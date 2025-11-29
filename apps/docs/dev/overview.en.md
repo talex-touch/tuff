@@ -1,0 +1,37 @@
+# Developer Overview
+
+## Plugin Model
+- **BaseModule**: lifecycle = `created → onInit → start → stop → onDestroy`.
+- **Plugin Capsule**: every plugin runs in its own process, described by a manifest.
+- **Channel System**: `ChannelType.MAIN` and `ChannelType.PLUGIN` handle IPC with promise-based replies.
+
+## Directory Layout
+```
+apps/core-app/
+├── src/main/        # main process, modules, channels
+├── src/renderer/    # renderer (Vue 3)
+└── ...
+plugins/
+└── my-plugin/
+    ├── manifest.json
+    ├── init/
+    │   └── index.ts
+    ├── preload/
+    └── src/
+```
+
+## Lifecycle
+1. **Load** – manifest is parsed and entry scripts are registered.
+2. **Init** – `init/index.ts` runs with context (logger, storage, channel).
+3. **Run** – plugin listens to events, renders UI, or exposes services.
+4. **Destroy** – `onDestroy` clears timers, listeners, and temporary files.
+
+## Sandbox Policy
+- File access is scoped to the plugin directory.
+- HTTPS calls are allowed; sensitive domains must be declared.
+- Storage API enforces the 10 MB quota per plugin.
+
+## Developer Loop
+- `pnpm core:dev` launches Electron with hot reload for plugins.
+- `pnpm utils:test` validates shared SDK behavior.
+- `pnpm core:build:snapshot` ensures the packaged app loads your plugin.
