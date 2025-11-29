@@ -16,7 +16,7 @@ export function useKeyboard(
   scrollbar: Ref<any>,
   searchVal: Ref<string>,
   handleExecute: (item: any) => void,
-  handleExit: () => void,
+  handleExit: () => Promise<void>,
   inputEl: Ref<HTMLInputElement | undefined>,
   clipboardOptions: any,
   clearClipboard: (options?: { remember?: boolean }) => void,
@@ -115,10 +115,14 @@ export function useKeyboard(
        * 3. Clear input query
        * 4. Handle mode transitions
        * 5. Hide CoreBox window
+       * 
+       * Note: handleExit is async but we use void operator (fire-and-forget)
+       * because keyboard event handlers cannot be async. The async operations
+       * will continue in the background without blocking the UI.
        */
       
       if (activeActivations.value?.length > 0) {
-        handleExit()
+        void handleExit()
         event.preventDefault()
         return
       }
@@ -141,7 +145,7 @@ export function useKeyboard(
         return
       }
 
-      handleExit()
+      void handleExit()
     }
 
     if (boxOptions.focus < 0) {
