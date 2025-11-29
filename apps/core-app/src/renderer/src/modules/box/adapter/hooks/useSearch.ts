@@ -23,24 +23,17 @@ export function useSearch(
   const searchVal = ref('')
   const select = ref(-1)
 
-  // 使用 BoxItemSDK 统一管理所有 items
   const { items: boxItems } = useBoxItems()
 
-  // 本地搜索结果（来自搜索引擎）
   const searchResults = ref<Array<TuffItem>>([])
 
-  // 合并搜索结果和 BoxItemSDK items
-  // 优先显示搜索结果，然后是 BoxItemSDK 推送的 items
   const res = computed<Array<TuffItem>>(() => {
-    // 使用 Map 去重，searchResults 优先级更高
     const itemsMap = new Map<string, TuffItem>()
 
-    // 先添加 BoxItemSDK items（保持原始顺序，不做 reverse）
     boxItems.value.forEach((item) => {
       itemsMap.set(item.id, item)
     })
 
-    // 再添加搜索结果，覆盖同 id 的 items
     searchResults.value.forEach((item) => {
       itemsMap.set(item.id, item)
     })
@@ -53,21 +46,17 @@ export function useSearch(
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
-  const BASE_DEBOUNCE = 35 // Optimized from 200ms to 35ms for faster response
+  const BASE_DEBOUNCE = 35
   const debounceMs = computed(() => {
     return activeActivations.value && activeActivations.value.length > 0 ? 100 : BASE_DEBOUNCE
   })
 
-  // Request sequence tracking to ensure only the latest search results are displayed
   let searchSequence = 0
 
   const debouncedSearch = useDebounceFn(async () => {
-    // Increment and capture the current search sequence
     const currentSequence = ++searchSequence
     
-    // Allow empty queries to trigger recommendation search
     if (!searchVal.value && !activeActivations.value?.length) {
-      // Empty query with no active providers: trigger recommendation search
       boxOptions.focus = 0
       loading.value = true
       searchResults.value = [] // Clear previous results immediately
@@ -124,19 +113,6 @@ export function useSearch(
 
       const inputs: TuffQueryInput[] = []
 
-      // Priority-based input selection (matches TagSection display logic)
-      // Priority 1: Image (clipboard image)
-      // Priority 2: File (FILE mode or clipboard files)
-      // Priority 3: Text (clipboard text/html)
-      // Only one input should be added to match what's displayed in the tag
-
-      /**
-       * CRITICAL: Use clipboardOptions.last directly instead of re-fetching from main process
-       * This ensures UI (TagSection) and data (TuffQuery) use the same source
-       * Fixes Bug: Suffix tags not displayed but TuffQuery contains data
-       */
-
-      // Priority 1: Image (clipboard image)
       if (clipboardOptions?.last?.type === 'image') {
         inputs.push({
           type: TuffInputType.Image,
@@ -145,7 +121,6 @@ export function useSearch(
           metadata: clipboardOptions.last.meta ?? undefined
         })
       }
-      // Priority 2: File (FILE mode or clipboard files)
       else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
         inputs.push({
           type: TuffInputType.Files,
@@ -159,10 +134,8 @@ export function useSearch(
           metadata: clipboardOptions.last.meta ?? undefined
         })
       }
-      // Priority 3: Text (clipboard text/html)
       else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
         if (clipboardOptions.last.rawContent) {
-          // Rich text: preserve both plain text and HTML
           inputs.push({
             type: TuffInputType.Html,
             content: clipboardOptions.last.content, // Plain text version
@@ -170,7 +143,6 @@ export function useSearch(
             metadata: clipboardOptions.last.meta ?? undefined
           })
         } else {
-          // Plain text: text only
           inputs.push({
             type: TuffInputType.Text,
             content: clipboardOptions.last.content,
@@ -179,7 +151,6 @@ export function useSearch(
         }
       }
 
-      // Only add inputs if we have one (matches what's displayed in tag)
       if (inputs.length > 0) {
         query.inputs = inputs
       }
@@ -216,13 +187,16 @@ export function useSearch(
     // Do not set loading to false here; wait for the `search-end` event.
   }, debounceMs)
 
+  /**
+   * Trigger debounced search
+   */
   async function handleSearch(): Promise<void> {
     debouncedSearch()
   }
 
   /**
    * Force immediate search without debounce
-   * Used when clipboard state changes
+   * Used when clipboard state changes or immediate update is needed
    */
   async function handleSearchImmediate(): Promise<void> {
     if (!searchVal.value) {
@@ -231,7 +205,6 @@ export function useSearch(
       }
       return
     }
-    // Call the debounced search immediately by flushing
     debouncedSearch()
     // @ts-ignore - flush method exists on debounced function from lodash-es
     if (debouncedSearch.flush) {
@@ -240,6 +213,10 @@ export function useSearch(
     }
   }
 
+  /**
+   * Execute a search result item
+   * @param item - Item to execute, defaults to currently focused item
+   */
   async function handleExecute(item?: TuffItem): Promise<void> {
     const itemToExecute = item || activeItem.value
     if (!itemToExecute) {
@@ -353,6 +330,11 @@ export function useSearch(
     select.value = -1
   }
 
+  /**
+   * Deactivate provider(s) and trigger new search
+   * @param providerId - Specific provider ID to deactivate, or deactivate all if undefined
+   * @returns True if successfully deactivated
+   */
   async function deactivateProvider(providerId?: string): Promise<boolean> {
     if (!providerId) {
       // Deactivate all if no ID is provided
@@ -375,6 +357,9 @@ export function useSearch(
     return true
   }
 
+  /**
+   * Deactivate all active providers
+   */
   async function deactivateAllProviders(): Promise<void> {
     const newState = await touchChannel.send('core-box:deactivate-providers')
     activeActivations.value = newState
@@ -382,13 +367,15 @@ export function useSearch(
     await handleSearch()
   }
 
+  /**
+   * Handle exit operations in strict sequential order:
+   * - Deactivate providers only (searchVal preserved for next ESC)
+   * - Handle mode transitions (FEATURE → INPUT)
+   * - Hide window (final step)
+   */
   function handleExit(): void {
     if (activeActivations.value && activeActivations.value.length > 0) {
-      console.log(
-        '[useSearch] handleExit: activeActivations exist, calling deactivateAllProviders.'
-      )
       deactivateAllProviders()
-      searchVal.value = '' // Clear search value to reset state
       return
     }
 
@@ -456,11 +443,10 @@ export function useSearch(
 
   // 3. Watch for searchVal changes to broadcast to plugins (debounced for performance)
   const debouncedInputBroadcast = useDebounceFn((newVal: string) => {
-    // 广播输入变化到主进程，主进程会转发给插件
     touchChannel.send('core-box:input-changed', { input: newVal }).catch((error) => {
       console.error('[useSearch] Failed to broadcast input change:', error)
     })
-  }, BASE_DEBOUNCE) // 防抖，避免频繁广播
+  }, BASE_DEBOUNCE)
 
   watch(searchVal, (newVal) => {
     debouncedInputBroadcast(newVal)

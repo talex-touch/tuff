@@ -9,7 +9,11 @@ const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
 const AUTOFILL_LOG_PREVIEW_LENGTH = 30
 
-// Normalize timestamp inputs so autopaste doesn't choke on weird types
+/**
+ * Normalize timestamp to milliseconds
+ * @param value - Timestamp in various formats
+ * @returns Normalized timestamp in milliseconds or null
+ */
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
   if (value === null || value === undefined) {
     return null
@@ -28,10 +32,11 @@ function normalizeTimestamp(value?: string | number | Date | null): number | nul
   return Number.isFinite(parsed) ? parsed : null
 }
 
-// Track auto-pasted timestamps to prevent duplicate auto-paste
 const autoPastedTimestamps = new Set<number>()
 
-// Trim stale autopaste entries
+/**
+ * Clean up expired autopaste records to prevent memory leaks
+ */
 function cleanupAutoPastedRecords(): void {
   const expiredAt = Date.now() - AUTOFILL_TIMESTAMP_TTL
   for (const ts of autoPastedTimestamps) {
@@ -41,7 +46,9 @@ function cleanupAutoPastedRecords(): void {
   }
 }
 
-// Keep only fresh autopaste cache when CoreBox mounts
+/**
+ * Reset autopaste state for new CoreBox session
+ */
 function resetAutoPasteState(): void {
   cleanupAutoPastedRecords()
 }
@@ -70,7 +77,6 @@ export function useClipboard(
       return true
     }
 
-    // Use database timestamp (real copy time) instead of detectedAt
     const copiedTime = new Date(clipboardOptions.last.timestamp).getTime()
     const now = Date.now()
     const elapsed = now - copiedTime
@@ -86,7 +92,10 @@ export function useClipboard(
     return elapsed <= limit * 1000
   }
 
-  // Mirror clipboard state to CoreBox UI (UI only, no OS paste)
+  /**
+   * Auto-fill clipboard data to CoreBox UI when conditions are met
+   * Handles files, short text, long text, and images
+   */
   function handleAutoFill(): void {
     if (!clipboardOptions.last) {
       return
@@ -97,7 +106,6 @@ export function useClipboard(
 
     const timestamp = new Date(clipboardOptions.last.timestamp).getTime()
 
-    // Check if already auto-pasted (prevent duplicate)
     if (autoPastedTimestamps.has(timestamp)) {
       console.warn('[Clipboard] Already auto-filled, skipping', {
         timestamp: new Date(timestamp).toISOString()
@@ -107,12 +115,10 @@ export function useClipboard(
 
     const data = clipboardOptions.last
 
-    // Clean up old records periodically
     if (Math.random() < AUTOFILL_CLEANUP_PROBABILITY) {
       cleanupAutoPastedRecords()
     }
 
-    // Handle files: switch to FILE mode
     if (data.type === 'files') {
       try {
         const pathList = JSON.parse(data.content)
@@ -139,12 +145,10 @@ export function useClipboard(
       return
     }
 
-    // Handle text: short text to input query, long text just flagged once
     if (data.type === 'text') {
       const textContent = data.content || ''
       const textLength = textContent.length
 
-      // Short text (≤limit): auto-fill to input query
       if (textLength > 0 && textLength <= AUTOFILL_SHORT_TEXT_LIMIT && searchVal) {
         searchVal.value = textContent
         autoPastedTimestamps.add(timestamp)
@@ -162,7 +166,6 @@ export function useClipboard(
         return
       }
 
-      // Long text (>limit): only trigger callback once
       console.warn('[Clipboard] Long text shown as tag', {
         type: data.type,
         length: textLength
@@ -176,7 +179,6 @@ export function useClipboard(
       return
     }
 
-    // Handle image: show as tag
     if (data.type === 'image') {
       console.warn('[Clipboard] Image shown as tag')
       autoPastedTimestamps.add(timestamp)
@@ -187,6 +189,11 @@ export function useClipboard(
     }
   }
 
+  /**
+   * Fetch and process latest clipboard data from main process
+   * @param options - Configuration options
+   * @param options.overrideDismissed - If true, re-fetch dismissed clipboard items
+   */
   function handlePaste(options?: { overrideDismissed?: boolean }): void {
     const overrideDismissed = options?.overrideDismissed ?? false
     const clipboard = touchChannel.sendSync('clipboard:get-latest') as IClipboardItem | null
@@ -235,6 +242,11 @@ export function useClipboard(
     handleAutoFill()
   }
 
+  /**
+   * Apply clipboard item to the active application window
+   * @param item - Clipboard item to apply, defaults to current clipboard
+   * @returns True if successfully applied
+   */
   async function applyToActiveApp(item?: IClipboardItem): Promise<boolean> {
     const target = item ?? clipboardOptions.last
     if (!target) {
@@ -254,14 +266,17 @@ export function useClipboard(
     }
   }
 
-  // Clear clipboard UI state, optional remember prevents future auto-paste
+  /**
+   * Clear clipboard UI state
+   * @param options - Configuration options
+   * @param options.remember - If true, prevent this clipboard item from auto-pasting in the future
+   */
   function clearClipboard(options?: { remember?: boolean }): void {
     const remember = options?.remember ?? false
 
     if (remember && clipboardOptions.last?.timestamp) {
       clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
 
-      // Mirror dismissal to autoPastedTimestamps so the item never autoloads again
       const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
       if (timestamp !== null) {
         autoPastedTimestamps.add(timestamp)
@@ -279,7 +294,6 @@ export function useClipboard(
     }
   }
 
-  // Listen for system clipboard changes
   touchChannel.regChannel('clipboard:new-item', (data: any) => {
     if (!data?.type) {
       return
