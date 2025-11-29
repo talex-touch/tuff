@@ -37,6 +37,13 @@ export interface ITuffIcon {
   /** Icon value */
   value: string
 
+  /**
+   * Icon Colorful (Only for URL type)
+   * @desc This prop defines whether a URL icon should be rendered in colorful mode.
+   * It is only applicable when the icon type is 'url'.
+   */
+  colorful?: boolean
+
   /** Icon status (optional) */
   status?: TuffIconStatus
 
