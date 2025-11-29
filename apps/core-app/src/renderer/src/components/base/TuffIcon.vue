@@ -95,13 +95,8 @@ watch(
     </span>
 
     <template v-else-if="addressable">
-      <template v-if="isSvg">
-        <i
-          :class="{ colorful }"
-          class="TuffIcon-Svg"
-          :alt="alt"
-          :style="{ '--un-icon': `url('${dataurl}')` }"
-        />
+      <template v-if="isSvg && colorful">
+        <i class="TuffIcon-Svg colorful" :alt="alt" :style="{ '--un-icon': `url('${dataurl}')` }" />
       </template>
       <template v-else>
         <img :alt="alt" :src="url" />

@@ -48,7 +48,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
       return new TuffItemBuilder(`${this.id}:${browser.id}:${normalizedURL}`)
         .setTitle(`用 ${browser.name} 打开`)
         .setSubtitle(normalizedURL)
-        .setIcon({ type: 'url', value: browser.icon })
+        .setIcon({ type: 'url', value: browser.icon, colorful: false })
         .setSource(this.type, this.id, this.name)
         .setMeta({
           web: {
