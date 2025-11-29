@@ -1,14 +1,9 @@
-<!--
-  MarketItemCard Component
-
-  Enhanced market item component with smooth animations and interactive hover effects
-  Based on TopPlugins design for consistency
--->
 <script setup lang="ts" name="MarketItemCard">
 import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import MarketIcon from '~/components/market/MarketIcon.vue'
 
 interface MarketItem {
   id?: string
@@ -122,26 +117,6 @@ const buttonLabel = computed(() => {
 
 const disableInstall = computed(() => isActiveStage.value)
 
-const iconClass = computed(() => {
-  if (!props.item) return ''
-
-  const fromProp = typeof props.item.icon === 'string' ? props.item.icon.trim() : ''
-  if (fromProp) {
-    return fromProp.startsWith('i-') ? fromProp : `i-${fromProp}`
-  }
-
-  const metadata = props.item.metadata as Record<string, unknown> | undefined
-  if (metadata) {
-    const metaIconClass = typeof metadata.icon_class === 'string' ? metadata.icon_class.trim() : ''
-    if (metaIconClass) return metaIconClass
-
-    const metaIcon = typeof metadata.icon === 'string' ? metadata.icon.trim() : ''
-    if (metaIcon) return metaIcon.startsWith('i-') ? metaIcon : `i-${metaIcon}`
-  }
-
-  return ''
-})
-
 function handleInstall(event: MouseEvent): void {
   event.stopPropagation()
   emits('install')
@@ -156,10 +131,11 @@ function handleOpen(): void {
 <template>
   <div class="market-item-card" :class="{ verified: item.official }" @click="handleOpen">
     <div class="market-item-content">
-      <div v-shared-element:plugin-market-icon class="market-item-icon" :style="{ viewTransitionName: `market-icon-${item.id}` }">
-        <i v-if="iconClass" :class="iconClass" />
-        <i v-else class="i-ri-puzzle-line" />
-      </div>
+      <MarketIcon
+        v-shared-element:plugin-market-icon
+        :item="item"
+        :view-transition-name="`market-icon-${item.id}`"
+      />
 
       <div class="market-item-info">
         <div class="market-item-header">
@@ -197,10 +173,32 @@ function handleOpen(): void {
 
 <style lang="scss" scoped>
 .market-item-card {
+  &.verified {
+    &::before {
+      content: '';
+      position: absolute;
+
+      inset: 0;
+
+      border-radius: 22px;
+      border-style: solid;
+      border-image-slice: 1;
+      border-image-source: linear-gradient(100deg, #3f5c1e 0%, #4d9375 68%);
+      border-width: 8px;
+
+      margin: -7px;
+
+      opacity: 0.5;
+      filter: blur(4px);
+      mix-blend-mode: hard-light;
+    }
+  }
+
   position: relative;
   border-radius: 22px;
   border: 1px solid rgba(var(--el-color-primary-rgb), 0.35);
   cursor: pointer;
+  overflow: hidden;
   transition:
     border-color 0.25s ease,
     box-shadow 0.25s ease,
@@ -219,42 +217,6 @@ function handleOpen(): void {
   gap: 1rem;
   padding: 0.75rem 1rem;
   box-sizing: border-box;
-}
-
-.market-item-icon {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(
-    135deg,
-    rgba(var(--el-color-primary-rgb), 0.18),
-    rgba(var(--el-color-primary-rgb), 0.05)
-  );
-  border-radius: 14px;
-  border: 1px solid rgba(var(--el-color-primary-rgb), 0.15);
-  transition: all 0.25s ease;
-
-  i {
-    font-size: 22px;
-    color: var(--el-color-primary);
-    transition: color 0.25s ease;
-  }
-}
-
-.market-item-card:hover .market-item-icon {
-  background: linear-gradient(
-    135deg,
-    rgba(var(--el-color-primary-rgb), 0.24),
-    rgba(var(--el-color-primary-rgb), 0.08)
-  );
-  border-color: rgba(var(--el-color-primary-rgb), 0.3);
-
-  i {
-    color: var(--el-color-primary-dark-2);
-  }
 }
 
 .market-item-info {
