@@ -154,25 +154,18 @@ function handleOpen(): void {
 </script>
 
 <template>
-  <div class="market-item-card" @click="handleOpen">
-    <!-- Card content -->
+  <div class="market-item-card" :class="{ verified: item.official }" @click="handleOpen">
     <div class="market-item-content">
-      <!-- Icon section -->
-      <div class="market-item-icon" :style="{ viewTransitionName: `market-icon-${item.id}` }">
+      <div v-shared-element:plugin-market-icon class="market-item-icon" :style="{ viewTransitionName: `market-icon-${item.id}` }">
         <i v-if="iconClass" :class="iconClass" />
         <i v-else class="i-ri-puzzle-line" />
       </div>
 
-      <!-- Info section -->
       <div class="market-item-info">
         <div class="market-item-header">
           <h3 class="market-item-title" :style="{ viewTransitionName: `market-title-${item.id}` }">
             {{ item.name || 'Unnamed Plugin' }}
           </h3>
-          <span v-if="item.official" class="official-badge">
-            <i class="i-ri-shield-check-fill" />
-            {{ t('market.officialBadge') }}
-          </span>
         </div>
         <p
           v-if="item.description"
@@ -184,33 +177,6 @@ function handleOpen(): void {
         <p v-else class="market-item-description placeholder">
           {{ t('market.noDescription') }}
         </p>
-
-        <!-- Stats section -->
-        <div class="market-item-stats">
-          <span v-if="item.downloads" class="stat-item downloads">
-            <i class="i-ri-download-line" />
-            {{ item.downloads }}
-          </span>
-          <span v-if="item.rating" class="stat-item rating">
-            <i class="i-ri-star-fill" />
-            {{ item.rating }}
-          </span>
-          <span v-if="item.version" class="stat-item version">
-            <i class="i-ri-price-tag-3-line" />
-            v{{ item.version }}
-          </span>
-        </div>
-
-        <div class="market-item-meta">
-          <span v-if="item.author" class="meta-chip">
-            <i class="i-ri-user-line" />
-            {{ item.author }}
-          </span>
-          <span v-if="item.category" class="meta-chip">
-            <i class="i-ri-folder-3-line" />
-            {{ item.category }}
-          </span>
-        </div>
       </div>
 
       <div class="market-item-actions">
@@ -232,20 +198,16 @@ function handleOpen(): void {
 <style lang="scss" scoped>
 .market-item-card {
   position: relative;
-  min-height: 110px;
-  background: var(--el-bg-color-overlay);
-  border-radius: 16px;
-  border: 1px solid transparent;
+  border-radius: 22px;
+  border: 1px solid rgba(var(--el-color-primary-rgb), 0.35);
   cursor: pointer;
-  overflow: hidden;
   transition:
     border-color 0.25s ease,
     box-shadow 0.25s ease,
     background 0.25s ease;
 
   &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.35);
-    background: var(--el-fill-color-light);
+    border-color: rgba(var(--el-color-primary-rgb), 0.5);
   }
 }
 
@@ -253,10 +215,9 @@ function handleOpen(): void {
   position: relative;
   z-index: 2;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 1rem;
-  padding: 1rem 1.2rem;
-  min-height: 110px;
+  padding: 0.75rem 1rem;
   box-sizing: border-box;
 }
 
@@ -301,15 +262,8 @@ function handleOpen(): void {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   height: 100%;
-  gap: 0.5rem;
-}
-
-.market-item-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 .market-item-title {
@@ -317,26 +271,7 @@ function handleOpen(): void {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--el-text-color-primary);
-  line-height: 1.3;
   transition: color 0.3s ease;
-}
-
-.official-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.65rem;
-  font-weight: 600;
-  border-radius: 999px;
-  background: rgba(var(--el-color-primary-rgb), 0.16);
-  color: var(--el-color-primary);
-  letter-spacing: 0.5px;
-
-  i {
-    font-size: 0.85rem;
-  }
 }
 
 .market-item-description {
@@ -344,86 +279,10 @@ function handleOpen(): void {
   font-size: 0.8rem;
   color: var(--el-text-color-regular);
   opacity: 0.85;
-  line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.market-item-stats {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  font-size: 0.75rem;
-}
-
-.stat-item {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-weight: 500;
-  opacity: 0.75;
-  transition: opacity 0.3s ease;
-
-  i {
-    font-size: 0.8rem;
-  }
-
-  &.downloads {
-    color: var(--el-color-info);
-  }
-
-  &.rating {
-    color: var(--el-color-warning);
-
-    i {
-      color: #f7ba2a;
-    }
-  }
-
-  &.version {
-    color: var(--el-color-success);
-  }
-}
-
-.market-item-card:hover .stat-item {
-  opacity: 0.9;
-}
-
-.market-item-meta {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.meta-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.6rem;
-  border-radius: 14px;
-  background: var(--el-fill-color);
-  font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
-
-  i {
-    font-size: 0.85rem;
-  }
-}
-
-.market-item-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
-.install-button-content {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
 }
 
 .install-progress {
