@@ -11,7 +11,10 @@ const AUTOFILL_LOG_PREVIEW_LENGTH = 30
 
 // Normalize timestamp inputs so autopaste doesn't choke on weird types
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
-  if (value === null || value === undefined) return null
+  if (value === null || value === undefined) {
+    return null
+  }
+
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null
   }
@@ -50,19 +53,29 @@ export function useClipboard(
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> {
   function canAutoPaste(): boolean {
-    if (!clipboardOptions.last || !clipboardOptions.last.timestamp) return false
-    if (!appSetting.tools.autoPaste.enable) return false
+    if (!clipboardOptions.last || !clipboardOptions.last.timestamp) {
+      return false
+    }
+
+    if (!appSetting.tools.autoPaste.enable) {
+      return false
+    }
 
     const limit = appSetting.tools.autoPaste.time
-    if (limit === -1) return false
-    if (limit === 0) return true
+    if (limit === -1) {
+      return false
+    }
+
+    if (limit === 0) {
+      return true
+    }
 
     // Use database timestamp (real copy time) instead of detectedAt
     const copiedTime = new Date(clipboardOptions.last.timestamp).getTime()
     const now = Date.now()
     const elapsed = now - copiedTime
 
-    console.debug('[Clipboard] AutoPaste time check', {
+    console.warn('[Clipboard] AutoPaste time check', {
       copiedAt: new Date(copiedTime).toISOString(),
       now: new Date(now).toISOString(),
       elapsed,
@@ -75,14 +88,18 @@ export function useClipboard(
 
   // Mirror clipboard state to CoreBox UI (UI only, no OS paste)
   function handleAutoFill(): void {
-    if (!clipboardOptions.last) return
-    if (!canAutoPaste()) return
+    if (!clipboardOptions.last) {
+      return
+    }
+    if (!canAutoPaste()) {
+      return
+    }
 
     const timestamp = new Date(clipboardOptions.last.timestamp).getTime()
 
     // Check if already auto-pasted (prevent duplicate)
     if (autoPastedTimestamps.has(timestamp)) {
-      console.debug('[Clipboard] Already auto-filled, skipping', {
+      console.warn('[Clipboard] Already auto-filled, skipping', {
         timestamp: new Date(timestamp).toISOString()
       })
       return
@@ -111,11 +128,12 @@ export function useClipboard(
           autoPastedTimestamps.add(timestamp)
           clearClipboard({ remember: true })
 
-          console.debug('[Clipboard] Files auto-filled to FILE mode', {
+          console.warn('[Clipboard] Files auto-filled to FILE mode', {
             fileCount: pathList.length
           })
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error('[Clipboard] Failed to parse file paths:', error)
       }
       return
@@ -132,7 +150,7 @@ export function useClipboard(
         autoPastedTimestamps.add(timestamp)
         clearClipboard({ remember: true })
 
-        console.debug('[Clipboard] Short text auto-filled to input', {
+        console.warn('[Clipboard] Short text auto-filled to input', {
           length: textLength,
           limit: AUTOFILL_SHORT_TEXT_LIMIT,
           content: textContent.substring(0, AUTOFILL_LOG_PREVIEW_LENGTH)
@@ -145,7 +163,7 @@ export function useClipboard(
       }
 
       // Long text (>limit): only trigger callback once
-      console.debug('[Clipboard] Long text shown as tag', {
+      console.warn('[Clipboard] Long text shown as tag', {
         type: data.type,
         length: textLength
       })
@@ -160,7 +178,7 @@ export function useClipboard(
 
     // Handle image: show as tag
     if (data.type === 'image') {
-      console.debug('[Clipboard] Image shown as tag')
+      console.warn('[Clipboard] Image shown as tag')
       autoPastedTimestamps.add(timestamp)
 
       if (onPasteCallback) {
@@ -193,7 +211,7 @@ export function useClipboard(
       !overrideDismissed && dismissedTimestamp !== null && dismissedTimestamp === clipboardTimestamp
 
     if (isDismissed) {
-      console.debug('[Clipboard] Skipping dismissed clipboard item')
+      console.warn('[Clipboard] Skipping dismissed clipboard item')
       return
     }
 
@@ -204,7 +222,7 @@ export function useClipboard(
       clipboardOptions.detectedAt = Date.now()
       clipboardOptions.lastClearedTimestamp = null
 
-      console.debug('[Clipboard] New content detected', {
+      console.warn('[Clipboard] New content detected', {
         type: clipboard.type,
         timestamp: new Date(clipboard.timestamp).toISOString()
       })
@@ -219,7 +237,9 @@ export function useClipboard(
 
   async function applyToActiveApp(item?: IClipboardItem): Promise<boolean> {
     const target = item ?? clipboardOptions.last
-    if (!target) return false
+    if (!target) {
+      return false
+    }
 
     try {
       const result = await touchChannel.send('clipboard:apply-to-active-app', { item: target })
@@ -227,7 +247,8 @@ export function useClipboard(
         return Boolean(result.success)
       }
       return true
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[Clipboard] Failed to apply to active app:', error)
       return false
     }
@@ -245,7 +266,8 @@ export function useClipboard(
       if (timestamp !== null) {
         autoPastedTimestamps.add(timestamp)
       }
-    } else if (!remember) {
+    }
+    else if (!remember) {
       clipboardOptions.lastClearedTimestamp = null
     }
 
@@ -259,14 +281,16 @@ export function useClipboard(
 
   // Listen for system clipboard changes
   touchChannel.regChannel('clipboard:new-item', (data: any) => {
-    if (!data?.type) return
+    if (!data?.type) {
+      return
+    }
 
     const clipboardData = data as IClipboardItem
     const incomingTimestamp = normalizeTimestamp(clipboardData.timestamp)
     const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
 
     if (incomingTimestamp && dismissedTimestamp && incomingTimestamp === dismissedTimestamp) {
-      console.debug('[Clipboard] Ignoring dismissed clipboard item from system event')
+      console.warn('[Clipboard] Ignoring dismissed clipboard item from system event')
       return
     }
 
@@ -274,7 +298,7 @@ export function useClipboard(
     clipboardOptions.detectedAt = Date.now()
     clipboardOptions.lastClearedTimestamp = null
 
-    console.debug('[Clipboard] System clipboard changed', {
+    console.warn('[Clipboard] System clipboard changed', {
       type: clipboardData.type,
       timestamp: new Date(clipboardData.timestamp).toISOString()
     })
