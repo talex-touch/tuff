@@ -12,7 +12,7 @@ export class SearchLogger {
   // private readonly storageKey = 'search-engine-logs-enabled'
   // private currentSession: string | null = null
   private searchStartTime: number = 0
-  private searchSteps: Array<{ step: string; timestamp: number; duration?: number }> = []
+  private searchSteps: Array<{ step: string, timestamp: number, duration?: number }> = []
   private unsubscribe?: () => void
 
   private constructor() {
