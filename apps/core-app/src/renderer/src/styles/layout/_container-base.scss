@@ -1,0 +1,72 @@
+/**
+ * Shared container base styles for Flat and Simple layouts
+ */
+
+/// Layout CSS variables
+@mixin layout-variables {
+  --ctr-height: 40px;
+  --nav-width: 200px;
+}
+
+/// View area base styles
+@mixin layout-view-base {
+  position: relative;
+  top: 0;
+  left: 0;
+  flex: none;
+  width: calc(100% - var(--nav-width));
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/// Icon footer base styles
+@mixin layout-icon-footer {
+  :deep(.AppLayout-Icon) {
+    margin: 0;
+    bottom: 0;
+  }
+
+  position: absolute;
+  padding: 0;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 110px;
+  -webkit-app-region: no-drag;
+}
+
+/// Display mode base styles (for layout preview)
+@mixin layout-display-mode-base {
+  &.is-display {
+    min-height: 150px;
+    padding: 6px;
+    gap: 4px;
+    border-radius: 12px;
+    pointer-events: none;
+
+    .AppLayout-Header {
+      padding: 4px 6px;
+      border-bottom: none;
+    }
+
+    .AppLayout-IconFooter {
+      position: relative;
+      height: auto;
+    }
+
+    :deep(.TouchMenuItem-Container) {
+      min-height: 20px;
+    }
+
+    .LayoutDisplay-View,
+    .LayoutDisplay-Footer {
+      width: 100%;
+      background: var(--el-fill-color-darker);
+      border-radius: 8px;
+    }
+
+    .LayoutDisplay-View {
+      height: 100%;
+    }
+  }
+}

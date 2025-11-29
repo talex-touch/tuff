@@ -1,15 +1,7 @@
 <script lang="ts" name="FlatController" setup>
-import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
-import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
+import { useLayoutController } from '~/composables/layout/useLayoutController'
 
-const route = useRoute()
-const { t } = useI18n()
-const { checkApplicationUpgrade } = useApplicationUpgrade()
-
-function handleUpgradeClick() {
-  void checkApplicationUpgrade()
-}
+const { route, t, handleUpgradeClick } = useLayoutController()
 </script>
 
 <template>
@@ -35,58 +27,24 @@ function handleUpgradeClick() {
 </template>
 
 <style lang="scss">
+@use '~/styles/layout/controller-mixins' as *;
+
 .FlatLayout-Controller {
+  @include controller-buttons;
   opacity: 0;
 }
 
 .FlatLayout-Nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
+  @include controller-nav;
   margin-right: 4px;
-  min-width: 28px;
-  -webkit-app-region: no-drag;
 }
 
 .FlatLayout-Icon {
   & span {
-    .has-update &:after {
-      content: '';
-      position: absolute;
-
-      margin-left: 10px;
-      margin-top: 4px;
-
-      width: 8px;
-      height: 8px;
-
-      border-radius: 50%;
-      background-color: var(--el-color-warning);
-
-      animation: breathing 1.5s ease-in-out infinite;
-    }
-
-    .has-update & {
-      pointer-events: all;
-      cursor: pointer;
-
-      span {
-        background-color: var(--el-color-warning-light-7) !important;
-      }
-
-      // :deep(span) {
-      //   background-color: var(--el-color-warning-light-7) !important;
-      // }
-    }
-
-    .touch-blur & {
-      opacity: 0.75;
-    }
+    @include update-indicator;
 
     padding: 4px 2px;
     font-size: 12px;
-
     pointer-events: none;
     -webkit-app-region: no-drag;
   }

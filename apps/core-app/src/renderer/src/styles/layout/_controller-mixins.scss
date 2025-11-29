@@ -1,0 +1,47 @@
+/**
+ * Shared controller styles for Flat and Simple layouts
+ */
+
+/// Upgrade indicator animation and styles
+@mixin update-indicator {
+  .has-update &:after {
+    content: '';
+    position: absolute;
+    margin-left: 10px;
+    margin-top: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--el-color-warning);
+    animation: breathing 1.5s ease-in-out infinite;
+  }
+
+  .has-update & {
+    pointer-events: all;
+    cursor: pointer;
+    
+    span {
+      background-color: var(--el-color-warning-light-7) !important;
+    }
+  }
+
+  .touch-blur & {
+    opacity: 0.75;
+  }
+}
+
+/// Navigation button base styles
+@mixin controller-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  -webkit-app-region: no-drag;
+}
+
+/// Controller buttons (hidden on macOS)
+@mixin controller-buttons {
+  .darwin & {
+    display: none;
+  }
+}

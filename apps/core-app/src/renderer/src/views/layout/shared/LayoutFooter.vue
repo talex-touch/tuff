@@ -4,14 +4,14 @@ import FlatDownload from '~/components/download/FlatDownload.vue'
 </script>
 
 <template>
-  <div class="FlatFooter">
+  <div class="LayoutFooter">
     <FlatDownload />
     <TuffUserInfo />
   </div>
 </template>
 
 <style lang="scss" scoped>
-.FlatFooter {
+.LayoutFooter {
   display: flex;
   flex-direction: column;
   width: 100%;
