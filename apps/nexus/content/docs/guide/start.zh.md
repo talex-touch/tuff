@@ -1,0 +1,30 @@
+# 快速开始
+
+## 1. 安装与环境
+| 操作系统 | 要求 | 获取方式 |
+| --- | --- | --- |
+| macOS | macOS 13 及以上、Apple Silicon 优化 | 访问 App 内更新通道或 TestFlight 安装包 |
+| Windows | Win11 22621+、支持 WDDM 3.0 | 通过安装器一步到位，默认启用自动更新 |
+| Linux | Ubuntu 22.04+ / Fedora 38+ / Arch 最新滚动 | 提供 AppImage 与 deb 包，命令行校验 SHA-256 |
+
+> 所有版本均已内置 Node.js 22 运行时，无需额外环境。
+
+## 2. 初次启动
+1. 打开安装包，勾选「启用 CoreBox 全局快捷键」。
+2. 首次进入会弹出登录窗，支持 Apple ID / GitHub / 邮箱三种方式。
+3. 完成设备信任，即可自动拉取 Workspace 与插件列表。
+
+## 3. 账号与同步
+- **Workspace**：默认创建「个人空间」，你可以为团队或副本创建多套配置。
+- **同步策略**：在设置中选择「即时」或「低频」同步，移动端只在 Wi-Fi 下推送。
+- **数据所有权**：所有内容落在本地 LibSQL 数据库，云端仅同步加密后的配置片段。
+
+## 4. 快捷体验
+- `⌘ + E` / `Ctrl + E`：唤出 CoreBox。
+- 长按拖拽 Dock 图标：快速切换 Workspace。
+- 通知中心小部件：查看当前 workflow 队列与插件状态。
+
+## 5. 遇到问题？
+- 系统日志位于 `~/Library/Logs/Tuff` 或 `%LOCALAPPDATA%/Tuff/logs`。
+- 打开 CoreBox 输入 `diagnose` 可生成自检报告。
+- 常见故障可查看《../tips/faq.zh.md》。
