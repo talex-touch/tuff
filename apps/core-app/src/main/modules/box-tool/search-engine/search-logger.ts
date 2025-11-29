@@ -12,7 +12,7 @@ export class SearchLogger {
   // private readonly storageKey = 'search-engine-logs-enabled'
   // private currentSession: string | null = null
   private searchStartTime: number = 0
-  private searchSteps: Array<{ step: string; timestamp: number; duration?: number }> = []
+  private searchSteps: Array<{ step: string, timestamp: number, duration?: number }> = []
   private unsubscribe?: () => void
 
   private constructor() {
@@ -91,7 +91,7 @@ export class SearchLogger {
       // Fallback to legacy setting
       const settings = await storageModule.getConfig('search-engine-logs-enabled')
       this.enabled = (settings as unknown as string) === 'true'
-    } catch (error) {
+    } catch {
       // Silently fail if storage is not ready yet
       this.enabled = false
     }
@@ -133,7 +133,9 @@ export class SearchLogger {
    * Log search session start with clear separators
    */
   searchSessionStart(query: string, sessionId: string): void {
-    if (!this.enabled) return
+    if (!this.enabled) {
+      return
+    }
 
     // this.currentSession = sessionId
     this.searchStartTime = Date.now()
