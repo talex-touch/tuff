@@ -31,7 +31,7 @@ export interface IUseSearch {
   activeItem: ComputedRef<TuffItem>
   activeActivations: Ref<IProviderActivate[] | null>
   handleExecute: (item?: TuffItem) => Promise<void>
-  handleExit: () => void
+  handleExit: () => Promise<void>
   handleSearchImmediate: () => Promise<void>
   deactivateProvider: (id?: string) => Promise<boolean>
   deactivateAllProviders: () => Promise<void>

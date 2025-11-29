@@ -55,7 +55,7 @@ export function useSearch(
 
   const debouncedSearch = useDebounceFn(async () => {
     const currentSequence = ++searchSequence
-    
+
     if (!searchVal.value && !activeActivations.value?.length) {
       boxOptions.focus = 0
       loading.value = true
@@ -347,18 +347,25 @@ export function useSearch(
 
     const newState = await touchChannel.send('core-box:deactivate-provider', { id: providerId })
     activeActivations.value = newState
-    
+
     // If all providers are deactivated, clear search input
     if (!newState || newState.length === 0) {
       searchVal.value = ''
     }
-    
+
     await handleSearch()
     return true
   }
 
   /**
    * Deactivate all active providers
+   * This MUST be async to ensure backend provider deactivation completes
+   * before updating the UI state. Calling this synchronously could cause
+   * race conditions where the UI believes providers are deactivated but
+   * they're still active in the backend.
+   * 
+   * @async
+   * @returns Promise that resolves when all providers are deactivated
    */
   async function deactivateAllProviders(): Promise<void> {
     const newState = await touchChannel.send('core-box:deactivate-providers')
@@ -368,14 +375,22 @@ export function useSearch(
   }
 
   /**
-   * Handle exit operations in strict sequential order:
-   * - Deactivate providers only (searchVal preserved for next ESC)
-   * - Handle mode transitions (FEATURE → INPUT)
-   * - Hide window (final step)
+   * Handle exit operations in strict sequential order.
+   * This is an ASYNC function to ensure provider deactivation completes
+   * before proceeding, preventing race conditions.
+   * 
+   * Exit sequence:
+   * 1. Deactivate active providers (if any) and return
+   * 2. Handle mode transitions (FEATURE → INPUT)
+   * 3. Clear search input (if any)
+   * 4. Hide CoreBox window (final step)
+   * 
+   * @async
+   * @returns Promise that resolves when exit handling is complete
    */
-  function handleExit(): void {
+  async function handleExit(): Promise<void> {
     if (activeActivations.value && activeActivations.value.length > 0) {
-      deactivateAllProviders()
+      await deactivateAllProviders()
       return
     }
 
@@ -464,16 +479,6 @@ export function useSearch(
       // console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
   })
-
-  // ⚠️ 已废弃：intelligence:upsert-item 监听器
-  // 现在所有 AI items 都通过 BoxItemSDK 统一管理
-  // Intelligence Provider 使用 boxItemManager.upsert() 推送
-  // 渲染层的 useBoxItems 会自动处理这些 items
-  /*
-  touchChannel.regChannel('core-box:intelligence:upsert-item', ({ data }) => {
-    ... 旧逻辑已移除 ...
-  })
-  */
 
   touchChannel.regChannel('core-box:set-query', ({ data }) => {
     const value = typeof data?.value === 'string' ? data.value : ''
