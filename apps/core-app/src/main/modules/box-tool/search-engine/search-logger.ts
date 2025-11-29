@@ -58,6 +58,17 @@ export class SearchLogger {
   }
 
   /**
+   * Cleanup and destroy the logger instance
+   * Unsubscribes from settings changes
+   */
+  destroy(): void {
+    if (this.unsubscribe) {
+      this.unsubscribe()
+      this.unsubscribe = undefined
+    }
+  }
+
+  /**
    * Load settings from storage
    */
   private async loadSettings(): Promise<void> {

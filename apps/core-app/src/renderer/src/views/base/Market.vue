@@ -21,7 +21,7 @@ const router = useRouter()
 const { officialPlugins, loading, loadOfficialPlugins } = useMarketData()
 
 // Category management
-const { tags, tagInd, selectedTag, updateCategoryTags } = useMarketCategories(officialPlugins)
+const { tags: _tags, tagInd: _tagInd, selectedTag, updateCategoryTags } = useMarketCategories(officialPlugins)
 
 // Installation management
 const { handleInstall } = useMarketInstall()

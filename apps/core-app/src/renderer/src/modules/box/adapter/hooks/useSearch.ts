@@ -55,7 +55,7 @@ export function useSearch(
 
   const debouncedSearch = useDebounceFn(async () => {
     const currentSequence = ++searchSequence
-    
+
     if (!searchVal.value && !activeActivations.value?.length) {
       boxOptions.focus = 0
       loading.value = true
@@ -347,12 +347,12 @@ export function useSearch(
 
     const newState = await touchChannel.send('core-box:deactivate-provider', { id: providerId })
     activeActivations.value = newState
-    
+
     // If all providers are deactivated, clear search input
     if (!newState || newState.length === 0) {
       searchVal.value = ''
     }
-    
+
     await handleSearch()
     return true
   }
@@ -373,9 +373,9 @@ export function useSearch(
    * - Handle mode transitions (FEATURE → INPUT)
    * - Hide window (final step)
    */
-  function handleExit(): void {
+  async function handleExit(): Promise<void> {
     if (activeActivations.value && activeActivations.value.length > 0) {
-      deactivateAllProviders()
+      await deactivateAllProviders()
       return
     }
 
@@ -464,16 +464,6 @@ export function useSearch(
       // console.log('[useSearch] Discarded update for old search:', data.searchId)
     }
   })
-
-  // ⚠️ 已废弃：intelligence:upsert-item 监听器
-  // 现在所有 AI items 都通过 BoxItemSDK 统一管理
-  // Intelligence Provider 使用 boxItemManager.upsert() 推送
-  // 渲染层的 useBoxItems 会自动处理这些 items
-  /*
-  touchChannel.regChannel('core-box:intelligence:upsert-item', ({ data }) => {
-    ... 旧逻辑已移除 ...
-  })
-  */
 
   touchChannel.regChannel('core-box:set-query', ({ data }) => {
     const value = typeof data?.value === 'string' ? data.value : ''

@@ -62,7 +62,7 @@ function onLeave(el: Element, done: () => void) {
 // FLIP animation for grid/list view transition
 watch(
   () => props.viewType,
-  async (newType, oldType) => {
+  async (_newType, _oldType) => {
     if (!gridRef.value || isTransitioning.value) return
 
     isTransitioning.value = true
