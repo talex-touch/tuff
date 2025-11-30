@@ -1,21 +1,39 @@
-import type { Method } from 'axios'
+import type { Method, AxiosResponseHeaders, RawAxiosResponseHeaders, AxiosHeaderValue } from 'axios'
 import axios from 'axios'
 import type { MarketHttpRequestOptions, MarketHttpResponse } from '@talex-touch/utils/market'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 
-function normalizeHeaders(headers: Record<string, string | string[] | undefined>): Record<string, string> {
+type HeaderSource = AxiosResponseHeaders | RawAxiosResponseHeaders | undefined
+
+function normalizeHeaders(headers: HeaderSource): Record<string, string> {
   const normalized: Record<string, string> = {}
 
-  for (const [key, value] of Object.entries(headers)) {
-    if (typeof value === 'undefined') {
+  if (!headers) {
+    return normalized
+  }
+
+  const raw =
+    isAxiosHeaders(headers) ? headers.toJSON() : (headers as Record<string, AxiosHeaderValue | undefined>)
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (value === null || typeof value === 'undefined') {
       continue
     }
 
-    normalized[key] = Array.isArray(value) ? value.join(', ') : value
+    if (Array.isArray(value)) {
+      normalized[key] = value.map(String).join(', ')
+      continue
+    }
+
+    normalized[key] = String(value)
   }
 
   return normalized
+}
+
+function isAxiosHeaders(headers: AxiosResponseHeaders | RawAxiosResponseHeaders): headers is AxiosResponseHeaders {
+  return typeof (headers as AxiosResponseHeaders).toJSON === 'function'
 }
 
 export async function performMarketHttpRequest<T = unknown>(

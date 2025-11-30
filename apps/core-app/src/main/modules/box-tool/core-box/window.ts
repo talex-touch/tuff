@@ -120,13 +120,6 @@ export class WindowManager {
   }
 
   /**
-   * Check if clipboard type is allowed
-   */
-  private isClipboardTypeAllowed(type: number): boolean {
-    return (this.clipboardAllowedTypes & type) !== 0
-  }
-
-  /**
    * 创建并初始化一个新的 CoreBox 窗口。
    */
   public async create(): Promise<TouchWindow> {
