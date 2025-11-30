@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 import { computed, ref } from 'vue'
-import type { OfficialPluginListItem } from './useMarketData'
+import type { MarketPluginListItem } from './useMarketData'
 
 interface CategoryTag {
   tag: string
@@ -12,7 +12,7 @@ interface CategoryTag {
  * Composable for managing market categories
  * Handles category filtering and tag management
  */
-export function useMarketCategories(plugins: Ref<OfficialPluginListItem[]>) {
+export function useMarketCategories(plugins: Ref<MarketPluginListItem[]>) {
   const tagInd = ref(0)
   const tags = ref<CategoryTag[]>([{ tag: 'market.categories.all', filter: '' }])
 

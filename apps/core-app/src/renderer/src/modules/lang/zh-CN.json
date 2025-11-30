@@ -252,6 +252,7 @@
       "version": "版本",
       "updateTime": "更新时间",
       "pluginId": "插件标识",
+      "provider": "分发渠道",
       "download": "下载源文件",
       "viewDocs": "查看文档",
       "information": "插件信息",

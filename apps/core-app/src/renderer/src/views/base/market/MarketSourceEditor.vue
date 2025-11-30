@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import type { MarketProviderType } from '@talex-touch/utils/market'
+import { onMounted, reactive, ref } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { vDraggable } from 'vue-draggable-plus'
-import { pluginSettings } from '~/modules/storage/plugin-settings'
+import { marketSourcesStorage } from '~/modules/storage/market-sources'
 
 const props = defineProps<{
   show: boolean
@@ -15,25 +17,66 @@ onMounted(() => {
   })
 })
 
+const storageState = marketSourcesStorage.get()
+const sources = storageState.sources
+
+const providerTypeOptions: { label: string; value: MarketProviderType }[] = [
+  { label: 'Nexus Store', value: 'nexusStore' },
+  { label: 'Repository', value: 'repository' },
+  { label: 'NPM Package', value: 'npmPackage' }
+]
+
 const newSource = reactive({
   name: '',
   url: '',
-  adapter: ''
+  type: providerTypeOptions[0]!.value as MarketProviderType
 })
 
+function generateSourceId(name: string): string {
+  return `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`
+}
+
 function deleteSource(ind: number) {
-  pluginSettings.value.source.list.length !== 1 && pluginSettings.value.source.list.splice(ind, 1)
+  const list = sources
+  if (list.length === 1)
+    return
+
+  const target = list[ind]
+  if (!target || target.readOnly)
+    return
+
+  list.splice(ind, 1)
+}
+
+function resetNewSource() {
+  newSource.name = ''
+  newSource.url = ''
+  newSource.type = providerTypeOptions[0]!.value
 }
 
 function handleAdd() {
-  // validate newSource
-  if (!newSource.name || !newSource.url || !newSource.adapter) return
+  if (!newSource.name.trim() || !newSource.url.trim())
+    return
 
-  pluginSettings.value.source.list.push({
-    url: newSource.url,
-    name: newSource.name,
-    adapter: newSource.adapter
+  const list = sources
+  const id = generateSourceId(newSource.name)
+
+  list.push({
+    id,
+    name: newSource.name.trim(),
+    type: newSource.type,
+    url: newSource.url.trim(),
+    enabled: true,
+    priority: list.length ? Math.max(...list.map((item) => item.priority ?? 0)) + 1 : 1,
+    trustLevel: 'unverified',
+    config: newSource.type === 'nexusStore'
+      ? {
+          manifestUrl: newSource.url.trim()
+        }
+      : {},
   })
+
+  resetNewSource()
 }
 </script>
 
@@ -45,14 +88,11 @@ function handleAdd() {
     <div class="MarketSourceEditor-Container">
       <el-scrollbar>
         <div
-          v-draggable="[
-            pluginSettings.source.list,
-            { animation: 150, handle: '.handle', ghostClass: 'ghost' }
-          ]"
+          v-draggable="[sources, { animation: 150, handle: '.handle', ghostClass: 'ghost' }]"
           class="MarketSourceEditor-Content"
         >
           <div
-            v-for="(item, ind) in pluginSettings.source.list"
+            v-for="(item, ind) in sources"
             :key="ind"
             class="MarketSourceEditor-Content-Item Item"
           >
@@ -61,18 +101,18 @@ function handleAdd() {
 
             <div class="Item-Container">
               <div class="Item-Title">
-                {{ item.name }}<span class="adapter">({{ item.adapter }})</span>
+                {{ item.name }}<span class="adapter">({{ item.type }})</span>
               </div>
               <div class="Item-Desc">
                 {{ item.url }}
               </div>
             </div>
             <div
-              :class="{ disabled: pluginSettings.source.list.length === 1 }"
+              :class="{ disabled: sources.length === 1 || item.readOnly }"
               class="transition-cubic action"
               @click="deleteSource(ind)"
             >
-              <div v-if="pluginSettings.source.list.length !== 1" class="i-carbon-close" />
+              <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
               <div v-else class="i-carbon-carbon-for-salesforce" />
             </div>
           </div>
@@ -81,16 +121,11 @@ function handleAdd() {
             <div class="Item-Container">
               <div flex gap-2 class="Item-Title">
                 <FlatInput v-model="newSource.name" flex-1 placeholder="Source name" />
-                <!-- <t-select v-model="newSource.adapter">
-                <t-select-item v-for="adapter in pluginSettings.source.adapter">{{
-                  adapter
-                }}</t-select-item>
-              </t-select> -->
-                <FlatInput
-                  v-model="newSource.adapter"
-                  style="width: 30%"
-                  placeholder="Source adapter"
-                />
+                <select v-model="newSource.type" class="TypeSelect">
+                  <option v-for="option in providerTypeOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
               </div>
               <div mt-2 class="Item-Desc">
                 <FlatInput v-model="newSource.url" placeholder="Source url" />
@@ -248,6 +283,15 @@ function handleAdd() {
 
 .MarketSourceEditor-Container {
   height: 80%;
+}
+
+.TypeSelect {
+  width: 30%;
+  padding: 0.35rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--el-border-color);
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-text-color-primary);
 }
 
 .MarketSourceEditor {

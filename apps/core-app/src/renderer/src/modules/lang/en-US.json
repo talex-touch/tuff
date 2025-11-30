@@ -252,6 +252,7 @@
       "version": " Version",
       "updateTime": "Update Time",
       "pluginId": "Plugin ID",
+      "provider": "Provider",
       "download": "Download Source",
       "viewDocs": "View Documentation",
       "information": "Information",

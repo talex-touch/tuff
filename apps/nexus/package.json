@@ -59,12 +59,5 @@
     "vue-tsc": "catalog:dev",
     "webpack": "catalog:dev",
     "wrangler": "catalog:dev"
-  },
-  "resolutions": {
-    "@nuxt/devtools": "catalog:build",
-    "@nuxt/kit": "catalog:build",
-    "nuxt": "catalog:build",
-    "unplugin": "catalog:build",
-    "vite": "catalog:build"
   }
 }

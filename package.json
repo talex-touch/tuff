@@ -76,10 +76,17 @@
       "tesseract.js",
       "typeit",
       "utf-8-validate",
-      "vue-demi"
+      "vue-demi",
+      "sharp",
+      "unrs-resolver",
+      "workerd"
     ],
     "overrides": {
       "@types/node": "24.1.0",
+      "@nuxt/devtools": "catalog:build",
+      "@nuxt/kit": "catalog:build",
+      "nuxt": "catalog:build",
+      "unplugin": "catalog:build",
       "vite": "7.0.6"
     }
   },

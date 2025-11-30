@@ -3,7 +3,6 @@
 # ========================
 .DS_Store*
 .idea/
-.vscode/
 .vscode-test/
 
 # ========================
@@ -122,8 +121,3 @@ apps/nexus/.data/
 # Project-specific (core-app)
 # ========================
 apps/core-app/signature.json
-
-# ========================
-# Optional plugin dir
-# ========================
-# plugins/
