@@ -106,6 +106,11 @@ export class WindowManager {
    * Enable clipboard monitoring for specified types
    */
   public enableClipboardMonitoring(types: number): void {
+    if (this.clipboardAllowedTypes === types) {
+      coreBoxWindowLog.debug('Clipboard monitoring already configured, skipping update')
+      return
+    }
+
     this.clipboardAllowedTypes = types
     coreBoxWindowLog.info(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
   }
