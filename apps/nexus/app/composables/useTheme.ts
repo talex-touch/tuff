@@ -14,7 +14,7 @@ export function useTheme() {
       color.preference = mode
   }
 
-  const toggleDark = (mode: 'auto' | 'dark' | 'light', event?: { clientX: number; clientY: number }) => {
+  const toggleDark = (mode: 'auto' | 'dark' | 'light', event?: { clientX: number; clientY: number; }) => {
     if (!hasWindow || !hasDocument) {
       applyPreference(mode)
       return

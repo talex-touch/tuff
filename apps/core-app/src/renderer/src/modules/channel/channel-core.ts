@@ -24,7 +24,6 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   __parse_raw_data(e: IpcRendererEvent | null, arg: any): RawStandardChannelData | null {
-    console.debug('Raw data: ', arg, e)
     if (arg) {
       const { name, header, code, plugin, data, sync } = arg
 
@@ -214,8 +213,6 @@ class TouchChannel implements ITouchClientChannel {
 
     try {
       const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@main-process-message', data))
-
-      console.debug('sync res', res)
 
       if (res?.header?.status === 'reply')
         return res.data

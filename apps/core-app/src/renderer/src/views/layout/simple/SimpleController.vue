@@ -1,4 +1,4 @@
-<script lang="ts" name="FlatController" setup>
+<script lang="ts" name="SimpleController" setup>
 import { computed } from 'vue'
 import { useLayoutController } from '~/composables/layout/useLayoutController'
 
