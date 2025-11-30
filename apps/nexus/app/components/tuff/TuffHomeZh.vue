@@ -19,7 +19,7 @@ const essentials = [
     badge: '开源',
     title: '透明的内核',
     copy: '审阅编排引擎代码、在 GitHub 参与共建，亦可利用官方镜像自建部署。',
-    link: { to: 'https://github.com/tuff-docs/tuff-nexus', label: '前往仓库' },
+    link: { to: 'https://github.com/talex-touch/tuff', label: '前往仓库' },
   },
   {
     badge: '全平台',
