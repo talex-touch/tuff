@@ -68,7 +68,6 @@ interface VersionFormState {
   pluginId: string
   version: string
   channel: PluginChannel
-  homepage: string
   changelog: string
   packageFile: File | null
 }
@@ -668,7 +667,6 @@ function createVersionFormState(plugin?: DashboardPlugin): VersionFormState {
     pluginId: plugin?.id ?? '',
     version: '',
     channel: 'SNAPSHOT',
-    homepage: plugin?.homepage ?? '',
     changelog: '',
     packageFile: null,
   }
@@ -691,6 +689,12 @@ function resetVersionForm(plugin?: DashboardPlugin) {
   versionPreviewLoading.value = false
   versionPreviewError.value = null
   showVersionForm.value = Boolean(plugin)
+  
+  // Clear icon preview URL
+  if (versionForm.iconPreviewUrl) {
+    URL.revokeObjectURL(versionForm.iconPreviewUrl)
+    versionForm.iconPreviewUrl = null
+  }
 }
 
 function closeVersionForm() {
@@ -730,6 +734,28 @@ async function handleVersionPackageInput(event: Event) {
   }
 }
 
+/**
+ * Handles icon file input for version form
+ * Creates a preview URL and validates the file
+ */
+function handleVersionIconInput(event: Event) {
+  const target = event.target as HTMLInputElement | null
+  const file = target?.files?.[0] ?? null
+  
+  // Revoke previous preview URL if exists
+  if (versionForm.iconPreviewUrl) {
+    URL.revokeObjectURL(versionForm.iconPreviewUrl)
+    versionForm.iconPreviewUrl = null
+  }
+  
+  versionForm.iconFile = file
+  
+  if (file) {
+    // Create preview URL
+    versionForm.iconPreviewUrl = URL.createObjectURL(file)
+  }
+}
+
 async function submitVersionForm() {
   versionSaving.value = true
   versionFormError.value = null
@@ -757,6 +783,10 @@ async function submitVersionForm() {
     formData.append('changelog', changelog)
 
     formData.append('package', versionForm.packageFile)
+    
+    // Add icon file if provided
+    if (versionForm.iconFile)
+      formData.append('icon', versionForm.iconFile)
 
     await $fetch(`/api/dashboard/plugins/${versionForm.pluginId}/versions`, {
       method: 'POST',
@@ -917,7 +947,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 <label class="flex items-center gap-2">
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
                     class="max-w-[220px] text-[11px] font-medium text-black outline-none file:mr-3 file:rounded-full file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-primary hover:file:bg-primary/20 dark:text-light dark:file:bg-light/20 dark:file:text-light"
                     @change="handlePluginIconInput"
                   >
@@ -1147,6 +1177,33 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
               class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
             >
           </label>
+          <div class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
+            <span>{{ t('dashboard.sections.plugins.form.icon') }}</span>
+            <div class="flex items-center gap-3">
+              <div class="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-primary/15 bg-dark/5 text-lg font-semibold text-black dark:border-light/20 dark:bg-light/5 dark:text-light">
+                <img
+                  v-if="versionForm.iconPreviewUrl"
+                  :src="versionForm.iconPreviewUrl"
+                  alt="Version icon preview"
+                  class="h-full w-full object-cover"
+                >
+                <span v-else class="text-2xl">📦</span>
+              </div>
+              <div class="flex flex-col gap-2 text-[11px] font-medium normal-case text-black/60 dark:text-light/60">
+                <label class="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                    class="max-w-[220px] text-[11px] font-medium text-black outline-none file:mr-3 file:rounded-full file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-primary hover:file:bg-primary/20 dark:text-light dark:file:bg-light/20 dark:file:text-light"
+                    @change="handleVersionIconInput"
+                  >
+                </label>
+                <p class="max-w-xs leading-relaxed">
+                  {{ t('dashboard.sections.plugins.form.iconHelp') }}
+                </p>
+              </div>
+            </div>
+          </div>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
             {{ t('dashboard.sections.plugins.versionForm.changelog') }}
             <textarea

@@ -24,6 +24,7 @@
     "@floating-ui/vue": "^1.1.9",
     "@iconify-json/cib": "^1.2.3",
     "@sentry/nuxt": "^10.20.0",
+    "@talex-touch/utils": "workspace:*",
     "gsap": "catalog:",
     "jszip": "catalog:",
     "motion-v": "catalog:",

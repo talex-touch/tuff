@@ -281,11 +281,69 @@ export default {
           readmeHelp: 'Supports Markdown. Displayed on the marketplace plugin detail page.',
         },
         versionForm: {
-          version: 'Version tag',
-          channel: 'Release channel',
+          version: 'Version',
+          channel: 'Release Channel',
           changelog: 'Changelog',
-          package: 'Plugin package (.tpex tar, ≤5 MB)',
-          submit: 'Submit for review',
+          package: 'Plugin Package (.tpex tar, ≤5 MB)',
+          submit: 'Submit for Review',
+        },
+        channels: {
+          RELEASE: {
+            name: 'Release',
+            description: 'Visible to all users. For stable versions, pushed to all users who have the plugin installed.',
+            visibility: '✓ Visible to all users',
+          },
+          BETA: {
+            name: 'Beta',
+            description: 'Visible to team members only. For internal testing, only team members can see and install.',
+            visibility: '✓ Visible to team members only',
+          },
+          SNAPSHOT: {
+            name: 'Snapshot',
+            description: 'Visible to advanced users only. For experimental features, only available to advanced users who opted into the snapshot channel.',
+            visibility: '✓ Visible to users who opted into snapshot channel',
+          },
+        },
+        warnings: {
+          immutable: {
+            title: '⚠️ Version Cannot Be Revoked',
+            message: 'Once published, the version cannot be deleted or modified. Please ensure all information is correct before submitting.',
+            understand: 'I Understand',
+            cancel: 'Cancel Publishing',
+          },
+        },
+        license: {
+          title: 'Tuff Plugin License Agreement',
+          agreement: `
+# Tuff Plugin License Agreement
+
+## 1. Acceptance of Terms
+By submitting a plugin, you agree to comply with all terms of this License Agreement.
+
+## 2. Intellectual Property
+- You retain ownership of your plugin source code
+- You grant Tuff the right to distribute and display your plugin
+- You confirm that your plugin does not infringe any third-party rights
+
+## 3. Content Standards
+Plugins must meet the following standards:
+- No malicious code, viruses, or backdoors
+- No collection of user privacy data (unless explicitly stated)
+- No violation of any laws or regulations
+- Accurate feature descriptions
+
+## 4. Review Rights
+Tuff reserves the right to review, reject, or remove any plugin.
+
+## 5. Disclaimer
+Plugins are provided \"as is\". Tuff makes no warranties regarding plugin quality.
+
+## 6. Agreement Changes
+Tuff may update this agreement at any time. Continued submission indicates acceptance of changes.
+          `.trim(),
+          confirm: 'I agree to the Tuff Plugin License Agreement',
+          submit: 'Agree and Submit for Review',
+          cancel: 'Cancel',
         },
         statuses: {
           draft: 'Draft',
