@@ -44,7 +44,6 @@ export class NexusStoreProvider extends BaseMarketProvider {
 
     return plugins
   }
-}
 
   private resolveManifestUrl(): string | null {
     if (typeof this.definition.config?.manifestUrl === 'string') {
