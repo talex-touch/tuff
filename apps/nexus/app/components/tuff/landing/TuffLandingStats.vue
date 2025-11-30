@@ -64,11 +64,11 @@ const aiSpotlight = computed(() => ({
       data-reveal
       class="flex flex-col items-center gap-8 text-center"
     >
-      <TuffLandingShowcaseTuffShowcaseContainer>
+      <TuffShowcaseContainer>
         <TuffVortexBackground>
           <TuffShowcase />
         </TuffVortexBackground>
-      </TuffLandingShowcaseTuffShowcaseContainer>
+      </TuffShowcaseContainer>
 
       <p>
         <span class="block text-sm text-neutral-500/80 font-medium tracking-wide dark:text-neutral-300/70">
