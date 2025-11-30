@@ -156,9 +156,7 @@ interface PublishVersionInput {
   channel: PluginChannel
   version: string
   changelog: string
-  homepage?: string | null
   packageFile: File
-  iconFile?: File | null
   createdBy: string
   canModerate?: boolean
 }
@@ -450,6 +448,38 @@ function validateChannel(channel: string): asserts channel is PluginChannel {
   const allowed: PluginChannel[] = ['SNAPSHOT', 'BETA', 'RELEASE']
   if (!allowed.includes(channel as PluginChannel))
     throw createError({ statusCode: 400, statusMessage: 'Invalid plugin channel.' })
+}
+
+/**
+ * Validate semantic version format (e.g., 1.0.0, 2.1.3-beta, 1.0.0-rc.1)
+ * @param version - Version string to validate
+ * @returns true if version follows semver format, false otherwise
+ */
+function validateSemanticVersion(version: string): boolean {
+  // Standard semver pattern: major.minor.patch with optional pre-release and build metadata
+  const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+  return semverPattern.test(version)
+}
+
+/**
+ * Compare two semantic versions
+ * @param v1 - First version string
+ * @param v2 - Second version string
+ * @returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ */
+function compareVersions(v1: string, v2: string): number {
+  // Extract major.minor.patch from version strings (ignore pre-release and build metadata)
+  const normalize = (v: string) => v.split('-')[0].split('+')[0].split('.').map(Number)
+  const parts1 = normalize(v1)
+  const parts2 = normalize(v2)
+
+  for (let i = 0; i < 3; i++) {
+    if (parts1[i] > parts2[i])
+      return 1
+    if (parts1[i] < parts2[i])
+      return -1
+  }
+  return 0
 }
 
 async function ensureUniquePluginSlug(event: H3Event | undefined, slug: string, excludeId?: string) {
@@ -1253,6 +1283,14 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
 export async function publishPluginVersion(event: H3Event, input: PublishVersionInput) {
   validateChannel(input.channel)
 
+  // Validate semantic version format
+  if (!validateSemanticVersion(input.version)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Version must follow semantic versioning format (e.g., 1.0.0, 2.1.3-beta)',
+    })
+  }
+
   if (!input.changelog || !input.changelog.trim())
     throw createError({ statusCode: 400, statusMessage: 'Changelog is required.' })
 
@@ -1275,6 +1313,26 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
   })
   const currentVersions = pluginWithVersions?.versions ?? []
 
+  // Check for version downgrade and duplicates
+  for (const existing of currentVersions) {
+    // Check for exact duplicate
+    if (existing.version === input.version) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Version ${input.version} already exists`,
+      })
+    }
+
+    // Check for version downgrade
+    const comparison = compareVersions(input.version, existing.version)
+    if (comparison < 0) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Cannot downgrade version from ${existing.version} to ${input.version}`,
+      })
+    }
+  }
+
   await ensureSubmissionCooldown(event, input.createdBy)
 
   const packageArrayBuffer = await input.packageFile.arrayBuffer()
@@ -1282,14 +1340,9 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
   const signature = createHash('sha256').update(packageBuffer).digest('hex')
 
   const metadata = await extractTpexMetadata(packageBuffer)
-  let iconKey = plugin.iconKey ?? ''
-  let iconUrl = plugin.iconUrl ?? ''
-
-  if (input.iconFile && input.iconFile.size > 0) {
-    const iconUpload = await uploadImage(event, input.iconFile)
-    iconKey = iconUpload.key
-    iconUrl = iconUpload.url
-  }
+  // Use plugin's existing icon
+  const iconKey = plugin.iconKey ?? ''
+  const iconUrl = plugin.iconUrl ?? ''
 
   const packageResult = await uploadPluginPackage(event, input.packageFile, packageArrayBuffer)
 
@@ -1383,12 +1436,10 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       UPDATE ${PLUGINS_TABLE}
       SET
         latest_version_id = ?1,
-        homepage = COALESCE(?2, homepage),
-        updated_at = ?3
-      WHERE id = ?4;
+        updated_at = ?2
+      WHERE id = ?3;
     `).bind(
       latest?.id ?? version.id,
-      input.homepage ?? null,
       version.createdAt,
       plugin.id,
     ).run()
@@ -1413,7 +1464,6 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
 
       plugins[index] = {
         ...plugins[index],
-        homepage: input.homepage ?? plugins[index].homepage ?? null,
         latestVersionId: latest?.id ?? version.id,
         updatedAt: version.createdAt,
       }

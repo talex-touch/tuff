@@ -285,6 +285,64 @@ export default {
           package: '插件包（.tpex tar，≤5 MB）',
           submit: '提交审核',
         },
+        channels: {
+          RELEASE: {
+            name: '正式发布',
+            description: '所有用户可见。适用于稳定版本,向所有安装了插件的用户推送。',
+            visibility: '✓ 对所有用户可见',
+          },
+          BETA: {
+            name: '测试版',
+            description: '仅团队成员可见。适用于内部测试,只有团队成员可以看到和安装。',
+            visibility: '✓ 仅团队成员可见',
+          },
+          SNAPSHOT: {
+            name: '快照版',
+            description: '仅高级用户可见。适用于实验性功能,只有选择了快照渠道的高级用户可以访问。',
+            visibility: '✓ 仅选择快照渠道的用户可见',
+          },
+        },
+        warnings: {
+          immutable: {
+            title: '⚠️ 版本不可撤销',
+            message: '版本一旦发布,将无法删除或修改。请确保所有信息无误后再提交。',
+            understand: '我已了解',
+            cancel: '取消发布',
+          },
+        },
+        license: {
+          title: 'Tuff 插件许可协议',
+          agreement: `
+# Tuff 插件许可协议 (Tuff Plugin License)
+
+## 1. 接受条款
+提交插件即表示您同意遵守本许可协议的所有条款。
+
+## 2. 知识产权
+- 您保留对插件源代码的所有权
+- 您授予 Tuff 分发和展示插件的权利
+- 您确认插件不侵犯任何第三方权利
+
+## 3. 内容规范
+插件必须符合以下标准:
+- 不包含恶意代码、病毒或后门
+- 不收集用户隐私数据(除非明确说明)
+- 不违反任何法律法规
+- 功能描述真实准确
+
+## 4. 审核权利
+Tuff 保留审核、拒绝或下架任何插件的权利。
+
+## 5. 免责声明
+插件"按原样"提供,Tuff 不对插件质量做任何保证。
+
+## 6. 协议变更
+Tuff 可能随时更新本协议,继续提交表示接受变更。
+          `.trim(),
+          confirm: '我同意 Tuff 插件许可协议',
+          submit: '同意并提交审核',
+          cancel: '取消',
+        },
         statuses: {
           draft: '草稿',
           pending: '待审核',

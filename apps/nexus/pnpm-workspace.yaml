@@ -1,4 +1,8 @@
-packages: []
+packages:
+  - '../../packages/**'
+  - '../../apps/**'
+  - '../../plugins/**'
+  - '!../app/core/extensions/**'
 
 catalog:
   '@clerk/nuxt': ^1.10.0

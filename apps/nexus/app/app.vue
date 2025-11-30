@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ClerkLoaded, ClerkLoading } from '@clerk/nuxt/components'
-import { computed, watchEffect } from 'vue'
+import { computed, onMounted, watchEffect } from 'vue'
 import { appName } from '~/constants'
 
 useHead({
@@ -12,6 +12,17 @@ const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 
 const { locale, setLocale } = useI18n()
+
+// Initialize user locale from Clerk metadata
+const { initializeLocale, syncLocaleChanges } = useUserLocale()
+
+onMounted(() => {
+  // Load user's saved locale from Clerk
+  initializeLocale()
+  
+  // Enable auto-sync of locale changes to Clerk
+  syncLocaleChanges()
+})
 
 const langParam = computed(() => {
   const raw = route.query.lang
