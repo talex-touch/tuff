@@ -3,6 +3,7 @@ export enum StorageList {
   SHORTCUT_SETTING = 'shortcut-setting.ini',
   OPENERS = 'openers.json',
   IntelligenceConfig = 'aisdk-config',
+  MARKET_SOURCES = 'market-sources.json',
 }
 
 /**

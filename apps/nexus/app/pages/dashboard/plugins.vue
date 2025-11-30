@@ -1,5 +1,10 @@
+```
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import type { VersionFormData } from '~/components/VersionDrawer.vue'
+import VersionDrawer from '~/components/VersionDrawer.vue'
+import { useUser } from '@clerk/vue'
+import { useDateFormat } from '@vueuse/core'
+import { computed, ref, watch } from 'vue'
 import { PLUGIN_CATEGORIES, isPluginCategoryId } from '~/utils/plugin-categories'
 import { useDashboardPluginsData } from '~/composables/useDashboardData'
 
@@ -187,11 +192,6 @@ function slugify(input: string): string {
 const PACKAGE_PREVIEW_ENDPOINT = '/api/dashboard/plugins/package/preview'
 const PACKAGE_CHANNELS: PluginChannel[] = ['SNAPSHOT', 'BETA', 'RELEASE']
 
-function isValidChannel(value: string | undefined | null): value is PluginChannel {
-  if (!value)
-    return false
-  return PACKAGE_CHANNELS.includes(value as PluginChannel)
-}
 
 async function requestPackagePreview(file: File): Promise<PackagePreviewResult> {
   const formData = new FormData()
@@ -234,7 +234,7 @@ function applyManifestToVersionForm(manifest: ExtractedManifest | null) {
     versionForm.version = manifest.version
 
   const manifestChannel = typeof manifest.channel === 'string' ? manifest.channel.toUpperCase() : undefined
-  if (isValidChannel(manifestChannel))
+  if (manifestChannel && PACKAGE_CHANNELS.includes(manifestChannel as PluginChannel))
     versionForm.channel = manifestChannel
 
   if (typeof manifest.homepage === 'string' && !versionForm.homepage.trim())
@@ -676,25 +676,11 @@ const versionForm = reactive(createVersionFormState())
 const showVersionForm = ref(false)
 const versionFormError = ref<string | null>(null)
 const versionSaving = ref(false)
-const versionManifest = ref<ExtractedManifest | null>(null)
-const versionReadme = ref('')
-const versionPreviewLoading = ref(false)
-const versionPreviewError = ref<string | null>(null)
 
 function resetVersionForm(plugin?: DashboardPlugin) {
   Object.assign(versionForm, createVersionFormState(plugin))
   versionFormError.value = null
-  versionManifest.value = null
-  versionReadme.value = ''
-  versionPreviewLoading.value = false
-  versionPreviewError.value = null
   showVersionForm.value = Boolean(plugin)
-  
-  // Clear icon preview URL
-  if (versionForm.iconPreviewUrl) {
-    URL.revokeObjectURL(versionForm.iconPreviewUrl)
-    versionForm.iconPreviewUrl = null
-  }
 }
 
 function closeVersionForm() {
@@ -707,86 +693,23 @@ function openPublishVersionForm(plugin: DashboardPlugin) {
   showVersionForm.value = true
 }
 
-async function handleVersionPackageInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  const file = target?.files?.[0] ?? null
-  versionForm.packageFile = file
-  versionFormError.value = null
-  versionManifest.value = null
-  versionReadme.value = ''
-  versionPreviewError.value = null
 
-  if (!file)
-    return
 
-  versionPreviewLoading.value = true
-  try {
-    const preview = await requestPackagePreview(file)
-    versionManifest.value = preview.manifest
-    versionReadme.value = preview.readmeMarkdown ?? ''
-    applyManifestToVersionForm(preview.manifest)
-  }
-  catch (error: unknown) {
-    versionPreviewError.value = error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
-  }
-  finally {
-    versionPreviewLoading.value = false
-  }
-}
 
-/**
- * Handles icon file input for version form
- * Creates a preview URL and validates the file
- */
-function handleVersionIconInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  const file = target?.files?.[0] ?? null
-  
-  // Revoke previous preview URL if exists
-  if (versionForm.iconPreviewUrl) {
-    URL.revokeObjectURL(versionForm.iconPreviewUrl)
-    versionForm.iconPreviewUrl = null
-  }
-  
-  versionForm.iconFile = file
-  
-  if (file) {
-    // Create preview URL
-    versionForm.iconPreviewUrl = URL.createObjectURL(file)
-  }
-}
 
-async function submitVersionForm() {
+async function submitVersionForm(data: VersionFormData) {
   versionSaving.value = true
   versionFormError.value = null
 
   try {
     if (!versionForm.pluginId)
       throw new Error(t('dashboard.sections.plugins.errors.missingPlugin'))
-    if (!versionForm.version.trim())
-      throw new Error(t('dashboard.sections.plugins.errors.missingVersion'))
-    if (!versionForm.packageFile)
-      throw new Error(t('dashboard.sections.plugins.errors.missingPackage'))
 
     const formData = new FormData()
-    formData.append('version', versionForm.version.trim())
-    formData.append('channel', versionForm.channel)
-
-    const homepage = versionForm.homepage.trim()
-    if (homepage.length)
-      formData.append('homepage', homepage)
-
-    const changelog = versionForm.changelog.trim()
-    if (!changelog.length)
-      throw new Error(t('dashboard.sections.plugins.errors.missingChangelog', 'Changelog is required.'))
-
-    formData.append('changelog', changelog)
-
-    formData.append('package', versionForm.packageFile)
-    
-    // Add icon file if provided
-    if (versionForm.iconFile)
-      formData.append('icon', versionForm.iconFile)
+    formData.append('version', data.version.trim())
+    formData.append('channel', data.channel)
+    formData.append('changelog', data.changelog.trim())
+    formData.append('package', data.packageFile)
 
     await $fetch(`/api/dashboard/plugins/${versionForm.pluginId}/versions`, {
       method: 'POST',
@@ -1141,185 +1064,15 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         </p>
       </div>
 
-      <form
-        v-if="showVersionForm"
-        class="mt-6 space-y-4"
-        @submit.prevent="submitVersionForm"
-      >
-        <div class="grid gap-4 md:grid-cols-2">
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            {{ t('dashboard.sections.plugins.versionForm.version') }}
-            <input
-              v-model="versionForm.version"
-              type="text"
-              required
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            >
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            {{ t('dashboard.sections.plugins.versionForm.channel') }}
-            <select
-              v-model="versionForm.channel"
-              required
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            >
-              <option value="SNAPSHOT">SNAPSHOT</option>
-              <option value="BETA">BETA</option>
-              <option value="RELEASE">RELEASE</option>
-            </select>
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            {{ t('dashboard.sections.plugins.form.homepage') }}
-            <input
-              v-model="versionForm.homepage"
-              type="url"
-              placeholder="https://github.com/..."
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            >
-          </label>
-          <div class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            <span>{{ t('dashboard.sections.plugins.form.icon') }}</span>
-            <div class="flex items-center gap-3">
-              <div class="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-primary/15 bg-dark/5 text-lg font-semibold text-black dark:border-light/20 dark:bg-light/5 dark:text-light">
-                <img
-                  v-if="versionForm.iconPreviewUrl"
-                  :src="versionForm.iconPreviewUrl"
-                  alt="Version icon preview"
-                  class="h-full w-full object-cover"
-                >
-                <span v-else class="text-2xl">📦</span>
-              </div>
-              <div class="flex flex-col gap-2 text-[11px] font-medium normal-case text-black/60 dark:text-light/60">
-                <label class="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                    class="max-w-[220px] text-[11px] font-medium text-black outline-none file:mr-3 file:rounded-full file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-primary hover:file:bg-primary/20 dark:text-light dark:file:bg-light/20 dark:file:text-light"
-                    @change="handleVersionIconInput"
-                  >
-                </label>
-                <p class="max-w-xs leading-relaxed">
-                  {{ t('dashboard.sections.plugins.form.iconHelp') }}
-                </p>
-              </div>
-            </div>
-          </div>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
-            {{ t('dashboard.sections.plugins.versionForm.changelog') }}
-            <textarea
-              v-model="versionForm.changelog"
-              rows="3"
-              required
-              class="resize-y rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            ></textarea>
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            {{ t('dashboard.sections.plugins.versionForm.package') }}
-            <input
-              type="file"
-              accept=".tpex"
-              required
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none file:mr-3 file:rounded-lg file:border-0 file:bg-dark/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-black transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light dark:file:bg-light/10 dark:file:text-light"
-              @change="handleVersionPackageInput"
-            >
-          </label>
-        </div>
-        <div class="rounded-2xl border border-primary/10 bg-dark/5 p-4 text-xs text-black/70 dark:border-light/20 dark:bg-light/10 dark:text-light/70">
-          <div class="grid gap-4 md:grid-cols-2">
-            <div>
-              <p class="font-semibold uppercase tracking-wide">
-                {{ t('dashboard.sections.plugins.manifestPreview') }}
-              </p>
-              <p class="mt-1 text-[11px]">
-                {{ t('dashboard.sections.plugins.readmePreviewServer') }}
-              </p>
-              <p v-if="versionPreviewLoading" class="mt-2 text-[11px]">
-                {{ t('dashboard.sections.plugins.previewLoading') }}
-              </p>
-              <p v-else-if="versionPreviewError" class="mt-2 text-[11px] text-red-500">
-                {{ versionPreviewError }}
-              </p>
-              <template v-else>
-                <div v-if="versionManifest" class="mt-3 space-y-2 text-[11px] leading-relaxed">
-                  <p v-if="versionManifest.id">
-                    <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.id') }}:</span>
-                    {{ versionManifest.id }}
-                  </p>
-                  <p v-if="versionManifest.name">
-                    <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.name') }}:</span>
-                    {{ versionManifest.name }}
-                  </p>
-                  <p v-if="versionManifest.version">
-                    <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.version') }}:</span>
-                    {{ versionManifest.version }}
-                  </p>
-                  <p v-if="versionManifest.description">
-                    <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.description') }}:</span>
-                    {{ versionManifest.description }}
-                  </p>
-                  <p v-if="versionManifest.homepage">
-                    <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.homepage') }}:</span>
-                    {{ versionManifest.homepage }}
-                  </p>
-                  <details class="group rounded-lg border border-primary/10 bg-white/50 p-2 text-black dark:border-light/20 dark:bg-dark/40 dark:text-light">
-                    <summary class="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-wide text-black/70 transition group-open:text-black dark:text-light/70 dark:group-open:text-light">
-                      {{ t('dashboard.sections.plugins.manifestRaw') }}
-                    </summary>
-                    <pre class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-black/5 p-2 font-mono text-[10px] text-black dark:bg-white/10 dark:text-light">
-                      {{ JSON.stringify(versionManifest, null, 2) }}
-                    </pre>
-                  </details>
-                </div>
-                <p v-else-if="versionForm.packageFile" class="mt-3 text-[11px]">
-                  {{ t('dashboard.sections.plugins.noManifest') }}
-                </p>
-                <p v-else class="mt-3 text-[11px] text-black/50 dark:text-light/60">
-                  {{ t('dashboard.sections.plugins.packageAwaiting') }}
-                </p>
-              </template>
-            </div>
-            <div class="border-t border-primary/10 pt-3 dark:border-light/20 md:border-l md:border-t-0 md:pl-4 md:pt-0">
-              <p class="font-semibold uppercase tracking-wide">
-                {{ t('dashboard.sections.plugins.readmePreview') }}
-              </p>
-              <p class="mt-1 text-[11px]">
-                {{ t('dashboard.sections.plugins.readmePreviewServer') }}
-              </p>
-              <p v-if="versionPreviewLoading" class="mt-2 text-[11px]">
-                {{ t('dashboard.sections.plugins.previewLoading') }}
-              </p>
-              <p v-else-if="versionPreviewError" class="mt-2 text-[11px] text-red-500">
-                {{ versionPreviewError }}
-              </p>
-              <div v-else-if="versionReadme" class="prose prose-sm mt-2 max-w-none dark:prose-invert">
-                <ContentRendererMarkdown :value="versionReadme" />
-              </div>
-              <p v-else-if="versionForm.packageFile" class="mt-2 text-[11px]">
-                {{ t('dashboard.sections.plugins.noReadme') }}
-              </p>
-              <p v-else class="mt-2 text-[11px] text-black/50 dark:text-light/60">
-                {{ t('dashboard.sections.plugins.packageAwaiting') }}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <p
-            v-if="versionFormError"
-            class="text-xs text-red-500"
-          >
-            {{ versionFormError }}
-          </p>
-          <button
-            type="submit"
-            class="inline-flex items-center gap-2 rounded-full bg-dark px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-dark/90 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-light dark:text-black dark:hover:bg-light/90"
-            :disabled="versionSaving"
-          >
-            <span v-if="versionSaving" class="i-carbon-circle-dash animate-spin" />
-            {{ t('dashboard.sections.plugins.versionForm.submit') }}
-          </button>
-        </div>
-      </form>
+      <VersionDrawer
+        :is-open="showVersionForm"
+        :plugin-id="versionForm.pluginId"
+        :plugin-name="pluginForm.name"
+        :loading="versionSaving"
+        :error="versionFormError"
+        @close="closeVersionForm"
+        @submit="submitVersionForm"
+      />
     </div>
 
     <div
