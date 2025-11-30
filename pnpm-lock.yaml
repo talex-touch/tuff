@@ -43,6 +43,15 @@ catalogs:
     '@clerk/nuxt':
       specifier: ^1.10.0
       version: 1.13.3
+    '@floating-ui/vue':
+      specifier: ^1.1.9
+      version: 1.1.9
+    '@iconify-json/cib':
+      specifier: ^1.2.3
+      version: 1.2.3
+    '@sentry/nuxt':
+      specifier: ^10.20.0
+      version: 10.27.0
     gsap:
       specifier: ^3.12.5
       version: 3.13.0
@@ -499,13 +508,13 @@ importers:
         specifier: 'catalog:'
         version: 1.13.3(magicast@0.5.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(vue@3.5.24(typescript@5.9.3))
       '@floating-ui/vue':
-        specifier: ^1.1.9
+        specifier: 'catalog:'
         version: 1.1.9(vue@3.5.24(typescript@5.9.3))
       '@iconify-json/cib':
-        specifier: ^1.2.3
+        specifier: 'catalog:'
         version: 1.2.3
       '@sentry/nuxt':
-        specifier: ^10.20.0
+        specifier: 'catalog:'
         version: 10.27.0(5baa69950ec852f989de998838f32ee9)
       '@talex-touch/utils':
         specifier: workspace:*
@@ -14673,7 +14682,7 @@ snapshots:
       '@nuxt/devtools-wizard': 2.7.0
       '@nuxt/kit': 4.2.1(magicast@0.3.5)
       '@vue/devtools-core': 7.7.9(vite@7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.94.0)(terser@5.44.1)(yaml@2.8.1))(vue@3.5.24(typescript@5.9.3))
-      '@vue/devtools-kit': 7.7.8
+      '@vue/devtools-kit': 7.7.9
       birpc: 2.8.0
       consola: 3.4.2
       destr: 2.0.5
