@@ -33,17 +33,18 @@ export class NexusStoreProvider extends BaseMarketProvider {
     })
 
     if (!Array.isArray(response.data)) {
-      throw new Error('MARKET_NEXUS_INVALID_MANIFEST')
+      throw new TypeError('MARKET_NEXUS_INVALID_MANIFEST')
     }
 
     const baseUrl = this.resolveBaseUrl(manifestUrl)
 
-    const plugins = response.data.map((entry) => this.normalizeEntry(entry, baseUrl))
+    const plugins = response.data.map(entry => this.normalizeEntry(entry, baseUrl))
 
     this.#cache = plugins
 
     return plugins
   }
+}
 
   private resolveManifestUrl(): string | null {
     if (typeof this.definition.config?.manifestUrl === 'string') {
