@@ -19,21 +19,29 @@ const linkable = computed(() => props.list <= 0)
 
 <template>
   <div class="DocSection flex flex-col">
-    <button
-      type="button"
-      class="DocSection-Header group w-full flex cursor-pointer items-center justify-between py-2.5 text-sm font-medium transition-colors"
+    <NuxtLink
+      v-if="linkable"
+      :to="link"
+      class="DocSection-Header group w-full flex cursor-pointer items-center justify-between py-2.5 text-sm font-medium transition-colors text-inherit no-underline"
       :class="active ? 'text-black dark:text-white' : 'text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white'"
       @click="emit('click')"
     >
       <span class="truncate pl-1">
-        <slot v-if="!linkable" name="header" />
-        <NuxtLink v-else class="text-inherit no-underline" :to="link">
-          <slot name="header" />
-        </NuxtLink>
+        <slot name="header" />
       </span>
-
+    </NuxtLink>
+    <button
+      v-else
+      type="button"
+      class="DocSection-Header group w-full flex cursor-pointer items-center justify-between py-2.5 text-sm font-medium transition-colors"
+      :class="active ? 'text-black dark:text-white' : 'text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white'"
+      :aria-expanded="active"
+      @click="emit('click')"
+    >
+      <span class="truncate pl-1">
+        <slot name="header" />
+      </span>
       <span
-        v-if="!linkable"
         class="i-carbon-chevron-right text-[10px] transition-transform duration-200"
         :class="active ? 'rotate-90 opacity-100' : 'opacity-40 group-hover:opacity-100'"
       />
