@@ -16,7 +16,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const { officialPlugins, loading, loadOfficialPlugins } = useMarketData()
+const { plugins: officialPlugins, loading, loadMarketPlugins: loadOfficialPlugins } = useMarketData()
 const { handleInstall } = useMarketInstall()
 
 const pluginId = computed(() => route.params.id as string)

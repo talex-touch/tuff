@@ -15,7 +15,6 @@ interface NexusManifestEntry {
 
 export class NexusStoreProvider extends BaseMarketProvider {
   #cache: MarketPlugin[] | null = null
-  #lastFetched = 0
 
   async list(options: MarketProviderListOptions = {}): Promise<MarketPlugin[]> {
     if (!options.force && this.#cache) {
@@ -42,7 +41,6 @@ export class NexusStoreProvider extends BaseMarketProvider {
     const plugins = response.data.map((entry) => this.normalizeEntry(entry, baseUrl))
 
     this.#cache = plugins
-    this.#lastFetched = Date.now()
 
     return plugins
   }
