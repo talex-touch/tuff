@@ -69,6 +69,8 @@ export class WindowManager {
   private nativeThemeHandler: (() => void) | null = null
   private currentThemeIsDark = false
   private bundledThemeCss: string | null = null
+  private inputAllowed = false
+  private clipboardAllowedTypes = 0
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -90,6 +92,38 @@ export class WindowManager {
 
   public getAttachedPlugin(): TouchPlugin | null {
     return this.attachedPlugin
+  }
+
+  /**
+   * Enable input monitoring for attached UI view
+   */
+  public enableInputMonitoring(): void {
+    this.inputAllowed = true
+    coreBoxWindowLog.info('Input monitoring enabled for UI view')
+  }
+
+  /**
+   * Enable clipboard monitoring for specified types
+   */
+  public enableClipboardMonitoring(types: number): void {
+    this.clipboardAllowedTypes = types
+    coreBoxWindowLog.info(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
+  }
+
+  /**
+   * Send input change to UI view if allowed
+   */
+  public sendInputChange(input: string): void {
+    if (!this.inputAllowed || !this.attachedPlugin) return
+
+    this.sendChannelMessageToUIView('core-box:input-change', { input })
+  }
+
+  /**
+   * Check if clipboard type is allowed
+   */
+  private isClipboardTypeAllowed(type: number): boolean {
+    return (this.clipboardAllowedTypes & type) !== 0
   }
 
   /**
@@ -532,6 +566,7 @@ export class WindowManager {
   const { ipcRenderer } = require('electron')
   const ChannelType = ${JSON.stringify(ChannelType)};
   const DataCode = ${JSON.stringify(DataCode)};
+  const CHANNEL_DEFAULT_TIMEOUT = 10000;
 
   class TouchChannel {
     channelMap = new Map();
@@ -573,7 +608,6 @@ export class WindowManager {
     }
 
     __handle_main(e, arg) {
-      console.debug(e, arg)
       const rawData = this.__parse_raw_data(e, arg);
       if (!rawData?.header) {
         console.error('Invalid message: ', arg);
@@ -616,6 +650,16 @@ export class WindowManager {
       };
     }
 
+    formatPayloadPreview(payload) {
+      if (payload === null || payload === undefined) return String(payload);
+      if (typeof payload === 'string') return payload.length > 200 ? payload.slice(0, 200) + '…' : payload;
+      try {
+        return JSON.stringify(payload);
+      } catch {
+        return '[unserializable]';
+      }
+    }
+
     regChannel(eventName, callback) {
       const listeners = this.channelMap.get(eventName) || [];
       if (!listeners.includes(callback)) {
@@ -633,13 +677,13 @@ export class WindowManager {
     }
 
     send(eventName, arg) {
-      const uniqueId = \`\${new Date().getTime()}#\${eventName}@\${Math.random().toString(12)}\`;
+      const uniqueId = Date.now() + '#' + eventName + '@' + Math.random().toString(12);
       const data = {
         code: DataCode.SUCCESS,
         data: arg,
         sync: {
           timeStamp: new Date().getTime(),
-          timeout: 10000,
+          timeout: CHANNEL_DEFAULT_TIMEOUT,
           id: uniqueId
         },
         name: eventName,
@@ -649,9 +693,34 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
-      return new Promise((resolve) => {
-        ipcRenderer.send('@plugin-process-message', data);
+      return new Promise((resolve, reject) => {
+        try {
+          ipcRenderer.send('@plugin-process-message', data);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('[CoreBox] Failed to send plugin channel message', {
+            eventName,
+            error: errorMessage,
+            payloadPreview: this.formatPayloadPreview(arg)
+          });
+          const sendError = new Error('Failed to send plugin channel message "' + eventName + '": ' + errorMessage);
+          sendError.code = 'plugin_channel_send_failed';
+          reject(sendError);
+          return;
+        }
+
+        const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT;
+        const timeoutHandle = setTimeout(() => {
+          if (!this.pendingMap.has(uniqueId)) return;
+          this.pendingMap.delete(uniqueId);
+          const timeoutError = new Error('Plugin channel request "' + eventName + '" timed out after ' + timeoutMs + 'ms');
+          timeoutError.code = 'plugin_channel_timeout';
+          console.warn(timeoutError.message);
+          reject(timeoutError);
+        }, timeoutMs);
+
         this.pendingMap.set(uniqueId, (res) => {
+          clearTimeout(timeoutHandle);
           this.pendingMap.delete(uniqueId);
           resolve(res.data);
         });
@@ -669,9 +738,18 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
-      const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@plugin-process-message', data));
-      if (res?.header?.status === 'reply') return res.data;
-      return res;
+      try {
+        const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@plugin-process-message', data));
+        if (res?.header?.status === 'reply') return res.data;
+        return res;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[CoreBox] Failed to sendSync plugin channel message', {
+          eventName,
+          error: errorMessage
+        });
+        throw new Error('Failed to sendSync plugin channel message "' + eventName + '": ' + errorMessage);
+      }
     }
   }
   window['$channel'] = new TouchChannel();
@@ -776,10 +854,16 @@ export class WindowManager {
       height: bounds.height - 60
     })
 
-    this.uiView.webContents.loadURL(url)
+    const finalUrl = this.normalizeUIViewUrl(url, plugin)
+    coreBoxWindowLog.info(`AttachUIView - resolved URL ${finalUrl}`)
+    this.uiView.webContents.loadURL(finalUrl)
   }
 
   public detachUIView(): void {
+    // Reset permissions
+    this.inputAllowed = false
+    this.clipboardAllowedTypes = 0
+
     if (this.nativeThemeHandler) {
       nativeTheme.removeListener('updated', this.nativeThemeHandler)
       this.nativeThemeHandler = null
@@ -832,6 +916,36 @@ export class WindowManager {
     }
 
     return this.uiView
+  }
+
+  private normalizeUIViewUrl(url: string, plugin?: TouchPlugin): string {
+    const isDevPlugin = Boolean(plugin && plugin.dev && plugin.dev.enable)
+    if (!isDevPlugin) {
+      return url
+    }
+
+    try {
+      const parsed = new URL(url)
+      if (parsed.hash && parsed.hash.startsWith('#/')) {
+        return url
+      }
+
+      const pathWithSearch = `${parsed.pathname ?? ''}${parsed.search ?? ''}` || '/'
+      const normalizedPath = pathWithSearch.startsWith('/') ? pathWithSearch : `/${pathWithSearch}`
+      parsed.pathname = '/'
+      parsed.search = ''
+      parsed.hash = `#${normalizedPath}`
+      return parsed.toString()
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      coreBoxWindowLog.warn(
+        '[CoreBox] Failed to normalize plugin dev URL for hash routing, falling back.',
+        { meta: { url, error: errorMessage } }
+      )
+      const sanitized = url.replace(/#.*$/, '').replace(/\/+$/, '')
+      return `${sanitized}/#/`
+    }
   }
 }
 
