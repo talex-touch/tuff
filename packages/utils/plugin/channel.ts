@@ -10,6 +10,8 @@ import {
   DataCode,
 } from '../channel'
 
+const CHANNEL_DEFAULT_TIMEOUT = 10_000
+
 let cachedIpcRenderer: IpcRenderer | null = null
 
 // 使用惰性解析避免在打包阶段静态引入 electron
@@ -197,6 +199,19 @@ class TouchChannel implements ITouchClientChannel {
     return true
   }
 
+  private formatPayloadPreview(payload: unknown): string {
+    if (payload === null || payload === undefined)
+      return String(payload)
+    if (typeof payload === 'string')
+      return payload.length > 200 ? `${payload.slice(0, 200)}…` : payload
+    try {
+      return JSON.stringify(payload)
+    }
+    catch {
+      return '[unserializable]'
+    }
+  }
+
   send(eventName: string, arg: any): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(
       12,
@@ -207,7 +222,7 @@ class TouchChannel implements ITouchClientChannel {
       data: arg,
       sync: {
         timeStamp: new Date().getTime(),
-        timeout: 10000,
+        timeout: CHANNEL_DEFAULT_TIMEOUT,
         id: uniqueId,
       },
       name: eventName,
@@ -218,10 +233,40 @@ class TouchChannel implements ITouchClientChannel {
       },
     } as RawStandardChannelData
 
-    return new Promise((resolve) => {
-      this.ipcRenderer.send('@plugin-process-message', data)
+    return new Promise((resolve, reject) => {
+      try {
+        this.ipcRenderer.send('@plugin-process-message', data)
+      }
+      catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error(
+          `[PluginChannel] Failed to send "${eventName}": ${errorMessage}`,
+          { payloadPreview: this.formatPayloadPreview(arg) },
+        )
+        reject(
+          Object.assign(
+            new Error(`Failed to send plugin channel message "${eventName}": ${errorMessage}`),
+            { code: 'plugin_channel_send_failed' },
+          ),
+        )
+        return
+      }
+
+      const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT
+      const timeoutHandle = setTimeout(() => {
+        if (!this.pendingMap.has(uniqueId))
+          return
+        this.pendingMap.delete(uniqueId)
+        const timeoutError = Object.assign(
+          new Error(`Plugin channel request "${eventName}" timed out after ${timeoutMs}ms`),
+          { code: 'plugin_channel_timeout' },
+        )
+        console.warn(timeoutError.message)
+        reject(timeoutError)
+      }, timeoutMs)
 
       this.pendingMap.set(uniqueId, (res: any) => {
+        clearTimeout(timeoutHandle)
         this.pendingMap.delete(uniqueId)
 
         resolve(res.data)
@@ -241,12 +286,26 @@ class TouchChannel implements ITouchClientChannel {
       },
     } as RawStandardChannelData
 
-    const res = this.__parse_raw_data(void 0, this.ipcRenderer.sendSync('@plugin-process-message', data))!
+    try {
+      const res = this.__parse_raw_data(
+        void 0,
+        this.ipcRenderer.sendSync('@plugin-process-message', data),
+      )!
 
-    if (res.header.status === 'reply')
-      return res.data
+      if (res.header.status === 'reply')
+        return res.data
 
-    return res
+      return res
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error('[PluginChannel] Failed to sendSync message', {
+        eventName,
+        error: errorMessage,
+        payloadPreview: this.formatPayloadPreview(arg),
+      })
+      throw new Error(`Failed to sendSync plugin channel message "${eventName}": ${errorMessage}`)
+    }
   }
 }
 
