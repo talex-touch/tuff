@@ -7,10 +7,10 @@ import { useRouter } from 'vue-router'
 import MarketGridView from '~/components/market/MarketGridView.vue'
 import MarketHeader from '~/components/market/MarketHeader.vue'
 import { useMarketCategories } from '~/composables/market/useMarketCategories'
-import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
+import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
-import { pluginSettings } from '~/modules/storage/plugin-settings'
+import { marketSourcesStorage } from '~/modules/storage/market-sources'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 
@@ -18,10 +18,10 @@ const { t } = useI18n()
 const router = useRouter()
 
 // Market data management
-const { officialPlugins, loading, loadOfficialPlugins } = useMarketData()
+const { plugins: marketPlugins, loading, loadMarketPlugins } = useMarketData()
 
 // Category management
-const { tags: _tags, tagInd: _tagInd, selectedTag, updateCategoryTags } = useMarketCategories(officialPlugins)
+const { tags: _tags, tagInd: _tagInd, selectedTag, updateCategoryTags } = useMarketCategories(marketPlugins)
 
 // Installation management
 const { handleInstall } = useMarketInstall()
@@ -31,7 +31,9 @@ const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const viewType = ref<'grid' | 'list'>('grid')
 const searchKey = ref('')
 const detailVisible = ref(false)
-const activePlugin = ref<OfficialPluginListItem | null>(null)
+const activePlugin = ref<MarketPluginListItem | null>(null)
+const sourcesState = marketSourcesStorage.get()
+const sourcesCount = computed(() => sourcesState.sources.length)
 
 // Renderer channel
 let rendererChannel: ITouchClientChannel | undefined
@@ -57,7 +59,7 @@ const displayedPlugins = computed(() => {
   const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
   const normalizedKey = searchKey.value.trim().toLowerCase()
 
-  return officialPlugins.value.filter((plugin) => {
+  return marketPlugins.value.filter((plugin) => {
     const pluginCategory = plugin.category?.toLowerCase() ?? ''
     const matchesCategory = !categoryFilter || pluginCategory === categoryFilter
 
@@ -138,6 +140,14 @@ const detailMeta = computed(() => {
   }
 
   meta.push({
+    icon: 'i-ri-shield-user-line',
+    label: t('market.detailDialog.provider'),
+    value: plugin.providerName
+      ? `${plugin.providerName} (${plugin.providerType})`
+      : plugin.providerId
+  })
+
+  meta.push({
     icon: 'i-ri-barcode-line',
     label: t('market.detailDialog.pluginId'),
     value: plugin.id
@@ -170,12 +180,12 @@ function handleSearch(query: string): void {
   searchKey.value = query
 }
 
-async function onInstall(plugin: OfficialPluginListItem): Promise<void> {
+async function onInstall(plugin: MarketPluginListItem): Promise<void> {
   const channel = await getRendererChannel()
   await handleInstall(plugin, channel)
 }
 
-function openPluginDetail(plugin: OfficialPluginListItem): void {
+function openPluginDetail(plugin: MarketPluginListItem): void {
   // Navigate to detail page with shared element transition
   router.push(`/market/${plugin.id}`)
 }
@@ -196,7 +206,7 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 watch(
-  () => officialPlugins.value,
+  () => marketPlugins.value,
   () => {
     updateCategoryTags()
   },
@@ -222,7 +232,7 @@ onMounted(() => {
     window.addEventListener('keydown', handleKeydown)
   }
 
-  void loadOfficialPlugins()
+  void loadMarketPlugins()
 })
 
 onBeforeUnmount(() => {
@@ -241,8 +251,8 @@ onBeforeUnmount(() => {
     <MarketHeader
       v-model:view-type="viewType"
       :loading="loading"
-      :sources-count="pluginSettings.source.list.length"
-      @refresh="loadOfficialPlugins(true)"
+      :sources-count="sourcesCount"
+      @refresh="loadMarketPlugins(true)"
       @open-source-editor="toggleSourceEditorShow()"
       @search="handleSearch"
     />

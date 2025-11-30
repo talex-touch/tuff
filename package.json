@@ -18,7 +18,8 @@
     "postinstall": "node scripts/sync-core-package.mjs",
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
     "sync:core-pkg": "node scripts/sync-core-package.mjs",
-    "dev": "pnpm -F @talex-touch/core-app run dev",
+    "core:dev": "pnpm -F @talex-touch/core-app run dev",
+    "nexus:dev": "pnpm -F @talex-touch/tuff-nexus run dev",
     "build": "pnpm -F @talex-touch/core-app run build",
     "build:beta": "pnpm -F @talex-touch/core-app run build:beta",
     "build:snapshot": "pnpm -F @talex-touch/core-app run build:snapshot",
@@ -75,10 +76,17 @@
       "tesseract.js",
       "typeit",
       "utf-8-validate",
-      "vue-demi"
+      "vue-demi",
+      "sharp",
+      "unrs-resolver",
+      "workerd"
     ],
     "overrides": {
       "@types/node": "24.1.0",
+      "@nuxt/devtools": "catalog:build",
+      "@nuxt/kit": "catalog:build",
+      "nuxt": "catalog:build",
+      "unplugin": "catalog:build",
       "vite": "7.0.6"
     }
   },

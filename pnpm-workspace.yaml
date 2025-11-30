@@ -3,3 +3,60 @@ packages:
   - 'apps/**'
   - 'plugins/**'
   - '!app/core/extensions/**'
+
+catalog:
+  '@clerk/nuxt': ^1.10.0
+  '@floating-ui/vue': ^1.1.9
+  '@iconify-json/cib': ^1.2.3
+  '@lobehub/icons': ^2.43.1
+  '@sentry/nuxt': ^10.20.0
+  fighting-design: 0.25.1
+  gsap: ^3.12.5
+  jszip: ^3.10.1
+  markdown-it: ^14.1.0
+  motion-v: ^1.7.2
+  ogl: ^1.0.11
+  sass: ^1.89.2
+  simplex-noise: ^4.0.3
+  typeit: ^8.8.7
+  vitepress: 2.0.0-alpha.9
+
+catalogs:
+  build:
+    '@nuxt/content': ^3.6.3
+    '@nuxt/devtools': ^2.6.2
+    '@nuxt/eslint': ^1.5.2
+    '@nuxt/kit': ^4.0.0
+    '@nuxtjs/color-mode': ^3.5.2
+    '@nuxtjs/i18n': ^10.0.6
+    '@pinia/nuxt': ^0.11.1
+    '@unocss/eslint-config': ^66.3.3
+    '@unocss/nuxt': ^66.3.3
+    '@unocss/preset-typography': ^66.5.0
+    '@vite-pwa/nuxt': ^1.0.4
+    '@vueuse/nuxt': ^13.5.0
+    nuxt: ^4.0.0
+    unocss: ^66.3.3
+    unplugin: ^2.3.5
+    vite: ^7.0.4
+  conflicts_build_h7_0_6:
+    vite: ^7.0.6
+  conflicts_frontend_h3_5_18:
+    vue: ^3.5.18
+  dev:
+    '@antfu/eslint-config': ^4.17.0
+    '@cloudflare/workers-types': ^4.20241218.0
+    eslint: ^9.31.0
+    eslint-plugin-format: ^1.0.1
+    nitro-cloudflare-dev: ^0.2.2
+    typescript: ^5.8.3
+    vue-tsc: ^3.0.1
+    webpack: ^5.101.3
+    wrangler: ^4.0.0
+  frontend:
+    '@vueuse/core': ^13.5.0
+    pinia: ^3.0.3
+    vue: ^3.5.17
+  icons:
+    '@iconify-json/carbon': ^1.2.10
+    '@iconify-json/twemoji': ^1.2.2
