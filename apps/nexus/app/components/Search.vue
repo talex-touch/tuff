@@ -9,7 +9,7 @@ watch(searchTerm, async (newTerm) => {
   }
   // @ts-expect-error: `searchContent` is auto-imported
   const results = await searchContent(newTerm)
-  searchResults.value = results.value
+  searchResults.value = results
 })
 </script>
 

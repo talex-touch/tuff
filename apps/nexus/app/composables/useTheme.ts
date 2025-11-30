@@ -1,31 +1,40 @@
 import { useColorMode } from '#imports'
 
+const hasWindow = typeof window !== 'undefined'
+const hasDocument = typeof document !== 'undefined'
+
 export function useTheme() {
   const color = useColorMode()
-  const systemDarkMode = window.matchMedia('(prefers-color-scheme: dark)')
+  const systemDarkMode = hasWindow ? window.matchMedia('(prefers-color-scheme: dark)') : null
+
+  const applyPreference = (mode: 'auto' | 'dark' | 'light') => {
+    if (mode === 'auto')
+      color.preference = 'auto'
+    else
+      color.preference = mode
+  }
 
   const toggleDark = (mode: 'auto' | 'dark' | 'light', event?: { clientX: number; clientY: number }) => {
-    const isAppearanceTransition = typeof document !== 'undefined'
+    if (!hasWindow || !hasDocument) {
+      applyPreference(mode)
+      return
+    }
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const isAppearanceTransition = !prefersReducedMotion
       // @ts-expect-error: Transition API
-      && !!document.startViewTransition
-      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      && typeof document.startViewTransition === 'function'
 
     if (!isAppearanceTransition || !event) {
-      if (mode === 'auto')
-        color.preference = 'auto'
-      else
-        color.preference = mode
+      applyPreference(mode)
       return
     }
 
     const [x, y] = [event.clientX, event.clientY]
-    const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode.matches)
+    const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode?.matches)
 
     const transition = document.startViewTransition(() => {
-      if (mode === 'auto')
-        color.preference = 'auto'
-      else
-        color.preference = mode
+      applyPreference(mode)
     })
 
     transition.ready.then(() => {

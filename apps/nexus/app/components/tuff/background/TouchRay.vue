@@ -87,7 +87,11 @@ const resizeTimeoutRef = ref<number | null>(null)
 
 const rgbColor = computed<[number, number, number]>(() => hexToRgb(props.raysColor))
 const pulsatingValue = computed<number>(() => props.pulsating ? 1.0 : 0.0)
-const devicePixelRatio = computed<number>(() => Math.min(window.devicePixelRatio || 1, 2))
+const devicePixelRatio = computed<number>(() => {
+  if (typeof window === 'undefined')
+    return 1
+  return Math.min(window.devicePixelRatio || 1, 2)
+})
 
 function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
@@ -128,6 +132,11 @@ const debouncedUpdatePlacement = (() => {
   return (updateFn: () => void): void => {
     if (timeoutId !== null) {
       clearTimeout(timeoutId)
+    }
+    if (typeof window === 'undefined') {
+      updateFn()
+      timeoutId = null
+      return
     }
     timeoutId = window.setTimeout(() => {
       updateFn()
