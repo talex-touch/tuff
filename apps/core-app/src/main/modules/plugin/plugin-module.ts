@@ -21,9 +21,11 @@ import { createDbUtils } from '../../db/utils'
 import { internalPlugins } from '../../plugins/internal'
 import { fileWatchService } from '../../service/file-watch.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
+import { performMarketHttpRequest } from '../../service/market-http.service'
 import { createLogger } from '../../utils/logger'
 import { debounce } from '../../utils/common-util'
 import { BaseModule } from '../abstract-base-module'
+import type { MarketHttpRequestOptions } from '@talex-touch/utils/market'
 import { databaseModule } from '../database'
 import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
@@ -1120,6 +1122,18 @@ export class PluginModule extends BaseModule {
         console.error('Failed to fetch official plugin list:', error)
         return reply(DataCode.ERROR, {
           error: error?.message ?? 'OFFICIAL_PLUGIN_FETCH_FAILED',
+        })
+      }
+    })
+    touchChannel.regChannel(ChannelType.MAIN, 'market:http-request', async ({ data, reply }) => {
+      try {
+        const result = await performMarketHttpRequest(data as MarketHttpRequestOptions)
+        return reply(DataCode.SUCCESS, result)
+      }
+      catch (error: any) {
+        console.error('Market HTTP request failed:', error)
+        return reply(DataCode.ERROR, {
+          error: typeof error?.message === 'string' ? error.message : 'MARKET_HTTP_REQUEST_FAILED',
         })
       }
     })

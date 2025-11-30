@@ -1,7 +1,9 @@
-<script lang="ts" name="FlatController" setup>
+<script lang="ts" name="SimpleController" setup>
+import { computed } from 'vue'
 import { useLayoutController } from '~/composables/layout/useLayoutController'
 
 const { route, t, handleUpgradeClick } = useLayoutController()
+const routeLabel = computed(() => route?.name ?? route?.path ?? '')
 </script>
 
 <template>
@@ -17,7 +19,7 @@ const { route, t, handleUpgradeClick } = useLayoutController()
       <div class="SimpleController-Nav absolute left-2">
         <slot name="nav" />
       </div>
-      <span> {{ route.name ?? route.path }}</span>
+      <span> {{ routeLabel }}</span>
     </div>
 
     <ul class="SimpleController-Controller">

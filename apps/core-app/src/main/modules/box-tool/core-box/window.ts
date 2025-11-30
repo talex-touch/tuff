@@ -69,6 +69,8 @@ export class WindowManager {
   private nativeThemeHandler: (() => void) | null = null
   private currentThemeIsDark = false
   private bundledThemeCss: string | null = null
+  private inputAllowed = false
+  private clipboardAllowedTypes = 0
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -93,6 +95,36 @@ export class WindowManager {
   }
 
   /**
+   * Enable input monitoring for attached UI view
+   */
+  public enableInputMonitoring(): void {
+    this.inputAllowed = true
+    coreBoxWindowLog.info('Input monitoring enabled for UI view')
+  }
+
+  /**
+   * Enable clipboard monitoring for specified types
+   */
+  public enableClipboardMonitoring(types: number): void {
+    if (this.clipboardAllowedTypes === types) {
+      coreBoxWindowLog.debug('Clipboard monitoring already configured, skipping update')
+      return
+    }
+
+    this.clipboardAllowedTypes = types
+    coreBoxWindowLog.info(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
+  }
+
+  /**
+   * Send input change to UI view if allowed
+   */
+  public sendInputChange(input: string): void {
+    if (!this.inputAllowed || !this.attachedPlugin) return
+
+    this.sendChannelMessageToUIView('core-box:input-change', { input })
+  }
+
+  /**
    * 创建并初始化一个新的 CoreBox 窗口。
    */
   public async create(): Promise<TouchWindow> {
@@ -111,39 +143,37 @@ export class WindowManager {
           const url = path.join(__dirname, '..', 'renderer', 'index.html')
 
           await window.loadFile(url, {
-            devtools: this.touchApp.version === TalexTouch.AppVersion.DEV,
+            devtools: this.touchApp.version === TalexTouch.AppVersion.DEV
           })
-        }
-        else {
+        } else {
           const url = process.env.ELECTRON_RENDERER_URL as string
 
           await window.loadURL(url)
 
           window.openDevTools({
-            mode: 'detach',
+            mode: 'detach'
           })
         }
 
         window.window.hide()
-      }
-      catch (error) {
+      } catch (error) {
         coreBoxWindowLog.error('Failed to load content in new box window', { error })
       }
     }, 200)
 
     window.window.webContents.addListener('dom-ready', () => {
       coreBoxWindowLog.debug(
-        `BoxWindow ${window.window.webContents.id} dom loaded, registering ...`,
+        `BoxWindow ${window.window.webContents.id} dom loaded, registering ...`
       )
 
       this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
         id: window.window.webContents.id,
-        show: false,
+        show: false
       })
     })
 
     window.window.addListener('closed', () => {
-      this.windows = this.windows.filter(w => w !== window)
+      this.windows = this.windows.filter((w) => w !== window)
       coreBoxWindowLog.debug('BoxWindow closed')
     })
 
@@ -205,18 +235,18 @@ export class WindowManager {
     const { bounds } = curScreen
 
     if (
-      typeof bounds.x !== 'number'
-      || typeof bounds.y !== 'number'
-      || typeof bounds.width !== 'number'
-      || typeof bounds.height !== 'number'
+      typeof bounds.x !== 'number' ||
+      typeof bounds.y !== 'number' ||
+      typeof bounds.width !== 'number' ||
+      typeof bounds.height !== 'number'
     ) {
       coreBoxWindowLog.error('Invalid screen bounds received', {
         meta: {
           width: bounds.width,
           height: bounds.height,
           x: bounds.x,
-          y: bounds.y,
-        },
+          y: bounds.y
+        }
       })
       return
     }
@@ -233,16 +263,14 @@ export class WindowManager {
 
     try {
       window.window.setPosition(left, top)
-    }
-    catch (error) {
+    } catch (error) {
       coreBoxWindowLog.error('Failed to set window position', { error })
     }
   }
 
   public show(): void {
     const window = this.current
-    if (!window)
-      return
+    if (!window) return
 
     this.updatePosition(window)
     window.window.showInactive()
@@ -253,8 +281,7 @@ export class WindowManager {
 
   public hide(): void {
     const window = this.current
-    if (!window)
-      return
+    if (!window) return
 
     if (process.platform !== 'darwin') {
       window.window.setPosition(-1000000, -1000000)
@@ -266,8 +293,8 @@ export class WindowManager {
   }
 
   public expand(
-    options: { length?: number, forceMax?: boolean } = {},
-    isUIMode: boolean = false,
+    options: { length?: number; forceMax?: boolean } = {},
+    isUIMode: boolean = false
   ): void {
     const { length = 0, forceMax = false } = options
     const effectiveLength = length > 0 ? length : 1
@@ -284,11 +311,10 @@ export class WindowManager {
           x: 0,
           y: 60,
           width: bounds.width,
-          height: bounds.height - 60,
+          height: bounds.height - 60
         })
       }
-    }
-    else {
+    } else {
       coreBoxWindowLog.error('No current window available for expansion')
     }
 
@@ -306,8 +332,7 @@ export class WindowManager {
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, 60)
       currentWindow.window.setSize(900, 60, false)
-    }
-    else {
+    } else {
       coreBoxWindowLog.error('No current window available for shrinking')
     }
     coreBoxWindowLog.debug('Shrunk window to compact mode')
@@ -324,8 +349,7 @@ export class WindowManager {
       }
 
       return curScreen
-    }
-    catch (error) {
+    } catch (error) {
       coreBoxWindowLog.error('Error getting current screen', { error })
 
       return screen.getPrimaryDisplay()
@@ -354,7 +378,7 @@ export class WindowManager {
     return { followSystem, dark }
   }
 
-  private resolveThemeStoragePath(): { directory: string, file: string } {
+  private resolveThemeStoragePath(): { directory: string; file: string } {
     const userDataDir = app.getPath('userData')
     const directory = path.join(userDataDir, ...CORE_BOX_THEME_SUBDIR)
     const file = path.join(directory, CORE_BOX_THEME_FILE_NAME)
@@ -382,10 +406,9 @@ export class WindowManager {
 
       const content = fs.readFileSync(file, 'utf-8')
       return content.trim().length > 0 ? content : defaultCss
-    }
-    catch (error) {
+    } catch (error) {
       coreBoxWindowLog.error('Failed to prepare theme stylesheet, falling back to default', {
-        error,
+        error
       })
       return defaultCss
     }
@@ -491,7 +514,7 @@ export class WindowManager {
         currentWindow.window,
         ChannelType.MAIN,
         CORE_BOX_THEME_EVENT,
-        payload,
+        payload
       )
     }
 
@@ -521,17 +544,16 @@ export class WindowManager {
     if (plugin && injections?.js) {
       const tempPreloadPath = path.resolve(
         os.tmpdir(),
-        `talex-plugin-preload-${plugin.name}-${Date.now()}.js`,
+        `talex-plugin-preload-${plugin.name}-${Date.now()}.js`
       )
 
       let originalPreloadContent = ''
       if (injections._.preload && fse.existsSync(injections._.preload)) {
         try {
           originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
-        }
-        catch (error) {
+        } catch (error) {
           coreBoxWindowLog.warn(`Failed to read original preload: ${injections._.preload}`, {
-            error,
+            error
           })
         }
       }
@@ -542,13 +564,14 @@ export class WindowManager {
   const { ipcRenderer } = require('electron')
   const ChannelType = ${JSON.stringify(ChannelType)};
   const DataCode = ${JSON.stringify(DataCode)};
+  const CHANNEL_DEFAULT_TIMEOUT = 10000;
 
   class TouchChannel {
     channelMap = new Map();
     pendingMap = new Map();
 
     constructor() {
-      electron.ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
+      ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
     }
 
     __parse_raw_data(e, arg) {
@@ -583,7 +606,6 @@ export class WindowManager {
     }
 
     __handle_main(e, arg) {
-      console.debug(e, arg)
       const rawData = this.__parse_raw_data(e, arg);
       if (!rawData?.header) {
         console.error('Invalid message: ', arg);
@@ -626,6 +648,16 @@ export class WindowManager {
       };
     }
 
+    formatPayloadPreview(payload) {
+      if (payload === null || payload === undefined) return String(payload);
+      if (typeof payload === 'string') return payload.length > 200 ? payload.slice(0, 200) + '…' : payload;
+      try {
+        return JSON.stringify(payload);
+      } catch {
+        return '[unserializable]';
+      }
+    }
+
     regChannel(eventName, callback) {
       const listeners = this.channelMap.get(eventName) || [];
       if (!listeners.includes(callback)) {
@@ -643,13 +675,13 @@ export class WindowManager {
     }
 
     send(eventName, arg) {
-      const uniqueId = \`\${new Date().getTime()}#\${eventName}@\${Math.random().toString(12)}\`;
+      const uniqueId = Date.now() + '#' + eventName + '@' + Math.random().toString(12);
       const data = {
         code: DataCode.SUCCESS,
         data: arg,
         sync: {
           timeStamp: new Date().getTime(),
-          timeout: 10000,
+          timeout: CHANNEL_DEFAULT_TIMEOUT,
           id: uniqueId
         },
         name: eventName,
@@ -659,9 +691,34 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
-      return new Promise((resolve) => {
-        electron.ipcRenderer.send('@plugin-process-message', data);
+      return new Promise((resolve, reject) => {
+        try {
+          ipcRenderer.send('@plugin-process-message', data);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error('[CoreBox] Failed to send plugin channel message', {
+            eventName,
+            error: errorMessage,
+            payloadPreview: this.formatPayloadPreview(arg)
+          });
+          const sendError = new Error('Failed to send plugin channel message "' + eventName + '": ' + errorMessage);
+          sendError.code = 'plugin_channel_send_failed';
+          reject(sendError);
+          return;
+        }
+
+        const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT;
+        const timeoutHandle = setTimeout(() => {
+          if (!this.pendingMap.has(uniqueId)) return;
+          this.pendingMap.delete(uniqueId);
+          const timeoutError = new Error('Plugin channel request "' + eventName + '" timed out after ' + timeoutMs + 'ms');
+          timeoutError.code = 'plugin_channel_timeout';
+          console.warn(timeoutError.message);
+          reject(timeoutError);
+        }, timeoutMs);
+
         this.pendingMap.set(uniqueId, (res) => {
+          clearTimeout(timeoutHandle);
           this.pendingMap.delete(uniqueId);
           resolve(res.data);
         });
@@ -679,9 +736,18 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
-      const res = this.__parse_raw_data(null, electron.ipcRenderer.sendSync('@plugin-process-message', data));
-      if (res?.header?.status === 'reply') return res.data;
-      return res;
+      try {
+        const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@plugin-process-message', data));
+        if (res?.header?.status === 'reply') return res.data;
+        return res;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[CoreBox] Failed to sendSync plugin channel message', {
+          eventName,
+          error: errorMessage
+        });
+        throw new Error('Failed to sendSync plugin channel message "' + eventName + '": ' + errorMessage);
+      }
     }
   }
   window['$channel'] = new TouchChannel();
@@ -721,10 +787,9 @@ export class WindowManager {
         fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
         preloadPath = path.resolve(tempPreloadPath)
         coreBoxWindowLog.info(`Created dynamic preload script: ${preloadPath}`)
-      }
-      catch (error) {
+      } catch (error) {
         coreBoxWindowLog.error(`Failed to create preload script: ${tempPreloadPath}`, {
-          error,
+          error
         })
         preloadPath = injections._.preload
       }
@@ -738,7 +803,7 @@ export class WindowManager {
       contextIsolation: false,
       sandbox: false,
       webviewTag: true,
-      scrollBounce: true,
+      scrollBounce: true
     }
 
     const view = (this.uiView = new WebContentsView({ webPreferences }))
@@ -773,8 +838,7 @@ export class WindowManager {
         }
         if (pluginModule.pluginManager) {
           pluginModule.pluginManager.setActivePlugin(plugin.name)
-        }
-        else {
+        } else {
           coreBoxWindowLog.warn('Plugin manager not available, cannot set plugin active')
         }
       }
@@ -785,13 +849,19 @@ export class WindowManager {
       x: 0,
       y: 60,
       width: bounds.width,
-      height: bounds.height - 60,
+      height: bounds.height - 60
     })
 
-    this.uiView.webContents.loadURL(url)
+    const finalUrl = this.normalizeUIViewUrl(url, plugin)
+    coreBoxWindowLog.info(`AttachUIView - resolved URL ${finalUrl}`)
+    this.uiView.webContents.loadURL(finalUrl)
   }
 
   public detachUIView(): void {
+    // Reset permissions
+    this.inputAllowed = false
+    this.clipboardAllowedTypes = 0
+
     if (this.nativeThemeHandler) {
       nativeTheme.removeListener('updated', this.nativeThemeHandler)
       this.nativeThemeHandler = null
@@ -805,7 +875,7 @@ export class WindowManager {
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
           genTouchApp().channel.send(ChannelType.PLUGIN, `@lifecycle:${LifecycleHooks.INACTIVE}`, {
-            plugin: plugin.name,
+            plugin: plugin.name
           })
         }
       }
@@ -814,8 +884,7 @@ export class WindowManager {
       if (currentWindow && !currentWindow.window.isDestroyed()) {
         this.uiView.webContents.closeDevTools()
         currentWindow.window.contentView.removeChildView(this.uiView)
-      }
-      else {
+      } else {
         coreBoxWindowLog.warn('Cannot remove child view: current window is null or destroyed')
       }
       // The WebContents are automatically destroyed when the WebContentsView is removed.
@@ -845,6 +914,36 @@ export class WindowManager {
     }
 
     return this.uiView
+  }
+
+  private normalizeUIViewUrl(url: string, plugin?: TouchPlugin): string {
+    const isDevPlugin = Boolean(plugin && plugin.dev && plugin.dev.enable)
+    if (!isDevPlugin) {
+      return url
+    }
+
+    try {
+      const parsed = new URL(url)
+      if (parsed.hash && parsed.hash.startsWith('#/')) {
+        return url
+      }
+
+      const pathWithSearch = `${parsed.pathname ?? ''}${parsed.search ?? ''}` || '/'
+      const normalizedPath = pathWithSearch.startsWith('/') ? pathWithSearch : `/${pathWithSearch}`
+      parsed.pathname = '/'
+      parsed.search = ''
+      parsed.hash = `#${normalizedPath}`
+      return parsed.toString()
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      coreBoxWindowLog.warn(
+        '[CoreBox] Failed to normalize plugin dev URL for hash routing, falling back.',
+        { meta: { url, error: errorMessage } }
+      )
+      const sanitized = url.replace(/#.*$/, '').replace(/\/+$/, '')
+      return `${sanitized}/#/`
+    }
   }
 }
 

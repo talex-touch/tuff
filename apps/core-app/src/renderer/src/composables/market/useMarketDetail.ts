@@ -1,5 +1,5 @@
 import { computed, type ComputedRef } from 'vue'
-import type { OfficialPluginListItem } from './useMarketData'
+import type { MarketPluginListItem } from './useMarketData'
 
 interface DetailMetaItem {
   icon: string
@@ -8,7 +8,7 @@ interface DetailMetaItem {
 }
 
 export function useMarketDetail(
-  plugin: ComputedRef<OfficialPluginListItem | null>,
+  plugin: ComputedRef<MarketPluginListItem | null>,
   t: (key: string) => string
 ) {
   const formatTimestamp = (timestamp: any): string => {
@@ -45,6 +45,12 @@ export function useMarketDetail(
     const time = formatTimestamp(p.timestamp)
     if (time)
       meta.push({ icon: 'i-ri-time-line', label: t('market.detailDialog.updateTime'), value: time })
+
+    meta.push({
+      icon: 'i-ri-shield-user-line',
+      label: t('market.detailDialog.provider'),
+      value: p.providerName ? `${p.providerName} (${p.providerType})` : p.providerId
+    })
 
     meta.push({
       icon: 'i-ri-barcode-line',

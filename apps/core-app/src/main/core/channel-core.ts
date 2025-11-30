@@ -13,6 +13,8 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { ipcMain } from 'electron'
 import { WindowManager } from '../modules/box-tool/core-box/window'
 
+const CHANNEL_DEFAULT_TIMEOUT = 10_000
+
 class TouchChannel implements ITouchChannel {
   channelMap: Map<ChannelType, Map<string, ChannelCallback[]>> = new Map()
 
@@ -281,7 +283,7 @@ class TouchChannel implements ITouchChannel {
       data: arg,
       sync: {
         timeStamp: new Date().getTime(),
-        timeout: 10000,
+        timeout: CHANNEL_DEFAULT_TIMEOUT,
         id: uniqueId,
       },
       name: eventName,
@@ -293,7 +295,26 @@ class TouchChannel implements ITouchChannel {
     } as RawStandardChannelData
 
     let _channelCategory = '@main-process-message'
-    const finalData = JSON.parse(structuredStrictStringify(data))
+
+    let finalData: RawStandardChannelData
+    try {
+      finalData = JSON.parse(structuredStrictStringify(data))
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error(
+        `[Channel] Failed to serialize payload for "${eventName}": ${errorMessage}`,
+        { eventName, type, argSummary: this.__safePreview(arg) },
+      )
+      return Promise.resolve({
+        code: DataCode.ERROR,
+        data: {
+          message: errorMessage,
+          reason: 'serialize_failed',
+          eventName,
+        },
+      })
+    }
 
     if (type === ChannelType.PLUGIN) {
       if (arg.plugin === void 0) {
@@ -323,7 +344,27 @@ class TouchChannel implements ITouchChannel {
 
         webContents.send(_channelCategory, finalData)
 
+        const timeoutMs = finalData.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT
+        const timeoutHandle = setTimeout(() => {
+          if (!this.pendingMap.has(uniqueId)) {
+            return
+          }
+          this.pendingMap.delete(uniqueId)
+          console.warn(
+            `[Channel] Request "${eventName}" timed out after ${timeoutMs}ms.`,
+          )
+          resolve({
+            code: DataCode.ERROR,
+            data: {
+              message: `Channel request "${eventName}" timed out after ${timeoutMs}ms`,
+              reason: 'timeout',
+              eventName,
+            },
+          })
+        }, timeoutMs)
+
         this.pendingMap.set(uniqueId, (res) => {
+          clearTimeout(timeoutHandle)
           this.pendingMap.delete(uniqueId)
 
           resolve(res)
@@ -343,7 +384,14 @@ class TouchChannel implements ITouchChannel {
 
         // Clean up pending map
         this.pendingMap.delete(uniqueId)
-        resolve({ code: DataCode.ERROR, data: errorMessage })
+        resolve({
+          code: DataCode.ERROR,
+          data: {
+            message: errorMessage,
+            reason: 'send_failed',
+            eventName,
+          },
+        })
       }
     })
   }
@@ -419,6 +467,26 @@ class TouchChannel implements ITouchChannel {
       pluginName,
       arg,
     )
+  }
+
+  /**
+   * Safely preview payload for logging/debugging purposes.
+   * Truncates long strings and handles circular references.
+   *
+   * @param payload - The payload to preview
+   * @returns A safely serializable preview of the payload
+   */
+  private __safePreview(payload: unknown): unknown {
+    if (payload === null || payload === undefined)
+      return payload
+    if (typeof payload === 'string')
+      return payload.length > 200 ? `${payload.slice(0, 200)}…` : payload
+    try {
+      return JSON.parse(structuredStrictStringify(payload))
+    }
+    catch {
+      return '[unserializable-payload]'
+    }
   }
 }
 

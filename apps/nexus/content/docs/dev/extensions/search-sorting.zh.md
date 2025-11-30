@@ -1,0 +1,26 @@
+# Search Sorting 扩展
+
+## 作用
+自定义 CoreBox 搜索结果排序与权重分配，帮助插件在合适场景冒头而非霸占列表。
+
+## Hook 入口
+在 `init/index.ts` 注册：
+```ts
+ctx.corebox.registerSorter('mySorter', ({ query, results }) => {
+  const boosted = results.map(item => {
+    if (item.pluginId === ctx.meta.id && query.includes('todo')) {
+      return { ...item, score: item.score + 20 }
+    }
+    return item
+  })
+  return boosted.sort((a, b) => b.score - a.score)
+})
+```
+
+## 调整策略
+- 使用关键词匹配、最近使用时间、上下文权重等数据。
+- 避免无条件推高分数，保持整体排序体验的一致性。
+
+## 调试
+- 在 CoreBox 输入 `sorter:list` 查看已注册扩展。
+- 使用 `sorter:trace` 命令查看每条结果的评分细节。

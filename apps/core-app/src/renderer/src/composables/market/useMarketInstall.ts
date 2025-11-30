@@ -2,7 +2,7 @@ import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { useI18n } from 'vue-i18n'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
-import type { OfficialPluginListItem } from './useMarketData'
+import type { MarketPluginListItem } from './useMarketData'
 
 /**
  * Composable for managing plugin installation
@@ -20,8 +20,48 @@ export function useMarketInstall() {
     return installManager.isActiveStage(getInstallTask(pluginId)?.stage)
   }
 
+  async function confirmUntrusted(plugin: MarketPluginListItem): Promise<boolean> {
+    if (plugin.trusted) return true
+
+    let confirmed = false
+
+    await forTouchTip(
+      t('market.installation.confirmTitle'),
+      t('market.installation.confirmMessage', { name: plugin.name }),
+      [
+        {
+          content: t('market.installation.confirmInstall'),
+          type: 'success',
+          onClick: async () => {
+            confirmed = true
+            return true
+          }
+        },
+        {
+          content: t('market.installation.confirmReject'),
+          type: 'warning',
+          onClick: async () => false
+        }
+      ]
+    )
+
+    return confirmed
+  }
+
+  function resolveDownloadUrl(plugin: MarketPluginListItem): string | undefined {
+    if (typeof plugin.downloadUrl === 'string' && plugin.downloadUrl.length > 0) {
+      return plugin.downloadUrl
+    }
+
+    if (plugin.install?.type === 'url' && plugin.install.url) {
+      return plugin.install.url
+    }
+
+    return undefined
+  }
+
   async function handleInstall(
-    plugin: OfficialPluginListItem,
+    plugin: MarketPluginListItem,
     channel: ITouchClientChannel | undefined
   ): Promise<void> {
     if (isPluginInstalling(plugin.id)) return
@@ -35,17 +75,32 @@ export function useMarketInstall() {
     }
 
     try {
+      if (!(await confirmUntrusted(plugin))) {
+        return
+      }
+
+      const downloadUrl = resolveDownloadUrl(plugin)
+      if (!downloadUrl) {
+        throw new Error('MARKET_INSTALL_NO_SOURCE')
+      }
+
       const payload: Record<string, unknown> = {
-        source: plugin.downloadUrl,
+        source: downloadUrl,
         metadata: {
           officialId: plugin.id,
           officialVersion: plugin.version,
           officialSource: 'talex-touch/tuff-official-plugins',
-          official: plugin.official === true
+          official: plugin.official === true,
+          providerId: plugin.providerId,
+          providerName: plugin.providerName,
+          providerType: plugin.providerType,
+          trusted: plugin.trusted === true
         },
         clientMetadata: {
           pluginId: plugin.id,
-          pluginName: plugin.name
+          pluginName: plugin.name,
+          providerId: plugin.providerId,
+          providerName: plugin.providerName
         }
       }
 

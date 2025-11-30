@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import MarketIcon from '~/components/market/MarketIcon.vue'
 import MarketDetailSkeleton from '~/components/market/MarketDetailSkeleton.vue'
-import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
+import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { useMarketDetail } from '~/composables/market/useMarketDetail'
@@ -16,11 +16,11 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const { officialPlugins, loading, loadOfficialPlugins } = useMarketData()
+const { plugins: officialPlugins, loading, loadMarketPlugins: loadOfficialPlugins } = useMarketData()
 const { handleInstall } = useMarketInstall()
 
 const pluginId = computed(() => route.params.id as string)
-const activePlugin = computed<OfficialPluginListItem | null>(() => {
+const activePlugin = computed<MarketPluginListItem | null>(() => {
   return officialPlugins.value.find((p) => p.id === pluginId.value) || null
 })
 

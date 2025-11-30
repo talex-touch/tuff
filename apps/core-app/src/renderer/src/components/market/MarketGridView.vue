@@ -2,18 +2,18 @@
 import gsap from 'gsap'
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { OfficialPluginListItem } from '~/composables/market/useMarketData'
+import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import MarketItemCard from './MarketItemCard.vue'
 
 const props = defineProps<{
-  plugins: OfficialPluginListItem[]
+  plugins: MarketPluginListItem[]
   viewType: 'grid' | 'list'
   loading: boolean
 }>()
 
 const emit = defineEmits<{
-  install: [plugin: OfficialPluginListItem]
-  'open-detail': [plugin: OfficialPluginListItem]
+  install: [plugin: MarketPluginListItem]
+  'open-detail': [plugin: MarketPluginListItem]
 }>()
 
 const { t } = useI18n()
