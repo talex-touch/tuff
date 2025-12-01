@@ -29,7 +29,7 @@ export class NexusStoreProvider extends BaseMarketProvider {
     const response = await this.request<NexusManifestEntry[]>({
       url: manifestUrl,
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json' }
     })
 
     if (!Array.isArray(response.data)) {
@@ -38,13 +38,12 @@ export class NexusStoreProvider extends BaseMarketProvider {
 
     const baseUrl = this.resolveBaseUrl(manifestUrl)
 
-    const plugins = response.data.map(entry => this.normalizeEntry(entry, baseUrl))
+    const plugins = response.data.map((entry) => this.normalizeEntry(entry, baseUrl))
 
     this.#cache = plugins
 
     return plugins
   }
-}
 
   private resolveManifestUrl(): string | null {
     if (typeof this.definition.config?.manifestUrl === 'string') {
@@ -67,8 +66,7 @@ export class NexusStoreProvider extends BaseMarketProvider {
       const parsed = new URL(manifestUrl)
       parsed.pathname = parsed.pathname.replace(/\/[^/]*$/, '/') // remove filename
       return parsed.toString()
-    }
-    catch {
+    } catch {
       return manifestUrl
     }
   }
@@ -85,10 +83,15 @@ export class NexusStoreProvider extends BaseMarketProvider {
     }
 
     let icon: string | undefined
-    if (typeof (metadata as any).icon_class === 'string' && (metadata as any).icon_class.trim().length > 0) {
+    if (
+      typeof (metadata as any).icon_class === 'string' &&
+      (metadata as any).icon_class.trim().length > 0
+    ) {
       icon = (metadata as any).icon_class.trim()
-    }
-    else if (typeof (metadata as any).icon === 'string' && (metadata as any).icon.trim().length > 0) {
+    } else if (
+      typeof (metadata as any).icon === 'string' &&
+      (metadata as any).icon.trim().length > 0
+    ) {
       const trimmed = (metadata as any).icon.trim()
       icon = trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
     }
@@ -107,14 +110,14 @@ export class NexusStoreProvider extends BaseMarketProvider {
       downloadUrl,
       install: {
         type: 'url',
-        url: downloadUrl,
+        url: downloadUrl
       },
       providerId: this.definition.id,
       providerName: this.definition.name,
       providerType: this.definition.type,
       providerTrustLevel: this.trustLevel,
       trusted: this.isTrusted,
-      official: this.trustLevel === 'official',
+      official: this.trustLevel === 'official'
     }
   }
 }
