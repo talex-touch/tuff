@@ -7,6 +7,7 @@
  */
 
 import type { TuffItem } from '../../core-box/tuff'
+import { ensureRendererChannel } from './channel'
 
 /**
  * Input change event handler
@@ -218,17 +219,12 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
  * ```
  */
 export function useFeature(): FeatureSDK {
-  // @ts-ignore - window.$boxItems and window.$channel are injected by the plugin system
+  // @ts-ignore - window.$boxItems is injected by the plugin system
   const boxItemsAPI = window.$boxItems
-  // @ts-ignore
-  const channel = window.$channel
+  const channel = ensureRendererChannel('[Feature SDK] Channel not available. Make sure this is called in a plugin context.')
   
   if (!boxItemsAPI) {
     throw new Error('[Feature SDK] boxItems API not available. Make sure this is called in a plugin context.')
-  }
-  
-  if (!channel) {
-    throw new Error('[Feature SDK] Channel not available. Make sure this is called in a plugin context.')
   }
   
   return createFeatureSDK(boxItemsAPI, channel)

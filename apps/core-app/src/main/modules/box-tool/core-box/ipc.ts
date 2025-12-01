@@ -27,6 +27,20 @@ export class IpcManager {
     //
   }
 
+  private async sendInputValueToRenderer(value: string): Promise<void> {
+    const coreBoxWindow = getCoreBoxWindow()
+    if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+      throw new Error('CoreBox window not available')
+    }
+
+    await this.touchApp.channel.sendTo(
+      coreBoxWindow.window,
+      ChannelType.MAIN,
+      'core-box:set-query',
+      { value }
+    )
+  }
+
   public static getInstance(): IpcManager {
     if (!IpcManager.instance) {
       IpcManager.instance = new IpcManager()
@@ -199,6 +213,25 @@ export class IpcManager {
           {}
         )
         reply(DataCode.SUCCESS, { input: result?.data?.input || result?.input || '' })
+      } catch (error: any) {
+        reply(DataCode.ERROR, { error: error.message })
+      }
+    })
+
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:set-input', async ({ data, reply }) => {
+      try {
+        const value = typeof (data as any)?.value === 'string' ? (data as any).value : ''
+        await this.sendInputValueToRenderer(value)
+        reply(DataCode.SUCCESS, { value })
+      } catch (error: any) {
+        reply(DataCode.ERROR, { error: error.message })
+      }
+    })
+
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:clear-input', async ({ reply }) => {
+      try {
+        await this.sendInputValueToRenderer('')
+        reply(DataCode.SUCCESS, { cleared: true })
       } catch (error: any) {
         reply(DataCode.ERROR, { error: error.message })
       }

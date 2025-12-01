@@ -24,7 +24,7 @@ export class QueryCompletionService {
     totalRecorded: 0,
     totalInjected: 0,
     avgRecordTime: 0,
-    avgInjectTime: 0,
+    avgInjectTime: 0
   }
 
   constructor(private dbUtils: DbUtils) {}
@@ -36,8 +36,7 @@ export class QueryCompletionService {
 
   /** Record a query completion when user executes an item after search */
   async recordCompletion(query: string, item: TuffItem): Promise<void> {
-    if (!query || !item.id)
-      return
+    if (!query || !item.id) return
 
     const start = performance.now()
     const db = this.dbUtils.getDb()
@@ -51,25 +50,24 @@ export class QueryCompletionService {
         .where(
           sql`${schema.queryCompletions.prefix} = ${prefix}
               AND ${schema.queryCompletions.sourceId} = ${item.source.id}
-              AND ${schema.queryCompletions.itemId} = ${item.id}`,
+              AND ${schema.queryCompletions.itemId} = ${item.id}`
         )
         .get()
 
       if (existing) {
         const newCount = existing.completionCount + 1
-        const newAvgLength
-          = (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
+        const newAvgLength =
+          (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
 
         await db
           .update(schema.queryCompletions)
           .set({
             completionCount: newCount,
             lastCompleted: new Date(),
-            avgQueryLength: newAvgLength,
+            avgQueryLength: newAvgLength
           })
           .where(sql`id = ${existing.id}`)
-      }
-      else {
+      } else {
         await db.insert(schema.queryCompletions).values({
           prefix,
           sourceId: item.source.id,
@@ -77,29 +75,27 @@ export class QueryCompletionService {
           completionCount: 1,
           lastCompleted: new Date(),
           avgQueryLength: queryLength,
-          createdAt: new Date(),
+          createdAt: new Date()
         })
       }
 
       const duration = performance.now() - start
       this.stats.totalRecorded++
-      this.stats.avgRecordTime
-        = (this.stats.avgRecordTime * (this.stats.totalRecorded - 1) + duration)
-          / this.stats.totalRecorded
+      this.stats.avgRecordTime =
+        (this.stats.avgRecordTime * (this.stats.totalRecorded - 1) + duration) /
+        this.stats.totalRecorded
 
       log.debug('Recorded completion', {
-        meta: { prefix, itemId: item.id, sourceId: item.source.id },
+        meta: { prefix, itemId: item.id, sourceId: item.source.id }
       })
-    }
-    catch (error) {
+    } catch (error) {
       log.error('Failed to record completion', { error })
     }
   }
 
   /** Get completion suggestions for a query prefix, sorted by frequency and recency */
   async getSuggestions(query: string, limit = 10): Promise<CompletionSuggestion[]> {
-    if (!query)
-      return []
+    if (!query) return []
 
     const timer = log.time('getSuggestions')
     const db = this.dbUtils.getDb()
@@ -113,7 +109,9 @@ export class QueryCompletionService {
         .all()
 
       if (results.length === 0) {
-        timer.end('debug')
+        timer.end('debug', {
+          level: 'debug'
+        })
         return []
       }
 
@@ -122,8 +120,7 @@ export class QueryCompletionService {
       const suggestions = results.map((record) => {
         let score = record.completionCount * 10
 
-        const daysSinceLastUsed
-          = (now - record.lastCompleted.getTime()) / (1000 * 3600 * 24)
+        const daysSinceLastUsed = (now - record.lastCompleted.getTime()) / (1000 * 3600 * 24)
         const recencyFactor = Math.exp(-0.05 * daysSinceLastUsed)
         score *= recencyFactor
 
@@ -136,14 +133,15 @@ export class QueryCompletionService {
           prefix: record.prefix,
           completionCount: record.completionCount,
           lastCompleted: record.lastCompleted,
-          score,
+          score
         }
       })
 
-      timer.end('debug')
+      timer.end('debug', {
+        level: 'debug'
+      })
       return suggestions.sort((a, b) => b.score - a.score).slice(0, limit)
-    }
-    catch (error) {
+    } catch (error) {
       log.error('Failed to get suggestions', { error })
       return []
     }
@@ -151,19 +149,15 @@ export class QueryCompletionService {
 
   /** Inject completion weights into search results based on historical completion data */
   async injectCompletionWeights(query: string, items: TuffItem[]): Promise<void> {
-    if (!query || items.length === 0)
-      return
+    if (!query || items.length === 0) return
 
     const start = performance.now()
 
     try {
       const suggestions = await this.getSuggestions(query, 50)
-      if (suggestions.length === 0)
-        return
+      if (suggestions.length === 0) return
 
-      const suggestionMap = new Map(
-        suggestions.map(s => [`${s.sourceId}:${s.itemId}`, s]),
-      )
+      const suggestionMap = new Map(suggestions.map((s) => [`${s.sourceId}:${s.itemId}`, s]))
 
       let injectedCount = 0
       for (const item of items) {
@@ -171,13 +165,12 @@ export class QueryCompletionService {
         const suggestion = suggestionMap.get(key)
 
         if (suggestion) {
-          if (!item.meta)
-            item.meta = {}
+          if (!item.meta) item.meta = {}
 
           item.meta.completion = {
             count: suggestion.completionCount,
             lastCompleted: suggestion.lastCompleted.toISOString(),
-            score: suggestion.score,
+            score: suggestion.score
           }
 
           if (item.scoring) {
@@ -192,15 +185,14 @@ export class QueryCompletionService {
 
       const duration = performance.now() - start
       this.stats.totalInjected++
-      this.stats.avgInjectTime
-        = (this.stats.avgInjectTime * (this.stats.totalInjected - 1) + duration)
-          / this.stats.totalInjected
+      this.stats.avgInjectTime =
+        (this.stats.avgInjectTime * (this.stats.totalInjected - 1) + duration) /
+        this.stats.totalInjected
 
       log.debug('Injected completion weights', {
-        meta: { injectedCount, totalSuggestions: suggestions.length },
+        meta: { injectedCount, totalSuggestions: suggestions.length }
       })
-    }
-    catch (error) {
+    } catch (error) {
       log.error('Failed to inject completion weights', { error })
     }
   }
@@ -220,12 +212,11 @@ export class QueryCompletionService {
 
       timer.end('info')
       log.info('Cleaned up old completions', {
-        meta: { cutoffDate: expirationDate.toISOString() },
+        meta: { cutoffDate: expirationDate.toISOString() }
       })
 
       return 0
-    }
-    catch (error) {
+    } catch (error) {
       log.error('Failed to cleanup old completions', { error })
       return 0
     }

@@ -466,7 +466,7 @@ export class TouchPlugin implements ITouchPlugin {
     this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
 
     this.pluginLifecycle?.onInit?.()
-    genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:en', {
+    genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:enabled', {
       ...this.toJSONObject(),
       plugin: this.name,
     })
@@ -497,7 +497,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING
     this.logger.debug('Disabling plugin')
 
-    genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:di', {
+    genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:disabled', {
       ...this.toJSONObject(),
       plugin: this.name,
     })

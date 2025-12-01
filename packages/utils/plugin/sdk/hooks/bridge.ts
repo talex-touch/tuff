@@ -1,4 +1,5 @@
 import { BridgeEventForCoreBox } from '../enum/bridge-event'
+import { ensureRendererChannel } from '../channel'
 
 export type BridgeEvent = BridgeEventForCoreBox
 
@@ -26,7 +27,8 @@ export function injectBridgeEvent<T>(type: BridgeEvent, hook: BridgeHook<T>) {
 
   // Only register the channel listener once per event type
   if (hooks.length === 0) {
-    window.$channel.regChannel(type, ({ data }) => {
+    const channel = ensureRendererChannel('[TouchSDK] Bridge channel not available. Make sure hooks run in plugin renderer context.')
+    channel.regChannel(type, ({ data }) => {
       console.debug(`[TouchSDK] ${type} event received: `, data)
       // When the event is received, call all registered hooks for this type
       const registeredHooks = __hooks[type]

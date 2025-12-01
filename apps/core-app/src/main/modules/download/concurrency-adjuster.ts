@@ -117,10 +117,9 @@ export class ConcurrencyAdjuster {
     const oldConcurrency = this.currentConcurrency
     this.currentConcurrency = Math.max(1, Math.min(10, newConcurrency))
 
-    // 记录调整历史
     this.addToHistory(this.currentConcurrency)
 
-    console.log(`Concurrency adjusted from ${oldConcurrency} to ${this.currentConcurrency}`)
+    console.debug(`Concurrency adjusted from ${oldConcurrency} to ${this.currentConcurrency}`)
   }
 
   // 获取当前并发数
