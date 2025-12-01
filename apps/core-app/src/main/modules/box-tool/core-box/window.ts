@@ -676,11 +676,6 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
-      const instance = this
-      console.debug('[PluginChannelSDK] Sending plugin channel message', {
-        eventName,
-        instance,
-      });
       return new Promise((resolve, reject) => {
         try {
           ipcRenderer.send('@plugin-process-message', data);
