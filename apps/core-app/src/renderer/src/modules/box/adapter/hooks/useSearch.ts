@@ -120,8 +120,7 @@ export function useSearch(
           thumbnail: clipboardOptions.last.thumbnail ?? undefined,
           metadata: clipboardOptions.last.meta ?? undefined
         })
-      }
-      else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
+      } else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
         inputs.push({
           type: TuffInputType.Files,
           content: JSON.stringify(boxOptions.file.paths),
@@ -133,8 +132,10 @@ export function useSearch(
           content: clipboardOptions.last.content,
           metadata: clipboardOptions.last.meta ?? undefined
         })
-      }
-      else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
+      } else if (
+        clipboardOptions?.last?.type === 'text' ||
+        clipboardOptions?.last?.type === 'html'
+      ) {
         if (clipboardOptions.last.rawContent) {
           inputs.push({
             type: TuffInputType.Html,
@@ -363,7 +364,7 @@ export function useSearch(
    * before updating the UI state. Calling this synchronously could cause
    * race conditions where the UI believes providers are deactivated but
    * they're still active in the backend.
-   * 
+   *
    * @async
    * @returns Promise that resolves when all providers are deactivated
    */
@@ -378,13 +379,13 @@ export function useSearch(
    * Handle exit operations in strict sequential order.
    * This is an ASYNC function to ensure provider deactivation completes
    * before proceeding, preventing race conditions.
-   * 
+   *
    * Exit sequence:
    * 1. Deactivate active providers (if any) and return
    * 2. Handle mode transitions (FEATURE → INPUT)
    * 3. Clear search input (if any)
    * 4. Hide CoreBox window (final step)
-   * 
+   *
    * @async
    * @returns Promise that resolves when exit handling is complete
    */
@@ -444,12 +445,6 @@ export function useSearch(
   watch(searchVal, (newSearchVal) => {
     if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND) {
       boxOptions.mode = newSearchVal.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
-    }
-    // If the input is cleared, also clear active providers to allow recommendations
-    if (newSearchVal === '' && activeActivations.value && activeActivations.value.length > 0) {
-      activeActivations.value = null
-      searchResults.value = []
-      // handleSearch will be triggered by the watch below and show recommendations
     }
   })
 

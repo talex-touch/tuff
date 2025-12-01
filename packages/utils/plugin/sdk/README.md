@@ -26,8 +26,10 @@ plugin.box.shrink()
 plugin.box.hideInput()
 plugin.box.showInput()
 
-// 获取当前输入
+// 获取与设置输入
 const input = await plugin.box.getInput()
+await plugin.box.setInput('Hello Touch!')
+await plugin.box.clearInput()
 ```
 
 ### 2. FeatureSDK - 搜索结果管理
@@ -203,6 +205,8 @@ export default {
 - `core-box:hide-input` - 隐藏输入框
 - `core-box:show-input` - 显示输入框
 - `core-box:get-input` - 获取当前输入值
+- `core-box:set-input` - 设置输入框内容
+- `core-box:clear-input` - 清空输入框
 - `core-box:input-changed` - 输入变化广播（主进程 → 插件）
 - `core-box:set-input-visibility` - 设置输入框可见性（主进程 → 渲染进程）
 - `core-box:request-input-value` - 请求输入值（主进程 → 渲染进程）

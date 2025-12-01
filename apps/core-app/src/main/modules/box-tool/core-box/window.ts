@@ -8,7 +8,6 @@ import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -25,8 +24,6 @@ import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 
 const windowAnimation = useWindowAnimation()
-
-const CORE_BOX_THEME_EVENT = 'core-box:theme-change'
 
 const CORE_BOX_THEME_FILE_NAME = 'tuff-element.css'
 const CORE_BOX_THEME_SUBDIR = ['core-box', 'theme'] as const
@@ -506,21 +503,9 @@ export class WindowManager {
       ? chalk.bgHex('#1f2937').white.bold(' DARK ')
       : chalk.bgHex('#e5e7eb').black.bold(' LIGHT ')
     coreBoxWindowLog.info(`${chalk.cyan('Theme ready')} ${themeLabel}`)
-    const payload = { dark: isDark }
 
-    const currentWindow = this.current
-    if (currentWindow && !currentWindow.window.isDestroyed()) {
-      void this.touchApp.channel.sendTo(
-        currentWindow.window,
-        ChannelType.MAIN,
-        CORE_BOX_THEME_EVENT,
-        payload
-      )
-    }
-
-    if (this.attachedPlugin) {
-      this.sendChannelMessageToUIView(CORE_BOX_THEME_EVENT, payload)
-    }
+    // Theme change events removed - theme is now passed once during attachUIView
+    // No real-time broadcasting to prevent channel timeout issues
   }
 
   public attachUIView(url: string, plugin?: TouchPlugin): void {
@@ -691,6 +676,10 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
+      console.debug('[PluginChannelSDK] Sending plugin channel message', {
+        eventName,
+        payloadPreview: this.formatPayloadPreview(arg)
+      });
       return new Promise((resolve, reject) => {
         try {
           ipcRenderer.send('@plugin-process-message', data);
@@ -841,6 +830,8 @@ export class WindowManager {
         } else {
           coreBoxWindowLog.warn('Plugin manager not available, cannot set plugin active')
         }
+
+        this.uiView?.webContents.focus()
       }
     })
 
@@ -855,6 +846,17 @@ export class WindowManager {
     const finalUrl = this.normalizeUIViewUrl(url, plugin)
     coreBoxWindowLog.info(`AttachUIView - resolved URL ${finalUrl}`)
     this.uiView.webContents.loadURL(finalUrl)
+
+    // Send initial theme state once to UIView (no real-time updates)
+    this.uiView.webContents.once('did-finish-load', () => {
+      if (this.attachedPlugin) {
+        const themePayload = { dark: this.currentThemeIsDark }
+        this.sendChannelMessageToUIView('core-box:initial-theme', themePayload)
+        coreBoxWindowLog.debug(
+          `Initial theme sent to UIView: ${this.currentThemeIsDark ? 'dark' : 'light'}`
+        )
+      }
+    })
   }
 
   public detachUIView(): void {
@@ -874,7 +876,7 @@ export class WindowManager {
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
-          genTouchApp().channel.send(ChannelType.PLUGIN, `@lifecycle:${LifecycleHooks.INACTIVE}`, {
+          genTouchApp().channel.send(ChannelType.PLUGIN, 'plugin:lifecycle:inactive', {
             plugin: plugin.name
           })
         }
@@ -934,8 +936,7 @@ export class WindowManager {
       parsed.search = ''
       parsed.hash = `#${normalizedPath}`
       return parsed.toString()
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       coreBoxWindowLog.warn(
         '[CoreBox] Failed to normalize plugin dev URL for hash routing, falling back.',

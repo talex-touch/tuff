@@ -4,6 +4,7 @@
  * Provides a unified API for plugins to control the CoreBox window behavior,
  * including visibility, size, input field control, and input value access.
  */
+import { ensureRendererChannel } from './channel'
 
 /**
  * Clipboard content type flags for binary combination
@@ -135,6 +136,26 @@ export interface BoxSDK {
   getInput: () => Promise<string>
 
   /**
+   * Sets the CoreBox search input to the specified value
+   *
+   * @example
+   * ```typescript
+   * await plugin.box.setInput('hello world')
+   * ```
+   */
+  setInput: (value: string) => Promise<void>
+
+  /**
+   * Clears the CoreBox search input
+   *
+   * @example
+   * ```typescript
+   * await plugin.box.clearInput()
+   * ```
+   */
+  clearInput: () => Promise<void>
+
+  /**
    * Enable input monitoring for attached UI view
    *
    * @example
@@ -243,6 +264,26 @@ export function createBoxSDK(channel: any): BoxSDK {
       }
     },
 
+    async setInput(value: string): Promise<void> {
+      try {
+        await sendFn('core-box:set-input', { value })
+      }
+      catch (error) {
+        console.error('[Box SDK] Failed to set input:', error)
+        throw error
+      }
+    },
+
+    async clearInput(): Promise<void> {
+      try {
+        await sendFn('core-box:clear-input')
+      }
+      catch (error) {
+        console.error('[Box SDK] Failed to clear input:', error)
+        throw error
+      }
+    },
+
     async allowInput(): Promise<void> {
       try {
         await sendFn('core-box:allow-input')
@@ -280,11 +321,6 @@ export function createBoxSDK(channel: any): BoxSDK {
  * ```
  */
 export function useBox(): BoxSDK {
-  const channel = window.$channel
-
-  if (!channel) {
-    throw new Error('[Box SDK] Channel not available. Make sure this is called in a plugin context.')
-  }
-
+  const channel = ensureRendererChannel('[Box SDK] Channel not available. Make sure this is called in a plugin context.')
   return createBoxSDK(channel)
 }

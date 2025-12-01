@@ -1,3 +1,5 @@
+import { ensureRendererChannel } from '../channel'
+
 export enum LifecycleHooks {
   ENABLE = 'en',
   DISABLE = 'di',
@@ -22,7 +24,8 @@ export function injectHook(type: LifecycleHooks, hook: Function, processFunc = (
   const hooks: Array<Function> = __hooks[type] || (__hooks[type] = [])
 
   if (hooks.length === 0) {
-    window.$channel.regChannel(`@lifecycle:${type}`, (obj: any) => {
+    const channel = ensureRendererChannel('[Lifecycle Hook] Channel not available. Make sure hooks run in plugin renderer context.')
+    channel.regChannel(`@lifecycle:${type}`, (obj: any) => {
       processFunc(obj)
 
       // @ts-ignore

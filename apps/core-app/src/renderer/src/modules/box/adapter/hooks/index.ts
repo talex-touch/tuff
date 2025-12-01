@@ -1,6 +1,7 @@
 export type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 export { useChannel } from './useChannel'
 export { useClipboard } from './useClipboard'
+export { useClipboardChannel, CLIPBOARD_CHANNELS, type ClipboardChannelHandlers, type ClipboardMetaUpdate } from './useClipboardChannel'
 export { useKeyboard } from './useKeyboard'
 export { useSearch } from './useSearch'
 

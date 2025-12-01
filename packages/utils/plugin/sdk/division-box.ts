@@ -11,6 +11,7 @@ import type {
   DivisionBoxState,
   SessionInfo,
 } from '../../types/division-box'
+import { ensureRendererChannel } from './channel'
 
 /**
  * State change event handler
@@ -255,12 +256,6 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
  * ```
  */
 export function useDivisionBox(): DivisionBoxSDK {
-  // @ts-ignore - window.$channel is injected by the plugin system
-  const channel = window.$channel
-  
-  if (!channel) {
-    throw new Error('[DivisionBox SDK] Channel not available. Make sure this is called in a plugin context.')
-  }
-  
+  const channel = ensureRendererChannel('[DivisionBox SDK] Channel not available. Make sure this is called in a plugin context.')
   return createDivisionBoxSDK(channel)
 }

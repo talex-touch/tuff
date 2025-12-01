@@ -70,12 +70,13 @@ function handleClipboardChange() {
   handleSearchImmediate()
 }
 
-const { handlePaste, handleAutoFill, clearClipboard, resetAutoPasteState } = useClipboard(
-  boxOptions,
-  clipboardOptions,
-  handleClipboardChange,
-  searchVal // Pass searchVal for short text auto-fill
-)
+const {
+  handlePaste,
+  handleAutoFill,
+  clearClipboard,
+  resetAutoPasteState,
+  cleanup: cleanupClipboard
+} = useClipboard(boxOptions, clipboardOptions, handleClipboardChange, searchVal)
 
 const completionDisplay = computed(() => {
   if (
@@ -391,6 +392,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cleanupClipboard()
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)

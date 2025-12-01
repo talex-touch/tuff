@@ -298,7 +298,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
           `Deactivating plugin ${pluginTag(active)}: ${PluginStatus[previousPlugin.status]} → ENABLED`,
         )
 
-        genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:in', {
+        genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:inactive', {
           plugin: active,
         })
 
@@ -339,7 +339,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
       plugin.status = PluginStatus.ACTIVE
       active = pluginName
 
-      genTouchChannel().send(ChannelType.PLUGIN, '@lifecycle:ac', {
+      genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:active', {
         plugin: pluginName,
       })
     }
@@ -1194,7 +1194,7 @@ export class PluginModule extends BaseModule {
         plugin,
         ...data,
       })
-      touchChannel.send(ChannelType.PLUGIN, '@lifecycle:cr', {
+      touchChannel.send(ChannelType.PLUGIN, 'plugin:lifecycle:crashed', {
         plugin,
         ...data,
       })
