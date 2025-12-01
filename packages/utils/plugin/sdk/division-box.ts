@@ -181,11 +181,19 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
 
   registerListener()
 
+  const send: (eventName: string, payload?: any) => Promise<any> =
+    typeof channel?.sendToMain === 'function'
+      ? channel.sendToMain.bind(channel)
+      : typeof channel?.send === 'function'
+        ? channel.send.bind(channel)
+        : (() => {
+            throw new Error('[DivisionBox SDK] Channel send function not available')
+          })()
+
   return {
     async open(config: DivisionBoxConfig): Promise<SessionInfo> {
       // Send to main process
-      const sendFn = channel.sendToMain || channel.send
-      const result = await sendFn('division-box:open', config)
+      const result = await send('division-box:open', config)
       
       if (!result.success) {
         throw new Error(result.error?.message || 'Failed to open DivisionBox')
@@ -195,8 +203,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     async close(sessionId: string, options?: CloseOptions): Promise<void> {
-      const sendFn = channel.sendToMain || channel.send
-      const result = await sendFn('division-box:close', { sessionId, options })
+      const result = await send('division-box:close', { sessionId, options })
       
       if (!result.success) {
         throw new Error(result.error?.message || 'Failed to close DivisionBox')
@@ -212,8 +219,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     async updateState(sessionId: string, key: string, value: any): Promise<void> {
-      const sendFn = channel.sendToMain || channel.send
-      const result = await sendFn('division-box:update-state', {
+      const result = await send('division-box:update-state', {
         sessionId,
         key,
         value
@@ -225,8 +231,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     async getState(sessionId: string, key: string): Promise<any> {
-      const sendFn = channel.sendToMain || channel.send
-      const result = await sendFn('division-box:get-state', {
+      const result = await send('division-box:get-state', {
         sessionId,
         key
       })

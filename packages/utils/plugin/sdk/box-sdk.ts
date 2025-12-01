@@ -194,28 +194,31 @@ export interface BoxSDK {
  * @internal
  */
 export function createBoxSDK(channel: any): BoxSDK {
-  const sendFn = channel.sendToMain || channel.send
-
-  if (!sendFn) {
-    throw new Error('[Box SDK] Channel send function not available')
-  }
+  const send: (eventName: string, payload?: any) => Promise<any> =
+    typeof channel?.sendToMain === 'function'
+      ? channel.sendToMain.bind(channel)
+      : typeof channel?.send === 'function'
+        ? channel.send.bind(channel)
+        : (() => {
+            throw new Error('[Box SDK] Channel send function not available')
+          })()
 
   return {
     hide(): void {
-      sendFn('core-box:hide').catch((error: any) => {
+      send('core-box:hide').catch((error: any) => {
         console.error('[Box SDK] Failed to hide CoreBox:', error)
       })
     },
 
     show(): void {
-      sendFn('core-box:show').catch((error: any) => {
+      send('core-box:show').catch((error: any) => {
         console.error('[Box SDK] Failed to show CoreBox:', error)
       })
     },
 
     async expand(options?: BoxExpandOptions): Promise<void> {
       try {
-        await sendFn('core-box:expand', options || {})
+        await send('core-box:expand', options || {})
       }
       catch (error) {
         console.error('[Box SDK] Failed to expand CoreBox:', error)
@@ -225,7 +228,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async shrink(): Promise<void> {
       try {
-        await sendFn('core-box:expand', { mode: 'collapse' })
+        await send('core-box:expand', { mode: 'collapse' })
       }
       catch (error) {
         console.error('[Box SDK] Failed to shrink CoreBox:', error)
@@ -235,7 +238,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async hideInput(): Promise<void> {
       try {
-        await sendFn('core-box:hide-input')
+        await send('core-box:hide-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to hide input:', error)
@@ -245,7 +248,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async showInput(): Promise<void> {
       try {
-        await sendFn('core-box:show-input')
+        await send('core-box:show-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to show input:', error)
@@ -255,7 +258,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async getInput(): Promise<string> {
       try {
-        const result = await sendFn('core-box:get-input')
+        const result = await send('core-box:get-input')
         return result?.data?.input || result?.input || ''
       }
       catch (error) {
@@ -266,7 +269,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async setInput(value: string): Promise<void> {
       try {
-        await sendFn('core-box:set-input', { value })
+        await send('core-box:set-input', { value })
       }
       catch (error) {
         console.error('[Box SDK] Failed to set input:', error)
@@ -276,7 +279,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async clearInput(): Promise<void> {
       try {
-        await sendFn('core-box:clear-input')
+        await send('core-box:clear-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to clear input:', error)
@@ -286,7 +289,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async allowInput(): Promise<void> {
       try {
-        await sendFn('core-box:allow-input')
+        await send('core-box:allow-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to enable input monitoring:', error)
@@ -296,7 +299,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async allowClipboard(types: number): Promise<void> {
       try {
-        await sendFn('core-box:allow-clipboard', types)
+        await send('core-box:allow-clipboard', types)
       }
       catch (error) {
         console.error('[Box SDK] Failed to enable clipboard monitoring:', error)
