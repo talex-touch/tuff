@@ -65,6 +65,6 @@ export const createBridgeHook = <T>(type: BridgeEvent) => (hook: BridgeHook<T>) 
  * The hook receives the new input value as a string.
  * @param data The input change data (string).
  */
-export const onCoreBoxInputChange = createBridgeHook<{ query: string }>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
+export const onCoreBoxInputChange = createBridgeHook<{ query: { inputs: Array<any>, text: string } }>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
 
 export const onCoreBoxClipboardChange = createBridgeHook<{ item: any }>(BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE)

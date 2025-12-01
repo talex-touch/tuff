@@ -676,6 +676,7 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
+      const instance = this
       return new Promise((resolve, reject) => {
         try {
           ipcRenderer.send('@plugin-process-message', data);
