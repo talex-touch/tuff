@@ -1,4 +1,4 @@
-import type { PluginClipboardHistoryResponse, PluginClipboardItem } from './types'
+import type { PluginClipboardHistoryResponse, PluginClipboardItem, PluginClipboardSearchOptions, PluginClipboardSearchResponse } from './types'
 
 function ensurePluginChannel() {
   const channel = (window as any)?.$channel
@@ -23,9 +23,7 @@ function normalizeItem(item: PluginClipboardItem | null): PluginClipboardItem | 
   return item
 }
 
-export interface ClipboardHistoryOptions {
-  page?: number
-}
+export type ClipboardHistoryOptions = PluginClipboardSearchOptions
 
 export interface ClipboardFavoriteOptions {
   id: number
@@ -46,6 +44,9 @@ export interface ClipboardApplyOptions {
   type?: PluginClipboardItem['type']
 }
 
+export type ClipboardSearchOptions = PluginClipboardSearchOptions
+export type ClipboardSearchResponse = PluginClipboardSearchResponse
+
 export function useClipboardHistory() {
   const channel = ensurePluginChannel()
 
@@ -56,8 +57,7 @@ export function useClipboardHistory() {
     },
 
     async getHistory(options: ClipboardHistoryOptions = {}): Promise<PluginClipboardHistoryResponse> {
-      const { page = 1 } = options
-      const response = await channel.send('clipboard:get-history', { page })
+      const response = await channel.send('clipboard:get-history', options)
       const history = Array.isArray(response?.history)
         ? response.history.map((item: PluginClipboardItem) => normalizeItem(item) ?? item)
         : []
@@ -77,6 +77,44 @@ export function useClipboardHistory() {
 
     async clearHistory(): Promise<void> {
       await channel.send('clipboard:clear-history')
+    },
+
+    /**
+     * Search clipboard history with advanced filtering options.
+     * Supports keyword search, time-based filtering, and combined filters.
+     *
+     * @param options - Search options
+     * @returns Search results with pagination metadata
+     *
+     * @example
+     * ```typescript
+     * // Search by keyword
+     * const result = await searchHistory({ keyword: 'hello' })
+     *
+     * // Search by time range (last 24 hours)
+     * const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000
+     * const recent = await searchHistory({ startTime: oneDayAgo })
+     *
+     * // Combined search: text type, favorite items from a specific app
+     * const filtered = await searchHistory({
+     *   type: 'text',
+     *   isFavorite: true,
+     *   sourceApp: 'com.apple.Safari'
+     * })
+     * ```
+     */
+    async searchHistory(options: ClipboardSearchOptions = {}): Promise<ClipboardSearchResponse> {
+      // Use the extended clipboard:get-history interface with search parameters
+      const response = await channel.send('clipboard:get-history', options)
+      const items = Array.isArray(response?.history)
+        ? response.history.map((item: PluginClipboardItem) => normalizeItem(item) ?? item)
+        : []
+      return {
+        items,
+        total: response?.total ?? 0,
+        page: response?.page ?? 1,
+        pageSize: response?.pageSize ?? 20,
+      }
     },
 
     onDidChange(callback: (item: PluginClipboardItem) => void): () => void {

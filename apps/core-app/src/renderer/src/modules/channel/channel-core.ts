@@ -59,8 +59,6 @@ class TouchChannel implements ITouchClientChannel {
       return this.pendingMap.get(id)?.(rawData)
     }
 
-    console.log(rawData, this.channelMap, e, arg)
-
     this.channelMap.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any) => {

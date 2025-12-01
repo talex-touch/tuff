@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode } from '../types'
+import { DataCode } from '@talex-touch/utils'
 
 export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<string>): void {
   console.log('useChannel', boxOptions)
@@ -14,7 +15,7 @@ export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<str
 
   touchChannel.regChannel('core-box:request-input-value', ({ reply }: any) => {
     const input = searchVal?.value || ''
-    reply({ input })
+    reply(DataCode.SUCCESS, { input })
   })
 
   touchChannel.regChannel('core-box:clear-items', ({ data }: any) => {
