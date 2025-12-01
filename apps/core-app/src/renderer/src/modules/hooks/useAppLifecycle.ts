@@ -13,6 +13,7 @@ import {
 } from '~/modules/mention/platform-warning'
 import { useCoreBox } from './core-box'
 import { useApplicationUpgrade } from './useUpdate'
+import { useUrlProcessor } from './useUrlProcessor'
 
 /**
  * Application lifecycle management hook.
@@ -24,6 +25,7 @@ export function useAppLifecycle() {
    * Skips update check on first launch before onboarding is complete.
    */
   async function executeMainTask(): Promise<void> {
+    useUrlProcessor()
     const { checkApplicationUpgrade, setupUpdateListener } = useApplicationUpgrade()
 
     setupUpdateListener()
