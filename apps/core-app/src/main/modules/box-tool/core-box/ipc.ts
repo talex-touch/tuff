@@ -177,16 +177,11 @@ export class IpcManager {
         })
     })
 
-    // 新增：显示输入框
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show-input', ({ reply }) => {
       const coreBoxWindow = getCoreBoxWindow()
-      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-        reply(DataCode.ERROR, { error: 'CoreBox window not available' })
-        return
-      }
 
       this.touchApp.channel
-        .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:set-input-visibility', {
+        .sendTo(coreBoxWindow!.window, ChannelType.MAIN, 'core-box:set-input-visibility', {
           visible: true
         })
         .then(() => {
@@ -197,20 +192,14 @@ export class IpcManager {
         })
     })
 
-    // 新增：获取当前输入
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:get-input', async ({ reply }) => {
       try {
         const coreBoxWindow = getCoreBoxWindow()
-        if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-          reply(DataCode.ERROR, { error: 'CoreBox window not available' })
-          return
-        }
 
-        const result = await this.touchApp.channel.sendTo(
-          coreBoxWindow.window,
+        const result = await this.touchApp.channel.sendToMain(
+          coreBoxWindow!.window,
           ChannelType.MAIN,
-          'core-box:request-input-value',
-          {}
+          'core-box:request-input-value'
         )
         reply(DataCode.SUCCESS, { input: result?.data?.input || result?.input || '' })
       } catch (error: any) {
@@ -218,24 +207,32 @@ export class IpcManager {
       }
     })
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:set-input', async ({ data, reply }) => {
-      try {
-        const value = typeof (data as any)?.value === 'string' ? (data as any).value : ''
-        await this.sendInputValueToRenderer(value)
-        reply(DataCode.SUCCESS, { value })
-      } catch (error: any) {
-        reply(DataCode.ERROR, { error: error.message })
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:set-input',
+      async ({ data, reply }) => {
+        try {
+          const value = typeof (data as any)?.value === 'string' ? (data as any).value : ''
+          await this.sendInputValueToRenderer(value)
+          reply(DataCode.SUCCESS, { value })
+        } catch (error: any) {
+          reply(DataCode.ERROR, { error: error.message })
+        }
       }
-    })
+    )
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:clear-input', async ({ reply }) => {
-      try {
-        await this.sendInputValueToRenderer('')
-        reply(DataCode.SUCCESS, { cleared: true })
-      } catch (error: any) {
-        reply(DataCode.ERROR, { error: error.message })
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      'core-box:clear-input',
+      async ({ reply }) => {
+        try {
+          await this.sendInputValueToRenderer('')
+          reply(DataCode.SUCCESS, { cleared: true })
+        } catch (error: any) {
+          reply(DataCode.ERROR, { error: error.message })
+        }
       }
-    })
+    )
 
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:allow-input', ({ reply }) => {
       try {
