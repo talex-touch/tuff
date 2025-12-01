@@ -146,19 +146,18 @@ export class IpcManager {
       }
     )
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:enter-ui-mode', ({ data }) => {
+    this.touchApp.channel.regChannel(ChannelType.PLUGIN, 'core-box:enter-ui-mode', ({ data }) => {
       const { url } = data as { url: string }
       if (url) {
         coreBoxManager.enterUIMode(url)
       }
     })
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:exit-ui-mode', () => {
+    this.touchApp.channel.regChannel(ChannelType.PLUGIN, 'core-box:exit-ui-mode', () => {
       coreBoxManager.exitUIMode()
     })
 
-    // 新增：隐藏输入框
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide-input', ({ reply }) => {
+    this.touchApp.channel.regChannel(ChannelType.PLUGIN, 'core-box:hide-input', ({ reply }) => {
       const coreBoxWindow = getCoreBoxWindow()
       if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
         reply(DataCode.ERROR, { error: 'CoreBox window not available' })
@@ -177,7 +176,7 @@ export class IpcManager {
         })
     })
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show-input', ({ reply }) => {
+    this.touchApp.channel.regChannel(ChannelType.PLUGIN, 'core-box:show-input', ({ reply }) => {
       const coreBoxWindow = getCoreBoxWindow()
 
       this.touchApp.channel
@@ -192,23 +191,27 @@ export class IpcManager {
         })
     })
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:get-input', async ({ reply }) => {
-      try {
-        const coreBoxWindow = getCoreBoxWindow()
+    this.touchApp.channel.regChannel(
+      ChannelType.PLUGIN,
+      'core-box:get-input',
+      async ({ reply }) => {
+        try {
+          const coreBoxWindow = getCoreBoxWindow()
 
-        const result = await this.touchApp.channel.sendToMain(
-          coreBoxWindow!.window,
-          ChannelType.MAIN,
-          'core-box:request-input-value'
-        )
-        reply(DataCode.SUCCESS, { input: result?.data?.input || result?.input || '' })
-      } catch (error: any) {
-        reply(DataCode.ERROR, { error: error.message })
+          const result = await this.touchApp.channel.sendToMain(
+            coreBoxWindow!.window,
+            'core-box:request-input-value',
+            {}
+          )
+          reply(DataCode.SUCCESS, { input: result?.data?.input || result?.input || '' })
+        } catch (error: any) {
+          reply(DataCode.ERROR, { error: error.message })
+        }
       }
-    })
+    )
 
     this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
+      ChannelType.PLUGIN,
       'core-box:set-input',
       async ({ data, reply }) => {
         try {
@@ -222,7 +225,7 @@ export class IpcManager {
     )
 
     this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
+      ChannelType.PLUGIN,
       'core-box:clear-input',
       async ({ reply }) => {
         try {
@@ -244,7 +247,7 @@ export class IpcManager {
     })
 
     this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
+      ChannelType.PLUGIN,
       'core-box:allow-clipboard',
       ({ data, reply }) => {
         try {

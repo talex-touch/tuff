@@ -2,20 +2,17 @@ import type {
   ITouchClientChannel,
   RawChannelSyncData,
   RawStandardChannelData,
-  StandardChannelData,
+  StandardChannelData
 } from '@talex-touch/utils/channel'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+
 import type { IpcRendererEvent } from 'electron'
-import {
-  ChannelType,
-  DataCode,
-} from '@talex-touch/utils/channel'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 
 const { ipcRenderer } = require('electron')
 const CHANNEL_DEFAULT_TIMEOUT = 10_000
 
 class TouchChannel implements ITouchClientChannel {
-  channelMap: Map<string, ((data: StandardChannelData) => void)[]> = new Map()
+  channelMap: Map<string, ((data: StandardChannelData) => any)[]> = new Map()
 
   pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
 
@@ -33,13 +30,13 @@ class TouchChannel implements ITouchClientChannel {
             status: header.status || 'request',
             type: ChannelType.MAIN,
             _originData: arg,
-            event: e || undefined,
+            event: e || undefined
           },
           sync,
           code,
           data,
           plugin,
-          name: name as string,
+          name: name as string
         }
       }
     }
@@ -62,21 +59,33 @@ class TouchChannel implements ITouchClientChannel {
       return this.pendingMap.get(id)?.(rawData)
     }
 
+    console.log(rawData, this.channelMap, e, arg)
+
     this.channelMap.get(rawData.name)?.forEach((func) => {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any) => {
           e.sender.send(
             '@main-process-message',
-            this.__parse_sender(code, rawData, data, rawData.sync),
+            this.__parse_sender(code, rawData, data, rawData.sync)
           )
         },
-        ...rawData,
+        ...rawData
       }
 
-      // We can't check the return value of func because it's void
-      func(handInData)
-      // Always reply with success
-      handInData.reply(DataCode.SUCCESS, undefined)
+      const res = func(handInData)
+
+      if (res instanceof Promise) {
+        res
+          .then((data) => {
+            handInData.reply(DataCode.SUCCESS, data)
+          })
+          .catch((err) => {
+            handInData.reply(DataCode.ERROR, err)
+          })
+        return
+      }
+
+      handInData.reply(DataCode.SUCCESS, res)
     })
   }
 
@@ -84,7 +93,7 @@ class TouchChannel implements ITouchClientChannel {
     code: DataCode,
     rawData: RawStandardChannelData,
     data: any,
-    sync?: RawChannelSyncData,
+    sync?: RawChannelSyncData
   ): RawStandardChannelData {
     return {
       code,
@@ -95,15 +104,15 @@ class TouchChannel implements ITouchClientChannel {
             timeStamp: new Date().getTime(),
             // reply sync timeout should follow the request timeout, unless user set it.
             timeout: sync.timeout,
-            id: sync.id,
+            id: sync.id
           },
       name: rawData.name,
       plugin: rawData.plugin,
       header: {
         status: 'reply',
         type: rawData.header.type,
-        _originData: rawData.header._originData,
-      },
+        _originData: rawData.header._originData
+      }
     }
   }
 
@@ -112,8 +121,7 @@ class TouchChannel implements ITouchClientChannel {
 
     if (!listeners.includes(callback)) {
       listeners.push(callback)
-    }
-    else {
+    } else {
       return () => {}
     }
 
@@ -129,14 +137,12 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   private formatPayloadPreview(payload: unknown): string {
-    if (payload === null || payload === undefined)
-      return String(payload)
+    if (payload === null || payload === undefined) return String(payload)
     if (typeof payload === 'string')
       return payload.length > 200 ? `${payload.slice(0, 200)}…` : payload
     try {
       return JSON.stringify(payload)
-    }
-    catch {
+    } catch {
       return '[unserializable]'
     }
   }
@@ -150,42 +156,39 @@ class TouchChannel implements ITouchClientChannel {
       sync: {
         timeStamp: new Date().getTime(),
         timeout: CHANNEL_DEFAULT_TIMEOUT,
-        id: uniqueId,
+        id: uniqueId
       },
       name: eventName,
       header: {
         status: 'request',
-        type: ChannelType.MAIN,
-      },
+        type: ChannelType.MAIN
+      }
     } as RawStandardChannelData
 
     return new Promise((resolve, reject) => {
       try {
         ipcRenderer.send('@main-process-message', data)
-      }
-      catch (error) {
+      } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(
-          `[Channel] Failed to send "${eventName}": ${errorMessage}`,
-          { payloadPreview: this.formatPayloadPreview(arg) },
-        )
+        console.error(`[Channel] Failed to send "${eventName}": ${errorMessage}`, {
+          payloadPreview: this.formatPayloadPreview(arg)
+        })
         reject(
           Object.assign(
             new Error(`Failed to send channel message "${eventName}": ${errorMessage}`),
-            { code: 'channel_send_failed' },
-          ),
+            { code: 'channel_send_failed' }
+          )
         )
         return
       }
 
       const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT
       const timeoutHandle = setTimeout(() => {
-        if (!this.pendingMap.has(uniqueId))
-          return
+        if (!this.pendingMap.has(uniqueId)) return
         this.pendingMap.delete(uniqueId)
         const error = Object.assign(
           new Error(`Channel request "${eventName}" timed out after ${timeoutMs}ms`),
-          { code: 'channel_timeout' },
+          { code: 'channel_timeout' }
         )
         console.warn(error.message)
         reject(error)
@@ -207,27 +210,24 @@ class TouchChannel implements ITouchClientChannel {
       name: eventName,
       header: {
         status: 'request',
-        type: ChannelType.MAIN,
-      },
+        type: ChannelType.MAIN
+      }
     } as RawStandardChannelData
 
     try {
       const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@main-process-message', data))
 
-      if (res?.header?.status === 'reply')
-        return res.data
+      if (res?.header?.status === 'reply') return res.data
 
       return res
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      console.error(
-        `[Channel] Failed to sendSync "${eventName}": ${errorMessage}`,
-        { payloadPreview: this.formatPayloadPreview(arg) },
-      )
+      console.error(`[Channel] Failed to sendSync "${eventName}": ${errorMessage}`, {
+        payloadPreview: this.formatPayloadPreview(arg)
+      })
       throw Object.assign(
         new Error(`Failed to sendSync channel message "${eventName}": ${errorMessage}`),
-        { code: 'channel_send_failed' },
+        { code: 'channel_send_failed' }
       )
     }
   }
