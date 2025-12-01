@@ -676,9 +676,10 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
+      const instance = this
       console.debug('[PluginChannelSDK] Sending plugin channel message', {
         eventName,
-        payloadPreview: this.formatPayloadPreview(arg)
+        instance,
       });
       return new Promise((resolve, reject) => {
         try {
@@ -688,7 +689,7 @@ export class WindowManager {
           console.error('[CoreBox] Failed to send plugin channel message', {
             eventName,
             error: errorMessage,
-            payloadPreview: this.formatPayloadPreview(arg)
+            payloadPreview: instance.formatPayloadPreview(arg)
           });
           const sendError = new Error('Failed to send plugin channel message "' + eventName + '": ' + errorMessage);
           sendError.code = 'plugin_channel_send_failed';
@@ -698,17 +699,17 @@ export class WindowManager {
 
         const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT;
         const timeoutHandle = setTimeout(() => {
-          if (!this.pendingMap.has(uniqueId)) return;
-          this.pendingMap.delete(uniqueId);
+          if (!instance.pendingMap.has(uniqueId)) return;
+          instance.pendingMap.delete(uniqueId);
           const timeoutError = new Error('Plugin channel request "' + eventName + '" timed out after ' + timeoutMs + 'ms');
           timeoutError.code = 'plugin_channel_timeout';
           console.warn(timeoutError.message);
           reject(timeoutError);
         }, timeoutMs);
 
-        this.pendingMap.set(uniqueId, (res) => {
+        instance.pendingMap.set(uniqueId, (res) => {
           clearTimeout(timeoutHandle);
-          this.pendingMap.delete(uniqueId);
+          instance.pendingMap.delete(uniqueId);
           resolve(res.data);
         });
       });

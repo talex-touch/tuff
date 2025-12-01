@@ -4,6 +4,7 @@
  * Provides a unified API for plugins to control the CoreBox window behavior,
  * including visibility, size, input field control, and input value access.
  */
+import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { ensureRendererChannel } from './channel'
 
 /**
@@ -193,32 +194,23 @@ export interface BoxSDK {
  *
  * @internal
  */
-export function createBoxSDK(channel: any): BoxSDK {
-  const send: (eventName: string, payload?: any) => Promise<any> =
-    typeof channel?.sendToMain === 'function'
-      ? channel.sendToMain.bind(channel)
-      : typeof channel?.send === 'function'
-        ? channel.send.bind(channel)
-        : (() => {
-            throw new Error('[Box SDK] Channel send function not available')
-          })()
-
+export function createBoxSDK(channel: ITouchClientChannel): BoxSDK {
   return {
     hide(): void {
-      send('core-box:hide').catch((error: any) => {
+      channel.send('core-box:hide').catch((error: any) => {
         console.error('[Box SDK] Failed to hide CoreBox:', error)
       })
     },
 
     show(): void {
-      send('core-box:show').catch((error: any) => {
+      channel.send('core-box:show').catch((error: any) => {
         console.error('[Box SDK] Failed to show CoreBox:', error)
       })
     },
 
     async expand(options?: BoxExpandOptions): Promise<void> {
       try {
-        await send('core-box:expand', options || {})
+        await channel.send('core-box:expand', options || {})
       }
       catch (error) {
         console.error('[Box SDK] Failed to expand CoreBox:', error)
@@ -228,7 +220,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async shrink(): Promise<void> {
       try {
-        await send('core-box:expand', { mode: 'collapse' })
+        await channel.send('core-box:expand', { mode: 'collapse' })
       }
       catch (error) {
         console.error('[Box SDK] Failed to shrink CoreBox:', error)
@@ -238,7 +230,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async hideInput(): Promise<void> {
       try {
-        await send('core-box:hide-input')
+        await channel.send('core-box:hide-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to hide input:', error)
@@ -248,7 +240,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async showInput(): Promise<void> {
       try {
-        await send('core-box:show-input')
+        await channel.send('core-box:show-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to show input:', error)
@@ -258,7 +250,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async getInput(): Promise<string> {
       try {
-        const result = await send('core-box:get-input')
+        const result = await channel.send('core-box:get-input')
         return result?.data?.input || result?.input || ''
       }
       catch (error) {
@@ -269,7 +261,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async setInput(value: string): Promise<void> {
       try {
-        await send('core-box:set-input', { value })
+        await channel.send('core-box:set-input', { value })
       }
       catch (error) {
         console.error('[Box SDK] Failed to set input:', error)
@@ -279,7 +271,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async clearInput(): Promise<void> {
       try {
-        await send('core-box:clear-input')
+        await channel.send('core-box:clear-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to clear input:', error)
@@ -289,7 +281,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async allowInput(): Promise<void> {
       try {
-        await send('core-box:allow-input')
+        await channel.send('core-box:allow-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to enable input monitoring:', error)
@@ -299,7 +291,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async allowClipboard(types: number): Promise<void> {
       try {
-        await send('core-box:allow-clipboard', types)
+        await channel.send('core-box:allow-clipboard', types)
       }
       catch (error) {
         console.error('[Box SDK] Failed to enable clipboard monitoring:', error)
