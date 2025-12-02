@@ -1,7 +1,5 @@
 import type { TuffQuery } from '@talex-touch/utils'
-import type { TouchApp } from '../../../core/touch-app'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { genTouchApp } from '../../../core'
 import { createLogger } from '../../../utils/logger'
 import pluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { windowManager } from './window'
@@ -17,14 +15,6 @@ const coreBoxInputLog = createLogger('CoreBox').child('InputTransport')
 
 class CoreBoxInputTransport {
   private static instance: CoreBoxInputTransport
-  private _touchApp: TouchApp | null = null
-
-  private get touchApp(): TouchApp {
-    if (!this._touchApp) {
-      this._touchApp = genTouchApp()
-    }
-    return this._touchApp
-  }
 
   public static getInstance(): CoreBoxInputTransport {
     if (!CoreBoxInputTransport.instance) {
@@ -47,8 +37,10 @@ class CoreBoxInputTransport {
     const query = this.normalizeQuery(payload)
 
     coreBoxInputLog.debug('Dispatching input change', {
-      text: query.text,
-      hasInputs: Boolean(query.inputs?.length)
+      meta: {
+        text: query.text,
+        hasInputs: Boolean(query.inputs?.length)
+      }
     })
 
     windowManager.forwardInputChange({

@@ -15,6 +15,14 @@ interface ExpandOptions {
   forceMax?: boolean
 }
 
+/**
+ * Options for triggering CoreBox visibility
+ */
+interface TriggerOptions {
+  /** Whether the trigger was initiated by a keyboard shortcut */
+  triggeredByShortcut?: boolean
+}
+
 export class CoreBoxManager {
   private _searchEngine: SearchEngineCore | null = null
   private static instance: CoreBoxManager
@@ -85,7 +93,12 @@ export class CoreBoxManager {
     return this._isUIMode
   }
 
-  public trigger(show: boolean): void {
+  /**
+   * Toggle CoreBox visibility
+   * @param show - Whether to show or hide CoreBox
+   * @param options - Trigger options including shortcut flag
+   */
+  public trigger(show: boolean, options?: TriggerOptions): void {
     // If trying to show, check if initialization is complete
     if (show) {
       try {
@@ -117,7 +130,7 @@ export class CoreBoxManager {
 
     if (show) {
       this.applyExpandState()
-      windowManager.show()
+      windowManager.show(options?.triggeredByShortcut ?? false)
     }
     else {
       windowManager.hide()
