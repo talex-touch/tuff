@@ -270,12 +270,26 @@ export class WindowManager {
     }
   }
 
-  public show(): void {
+  /**
+   * Show CoreBox window
+   * @param triggeredByShortcut - Whether this show was triggered by keyboard shortcut
+   */
+  public show(triggeredByShortcut: boolean = false): void {
     const window = this.current
     if (!window) return
 
     this.updatePosition(window)
     window.window.showInactive()
+    
+    // Notify renderer about shortcut trigger for autopaste control
+    if (triggeredByShortcut) {
+      this.touchApp.channel
+        .sendTo(window.window, ChannelType.MAIN, 'core-box:shortcut-triggered', {})
+        .catch((error) => {
+          coreBoxWindowLog.error('Failed to send shortcut trigger event', { error })
+        })
+    }
+    
     setTimeout(() => {
       window.window.focus()
     }, 100)

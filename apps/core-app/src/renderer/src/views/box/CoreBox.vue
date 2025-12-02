@@ -129,7 +129,7 @@ function handleAskAiSuggestion(): void {
   focusMainInput()
 }
 
-useVisibility(
+const { cleanup: cleanupVisibility } = useVisibility(
   boxOptions,
   searchVal,
   clipboardOptions,
@@ -389,6 +389,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   cleanupClipboard()
+  cleanupVisibility()
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)

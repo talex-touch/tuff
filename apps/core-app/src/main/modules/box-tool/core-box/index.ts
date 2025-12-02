@@ -65,7 +65,8 @@ export class CoreBoxModule extends BaseModule {
           }
         }
       } else {
-        coreBoxManager.trigger(true)
+        // Pass triggeredByShortcut flag when opening CoreBox via shortcut
+        coreBoxManager.trigger(true, { triggeredByShortcut: true })
         lastScreenId = curScreen.id
       }
     })
@@ -79,7 +80,8 @@ export class CoreBoxModule extends BaseModule {
         windowManager.updatePosition(currentWindow, curScreen)
       }
 
-      coreBoxManager.trigger(true)
+      // Also pass triggeredByShortcut for AI quick call
+      coreBoxManager.trigger(true, { triggeredByShortcut: true })
       lastScreenId = curScreen.id
 
       const targetWindow = windowManager.current?.window

@@ -14,6 +14,7 @@ import type {
 import type { TouchWindow } from '../../core/touch-window'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
+import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import {
   createBoxSDK,
@@ -604,6 +605,38 @@ export class TouchPlugin implements ITouchPlugin {
       raw: appChannel
     }
 
+    const boxChannelHandlers = new Map<
+      string,
+      Map<(data: StandardChannelData) => any, () => void>
+    >()
+
+    const boxChannel: ITouchClientChannel = {
+      regChannel: (eventName, callback) => {
+        const dispose = channelBridge.onMain(eventName, callback)
+        let handlers = boxChannelHandlers.get(eventName)
+        if (!handlers) {
+          handlers = new Map()
+          boxChannelHandlers.set(eventName, handlers)
+        }
+        handlers.set(callback, dispose)
+        return () => {
+          dispose()
+          handlers?.delete(callback)
+        }
+      },
+      unRegChannel: (eventName, callback) => {
+        const disposer = boxChannelHandlers.get(eventName)?.get(callback)
+        if (!disposer) return false
+        disposer()
+        boxChannelHandlers.get(eventName)?.delete(callback)
+        return true
+      },
+      send: (eventName, arg) => channelBridge.sendToMain(eventName, arg),
+      sendSync: () => {
+        throw new Error('[Plugin API] Box SDK sendSync is not supported in plugin main context.')
+      }
+    }
+
     const boxItemManager = getBoxItemManager({ enableLogging: !app.isPackaged })
 
     // BoxItem SDK 工具对象
@@ -1001,7 +1034,7 @@ export class TouchPlugin implements ITouchPlugin {
       clipboard: clipboardUtil,
       channel: channelBridge,
       divisionBox: createDivisionBoxSDK(channelBridge),
-      box: createBoxSDK(channelBridge),
+      box: createBoxSDK(boxChannel),
       feature: createFeatureSDK(boxItems, channelBridge),
       // 新的 BoxItemSDK API
       boxItems,
