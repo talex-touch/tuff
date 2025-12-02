@@ -168,10 +168,6 @@ useKeyboard(
 )
 useChannel(boxOptions, res, searchVal)
 
-watch(searchVal, (newValue) => {
-  touchChannel.send('core-box:input-changed', { input: newValue })
-})
-
 const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
 const historyActiveIndex = ref(-1)
 

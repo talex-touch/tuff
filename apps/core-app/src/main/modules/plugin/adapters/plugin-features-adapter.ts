@@ -14,6 +14,7 @@ import searchEngineCore from '../../box-tool/search-engine/search-core'
 import { pluginModule } from '../plugin-module'
 
 import { PluginViewLoader } from '../view/plugin-view-loader'
+import { genTouchApp } from '../../../core'
 
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   if (!command.type) {
@@ -64,6 +65,37 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     TuffInputType.Files,
     TuffInputType.Html,
   ]
+
+  public handleActiveFeatureInput(query: TuffQuery): boolean {
+    const activationState = searchEngineCore.getActivationState()
+
+    const activeFeatureActivation = activationState?.find(a => a.id === this.id)
+    if (!activeFeatureActivation?.meta?.pluginName) {
+      return false
+    }
+
+    const { pluginName, featureId } = activeFeatureActivation.meta
+    const plugin = pluginModule.pluginManager!.plugins.get(pluginName) as TouchPlugin | undefined
+    const feature = plugin?.getFeature(featureId)
+
+    if (!plugin || !feature || !this.isPluginActive(plugin)) {
+      return false
+    }
+
+    genTouchApp().channel.sendToPlugin(plugin.name, 'core-box:input-change', {
+      source: 'feature-activation',
+      query,
+    })
+
+    if (!query.text) {
+      return true
+    }
+
+    plugin.triggerFeature(feature, query)
+    plugin.triggerInputChanged(feature, query)
+
+    return true
+  }
 
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
@@ -244,10 +276,6 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature && this.isPluginActive(plugin)) {
-          $app.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-            query,
-          })
-
           if (!query.text) {
             const allFeatures = plugin.getFeatures()
             const items = allFeatures
@@ -258,9 +286,6 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
               .setActivate(activationState)
               .build()
           }
-
-          plugin.triggerFeature(feature, query)
-          plugin.triggerInputChanged(feature, query)
 
           return TuffFactory.createSearchResult(query).setActivate(activationState).build()
         }

@@ -14,6 +14,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
+import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { BoxMode } from '..'
 
 export function useSearch(
@@ -47,6 +48,7 @@ export function useSearch(
   const currentSearchId = ref<string | null>(null)
 
   const BASE_DEBOUNCE = 35
+  const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
   const debounceMs = computed(() => {
     return activeActivations.value && activeActivations.value.length > 0 ? 100 : BASE_DEBOUNCE
   })
@@ -66,6 +68,12 @@ export function useSearch(
           text: '',
           inputs: []
         }
+
+        inputTransport.broadcast({
+          input: query.text,
+          query,
+          source: 'renderer'
+        })
 
         // The initial call now returns the high-priority results directly.
         const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
@@ -97,7 +105,19 @@ export function useSearch(
     }
 
     if (!searchVal.value) {
-      // Empty query with active providers: keep current state
+      // Empty query with active providers: still notify plugins/UI about clear
+      const query: TuffQuery = {
+        text: '',
+        inputs: []
+      }
+
+      inputTransport.broadcast({
+        input: query.text,
+        query,
+        source: 'renderer'
+      })
+
+      // Keep current search state; no new search request
       return
     }
 
@@ -155,6 +175,12 @@ export function useSearch(
       if (inputs.length > 0) {
         query.inputs = inputs
       }
+
+      inputTransport.broadcast({
+        input: query.text,
+        query,
+        source: 'renderer'
+      })
 
       // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
@@ -450,17 +476,6 @@ export function useSearch(
 
   // 2. Watch for searchVal or mode changes to trigger the search
   watch([searchVal], handleSearch)
-
-  // 3. Watch for searchVal changes to broadcast to plugins (debounced for performance)
-  const debouncedInputBroadcast = useDebounceFn((newVal: string) => {
-    touchChannel.send('core-box:input-changed', { input: newVal }).catch((error) => {
-      console.error('[useSearch] Failed to broadcast input change:', error)
-    })
-  }, BASE_DEBOUNCE)
-
-  watch(searchVal, (newVal) => {
-    debouncedInputBroadcast(newVal)
-  })
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 

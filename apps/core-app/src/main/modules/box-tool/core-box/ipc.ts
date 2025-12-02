@@ -5,6 +5,7 @@ import { genTouchApp } from '../../../core'
 import { pluginModule } from '../../plugin/plugin-module'
 import searchEngineCore from '../search-engine/search-core'
 import { coreBoxManager } from './manager'
+import { coreBoxInputTransport } from './input-transport'
 import { getCoreBoxWindow, windowManager } from './window'
 
 /**
@@ -237,14 +238,19 @@ export class IpcManager {
       }
     )
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:allow-input', ({ reply }) => {
-      try {
-        windowManager.enableInputMonitoring()
-        reply(DataCode.SUCCESS, { enabled: true })
-      } catch (error: any) {
-        reply(DataCode.ERROR, { error: error.message })
-      }
-    })
+    const registerAllowInput = (type: ChannelType): void => {
+      this.touchApp.channel.regChannel(type, 'core-box:allow-input', ({ reply }) => {
+        try {
+          windowManager.enableInputMonitoring()
+          reply(DataCode.SUCCESS, { enabled: true })
+        } catch (error: any) {
+          reply(DataCode.ERROR, { error: error.message })
+        }
+      })
+    }
+
+    registerAllowInput(ChannelType.MAIN)
+    registerAllowInput(ChannelType.PLUGIN)
 
     this.touchApp.channel.regChannel(
       ChannelType.PLUGIN,
@@ -260,10 +266,7 @@ export class IpcManager {
       }
     )
 
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:input-changed', ({ data }) => {
-      const { input } = data
-      windowManager.sendInputChange(input)
-    })
+    coreBoxInputTransport.register()
 
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
