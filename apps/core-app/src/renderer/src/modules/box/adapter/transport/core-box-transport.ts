@@ -1,8 +1,5 @@
+import { ITouchClientChannel } from '@talex-touch/utils'
 import { useDebounceFn } from '@vueuse/core'
-
-interface ChannelLike {
-  send: (event: string, payload?: any) => Promise<any>
-}
 
 interface TransportOptions {
   event: string
@@ -15,15 +12,14 @@ export interface CoreBoxTransport<TPayload> {
 }
 
 export function createCoreBoxTransport<TPayload>(
-  channel: ChannelLike,
+  channel: ITouchClientChannel,
   options: TransportOptions
 ): CoreBoxTransport<TPayload> {
   const { event, debounceMs, onError } = options
 
-  // lazy import to keep core util free of vue at call sites
   const maybeDebounce = <T extends (...args: any[]) => void>(fn: T): T => {
     if (!debounceMs) return fn
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     return useDebounceFn(fn, debounceMs) as unknown as T
   }
 
