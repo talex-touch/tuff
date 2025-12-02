@@ -1,5 +1,5 @@
 import type { TuffQuery } from '@talex-touch/utils'
-import { useDebounceFn } from '@vueuse/core'
+import { createCoreBoxTransport } from './core-box-transport'
 
 interface CoreBoxInputMessage {
   input: string
@@ -13,19 +13,18 @@ interface ChannelLike {
 
 export function createCoreBoxInputTransport(
   channel: ChannelLike,
-  debounceMs = 35,
+  debounceMs = 35
 ): {
   broadcast: (payload: CoreBoxInputMessage) => void
 } {
-  const emitInputChange = useDebounceFn((payload: CoreBoxInputMessage) => {
-    channel.send('core-box:input-change', payload).catch((error) => {
-      console.error('[coreBoxInputTransport] Failed to broadcast input change:', error)
-    })
-  }, debounceMs)
+  const transport = createCoreBoxTransport<CoreBoxInputMessage>(channel, {
+    event: 'core-box:input-change',
+    debounceMs
+  })
 
   return {
     broadcast(payload: CoreBoxInputMessage) {
-      emitInputChange(payload)
-    },
+      transport.dispatch(payload)
+    }
   }
 }

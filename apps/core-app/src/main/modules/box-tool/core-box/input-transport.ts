@@ -5,6 +5,7 @@ import { genTouchApp } from '../../../core'
 import { createLogger } from '../../../utils/logger'
 import pluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { windowManager } from './window'
+import { coreBoxTransport } from './transport/core-box-transport'
 
 export interface CoreBoxInputChange {
   input?: string
@@ -33,9 +34,13 @@ class CoreBoxInputTransport {
   }
 
   public register(): void {
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:input-change', ({ data }) => {
-      this.handleRendererInput(data as CoreBoxInputChange)
-    })
+    coreBoxTransport.register<CoreBoxInputChange>(
+      ChannelType.MAIN,
+      'core-box:input-change',
+      (data) => {
+        this.handleRendererInput(data)
+      }
+    )
   }
 
   private handleRendererInput(payload: CoreBoxInputChange): void {
@@ -43,13 +48,13 @@ class CoreBoxInputTransport {
 
     coreBoxInputLog.debug('Dispatching input change', {
       text: query.text,
-      hasInputs: Boolean(query.inputs?.length),
+      hasInputs: Boolean(query.inputs?.length)
     })
 
     windowManager.forwardInputChange({
       input: query.text,
       query,
-      source: 'renderer',
+      source: 'renderer'
     })
 
     pluginFeaturesAdapter.handleActiveFeatureInput(query)
@@ -62,7 +67,7 @@ class CoreBoxInputTransport {
 
     return {
       text: payload.input ?? '',
-      inputs: [],
+      inputs: []
     }
   }
 }
