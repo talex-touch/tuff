@@ -142,10 +142,15 @@ export interface IPluginFeature {
   name: string
   desc: string
   icon: ITuffIcon
+  keywords?: string[]
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]
   interaction?: IFeatureInteraction
+  /**
+   * Internal search tokens generated at runtime for better matching
+   */
+  searchTokens?: string[]
   /**
    * Priority of the feature for sorting in search results
    * Higher numbers have higher priority (displayed first)

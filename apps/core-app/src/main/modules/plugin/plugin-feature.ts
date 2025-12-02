@@ -78,18 +78,21 @@ export class PluginFeature implements IPluginFeature {
   name: string
   desc: string
   icon: ITuffIcon
+  keywords?: string[]
   push: boolean
   platform: IPlatform
   commands: IFeatureCommand[]
   interaction?: IFeatureInteraction
   priority: number
   dev: IPluginDev
+  searchTokens?: string[]
 
   constructor(pluginPath: string, options: IPluginFeature, dev: IPluginDev) {
     this.id = options.id
     this.name = options.name
     this.desc = options.desc
     this.icon = new TuffIconImpl(pluginPath, options.icon.type, options.icon.value)
+    this.keywords = options.keywords
     this.push = options.push
     this.platform = options.platform
     this.commands = [...options.commands]
@@ -112,6 +115,7 @@ export class PluginFeature implements IPluginFeature {
         value: this.icon.value,
         status: this.icon.status,
       },
+      keywords: this.keywords,
       push: this.push,
       platform: this.platform,
       commands: this.commands,

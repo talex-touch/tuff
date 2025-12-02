@@ -25,16 +25,35 @@ function getWeight(item: TuffItem): number {
  * @returns Match score (higher is better)
  */
 function calculateMatchScore(item: TuffItem, searchKey?: string): number {
-  if (!searchKey)
+  const normalizedKey = searchKey?.trim().toLowerCase()
+
+  if (!normalizedKey)
     return 0
 
   const title = item.render.basic?.title
   const titleLower = title?.toLowerCase() || ''
   const titleLength = titleLower.length
+  const searchTokens = (item.meta?.extension?.searchTokens as string[])?.filter(Boolean) ?? []
 
   // Perfect title match
-  if (titleLower === searchKey)
+  if (titleLower === normalizedKey)
     return 1000
+
+  // Token match (keywords/pinyin/initials generated at registration)
+  if (searchTokens.length > 0) {
+    for (const token of searchTokens) {
+      const lowerToken = token.toLowerCase()
+      if (!lowerToken)
+        continue
+
+      if (lowerToken === normalizedKey)
+        return 950
+      if (lowerToken.startsWith(normalizedKey))
+        return 800
+      if (lowerToken.includes(normalizedKey))
+        return 650
+    }
+  }
 
   // Check source.id match for features (e.g., 'clipboard' matches 'clipboard-history')
   // This is especially useful for English searches matching features with Chinese titles
@@ -42,14 +61,14 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     const sourceIdLower = item.source.id.toLowerCase()
     
     // Exact source.id match
-    if (sourceIdLower === searchKey) {
+    if (sourceIdLower === normalizedKey) {
       return 900
     }
     
     // Source.id contains search key (e.g., 'clipboard-history' contains 'clipboard')
-    if (sourceIdLower.includes(searchKey)) {
+    if (sourceIdLower.includes(normalizedKey)) {
       // Higher score if search key is at the start
-      if (sourceIdLower.startsWith(searchKey)) {
+      if (sourceIdLower.startsWith(normalizedKey)) {
         return 850
       }
       return 800
@@ -79,15 +98,15 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     }
 
     // 3. Continuity/relevance reward (compared to search term length)
-    if (matchLength === searchKey.length) {
+    if (matchLength === normalizedKey.length) {
       score += 200
     }
 
     return Math.round(score)
   }
 
-  if (titleLower.includes(searchKey)) {
-    if (titleLower.startsWith(searchKey))
+  if (titleLower.includes(normalizedKey)) {
+    if (titleLower.startsWith(normalizedKey))
       return 500
     return 300
   }
@@ -138,7 +157,8 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
       frequency,
       finalScore,
       usageStats: item.meta?.usageStats,
-      matchResult: item.meta?.extension?.matchResult
+      matchResult: item.meta?.extension?.matchResult,
+      searchTokens: item.meta?.extension?.searchTokens,
     })
   }
 
@@ -148,7 +168,7 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
 export const tuffSorter: ISortMiddleware = {
   name: 'tuff-sorter',
   sort: (items: TuffItem[], query: TuffQuery) => {
-    const searchKey = query.text?.toLowerCase()
+    const searchKey = query.text?.trim().toLowerCase()
 
     // Use the Schwartzian transform (decorate-sort-undecorate) for performance.
     // Decorate: Calculate the sort score for each item once.
