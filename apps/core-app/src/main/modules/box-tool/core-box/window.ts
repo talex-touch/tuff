@@ -1,4 +1,4 @@
-import type { AppSetting } from '@talex-touch/utils'
+import type { AppSetting, TuffQuery } from '@talex-touch/utils'
 import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
 import * as fs from 'node:fs'
@@ -19,6 +19,7 @@ import { pluginModule } from '../../plugin/plugin-module'
 import { getConfig } from '../../storage'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from './manager'
+import type { CoreBoxInputChange } from './input-transport'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
@@ -115,10 +116,14 @@ export class WindowManager {
   /**
    * Send input change to UI view if allowed
    */
-  public sendInputChange(input: string): void {
+  public forwardInputChange(payload: CoreBoxInputChange & { query: TuffQuery }): void {
     if (!this.inputAllowed || !this.attachedPlugin) return
 
-    this.sendChannelMessageToUIView('core-box:input-change', { input })
+    this.sendChannelMessageToUIView('core-box:input-change', {
+      input: payload.input ?? payload.query.text,
+      query: payload.query,
+      source: payload.source ?? 'ui-monitor',
+    })
   }
 
   /**

@@ -143,14 +143,14 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
   const registerListener = () => {
     if (channel.onMain) {
       // Main process plugin context
-      channel.onMain('core-box:input-changed', (event: any) => {
-        const input = event.data?.input || event.input || ''
+      channel.onMain('core-box:input-change', (event: any) => {
+        const input = event.data?.input || event.data?.query?.text || event.input || ''
         inputChangeHandlers.forEach(handler => handler(input))
       })
     } else if (channel.on) {
       // Renderer process context
-      channel.on('core-box:input-changed', (data: any) => {
-        const input = data?.input || data || ''
+      channel.on('core-box:input-change', (data: any) => {
+        const input = data?.input || data?.query?.text || data || ''
         inputChangeHandlers.forEach(handler => handler(input))
       })
     }

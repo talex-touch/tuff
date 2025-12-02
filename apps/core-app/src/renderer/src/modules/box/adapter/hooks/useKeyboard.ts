@@ -109,9 +109,9 @@ export function useKeyboard(
     }
     else if (event.key === 'Escape') {
       /**
-       * ESC key strict sequential handling:
-       * 1. Deactivate active providers
-       * 2. Clear clipboard/file attachments
+       * ESC key strict sequential handling (FIXED):
+       * 1. Clear clipboard/file attachments (PRIORITY)
+       * 2. Deactivate active providers (attachUIView)
        * 3. Clear input query
        * 4. Handle mode transitions
        * 5. Hide CoreBox window
@@ -119,14 +119,12 @@ export function useKeyboard(
        * Note: handleExit is async but we use void operator (fire-and-forget)
        * because keyboard event handlers cannot be async. The async operations
        * will continue in the background without blocking the UI.
+       * 
+       * Fix: Prioritize clearing clipboard/attachments before deactivating providers
+       * to prevent attachUIView from closing while clipboard data remains attached.
        */
       
-      if (activeActivations.value?.length > 0) {
-        void handleExit()
-        event.preventDefault()
-        return
-      }
-
+      // Step 1: Clear clipboard/file attachments FIRST (highest priority)
       if (clipboardOptions.last || boxOptions.file?.paths?.length > 0) {
         if (clipboardOptions.last) {
           clearClipboard({ remember: true })
@@ -139,12 +137,21 @@ export function useKeyboard(
         return
       }
 
+      // Step 2: Deactivate active providers (attachUIView)
+      if (activeActivations.value?.length > 0) {
+        void handleExit()
+        event.preventDefault()
+        return
+      }
+
+      // Step 3: Clear input query
       if (searchVal.value) {
         searchVal.value = ''
         event.preventDefault()
         return
       }
 
+      // Step 4: Hide CoreBox window (final step)
       void handleExit()
     }
 
@@ -186,9 +193,19 @@ export function useKeyboard(
     })
   }
 
-  document.addEventListener('keydown', onKeyDown)
+  /**
+   * Use capture phase (true) to ensure keyboard events are handled
+   * before input element's event handlers. This fixes the issue where
+   * keyboard events don't reach the global handler when input has focus.
+   * 
+   * Event propagation phases:
+   * 1. Capture phase (document → input) - WE LISTEN HERE
+   * 2. Target phase (input itself)
+   * 3. Bubble phase (input → document)
+   */
+  document.addEventListener('keydown', onKeyDown, true)
 
   onBeforeUnmount(() => {
-    document.removeEventListener('keydown', onKeyDown)
+    document.removeEventListener('keydown', onKeyDown, true)
   })
 }
