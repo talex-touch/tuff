@@ -18,18 +18,47 @@ function getWeight(item: TuffItem): number {
   return DEFAULT_WEIGHTS[kind] || 0
 }
 
+/**
+ * Calculate match score based on title and source.id matching
+ * @param item - TuffItem to calculate score for
+ * @param searchKey - Search keyword (lowercase)
+ * @returns Match score (higher is better)
+ */
 function calculateMatchScore(item: TuffItem, searchKey?: string): number {
+  if (!searchKey)
+    return 0
+
   const title = item.render.basic?.title
-  if (!searchKey || !title)
-    return 0
+  const titleLower = title?.toLowerCase() || ''
+  const titleLength = titleLower.length
 
-  const name = title.toLowerCase()
-  const nameLength = name.length
-  if (nameLength === 0)
-    return 0
-
-  if (name === searchKey)
+  // Perfect title match
+  if (titleLower === searchKey)
     return 1000
+
+  // Check source.id match for features (e.g., 'clipboard' matches 'clipboard-history')
+  // This is especially useful for English searches matching features with Chinese titles
+  if (item.kind === 'feature' && item.source?.id) {
+    const sourceIdLower = item.source.id.toLowerCase()
+    
+    // Exact source.id match
+    if (sourceIdLower === searchKey) {
+      return 900
+    }
+    
+    // Source.id contains search key (e.g., 'clipboard-history' contains 'clipboard')
+    if (sourceIdLower.includes(searchKey)) {
+      // Higher score if search key is at the start
+      if (sourceIdLower.startsWith(searchKey)) {
+        return 850
+      }
+      return 800
+    }
+  }
+
+  // Title-based matching (original logic)
+  if (titleLength === 0)
+    return 0
 
   const matchRanges = item.meta?.extension?.matchResult as
     | { start: number, end: number }[]
@@ -42,7 +71,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     let score = 400
 
     // 1. Match length reward
-    score += (matchLength / nameLength) * 100 // Match length reward
+    score += (matchLength / titleLength) * 100 // Match length reward
 
     // 2. Beginning match reward
     if (start === 0) {
@@ -57,8 +86,8 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     return Math.round(score)
   }
 
-  if (name.includes(searchKey)) {
-    if (name.startsWith(searchKey))
+  if (titleLower.includes(searchKey)) {
+    if (titleLower.startsWith(searchKey))
       return 500
     return 300
   }
@@ -94,6 +123,24 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   }
 
   const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 10
+
+  // Debug logging for feature items to diagnose sorting issues
+  if (item.kind === 'feature' && searchKey) {
+    console.log('[TuffSorter]', {
+      title: item.render.basic?.title,
+      kind: item.kind,
+      searchKey,
+      source: item.source, // 输出完整 source 对象
+      sourceId: item.source?.id, // 单独输出 source.id
+      weight,
+      matchScore,
+      recency,
+      frequency,
+      finalScore,
+      usageStats: item.meta?.usageStats,
+      matchResult: item.meta?.extension?.matchResult
+    })
+  }
 
   return finalScore
 }

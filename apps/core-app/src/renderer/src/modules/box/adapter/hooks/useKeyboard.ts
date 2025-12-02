@@ -57,11 +57,23 @@ export function useKeyboard(
       handleExecute(target)
     }
     else if (event.key === 'ArrowDown') {
-      boxOptions.focus += 1
+      // Support cycling to first item when list is small (≤ 20 items)
+      // For larger lists, keep current behavior to avoid rendering performance issues
+      if (res.value.length <= 20 && boxOptions.focus === res.value.length - 1) {
+        boxOptions.focus = 0
+      } else {
+        boxOptions.focus += 1
+      }
       event.preventDefault()
     }
     else if (event.key === 'ArrowUp') {
-      boxOptions.focus -= 1
+      // Support cycling to last item when list is small (≤ 20 items)
+      // For larger lists, keep current behavior to avoid rendering performance issues
+      if (res.value.length <= 20 && boxOptions.focus === 0) {
+        boxOptions.focus = res.value.length - 1
+      } else {
+        boxOptions.focus -= 1
+      }
       event.preventDefault()
     }
     else if (

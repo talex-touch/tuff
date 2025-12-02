@@ -895,8 +895,6 @@ export class ClipboardModule extends BaseModule {
           sortOrder = 'desc'
         } = payload ?? {}
 
-        console.log(payload, '=======')
-
         // Use PAGE_SIZE as default, but allow override (capped at 100)
         const pageSize = requestedPageSize
           ? Math.min(Math.max(requestedPageSize, 1), 100)
