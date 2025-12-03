@@ -6,10 +6,73 @@ import { touchChannel } from '~/modules/channel/channel-core'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
 
-function evaluateWidgetComponent(code: string): Component {
+/**
+ * Create a sandboxed require function for widgets
+ * 为 widget 创建沙箱化的 require 函数
+ * @param allowedDependencies - List of allowed module names
+ * @returns Safe require function
+ */
+function createSandboxRequire(allowedDependencies: string[]): (id: string) => any {
+  // Preload allowed modules
+  const moduleCache: Record<string, any> = {
+    'vue': require('vue'),
+  }
+
+  // Dynamically load @talex-touch/utils modules
+  const talexModules = [
+    '@talex-touch/utils',
+    '@talex-touch/utils/plugin',
+    '@talex-touch/utils/plugin/sdk',
+    '@talex-touch/utils/core-box',
+    '@talex-touch/utils/channel',
+    '@talex-touch/utils/common',
+    '@talex-touch/utils/types',
+  ]
+
+  talexModules.forEach((module) => {
+    try {
+      moduleCache[module] = require(module)
+    }
+    catch (error) {
+      console.warn(`[WidgetSandbox] Failed to preload module "${module}":`, error)
+    }
+  })
+
+  return function sandboxRequire(id: string) {
+    if (!allowedDependencies.includes(id)) {
+      throw new Error(
+        `[WidgetSandbox] Module "${id}" is not allowed. Available modules: ${allowedDependencies.join(', ')}`,
+      )
+    }
+
+    if (!(id in moduleCache)) {
+      throw new Error(`[WidgetSandbox] Module "${id}" is not loaded in sandbox`)
+    }
+
+    return moduleCache[id]
+  }
+}
+
+/**
+ * Evaluate widget component code in a sandboxed environment
+ * 在沙箱环境中执行 widget 组件代码
+ * @param code - Compiled widget code
+ * @param dependencies - Allowed dependencies
+ * @returns Vue component
+ */
+function evaluateWidgetComponent(code: string, dependencies: string[] = []): Component {
   const module: { exports: any } = { exports: {} }
-  const executor = new Function('require', 'module', 'exports', code)
-  executor(require, module, module.exports)
+  const customRequire = createSandboxRequire(dependencies)
+
+  try {
+    const executor = new Function('require', 'module', 'exports', code)
+    executor(customRequire, module, module.exports)
+  }
+  catch (error) {
+    console.error('[WidgetRegistry] Widget execution failed:', error)
+    throw error
+  }
+
   const exported = module.exports.default || module.exports
 
   if (!exported) {
@@ -40,7 +103,7 @@ touchChannel.regChannel('plugin:widget:register', ({ data, reply }) => {
   const payload = data as WidgetRegistrationPayload
 
   try {
-    const component = evaluateWidgetComponent(payload.code)
+    const component = evaluateWidgetComponent(payload.code, payload.dependencies || [])
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     reply(DataCode.SUCCESS, { widgetId: payload.widgetId })
@@ -55,7 +118,7 @@ touchChannel.regChannel('plugin:widget:update', ({ data, reply }) => {
   const payload = data as WidgetRegistrationPayload
 
   try {
-    const component = evaluateWidgetComponent(payload.code)
+    const component = evaluateWidgetComponent(payload.code, payload.dependencies || [])
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     reply(DataCode.SUCCESS, { widgetId: payload.widgetId })
