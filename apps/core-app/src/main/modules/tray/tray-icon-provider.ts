@@ -247,74 +247,50 @@ export class TrayIconProvider {
 
   /**
    * Get application icon path
+   * 获取应用图标路径
+   * 
    * Used for Dock icon on macOS, window icon on other platforms
+   * 用于 macOS 的 Dock 图标或其他平台的窗口图标
+   * 
    * @returns Full path to application icon file
    */
   static getAppIconPath(): string {
+    const iconName = process.platform === 'darwin' ? 'icon.icns' : 'icon.png'
+
     if (app.isPackaged) {
-      // In packaged app, look for icon.icns (macOS) or icon.png
-      const appPath = app.getAppPath()
-      const iconNames
-        = process.platform === 'darwin' ? ['icon.icns', 'icon.png'] : ['icon.png', 'icon.ico']
-
-      for (const iconName of iconNames) {
-        const potentialPaths = [
-          path.resolve(appPath, 'resources', iconName),
-          path.resolve(appPath, '..', 'resources', iconName),
-          path.resolve(__dirname, '..', '..', '..', 'resources', iconName),
-          ...(process.resourcesPath
-            ? [
-                path.resolve(process.resourcesPath, 'resources', iconName),
-                path.resolve(process.resourcesPath, 'app', 'resources', iconName),
-              ]
-            : []),
-          // macOS-specific paths (Contents/Resources)
-          ...(process.platform === 'darwin'
-            ? [
-                path.resolve(appPath, '..', '..', '..', 'Resources', iconName),
-                path.resolve(appPath, '..', '..', '..', 'Resources', 'app', 'resources', iconName),
-                path.resolve(__dirname, '..', '..', '..', '..', '..', 'build', iconName),
-              ]
-            : []),
-        ]
-
-        for (const potentialPath of potentialPaths) {
-          if (fse.existsSync(potentialPath)) {
-            return potentialPath
-          }
+      // Packaged mode: use resourcesPath
+      // 打包模式：使用 resourcesPath
+      if (process.resourcesPath) {
+        const iconPath = path.join(process.resourcesPath, 'app', 'build', iconName)
+        if (fse.existsSync(iconPath)) {
+          return iconPath
         }
       }
+
+      // Fallback for packaged mode
+      // 打包模式备用方案
+      const appPath = app.getAppPath()
+      return path.join(appPath, '..', '..', 'Resources', iconName)
     }
     else {
-      // In development, look for icon files in build or resources directory
-      const iconNames
-        = process.platform === 'darwin' ? ['icon.icns', 'icon.png'] : ['icon.png', 'icon.ico']
-
-      for (const iconName of iconNames) {
-        let currentDir = __dirname
-
-        for (let i = 0; i < 10; i++) {
-          // Check build directory
-          const buildPath = path.resolve(currentDir, 'apps', 'core-app', 'build', iconName)
-          if (fse.existsSync(buildPath)) {
-            return buildPath
-          }
-
-          // Check resources directory
-          const resourcesPath = path.resolve(currentDir, 'apps', 'core-app', 'resources', iconName)
-          if (fse.existsSync(resourcesPath)) {
-            return resourcesPath
-          }
-
-          const parentDir = path.dirname(currentDir)
-          if (parentDir === currentDir) {
-            break
-          }
-          currentDir = parentDir
-        }
+      // Development mode: directly use fixed path from project root
+      // 开发模式：直接使用项目根目录的固定路径
+      const devIconPath = path.join(__dirname, '..', '..', 'build', iconName)
+      
+      if (fse.existsSync(devIconPath)) {
+        trayLog.success('Found app icon in development mode', { meta: { devIconPath } })
+        return devIconPath
       }
-    }
 
-    return ''
+      trayLog.error('App icon not found in development mode', { 
+        meta: { 
+          expectedPath: devIconPath,
+          __dirname,
+          exists: false 
+        } 
+      })
+      
+      return ''
+    }
   }
 }

@@ -287,18 +287,47 @@ export class TrayManager extends BaseModule {
     }
   }
 
+  /**
+   * Setup Dock icon on macOS
+   * 在 macOS 上设置 Dock 图标
+   */
   private setupDockIcon(): void {
     if (process.platform !== 'darwin')
       return
 
     try {
       const appIconPath = TrayIconProvider.getAppIconPath()
-      if (appIconPath && app.dock) {
-        app.dock.setIcon(appIconPath)
+      
+      // Validate icon path before attempting to load
+      if (!appIconPath) {
+        console.warn('[TrayManager] App icon path is empty, skipping Dock icon setup')
+        return
+      }
 
+      // Verify file existence
+      const fs = require('fs-extra')
+      if (!fs.existsSync(appIconPath)) {
+        console.warn(`[TrayManager] App icon file does not exist: ${appIconPath}`)
+        return
+      }
+
+      if (!app.dock) {
+        console.warn('[TrayManager] app.dock is not available')
+        return
+      }
+
+      // Attempt to set Dock icon
+      try {
+        app.dock.setIcon(appIconPath)
+        console.log(`[TrayManager] Successfully set Dock icon: ${appIconPath}`)
+
+        // Set badge for dev version
         if ($app.version === TalexTouch.AppVersion.DEV) {
           app.dock.setBadge($app.version)
         }
+      }
+      catch (iconError) {
+        console.error(`[TrayManager] Failed to load icon from path: ${appIconPath}`, iconError)
       }
     }
     catch (error) {

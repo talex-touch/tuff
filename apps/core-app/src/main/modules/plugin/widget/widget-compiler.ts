@@ -1,78 +1,87 @@
-import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
-import { transform } from 'esbuild'
+import path from 'node:path'
+import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetSource } from './widget-loader'
+import { WidgetVueProcessor } from './processors/vue-processor'
+import { widgetProcessorRegistry } from './widget-processor'
+import type { CompiledWidget, WidgetCompilationContext } from './widget-processor'
 
-interface CompiledWidget {
+// Register default processors
+widgetProcessorRegistry.register(new WidgetVueProcessor())
+
+/**
+ * Legacy interface for backward compatibility
+ * 向后兼容的遗留接口
+ * @deprecated Use the processor-based compile function instead
+ */
+interface LegacyCompiledWidget {
   code: string
   styles: string
 }
 
-function resolveLoader(lang: string | undefined): 'js' | 'ts' | 'tsx' | 'jsx' {
-  if (!lang)
-    return 'js'
+/**
+ * Compile widget source using the processor registry
+ * 使用处理器注册表编译 widget 源码
+ * @param source - Widget source information
+ * @param context - Compilation context (plugin and feature)
+ * @returns Compiled widget or null on failure
+ */
+export async function compileWidgetSource(
+  source: WidgetSource,
+  context: WidgetCompilationContext,
+): Promise<CompiledWidget | null> {
+  const ext = path.extname(source.filePath)
 
-  const lower = lang.toLowerCase()
+  const processor = widgetProcessorRegistry.getProcessor(ext)
 
-  if (lower === 'ts')
-    return 'ts'
-  if (lower === 'tsx')
-    return 'tsx'
-  if (lower === 'jsx')
-    return 'jsx'
+  if (!processor) {
+    context.plugin.issues.push({
+      type: 'error',
+      code: 'WIDGET_UNSUPPORTED_TYPE',
+      message: `Unsupported widget file type: ${ext}`,
+      source: `feature:${context.feature.id}`,
+      suggestion: `Supported extensions: ${widgetProcessorRegistry.getSupportedExtensions().join(', ')}`,
+      timestamp: Date.now(),
+    })
 
-  return 'js'
+    context.plugin.logger.error(
+      `[WidgetCompiler] Unsupported file type "${ext}" for widget "${source.widgetId}"`,
+    )
+
+    return null
+  }
+
+  return await processor.compile(source, context)
 }
 
-export async function compileWidgetSource(source: WidgetSource): Promise<CompiledWidget> {
-  const descriptor = parse(source.source, { filename: source.filePath }).descriptor
-
-  let scriptCode = ''
-
-  if (descriptor.script || descriptor.scriptSetup) {
-    const compiledScript = compileScript(descriptor, {
-      id: source.widgetId,
-      inlineTemplate: false,
-    })
-    scriptCode = compiledScript.content
-  }
-  else {
-    scriptCode = 'export default {}'
-  }
-
-  let templateCode = ''
-  if (descriptor.template) {
-    const compiledTemplate = compileTemplate({
-      id: source.widgetId,
-      filename: source.filePath,
-      source: descriptor.template.content,
-      compilerOptions: {
-        mode: 'function',
-      },
-    })
-    templateCode = compiledTemplate.code
+/**
+ * Legacy compile function for backward compatibility
+ * 向后兼容的编译函数
+ * @deprecated This function is kept for backward compatibility only.
+ * Use compileWidgetSource with WidgetCompilationContext instead.
+ */
+export async function compileWidgetSourceLegacy(
+  source: WidgetSource,
+  plugin: ITouchPlugin,
+  feature: IPluginFeature,
+): Promise<LegacyCompiledWidget | null> {
+  const context: WidgetCompilationContext = {
+    plugin,
+    feature,
+    allowedModules: new Map(),
   }
 
-  const loader = resolveLoader(descriptor.script?.lang ?? descriptor.scriptSetup?.lang)
-  const finalBundle = `
-${scriptCode}
-${templateCode}
-const __component = exports.default || module.exports || {}
-if (__component && exports.render) {
-  __component.render = exports.render
-}
-module.exports = __component
-`
+  const result = await compileWidgetSource(source, context)
 
-  const transformed = await transform(finalBundle, {
-    loader,
-    format: 'cjs',
-    target: 'node18',
-  })
+  if (!result) {
+    return null
+  }
 
-  const styles = descriptor.styles.map((style) => style.content || '').join('\n').trim()
-
+  // Convert to legacy format (without dependencies)
   return {
-    code: transformed.code,
-    styles,
+    code: result.code,
+    styles: result.styles,
   }
 }
+
+export type { CompiledWidget }
+export { widgetProcessorRegistry }

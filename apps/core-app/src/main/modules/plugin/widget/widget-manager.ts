@@ -7,6 +7,7 @@ import chokidar from 'chokidar'
 import { WidgetRegistrationPayload, makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import { pluginWidgetLoader } from './widget-loader'
 import { compileWidgetSource } from './widget-compiler'
+import type { WidgetCompilationContext } from './widget-processor'
 
 type WidgetEvent = 'plugin:widget:register' | 'plugin:widget:update'
 
@@ -35,13 +36,25 @@ export class WidgetManager {
       return cached
     }
 
+    // Prepare compilation context
+    const context: WidgetCompilationContext = {
+      plugin,
+      feature,
+      allowedModules: new Map(),
+    }
+
     let compiled
     try {
-      compiled = await compileWidgetSource(source)
+      compiled = await compileWidgetSource(source, context)
     }
     catch (error) {
       plugin.logger.error('[WidgetManager] 编译 widget 失败：', error as Error)
       this.pushIssue(plugin, feature, 'WIDGET_COMPILE_FAILED', `${(error as Error).message ?? 'unknown error'}`)
+      return null
+    }
+
+    // Check if compilation returned null (validation failed)
+    if (!compiled) {
       return null
     }
 
@@ -53,6 +66,7 @@ export class WidgetManager {
       hash: source.hash,
       code: compiled.code,
       styles: compiled.styles,
+      dependencies: compiled.dependencies || [],
     }
 
     try {
@@ -120,16 +134,33 @@ export class WidgetManager {
       return
     }
 
+    // Optimize for dev mode: faster polling and stability threshold
+    const isDev = plugin.dev?.enable && plugin.dev?.source
+    const pollInterval = isDev ? 100 : 300
+    const stabilityThreshold = isDev ? 50 : 200
+
     const watcher = chokidar.watch(filePath, {
       ignoreInitial: true,
       persistent: true,
       awaitWriteFinish: {
-        stabilityThreshold: 100,
-        pollInterval: 50,
+        stabilityThreshold,
+        pollInterval,
       },
     })
 
+    // Log dev mode watching
+    if (isDev) {
+      plugin.logger.info(
+        `[WidgetManager] 🔥 Dev mode: watching widget "${feature.id}" at ${filePath}`,
+      )
+    }
+
     watcher.on('change', () => {
+      if (isDev) {
+        plugin.logger.info(
+          `[WidgetManager] ♻️  Widget "${feature.id}" changed, recompiling...`,
+        )
+      }
       void this.handleWidgetFileChange(plugin, feature)
     })
     watcher.on('add', () => {
