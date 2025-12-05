@@ -1,5 +1,5 @@
 <script lang="ts" name="IntelligencePromptsPage" setup>
-import type { PromptTemplate } from '~/modules/hooks/usePromptManager'
+import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'

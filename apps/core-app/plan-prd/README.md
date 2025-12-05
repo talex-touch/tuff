@@ -36,6 +36,7 @@
 
 ### 项目架构
 - [PROJECT_ANALYSIS.md](01-project/PROJECT_ANALYSIS.md) - 项目架构分析
+- [TODO_PLAN.md](01-project/TODO_PLAN.md) - TODO 精简与优先级清单
 
 ### 搜索功能
 - [TUFF_USAGE_TRACKING_PRD.md](03-features/search/TUFF_USAGE_TRACKING_PRD.md) - 使用跟踪需求文档

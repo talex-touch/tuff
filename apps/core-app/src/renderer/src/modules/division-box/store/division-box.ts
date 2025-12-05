@@ -15,12 +15,13 @@ import type {
   DivisionBoxIPCChannel
 } from '@talex-touch/utils'
 import type { DivisionBoxStoreState } from '../types'
+import { divisionBoxStorage } from '~/modules/storage/division-box-storage'
 
 export const useDivisionBoxStore = defineStore('divisionBox', {
   state: (): DivisionBoxStoreState => ({
     activeSessions: new Map(),
     recentList: [],
-    pinnedList: [],
+    pinnedList: divisionBoxStorage.getPinnedSessionIds(),
     uiState: {
       draggingSessionId: null,
       resizingSessionId: null,
@@ -156,12 +157,8 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
      */
     async loadPinnedList(): Promise<void> {
       try {
-        // TODO: Implement loading from persistent storage
-        // For now, use localStorage as a placeholder
-        const stored = localStorage.getItem('division-box:pinned-list')
-        if (stored) {
-          this.pinnedList = JSON.parse(stored)
-        }
+        await divisionBoxStorage.reloadFromRemote()
+        this.pinnedList = [...divisionBoxStorage.getPinnedSessionIds()]
       } catch (error) {
         console.error('Failed to load pinned list:', error)
       }
@@ -172,9 +169,8 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
      */
     async savePinnedList(): Promise<void> {
       try {
-        // TODO: Implement saving to persistent storage
-        // For now, use localStorage as a placeholder
-        localStorage.setItem('division-box:pinned-list', JSON.stringify(this.pinnedList))
+        divisionBoxStorage.setPinnedSessionIds(this.pinnedList)
+        await divisionBoxStorage.saveToRemote({ force: true })
       } catch (error) {
         console.error('Failed to save pinned list:', error)
       }
