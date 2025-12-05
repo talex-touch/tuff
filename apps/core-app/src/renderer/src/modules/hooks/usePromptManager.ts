@@ -1,15 +1,6 @@
-import { reactive, ref } from 'vue'
-
-export interface PromptTemplate {
-  id: string
-  name: string
-  content: string
-  builtin: boolean
-  category?: string
-  description?: string
-  createdAt?: number
-  updatedAt?: number
-}
+import { reactive } from 'vue'
+import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
+import { promptLibraryStorage } from '~/modules/storage/prompt-library'
 
 // Mock data - 实际应该从存储系统或API获取
 const builtinPrompts: PromptTemplate[] = [
@@ -63,24 +54,24 @@ const builtinPrompts: PromptTemplate[] = [
   },
 ]
 
-const customPrompts = ref<PromptTemplate[]>([
-  {
-    id: 'custom_1',
-    name: '我的自定义提示词',
-    content: '这是一个自定义的提示词示例...',
-    builtin: false,
-    category: 'custom',
-    description: '用户自定义的提示词模板',
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  },
-])
-
 export function usePromptManager() {
   const prompts = reactive({
     builtin: builtinPrompts,
-    custom: customPrompts.value,
+    custom: promptLibraryStorage.getCustomPrompts(),
   })
+
+  const persistCustomPrompts = (): void => {
+    saveCustomPrompts().catch((error) => {
+      console.error('Failed to persist custom prompts:', error)
+    })
+  }
+
+  const refreshCustomPrompts = (next?: PromptTemplate[]): void => {
+    if (next) {
+      promptLibraryStorage.replaceCustomPrompts(next)
+    }
+    prompts.custom = promptLibraryStorage.getCustomPrompts()
+  }
 
   // 获取所有提示词
   const getAllPrompts = () => {
@@ -119,10 +110,7 @@ export function usePromptManager() {
     }
 
     prompts.custom.push(newPrompt)
-    customPrompts.value.push(newPrompt)
-
-    // TODO: 保存到存储系统
-    saveCustomPrompts()
+    persistCustomPrompts()
 
     return id
   }
@@ -142,10 +130,7 @@ export function usePromptManager() {
     }
 
     prompts.custom[index] = updated
-    customPrompts.value[index] = updated
-
-    // TODO: 保存到存储系统
-    saveCustomPrompts()
+    persistCustomPrompts()
 
     return true
   }
@@ -157,10 +142,7 @@ export function usePromptManager() {
       return false
 
     prompts.custom.splice(index, 1)
-    customPrompts.value.splice(index, 1)
-
-    // TODO: 从存储系统删除
-    saveCustomPrompts()
+    persistCustomPrompts()
 
     return true
   }
@@ -168,8 +150,8 @@ export function usePromptManager() {
   // 保存自定义提示词到存储
   const saveCustomPrompts = async () => {
     try {
-      // TODO: 实现实际的存储逻辑
-      console.log('Saving custom prompts:', prompts.custom)
+      promptLibraryStorage.replaceCustomPrompts(prompts.custom)
+      await promptLibraryStorage.saveToRemote({ force: true })
     }
     catch (error) {
       console.error('Failed to save custom prompts:', error)
@@ -179,8 +161,8 @@ export function usePromptManager() {
   // 从存储加载自定义提示词
   const loadCustomPrompts = async () => {
     try {
-      // TODO: 实现实际的加载逻辑
-      console.log('Loading custom prompts...')
+      await promptLibraryStorage.reloadFromRemote()
+      refreshCustomPrompts()
     }
     catch (error) {
       console.error('Failed to load custom prompts:', error)
@@ -192,7 +174,7 @@ export function usePromptManager() {
     let imported = 0
     promptsToImport.forEach((prompt) => {
       if (!prompt.builtin && !getPromptById(prompt.id)) {
-        const newPrompt = {
+        const newPrompt: PromptTemplate = {
           ...prompt,
           id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           builtin: false,
@@ -200,13 +182,12 @@ export function usePromptManager() {
           updatedAt: Date.now(),
         }
         prompts.custom.push(newPrompt)
-        customPrompts.value.push(newPrompt)
         imported++
       }
     })
 
     if (imported > 0) {
-      saveCustomPrompts()
+      persistCustomPrompts()
     }
 
     return imported
