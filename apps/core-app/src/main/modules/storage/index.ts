@@ -16,7 +16,13 @@ let pluginConfigPath: string
 // Debounced broadcast mechanism to batch updates
 const pendingBroadcasts = new Map<string, NodeJS.Timeout>()
 
-function broadcastUpdate(name: string) {
+/**
+ * Broadcast storage update to all windows
+ * @param name - Configuration name
+ * @param version - Current version number
+ * @param sourceWebContentsId - WebContents ID of the source window (to exclude from broadcast)
+ */
+function broadcastUpdate(name: string, version: number, sourceWebContentsId?: number) {
   // Cancel previous broadcast for this config
   const existing = pendingBroadcasts.get(name)
   if (existing) {
@@ -27,7 +33,11 @@ function broadcastUpdate(name: string) {
   const timer = setTimeout(() => {
     const windows = BrowserWindow.getAllWindows()
     for (const win of windows) {
-      $app.channel?.sendTo(win, ChannelType.MAIN, 'storage:update', { name })
+      // Skip the source window to avoid echo
+      if (sourceWebContentsId && win.webContents.id === sourceWebContentsId) {
+        continue
+      }
+      $app.channel?.sendTo(win, ChannelType.MAIN, 'storage:update', { name, version })
     }
     pendingBroadcasts.delete(name)
   }, 50) // 50ms debounce window
@@ -53,7 +63,7 @@ export class StorageModule extends BaseModule {
   private lruManager: StorageLRUManager
   private frequencyMonitor = new StorageFrequencyMonitor()
   private subscribers = new Map<string, Set<(data: object) => void>>()
- private hotConfigs = new Set<string>(['app-setting.ini'])
+  private hotConfigs = new Set<string>(['app-setting.ini'])
 
   pluginConfigs = new Map<string, object>()
   PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
@@ -99,6 +109,11 @@ export class StorageModule extends BaseModule {
     console.info(chalk.green('[StorageModule] Shutdown complete'))
   }
 
+  /**
+   * Get configuration data
+   * @param name - Configuration name
+   * @returns Configuration data (deep copy)
+   */
   getConfig(name: string): object {
     if (!this.filePath)
       throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
@@ -137,11 +152,32 @@ export class StorageModule extends BaseModule {
       }
     }
 
-    this.cache.set(name, file)
-    this.cache.clearDirty(name)
+    // Use setWithVersion for initial load (version 1, not dirty)
+    this.cache.setWithVersion(name, file, 1)
 
     // Return through cache.get() to ensure deep copy protection
     return this.cache.get(name)!
+  }
+
+  /**
+   * Get configuration data with version info
+   * @param name - Configuration name
+   * @returns Configuration data with version, or null if not found
+   */
+  getConfigWithVersion(name: string): { data: object, version: number } | null {
+    // Ensure config is loaded
+    this.getConfig(name)
+    const result = this.cache.getWithVersion(name)
+    return result ? { data: result.data, version: result.version } : null
+  }
+
+  /**
+   * Get current version of a configuration
+   * @param name - Configuration name
+   * @returns Version number
+   */
+  getVersion(name: string): number {
+    return this.cache.getVersion(name)
   }
 
   reloadConfig(name: string): object {
@@ -176,15 +212,33 @@ export class StorageModule extends BaseModule {
   invalidateCache(name: string): void {
     this.cache.invalidate(name)
     // Notify all windows that cache was invalidated
+    const version = this.cache.getVersion(name)
     setImmediate(() => {
-      broadcastUpdate(name)
+      broadcastUpdate(name, version)
     })
 
     // Notify local subscribers
     this.notifySubscribers(name)
   }
 
-  saveConfig(name: string, content?: string, clear?: boolean, force?: boolean): boolean {
+  /**
+   * Save configuration data
+   * @param name - Configuration name
+   * @param content - JSON string content (optional, uses cached data if not provided)
+   * @param clear - Whether to clear cache after save
+   * @param force - Force save even if content hasn't changed
+   * @param sourceWebContentsId - WebContents ID of the source window (to exclude from broadcast)
+   * @param clientVersion - Client's version number for conflict detection
+   * @returns Save result with new version number
+   */
+  saveConfig(
+    name: string,
+    content?: string,
+    clear?: boolean,
+    force?: boolean,
+    sourceWebContentsId?: number,
+    clientVersion?: number,
+  ): { success: boolean, version: number, conflict?: boolean } {
     if (!this.filePath)
       throw new Error(`Config ${name} not found`)
 
@@ -194,33 +248,41 @@ export class StorageModule extends BaseModule {
 
     if (clear) {
       this.cache.evict(name)
+      return { success: true, version: 0 }
     }
-    else {
-      const parsed = JSON.parse(configData)
-      
-      // Smart deduplication: check if content actually changed (unless force=true)
-      if (!force) {
-        const cachedData = this.cache.get(name)
-        if (cachedData && JSON.stringify(cachedData) === JSON.stringify(parsed)) {
-          // Content hasn't changed, skip save
-          return true
-        }
+
+    const parsed = JSON.parse(configData)
+    const currentVersion = this.cache.getVersion(name)
+
+    // Conflict detection: if client has older version, reject the save
+    if (clientVersion !== undefined && clientVersion < currentVersion) {
+      console.warn(
+        chalk.yellow(`[StorageModule] Conflict detected for ${name}: client v${clientVersion} < server v${currentVersion}`),
+      )
+      return { success: false, version: currentVersion, conflict: true }
+    }
+
+    // Smart deduplication: check if content actually changed (unless force=true)
+    if (!force) {
+      const cachedData = this.cache.get(name)
+      if (cachedData && JSON.stringify(cachedData) === JSON.stringify(parsed)) {
+        // Content hasn't changed, skip save but return current version
+        return { success: true, version: currentVersion }
       }
-
-      this.cache.set(name, parsed)
-      // Mark as dirty to trigger persist
-      this.cache.markDirty(name)
     }
 
-    // Broadcast update to all windows
+    // Set new data and get new version
+    const newVersion = this.cache.set(name, parsed)
+
+    // Broadcast update to other windows (exclude source)
     setImmediate(() => {
-      broadcastUpdate(name)
+      broadcastUpdate(name, newVersion, sourceWebContentsId)
     })
 
     // Notify local subscribers
     this.notifySubscribers(name)
 
-    return true
+    return { success: true, version: newVersion }
   }
 
   /**
@@ -260,13 +322,13 @@ export class StorageModule extends BaseModule {
    * @param name Configuration file name
    * @param callback Callback function that receives the updated configuration data
    * @returns Unsubscribe function
-   * 
+   *
    * @example
    * ```typescript
    * const unsubscribe = storageModule.subscribe('app-setting.ini', (data) => {
    *   console.log('Config updated:', data)
    * })
-   * 
+   *
    * // Later, to unsubscribe:
    * unsubscribe()
    * ```
@@ -338,31 +400,71 @@ export class StorageModule extends BaseModule {
   setupListeners() {
     const channel = $app.channel
 
+    // Get config data (returns data only for backward compatibility)
     channel.regChannel(ChannelType.MAIN, 'storage:get', ({ data }) => {
       if (!data || typeof data !== 'string')
         return {}
       return this.getConfig(data)
     })
 
-    channel.regChannel(ChannelType.MAIN, 'storage:save', ({ data }) => {
-      if (!data || typeof data !== 'object')
-        return false
-      const { key, content, clear } = data
-      if (typeof key !== 'string')
-        return false
-      return this.saveConfig(key, content, clear)
+    // Get config data with version info
+    channel.regChannel(ChannelType.MAIN, 'storage:get-versioned', ({ data }) => {
+      if (!data || typeof data !== 'string')
+        return null
+      return this.getConfigWithVersion(data)
     })
 
+    // Save config with version tracking and conflict detection
+    channel.regChannel(ChannelType.MAIN, 'storage:save', ({ data, header }) => {
+      if (!data || typeof data !== 'object')
+        return { success: false, version: 0 }
+      const { key, content, clear, force, version: clientVersion } = data
+      if (typeof key !== 'string')
+        return { success: false, version: 0 }
+
+      // Get source webContents ID to exclude from broadcast
+      const sender = header?.event?.sender
+      const sourceWebContentsId = sender && 'id' in sender ? sender.id : undefined
+
+      return this.saveConfig(key, content, clear, force, sourceWebContentsId, clientVersion)
+    })
+
+    // Reload config from disk
     channel.regChannel(ChannelType.MAIN, 'storage:reload', ({ data }) => {
       if (!data || typeof data !== 'string')
         return {}
       const result = this.reloadConfig(data)
-      broadcastUpdate(data)
+      const version = this.cache.getVersion(data)
+      broadcastUpdate(data, version)
       return result
     })
 
+    // Force save all dirty configs
     channel.regChannel(ChannelType.MAIN, 'storage:saveall', async () => {
       await this.pollingService.forceSave()
+    })
+
+    // Sync save (for window close) - immediate persist to disk
+    channel.regChannel(ChannelType.MAIN, 'storage:save-sync', ({ data, header }) => {
+      if (!data || typeof data !== 'object')
+        return { success: false, version: 0 }
+      const { key, content, clear, force, version: clientVersion } = data
+      if (typeof key !== 'string')
+        return { success: false, version: 0 }
+
+      const sender = header?.event?.sender
+      const sourceWebContentsId = sender && 'id' in sender ? sender.id : undefined
+      const result = this.saveConfig(key, content, clear, force, sourceWebContentsId, clientVersion)
+
+      // Immediately persist to disk for sync save
+      if (result.success && !clear) {
+        this.persistConfig(key).catch((err) => {
+          console.error(chalk.red(`[StorageModule] Failed to persist ${key} synchronously:`), err)
+        })
+        this.cache.clearDirty(key)
+      }
+
+      return result
     })
   }
 }
