@@ -110,6 +110,41 @@ export interface PluginClipboardHistoryResponse {
   pageSize: number
 }
 
+/**
+ * Clipboard search options for filtering and sorting clipboard history.
+ */
+export interface PluginClipboardSearchOptions {
+  /** Keyword for fuzzy search in content */
+  keyword?: string
+  /** Start time for filtering (Unix timestamp in milliseconds) */
+  startTime?: number
+  /** End time for filtering (Unix timestamp in milliseconds) */
+  endTime?: number
+  /** Filter by clipboard item type */
+  type?: 'text' | 'image' | 'files'
+  /** Filter by favorite status */
+  isFavorite?: boolean
+  /** Filter by source application */
+  sourceApp?: string
+  /** Page number for pagination (default: 1) */
+  page?: number
+  /** Number of items per page (default: 20, max: 100) */
+  pageSize?: number
+  /** Sort order by timestamp (default: 'desc') */
+  sortOrder?: 'asc' | 'desc'
+}
+
+/**
+ * Clipboard search response structure.
+ */
+export interface PluginClipboardSearchResponse {
+  items: PluginClipboardItem[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+
 export interface ActiveAppSnapshot {
   identifier: string | null
   displayName: string | null

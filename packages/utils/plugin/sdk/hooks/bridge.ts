@@ -1,4 +1,5 @@
 import { BridgeEventForCoreBox } from '../enum/bridge-event'
+import { ensureRendererChannel } from '../channel'
 
 export type BridgeEvent = BridgeEventForCoreBox
 
@@ -11,6 +12,7 @@ export type BridgeHook<T = any> = (data: T) => void
 const __hooks: Record<BridgeEvent, Array<BridgeHook>> = {
   [BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE]: [],
   [BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE]: [],
+  [BridgeEventForCoreBox.CORE_BOX_KEY_EVENT]: [],
 }
 
 /**
@@ -26,7 +28,8 @@ export function injectBridgeEvent<T>(type: BridgeEvent, hook: BridgeHook<T>) {
 
   // Only register the channel listener once per event type
   if (hooks.length === 0) {
-    window.$channel.regChannel(type, ({ data }) => {
+    const channel = ensureRendererChannel('[TouchSDK] Bridge channel not available. Make sure hooks run in plugin renderer context.')
+    channel.regChannel(type, ({ data }) => {
       console.debug(`[TouchSDK] ${type} event received: `, data)
       // When the event is received, call all registered hooks for this type
       const registeredHooks = __hooks[type]
@@ -63,6 +66,22 @@ export const createBridgeHook = <T>(type: BridgeEvent) => (hook: BridgeHook<T>) 
  * The hook receives the new input value as a string.
  * @param data The input change data (string).
  */
-export const onCoreBoxInputChange = createBridgeHook<{ query: string }>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
+export const onCoreBoxInputChange = createBridgeHook<{ query: { inputs: Array<any>, text: string } }>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
 
 export const onCoreBoxClipboardChange = createBridgeHook<{ item: any }>(BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE)
+
+/**
+ * Hook for when a keyboard event is forwarded from CoreBox.
+ * This is triggered when the plugin's UI view is attached and the user
+ * presses certain keys (Enter, Arrow keys, Meta+key combinations).
+ * @param data The forwarded keyboard event data.
+ */
+export const onCoreBoxKeyEvent = createBridgeHook<{
+  key: string
+  code: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  repeat: boolean
+}>(BridgeEventForCoreBox.CORE_BOX_KEY_EVENT)

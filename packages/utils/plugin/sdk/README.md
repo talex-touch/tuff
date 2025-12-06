@@ -26,8 +26,10 @@ plugin.box.shrink()
 plugin.box.hideInput()
 plugin.box.showInput()
 
-// 获取当前输入
+// 获取与设置输入
 const input = await plugin.box.getInput()
+await plugin.box.setInput('Hello Touch!')
+await plugin.box.clearInput()
 ```
 
 ### 2. FeatureSDK - 搜索结果管理
@@ -64,6 +66,53 @@ const unsubscribe = plugin.feature.onInputChange((input) => {
 
 // 取消监听
 unsubscribe()
+
+// 监听键盘事件（UI View 模式下）
+const unsubscribeKey = plugin.feature.onKeyEvent((event) => {
+  if (event.key === 'Enter') {
+    // 处理回车键
+    submitSelection()
+  } else if (event.key === 'ArrowDown') {
+    // 向下导航
+    selectNext()
+  } else if (event.key === 'ArrowUp') {
+    // 向上导航
+    selectPrev()
+  } else if (event.metaKey && event.key === 'k') {
+    // 处理 Cmd+K
+    openSearch()
+  }
+})
+```
+
+### 3. 键盘事件自动处理
+
+当插件的 UI View 附加到 CoreBox 时，系统会自动处理以下行为：
+
+#### ESC 键自动退出
+- 在 UI View 中按下 ESC 键会**自动退出 UI 模式**（deactivate providers）
+- 插件无需手动处理 ESC 键的退出逻辑
+- 这与 CoreBox 主界面的 ESC 行为保持一致
+
+#### 键盘事件转发
+以下按键会从 CoreBox 主输入框转发到插件 UI View：
+- **Enter** - 确认/提交
+- **ArrowUp / ArrowDown** - 上下导航
+- **Meta/Ctrl + 任意键** - 快捷键组合（Cmd+V 除外，用于粘贴）
+
+> **注意**：`ArrowLeft` 和 `ArrowRight` 不会被转发，因为它们用于输入框中的文本编辑。如果需要左右导航，请使用 `Meta/Ctrl + ArrowLeft/ArrowRight`。
+
+```typescript
+// 键盘事件数据结构
+interface ForwardedKeyEvent {
+  key: string       // 按键名称，如 'Enter', 'ArrowDown'
+  code: string      // 按键代码，如 'Enter', 'ArrowDown'
+  metaKey: boolean  // Cmd/Win 键是否按下
+  ctrlKey: boolean  // Ctrl 键是否按下
+  altKey: boolean   // Alt 键是否按下
+  shiftKey: boolean // Shift 键是否按下
+  repeat: boolean   // 是否为重复按键
+}
 ```
 
 ## 废弃的 API
@@ -149,7 +198,7 @@ onInit(context) {
 export default {
   onInit(context) {
     const { feature, box } = context.utils
-    
+
     // 监听输入变化
     feature.onInputChange((input) => {
       if (input.length > 2) {
@@ -161,10 +210,10 @@ export default {
       }
     })
   },
-  
+
   onFeatureTriggered(featureId, query, feature) {
     const { feature: featureSDK, box } = this.context.utils
-    
+
     // 推送结果
     featureSDK.pushItems([
       {
@@ -174,10 +223,10 @@ export default {
         source: { id: this.pluginName, name: this.pluginName }
       }
     ])
-    
+
     // 扩展窗口显示结果
     box.expand({ length: 5 })
-    
+
     // 3秒后隐藏
     setTimeout(() => {
       box.hide()
@@ -203,7 +252,10 @@ export default {
 - `core-box:hide-input` - 隐藏输入框
 - `core-box:show-input` - 显示输入框
 - `core-box:get-input` - 获取当前输入值
-- `core-box:input-changed` - 输入变化广播（主进程 → 插件）
+- `core-box:set-input` - 设置输入框内容
+- `core-box:clear-input` - 清空输入框
+- `core-box:input-change` - 输入变化广播（主进程 → 插件）
+- `core-box:key-event` - 键盘事件转发（主进程 → 插件 UI View）
 - `core-box:set-input-visibility` - 设置输入框可见性（主进程 → 渲染进程）
 - `core-box:request-input-value` - 请求输入值（主进程 → 渲染进程）
 

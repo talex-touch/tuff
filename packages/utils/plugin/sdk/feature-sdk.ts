@@ -7,11 +7,30 @@
  */
 
 import type { TuffItem } from '../../core-box/tuff'
+import { ensureRendererChannel } from './channel'
 
 /**
  * Input change event handler
  */
 export type InputChangeHandler = (input: string) => void
+
+/**
+ * Keyboard event data forwarded from CoreBox
+ */
+export interface ForwardedKeyEvent {
+  key: string
+  code: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  repeat: boolean
+}
+
+/**
+ * Key event handler
+ */
+export type KeyEventHandler = (event: ForwardedKeyEvent) => void
 
 /**
  * Feature SDK interface for plugins
@@ -124,6 +143,36 @@ export interface FeatureSDK {
    * ```
    */
   onInputChange(handler: InputChangeHandler): () => void
+
+  /**
+   * Registers a listener for keyboard events forwarded from CoreBox
+   * 
+   * When a plugin's UI view is attached to CoreBox, certain key events
+   * (Enter, Arrow keys, Meta+key combinations) are forwarded to the plugin.
+   * 
+   * @param handler - Callback function invoked when a key event is forwarded
+   * @returns Unsubscribe function
+   * 
+   * @example
+   * ```typescript
+   * const unsubscribe = plugin.feature.onKeyEvent((event) => {
+   *   if (event.key === 'Enter') {
+   *     // Handle enter key
+   *     submitSelection()
+   *   } else if (event.key === 'ArrowDown') {
+   *     // Navigate down in list
+   *     selectNext()
+   *   } else if (event.metaKey && event.key === 'k') {
+   *     // Handle Cmd+K
+   *     openSearch()
+   *   }
+   * })
+   * 
+   * // Later, unsubscribe
+   * unsubscribe()
+   * ```
+   */
+  onKeyEvent(handler: KeyEventHandler): () => void
 }
 
 /**
@@ -137,25 +186,48 @@ export interface FeatureSDK {
  */
 export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
   const inputChangeHandlers: Set<InputChangeHandler> = new Set()
+  const keyEventHandlers: Set<KeyEventHandler> = new Set()
 
   // Register listener for input change events from main process
-  const registerListener = () => {
+  const registerInputListener = () => {
     if (channel.onMain) {
       // Main process plugin context
-      channel.onMain('core-box:input-changed', (event: any) => {
-        const input = event.data?.input || event.input || ''
+      channel.onMain('core-box:input-change', (event: any) => {
+        const input = event.data?.input || event.data?.query?.text || event.input || ''
         inputChangeHandlers.forEach(handler => handler(input))
       })
     } else if (channel.on) {
       // Renderer process context
-      channel.on('core-box:input-changed', (data: any) => {
-        const input = data?.input || data || ''
+      channel.on('core-box:input-change', (data: any) => {
+        const input = data?.input || data?.query?.text || data || ''
         inputChangeHandlers.forEach(handler => handler(input))
       })
     }
   }
 
-  registerListener()
+  // Register listener for key events from main process
+  const registerKeyListener = () => {
+    if (channel.onMain) {
+      // Main process plugin context
+      channel.onMain('core-box:key-event', (event: any) => {
+        const keyEvent = event.data as ForwardedKeyEvent
+        if (keyEvent) {
+          keyEventHandlers.forEach(handler => handler(keyEvent))
+        }
+      })
+    } else if (channel.on) {
+      // Renderer process context
+      channel.on('core-box:key-event', (data: any) => {
+        const keyEvent = data as ForwardedKeyEvent
+        if (keyEvent) {
+          keyEventHandlers.forEach(handler => handler(keyEvent))
+        }
+      })
+    }
+  }
+
+  registerInputListener()
+  registerKeyListener()
 
   return {
     pushItems(items: TuffItem[]): void {
@@ -199,6 +271,14 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
       return () => {
         inputChangeHandlers.delete(handler)
       }
+    },
+
+    onKeyEvent(handler: KeyEventHandler): () => void {
+      keyEventHandlers.add(handler)
+      
+      return () => {
+        keyEventHandlers.delete(handler)
+      }
     }
   }
 }
@@ -218,17 +298,12 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
  * ```
  */
 export function useFeature(): FeatureSDK {
-  // @ts-ignore - window.$boxItems and window.$channel are injected by the plugin system
+  // @ts-ignore - window.$boxItems is injected by the plugin system
   const boxItemsAPI = window.$boxItems
-  // @ts-ignore
-  const channel = window.$channel
+  const channel = ensureRendererChannel('[Feature SDK] Channel not available. Make sure this is called in a plugin context.')
   
   if (!boxItemsAPI) {
     throw new Error('[Feature SDK] boxItems API not available. Make sure this is called in a plugin context.')
-  }
-  
-  if (!channel) {
-    throw new Error('[Feature SDK] Channel not available. Make sure this is called in a plugin context.')
   }
   
   return createFeatureSDK(boxItemsAPI, channel)

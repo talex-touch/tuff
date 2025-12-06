@@ -1,21 +1,21 @@
 import type { Ref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode } from '../types'
+import { DataCode } from '@talex-touch/utils'
 
 export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<string>): void {
-  // 监听主进程请求输入框可见性变化
+  console.log('useChannel', boxOptions)
+
   touchChannel.regChannel('core-box:set-input-visibility', ({ data }: any) => {
     const { visible } = data
-    // 通过 boxOptions 控制输入框可见性
     if (boxOptions) {
       boxOptions.inputVisible = visible
     }
   })
 
-  // 监听主进程请求当前输入值
   touchChannel.regChannel('core-box:request-input-value', ({ reply }: any) => {
     const input = searchVal?.value || ''
-    reply({ input })
+    reply(DataCode.SUCCESS, { input })
   })
 
   touchChannel.regChannel('core-box:clear-items', ({ data }: any) => {

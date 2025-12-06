@@ -966,19 +966,16 @@ class OcrService {
     this.clipboardMetaListener?.(clipboardId, patch)
   }
 
+  /**
+   * Broadcast clipboard metadata updates to interested parties
+   * Note: CoreBox renderer doesn't need real-time OCR updates
+   * Metadata is already persisted to DB and memory cache via handleMetaPatch callback
+   */
   private broadcastMetaUpdate(clipboardId: number, patch: Record<string, unknown>): void {
-    const touchChannel = genTouchChannel()
-    for (const win of windowManager.windows) {
-      if (!win.window.isDestroyed()) {
-        touchChannel.sendToMain(win.window, 'clipboard:meta-updated', {
-          clipboardId,
-          patch,
-        })
-      }
-    }
-
+    // Notify attached plugin UI view if any
     const activePlugin = windowManager.getAttachedPlugin()
     if (activePlugin?._uniqueChannelKey) {
+      const touchChannel = genTouchChannel()
       touchChannel
         .sendToPlugin(activePlugin.name, 'core-box:clipboard-meta-updated', {
           clipboardId,
@@ -989,6 +986,7 @@ class OcrService {
         })
     }
   }
+
 
   private async upsertConfig(key: string, value: unknown): Promise<void> {
     if (!this.db)

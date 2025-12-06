@@ -2,7 +2,9 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ProviderDeactivatedEvent } from '../../../core/eventbus/touch-event'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
+import { ChannelType } from '@talex-touch/utils/channel'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { genTouchApp } from '../../../core'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { getConfig } from '../../storage'
 import { SearchEngineCore } from '../search-engine/search-core'
@@ -13,6 +15,14 @@ import { windowManager } from './window'
 interface ExpandOptions {
   length?: number
   forceMax?: boolean
+}
+
+/**
+ * Options for triggering CoreBox visibility
+ */
+interface TriggerOptions {
+  /** Whether the trigger was initiated by a keyboard shortcut */
+  triggeredByShortcut?: boolean
 }
 
 export class CoreBoxManager {
@@ -85,7 +95,12 @@ export class CoreBoxManager {
     return this._isUIMode
   }
 
-  public trigger(show: boolean): void {
+  /**
+   * Toggle CoreBox visibility
+   * @param show - Whether to show or hide CoreBox
+   * @param options - Trigger options including shortcut flag
+   */
+  public trigger(show: boolean, options?: TriggerOptions): void {
     // If trying to show, check if initialization is complete
     if (show) {
       try {
@@ -117,7 +132,7 @@ export class CoreBoxManager {
 
     if (show) {
       this.applyExpandState()
-      windowManager.show()
+      windowManager.show(options?.triggeredByShortcut ?? false)
     }
     else {
       windowManager.hide()
@@ -150,6 +165,17 @@ export class CoreBoxManager {
       this.currentFeature = null
       windowManager.detachUIView()
       this.shrink()
+
+      // Notify CoreBox renderer to deactivate providers
+      const coreBoxWindow = windowManager.current?.window
+      if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+        genTouchApp().channel.sendTo(
+          coreBoxWindow,
+          ChannelType.MAIN,
+          'core-box:ui-mode-exited',
+          {}
+        )
+      }
     }
     else {
       console.warn('[CoreBoxManager] Not in UI mode, no need to exit.')

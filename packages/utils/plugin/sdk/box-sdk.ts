@@ -4,6 +4,8 @@
  * Provides a unified API for plugins to control the CoreBox window behavior,
  * including visibility, size, input field control, and input value access.
  */
+import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import { ensureRendererChannel } from './channel'
 
 /**
  * Clipboard content type flags for binary combination
@@ -135,6 +137,26 @@ export interface BoxSDK {
   getInput: () => Promise<string>
 
   /**
+   * Sets the CoreBox search input to the specified value
+   *
+   * @example
+   * ```typescript
+   * await plugin.box.setInput('hello world')
+   * ```
+   */
+  setInput: (value: string) => Promise<void>
+
+  /**
+   * Clears the CoreBox search input
+   *
+   * @example
+   * ```typescript
+   * await plugin.box.clearInput()
+   * ```
+   */
+  clearInput: () => Promise<void>
+
+  /**
    * Enable input monitoring for attached UI view
    *
    * @example
@@ -172,29 +194,23 @@ export interface BoxSDK {
  *
  * @internal
  */
-export function createBoxSDK(channel: any): BoxSDK {
-  const sendFn = channel.sendToMain || channel.send
-
-  if (!sendFn) {
-    throw new Error('[Box SDK] Channel send function not available')
-  }
-
+export function createBoxSDK(channel: ITouchClientChannel): BoxSDK {
   return {
     hide(): void {
-      sendFn('core-box:hide').catch((error: any) => {
+      channel.send('core-box:hide').catch((error: any) => {
         console.error('[Box SDK] Failed to hide CoreBox:', error)
       })
     },
 
     show(): void {
-      sendFn('core-box:show').catch((error: any) => {
+      channel.send('core-box:show').catch((error: any) => {
         console.error('[Box SDK] Failed to show CoreBox:', error)
       })
     },
 
     async expand(options?: BoxExpandOptions): Promise<void> {
       try {
-        await sendFn('core-box:expand', options || {})
+        await channel.send('core-box:expand', options || {})
       }
       catch (error) {
         console.error('[Box SDK] Failed to expand CoreBox:', error)
@@ -204,7 +220,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async shrink(): Promise<void> {
       try {
-        await sendFn('core-box:expand', { mode: 'collapse' })
+        await channel.send('core-box:expand', { mode: 'collapse' })
       }
       catch (error) {
         console.error('[Box SDK] Failed to shrink CoreBox:', error)
@@ -214,7 +230,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async hideInput(): Promise<void> {
       try {
-        await sendFn('core-box:hide-input')
+        await channel.send('core-box:hide-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to hide input:', error)
@@ -224,7 +240,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async showInput(): Promise<void> {
       try {
-        await sendFn('core-box:show-input')
+        await channel.send('core-box:show-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to show input:', error)
@@ -234,7 +250,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async getInput(): Promise<string> {
       try {
-        const result = await sendFn('core-box:get-input')
+        const result = await channel.send('core-box:get-input')
         return result?.data?.input || result?.input || ''
       }
       catch (error) {
@@ -243,9 +259,29 @@ export function createBoxSDK(channel: any): BoxSDK {
       }
     },
 
+    async setInput(value: string): Promise<void> {
+      try {
+        await channel.send('core-box:set-input', { value })
+      }
+      catch (error) {
+        console.error('[Box SDK] Failed to set input:', error)
+        throw error
+      }
+    },
+
+    async clearInput(): Promise<void> {
+      try {
+        await channel.send('core-box:clear-input')
+      }
+      catch (error) {
+        console.error('[Box SDK] Failed to clear input:', error)
+        throw error
+      }
+    },
+
     async allowInput(): Promise<void> {
       try {
-        await sendFn('core-box:allow-input')
+        await channel.send('core-box:allow-input')
       }
       catch (error) {
         console.error('[Box SDK] Failed to enable input monitoring:', error)
@@ -255,7 +291,7 @@ export function createBoxSDK(channel: any): BoxSDK {
 
     async allowClipboard(types: number): Promise<void> {
       try {
-        await sendFn('core-box:allow-clipboard', types)
+        await channel.send('core-box:allow-clipboard', types)
       }
       catch (error) {
         console.error('[Box SDK] Failed to enable clipboard monitoring:', error)
@@ -280,11 +316,6 @@ export function createBoxSDK(channel: any): BoxSDK {
  * ```
  */
 export function useBox(): BoxSDK {
-  const channel = window.$channel
-
-  if (!channel) {
-    throw new Error('[Box SDK] Channel not available. Make sure this is called in a plugin context.')
-  }
-
+  const channel = ensureRendererChannel('[Box SDK] Channel not available. Make sure this is called in a plugin context.')
   return createBoxSDK(channel)
 }

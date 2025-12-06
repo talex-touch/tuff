@@ -1,4 +1,4 @@
-import type { AppSetting } from '@talex-touch/utils'
+import type { AppSetting, TuffQuery } from '@talex-touch/utils'
 import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
 import * as fs from 'node:fs'
@@ -8,7 +8,6 @@ import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { LifecycleHooks } from '@talex-touch/utils/plugin/sdk/hooks/life-cycle'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -20,13 +19,12 @@ import { pluginModule } from '../../plugin/plugin-module'
 import { getConfig } from '../../storage'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from './manager'
+import type { CoreBoxInputChange } from './input-transport'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 
 const windowAnimation = useWindowAnimation()
-
-const CORE_BOX_THEME_EVENT = 'core-box:theme-change'
 
 const CORE_BOX_THEME_FILE_NAME = 'tuff-element.css'
 const CORE_BOX_THEME_SUBDIR = ['core-box', 'theme'] as const
@@ -118,10 +116,14 @@ export class WindowManager {
   /**
    * Send input change to UI view if allowed
    */
-  public sendInputChange(input: string): void {
+  public forwardInputChange(payload: CoreBoxInputChange & { query: TuffQuery }): void {
     if (!this.inputAllowed || !this.attachedPlugin) return
 
-    this.sendChannelMessageToUIView('core-box:input-change', { input })
+    this.sendChannelMessageToUIView('core-box:input-change', {
+      input: payload.input ?? payload.query.text,
+      query: payload.query,
+      source: payload.source ?? 'ui-monitor',
+    })
   }
 
   /**
@@ -268,12 +270,26 @@ export class WindowManager {
     }
   }
 
-  public show(): void {
+  /**
+   * Show CoreBox window
+   * @param triggeredByShortcut - Whether this show was triggered by keyboard shortcut
+   */
+  public show(triggeredByShortcut: boolean = false): void {
     const window = this.current
     if (!window) return
 
     this.updatePosition(window)
     window.window.showInactive()
+    
+    // Notify renderer about shortcut trigger for autopaste control
+    if (triggeredByShortcut) {
+      this.touchApp.channel
+        .sendTo(window.window, ChannelType.MAIN, 'core-box:shortcut-triggered', {})
+        .catch((error) => {
+          coreBoxWindowLog.error('Failed to send shortcut trigger event', { error })
+        })
+    }
+    
     setTimeout(() => {
       window.window.focus()
     }, 100)
@@ -506,21 +522,9 @@ export class WindowManager {
       ? chalk.bgHex('#1f2937').white.bold(' DARK ')
       : chalk.bgHex('#e5e7eb').black.bold(' LIGHT ')
     coreBoxWindowLog.info(`${chalk.cyan('Theme ready')} ${themeLabel}`)
-    const payload = { dark: isDark }
 
-    const currentWindow = this.current
-    if (currentWindow && !currentWindow.window.isDestroyed()) {
-      void this.touchApp.channel.sendTo(
-        currentWindow.window,
-        ChannelType.MAIN,
-        CORE_BOX_THEME_EVENT,
-        payload
-      )
-    }
-
-    if (this.attachedPlugin) {
-      this.sendChannelMessageToUIView(CORE_BOX_THEME_EVENT, payload)
-    }
+    // Theme change events removed - theme is now passed once during attachUIView
+    // No real-time broadcasting to prevent channel timeout issues
   }
 
   public attachUIView(url: string, plugin?: TouchPlugin): void {
@@ -691,6 +695,7 @@ export class WindowManager {
           type: ChannelType.PLUGIN
         }
       };
+      const instance = this
       return new Promise((resolve, reject) => {
         try {
           ipcRenderer.send('@plugin-process-message', data);
@@ -699,7 +704,7 @@ export class WindowManager {
           console.error('[CoreBox] Failed to send plugin channel message', {
             eventName,
             error: errorMessage,
-            payloadPreview: this.formatPayloadPreview(arg)
+            payloadPreview: instance.formatPayloadPreview(arg)
           });
           const sendError = new Error('Failed to send plugin channel message "' + eventName + '": ' + errorMessage);
           sendError.code = 'plugin_channel_send_failed';
@@ -709,17 +714,17 @@ export class WindowManager {
 
         const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT;
         const timeoutHandle = setTimeout(() => {
-          if (!this.pendingMap.has(uniqueId)) return;
-          this.pendingMap.delete(uniqueId);
+          if (!instance.pendingMap.has(uniqueId)) return;
+          instance.pendingMap.delete(uniqueId);
           const timeoutError = new Error('Plugin channel request "' + eventName + '" timed out after ' + timeoutMs + 'ms');
           timeoutError.code = 'plugin_channel_timeout';
           console.warn(timeoutError.message);
           reject(timeoutError);
         }, timeoutMs);
 
-        this.pendingMap.set(uniqueId, (res) => {
+        instance.pendingMap.set(uniqueId, (res) => {
           clearTimeout(timeoutHandle);
-          this.pendingMap.delete(uniqueId);
+          instance.pendingMap.delete(uniqueId);
           resolve(res.data);
         });
       });
@@ -820,6 +825,15 @@ export class WindowManager {
       this.uiViewFocused = true
     })
 
+    // Listen for ESC key in UI view to exit UI mode
+    this.uiView.webContents.on('before-input-event', (event, input) => {
+      if (input.key === 'Escape' && input.type === 'keyDown') {
+        coreBoxWindowLog.debug('ESC pressed in UI view, exiting UI mode')
+        coreBoxManager.exitUIMode()
+        event.preventDefault()
+      }
+    })
+
     // window.$plugin and window.$channel are injected via preload script before page scripts execute
     // Styles will be injected on dom-ready
 
@@ -841,6 +855,8 @@ export class WindowManager {
         } else {
           coreBoxWindowLog.warn('Plugin manager not available, cannot set plugin active')
         }
+
+        this.uiView?.webContents.focus()
       }
     })
 
@@ -855,6 +871,17 @@ export class WindowManager {
     const finalUrl = this.normalizeUIViewUrl(url, plugin)
     coreBoxWindowLog.info(`AttachUIView - resolved URL ${finalUrl}`)
     this.uiView.webContents.loadURL(finalUrl)
+
+    // Send initial theme state once to UIView (no real-time updates)
+    this.uiView.webContents.once('did-finish-load', () => {
+      if (this.attachedPlugin) {
+        const themePayload = { dark: this.currentThemeIsDark }
+        this.sendChannelMessageToUIView('core-box:initial-theme', themePayload)
+        coreBoxWindowLog.debug(
+          `Initial theme sent to UIView: ${this.currentThemeIsDark ? 'dark' : 'light'}`
+        )
+      }
+    })
   }
 
   public detachUIView(): void {
@@ -874,7 +901,7 @@ export class WindowManager {
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
-          genTouchApp().channel.send(ChannelType.PLUGIN, `@lifecycle:${LifecycleHooks.INACTIVE}`, {
+          genTouchApp().channel.send(ChannelType.PLUGIN, 'plugin:lifecycle:inactive', {
             plugin: plugin.name
           })
         }
@@ -900,11 +927,16 @@ export class WindowManager {
     }
   }
 
+  /**
+   * Sends a channel message to the attached plugin UI view.
+   *
+   * @param eventName - The event name to send
+   * @param data - Optional data payload
+   */
   public sendChannelMessageToUIView(eventName: string, data?: any): void {
     if (!this.attachedPlugin) {
       return
     }
-
     void this.touchApp.channel.sendToPlugin(this.attachedPlugin.name, eventName, data)
   }
 
@@ -914,6 +946,125 @@ export class WindowManager {
     }
 
     return this.uiView
+  }
+
+  /**
+   * Check if UI view is currently active and focused
+   */
+  public isUIViewActive(): boolean {
+    return !!(this.uiView && this.attachedPlugin)
+  }
+
+  /**
+   * Check if UI view has focus (vs main CoreBox input)
+   */
+  public isUIViewFocused(): boolean {
+    return this.uiViewFocused
+  }
+
+  /**
+   * Forwards a keyboard event to the attached plugin UI view by simulating native input.
+   *
+   * This method uses Electron's `sendInputEvent` API to simulate real keyboard input,
+   * allowing the plugin page to receive standard DOM keyboard events without any adaptation.
+   *
+   * @param event - The serialized keyboard event data to forward
+   * @param event.key - The key value (e.g., 'ArrowUp', 'Enter', 'a')
+   * @param event.code - The physical key code (e.g., 'ArrowUp', 'Enter', 'KeyA')
+   * @param event.metaKey - Whether the Meta (Cmd on macOS) key is pressed
+   * @param event.ctrlKey - Whether the Ctrl key is pressed
+   * @param event.altKey - Whether the Alt key is pressed
+   * @param event.shiftKey - Whether the Shift key is pressed
+   * @param event.repeat - Whether this is a repeat event from holding the key
+   */
+  public forwardKeyEvent(event: {
+    key: string
+    code: string
+    metaKey: boolean
+    ctrlKey: boolean
+    altKey: boolean
+    shiftKey: boolean
+    repeat: boolean
+  }): void {
+    if (!this.uiView) {
+      coreBoxWindowLog.debug('Cannot forward key event: no UI view attached')
+      return
+    }
+
+    const modifiers = this.buildKeyModifiers(event)
+    const keyCode = this.mapKeyToElectronKeyCode(event.key)
+
+    coreBoxWindowLog.debug(`Simulating key input: ${event.key}`, {
+      meta: { keyCode, modifiers: modifiers.join(',') }
+    })
+
+    this.uiView.webContents.sendInputEvent({
+      type: 'keyDown',
+      keyCode,
+      modifiers
+    })
+
+    if (event.key.length === 1) {
+      this.uiView.webContents.sendInputEvent({
+        type: 'char',
+        keyCode: event.key,
+        modifiers
+      })
+    }
+
+    this.uiView.webContents.sendInputEvent({
+      type: 'keyUp',
+      keyCode,
+      modifiers
+    })
+  }
+
+  /**
+   * Builds the modifiers array for Electron's sendInputEvent API.
+   *
+   * @param event - The keyboard event containing modifier key states
+   * @returns Array of modifier strings compatible with Electron's input event API
+   */
+  private buildKeyModifiers(event: {
+    shiftKey: boolean
+    ctrlKey: boolean
+    altKey: boolean
+    metaKey: boolean
+    repeat: boolean
+  }): Array<'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'> {
+    const modifiers: Array<'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'> = []
+    if (event.shiftKey) modifiers.push('shift')
+    if (event.ctrlKey) modifiers.push('control')
+    if (event.altKey) modifiers.push('alt')
+    if (event.metaKey) modifiers.push('meta')
+    if (event.repeat) modifiers.push('isautorepeat')
+    return modifiers
+  }
+
+  /**
+   * Maps a DOM key value to Electron's keyCode format for sendInputEvent.
+   *
+   * @param key - The DOM key value (e.g., 'ArrowUp', 'Enter')
+   * @returns The corresponding Electron keyCode (e.g., 'Up', 'Return')
+   */
+  private mapKeyToElectronKeyCode(key: string): string {
+    const keyMap: Record<string, string> = {
+      ArrowUp: 'Up',
+      ArrowDown: 'Down',
+      ArrowLeft: 'Left',
+      ArrowRight: 'Right',
+      Enter: 'Return',
+      Escape: 'Escape',
+      Backspace: 'Backspace',
+      Tab: 'Tab',
+      Delete: 'Delete',
+      Home: 'Home',
+      End: 'End',
+      PageUp: 'PageUp',
+      PageDown: 'PageDown',
+      ' ': 'Space'
+    }
+    return keyMap[key] || key
   }
 
   private normalizeUIViewUrl(url: string, plugin?: TouchPlugin): string {
@@ -934,8 +1085,7 @@ export class WindowManager {
       parsed.search = ''
       parsed.hash = `#${normalizedPath}`
       return parsed.toString()
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       coreBoxWindowLog.warn(
         '[CoreBox] Failed to normalize plugin dev URL for hash routing, falling back.',
