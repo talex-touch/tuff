@@ -82,12 +82,16 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
     const micaWindow = this.window as unknown as MicaBrowserWindow
 
-    // Set theme based on system preference
-    if (nativeTheme.shouldUseDarkColors) {
-      micaWindow.setDarkTheme()
-    } else {
-      micaWindow.setLightTheme()
+    const updateTheme = () => {
+      if (nativeTheme.shouldUseDarkColors) {
+        micaWindow.setDarkTheme()
+      } else {
+        micaWindow.setLightTheme()
+      }
     }
+
+    // Initial theme sync
+    updateTheme()
 
     // Apply Mica effect on Windows 11, Acrylic on Windows 10
     if (IS_WINDOWS_11) {
@@ -99,12 +103,11 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     }
 
     // Listen for theme changes and update accordingly
-    nativeTheme.on('updated', () => {
-      if (nativeTheme.shouldUseDarkColors) {
-        micaWindow.setDarkTheme()
-      } else {
-        micaWindow.setLightTheme()
-      }
+    nativeTheme.on('updated', updateTheme)
+
+    // Clean up listener when this window is closed
+    this.window.on('closed', () => {
+      nativeTheme.removeListener('updated', updateTheme)
     })
   }
 
