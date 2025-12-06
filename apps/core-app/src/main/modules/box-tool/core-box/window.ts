@@ -20,6 +20,7 @@ import { getConfig } from '../../storage'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from './manager'
 import type { CoreBoxInputChange } from './input-transport'
+import { getBoxItemManager } from '../item-sdk'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
@@ -921,6 +922,12 @@ export class WindowManager {
       // Handle plugin state transition before detaching
       if (this.attachedPlugin && pluginModule.pluginManager) {
         const plugin = this.attachedPlugin
+
+        // Clear items pushed by this plugin from BoxItemManager
+        const boxItemManager = getBoxItemManager()
+        boxItemManager.clear(plugin.name)
+        coreBoxWindowLog.debug(`Cleared BoxItemManager items for plugin: ${plugin.name}`)
+
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
