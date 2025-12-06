@@ -11,6 +11,7 @@ import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
+import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
@@ -39,7 +40,8 @@ const boxOptions = reactive<IBoxOptions>({
   mode: BoxMode.INPUT,
   focus: 0,
   file: { buffer: null, paths: [] },
-  data: {}
+  data: {},
+  layout: undefined
 })
 
 // Create shared clipboard state
@@ -442,6 +444,12 @@ const pinIcon = computed<ITuffIcon>(() => ({
   status: 'normal'
 }))
 
+const isGridMode = computed(() => boxOptions.layout?.mode === 'grid')
+
+function handleGridSelect(index: number, item: TuffItem): void {
+  handleItemTrigger(index, item)
+}
+
 async function handleDeactivateProvider(id?: string): Promise<void> {
   await deactivateProvider(id)
   await focusWindowAndInput()
@@ -476,15 +484,24 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   <div class="CoreBoxRes flex" @contextmenu="handleHistoryContextMenu">
     <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
       <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-        <CoreBoxRender
-          v-for="(item, index) in res"
-          :key="index"
-          :ref="(el) => setItemRef(el, index)"
-          :active="boxOptions.focus === index"
-          :item="item"
-          :index="index"
-          @trigger="handleItemTrigger(index, item)"
+        <BoxGrid
+          v-if="isGridMode"
+          :items="res"
+          :layout="boxOptions.layout"
+          :focus="boxOptions.focus"
+          @select="handleGridSelect"
         />
+        <template v-else>
+          <CoreBoxRender
+            v-for="(item, index) in res"
+            :key="index"
+            :ref="(el) => setItemRef(el, index)"
+            :active="boxOptions.focus === index"
+            :item="item"
+            :index="index"
+            @trigger="handleItemTrigger(index, item)"
+          />
+        </template>
       </TouchScroll>
       <div v-if="shouldShowAiSuggestion" class="CoreBoxRes-Empty CoreBoxRes-AI">
         <div class="AiSuggestion">

@@ -91,6 +91,9 @@ export function useSearch(
         // Immediately display the recommendation items.
         searchResults.value = initialResult.items
 
+        // Apply container layout from backend
+        boxOptions.layout = initialResult.containerLayout
+
         // The initial activation state is set here.
         if (initialResult.activate && initialResult.activate.length > 0) {
           activeActivations.value = initialResult.activate
@@ -100,6 +103,7 @@ export function useSearch(
         searchResults.value = []
         searchResult.value = null
         currentSearchId.value = null
+        boxOptions.layout = undefined
         loading.value = false
       }
       return
@@ -198,18 +202,19 @@ export function useSearch(
       // Immediately display the high-priority items.
       searchResults.value = initialResult.items
 
+      // 搜索结果使用 list 模式（清除 grid 布局）
+      boxOptions.layout = undefined
+
       // The initial activation state is set here.
       if (initialResult.activate && initialResult.activate.length > 0) {
         activeActivations.value = initialResult.activate
       }
-      // Removed else block to prevent premature clearing of activeActivations
-      // Subsequent items will arrive via `search-update` events.
-      // The loading state will be managed by `search-end`.
     } catch (error) {
       console.error('Search initiation failed:', error)
       searchResults.value = []
       searchResult.value = null
       currentSearchId.value = null
+      boxOptions.layout = undefined
       loading.value = false
     }
     // Do not set loading to false here; wait for the `search-end` event.
@@ -336,7 +341,8 @@ export function useSearch(
 
       activeActivations.value = newActivationState
 
-      if (!newActivationState || newActivationState.length === 0) {
+      // 进入 provider 时清空 query，让插件从空白状态开始
+      if (newActivationState && newActivationState.length > 0) {
         searchVal.value = ''
       }
 
