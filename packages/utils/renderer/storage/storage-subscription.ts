@@ -14,6 +14,7 @@ class StorageSubscriptionManager {
   private subscribers = new Map<string, Set<StorageSubscriptionCallback>>()
   private channelListenerRegistered = false
   private pendingUpdates = new Map<string, NodeJS.Timeout>()
+  private configVersions = new Map<string, number>()
 
   /**
    * Initialize the subscription manager with a channel
@@ -24,8 +25,15 @@ class StorageSubscriptionManager {
     if (!this.channelListenerRegistered) {
       // Listen to storage:update events from main process
       this.channel.regChannel('storage:update', ({ data }) => {
-        const { name } = data as { name: string }
-        this.handleStorageUpdate(name)
+        const { name, version } = data as { name: string, version?: number }
+        // Only handle update if version is newer or unknown
+        const currentVersion = this.configVersions.get(name) ?? 0
+        if (version === undefined || version > currentVersion) {
+          if (version !== undefined) {
+            this.configVersions.set(name, version)
+          }
+          this.handleStorageUpdate(name)
+        }
       })
       this.channelListenerRegistered = true
     }
@@ -36,13 +44,13 @@ class StorageSubscriptionManager {
    * @param configName - The configuration file name (e.g., 'app-setting.ini')
    * @param callback - Callback function to receive updates
    * @returns Unsubscribe function
-   * 
+   *
    * @example
    * ```typescript
    * const unsubscribe = subscribeStorage('app-setting.ini', (data) => {
    *   console.log('Config updated:', data)
    * })
-   * 
+   *
    * // Later:
    * unsubscribe()
    * ```
@@ -155,7 +163,7 @@ const subscriptionManager = new StorageSubscriptionManager()
 /**
  * Initialize storage subscription system with channel
  * Must be called before using subscribeStorage
- * 
+ *
  * @param channel - The storage channel
  */
 export function initStorageSubscription(channel: IStorageChannel): void {
@@ -164,19 +172,19 @@ export function initStorageSubscription(channel: IStorageChannel): void {
 
 /**
  * Subscribe to storage configuration changes
- * 
+ *
  * @param configName - Configuration file name (e.g., 'app-setting.ini')
  * @param callback - Callback function that receives updated data
  * @returns Unsubscribe function
- * 
+ *
  * @example
  * ```typescript
  * import { subscribeStorage } from '@talex-touch/utils/renderer/storage/storage-subscription'
- * 
+ *
  * const unsubscribe = subscribeStorage('app-setting.ini', (data) => {
  *   console.log('Settings updated:', data)
  * })
- * 
+ *
  * // Clean up when no longer needed
  * unsubscribe()
  * ```
