@@ -110,6 +110,49 @@ function getValueFromPlist(content: string, key: string): string | null {
   return match ? match[1] : null
 }
 
+// Helper to get localized display name from .lproj directories
+async function getLocalizedDisplayName(appPath: string): Promise<string | null> {
+  const resourcesPath = path.join(appPath, 'Contents', 'Resources')
+  
+  // Priority order: zh-Hans (Simplified Chinese), zh_CN, zh-Hant, zh_TW, Base, en
+  const lprojPriority = ['zh-Hans.lproj', 'zh_CN.lproj', 'zh-Hant.lproj', 'zh_TW.lproj', 'Base.lproj', 'en.lproj']
+  
+  try {
+    const files = await fs.readdir(resourcesPath).catch(() => [])
+    
+    // Find available lproj directories
+    const availableLprojs = files.filter(f => f.endsWith('.lproj'))
+    
+    // Try in priority order
+    for (const lproj of lprojPriority) {
+      if (!availableLprojs.includes(lproj)) continue
+      
+      const stringsPath = path.join(resourcesPath, lproj, 'InfoPlist.strings')
+      try {
+        const content = await fs.readFile(stringsPath, 'utf-8')
+        
+        // Parse strings file format: "CFBundleDisplayName" = "微信";
+        // or CFBundleName
+        const displayNameMatch = content.match(/"?CFBundleDisplayName"?\s*=\s*"([^"]+)"/)
+        if (displayNameMatch?.[1]) {
+          return displayNameMatch[1]
+        }
+        
+        const bundleNameMatch = content.match(/"?CFBundleName"?\s*=\s*"([^"]+)"/)
+        if (bundleNameMatch?.[1]) {
+          return bundleNameMatch[1]
+        }
+      } catch {
+        // File doesn't exist or can't be read, continue to next
+      }
+    }
+  } catch {
+    // Resources directory doesn't exist
+  }
+  
+  return null
+}
+
 // The core logic for fetching app info, designed to throw errors on failure.
 async function getAppInfoUnstable(appPath: string): Promise<{
   name: string
@@ -136,9 +179,15 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   const plistContent = await fs.readFile(plistPath, 'utf-8')
 
   // Get names from Info.plist
-  const displayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
-  const bundleName = getValueFromPlist(plistContent, 'CFBundleName') // Keep for icon cache
+  const plistDisplayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
+  const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
   const fileName = path.basename(appPath, '.app')
+
+  // Try to get localized display name (e.g., "微信" for WeChat)
+  const localizedName = await getLocalizedDisplayName(appPath)
+  
+  // Priority: localized name > plist display name > bundle name
+  const displayName = localizedName || plistDisplayName || bundleName
 
   // `name` is always the file name
   const name = fileName
@@ -146,7 +195,7 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
 
   // Use the most definitive name for the icon cache to avoid collisions
-  const icon = await getAppIcon({ name: displayName || bundleName || name, path: appPath })
+  const icon = await getAppIcon({ name: displayName || name, path: appPath })
 
   return {
     name,

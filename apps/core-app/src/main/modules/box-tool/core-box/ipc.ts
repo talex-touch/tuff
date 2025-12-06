@@ -305,7 +305,6 @@ export class IpcManager {
       ({ data, reply }) => {
         const { searchId } = data as { searchId: string }
         if (searchId && searchEngineCore.getCurrentGatherController()) {
-          console.debug(`[CoreBox] Canceling search with ID: ${searchId}`)
           searchEngineCore.cancelSearch(searchId)
           reply(DataCode.SUCCESS, { cancelled: true })
         } else {
