@@ -1,4 +1,4 @@
-import { ITouchClientChannel } from '@talex-touch/utils'
+import type { ITouchClientChannel } from '@talex-touch/utils'
 import { useDebounceFn } from '@vueuse/core'
 
 interface TransportOptions {
@@ -18,7 +18,8 @@ export function createCoreBoxTransport<TPayload>(
   const { event, debounceMs, onError } = options
 
   const maybeDebounce = <T extends (...args: any[]) => void>(fn: T): T => {
-    if (!debounceMs) return fn
+    if (!debounceMs)
+      return fn
 
     return useDebounceFn(fn, debounceMs) as unknown as T
   }
@@ -27,7 +28,8 @@ export function createCoreBoxTransport<TPayload>(
     channel.send(event, payload).catch((error: unknown) => {
       if (onError) {
         onError(error)
-      } else {
+      }
+      else {
         console.error(`[coreBoxTransport] Failed to send ${event}:`, error)
       }
     })

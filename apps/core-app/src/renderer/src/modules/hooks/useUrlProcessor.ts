@@ -14,14 +14,16 @@ export async function useUrlProcessor(): Promise<void> {
 
       if (!url) return
 
-      const regex =
-        /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
-
       event.preventDefault()
-      if (!regex.test(url) || url.startsWith(window.location.origin) || url.startsWith('/')) {
-        touchChannel.send('url:open', url)
-      } else {
+      
+      const isExternal = !isLocalhostUrl(url) 
+        && !url.startsWith(window.location.origin) 
+        && !url.startsWith('/')
+      
+      if (isExternal) {
         touchChannel.send('open-external', { url })
+      } else {
+        touchChannel.send('url:open', url)
       }
 
       // if(/^\//.test(target)) {
@@ -45,8 +47,10 @@ export async function useUrlProcessor(): Promise<void> {
   document.body.addEventListener('click', directListener)
 
   touchChannel.regChannel('url:open', async ({ data, reply }) => {
-    const url = data! as unknown as string
+    const url = data as string
+
     if (isLocalhostUrl(url)) {
+      reply(DataCode.SUCCESS, false)
       return
     }
 
