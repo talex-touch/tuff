@@ -18,6 +18,7 @@ import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '../../modules/box/adapter'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
+import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
@@ -129,16 +130,15 @@ function handleAskAiSuggestion(): void {
   focusMainInput()
 }
 
-const { cleanup: cleanupVisibility } = useVisibility(
+const { cleanup: cleanupVisibility } = useVisibility({
   boxOptions,
   searchVal,
   clipboardOptions,
   handleAutoFill,
   handlePaste,
-  clearClipboard,
   boxInputRef,
   deactivateAllProviders
-)
+})
 const itemRefs = ref<HTMLElement[]>([])
 
 watch(res, () => {
@@ -226,8 +226,10 @@ watch(
   }
 )
 
+const { focusWindowAndInput, focusInput } = useFocus({ boxInputRef })
+
 function focusMainInput(): void {
-  boxInputRef.value?.focus?.()
+  focusInput()
 }
 
 function handleFocusInputEvent(): void {
@@ -439,6 +441,11 @@ const pinIcon = computed<ITuffIcon>(() => ({
   value: appSetting.tools.autoHide ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill',
   status: 'normal'
 }))
+
+async function handleDeactivateProvider(id?: string): Promise<void> {
+  await deactivateProvider(id)
+  await focusWindowAndInput()
+}
 </script>
 
 <template>
@@ -450,7 +457,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
     <PrefixPart
       :providers="activeActivations"
       @close="handleExit"
-      @deactivate-provider="deactivateProvider"
+      @deactivate-provider="handleDeactivateProvider"
     />
 
     <BoxInput ref="boxInputRef" v-model="searchVal" :box-options="boxOptions">

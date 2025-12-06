@@ -16,6 +16,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { BoxMode } from '..'
+import { useResize } from './useResize'
 
 export function useSearch(
   boxOptions: IBoxOptions,
@@ -451,11 +452,7 @@ export function useSearch(
     }
   }
 
-  const debouncedResize = useDebounceFn(() => {
-    touchChannel.sendSync('core-box:expand', {
-      mode: res.value.length > 0 ? 'max' : 'collapse'
-    })
-  }, 10)
+  useResize({ results: res, activeActivations, loading })
 
   watch(
     () => res.value,
@@ -463,7 +460,6 @@ export function useSearch(
       if (res.value.length > 0 && boxOptions.focus === -1) {
         boxOptions.focus = 0
       }
-      debouncedResize()
     },
     { deep: true }
   )
