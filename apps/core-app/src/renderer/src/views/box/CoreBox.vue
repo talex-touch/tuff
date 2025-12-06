@@ -70,12 +70,13 @@ function handleClipboardChange() {
   handleSearchImmediate()
 }
 
-const { handlePaste, handleAutoFill, clearClipboard, resetAutoPasteState } = useClipboard(
-  boxOptions,
-  clipboardOptions,
-  handleClipboardChange,
-  searchVal // Pass searchVal for short text auto-fill
-)
+const {
+  handlePaste,
+  handleAutoFill,
+  clearClipboard,
+  resetAutoPasteState,
+  cleanup: cleanupClipboard
+} = useClipboard(boxOptions, clipboardOptions, handleClipboardChange, searchVal)
 
 const completionDisplay = computed(() => {
   if (
@@ -128,7 +129,7 @@ function handleAskAiSuggestion(): void {
   focusMainInput()
 }
 
-useVisibility(
+const { cleanup: cleanupVisibility } = useVisibility(
   boxOptions,
   searchVal,
   clipboardOptions,
@@ -166,10 +167,6 @@ useKeyboard(
   itemRefs
 )
 useChannel(boxOptions, res, searchVal)
-
-watch(searchVal, (newValue) => {
-  touchChannel.send('core-box:input-changed', { input: newValue })
-})
 
 const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
 const historyActiveIndex = ref(-1)
@@ -375,6 +372,14 @@ function handleHistoryContextMenu(event: MouseEvent): void {
   openPreviewHistory()
 }
 
+// Handle UI mode exit event from main process (ESC pressed in plugin UI view)
+const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () => {
+  console.debug('[CoreBox] UI mode exited from main process, deactivating providers')
+  deactivateAllProviders().catch((error) => {
+    console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
+  })
+})
+
 onMounted(() => {
   /**
    * Reset autopaste state on CoreBox open
@@ -391,6 +396,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  cleanupClipboard()
+  cleanupVisibility()
+  unregUIModeExited()
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)

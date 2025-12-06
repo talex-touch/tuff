@@ -1,6 +1,6 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChannel'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 
@@ -58,7 +58,7 @@ export function useClipboard(
   clipboardOptions: IClipboardOptions,
   onPasteCallback?: () => void,
   searchVal?: import('vue').Ref<string>
-): Omit<IClipboardHook, 'clipboardOptions'> {
+): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last || !clipboardOptions.last.timestamp) {
       return false
@@ -196,7 +196,7 @@ export function useClipboard(
    */
   function handlePaste(options?: { overrideDismissed?: boolean }): void {
     const overrideDismissed = options?.overrideDismissed ?? false
-    const clipboard = touchChannel.sendSync('clipboard:get-latest') as IClipboardItem | null
+    const clipboard = getLatestClipboardSync()
 
     if (!clipboard || !clipboard.timestamp) {
       clearClipboard()
@@ -239,7 +239,8 @@ export function useClipboard(
       }
     }
 
-    handleAutoFill()
+    // Note: handleAutoFill is called separately by useVisibility after handlePaste
+    // Don't call it here to avoid duplicate execution
   }
 
   /**
@@ -254,11 +255,8 @@ export function useClipboard(
     }
 
     try {
-      const result = await touchChannel.send('clipboard:apply-to-active-app', { item: target })
-      if (typeof result === 'object' && result) {
-        return Boolean(result.success)
-      }
-      return true
+      const { applyClipboardToActiveApp } = await import('./useClipboardChannel')
+      return await applyClipboardToActiveApp(target)
     }
     catch (error) {
       console.error('[Clipboard] Failed to apply to active app:', error)
@@ -294,32 +292,37 @@ export function useClipboard(
     }
   }
 
-  touchChannel.regChannel('clipboard:new-item', (data: any) => {
-    if (!data?.type) {
-      return
-    }
+  // Register clipboard channel listeners using centralized hook
+  const cleanup = useClipboardChannel({
+    onNewItem: (item) => {
+      if (!item?.type) {
+        return
+      }
 
-    const clipboardData = data as IClipboardItem
-    const incomingTimestamp = normalizeTimestamp(clipboardData.timestamp)
-    const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
+      const incomingTimestamp = normalizeTimestamp(item.timestamp)
+      const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
 
-    if (incomingTimestamp && dismissedTimestamp && incomingTimestamp === dismissedTimestamp) {
-      console.warn('[Clipboard] Ignoring dismissed clipboard item from system event')
-      return
-    }
+      if (incomingTimestamp && dismissedTimestamp && incomingTimestamp === dismissedTimestamp) {
+        console.warn('[Clipboard] Ignoring dismissed clipboard item from system event')
+        return
+      }
 
-    clipboardOptions.last = clipboardData
-    clipboardOptions.detectedAt = Date.now()
-    clipboardOptions.lastClearedTimestamp = null
+      clipboardOptions.last = item
+      clipboardOptions.detectedAt = Date.now()
+      clipboardOptions.lastClearedTimestamp = null
 
-    console.warn('[Clipboard] System clipboard changed', {
-      type: clipboardData.type,
-      timestamp: new Date(clipboardData.timestamp).toISOString()
-    })
+      console.warn('[Clipboard] System clipboard changed', {
+        type: item.type,
+        timestamp: new Date(item.timestamp).toISOString()
+      })
 
-    if (onPasteCallback) {
-      onPasteCallback()
-    }
+      if (onPasteCallback) {
+        onPasteCallback()
+      }
+    },
+    // Note: onMetaUpdated is intentionally NOT handled here
+    // CoreBox doesn't need real-time OCR updates in the UI
+    // Metadata updates are handled in main process and persisted to DB
   })
 
   return {
@@ -327,6 +330,7 @@ export function useClipboard(
     handleAutoFill,
     applyToActiveApp,
     clearClipboard,
-    resetAutoPasteState
+    resetAutoPasteState,
+    cleanup
   }
 }

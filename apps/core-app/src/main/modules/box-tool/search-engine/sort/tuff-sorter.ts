@@ -10,7 +10,7 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
   file: 2,
   url: 1,
   text: 1,
-  preview: 10000,
+  preview: 10000
 }
 
 function getWeight(item: TuffItem): number {
@@ -18,21 +18,65 @@ function getWeight(item: TuffItem): number {
   return DEFAULT_WEIGHTS[kind] || 0
 }
 
+/**
+ * Calculate match score based on title and source.id matching
+ * @param item - TuffItem to calculate score for
+ * @param searchKey - Search keyword (lowercase)
+ * @returns Match score (higher is better)
+ */
 function calculateMatchScore(item: TuffItem, searchKey?: string): number {
+  const normalizedKey = searchKey?.trim().toLowerCase()
+
+  if (!normalizedKey) return 0
+
   const title = item.render.basic?.title
-  if (!searchKey || !title)
-    return 0
+  const titleLower = title?.toLowerCase() || ''
+  const titleLength = titleLower.length
+  const rawTokens = item.meta?.extension?.searchTokens
+  const searchTokens = Array.isArray(rawTokens) 
+    ? rawTokens.filter((t): t is string => typeof t === 'string' && Boolean(t))
+    : []
 
-  const name = title.toLowerCase()
-  const nameLength = name.length
-  if (nameLength === 0)
-    return 0
+  // Perfect title match
+  if (titleLower === normalizedKey) return 1000
 
-  if (name === searchKey)
-    return 1000
+  // Token match (keywords/pinyin/initials generated at registration)
+  if (searchTokens.length > 0) {
+    for (const token of searchTokens) {
+      const lowerToken = token.toLowerCase()
+      if (!lowerToken) continue
+
+      if (lowerToken === normalizedKey) return 950
+      if (lowerToken.startsWith(normalizedKey)) return 800
+      if (lowerToken.includes(normalizedKey)) return 650
+    }
+  }
+
+  // Check source.id match for features (e.g., 'clipboard' matches 'clipboard-history')
+  // This is especially useful for English searches matching features with Chinese titles
+  if (item.kind === 'feature' && item.source?.id) {
+    const sourceIdLower = item.source.id.toLowerCase()
+
+    // Exact source.id match
+    if (sourceIdLower === normalizedKey) {
+      return 900
+    }
+
+    // Source.id contains search key (e.g., 'clipboard-history' contains 'clipboard')
+    if (sourceIdLower.includes(normalizedKey)) {
+      // Higher score if search key is at the start
+      if (sourceIdLower.startsWith(normalizedKey)) {
+        return 850
+      }
+      return 800
+    }
+  }
+
+  // Title-based matching (original logic)
+  if (titleLength === 0) return 0
 
   const matchRanges = item.meta?.extension?.matchResult as
-    | { start: number, end: number }[]
+    | { start: number; end: number }[]
     | undefined
   if (matchRanges && matchRanges.length > 0) {
     // Using the first match range to calculate the score
@@ -42,7 +86,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     let score = 400
 
     // 1. Match length reward
-    score += (matchLength / nameLength) * 100 // Match length reward
+    score += (matchLength / titleLength) * 100 // Match length reward
 
     // 2. Beginning match reward
     if (start === 0) {
@@ -50,16 +94,15 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
     }
 
     // 3. Continuity/relevance reward (compared to search term length)
-    if (matchLength === searchKey.length) {
+    if (matchLength === normalizedKey.length) {
       score += 200
     }
 
     return Math.round(score)
   }
 
-  if (name.includes(searchKey)) {
-    if (name.startsWith(searchKey))
-      return 500
+  if (titleLower.includes(normalizedKey)) {
+    if (titleLower.startsWith(normalizedKey)) return 500
     return 300
   }
 
@@ -89,7 +132,7 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
       lastExecuted,
       lastSearched,
       lastCancelled,
-      0.1, // lambda 参数，PRD 要求
+      0.1
     )
   }
 
@@ -101,19 +144,19 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
 export const tuffSorter: ISortMiddleware = {
   name: 'tuff-sorter',
   sort: (items: TuffItem[], query: TuffQuery) => {
-    const searchKey = query.text?.toLowerCase()
+    const searchKey = query.text?.trim().toLowerCase()
 
     // Use the Schwartzian transform (decorate-sort-undecorate) for performance.
     // Decorate: Calculate the sort score for each item once.
-    const decoratedItems = items.map(item => ({
+    const decoratedItems = items.map((item) => ({
       item,
-      score: calculateSortScore(item, searchKey),
+      score: calculateSortScore(item, searchKey)
     }))
 
     // Sort: The comparison function is now a simple number comparison.
     decoratedItems.sort((a, b) => b.score - a.score)
 
     // Undecorate: Extract the sorted items.
-    return decoratedItems.map(decorated => decorated.item)
-  },
+    return decoratedItems.map((decorated) => decorated.item)
+  }
 }

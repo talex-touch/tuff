@@ -18,6 +18,11 @@ export interface WidgetRegistrationPayload {
   code: string
   styles: string
   hash: string
+  /**
+   * List of allowed module dependencies for widget sandbox
+   * Widget 沙箱允许的模块依赖列表
+   */
+  dependencies?: string[]
 }
 
 export function makeWidgetId(pluginName: string, featureId: string): string {

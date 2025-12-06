@@ -1,10 +1,22 @@
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import { useDocumentVisibility } from '@vueuse/core'
-import { nextTick, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
+import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 
+/**
+ * Manages CoreBox visibility, auto-clear, and autopaste behavior
+ * @param boxOptions - Box state options
+ * @param searchVal - Search input value ref
+ * @param clipboardOptions - Clipboard state options
+ * @param handleAutoFill - Function to auto-fill clipboard content
+ * @param handlePaste - Function to paste clipboard content
+ * @param _clearClipboard - Function to clear clipboard state
+ * @param boxInputRef - Reference to box input component
+ * @param deactivateAllProviders - Function to deactivate all active providers
+ */
 export function useVisibility(
   boxOptions: IBoxOptions,
   searchVal: Ref<string>,
@@ -16,6 +28,15 @@ export function useVisibility(
   deactivateAllProviders: () => Promise<void>
 ) {
   const visibility = useDocumentVisibility()
+  
+  // Track if CoreBox was triggered by keyboard shortcut
+  const wasTriggeredByShortcut = ref(false)
+
+  // Listen for shortcut trigger event from main process
+  const unregisterShortcutTrigger = touchChannel.regChannel('core-box:shortcut-triggered', () => {
+    console.debug('[Visibility] CoreBox triggered by keyboard shortcut')
+    wasTriggeredByShortcut.value = true
+  })
 
   watch(
     () => visibility.value,
@@ -23,6 +44,9 @@ export function useVisibility(
       if (!val) {
         boxOptions.lastHidden = Date.now()
         console.debug('[Visibility] CoreBox hidden, timestamp saved:', boxOptions.lastHidden)
+        
+        // Reset shortcut trigger flag when hiding
+        wasTriggeredByShortcut.value = false
         
         // Clear search input to trigger item list clearing
         searchVal.value = ''
@@ -72,13 +96,22 @@ export function useVisibility(
       // handlePaste will check if clipboard is expired
       handlePaste()
 
-      if (clipboardOptions.last) {
+      // Only auto-fill if triggered by keyboard shortcut
+      if (wasTriggeredByShortcut.value && clipboardOptions.last) {
+        console.debug('[Visibility] Auto-filling clipboard (triggered by shortcut)')
         handleAutoFill()
+        // Reset flag after auto-filling
+        wasTriggeredByShortcut.value = false
+      } else if (clipboardOptions.last) {
+        console.debug('[Visibility] Skipping auto-fill (not triggered by shortcut)')
       }
     },
   )
 
   return {
     visibility,
+    cleanup: () => {
+      unregisterShortcutTrigger()
+    }
   }
 }

@@ -63,10 +63,11 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
     </ElPopover>
 
     <TuffIcon
-      class="flex-shrink-0"
+      class="flex-shrink-0 dark:text-white"
       :empty="DefaultIcon"
       :icon="plugin.icon"
       :alt="plugin.name"
+      colorful
       :size="32"
     />
 

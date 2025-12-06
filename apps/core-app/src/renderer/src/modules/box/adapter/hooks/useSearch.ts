@@ -14,6 +14,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
+import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { BoxMode } from '..'
 
 export function useSearch(
@@ -47,6 +48,7 @@ export function useSearch(
   const currentSearchId = ref<string | null>(null)
 
   const BASE_DEBOUNCE = 35
+  const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
   const debounceMs = computed(() => {
     return activeActivations.value && activeActivations.value.length > 0 ? 100 : BASE_DEBOUNCE
   })
@@ -66,6 +68,12 @@ export function useSearch(
           text: '',
           inputs: []
         }
+
+        inputTransport.broadcast({
+          input: query.text,
+          query,
+          source: 'renderer'
+        })
 
         // The initial call now returns the high-priority results directly.
         const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
@@ -97,7 +105,19 @@ export function useSearch(
     }
 
     if (!searchVal.value) {
-      // Empty query with active providers: keep current state
+      // Empty query with active providers: still notify plugins/UI about clear
+      const query: TuffQuery = {
+        text: '',
+        inputs: []
+      }
+
+      inputTransport.broadcast({
+        input: query.text,
+        query,
+        source: 'renderer'
+      })
+
+      // Keep current search state; no new search request
       return
     }
 
@@ -120,8 +140,7 @@ export function useSearch(
           thumbnail: clipboardOptions.last.thumbnail ?? undefined,
           metadata: clipboardOptions.last.meta ?? undefined
         })
-      }
-      else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
+      } else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
         inputs.push({
           type: TuffInputType.Files,
           content: JSON.stringify(boxOptions.file.paths),
@@ -133,8 +152,10 @@ export function useSearch(
           content: clipboardOptions.last.content,
           metadata: clipboardOptions.last.meta ?? undefined
         })
-      }
-      else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
+      } else if (
+        clipboardOptions?.last?.type === 'text' ||
+        clipboardOptions?.last?.type === 'html'
+      ) {
         if (clipboardOptions.last.rawContent) {
           inputs.push({
             type: TuffInputType.Html,
@@ -154,6 +175,12 @@ export function useSearch(
       if (inputs.length > 0) {
         query.inputs = inputs
       }
+
+      inputTransport.broadcast({
+        input: query.text,
+        query,
+        source: 'renderer'
+      })
 
       // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
@@ -363,7 +390,7 @@ export function useSearch(
    * before updating the UI state. Calling this synchronously could cause
    * race conditions where the UI believes providers are deactivated but
    * they're still active in the backend.
-   * 
+   *
    * @async
    * @returns Promise that resolves when all providers are deactivated
    */
@@ -378,13 +405,13 @@ export function useSearch(
    * Handle exit operations in strict sequential order.
    * This is an ASYNC function to ensure provider deactivation completes
    * before proceeding, preventing race conditions.
-   * 
+   *
    * Exit sequence:
    * 1. Deactivate active providers (if any) and return
    * 2. Handle mode transitions (FEATURE → INPUT)
    * 3. Clear search input (if any)
    * 4. Hide CoreBox window (final step)
-   * 
+   *
    * @async
    * @returns Promise that resolves when exit handling is complete
    */
@@ -445,27 +472,10 @@ export function useSearch(
     if (boxOptions.mode === BoxMode.INPUT || boxOptions.mode === BoxMode.COMMAND) {
       boxOptions.mode = newSearchVal.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT
     }
-    // If the input is cleared, also clear active providers to allow recommendations
-    if (newSearchVal === '' && activeActivations.value && activeActivations.value.length > 0) {
-      activeActivations.value = null
-      searchResults.value = []
-      // handleSearch will be triggered by the watch below and show recommendations
-    }
   })
 
   // 2. Watch for searchVal or mode changes to trigger the search
   watch([searchVal], handleSearch)
-
-  // 3. Watch for searchVal changes to broadcast to plugins (debounced for performance)
-  const debouncedInputBroadcast = useDebounceFn((newVal: string) => {
-    touchChannel.send('core-box:input-changed', { input: newVal }).catch((error) => {
-      console.error('[useSearch] Failed to broadcast input change:', error)
-    })
-  }, BASE_DEBOUNCE)
-
-  watch(searchVal, (newVal) => {
-    debouncedInputBroadcast(newVal)
-  })
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 

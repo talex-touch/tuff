@@ -82,7 +82,6 @@ export function getStyles() {
                   height: 100%;
 
                   overflow: hidden;
-                  border-radius: 12px;
                   box-sizing: border-box;
                 }
 

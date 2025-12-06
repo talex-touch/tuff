@@ -4,6 +4,34 @@ import { genChannel } from '../channel'
 
 const ensureClientChannel = (): ITouchClientChannel => genChannel()
 
+const DEFAULT_CHANNEL_ERROR = '[Plugin SDK] Channel not available. Make sure this code runs inside a plugin renderer context.'
+
+let cachedWindowChannel: ITouchClientChannel | null = null
+
+/**
+ * Ensures that the renderer-side plugin channel (window.$channel) exists and returns it.
+ *
+ * @param errorMessage - Optional custom error message when the channel is unavailable
+ */
+export function ensureRendererChannel(errorMessage = DEFAULT_CHANNEL_ERROR): ITouchClientChannel {
+  const globalWindow = typeof window === 'undefined' ? undefined : window
+  const channel = globalWindow?.$channel ?? cachedWindowChannel
+
+  if (!channel) {
+    throw new Error(errorMessage)
+  }
+
+  cachedWindowChannel = channel
+  return channel
+}
+
+/**
+ * Convenience hook for accessing window.$channel in plugin renderers.
+ */
+export function useChannel(errorMessage?: string): ITouchClientChannel {
+  return ensureRendererChannel(errorMessage)
+}
+
 export function createPluginRendererChannel(): IPluginRendererChannel {
   const client = ensureClientChannel()
 
@@ -45,4 +73,10 @@ export function usePluginRendererChannel(): IPluginRendererChannel {
   }
 
   return cachedRendererChannel
+}
+
+declare global {
+  interface Window {
+    $channel: ITouchClientChannel
+  }
 }

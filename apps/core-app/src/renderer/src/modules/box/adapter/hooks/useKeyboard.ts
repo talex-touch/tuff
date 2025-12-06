@@ -2,10 +2,50 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import { BoxMode } from '..'
 import { onBeforeUnmount } from 'vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { createCoreBoxKeyTransport, type ForwardedKeyEvent } from '../transport/key-transport'
 
 declare global {
   interface Window {
     __coreboxHistoryVisible?: boolean
+  }
+}
+
+/**
+ * Keys that should always be forwarded to plugin UI view when in UI mode.
+ * ArrowLeft/ArrowRight are NOT forwarded unless meta/ctrl is pressed,
+ * as they are used for text cursor navigation in the input field.
+ */
+const FORWARD_KEYS = new Set(['Enter', 'ArrowUp', 'ArrowDown'])
+
+/**
+ * Determines if a keyboard event should be forwarded to the plugin UI view.
+ *
+ * @param event - The keyboard event to check
+ * @returns True if the event should be forwarded
+ */
+function shouldForwardKey(event: KeyboardEvent): boolean {
+  if ((event.metaKey || event.ctrlKey) && event.key !== 'v') {
+    return true
+  }
+  return FORWARD_KEYS.has(event.key)
+}
+
+/**
+ * Serializes a DOM KeyboardEvent into a plain object for IPC transport.
+ *
+ * @param event - The keyboard event to serialize
+ * @returns A serializable keyboard event object
+ */
+function serializeKeyEvent(event: KeyboardEvent): ForwardedKeyEvent {
+  return {
+    key: event.key,
+    code: event.code,
+    metaKey: event.metaKey,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    shiftKey: event.shiftKey,
+    repeat: event.repeat
   }
 }
 
@@ -24,6 +64,22 @@ export function useKeyboard(
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   itemRefs: Ref<any[]>,
 ) {
+  const keyTransport = createCoreBoxKeyTransport(touchChannel)
+
+  /**
+   * Checks if CoreBox is currently in UI mode (plugin view attached).
+   */
+  function isInUIMode(): boolean {
+    return activeActivations.value?.length > 0
+  }
+
+  /**
+   * Forwards a keyboard event to the plugin UI view via IPC.
+   */
+  function forwardToUIView(event: KeyboardEvent): void {
+    keyTransport.forwardKeyEvent(serializeKeyEvent(event))
+  }
+
   /**
    * Global keyboard event handler for CoreBox window
    * @param event - KeyboardEvent from user interaction
@@ -33,9 +89,25 @@ export function useKeyboard(
       return
     }
 
+    // Check if in UI mode and should forward this key
+    const uiMode = isInUIMode()
+    if (uiMode && shouldForwardKey(event)) {
+      forwardToUIView(event)
+      // Don't prevent default for ESC - let it bubble for exit handling
+      if (event.key !== 'Escape') {
+        event.preventDefault()
+        return
+      }
+    }
+
     if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
       handlePaste({ overrideDismissed: true })
       event.preventDefault()
+      return
+    }
+
+    // Skip CoreBox's own navigation when in UI mode (already forwarded)
+    if (uiMode && FORWARD_KEYS.has(event.key)) {
       return
     }
 
@@ -57,11 +129,23 @@ export function useKeyboard(
       handleExecute(target)
     }
     else if (event.key === 'ArrowDown') {
-      boxOptions.focus += 1
+      // Support cycling to first item when list is small (≤ 20 items)
+      // For larger lists, keep current behavior to avoid rendering performance issues
+      if (res.value.length <= 20 && boxOptions.focus === res.value.length - 1) {
+        boxOptions.focus = 0
+      } else {
+        boxOptions.focus += 1
+      }
       event.preventDefault()
     }
     else if (event.key === 'ArrowUp') {
-      boxOptions.focus -= 1
+      // Support cycling to last item when list is small (≤ 20 items)
+      // For larger lists, keep current behavior to avoid rendering performance issues
+      if (res.value.length <= 20 && boxOptions.focus === 0) {
+        boxOptions.focus = res.value.length - 1
+      } else {
+        boxOptions.focus -= 1
+      }
       event.preventDefault()
     }
     else if (
@@ -109,9 +193,9 @@ export function useKeyboard(
     }
     else if (event.key === 'Escape') {
       /**
-       * ESC key strict sequential handling:
-       * 1. Deactivate active providers
-       * 2. Clear clipboard/file attachments
+       * ESC key strict sequential handling (FIXED):
+       * 1. Clear clipboard/file attachments (PRIORITY)
+       * 2. Deactivate active providers (attachUIView)
        * 3. Clear input query
        * 4. Handle mode transitions
        * 5. Hide CoreBox window
@@ -119,14 +203,12 @@ export function useKeyboard(
        * Note: handleExit is async but we use void operator (fire-and-forget)
        * because keyboard event handlers cannot be async. The async operations
        * will continue in the background without blocking the UI.
+       * 
+       * Fix: Prioritize clearing clipboard/attachments before deactivating providers
+       * to prevent attachUIView from closing while clipboard data remains attached.
        */
       
-      if (activeActivations.value?.length > 0) {
-        void handleExit()
-        event.preventDefault()
-        return
-      }
-
+      // Step 1: Clear clipboard/file attachments FIRST (highest priority)
       if (clipboardOptions.last || boxOptions.file?.paths?.length > 0) {
         if (clipboardOptions.last) {
           clearClipboard({ remember: true })
@@ -139,12 +221,21 @@ export function useKeyboard(
         return
       }
 
+      // Step 2: Deactivate active providers (attachUIView)
+      if (activeActivations.value?.length > 0) {
+        void handleExit()
+        event.preventDefault()
+        return
+      }
+
+      // Step 3: Clear input query
       if (searchVal.value) {
         searchVal.value = ''
         event.preventDefault()
         return
       }
 
+      // Step 4: Hide CoreBox window (final step)
       void handleExit()
     }
 
@@ -186,9 +277,19 @@ export function useKeyboard(
     })
   }
 
-  document.addEventListener('keydown', onKeyDown)
+  /**
+   * Use capture phase (true) to ensure keyboard events are handled
+   * before input element's event handlers. This fixes the issue where
+   * keyboard events don't reach the global handler when input has focus.
+   * 
+   * Event propagation phases:
+   * 1. Capture phase (document → input) - WE LISTEN HERE
+   * 2. Target phase (input itself)
+   * 3. Bubble phase (input → document)
+   */
+  document.addEventListener('keydown', onKeyDown, true)
 
   onBeforeUnmount(() => {
-    document.removeEventListener('keydown', onKeyDown)
+    document.removeEventListener('keydown', onKeyDown, true)
   })
 }
