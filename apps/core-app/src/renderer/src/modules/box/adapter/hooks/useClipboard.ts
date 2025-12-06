@@ -106,17 +106,25 @@ export function useClipboard(
   }
 
   /**
+   * Checks if data is text type (including HTML with text content)
+   */
+  function isTextType(data: IClipboardItem): boolean {
+    return data.type === 'text' || (data.type as string) === 'html'
+  }
+
+  /**
    * Auto-fills text content based on length:
    * - <= 80 chars: fills into input field
    * - > 80 chars: shown as tag (clipboard retained)
    */
   function autoFillText(data: IClipboardItem, timestamp: number): boolean {
-    if (data.type !== 'text') return false
+    if (!isTextType(data)) return false
+    if (!searchVal) return false
 
     const content = data.content || ''
     const length = content.length
 
-    if (length > 0 && length <= AUTOFILL_INPUT_TEXT_LIMIT && searchVal) {
+    if (length > 0 && length <= AUTOFILL_INPUT_TEXT_LIMIT) {
       searchVal.value = content
       markAsAutoPasted(timestamp)
       onPasteCallback?.()
@@ -187,6 +195,14 @@ export function useClipboard(
       clipboardOptions.last = clipboard
       clipboardOptions.detectedAt = Date.now()
       clipboardOptions.lastClearedTimestamp = null
+
+      const timestamp = normalizeTimestamp(clipboard.timestamp)
+      if (timestamp && !autoPastedTimestamps.has(timestamp)) {
+        autoFillFiles(clipboard, timestamp) ||
+          autoFillText(clipboard, timestamp) ||
+          autoFillImage(clipboard, timestamp)
+      }
+
       onPasteCallback?.()
     }
   }

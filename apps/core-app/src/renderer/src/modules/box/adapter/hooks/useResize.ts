@@ -48,4 +48,13 @@ export function useResize(options: UseResizeOptions): void {
     () => debouncedResize(),
     { deep: true }
   )
+
+  watch(
+    () => loading.value,
+    (isLoading) => {
+      if (!isLoading) {
+        debouncedResize()
+      }
+    }
+  )
 }

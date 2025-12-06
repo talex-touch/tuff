@@ -22,7 +22,7 @@ const displayIcon = computed(() => {
   const defaultIcon = {
     type: 'url',
     value: '',
-    status: 'normal',
+    status: 'normal'
   } as ITuffIcon
 
   if (typeof icon === 'string') {
@@ -45,8 +45,8 @@ const isMacPlatform = process.platform === 'darwin'
 
 const primaryActionLabel = computed(() => {
   const item = props.item
-  const isPluginFeature
-    = item?.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
+  const isPluginFeature =
+    item?.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
 
   const translationKey = isPluginFeature ? 'coreBox.hints.execute' : 'coreBox.hints.open'
   const translated = t(translationKey)
@@ -65,12 +65,12 @@ const keyHints = computed(() => {
     { key: '↵', label: primaryActionLabel.value },
     {
       key: aiHotkey,
-      label: aiHotkeyLabel,
+      label: aiHotkeyLabel
     },
     {
       key: quickSelectHotkey,
-      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel,
-    },
+      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel
+    }
   ]
 })
 </script>
@@ -82,6 +82,7 @@ const keyHints = computed(() => {
   >
     <div class="FooterInfo">
       <TuffIcon
+        colorful
         :icon="displayIcon"
         :alt="title"
         :empty="DefaultIcon"
