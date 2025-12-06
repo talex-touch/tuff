@@ -6,6 +6,7 @@ import type {
   TuffQuery,
   TuffSearchResult,
 } from '@talex-touch/utils'
+import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -37,6 +38,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
 
   private permissionChecker: PermissionChecker | null = null
   private actions: SystemAction[] = []
+  private searchIndex: SearchIndexService | null = null
 
   constructor() {
     this.initializeActions()
@@ -233,6 +235,21 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         },
       })
     }
+
+    // Open Main Window
+    this.actions.push({
+      id: 'open-main-window',
+      name: '打开主窗口',
+      description: '显示并激活 Tuff 主窗口',
+      keywords: ['主窗口', '打开', 'main window', 'show window', '显示窗口', 'tuff', '窗口'],
+      icon: 'window',
+      requiresAdmin: false,
+      execute: async () => {
+        const mainWindow = $app.window.window
+        mainWindow.show()
+        mainWindow.focus()
+      },
+    })
   }
 
   private async showPermissionError(action: string): Promise<void> {
@@ -255,9 +272,29 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  async onLoad(_context: ProviderContext): Promise<void> {
+  async onLoad(context: ProviderContext): Promise<void> {
     this.permissionChecker = PermissionChecker.getInstance()
-    console.log('[SystemProvider] System provider loaded')
+    this.searchIndex = context.searchIndex
+
+    await this.indexSystemActions()
+    console.log('[SystemProvider] System provider loaded with search index')
+  }
+
+  private async indexSystemActions(): Promise<void> {
+    if (!this.searchIndex) return
+
+    const indexItems = this.actions.map((action) => ({
+      itemId: `system:${action.id}`,
+      providerId: this.id,
+      type: this.type,
+      name: action.name,
+      displayName: action.name,
+      keywords: action.keywords.map((kw) => ({ value: kw, priority: 1.2 })),
+      tags: ['system', 'action'],
+    }))
+
+    await this.searchIndex.indexItems(indexItems)
+    console.log(`[SystemProvider] Indexed ${indexItems.length} system actions`)
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
@@ -266,13 +303,33 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       return new TuffSearchResultBuilder(query).build()
     }
 
-    const matchedActions = this.actions.filter((action) => {
+    const matchedActionIds = new Set<string>()
+
+    // 1. Search via index (supports pinyin)
+    if (this.searchIndex) {
+      const ftsQuery = searchText.replace(/[^\w\u4e00-\u9fa5]/g, ' ').trim()
+      if (ftsQuery) {
+        const ftsResults = await this.searchIndex.search(this.id, `${ftsQuery}*`, 20)
+        for (const result of ftsResults) {
+          // itemId format: "system:action-id"
+          const actionId = result.itemId.replace('system:', '')
+          matchedActionIds.add(actionId)
+        }
+      }
+    }
+
+    // 2. Fallback: simple string matching for direct matches
+    for (const action of this.actions) {
       const nameMatch = action.name.toLowerCase().includes(searchText)
       const keywordMatch = action.keywords.some(keyword =>
         keyword.toLowerCase().includes(searchText),
       )
-      return nameMatch || keywordMatch
-    })
+      if (nameMatch || keywordMatch) {
+        matchedActionIds.add(action.id)
+      }
+    }
+
+    const matchedActions = this.actions.filter(action => matchedActionIds.has(action.id))
 
     const items: TuffItem[] = matchedActions.map((action) => {
       return new TuffItemBuilder(action.id, this.type, this.id)
