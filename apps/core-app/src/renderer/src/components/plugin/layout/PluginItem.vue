@@ -13,8 +13,6 @@ const props = defineProps<{
 }>()
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
-
-console.log(props)
 </script>
 
 <template>

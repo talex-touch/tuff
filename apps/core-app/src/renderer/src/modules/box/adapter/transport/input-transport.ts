@@ -1,18 +1,14 @@
-import type { TuffQuery } from '@talex-touch/utils'
+import type { ITouchClientChannel, TuffQuery } from '@talex-touch/utils'
 import { createCoreBoxTransport } from './core-box-transport'
 
 interface CoreBoxInputMessage {
-  input: string
-  query: TuffQuery
+  input?: string
+  query?: TuffQuery
   source?: 'renderer'
 }
 
-interface ChannelLike {
-  send: (event: string, payload?: any) => Promise<any>
-}
-
 export function createCoreBoxInputTransport(
-  channel: ChannelLike,
+  channel: ITouchClientChannel,
   debounceMs = 35
 ): {
   broadcast: (payload: CoreBoxInputMessage) => void

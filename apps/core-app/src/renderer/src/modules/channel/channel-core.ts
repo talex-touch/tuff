@@ -8,7 +8,12 @@ import type {
 import type { IpcRendererEvent } from 'electron'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 
-const { ipcRenderer } = require('electron')
+// Use preload-exposed ipcRenderer instead of direct require
+const ipcRenderer = window.ipcRenderer as {
+  send: (channel: string, data: any) => void
+  sendSync: (channel: string, data: any) => any
+  on: (channel: string, func: (...args: any[]) => void) => void
+}
 const CHANNEL_DEFAULT_TIMEOUT = 10_000
 
 class TouchChannel implements ITouchClientChannel {
@@ -60,8 +65,11 @@ class TouchChannel implements ITouchClientChannel {
     }
 
     this.channelMap.get(rawData.name)?.forEach((func) => {
-      const handInData: StandardChannelData = {
+      let replySent = false
+      const handInData: StandardChannelData & { replySent?: boolean } = {
         reply: (code: DataCode, data: any) => {
+          if (replySent) return
+          replySent = true
           e.sender.send(
             '@main-process-message',
             this.__parse_sender(code, rawData, data, rawData.sync)
@@ -75,15 +83,21 @@ class TouchChannel implements ITouchClientChannel {
       if (res instanceof Promise) {
         res
           .then((data) => {
-            handInData.reply(DataCode.SUCCESS, data)
+            if (!replySent) {
+              handInData.reply(DataCode.SUCCESS, data)
+            }
           })
           .catch((err) => {
-            handInData.reply(DataCode.ERROR, err)
+            if (!replySent) {
+              handInData.reply(DataCode.ERROR, err)
+            }
           })
         return
       }
 
-      handInData.reply(DataCode.SUCCESS, res)
+      if (!replySent) {
+        handInData.reply(DataCode.SUCCESS, res)
+      }
     })
   }
 

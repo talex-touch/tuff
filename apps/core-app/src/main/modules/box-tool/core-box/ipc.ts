@@ -180,9 +180,13 @@ export class IpcManager {
 
     this.touchApp.channel.regChannel(ChannelType.PLUGIN, 'core-box:show-input', ({ reply }) => {
       const coreBoxWindow = getCoreBoxWindow()
+      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+        reply(DataCode.ERROR, { error: 'CoreBox window not available' })
+        return
+      }
 
       this.touchApp.channel
-        .sendTo(coreBoxWindow!.window, ChannelType.MAIN, 'core-box:set-input-visibility', {
+        .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:set-input-visibility', {
           visible: true
         })
         .then(() => {
@@ -199,9 +203,13 @@ export class IpcManager {
       async ({ reply }) => {
         try {
           const coreBoxWindow = getCoreBoxWindow()
+          if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+            reply(DataCode.ERROR, { error: 'CoreBox window not available' })
+            return
+          }
 
           const result = await this.touchApp.channel.sendToMain(
-            coreBoxWindow!.window,
+            coreBoxWindow.window,
             'core-box:request-input-value',
             {}
           )

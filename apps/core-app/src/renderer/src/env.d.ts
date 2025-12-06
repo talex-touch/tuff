@@ -28,5 +28,10 @@ declare global {
     $i18n: I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
     $startupInfo: IStartupInfo
     api: PreloadAPI
+    ipcRenderer: {
+      send: (channel: string, data: any) => void
+      sendSync: (channel: string, data: any) => any
+      on: (channel: string, func: (...args: any[]) => void) => void
+    }
   }
 }
