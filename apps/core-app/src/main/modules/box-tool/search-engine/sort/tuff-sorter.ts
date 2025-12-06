@@ -32,7 +32,10 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   const title = item.render.basic?.title
   const titleLower = title?.toLowerCase() || ''
   const titleLength = titleLower.length
-  const searchTokens = (item.meta?.extension?.searchTokens as string[])?.filter(Boolean) ?? []
+  const rawTokens = item.meta?.extension?.searchTokens
+  const searchTokens = Array.isArray(rawTokens) 
+    ? rawTokens.filter((t): t is string => typeof t === 'string' && Boolean(t))
+    : []
 
   // Perfect title match
   if (titleLower === normalizedKey) return 1000
