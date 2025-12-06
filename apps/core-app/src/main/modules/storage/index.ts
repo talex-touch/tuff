@@ -458,9 +458,16 @@ export class StorageModule extends BaseModule {
 
       // Immediately persist to disk for sync save
       if (result.success && !clear) {
-        this.persistConfig(key).catch((err) => {
+        try {
+          const data = this.cache.get(key)
+          if (data) {
+            const p = path.join(this.filePath!, key)
+            fse.ensureFileSync(p)
+            fse.writeFileSync(p, JSON.stringify(data), 'utf-8')
+          }
+        } catch (err) {
           console.error(chalk.red(`[StorageModule] Failed to persist ${key} synchronously:`), err)
-        })
+        }
         this.cache.clearDirty(key)
       }
 
