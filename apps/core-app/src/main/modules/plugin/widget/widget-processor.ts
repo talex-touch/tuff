@@ -90,6 +90,11 @@ export class WidgetProcessorRegistry {
     processor.supportedExtensions.forEach((ext) => {
       // Normalize extension to include leading dot
       const normalizedExt = ext.startsWith('.') ? ext : `.${ext}`
+      if (this.processors.has(normalizedExt)) {
+        throw new Error(
+          `Widget processor conflict: Extension '${normalizedExt}' is already registered`
+        )
+      }
       this.processors.set(normalizedExt, processor)
     })
   }
