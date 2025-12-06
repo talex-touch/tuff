@@ -688,7 +688,7 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    const boxItemManager = getBoxItemManager({ enableLogging: !app.isPackaged })
+    const boxItemManager = getBoxItemManager()
 
     // BoxItem SDK 工具对象
     const boxItems = {

@@ -98,7 +98,7 @@ export class WindowManager {
    */
   public enableInputMonitoring(): void {
     this.inputAllowed = true
-    coreBoxWindowLog.info('Input monitoring enabled for UI view')
+    coreBoxWindowLog.debug('Input monitoring enabled for UI view')
   }
 
   /**
@@ -111,7 +111,7 @@ export class WindowManager {
     }
 
     this.clipboardAllowedTypes = types
-    coreBoxWindowLog.info(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
+    coreBoxWindowLog.debug(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
   }
 
   /**
@@ -180,21 +180,6 @@ export class WindowManager {
       coreBoxWindowLog.debug('BoxWindow closed')
     })
 
-    // window.window.on('blur', () => {
-    //   const settings = this.getAppSettingConfig()
-    //   // Access isUIMode via its public getter
-    //   console.log(
-    //     `[CoreBox] Blur event detected. isUIMode: ${coreBoxManager.isUIMode}, autoHide setting: ${settings.tools.autoHide}`
-    //   )
-    //   if (settings.tools.autoHide && !coreBoxManager.isUIMode) {
-    //     // Only auto-hide if not in UI mode
-    //     console.log('[CoreBox] Auto-hiding CoreBox due to blur event (not in UI mode).')
-    //     coreBoxManager.trigger(false)
-    //   } else if (settings.tools.autoHide && coreBoxManager.isUIMode) {
-    //     console.log('[CoreBox] Blur event ignored in UI mode to prevent unintended hiding.')
-    //   }
-    // })
-
     window.window.on('blur', async () => {
       const settings = this.getAppSettingConfig()
 
@@ -216,7 +201,7 @@ export class WindowManager {
       }
     })
 
-    coreBoxWindowLog.info('NewBox created, WebContents loaded')
+    coreBoxWindowLog.debug('NewBox created, WebContents loaded')
 
     this.windows.push(window)
 
@@ -508,7 +493,6 @@ export class WindowManager {
           root.classList.add('dark');
           root.classList.remove('dark');
         }
-        console.log('[CoreBox] Current app theme:', isDark ? 'dark' : 'light');
       })();
     `
 
@@ -535,7 +519,7 @@ export class WindowManager {
       return
     }
 
-    coreBoxWindowLog.info(`AttachUIView - loading ${url}`)
+    coreBoxWindowLog.debug(`AttachUIView - loading ${url}`)
 
     if (this.uiView) {
       coreBoxWindowLog.warn('UI view already attached, skipping re-attachment')
@@ -823,7 +807,7 @@ export class WindowManager {
       try {
         fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
         preloadPath = path.resolve(tempPreloadPath)
-        coreBoxWindowLog.info(`Created dynamic preload script: ${preloadPath}`)
+        coreBoxWindowLog.debug(`Created dynamic preload script: ${preloadPath}`)
       } catch (error) {
         coreBoxWindowLog.error(`Failed to create preload script: ${tempPreloadPath}`, {
           error
@@ -901,7 +885,7 @@ export class WindowManager {
     })
 
     const finalUrl = this.normalizeUIViewUrl(url, plugin)
-    coreBoxWindowLog.info(`AttachUIView - resolved URL ${finalUrl}`)
+    coreBoxWindowLog.debug(`AttachUIView - resolved URL ${finalUrl}`)
     this.uiView.webContents.loadURL(finalUrl)
 
     // Initial theme is now injected synchronously via preload ($tuffInitialData.theme)
