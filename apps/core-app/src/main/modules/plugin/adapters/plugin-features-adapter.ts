@@ -71,7 +71,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     TuffInputType.Html
   ]
 
-  public handleActiveFeatureInput(query: TuffQuery): boolean {
+  public async handleActiveFeatureInput(query: TuffQuery): Promise<boolean> {
     const activationState = searchEngineCore.getActivationState()
 
     const activeFeatureActivation = activationState?.find((a) => a.id === this.id)
@@ -96,10 +96,19 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return true
     }
 
-    plugin.triggerFeature(feature, query)
-    plugin.triggerInputChanged(feature, query)
+    try {
+      const result = await plugin.triggerFeature(feature, query)
+      await plugin.triggerInputChanged(feature, query)
 
-    return true
+      if (result === false) {
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('[PluginFeaturesAdapter] handleActiveFeatureInput error:', error)
+      return false
+    }
   }
 
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
