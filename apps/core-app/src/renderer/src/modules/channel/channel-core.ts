@@ -8,12 +8,8 @@ import type {
 import type { IpcRendererEvent } from 'electron'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 
-// Use preload-exposed ipcRenderer instead of direct require
-const ipcRenderer = window.ipcRenderer as {
-  send: (channel: string, data: any) => void
-  sendSync: (channel: string, data: any) => any
-  on: (channel: string, func: (...args: any[]) => void) => void
-}
+// Use preload-exposed ipcRenderer via electron-toolkit
+const ipcRenderer = window.electron.ipcRenderer
 const CHANNEL_DEFAULT_TIMEOUT = 10_000
 
 class TouchChannel implements ITouchClientChannel {

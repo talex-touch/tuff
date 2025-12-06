@@ -19,7 +19,7 @@
   .has-update & {
     pointer-events: all;
     cursor: pointer;
-    
+
     span {
       background-color: var(--el-color-warning-light-7) !important;
     }
@@ -41,7 +41,5 @@
 
 /// Controller buttons (hidden on macOS)
 @mixin controller-buttons {
-  .darwin & {
-    display: none;
-  }
+  display: none;
 }

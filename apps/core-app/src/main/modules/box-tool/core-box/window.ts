@@ -562,9 +562,15 @@ export class WindowManager {
         }
       }
 
+      // Pre-compute initial data to inject synchronously
+      const initialThemeData = { dark: this.currentThemeIsDark }
+
       const channelScript = `
 (function() {
   const uniqueKey = "${plugin._uniqueChannelKey}";
+  
+  // Inject initial data synchronously so it's available immediately
+  window['$tuffInitialData'] = ${JSON.stringify({ theme: initialThemeData })};
   const { ipcRenderer } = require('electron')
   const ChannelType = ${JSON.stringify(ChannelType)};
   const DataCode = ${JSON.stringify(DataCode)};
@@ -573,6 +579,8 @@ export class WindowManager {
   class TouchChannel {
     channelMap = new Map();
     pendingMap = new Map();
+    // Queue for messages received before listeners are registered
+    earlyMessageQueue = new Map();
 
     constructor() {
       ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
@@ -619,7 +627,19 @@ export class WindowManager {
         const { id } = rawData.sync;
         return this.pendingMap.get(id)?.(rawData);
       }
-      this.channelMap.get(rawData.name)?.forEach((func) => {
+      const listeners = this.channelMap.get(rawData.name);
+      if (listeners && listeners.length > 0) {
+        this.__dispatch(e, rawData, listeners);
+      } else {
+        // No listeners yet, queue the message for later replay
+        const queue = this.earlyMessageQueue.get(rawData.name) || [];
+        queue.push({ e, rawData });
+        this.earlyMessageQueue.set(rawData.name, queue);
+      }
+    }
+
+    __dispatch(e, rawData, listeners) {
+      listeners.forEach((func) => {
         const handInData = {
           reply: (code, data) => {
             e.sender.send(
@@ -670,6 +690,16 @@ export class WindowManager {
         return () => {};
       }
       this.channelMap.set(eventName, listeners);
+
+      // Replay any early messages that were queued before this listener was registered
+      const earlyMessages = this.earlyMessageQueue.get(eventName);
+      if (earlyMessages && earlyMessages.length > 0) {
+        this.earlyMessageQueue.delete(eventName);
+        earlyMessages.forEach(({ e, rawData }) => {
+          this.__dispatch(e, rawData, [callback]);
+        });
+      }
+
       return () => {
         const index = listeners.indexOf(callback);
         if (index !== -1) {
@@ -755,6 +785,7 @@ export class WindowManager {
       }
     }
   }
+
   window['$channel'] = new TouchChannel();
 })();
 `
@@ -872,16 +903,8 @@ export class WindowManager {
     coreBoxWindowLog.info(`AttachUIView - resolved URL ${finalUrl}`)
     this.uiView.webContents.loadURL(finalUrl)
 
-    // Send initial theme state once to UIView (no real-time updates)
-    this.uiView.webContents.once('did-finish-load', () => {
-      if (this.attachedPlugin) {
-        const themePayload = { dark: this.currentThemeIsDark }
-        this.sendChannelMessageToUIView('core-box:initial-theme', themePayload)
-        coreBoxWindowLog.debug(
-          `Initial theme sent to UIView: ${this.currentThemeIsDark ? 'dark' : 'light'}`
-        )
-      }
-    })
+    // Initial theme is now injected synchronously via preload ($tuffInitialData.theme)
+    // No need to send via channel - data is available immediately when page scripts run
   }
 
   public detachUIView(): void {

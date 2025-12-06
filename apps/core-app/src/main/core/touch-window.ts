@@ -1,24 +1,56 @@
 import type { TalexTouch } from '@talex-touch/utils'
 import type { OpenDevToolsOptions, WebContents } from 'electron'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, nativeTheme } from 'electron'
+import { MicaBrowserWindow, IS_WINDOWS_11, WIN10 } from 'talex-mica-electron'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
+
+// Determine if we should use MicaBrowserWindow (Windows only)
+const isWindows = process.platform === 'win32'
+
+// Initialize mica-electron on module load (Windows only)
+// useMicaElectron() must be called once before creating any MicaBrowserWindow
+if (isWindows) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useMicaElectron } = require('talex-mica-electron') as {
+      useMicaElectron: (path?: string) => boolean | void
+    }
+    useMicaElectron()
+    console.debug('[TouchWindow] Mica-Electron initialized')
+  } catch (error) {
+    console.warn('[TouchWindow] Failed to initialize Mica-Electron:', error)
+  }
+}
 
 export class TouchWindow implements TalexTouch.ITouchWindow {
   window: BrowserWindow
+  private isMicaWindow: boolean = false
 
   constructor(options?: TalexTouch.TouchWindowConstructorOptions) {
-    this.window = new BrowserWindow(options)
+    if (isWindows) {
+      try {
+        // Use MicaBrowserWindow on Windows for better Mica/Acrylic effects
+        this.window = new MicaBrowserWindow(options) as unknown as BrowserWindow
+        this.isMicaWindow = true
+        this.applyWindowsEffects()
+      } catch (error) {
+        console.warn('[TouchWindow] Failed to create MicaBrowserWindow, falling back to BrowserWindow:', error)
+        this.window = new BrowserWindow(options)
+        this.isMicaWindow = false
+      }
+    } else {
+      this.window = new BrowserWindow(options)
+    }
 
     /**
      * Auto apply Vibrancy(darwin) or MicaMaterial(windows) on window
      */
     if (process.platform === 'darwin') {
       this.window.setVibrancy('fullscreen-ui')
-    }
-    else {
+    } else if (!this.isMicaWindow) {
+      // Fallback for Windows if MicaBrowserWindow is not used
       this.window.setBackgroundMaterial('mica')
-
-      console.debug('[TouchWindow] Apply MicaMaterial on window')
+      console.debug('[TouchWindow] Apply MicaMaterial on window (fallback)')
     }
 
     this.window.once('ready-to-show', () => {
@@ -45,6 +77,44 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   openDevTools(options?: OpenDevToolsOptions): void {
     console.debug('[TouchWindow] Open DevTools', options)
     this.window.webContents.openDevTools(options)
+  }
+
+  /**
+   * Apply Windows-specific Mica/Acrylic effects using talex-mica-electron
+   * This method is only called when running on Windows with MicaBrowserWindow
+   */
+  private applyWindowsEffects(): void {
+    if (!this.isMicaWindow) return
+
+    const micaWindow = this.window as unknown as MicaBrowserWindow
+
+    const updateTheme = () => {
+      if (nativeTheme.shouldUseDarkColors) {
+        micaWindow.setDarkTheme()
+      } else {
+        micaWindow.setLightTheme()
+      }
+    }
+
+    // Initial theme sync
+    updateTheme()
+
+    // Apply Mica effect on Windows 11, Acrylic on Windows 10
+    if (IS_WINDOWS_11) {
+      micaWindow.setMicaEffect()
+      console.debug('[TouchWindow] Applied Mica effect (Windows 11)')
+    } else if (WIN10) {
+      micaWindow.setAcrylic()
+      console.debug('[TouchWindow] Applied Acrylic effect (Windows 10)')
+    }
+
+    // Listen for theme changes and update accordingly
+    nativeTheme.on('updated', updateTheme)
+
+    // Clean up listener when this window is closed
+    this.window.on('closed', () => {
+      nativeTheme.removeListener('updated', updateTheme)
+    })
   }
 
   async __beforeLoad(
