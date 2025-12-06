@@ -129,50 +129,73 @@ export function useKeyboard(
       handleExecute(target)
     }
     else if (event.key === 'ArrowDown') {
-      // Support cycling to first item when list is small (≤ 20 items)
-      // For larger lists, keep current behavior to avoid rendering performance issues
-      if (res.value.length <= 20 && boxOptions.focus === res.value.length - 1) {
-        boxOptions.focus = 0
-      } else {
-        boxOptions.focus += 1
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      const cols = boxOptions.layout?.grid?.columns || 5
+      const step = isGrid ? cols : 1
+      const nextIndex = boxOptions.focus + step
+
+      if (nextIndex < res.value.length) {
+        boxOptions.focus = nextIndex
+      } else if (res.value.length <= 20) {
+        // Cycle to first item for small lists
+        boxOptions.focus = isGrid ? (boxOptions.focus % cols) : 0
       }
       event.preventDefault()
     }
     else if (event.key === 'ArrowUp') {
-      // Support cycling to last item when list is small (≤ 20 items)
-      // For larger lists, keep current behavior to avoid rendering performance issues
-      if (res.value.length <= 20 && boxOptions.focus === 0) {
-        boxOptions.focus = res.value.length - 1
-      } else {
-        boxOptions.focus -= 1
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      const cols = boxOptions.layout?.grid?.columns || 5
+      const step = isGrid ? cols : 1
+      const prevIndex = boxOptions.focus - step
+
+      if (prevIndex >= 0) {
+        boxOptions.focus = prevIndex
+      } else if (res.value.length <= 20) {
+        // Cycle to last row for small lists
+        const lastRowStart = Math.floor((res.value.length - 1) / cols) * cols
+        const targetCol = boxOptions.focus % cols
+        const targetIndex = Math.min(lastRowStart + targetCol, res.value.length - 1)
+        boxOptions.focus = isGrid ? targetIndex : (res.value.length - 1)
       }
       event.preventDefault()
     }
-    else if (
-      event.key === 'ArrowLeft'
-      && event.metaKey
-      && !event.ctrlKey
-      && !event.altKey
-      && !event.shiftKey
-    ) {
-      const current = res.value[boxOptions.focus]
-      if (current?.source?.id === 'preview-provider') {
-        window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: current }))
+    else if (event.key === 'ArrowLeft') {
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      // Grid mode: move left
+      if (isGrid && !event.metaKey) {
+        if (boxOptions.focus > 0) {
+          boxOptions.focus -= 1
+        }
         event.preventDefault()
         return
       }
+      // Meta+Left: show calculation history
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        const current = res.value[boxOptions.focus]
+        if (current?.source?.id === 'preview-provider') {
+          window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: current }))
+          event.preventDefault()
+          return
+        }
+      }
     }
-    else if (
-      event.key === 'ArrowRight'
-      && event.metaKey
-      && !event.ctrlKey
-      && !event.altKey
-      && !event.shiftKey
-    ) {
-      if (window.__coreboxHistoryVisible) {
-        window.dispatchEvent(new CustomEvent('corebox:hide-calculation-history'))
+    else if (event.key === 'ArrowRight') {
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      // Grid mode: move right
+      if (isGrid && !event.metaKey) {
+        if (boxOptions.focus < res.value.length - 1) {
+          boxOptions.focus += 1
+        }
         event.preventDefault()
         return
+      }
+      // Meta+Right: hide calculation history
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        if (window.__coreboxHistoryVisible) {
+          window.dispatchEvent(new CustomEvent('corebox:hide-calculation-history'))
+          event.preventDefault()
+          return
+        }
       }
     }
     else if (event.key === 'Tab') {
