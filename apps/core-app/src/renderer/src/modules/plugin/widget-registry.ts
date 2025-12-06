@@ -1,15 +1,18 @@
 import type { Component } from 'vue'
 import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
+import * as Vue from 'vue'
+import * as TalexUtils from '@talex-touch/utils'
+import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
+import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
+import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
+import * as TalexUtilsChannel from '@talex-touch/utils/channel'
 import { DataCode } from '@talex-touch/utils/channel'
+import * as TalexUtilsCommon from '@talex-touch/utils/common'
+import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
-
-// Pre-loaded module cache (initialized once at module load time)
-const preloadedModuleCache: Record<string, any> = {
-  'vue': require('vue'),
-}
 
 // List of allowed packages that can be used in widgets
 const ALLOWED_PACKAGES = [
@@ -23,24 +26,16 @@ const ALLOWED_PACKAGES = [
   '@talex-touch/utils/types',
 ]
 
-// Preload all allowed modules at startup - failures are fatal
-const preloadFailures: string[] = []
-ALLOWED_PACKAGES.forEach((module) => {
-  if (module in preloadedModuleCache) return // Already loaded (e.g., 'vue')
-  try {
-    preloadedModuleCache[module] = require(module)
-  }
-  catch (error) {
-    console.error(`[WidgetSandbox] Failed to preload module "${module}":`, error)
-    preloadFailures.push(module)
-  }
-})
-
-if (preloadFailures.length > 0) {
-  console.error(
-    `[WidgetSandbox] FATAL: Failed to preload required modules: ${preloadFailures.join(', ')}. ` +
-    'Widget functionality may be impaired.',
-  )
+// Pre-loaded module cache using ES imports
+const preloadedModuleCache: Record<string, any> = {
+  'vue': Vue,
+  '@talex-touch/utils': TalexUtils,
+  '@talex-touch/utils/plugin': TalexUtilsPlugin,
+  '@talex-touch/utils/plugin/sdk': TalexUtilsPluginSdk,
+  '@talex-touch/utils/core-box': TalexUtilsCoreBox,
+  '@talex-touch/utils/channel': TalexUtilsChannel,
+  '@talex-touch/utils/common': TalexUtilsCommon,
+  '@talex-touch/utils/types': TalexUtilsTypes,
 }
 
 /**
