@@ -209,3 +209,4 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
     }
   }
 }
+

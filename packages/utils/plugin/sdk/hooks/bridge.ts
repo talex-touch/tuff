@@ -12,6 +12,7 @@ export type BridgeHook<T = any> = (data: T) => void
 const __hooks: Record<BridgeEvent, Array<BridgeHook>> = {
   [BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE]: [],
   [BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE]: [],
+  [BridgeEventForCoreBox.CORE_BOX_KEY_EVENT]: [],
 }
 
 /**
@@ -68,3 +69,19 @@ export const createBridgeHook = <T>(type: BridgeEvent) => (hook: BridgeHook<T>) 
 export const onCoreBoxInputChange = createBridgeHook<{ query: { inputs: Array<any>, text: string } }>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
 
 export const onCoreBoxClipboardChange = createBridgeHook<{ item: any }>(BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE)
+
+/**
+ * Hook for when a keyboard event is forwarded from CoreBox.
+ * This is triggered when the plugin's UI view is attached and the user
+ * presses certain keys (Enter, Arrow keys, Meta+key combinations).
+ * @param data The forwarded keyboard event data.
+ */
+export const onCoreBoxKeyEvent = createBridgeHook<{
+  key: string
+  code: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  repeat: boolean
+}>(BridgeEventForCoreBox.CORE_BOX_KEY_EVENT)
