@@ -9,5 +9,5 @@ defineProps<{
 </script>
 
 <template>
-  <TuffIcon :icon="icon" :alt="alt" />
+  <TuffIcon colorful :icon="icon" :alt="alt" />
 </template>
