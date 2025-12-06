@@ -1,24 +1,36 @@
 import type { TalexTouch } from '@talex-touch/utils'
 import type { OpenDevToolsOptions, WebContents } from 'electron'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, nativeTheme } from 'electron'
+import { MicaBrowserWindow, IS_WINDOWS_11, WIN10 } from 'talex-mica-electron'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
+
+// Determine if we should use MicaBrowserWindow (Windows only)
+const isWindows = process.platform === 'win32'
+const useMicaWindow = isWindows
 
 export class TouchWindow implements TalexTouch.ITouchWindow {
   window: BrowserWindow
+  private isMicaWindow: boolean = false
 
   constructor(options?: TalexTouch.TouchWindowConstructorOptions) {
-    this.window = new BrowserWindow(options)
+    if (useMicaWindow) {
+      // Use MicaBrowserWindow on Windows for better Mica/Acrylic effects
+      this.window = new MicaBrowserWindow(options) as unknown as BrowserWindow
+      this.isMicaWindow = true
+      this.applyWindowsEffects()
+    } else {
+      this.window = new BrowserWindow(options)
+    }
 
     /**
      * Auto apply Vibrancy(darwin) or MicaMaterial(windows) on window
      */
     if (process.platform === 'darwin') {
       this.window.setVibrancy('fullscreen-ui')
-    }
-    else {
+    } else if (!this.isMicaWindow) {
+      // Fallback for Windows if MicaBrowserWindow is not used
       this.window.setBackgroundMaterial('mica')
-
-      console.debug('[TouchWindow] Apply MicaMaterial on window')
+      console.debug('[TouchWindow] Apply MicaMaterial on window (fallback)')
     }
 
     this.window.once('ready-to-show', () => {
@@ -45,6 +57,41 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   openDevTools(options?: OpenDevToolsOptions): void {
     console.debug('[TouchWindow] Open DevTools', options)
     this.window.webContents.openDevTools(options)
+  }
+
+  /**
+   * Apply Windows-specific Mica/Acrylic effects using talex-mica-electron
+   * This method is only called when running on Windows with MicaBrowserWindow
+   */
+  private applyWindowsEffects(): void {
+    if (!this.isMicaWindow) return
+
+    const micaWindow = this.window as unknown as MicaBrowserWindow
+
+    // Set theme based on system preference
+    if (nativeTheme.shouldUseDarkColors) {
+      micaWindow.setDarkTheme()
+    } else {
+      micaWindow.setLightTheme()
+    }
+
+    // Apply Mica effect on Windows 11, Acrylic on Windows 10
+    if (IS_WINDOWS_11) {
+      micaWindow.setMicaEffect()
+      console.debug('[TouchWindow] Applied Mica effect (Windows 11)')
+    } else if (WIN10) {
+      micaWindow.setAcrylic()
+      console.debug('[TouchWindow] Applied Acrylic effect (Windows 10)')
+    }
+
+    // Listen for theme changes and update accordingly
+    nativeTheme.on('updated', () => {
+      if (nativeTheme.shouldUseDarkColors) {
+        micaWindow.setDarkTheme()
+      } else {
+        micaWindow.setLightTheme()
+      }
+    })
   }
 
   async __beforeLoad(
