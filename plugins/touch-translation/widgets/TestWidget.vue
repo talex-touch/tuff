@@ -18,7 +18,7 @@ function increment() {
 // Test TuffItemBuilder API access
 try {
   const builder = new TuffItemBuilder()
-  console.log('[TestWidget] ✅ Successfully accessed @talex-touch/utils/core-box')
+  console.log('[TestWidget] ✅ Successfully accessed @talex-touch/utils/core-box', builder)
   message.value = '✅ API Access Working!'
 }
 catch (error) {
