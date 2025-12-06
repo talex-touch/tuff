@@ -3,11 +3,10 @@ const {
   http,
   logger,
   search,
-  pushItems,
-  clearItems,
+  feature,
+  box,
   URLSearchParams,
   TuffItemBuilder,
-  $box,
   storage,
 } = globalThis
 
@@ -593,7 +592,7 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
  */
 async function translateAndPushResults(textToTranslate, featureId, signal) {
   search.updateQuery(textToTranslate)
-  clearItems()
+  feature.clearItems()
 
   const detectedLang = detectLanguage(textToTranslate)
   const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
@@ -607,7 +606,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
     const result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
     const searchItem = createTranslationSearchItem(textToTranslate, result, featureId)
     logger.debug(`[touch-translation] pushItems fallback meta ${JSON.stringify(searchItem.meta)}`)
-    pushItems([searchItem])
+    feature.pushItems([searchItem])
     return
   }
 
@@ -622,7 +621,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
       .setSubtitle('Please enable at least one provider in the plugin settings.')
       .setIcon({ type: 'file', value: 'assets/logo.svg' })
       .build()
-    pushItems([infoItem])
+    feature.pushItems([infoItem])
     return
   }
 
@@ -731,7 +730,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
   )
 
   if (searchItems.length > 0) {
-    pushItems(searchItems)
+    feature.pushItems(searchItems)
   }
   else {
     const errorItem = new TuffItemBuilder('translation-error')
@@ -739,7 +738,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
       .setSubtitle('Check logs for more details.')
       .setIcon({ type: 'file', value: 'assets/logo.svg' })
       .build()
-    pushItems([errorItem])
+    feature.pushItems([errorItem])
   }
 }
 
@@ -779,7 +778,7 @@ const pluginLifecycle = {
 
         const isFeatureExecution = Boolean(item.meta?.featureId)
         if (!isFeatureExecution) {
-          $box.hide()
+          box.hide()
         }
       }
       else {

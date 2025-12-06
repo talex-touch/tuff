@@ -2,11 +2,13 @@
   "id": "com.tuffex.translation",
   "name": "touch-translation",
   "version": "1.0.0-Alpha",
+  "author": "TalexTouch Team",
   "icon": {
     "type": "file",
     "value": "assets/logo.svg"
   },
   "description": "一款全平台资源聚合翻译平台，支持多种翻译服务",
+  "main": "index.js",
   "dev": {
     "enable": true,
     "address": "http://localhost:3333/",
@@ -21,7 +23,10 @@
         "type": "file",
         "value": "assets/logo.svg"
       },
+      "keywords": ["translate", "翻译", "fy", "fanyi"],
       "push": true,
+      "priority": 10,
+      "acceptedInputTypes": ["text"],
       "platform": {
         "win32": true,
         "darwin": true,
@@ -30,10 +35,7 @@
       "commands": [
         {
           "type": "over",
-          "value": [
-            "fy",
-            "翻译"
-          ]
+          "value": ["fy", "翻译", "translate"]
         }
       ]
     },
@@ -45,8 +47,15 @@
         "type": "file",
         "value": "assets/logo.svg"
       },
+      "keywords": ["multi", "多源", "翻译"],
       "push": true,
-      "platform": { "win32": true, "darwin": true, "linux": true },
+      "priority": 5,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
       "commands": [
         {
           "type": "over",
@@ -61,13 +70,20 @@
     {
       "id": "screenshot-translate",
       "name": "截图翻译",
-      "desc": "截取屏幕进行翻译",
+      "desc": "截取屏幕区域进行 OCR 识别并翻译",
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
       },
+      "keywords": ["screenshot", "截图", "ocr", "识别"],
       "push": false,
-      "platform": { "win32": true, "darwin": true, "linux": true },
+      "priority": 5,
+      "acceptedInputTypes": ["text", "image"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
       "commands": [
         {
           "type": "over",
