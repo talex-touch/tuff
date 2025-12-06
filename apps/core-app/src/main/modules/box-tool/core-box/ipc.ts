@@ -57,6 +57,13 @@ export class IpcManager {
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show', () =>
       coreBoxManager.trigger(true)
     )
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:focus-window', ({ reply }) => {
+      const window = getCoreBoxWindow()
+      if (window && !window.window.isDestroyed()) {
+        window.window.focus()
+      }
+      reply(DataCode.SUCCESS, { focused: true })
+    })
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
       if (typeof data === 'object' && data) {
         if (data.mode === 'collapse') {
