@@ -67,7 +67,6 @@ export async function compileWidgetSourceLegacy(
   const context: WidgetCompilationContext = {
     plugin,
     feature,
-    allowedModules: new Map(),
   }
 
   const result = await compileWidgetSource(source, context)

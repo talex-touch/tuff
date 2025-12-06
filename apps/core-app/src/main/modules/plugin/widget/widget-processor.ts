@@ -23,8 +23,6 @@ export interface WidgetCompilationContext {
   plugin: ITouchPlugin
   /** Feature definition | Feature 定义 */
   feature: IPluginFeature
-  /** Allowed modules for sandbox | 沙箱允许的模块 */
-  allowedModules: Map<string, any>
 }
 
 /**

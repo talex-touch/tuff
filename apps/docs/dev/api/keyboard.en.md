@@ -90,11 +90,20 @@ onCoreBoxKeyEvent((event) => {
 
 ```typescript
 // In plugin renderer
-window.$channel.on('core-box:key-event', (event) => {
-  const { key, metaKey, ctrlKey } = event
+// Note: window.$channel exposes regChannel(), send(), and sendSync()
+// The handler receives an object with a `data` property containing the key event
+const unsubscribe = window.$channel.regChannel('core-box:key-event', (event) => {
+  const { key, metaKey, ctrlKey } = event.data
   // Handle key
 })
+
+// Cleanup on unmount
+onUnmounted(() => {
+  unsubscribe()
+})
 ```
+
+> **Tip**: For a simpler API with `on()` method, use the SDK wrapper (Method 1 or 2) which provides a more ergonomic interface.
 
 ## Event Data Structure
 
