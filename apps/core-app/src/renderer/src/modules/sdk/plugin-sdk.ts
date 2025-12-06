@@ -334,6 +334,124 @@ class PluginSDK {
   }
 
   // ============================================
+  // Plugin Details APIs (for PluginInfo page)
+  // ============================================
+
+  /**
+   * Get plugin manifest.json content
+   * @param name - Plugin name
+   * @returns Manifest object
+   */
+  async getManifest(name: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await touchChannel.send('plugin:api:get-manifest', { name })
+      return response
+    }
+    catch (error) {
+      console.error('[PluginSDK] Failed to get plugin manifest:', error)
+      return null
+    }
+  }
+
+  /**
+   * Save plugin manifest.json and optionally reload
+   * @param name - Plugin name
+   * @param manifest - Manifest content to save
+   * @param reload - Whether to reload the plugin after saving (default: true)
+   * @returns Success status
+   */
+  async saveManifest(
+    name: string,
+    manifest: Record<string, unknown>,
+    reload = true,
+  ): Promise<boolean> {
+    try {
+      const response = await touchChannel.send('plugin:api:save-manifest', {
+        name,
+        manifest,
+        reload,
+      })
+      return response?.success || false
+    }
+    catch (error) {
+      console.error('[PluginSDK] Failed to save plugin manifest:', error)
+      return false
+    }
+  }
+
+  /**
+   * Get plugin paths (pluginPath, dataPath, configPath, logsPath, tempPath)
+   * @param name - Plugin name
+   * @returns Plugin paths object
+   */
+  async getPaths(name: string): Promise<{
+    pluginPath: string
+    dataPath: string
+    configPath: string
+    logsPath: string
+    tempPath: string
+  } | null> {
+    try {
+      const response = await touchChannel.send('plugin:api:get-paths', { name })
+      return response
+    }
+    catch (error) {
+      console.error('[PluginSDK] Failed to get plugin paths:', error)
+      return null
+    }
+  }
+
+  /**
+   * Open a specific plugin path in file explorer
+   * @param name - Plugin name
+   * @param pathType - Type of path to open: 'plugin' | 'data' | 'config' | 'logs' | 'temp'
+   * @returns Success status and opened path
+   */
+  async openPath(
+    name: string,
+    pathType: 'plugin' | 'data' | 'config' | 'logs' | 'temp',
+  ): Promise<{ success: boolean, path?: string }> {
+    try {
+      const response = await touchChannel.send('plugin:api:open-path', { name, pathType })
+      return response || { success: false }
+    }
+    catch (error) {
+      console.error('[PluginSDK] Failed to open plugin path:', error)
+      return { success: false }
+    }
+  }
+
+  /**
+   * Get plugin performance metrics
+   * @param name - Plugin name
+   * @returns Performance metrics object
+   */
+  async getPerformance(name: string): Promise<{
+    storage: {
+      totalSize: number
+      fileCount: number
+      dirCount: number
+      maxSize: number
+      usagePercent: number
+    }
+    performance: {
+      loadTime: number
+      memoryUsage: number
+      cpuUsage: number
+      lastActiveTime: number
+    }
+  } | null> {
+    try {
+      const response = await touchChannel.send('plugin:api:get-performance', { name })
+      return response
+    }
+    catch (error) {
+      console.error('[PluginSDK] Failed to get plugin performance:', error)
+      return null
+    }
+  }
+
+  // ============================================
   // Subscription APIs
   // ============================================
 

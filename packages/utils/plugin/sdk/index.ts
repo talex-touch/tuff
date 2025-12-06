@@ -16,6 +16,7 @@ export * from './feature-sdk'
 export { createFeaturesManager, useFeatures } from './features'
 
 export * from './hooks/index'
+export * from './performance'
 export * from './service/index'
 export * from './storage'
 export * from './system'

@@ -548,8 +548,12 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
       }
 
       try {
+        const loadStartTime = Date.now()
         const loader = createPluginLoader(pluginName, currentPluginPath)
         const touchPlugin = await loader.load()
+        touchPlugin.markLoadStart()
+        touchPlugin._performanceMetrics.loadStartTime = loadStartTime // Set actual start time
+        touchPlugin.markLoadEnd()
 
         const manifestName = touchPlugin.name || pluginName
         const normalizedName = manifestName.trim()
@@ -1489,6 +1493,65 @@ export class PluginModule extends BaseModule {
       },
     )
 
+    // Plugin Performance: get-metrics (for plugin SDK)
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      'plugin:performance:get-metrics',
+      async ({ reply, plugin: pluginName }) => {
+        try {
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          const metrics = plugin.getPerformanceMetrics()
+          return reply(DataCode.SUCCESS, metrics)
+        }
+        catch (error) {
+          console.error('Error in plugin:performance:get-metrics handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })
+        }
+      },
+    )
+
+    // Plugin Performance: get-paths (for plugin SDK)
+    touchChannel.regChannel(
+      ChannelType.PLUGIN,
+      'plugin:performance:get-paths',
+      async ({ reply, plugin: pluginName }) => {
+        try {
+          if (!pluginName) {
+            return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+          }
+
+          const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+          if (!plugin) {
+            return reply(DataCode.ERROR, { error: `Plugin ${pluginName} not found` })
+          }
+
+          return reply(DataCode.SUCCESS, {
+            pluginPath: plugin.pluginPath,
+            dataPath: plugin.getDataPath(),
+            configPath: plugin.getConfigPath(),
+            logsPath: plugin.getLogsPath(),
+            tempPath: plugin.getTempPath(),
+          })
+        }
+        catch (error) {
+          console.error('Error in plugin:performance:get-paths handler:', error)
+          return reply(DataCode.ERROR, {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })
+        }
+      },
+    )
+
     // Plugin Storage: get-tree (support both MAIN and PLUGIN channels)
     touchChannel.regChannel(
       ChannelType.MAIN,
@@ -2088,6 +2151,202 @@ export class PluginModule extends BaseModule {
         }
       },
     )
+
+    // ============================================
+    // Plugin Details APIs (for PluginInfo page)
+    // ============================================
+
+    /**
+     * Get plugin manifest.json content
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get-manifest', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        const manifestPath = path.resolve(plugin.pluginPath, 'manifest.json')
+        if (!fse.existsSync(manifestPath)) {
+          return reply(DataCode.ERROR, { error: 'manifest.json not found' })
+        }
+
+        const manifest = fse.readJSONSync(manifestPath)
+        return reply(DataCode.SUCCESS, manifest)
+      }
+      catch (error) {
+        console.error('Error in plugin:api:get-manifest handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
+
+    /**
+     * Save plugin manifest.json and optionally reload
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:save-manifest', async ({ data, reply }) => {
+      try {
+        const { name, manifest, reload = true } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+        if (!manifest) {
+          return reply(DataCode.ERROR, { error: 'Manifest content is required' })
+        }
+
+        const plugin = manager.plugins.get(name) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        const manifestPath = path.resolve(plugin.pluginPath, 'manifest.json')
+
+        // Write manifest.json
+        fse.writeJSONSync(manifestPath, manifest, { spaces: 2 })
+
+        // Optionally reload the plugin
+        if (reload) {
+          await manager.reloadPlugin(name)
+        }
+
+        return reply(DataCode.SUCCESS, { success: true })
+      }
+      catch (error) {
+        console.error('Error in plugin:api:save-manifest handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
+
+    /**
+     * Get plugin paths (pluginPath, dataPath, configPath, logsPath)
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get-paths', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        return reply(DataCode.SUCCESS, {
+          pluginPath: plugin.pluginPath,
+          dataPath: plugin.getDataPath(),
+          configPath: plugin.getConfigPath(),
+          logsPath: plugin.getLogsPath(),
+          tempPath: plugin.getTempPath(),
+        })
+      }
+      catch (error) {
+        console.error('Error in plugin:api:get-paths handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
+
+    /**
+     * Open a specific plugin path in file explorer
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:open-path', async ({ data, reply }) => {
+      try {
+        const { name, pathType } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+        if (!pathType) {
+          return reply(DataCode.ERROR, { error: 'Path type is required' })
+        }
+
+        const plugin = manager.plugins.get(name) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        let targetPath: string
+        switch (pathType) {
+          case 'plugin':
+            targetPath = plugin.pluginPath
+            break
+          case 'data':
+            targetPath = plugin.getDataPath()
+            break
+          case 'config':
+            targetPath = plugin.getConfigPath()
+            break
+          case 'logs':
+            targetPath = plugin.getLogsPath()
+            break
+          case 'temp':
+            targetPath = plugin.getTempPath()
+            break
+          default:
+            return reply(DataCode.ERROR, { error: `Invalid path type: ${pathType}` })
+        }
+
+        // Ensure directory exists before opening
+        fse.ensureDirSync(targetPath)
+        await shell.openPath(targetPath)
+
+        return reply(DataCode.SUCCESS, { success: true, path: targetPath })
+      }
+      catch (error) {
+        console.error('Error in plugin:api:open-path handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
+
+    /**
+     * Get plugin performance metrics
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get-performance', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        // Get storage stats
+        const storageStats = plugin.getStorageStats()
+
+        // Get performance metrics from plugin if available
+        const performanceMetrics = plugin.getPerformanceMetrics?.() || {
+          loadTime: 0,
+          memoryUsage: 0,
+          cpuUsage: 0,
+          lastActiveTime: 0,
+        }
+
+        return reply(DataCode.SUCCESS, {
+          storage: storageStats,
+          performance: performanceMetrics,
+        })
+      }
+      catch (error) {
+        console.error('Error in plugin:api:get-performance handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
   }
 }
 
