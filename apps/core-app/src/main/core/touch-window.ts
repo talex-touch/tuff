@@ -6,14 +6,28 @@ import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/tou
 
 // Determine if we should use MicaBrowserWindow (Windows only)
 const isWindows = process.platform === 'win32'
-const useMicaWindow = isWindows
+
+// Initialize mica-electron on module load (Windows only)
+// useMicaElectron() must be called once before creating any MicaBrowserWindow
+if (isWindows) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useMicaElectron } = require('talex-mica-electron') as {
+      useMicaElectron: (path?: string) => boolean | void
+    }
+    useMicaElectron()
+    console.debug('[TouchWindow] Mica-Electron initialized')
+  } catch (error) {
+    console.warn('[TouchWindow] Failed to initialize Mica-Electron:', error)
+  }
+}
 
 export class TouchWindow implements TalexTouch.ITouchWindow {
   window: BrowserWindow
   private isMicaWindow: boolean = false
 
   constructor(options?: TalexTouch.TouchWindowConstructorOptions) {
-    if (useMicaWindow) {
+    if (isWindows) {
       // Use MicaBrowserWindow on Windows for better Mica/Acrylic effects
       this.window = new MicaBrowserWindow(options) as unknown as BrowserWindow
       this.isMicaWindow = true
