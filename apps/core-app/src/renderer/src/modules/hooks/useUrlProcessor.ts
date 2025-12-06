@@ -14,14 +14,16 @@ export async function useUrlProcessor(): Promise<void> {
 
       if (!url) return
 
-      const regex =
-        /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
-
       event.preventDefault()
-      if (!regex.test(url) || url.startsWith(window.location.origin) || url.startsWith('/')) {
-        touchChannel.send('url:open', url)
-      } else {
+      
+      const isExternal = !isLocalhostUrl(url) 
+        && !url.startsWith(window.location.origin) 
+        && !url.startsWith('/')
+      
+      if (isExternal) {
         touchChannel.send('open-external', { url })
+      } else {
+        touchChannel.send('url:open', url)
       }
 
       // if(/^\//.test(target)) {
