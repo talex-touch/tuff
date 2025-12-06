@@ -114,6 +114,15 @@ export function createStorageProxy<T extends object>(key: string, factory: () =>
 }
 
 /**
+ * Save result from main process
+ */
+export interface SaveResult {
+  success: boolean
+  version: number
+  conflict?: boolean
+}
+
+/**
  * A reactive storage utility with optional auto-save and update subscriptions.
  *
  * @template T Shape of the stored data.
@@ -127,6 +136,8 @@ export class TouchStorage<T extends object> {
   private readonly _onUpdate: Array<() => void> = []
   #channelInitialized = false
   #skipNextWatchTrigger = false
+  #currentVersion = 0
+  #isRemoteUpdate = false
 
   /**
    * The reactive data exposed to users.
@@ -189,23 +200,53 @@ export class TouchStorage<T extends object> {
 
     this.#channelInitialized = true
 
-    const result = channel!.sendSync('storage:get', this.#qualifiedName)
-    const parsed = result ? (result as Partial<T>) : {}
+    // Try to get versioned data first, fallback to legacy
+    const versionedResult = channel!.sendSync('storage:get-versioned', this.#qualifiedName) as { data: Partial<T>, version: number } | null
+    if (versionedResult) {
+      this.#currentVersion = versionedResult.version
+      this.assignData(versionedResult.data, true, true)
+    }
+    else {
+      const result = channel!.sendSync('storage:get', this.#qualifiedName)
+      const parsed = result ? (result as Partial<T>) : {}
+      this.#currentVersion = 1
+      this.assignData(parsed, true, true)
+    }
 
-    this.assignData(parsed)
-
-    // Register update listener
+    // Register update listener - only triggered for OTHER windows' changes
+    // (source window is excluded by main process)
     channel!.regChannel('storage:update', ({ data }) => {
-      const { name } = data!
+      const { name, version } = data as { name: string, version?: number }
 
       if (name === this.#qualifiedName) {
-        this.loadFromRemote()
+        // Only reload if remote version is newer
+        if (version === undefined || version > this.#currentVersion) {
+          this.#loadFromRemoteWithVersion()
+        }
       }
     })
 
     // Start auto-save watcher AFTER initial data load
     if (this.#autoSave && !this.#autoSaveStopHandle) {
       this.#startAutoSaveWatcher()
+    }
+  }
+
+  /**
+   * Load from remote and update version
+   * @private
+   */
+  #loadFromRemoteWithVersion(): void {
+    if (!channel)
+      return
+
+    const versionedResult = channel.sendSync('storage:get-versioned', this.#qualifiedName) as { data: Partial<T>, version: number } | null
+    if (versionedResult && versionedResult.version > this.#currentVersion) {
+      this.#currentVersion = versionedResult.version
+      // Mark as remote update to skip auto-save
+      this.#isRemoteUpdate = true
+      this.assignData(versionedResult.data, true, true)
+      this.#isRemoteUpdate = false
     }
   }
 
@@ -253,11 +294,26 @@ export class TouchStorage<T extends object> {
       return
     }
 
-    await channel.send('storage:save', {
+    // Skip save if this is a remote update (to avoid echo)
+    if (this.#isRemoteUpdate) {
+      return
+    }
+
+    const result = await channel.send('storage:save', {
       key: this.#qualifiedName,
       content: JSON.stringify(this.data),
       clear: false,
-    })
+      version: this.#currentVersion,
+    }) as SaveResult
+
+    if (result.success) {
+      this.#currentVersion = result.version
+    }
+    else if (result.conflict) {
+      // Conflict detected - reload from remote
+      console.warn(`[TouchStorage] Conflict detected for "${this.#qualifiedName}", reloading...`)
+      this.#loadFromRemoteWithVersion()
+    }
   }, 300)
 
   /**
@@ -364,8 +420,9 @@ export class TouchStorage<T extends object> {
    *
    * @param newData Partial update data
    * @param stopWatch Whether to stop the watcher during assignment
+   * @param skipSave Whether to skip saving (for remote updates)
    */
-  private assignData(newData: Partial<T>, stopWatch: boolean = true): void {
+  private assignData(newData: Partial<T>, stopWatch: boolean = true, skipSave: boolean = false): void {
     if (stopWatch && this.#autoSave) {
       this.#assigning = true
     }
@@ -385,7 +442,10 @@ export class TouchStorage<T extends object> {
         Promise.resolve().then(resetAssigning)
       }
 
-      this.#runAutoSavePipeline({ force: true })
+      // Only run auto-save pipeline if not a remote update
+      if (!skipSave && !this.#isRemoteUpdate) {
+        this.#runAutoSavePipeline({ force: true })
+      }
     }
   }
 
@@ -444,11 +504,34 @@ export class TouchStorage<T extends object> {
       return this
     }
 
-    const result = channel.sendSync('storage:get', this.#qualifiedName)
-    const parsed = result ? (result as Partial<T>) : {}
-    this.assignData(parsed, true)
-
+    this.#loadFromRemoteWithVersion()
     return this
+  }
+
+  /**
+   * Get current version number
+   * @returns Current version
+   */
+  getVersion(): number {
+    return this.#currentVersion
+  }
+
+  /**
+   * Save data synchronously (for window close)
+   * This bypasses debouncing and saves immediately
+   */
+  saveSync(): void {
+    if (!channel)
+      return
+    if (this.#isRemoteUpdate)
+      return
+
+    channel.sendSync('storage:save-sync', {
+      key: this.#qualifiedName,
+      content: JSON.stringify(this.data),
+      clear: false,
+      version: this.#currentVersion,
+    })
   }
 
   /**

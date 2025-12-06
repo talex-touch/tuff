@@ -64,11 +64,8 @@ export class StorageManager {
 // Auto-save all registered storages before the app closes
 window.onbeforeunload = () => {
   for (const storage of storages.values()) {
-    touchChannel.send('storage:save', {
-      key: storage.getQualifiedName(),
-      content: JSON.stringify(unref(storage.data) || storage.originalData),
-      clear: true,
-    })
+    // Use synchronous save to ensure data is persisted before window closes
+    storage.saveSync()
   }
 }
 
