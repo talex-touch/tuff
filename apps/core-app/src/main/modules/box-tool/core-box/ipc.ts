@@ -6,6 +6,7 @@ import { pluginModule } from '../../plugin/plugin-module'
 import searchEngineCore from '../search-engine/search-core'
 import { coreBoxManager } from './manager'
 import { coreBoxInputTransport } from './input-transport'
+import { coreBoxKeyTransport } from './key-transport'
 import { getCoreBoxWindow, windowManager } from './window'
 
 /**
@@ -267,6 +268,7 @@ export class IpcManager {
     )
 
     coreBoxInputTransport.register()
+    coreBoxKeyTransport.register()
 
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,

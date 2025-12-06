@@ -372,6 +372,14 @@ function handleHistoryContextMenu(event: MouseEvent): void {
   openPreviewHistory()
 }
 
+// Handle UI mode exit event from main process (ESC pressed in plugin UI view)
+const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () => {
+  console.debug('[CoreBox] UI mode exited from main process, deactivating providers')
+  deactivateAllProviders().catch((error) => {
+    console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
+  })
+})
+
 onMounted(() => {
   /**
    * Reset autopaste state on CoreBox open
@@ -390,6 +398,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cleanupClipboard()
   cleanupVisibility()
+  unregUIModeExited()
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)

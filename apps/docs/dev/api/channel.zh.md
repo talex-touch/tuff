@@ -23,6 +23,19 @@ sendTo(window, 'corebox:toggle')
 sendPlugin('com.tuff.todo', 'todo:sync')
 ```
 
+## CoreBox 相关通道
+
+| 通道名称 | 方向 | 说明 |
+| --- | --- | --- |
+| `core-box:input-change` | 主进程 → 插件 | 输入框内容变化 |
+| `core-box:key-event` | 主进程 → 插件 | 键盘事件转发 |
+| `core-box:clipboard-change` | 主进程 → 插件 | 剪贴板内容变化 |
+| `core-box:ui-mode-exited` | 主进程 → 渲染进程 | UI 模式已退出（ESC 触发） |
+| `core-box:hide-input` | 插件 → 主进程 | 隐藏输入框 |
+| `core-box:show-input` | 插件 → 主进程 | 显示输入框 |
+| `core-box:get-input` | 插件 → 主进程 | 获取输入值 |
+| `core-box:set-input` | 插件 → 主进程 | 设置输入值 |
+
 ## 最佳实践
 - 使用清晰的命名空间，如 `todo.create`，避免全局污染。
 - 每个 Channel 回调应处理异常并返回结构化错误。

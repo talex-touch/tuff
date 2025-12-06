@@ -825,6 +825,15 @@ export class WindowManager {
       this.uiViewFocused = true
     })
 
+    // Listen for ESC key in UI view to exit UI mode
+    this.uiView.webContents.on('before-input-event', (event, input) => {
+      if (input.key === 'Escape' && input.type === 'keyDown') {
+        coreBoxWindowLog.debug('ESC pressed in UI view, exiting UI mode')
+        coreBoxManager.exitUIMode()
+        event.preventDefault()
+      }
+    })
+
     // window.$plugin and window.$channel are injected via preload script before page scripts execute
     // Styles will be injected on dom-ready
 
@@ -918,11 +927,16 @@ export class WindowManager {
     }
   }
 
+  /**
+   * Sends a channel message to the attached plugin UI view.
+   *
+   * @param eventName - The event name to send
+   * @param data - Optional data payload
+   */
   public sendChannelMessageToUIView(eventName: string, data?: any): void {
     if (!this.attachedPlugin) {
       return
     }
-
     void this.touchApp.channel.sendToPlugin(this.attachedPlugin.name, eventName, data)
   }
 
@@ -932,6 +946,125 @@ export class WindowManager {
     }
 
     return this.uiView
+  }
+
+  /**
+   * Check if UI view is currently active and focused
+   */
+  public isUIViewActive(): boolean {
+    return !!(this.uiView && this.attachedPlugin)
+  }
+
+  /**
+   * Check if UI view has focus (vs main CoreBox input)
+   */
+  public isUIViewFocused(): boolean {
+    return this.uiViewFocused
+  }
+
+  /**
+   * Forwards a keyboard event to the attached plugin UI view by simulating native input.
+   *
+   * This method uses Electron's `sendInputEvent` API to simulate real keyboard input,
+   * allowing the plugin page to receive standard DOM keyboard events without any adaptation.
+   *
+   * @param event - The serialized keyboard event data to forward
+   * @param event.key - The key value (e.g., 'ArrowUp', 'Enter', 'a')
+   * @param event.code - The physical key code (e.g., 'ArrowUp', 'Enter', 'KeyA')
+   * @param event.metaKey - Whether the Meta (Cmd on macOS) key is pressed
+   * @param event.ctrlKey - Whether the Ctrl key is pressed
+   * @param event.altKey - Whether the Alt key is pressed
+   * @param event.shiftKey - Whether the Shift key is pressed
+   * @param event.repeat - Whether this is a repeat event from holding the key
+   */
+  public forwardKeyEvent(event: {
+    key: string
+    code: string
+    metaKey: boolean
+    ctrlKey: boolean
+    altKey: boolean
+    shiftKey: boolean
+    repeat: boolean
+  }): void {
+    if (!this.uiView) {
+      coreBoxWindowLog.debug('Cannot forward key event: no UI view attached')
+      return
+    }
+
+    const modifiers = this.buildKeyModifiers(event)
+    const keyCode = this.mapKeyToElectronKeyCode(event.key)
+
+    coreBoxWindowLog.debug(`Simulating key input: ${event.key}`, {
+      meta: { keyCode, modifiers: modifiers.join(',') }
+    })
+
+    this.uiView.webContents.sendInputEvent({
+      type: 'keyDown',
+      keyCode,
+      modifiers
+    })
+
+    if (event.key.length === 1) {
+      this.uiView.webContents.sendInputEvent({
+        type: 'char',
+        keyCode: event.key,
+        modifiers
+      })
+    }
+
+    this.uiView.webContents.sendInputEvent({
+      type: 'keyUp',
+      keyCode,
+      modifiers
+    })
+  }
+
+  /**
+   * Builds the modifiers array for Electron's sendInputEvent API.
+   *
+   * @param event - The keyboard event containing modifier key states
+   * @returns Array of modifier strings compatible with Electron's input event API
+   */
+  private buildKeyModifiers(event: {
+    shiftKey: boolean
+    ctrlKey: boolean
+    altKey: boolean
+    metaKey: boolean
+    repeat: boolean
+  }): Array<'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'> {
+    const modifiers: Array<'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'> = []
+    if (event.shiftKey) modifiers.push('shift')
+    if (event.ctrlKey) modifiers.push('control')
+    if (event.altKey) modifiers.push('alt')
+    if (event.metaKey) modifiers.push('meta')
+    if (event.repeat) modifiers.push('isautorepeat')
+    return modifiers
+  }
+
+  /**
+   * Maps a DOM key value to Electron's keyCode format for sendInputEvent.
+   *
+   * @param key - The DOM key value (e.g., 'ArrowUp', 'Enter')
+   * @returns The corresponding Electron keyCode (e.g., 'Up', 'Return')
+   */
+  private mapKeyToElectronKeyCode(key: string): string {
+    const keyMap: Record<string, string> = {
+      ArrowUp: 'Up',
+      ArrowDown: 'Down',
+      ArrowLeft: 'Left',
+      ArrowRight: 'Right',
+      Enter: 'Return',
+      Escape: 'Escape',
+      Backspace: 'Backspace',
+      Tab: 'Tab',
+      Delete: 'Delete',
+      Home: 'Home',
+      End: 'End',
+      PageUp: 'PageUp',
+      PageDown: 'PageDown',
+      ' ': 'Space'
+    }
+    return keyMap[key] || key
   }
 
   private normalizeUIViewUrl(url: string, plugin?: TouchPlugin): string {

@@ -2,10 +2,50 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import { BoxMode } from '..'
 import { onBeforeUnmount } from 'vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { createCoreBoxKeyTransport, type ForwardedKeyEvent } from '../transport/key-transport'
 
 declare global {
   interface Window {
     __coreboxHistoryVisible?: boolean
+  }
+}
+
+/**
+ * Keys that should always be forwarded to plugin UI view when in UI mode.
+ * ArrowLeft/ArrowRight are NOT forwarded unless meta/ctrl is pressed,
+ * as they are used for text cursor navigation in the input field.
+ */
+const FORWARD_KEYS = new Set(['Enter', 'ArrowUp', 'ArrowDown'])
+
+/**
+ * Determines if a keyboard event should be forwarded to the plugin UI view.
+ *
+ * @param event - The keyboard event to check
+ * @returns True if the event should be forwarded
+ */
+function shouldForwardKey(event: KeyboardEvent): boolean {
+  if ((event.metaKey || event.ctrlKey) && event.key !== 'v') {
+    return true
+  }
+  return FORWARD_KEYS.has(event.key)
+}
+
+/**
+ * Serializes a DOM KeyboardEvent into a plain object for IPC transport.
+ *
+ * @param event - The keyboard event to serialize
+ * @returns A serializable keyboard event object
+ */
+function serializeKeyEvent(event: KeyboardEvent): ForwardedKeyEvent {
+  return {
+    key: event.key,
+    code: event.code,
+    metaKey: event.metaKey,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    shiftKey: event.shiftKey,
+    repeat: event.repeat
   }
 }
 
@@ -24,6 +64,22 @@ export function useKeyboard(
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   itemRefs: Ref<any[]>,
 ) {
+  const keyTransport = createCoreBoxKeyTransport(touchChannel)
+
+  /**
+   * Checks if CoreBox is currently in UI mode (plugin view attached).
+   */
+  function isInUIMode(): boolean {
+    return activeActivations.value?.length > 0
+  }
+
+  /**
+   * Forwards a keyboard event to the plugin UI view via IPC.
+   */
+  function forwardToUIView(event: KeyboardEvent): void {
+    keyTransport.forwardKeyEvent(serializeKeyEvent(event))
+  }
+
   /**
    * Global keyboard event handler for CoreBox window
    * @param event - KeyboardEvent from user interaction
@@ -33,9 +89,25 @@ export function useKeyboard(
       return
     }
 
+    // Check if in UI mode and should forward this key
+    const uiMode = isInUIMode()
+    if (uiMode && shouldForwardKey(event)) {
+      forwardToUIView(event)
+      // Don't prevent default for ESC - let it bubble for exit handling
+      if (event.key !== 'Escape') {
+        event.preventDefault()
+        return
+      }
+    }
+
     if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
       handlePaste({ overrideDismissed: true })
       event.preventDefault()
+      return
+    }
+
+    // Skip CoreBox's own navigation when in UI mode (already forwarded)
+    if (uiMode && FORWARD_KEYS.has(event.key)) {
       return
     }
 
