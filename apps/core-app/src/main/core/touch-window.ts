@@ -28,10 +28,16 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   constructor(options?: TalexTouch.TouchWindowConstructorOptions) {
     if (isWindows) {
-      // Use MicaBrowserWindow on Windows for better Mica/Acrylic effects
-      this.window = new MicaBrowserWindow(options) as unknown as BrowserWindow
-      this.isMicaWindow = true
-      this.applyWindowsEffects()
+      try {
+        // Use MicaBrowserWindow on Windows for better Mica/Acrylic effects
+        this.window = new MicaBrowserWindow(options) as unknown as BrowserWindow
+        this.isMicaWindow = true
+        this.applyWindowsEffects()
+      } catch (error) {
+        console.warn('[TouchWindow] Failed to create MicaBrowserWindow, falling back to BrowserWindow:', error)
+        this.window = new BrowserWindow(options)
+        this.isMicaWindow = false
+      }
     } else {
       this.window = new BrowserWindow(options)
     }
