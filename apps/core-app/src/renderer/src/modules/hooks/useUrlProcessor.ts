@@ -47,8 +47,10 @@ export async function useUrlProcessor(): Promise<void> {
   document.body.addEventListener('click', directListener)
 
   touchChannel.regChannel('url:open', async ({ data, reply }) => {
-    const url = data! as unknown as string
+    const url = data as string
+
     if (isLocalhostUrl(url)) {
+      reply(DataCode.SUCCESS, false)
       return
     }
 
