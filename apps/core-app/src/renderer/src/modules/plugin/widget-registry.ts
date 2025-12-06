@@ -6,37 +6,68 @@ import { touchChannel } from '~/modules/channel/channel-core'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
 
+// Pre-loaded module cache (initialized once at module load time)
+const preloadedModuleCache: Record<string, any> = {
+  'vue': require('vue'),
+}
+
+// List of allowed packages that can be used in widgets
+const ALLOWED_PACKAGES = [
+  'vue',
+  '@talex-touch/utils',
+  '@talex-touch/utils/plugin',
+  '@talex-touch/utils/plugin/sdk',
+  '@talex-touch/utils/core-box',
+  '@talex-touch/utils/channel',
+  '@talex-touch/utils/common',
+  '@talex-touch/utils/types',
+]
+
+// Preload all allowed modules at startup - failures are fatal
+const preloadFailures: string[] = []
+ALLOWED_PACKAGES.forEach((module) => {
+  if (module in preloadedModuleCache) return // Already loaded (e.g., 'vue')
+  try {
+    preloadedModuleCache[module] = require(module)
+  }
+  catch (error) {
+    console.error(`[WidgetSandbox] Failed to preload module "${module}":`, error)
+    preloadFailures.push(module)
+  }
+})
+
+if (preloadFailures.length > 0) {
+  console.error(
+    `[WidgetSandbox] FATAL: Failed to preload required modules: ${preloadFailures.join(', ')}. ` +
+    'Widget functionality may be impaired.',
+  )
+}
+
 /**
  * Create a sandboxed require function for widgets
  * 为 widget 创建沙箱化的 require 函数
  * @param allowedDependencies - List of allowed module names
  * @returns Safe require function
+ * @throws Error if any declared dependency is not available
  */
 function createSandboxRequire(allowedDependencies: string[]): (id: string) => any {
-  // Preload allowed modules
-  const moduleCache: Record<string, any> = {
-    'vue': require('vue'),
-  }
-
-  // Dynamically load @talex-touch/utils modules
-  const talexModules = [
-    '@talex-touch/utils',
-    '@talex-touch/utils/plugin',
-    '@talex-touch/utils/plugin/sdk',
-    '@talex-touch/utils/core-box',
-    '@talex-touch/utils/channel',
-    '@talex-touch/utils/common',
-    '@talex-touch/utils/types',
-  ]
-
-  talexModules.forEach((module) => {
-    try {
-      moduleCache[module] = require(module)
+  // Validate that all declared dependencies are available before creating the sandbox
+  const unavailableDeps = allowedDependencies.filter((dep) => {
+    if (!ALLOWED_PACKAGES.includes(dep)) {
+      return true // Not in allowed list
     }
-    catch (error) {
-      console.warn(`[WidgetSandbox] Failed to preload module "${module}":`, error)
+    if (!(dep in preloadedModuleCache)) {
+      return true // Failed to preload
     }
+    return false
   })
+
+  if (unavailableDeps.length > 0) {
+    throw new Error(
+      `[WidgetSandbox] Cannot create sandbox: dependencies not available: ${unavailableDeps.join(', ')}. ` +
+      `Allowed packages: ${ALLOWED_PACKAGES.join(', ')}`,
+    )
+  }
 
   return function sandboxRequire(id: string) {
     if (!allowedDependencies.includes(id)) {
@@ -45,11 +76,8 @@ function createSandboxRequire(allowedDependencies: string[]): (id: string) => an
       )
     }
 
-    if (!(id in moduleCache)) {
-      throw new Error(`[WidgetSandbox] Module "${id}" is not loaded in sandbox`)
-    }
-
-    return moduleCache[id]
+    // At this point, we've validated the module exists in preloadedModuleCache
+    return preloadedModuleCache[id]
   }
 }
 

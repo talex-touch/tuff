@@ -41,6 +41,15 @@ export class WidgetVueProcessor implements IWidgetProcessor {
     // Match require calls: require('module')
     const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
 
+    // Match dynamic imports: import('module') or await import('module')
+    const dynamicImportRegex = /(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+
+    // Match re-exports: export * from 'module' or export { ... } from 'module'
+    const reExportRegex = /export\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/g
+
+    // Match side-effect imports: import 'module'
+    const sideEffectImportRegex = /import\s+['"]([^'"]+)['"]/g
+
     const imports = new Set<string>()
     let match
 
@@ -51,6 +60,21 @@ export class WidgetVueProcessor implements IWidgetProcessor {
 
     // Extract require calls
     while ((match = requireRegex.exec(source)) !== null) {
+      imports.add(match[1])
+    }
+
+    // Extract dynamic imports
+    while ((match = dynamicImportRegex.exec(source)) !== null) {
+      imports.add(match[1])
+    }
+
+    // Extract re-exports
+    while ((match = reExportRegex.exec(source)) !== null) {
+      imports.add(match[1])
+    }
+
+    // Extract side-effect imports
+    while ((match = sideEffectImportRegex.exec(source)) !== null) {
       imports.add(match[1])
     }
 

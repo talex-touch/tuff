@@ -40,7 +40,6 @@ export class WidgetManager {
     const context: WidgetCompilationContext = {
       plugin,
       feature,
-      allowedModules: new Map(),
     }
 
     let compiled
