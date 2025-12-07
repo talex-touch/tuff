@@ -312,8 +312,7 @@ export default {
         },
         license: {
           title: 'Tuff 插件许可协议',
-          agreement: `
-# Tuff 插件许可协议 (Tuff Plugin License)
+          agreement: `# Tuff 插件许可协议 (Tuff Plugin License)
 
 ## 1. 接受条款
 提交插件即表示您同意遵守本许可协议的所有条款。
@@ -337,8 +336,7 @@ Tuff 保留审核、拒绝或下架任何插件的权利。
 插件"按原样"提供,Tuff 不对插件质量做任何保证。
 
 ## 6. 协议变更
-Tuff 可能随时更新本协议,继续提交表示接受变更。
-          `.trim(),
+Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           confirm: '我同意 Tuff 插件许可协议',
           submit: '同意并提交审核',
           cancel: '取消',
