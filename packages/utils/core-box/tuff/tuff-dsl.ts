@@ -1300,6 +1300,14 @@ export interface TuffContainerLayout {
   sections?: TuffSection[]
 }
 
+/** 分组元数据 */
+export interface TuffSectionMeta {
+  /** 是否为智能推荐分组 */
+  intelligence?: boolean
+  /** 扩展字段 */
+  [key: string]: unknown
+}
+
 /** 分组定义 */
 export interface TuffSection {
   id: string
@@ -1308,6 +1316,8 @@ export interface TuffSection {
   /** 该分组的 item ids */
   itemIds: string[]
   collapsed?: boolean
+  /** 分组元数据 */
+  meta?: TuffSectionMeta
 }
 
 /** 搜索结果结构 */

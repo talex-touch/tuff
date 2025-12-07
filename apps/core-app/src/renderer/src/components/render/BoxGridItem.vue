@@ -40,10 +40,7 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
 </script>
 
 <template>
-  <div
-    class="BoxGridItem"
-    :class="{ 'is-active': active, 'is-pinned': isPinned }"
-  >
+  <div class="BoxGridItem fake-background" :class="{ 'is-active': active, 'is-pinned': isPinned }">
     <div class="BoxGridItem-Icon">
       <TuffIcon
         :empty="DefaultIcon"
@@ -58,7 +55,11 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
       </span>
     </div>
     <span class="BoxGridItem-Title">{{ title }}</span>
-    <span v-if="recommendation?.badge" class="BoxGridItem-Badge" :class="`badge-${recommendation.badge.variant}`">
+    <span
+      v-if="recommendation?.badge"
+      class="BoxGridItem-Badge"
+      :class="`badge-${recommendation.badge.variant}`"
+    >
       {{ recommendation.badge.text }}
     </span>
     <span v-if="quickKey" class="BoxGridItem-QuickKey">{{ quickKey }}</span>
@@ -71,20 +72,24 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px 4px;
-  border-radius: 8px;
+  padding: 0.5rem;
+  border-radius: 16px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: 0.125s;
   position: relative;
   min-width: 0;
 
+  --fake-inner-opacity: 0;
+  border: 5px solid #0000;
+
   &:hover {
-    background: var(--el-fill-color-lighter);
+    --fake-inner-opacity: 0.5;
+    border: 1px solid var(--el-border-color);
   }
 
   &.is-active {
-    background: var(--el-bg-color);
-    box-shadow: 0 0 0 2px var(--el-color-primary);
+    --fake-inner-opacity: 0.75;
+    border: 1px solid var(--el-color-primary);
   }
 
   &.is-pinned .BoxGridItem-Icon::after {
@@ -132,12 +137,12 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
 
 .BoxGridItem-QuickKey {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 6px;
   font-size: 10px;
   font-weight: 600;
   padding: 2px 4px;
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--el-fill-color-dark);
   color: var(--el-text-color-primary);
 }
@@ -145,7 +150,7 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
 .BoxGridItem-Badge {
   font-size: 10px;
   padding: 1px 6px;
-  border-radius: 8px;
+  border-radius: 12px;
   white-space: nowrap;
 
   &.badge-frequent {
