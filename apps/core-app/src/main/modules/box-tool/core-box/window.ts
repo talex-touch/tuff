@@ -115,6 +115,34 @@ export class WindowManager {
   }
 
   /**
+   * Check if clipboard change should be forwarded to plugin based on allowed types
+   * @param itemType - The type of clipboard item ('text' | 'image' | 'files')
+   * @returns true if the plugin should receive this clipboard change
+   */
+  public shouldForwardClipboardChange(itemType: 'text' | 'image' | 'files'): boolean {
+    if (!this.attachedPlugin || this.clipboardAllowedTypes === 0) {
+      return false
+    }
+
+    // ClipboardType enum values: TEXT = 0b0001, IMAGE = 0b0010, FILE = 0b0100
+    const typeMap: Record<string, number> = {
+      text: 0b0001,
+      image: 0b0010,
+      files: 0b0100
+    }
+
+    const typeBit = typeMap[itemType] ?? 0
+    return (this.clipboardAllowedTypes & typeBit) !== 0
+  }
+
+  /**
+   * Get current clipboard allowed types
+   */
+  public getClipboardAllowedTypes(): number {
+    return this.clipboardAllowedTypes
+  }
+
+  /**
    * Send input change to UI view if allowed
    */
   public forwardInputChange(payload: CoreBoxInputChange & { query: TuffQuery }): void {
