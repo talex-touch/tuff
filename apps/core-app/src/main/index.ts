@@ -16,6 +16,7 @@ import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
 import { downloadCenterModule } from './modules/download/download-center'
 import { extensionLoaderModule } from './modules/extension-loader'
+import { flowBusModule } from './modules/flow-bus'
 import { fileProtocolModule } from './modules/file-protocol'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
@@ -68,6 +69,7 @@ const modulesToLoad = [
   intelligenceModule,
   pluginModule,
   pluginLogModule,
+  flowBusModule, // Flow Transfer system - after plugin module
   coreBoxModule,
   trayManagerModule,
   addonOpenerModule,
