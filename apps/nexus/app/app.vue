@@ -14,11 +14,32 @@ const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 const { locale, setLocale } = useI18n()
 
 // Initialize user locale from Clerk metadata
-const { initializeLocale, syncLocaleChanges } = useUserLocale()
+const { initializeLocale, syncLocaleChanges, getSavedLocale } = useUserLocale()
+
+/**
+ * Detect browser language as fallback
+ */
+function detectBrowserLocale(): 'zh' | 'en' {
+  if (import.meta.server) return 'en'
+  
+  const browserLang = navigator.language || navigator.languages?.[0] || 'en'
+  return browserLang.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
 
 onMounted(() => {
-  // Load user's saved locale from Clerk
-  initializeLocale()
+  // Priority: Clerk metadata > Browser language > Default
+  const savedLocale = getSavedLocale()
+  
+  if (savedLocale) {
+    // User has saved preference in Clerk
+    initializeLocale()
+  } else {
+    // First-time visitor: detect browser language
+    const browserLocale = detectBrowserLocale()
+    if (browserLocale !== locale.value) {
+      setLocale(browserLocale)
+    }
+  }
   
   // Enable auto-sync of locale changes to Clerk
   syncLocaleChanges()
@@ -69,31 +90,23 @@ watchEffect(() => {
 
 <template>
   <VitePwaManifest />
-  <ClerkLoading>
-    <div
-      v-if="isProtectedRoute"
-      class="grid h-screen w-screen place-content-center text-sm text-gray-500"
-    >
-      Checking your session…
-    </div>
-    <div
-      v-else
-      class="pointer-events-none fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-xl bg-gray-900/85 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm dark:bg-gray-100/90 dark:text-gray-900"
-      role="status"
-      aria-live="polite"
-    >
-      <span
-        class="i-carbon-circle-dash animate-spin text-base"
-        aria-hidden="true"
-      />
-      <span>Checking your session…</span>
-    </div>
-  </ClerkLoading>
-  <ClerkLoaded>
+  <template v-if="isProtectedRoute">
+    <ClerkLoading>
+      <div class="grid h-screen w-screen place-content-center text-sm text-gray-500">
+        Checking your session…
+      </div>
+    </ClerkLoading>
+    <ClerkLoaded>
+      <NuxtLayout>
+        <NuxtPage />
+      </NuxtLayout>
+    </ClerkLoaded>
+  </template>
+  <template v-else>
     <NuxtLayout>
       <NuxtPage />
     </NuxtLayout>
-  </ClerkLoaded>
+  </template>
 </template>
 
 <style>

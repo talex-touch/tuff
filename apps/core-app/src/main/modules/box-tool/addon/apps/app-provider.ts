@@ -12,6 +12,7 @@ import type {
   SearchIndexService
 } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
+import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -164,6 +165,17 @@ function runWithSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
+const PENDING_DELETION_CONFIG_KEY = 'app_provider_pending_deletion'
+const DELETION_GRACE_PERIOD_MS = 3 * 60 * 1000 // 3 minutes grace period
+const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
+
+interface PendingDeletionEntry {
+  id: number
+  path: string
+  uniqueId: string
+  firstMissedAt: number
+  missCount: number
+}
 
 class AppProvider implements ISearchProvider<ProviderContext> {
   readonly id = 'app-provider'
@@ -468,7 +480,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const toAdd: any[] = []
     const toUpdate: { fileId: any; app: any }[] = []
-    const toDeleteIds: any[] = []
+    const missingApps: Array<{ id: number; path: string; uniqueId: string }> = []
 
     console.log(
       formatLog(
@@ -490,14 +502,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    for (const deletedApp of dbAppsMap.values()) {
-      toDeleteIds.push(deletedApp.id)
+    // Collect missing apps for grace period processing
+    for (const [uniqueId, deletedApp] of dbAppsMap.entries()) {
+      missingApps.push({
+        id: deletedApp.id,
+        path: deletedApp.path,
+        uniqueId
+      })
     }
+
+    // Process missing apps with grace period protection
+    const toDeleteIds = await this._processAppsForDeletion(missingApps)
 
     console.log(
       formatLog(
         'AppProvider',
-        `Found ${chalk.green(toAdd.length)} to add, ${chalk.yellow(toUpdate.length)} to update, ${chalk.red(toDeleteIds.length)} to delete`,
+        `Found ${chalk.green(toAdd.length)} to add, ${chalk.yellow(toUpdate.length)} to update, ${chalk.yellow(missingApps.length)} missing (${chalk.red(toDeleteIds.length)} confirmed for deletion)`,
         LogStyle.info
       )
     )
@@ -1574,6 +1594,147 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     await this._setLastScanTime(Date.now())
+  }
+
+  private async _getPendingDeletions(): Promise<Map<string, PendingDeletionEntry>> {
+    if (!this.dbUtils) return new Map()
+
+    const db = this.dbUtils.getDb()
+
+    try {
+      const result = await db
+        .select({ value: configSchema.value })
+        .from(configSchema)
+        .where(eq(configSchema.key, PENDING_DELETION_CONFIG_KEY))
+        .limit(1)
+
+      const rawValue = result[0]?.value
+      if (!rawValue) return new Map()
+
+      const parsed = JSON.parse(rawValue) as PendingDeletionEntry[]
+      if (!Array.isArray(parsed)) return new Map()
+
+      return new Map(parsed.map((entry) => [entry.uniqueId, entry]))
+    } catch (error) {
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Failed to load pending deletions: ${error instanceof Error ? error.message : String(error)}`,
+          LogStyle.warning
+        )
+      )
+      return new Map()
+    }
+  }
+
+  private async _savePendingDeletions(entries: Map<string, PendingDeletionEntry>): Promise<void> {
+    if (!this.dbUtils) return
+
+    const db = this.dbUtils.getDb()
+    const serialized = JSON.stringify(Array.from(entries.values()))
+
+    try {
+      await db
+        .insert(configSchema)
+        .values({ key: PENDING_DELETION_CONFIG_KEY, value: serialized })
+        .onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value: serialized }
+        })
+    } catch (error) {
+      console.warn(
+        formatLog(
+          'AppProvider',
+          `Failed to save pending deletions: ${error instanceof Error ? error.message : String(error)}`,
+          LogStyle.warning
+        )
+      )
+    }
+  }
+
+  private async _processAppsForDeletion(
+    missingApps: Array<{ id: number; path: string; uniqueId: string }>
+  ): Promise<number[]> {
+    const now = Date.now()
+    const pendingDeletions = await this._getPendingDeletions()
+    const confirmedDeleteIds: number[] = []
+    let pendingUpdated = false
+
+    for (const app of missingApps) {
+      // First check if file actually exists on disk
+      if (existsSync(app.path)) {
+        // File exists, remove from pending if present
+        if (pendingDeletions.has(app.uniqueId)) {
+          console.log(
+            formatLog(
+              'AppProvider',
+              `App reappeared, removing from pending deletion: ${chalk.green(app.path)}`,
+              LogStyle.info
+            )
+          )
+          pendingDeletions.delete(app.uniqueId)
+          pendingUpdated = true
+        }
+        continue
+      }
+
+      // File doesn't exist, check pending status
+      const existing = pendingDeletions.get(app.uniqueId)
+
+      if (!existing) {
+        // First time missing, add to pending
+        console.log(
+          formatLog(
+            'AppProvider',
+            `App missing (1st time), adding to pending deletion: ${chalk.yellow(app.path)}`,
+            LogStyle.info
+          )
+        )
+        pendingDeletions.set(app.uniqueId, {
+          id: app.id,
+          path: app.path,
+          uniqueId: app.uniqueId,
+          firstMissedAt: now,
+          missCount: 1
+        })
+        pendingUpdated = true
+      } else {
+        // Already pending, increment miss count
+        existing.missCount++
+        pendingUpdated = true
+
+        const elapsed = now - existing.firstMissedAt
+        const graceExpired = elapsed >= DELETION_GRACE_PERIOD_MS
+        const minMissCountReached = existing.missCount >= DELETION_MIN_MISS_COUNT
+
+        if (graceExpired && minMissCountReached) {
+          // Grace period expired and min miss count reached, confirm deletion
+          console.log(
+            formatLog(
+              'AppProvider',
+              `App confirmed for deletion (missed ${existing.missCount} times, ${(elapsed / 1000).toFixed(0)}s elapsed): ${chalk.red(app.path)}`,
+              LogStyle.warning
+            )
+          )
+          confirmedDeleteIds.push(app.id)
+          pendingDeletions.delete(app.uniqueId)
+        } else {
+          console.log(
+            formatLog(
+              'AppProvider',
+              `App still in grace period (missed ${existing.missCount} times, ${(elapsed / 1000).toFixed(0)}s/${(DELETION_GRACE_PERIOD_MS / 1000).toFixed(0)}s): ${chalk.yellow(app.path)}`,
+              LogStyle.info
+            )
+          )
+        }
+      }
+    }
+
+    if (pendingUpdated) {
+      await this._savePendingDeletions(pendingDeletions)
+    }
+
+    return confirmedDeleteIds
   }
 }
 

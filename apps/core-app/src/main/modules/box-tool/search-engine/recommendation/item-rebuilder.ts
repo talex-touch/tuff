@@ -13,12 +13,7 @@ export class ItemRebuilder {
   async rebuildItems(scoredItems: ScoredItem[]): Promise<TuffItem[]> {
     if (scoredItems.length === 0) return []
 
-    console.debug(`[ItemRebuilder] Rebuilding ${scoredItems.length} scored items`)
     const grouped = this.groupByNormalizedSource(scoredItems)
-
-    for (const [sourceId, items] of grouped.entries()) {
-      console.debug(`[ItemRebuilder]   - ${sourceId}: ${items.length} items`)
-    }
 
     const results = await Promise.all([
       this.rebuildAppItems(grouped.get('app-provider') || []),
@@ -29,8 +24,6 @@ export class ItemRebuilder {
     ])
 
     const allItems = results.flat()
-    console.debug(`[ItemRebuilder] Rebuilt ${allItems.length} items total`)
-
     return this.mergeAndEnrichItems(allItems, scoredItems)
   }
 
@@ -67,10 +60,6 @@ export class ItemRebuilder {
       const pathItems = items.filter((item) => item.itemId.startsWith('/'))
       const bundleIdItems = items.filter((item) => !item.itemId.startsWith('/'))
 
-      console.debug(
-        `[ItemRebuilder] Splitting ${items.length} items: ${pathItems.length} paths, ${bundleIdItems.length} bundle IDs`
-      )
-
       const [appsByPath, appsByBundleId] = await Promise.all([
         pathItems.length > 0
           ? this.dbUtils.getFilesByPaths(pathItems.map((i) => i.itemId))
@@ -81,27 +70,13 @@ export class ItemRebuilder {
       ])
 
       const apps = [...appsByPath, ...appsByBundleId]
-      console.debug(
-        `[ItemRebuilder] Database returned ${apps.length} apps (${appsByPath.length} by path, ${appsByBundleId.length} by bundle ID)`
-      )
-
-      if (apps.length === 0) {
-        console.warn('[ItemRebuilder] No apps found in database')
-        return []
-      }
-
-      if (apps.length < items.length) {
-        console.warn(`[ItemRebuilder] Missing ${items.length - apps.length} apps`)
-      }
+      if (apps.length === 0) return []
 
       const appsWithExtensions = await this.fetchExtensionsForApps(apps)
       const { processSearchResults } = await import('../../addon/apps/search-processing-service')
 
       const dummyQuery: TuffQuery = { text: '' }
-      const result = await processSearchResults(appsWithExtensions, dummyQuery, false, {})
-      console.debug(`[ItemRebuilder] Processed ${result.length} app items`)
-
-      return result
+      return processSearchResults(appsWithExtensions, dummyQuery, false, {})
     } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild app items:', error)
       return []
@@ -163,21 +138,14 @@ export class ItemRebuilder {
         // itemId 格式: "pluginName/featureId"
         const [pluginName, featureId] = item.itemId.split('/')
         if (!pluginName || !featureId) {
-          console.warn(`[ItemRebuilder] Invalid plugin feature itemId: ${item.itemId}`)
-          continue
+            continue
         }
 
         const plugin = pluginManager.plugins.get(pluginName)
-        if (!plugin) {
-          console.debug(`[ItemRebuilder] Plugin not found: ${pluginName}`)
-          continue
-        }
+        if (!plugin) continue
 
         const feature = plugin.getFeature(featureId)
-        if (!feature) {
-          console.debug(`[ItemRebuilder] Feature not found: ${featureId} in ${pluginName}`)
-          continue
-        }
+        if (!feature) continue
 
         // 使用 PluginFeaturesAdapter 的逻辑创建 TuffItem
         const { default: adapter } = await import(
@@ -214,8 +182,6 @@ export class ItemRebuilder {
 
         if (matchedItem) {
           rebuiltItems.push(matchedItem)
-        } else {
-          console.debug(`[ItemRebuilder] System action not found: ${actionId}`)
         }
       }
 

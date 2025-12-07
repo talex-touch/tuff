@@ -858,7 +858,7 @@ export class ClipboardModule extends BaseModule {
     }
 
     const activePlugin = windowManager.getAttachedPlugin()
-    if (activePlugin?._uniqueChannelKey) {
+    if (activePlugin?._uniqueChannelKey && windowManager.shouldForwardClipboardChange(persisted.type)) {
       touchChannel
         .sendToPlugin(activePlugin.name, 'core-box:clipboard-change', { item: persisted })
         .catch((error) => {
@@ -998,6 +998,128 @@ export class ClipboardModule extends BaseModule {
           reply(DataCode.SUCCESS, null)
         } catch (error) {
           reply(DataCode.ERROR, (error as Error).message)
+        }
+      })
+
+      touchChannel.regChannel(type, 'clipboard:write', async ({ data, reply }) => {
+        try {
+          const { text, html, image, files } = (data ?? {}) as {
+            text?: string
+            html?: string
+            image?: string
+            files?: string[]
+          }
+
+          if (image) {
+            const img = nativeImage.createFromDataURL(image)
+            if (!img.isEmpty()) {
+              clipboard.writeImage(img)
+              this.clipboardHelper?.primeImage(img)
+            }
+          } else if (files && files.length > 0) {
+            const resolvedPaths = files.map((filePath) => {
+              try {
+                return path.isAbsolute(filePath) ? filePath : path.resolve(filePath)
+              } catch {
+                return filePath
+              }
+            })
+            const fileUrlContent = resolvedPaths
+              .map((filePath) => pathToFileURL(filePath).toString())
+              .join('\n')
+            const buffer = Buffer.from(fileUrlContent, 'utf8')
+            for (const format of ['public.file-url', 'public.file-url-multiple', 'text/uri-list']) {
+              clipboard.writeBuffer(format, buffer)
+            }
+            clipboard.write({ text: resolvedPaths[0] ?? '' })
+            this.clipboardHelper?.primeFiles(resolvedPaths)
+          } else {
+            clipboard.write({ text: text ?? '', html: html ?? undefined })
+            this.clipboardHelper?.markText(text ?? '')
+          }
+          reply(DataCode.SUCCESS, null)
+        } catch (error) {
+          reply(DataCode.ERROR, (error as Error).message)
+        }
+      })
+
+      touchChannel.regChannel(type, 'clipboard:read', async ({ reply }) => {
+        try {
+          const formats = clipboard.availableFormats()
+          const text = clipboard.readText()
+          const html = clipboard.readHTML()
+          const image = clipboard.readImage()
+          const hasImage = !image.isEmpty()
+          const files = this.clipboardHelper?.readClipboardFiles() ?? []
+          const hasFiles = files.length > 0
+
+          reply(DataCode.SUCCESS, { text, html, hasImage, hasFiles, formats })
+        } catch (error) {
+          reply(DataCode.ERROR, (error as Error).message)
+        }
+      })
+
+      touchChannel.regChannel(type, 'clipboard:read-image', async ({ reply }) => {
+        try {
+          const image = clipboard.readImage()
+          if (image.isEmpty()) {
+            reply(DataCode.SUCCESS, null)
+            return
+          }
+          const size = image.getSize()
+          reply(DataCode.SUCCESS, {
+            dataUrl: image.toDataURL(),
+            width: size.width,
+            height: size.height
+          })
+        } catch (error) {
+          reply(DataCode.ERROR, (error as Error).message)
+        }
+      })
+
+      touchChannel.regChannel(type, 'clipboard:read-files', async ({ reply }) => {
+        try {
+          const files = this.clipboardHelper?.readClipboardFiles() ?? []
+          reply(DataCode.SUCCESS, files)
+        } catch (error) {
+          reply(DataCode.ERROR, (error as Error).message)
+        }
+      })
+
+      touchChannel.regChannel(type, 'clipboard:clear', async ({ reply }) => {
+        try {
+          clipboard.clear()
+          reply(DataCode.SUCCESS, null)
+        } catch (error) {
+          reply(DataCode.ERROR, (error as Error).message)
+        }
+      })
+
+      touchChannel.regChannel(type, 'clipboard:copy-and-paste', async ({ data, reply }) => {
+        try {
+          const { text, html, image, files, delayMs, hideCoreBox } = (data ?? {}) as {
+            text?: string
+            html?: string
+            image?: string
+            files?: string[]
+            delayMs?: number
+            hideCoreBox?: boolean
+          }
+
+          let payload: ClipboardApplyPayload
+          if (image) {
+            payload = { type: 'image', item: { type: 'image', content: image }, hideCoreBox, delayMs }
+          } else if (files && files.length > 0) {
+            payload = { type: 'files', files, hideCoreBox, delayMs }
+          } else {
+            payload = { type: 'text', text: text ?? '', html, hideCoreBox, delayMs }
+          }
+
+          await this.applyToActiveApp(payload)
+          reply(DataCode.SUCCESS, { success: true })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          reply(DataCode.ERROR, { success: false, message })
         }
       })
 

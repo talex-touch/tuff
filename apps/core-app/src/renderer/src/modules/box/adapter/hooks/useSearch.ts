@@ -16,6 +16,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { BoxMode } from '..'
+import { useResize } from './useResize'
 
 export function useSearch(
   boxOptions: IBoxOptions,
@@ -55,18 +56,68 @@ export function useSearch(
 
   let searchSequence = 0
 
+  /**
+   * Build TuffQueryInput array from current clipboard/file state
+   */
+  function buildQueryInputs(): TuffQueryInput[] {
+    const inputs: TuffQueryInput[] = []
+
+    if (clipboardOptions?.last?.type === 'image') {
+      inputs.push({
+        type: TuffInputType.Image,
+        content: clipboardOptions.last.content,
+        thumbnail: clipboardOptions.last.thumbnail ?? undefined,
+        metadata: clipboardOptions.last.meta ?? undefined
+      })
+    } else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
+      inputs.push({
+        type: TuffInputType.Files,
+        content: JSON.stringify(boxOptions.file.paths),
+        metadata: undefined
+      })
+    } else if (clipboardOptions?.last?.type === 'files') {
+      inputs.push({
+        type: TuffInputType.Files,
+        content: clipboardOptions.last.content,
+        metadata: clipboardOptions.last.meta ?? undefined
+      })
+    } else if (
+      clipboardOptions?.last?.type === 'text' ||
+      clipboardOptions?.last?.type === 'html'
+    ) {
+      if (clipboardOptions.last.rawContent) {
+        inputs.push({
+          type: TuffInputType.Html,
+          content: clipboardOptions.last.content,
+          rawContent: clipboardOptions.last.rawContent,
+          metadata: clipboardOptions.last.meta ?? undefined
+        })
+      } else {
+        inputs.push({
+          type: TuffInputType.Text,
+          content: clipboardOptions.last.content,
+          metadata: clipboardOptions.last.meta ?? undefined
+        })
+      }
+    }
+
+    return inputs
+  }
+
   const debouncedSearch = useDebounceFn(async () => {
     const currentSequence = ++searchSequence
+    const inputs = buildQueryInputs()
 
+    // Empty text query (with or without inputs): show recommendations or input-aware results
     if (!searchVal.value && !activeActivations.value?.length) {
       boxOptions.focus = 0
       loading.value = true
-      searchResults.value = [] // Clear previous results immediately
+      searchResults.value = []
 
       try {
         const query: TuffQuery = {
           text: '',
-          inputs: []
+          inputs
         }
 
         inputTransport.broadcast({
@@ -75,30 +126,28 @@ export function useSearch(
           source: 'renderer'
         })
 
-        // The initial call now returns the high-priority results directly.
         const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
 
-        // Validate sequence: only process if this is still the latest search
         if (currentSequence !== searchSequence) {
-          return // Discard outdated results
+          return
         }
 
-        // Store the session ID to track this specific search stream.
         currentSearchId.value = initialResult.sessionId || null
         searchResult.value = initialResult
-
-        // Immediately display the recommendation items.
         searchResults.value = initialResult.items
+        boxOptions.layout = initialResult.containerLayout
 
-        // The initial activation state is set here.
         if (initialResult.activate && initialResult.activate.length > 0) {
           activeActivations.value = initialResult.activate
         }
+
+        loading.value = false
       } catch (error) {
         console.error('Recommendation search failed:', error)
         searchResults.value = []
         searchResult.value = null
         currentSearchId.value = null
+        boxOptions.layout = undefined
         loading.value = false
       }
       return
@@ -108,7 +157,7 @@ export function useSearch(
       // Empty query with active providers: still notify plugins/UI about clear
       const query: TuffQuery = {
         text: '',
-        inputs: []
+        inputs
       }
 
       inputTransport.broadcast({
@@ -123,57 +172,12 @@ export function useSearch(
 
     boxOptions.focus = 0
     loading.value = true
-    searchResults.value = [] // Clear previous results immediately
+    searchResults.value = []
 
     try {
       const query: TuffQuery = {
         text: searchVal.value,
-        inputs: []
-      }
-
-      const inputs: TuffQueryInput[] = []
-
-      if (clipboardOptions?.last?.type === 'image') {
-        inputs.push({
-          type: TuffInputType.Image,
-          content: clipboardOptions.last.content,
-          thumbnail: clipboardOptions.last.thumbnail ?? undefined,
-          metadata: clipboardOptions.last.meta ?? undefined
-        })
-      } else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
-        inputs.push({
-          type: TuffInputType.Files,
-          content: JSON.stringify(boxOptions.file.paths),
-          metadata: undefined
-        })
-      } else if (clipboardOptions?.last?.type === 'files') {
-        inputs.push({
-          type: TuffInputType.Files,
-          content: clipboardOptions.last.content,
-          metadata: clipboardOptions.last.meta ?? undefined
-        })
-      } else if (
-        clipboardOptions?.last?.type === 'text' ||
-        clipboardOptions?.last?.type === 'html'
-      ) {
-        if (clipboardOptions.last.rawContent) {
-          inputs.push({
-            type: TuffInputType.Html,
-            content: clipboardOptions.last.content, // Plain text version
-            rawContent: clipboardOptions.last.rawContent, // HTML version
-            metadata: clipboardOptions.last.meta ?? undefined
-          })
-        } else {
-          inputs.push({
-            type: TuffInputType.Text,
-            content: clipboardOptions.last.content,
-            metadata: clipboardOptions.last.meta ?? undefined
-          })
-        }
-      }
-
-      if (inputs.length > 0) {
-        query.inputs = inputs
+        inputs
       }
 
       inputTransport.broadcast({
@@ -197,18 +201,19 @@ export function useSearch(
       // Immediately display the high-priority items.
       searchResults.value = initialResult.items
 
+      // 搜索结果使用 list 模式（清除 grid 布局）
+      boxOptions.layout = undefined
+
       // The initial activation state is set here.
       if (initialResult.activate && initialResult.activate.length > 0) {
         activeActivations.value = initialResult.activate
       }
-      // Removed else block to prevent premature clearing of activeActivations
-      // Subsequent items will arrive via `search-update` events.
-      // The loading state will be managed by `search-end`.
     } catch (error) {
       console.error('Search initiation failed:', error)
       searchResults.value = []
       searchResult.value = null
       currentSearchId.value = null
+      boxOptions.layout = undefined
       loading.value = false
     }
     // Do not set loading to false here; wait for the `search-end` event.
@@ -335,7 +340,9 @@ export function useSearch(
 
       activeActivations.value = newActivationState
 
-      if (!newActivationState || newActivationState.length === 0) {
+      // 进入 provider 时清空 query，让插件从空白状态开始
+      // 启动应用后也清空输入框
+      if ((newActivationState && newActivationState.length > 0) || !isPluginFeature) {
         searchVal.value = ''
       }
 
@@ -451,11 +458,7 @@ export function useSearch(
     }
   }
 
-  const debouncedResize = useDebounceFn(() => {
-    touchChannel.sendSync('core-box:expand', {
-      mode: res.value.length > 0 ? 'max' : 'collapse'
-    })
-  }, 10)
+  useResize({ results: res, activeActivations, loading })
 
   watch(
     () => res.value,
@@ -463,7 +466,6 @@ export function useSearch(
       if (res.value.length > 0 && boxOptions.focus === -1) {
         boxOptions.focus = 0
       }
-      debouncedResize()
     },
     { deep: true }
   )

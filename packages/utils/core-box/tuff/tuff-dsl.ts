@@ -1005,15 +1005,31 @@ export interface TuffMeta {
     permissions?: string[]
   }
 
-  /**
-   * TuffIntelligence
-   */
+  /** TuffIntelligence */
   intelligence?: any
 
-  /**
-   * Keep CoreBox open after action execution
-   */
+  /** Keep CoreBox open after action execution */
   keepCoreBoxOpen?: boolean
+
+  /** 固定配置 */
+  pinned?: {
+    isPinned: boolean
+    pinnedAt?: number
+    order?: number
+  }
+
+  /** 推荐来源标记 */
+  recommendation?: {
+    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
+    score?: number
+  }
+
+  /**
+   * 额外关键词
+   * @description 用于搜索索引的额外关键词，会参与关键字索引匹配
+   * @warning 不建议添加太多关键词（建议 <= 10），过多会影响搜索性能
+   */
+  keywords?: string[]
 }
 
 // ==================== 前端展示结构 ====================
@@ -1267,71 +1283,69 @@ export interface SortStat {
   duration: number
 }
 
-/**
- * 搜索结果结构
- *
- * @description
- * 定义搜索返回的结果集合和元数据。
- * 包含匹配项、统计信息和分页数据等。
- */
-export interface TuffSearchResult {
-  /**
-   * A unique identifier for this specific search operation.
-   * This is crucial for the streaming model to associate updates with the correct search instance.
-   */
-  sessionId?: string
+/** 容器布局配置 */
+export interface TuffContainerLayout {
+  /** 布局模式 */
+  mode: 'list' | 'grid'
+  /** 宫格配置 */
+  grid?: {
+    /** 列数 */
+    columns: number
+    /** 间距(px) */
+    gap?: number
+    /** 单项尺寸 */
+    itemSize?: 'small' | 'medium' | 'large'
+  }
+  /** 分组配置 */
+  sections?: TuffSection[]
+}
 
-  /**
-   * 结果项目
-   * @description 匹配的TuffItem列表
-   * @required
-   */
+/** 分组元数据 */
+export interface TuffSectionMeta {
+  /** 是否为智能推荐分组 */
+  intelligence?: boolean
+  /** 扩展字段 */
+  [key: string]: unknown
+}
+
+/** 分组定义 */
+export interface TuffSection {
+  id: string
+  title?: string
+  layout: 'list' | 'grid'
+  /** 该分组的 item ids */
+  itemIds: string[]
+  collapsed?: boolean
+  /** 分组元数据 */
+  meta?: TuffSectionMeta
+}
+
+/** 搜索结果结构 */
+export interface TuffSearchResult {
+  /** 搜索会话 ID */
+  sessionId?: string
+  /** 结果项目 */
   items: TuffItem[]
 
-  /**
-   * 查询信息
-   * @description 原始查询参数
-   * @required
-   */
+  /** 原始查询参数 */
   query: TuffQuery
-
-  /**
-   * 搜索耗时
-   * @description 搜索执行的毫秒数
-   * @required
-   */
+  /** 搜索耗时(ms) */
   duration: number
-
-  /**
-   * 来源统计
-   * @description 各数据来源的结果统计
-   * @required
-   */
+  /** 来源统计 */
   sources: Array<{
-    /** Provider's unique ID. */
     providerId: string
-    /** Provider's display name. */
     providerName: string
-    /** Search duration in milliseconds. */
     duration: number
-    /** Number of results returned. */
     resultCount: number
-    /** Status of the search operation. */
     status: 'success' | 'timeout' | 'error'
   }>
-
-  /**
-   * AI 推荐
-   * @description AI生成的搜索建议
-   */
+  /** 容器布局配置 */
+  containerLayout?: TuffContainerLayout
+  /** AI 推荐建议 */
   suggestions?: string[]
-
-  /**
-   * The provider(s) to activate after this search result.
-   */
+  /** 激活的 provider */
   activate?: IProviderActivate[]
-
-  /** Optional statistics about the sorting process. */
+  /** 排序统计 */
   sort_stats?: SortStat[]
 }
 

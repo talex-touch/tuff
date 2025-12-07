@@ -113,16 +113,16 @@ onFeatureTriggered(featureId, query, feature) {
     // 向后兼容：纯文本查询
     return
   }
-  
+
   const textQuery = query.text
   const inputs = query.inputs || []
-  
+
   // 图片输入（data URL）
   const imageInput = inputs.find(i => i.type === TuffInputType.Image)
-  
+
   // 文件输入（JSON 字符串数组）
   const filesInput = inputs.find(i => i.type === TuffInputType.Files)
-  
+
   // HTML 输入（富文本）
   const htmlInput = inputs.find(i => i.type === TuffInputType.Html)
 }
@@ -222,6 +222,49 @@ packages/utils/
 - 渲染器入口: apps/core-app/src/renderer/src/main.ts
 - 共享工具: packages/utils/
 
+## CoreBox 布局系统
+
+### 布局模式
+CoreBox 支持两种布局模式，由后端 `TuffSearchResult.containerLayout` 控制：
+- **list** - 默认列表模式，垂直排列
+- **grid** - 宫格模式，支持横向选择
+
+### DSL 类型
+```typescript
+interface TuffContainerLayout {
+  mode: 'list' | 'grid'
+  grid?: {
+    columns: number      // 列数，默认 5
+    gap?: number         // 间距(px)，默认 8
+    itemSize?: 'small' | 'medium' | 'large'
+  }
+  sections?: TuffSection[]  // 分组配置
+}
+
+interface TuffMeta {
+  // ... 其他字段
+  pinned?: {              // 固定配置
+    isPinned: boolean
+    pinnedAt?: number
+    order?: number
+  }
+  recommendation?: {      // 推荐来源标记
+    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
+    score?: number
+  }
+}
+```
+
+### 键盘导航
+- **list 模式**: ArrowUp/Down 上下移动
+- **grid 模式**: ArrowUp/Down 跨行移动，ArrowLeft/Right 同行移动
+
+### 关键文件
+- 布局组件: `src/renderer/src/components/render/BoxGrid.vue`
+- 宫格项: `src/renderer/src/components/render/BoxGridItem.vue`
+- 键盘导航: `src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- 推荐引擎: `src/main/modules/box-tool/search-engine/recommendation/`
+
 ## 开发注意事项
 
 - Node.js 版本: 22.16.0+ (pnpm preinstall hook 和 Volta 强制)
@@ -230,3 +273,5 @@ packages/utils/
 - CoreBox 定位支持屏幕感知，适应多显示器设置
 - 数据库使用 Drizzle ORM + LibSQL 进行类型安全查询
 - 使用 log4js 进行结构化日志记录，带命名空间、时间戳和彩色输出
+- 请不要写太多注释，尽量保持精简，保留必要的 EnglishTSDoc 即可
+- dev 环境中 console debug 主进程看不到日志，如果是调试可以用 console.log 打印，记得清空

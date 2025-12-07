@@ -19,13 +19,49 @@ declare global {
 const FORWARD_KEYS = new Set(['Enter', 'ArrowUp', 'ArrowDown'])
 
 /**
+ * Keys that should be forwarded when Alt/Option key is pressed.
+ * These are common text editing shortcuts:
+ * - Option+Backspace: Delete word backward
+ * - Option+Delete: Delete word forward
+ * - Option+Left/Right: Move by word
+ */
+const ALT_FORWARD_KEYS = new Set(['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight'])
+
+/**
+ * Event name for triggering DivisionBox detach (Command+D)
+ */
+const COREBOX_DETACH_EVENT = 'corebox:detach-item'
+
+/**
+ * Event name for triggering Flow transfer
+ */
+const COREBOX_FLOW_EVENT = 'corebox:flow-item'
+
+/**
  * Determines if a keyboard event should be forwarded to the plugin UI view.
+ *
+ * Common shortcuts that should be forwarded:
+ * - Cmd/Ctrl+A: Select all
+ * - Cmd/Ctrl+C: Copy
+ * - Cmd/Ctrl+X: Cut
+ * - Cmd/Ctrl+Z: Undo
+ * - Cmd/Ctrl+Shift+Z: Redo
+ * - Cmd/Ctrl+Backspace: Delete to line start
+ * - Option/Alt+Backspace: Delete word backward
+ * - Option/Alt+Delete: Delete word forward
+ * - Option/Alt+Left/Right: Move by word
+ * - Cmd/Ctrl+Left/Right: Move to line start/end
  *
  * @param event - The keyboard event to check
  * @returns True if the event should be forwarded
  */
 function shouldForwardKey(event: KeyboardEvent): boolean {
+  // Forward all Cmd/Ctrl shortcuts except Cmd+V (handled separately for paste)
   if ((event.metaKey || event.ctrlKey) && event.key !== 'v') {
+    return true
+  }
+  // Forward Alt/Option key combinations for word-level editing
+  if (event.altKey && ALT_FORWARD_KEYS.has(event.key)) {
     return true
   }
   return FORWARD_KEYS.has(event.key)
@@ -129,50 +165,73 @@ export function useKeyboard(
       handleExecute(target)
     }
     else if (event.key === 'ArrowDown') {
-      // Support cycling to first item when list is small (≤ 20 items)
-      // For larger lists, keep current behavior to avoid rendering performance issues
-      if (res.value.length <= 20 && boxOptions.focus === res.value.length - 1) {
-        boxOptions.focus = 0
-      } else {
-        boxOptions.focus += 1
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      const cols = boxOptions.layout?.grid?.columns || 5
+      const step = isGrid ? cols : 1
+      const nextIndex = boxOptions.focus + step
+
+      if (nextIndex < res.value.length) {
+        boxOptions.focus = nextIndex
+      } else if (res.value.length <= 20) {
+        // Cycle to first item for small lists
+        boxOptions.focus = isGrid ? (boxOptions.focus % cols) : 0
       }
       event.preventDefault()
     }
     else if (event.key === 'ArrowUp') {
-      // Support cycling to last item when list is small (≤ 20 items)
-      // For larger lists, keep current behavior to avoid rendering performance issues
-      if (res.value.length <= 20 && boxOptions.focus === 0) {
-        boxOptions.focus = res.value.length - 1
-      } else {
-        boxOptions.focus -= 1
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      const cols = boxOptions.layout?.grid?.columns || 5
+      const step = isGrid ? cols : 1
+      const prevIndex = boxOptions.focus - step
+
+      if (prevIndex >= 0) {
+        boxOptions.focus = prevIndex
+      } else if (res.value.length <= 20) {
+        // Cycle to last row for small lists
+        const lastRowStart = Math.floor((res.value.length - 1) / cols) * cols
+        const targetCol = boxOptions.focus % cols
+        const targetIndex = Math.min(lastRowStart + targetCol, res.value.length - 1)
+        boxOptions.focus = isGrid ? targetIndex : (res.value.length - 1)
       }
       event.preventDefault()
     }
-    else if (
-      event.key === 'ArrowLeft'
-      && event.metaKey
-      && !event.ctrlKey
-      && !event.altKey
-      && !event.shiftKey
-    ) {
-      const current = res.value[boxOptions.focus]
-      if (current?.source?.id === 'preview-provider') {
-        window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: current }))
+    else if (event.key === 'ArrowLeft') {
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      // Grid mode: move left
+      if (isGrid && !event.metaKey) {
+        if (boxOptions.focus > 0) {
+          boxOptions.focus -= 1
+        }
         event.preventDefault()
         return
       }
+      // Meta+Left: show calculation history
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        const current = res.value[boxOptions.focus]
+        if (current?.source?.id === 'preview-provider') {
+          window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: current }))
+          event.preventDefault()
+          return
+        }
+      }
     }
-    else if (
-      event.key === 'ArrowRight'
-      && event.metaKey
-      && !event.ctrlKey
-      && !event.altKey
-      && !event.shiftKey
-    ) {
-      if (window.__coreboxHistoryVisible) {
-        window.dispatchEvent(new CustomEvent('corebox:hide-calculation-history'))
+    else if (event.key === 'ArrowRight') {
+      const isGrid = boxOptions.layout?.mode === 'grid'
+      // Grid mode: move right
+      if (isGrid && !event.metaKey) {
+        if (boxOptions.focus < res.value.length - 1) {
+          boxOptions.focus += 1
+        }
         event.preventDefault()
         return
+      }
+      // Meta+Right: hide calculation history
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        if (window.__coreboxHistoryVisible) {
+          window.dispatchEvent(new CustomEvent('corebox:hide-calculation-history'))
+          event.preventDefault()
+          return
+        }
       }
     }
     else if (event.key === 'Tab') {
@@ -190,6 +249,37 @@ export function useKeyboard(
         }
       }
       event.preventDefault()
+    }
+    else if (event.key === 'd' || event.key === 'D') {
+      /**
+       * Command/Ctrl+D: Detach current item to DivisionBox
+       * 
+       * This allows users to "pop out" the currently focused item into
+       * an independent DivisionBox window for persistent access.
+       * 
+       * With Shift: Opens Flow selector to transfer data to another plugin
+       */
+      if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+        const currentItem = res.value[boxOptions.focus]
+        if (!currentItem) {
+          event.preventDefault()
+          return
+        }
+
+        if (event.shiftKey) {
+          // Command+Shift+D: Flow transfer to another plugin
+          window.dispatchEvent(new CustomEvent(COREBOX_FLOW_EVENT, { 
+            detail: { item: currentItem, query: searchVal.value } 
+          }))
+        } else {
+          // Command+D: Detach to DivisionBox
+          window.dispatchEvent(new CustomEvent(COREBOX_DETACH_EVENT, { 
+            detail: { item: currentItem, query: searchVal.value } 
+          }))
+        }
+        event.preventDefault()
+        return
+      }
     }
     else if (event.key === 'Escape') {
       /**

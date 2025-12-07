@@ -1,25 +1,38 @@
-import { useUser } from '@clerk/vue'
 import { watch } from 'vue'
 
 /**
  * Composable for managing user locale preferences stored in Clerk metadata.
  * Syncs user's language preference across devices and sessions.
+ * SSR-safe: all Clerk operations are deferred to client-side only.
  * 
  * @returns Object containing locale management functions
  */
 export function useUserLocale() {
-  const { user } = useUser()
   const { locale, setLocale } = useI18n()
+
+  const getClerkUser = () => {
+    if (import.meta.server) return null
+    try {
+      // Dynamic import to avoid SSR issues
+      const clerk = (window as any)?.__clerk_frontend_api || (window as any)?.Clerk
+      return clerk?.user ?? null
+    }
+    catch {
+      return null
+    }
+  }
   
   /**
    * Get user's saved locale from Clerk metadata
    * @returns Saved locale string or null if not set
    */
   const getSavedLocale = (): string | null => {
-    if (!user.value)
+    const user = getClerkUser()
+    if (!user)
       return null
     
-    return user.value.publicMetadata?.locale as string | null
+    // Use unsafeMetadata for client-side writable locale preference
+    return (user.unsafeMetadata?.locale as string) ?? null
   }
 
   /**
@@ -27,13 +40,14 @@ export function useUserLocale() {
    * @param newLocale - Locale to save (e.g., 'zh', 'en')
    */
   const saveUserLocale = async (newLocale: string) => {
-    if (!user.value)
+    const user = getClerkUser()
+    if (!user?.update)
       return
 
     try {
-      await user.value.update({
-        publicMetadata: {
-          ...user.value.publicMetadata,
+      await user.update({
+        unsafeMetadata: {
+          ...user.unsafeMetadata,
           locale: newLocale,
         },
       })
@@ -48,9 +62,11 @@ export function useUserLocale() {
    * Falls back to browser locale if not set in Clerk
    */
   const initializeLocale = () => {
+    if (import.meta.server) return
+    
     const savedLocale = getSavedLocale()
     if (savedLocale && savedLocale !== locale.value) {
-      setLocale(savedLocale)
+      setLocale(savedLocale as 'en' | 'zh')
     }
   }
 
@@ -59,6 +75,8 @@ export function useUserLocale() {
    * This enables automatic synchronization when user changes language
    */
   const syncLocaleChanges = () => {
+    if (import.meta.server) return
+    
     watch(locale, (newLocale) => {
       const savedLocale = getSavedLocale()
       if (newLocale !== savedLocale) {

@@ -33,8 +33,6 @@ const docPath = computed(() => {
 })
 
 const localizedPath = computed(() => {
-  if (locale.value === 'en')
-    return docPath.value
   return `${docPath.value}.${locale.value}`
 })
 

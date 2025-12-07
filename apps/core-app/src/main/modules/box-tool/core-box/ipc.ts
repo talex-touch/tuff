@@ -8,6 +8,7 @@ import { coreBoxManager } from './manager'
 import { coreBoxInputTransport } from './input-transport'
 import { coreBoxKeyTransport } from './key-transport'
 import { getCoreBoxWindow, windowManager } from './window'
+import { getBoxItemManager } from '../item-sdk'
 
 /**
  * @class IpcManager
@@ -57,6 +58,13 @@ export class IpcManager {
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show', () =>
       coreBoxManager.trigger(true)
     )
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:focus-window', ({ reply }) => {
+      const window = getCoreBoxWindow()
+      if (window && !window.window.isDestroyed()) {
+        window.window.focus()
+      }
+      reply(DataCode.SUCCESS, { focused: true })
+    })
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
       if (typeof data === 'object' && data) {
         if (data.mode === 'collapse') {
@@ -97,6 +105,15 @@ export class IpcManager {
       'core-box:deactivate-provider',
       async ({ data, reply }) => {
         const { id } = data as { id: string }
+
+        // Clear BoxItemManager items for the deactivated plugin
+        // The id format is "plugin-features:pluginName" for plugin providers
+        if (id.startsWith('plugin-features:')) {
+          const pluginName = id.substring('plugin-features:'.length)
+          const boxItemManager = getBoxItemManager()
+          boxItemManager.clear(pluginName)
+        }
+
         searchEngineCore.deactivateProvider(id)
         reply(DataCode.SUCCESS, searchEngineCore.getActivationState())
       }
@@ -106,6 +123,10 @@ export class IpcManager {
       ChannelType.MAIN,
       'core-box:deactivate-providers',
       async ({ reply }) => {
+        // Clear all items from BoxItemManager
+        const boxItemManager = getBoxItemManager()
+        boxItemManager.clear()
+
         searchEngineCore.deactivateProviders()
         // Return the new, empty state for consistency
         reply(DataCode.SUCCESS, searchEngineCore.getActivationState())
@@ -284,7 +305,6 @@ export class IpcManager {
       ({ data, reply }) => {
         const { searchId } = data as { searchId: string }
         if (searchId && searchEngineCore.getCurrentGatherController()) {
-          console.debug(`[CoreBox] Canceling search with ID: ${searchId}`)
           searchEngineCore.cancelSearch(searchId)
           reply(DataCode.SUCCESS, { cancelled: true })
         } else {

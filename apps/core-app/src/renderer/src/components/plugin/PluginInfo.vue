@@ -37,11 +37,11 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 const loadingStates = ref({
   reload: false,
   openFolder: false,
-  uninstall: false,
+  uninstall: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
-const hasErrors = computed(() => props.plugin.issues?.some(issue => issue.type === 'error'))
+const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
 
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
@@ -54,7 +54,7 @@ const tabItems = computed(() => {
 watchEffect(() => {
   if (hasErrors.value) {
     const issuesTabIndex = tabItems.value.findIndex(
-      (vnode: VNode) => vnode.props?.name === 'Issues',
+      (vnode: VNode) => vnode.props?.name === 'Issues'
     )
     if (issuesTabIndex !== -1) {
       tabsModel.value = { [issuesTabIndex + 1]: 'Issues' }
@@ -71,41 +71,35 @@ const statusMap = {
   [EPluginStatus.LOAD_FAILED]: { indicator: 'bg-red-500' },
   [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' },
   [EPluginStatus.DEV_DISCONNECTED]: { indicator: 'bg-orange-500' },
-  [EPluginStatus.DEV_RECONNECTING]: { indicator: 'bg-orange-500' },
+  [EPluginStatus.DEV_RECONNECTING]: { indicator: 'bg-orange-500' }
 }
 
 const statusClass = computed(() => {
-  if (!props.plugin)
-    return { indicator: 'bg-gray-400' }
+  if (!props.plugin) return { indicator: 'bg-gray-400' }
   return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
 })
 
 async function handleReloadPlugin(): Promise<void> {
-  if (!props.plugin)
-    return
+  if (!props.plugin) return
 
   await touchSdk.reloadPlugin(props.plugin.name)
 }
 
 async function handleOpenPluginFolder(): Promise<void> {
-  if (!props.plugin || loadingStates.value.openFolder)
-    return
+  if (!props.plugin || loadingStates.value.openFolder) return
 
   loadingStates.value.openFolder = true
   try {
     await touchSdk.openPluginFolder(props.plugin.name)
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to open plugin folder:', error)
-  }
-  finally {
+  } finally {
     loadingStates.value.openFolder = false
   }
 }
 
 async function handleUninstallPlugin(): Promise<void> {
-  if (!props.plugin || loadingStates.value.uninstall)
-    return
+  if (!props.plugin || loadingStates.value.uninstall) return
 
   try {
     await ElMessageBox.confirm(
@@ -114,11 +108,10 @@ async function handleUninstallPlugin(): Promise<void> {
       {
         type: 'warning',
         confirmButtonText: t('plugin.uninstall.confirmButton'),
-        cancelButtonText: t('plugin.uninstall.cancelButton'),
-      },
+        cancelButtonText: t('plugin.uninstall.cancelButton')
+      }
     )
-  }
-  catch {
+  } catch {
     return
   }
 
@@ -127,16 +120,13 @@ async function handleUninstallPlugin(): Promise<void> {
     const success = await pluginSDK.uninstall(props.plugin.name)
     if (success) {
       toast.success(t('plugin.uninstall.success', { name: props.plugin.name }))
-    }
-    else {
+    } else {
       toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to uninstall plugin:', error)
     toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
-  }
-  finally {
+  } finally {
     loadingStates.value.uninstall = false
   }
 }
@@ -152,7 +142,13 @@ async function handleUninstallPlugin(): Promise<void> {
     >
       <div class="flex items-center gap-3">
         <div class="relative">
-          <TuffIcon :empty="DefaultIcon" :alt="plugin.name" :icon="plugin.icon" :size="48" />
+          <TuffIcon
+            colorful
+            :empty="DefaultIcon"
+            :alt="plugin.name"
+            :icon="plugin.icon"
+            :size="48"
+          />
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
             :class="statusClass.indicator"
