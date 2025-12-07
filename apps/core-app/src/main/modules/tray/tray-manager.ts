@@ -91,11 +91,11 @@ export class TrayManager extends BaseModule {
 
   private shouldShowTray(): boolean {
     try {
-      const config = $app.config.data as any
-      const setupConfig = config?.setup
+      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      const showTray = appConfig?.setup?.showTray
 
-      if (setupConfig?.showTray !== undefined) {
-        return setupConfig.showTray !== false
+      if (showTray !== undefined) {
+        return showTray !== false
       }
 
       return true
@@ -108,11 +108,13 @@ export class TrayManager extends BaseModule {
 
   private setupAutoStart(): void {
     try {
-      const autoStart = ($app.config.data as any)?.autoStart ?? false
+      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      const autoStart = appConfig?.setup?.autoStart ?? false
+      const startSilent = appConfig?.window?.startSilent ?? false
 
       const options: Electron.Settings = {
         openAtLogin: autoStart,
-        openAsHidden: ($app.config.data as any)?.window?.startSilent ?? false,
+        openAsHidden: startSilent,
       }
 
       app.setLoginItemSettings(options)
@@ -124,7 +126,8 @@ export class TrayManager extends BaseModule {
 
   public updateAutoStart(enabled: boolean): void {
     try {
-      const startSilent = ($app.config.data as any)?.window?.startSilent ?? false
+      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      const startSilent = appConfig?.window?.startSilent ?? false
 
       const options: Electron.Settings = {
         openAtLogin: enabled,
