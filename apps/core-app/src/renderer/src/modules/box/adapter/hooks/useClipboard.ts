@@ -253,17 +253,12 @@ export function useClipboard(
         return
       }
 
+      // Only store the clipboard item, don't auto-fill here.
+      // Auto-fill should only happen when CoreBox is triggered/focused (via handlePaste or handleAutoFill).
+      // This prevents clipboard updates from auto-filling when CoreBox is pinned but not actively triggered.
       clipboardOptions.last = item
       clipboardOptions.detectedAt = Date.now()
       clipboardOptions.lastClearedTimestamp = null
-
-      if (incomingTimestamp && !autoPastedTimestamps.has(incomingTimestamp)) {
-        autoFillFiles(item, incomingTimestamp) ||
-          autoFillText(item, incomingTimestamp) ||
-          autoFillImage(item, incomingTimestamp)
-      }
-
-      onPasteCallback?.()
     }
   })
 

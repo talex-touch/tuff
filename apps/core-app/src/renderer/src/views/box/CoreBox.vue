@@ -14,6 +14,7 @@ import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
+import FlowSelector from '~/components/flow/FlowSelector.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '../../modules/box/adapter'
@@ -354,6 +355,182 @@ const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () 
   })
 })
 
+// Handle global shortcut: Detach to DivisionBox (Command+D)
+const unregDetachShortcut = touchChannel.regChannel('flow:trigger-detach', () => {
+  const currentItem = res.value[boxOptions.focus]
+  if (currentItem) {
+    handleDetachItem(new CustomEvent('corebox:detach-item', {
+      detail: { item: currentItem, query: searchVal.value }
+    }))
+  }
+})
+
+// Handle global shortcut: Flow Transfer (Command+Shift+D)
+const unregFlowShortcut = touchChannel.regChannel('flow:trigger-transfer', () => {
+  const currentItem = res.value[boxOptions.focus]
+  if (currentItem) {
+    handleFlowItem(new CustomEvent('corebox:flow-item', {
+      detail: { item: currentItem, query: searchVal.value }
+    }))
+  }
+})
+
+/**
+ * Handle Command+D: Detach item to DivisionBox
+ * Opens the current item in an independent DivisionBox window
+ */
+async function handleDetachItem(event: Event): Promise<void> {
+  const detail = (event as CustomEvent<{ item: TuffItem; query: string }>).detail
+  if (!detail?.item) return
+
+  const item = detail.item
+  console.log('[CoreBox] Detaching item to DivisionBox:', item.id)
+
+  try {
+    // Build DivisionBox config from item
+    const config = {
+      url: buildDivisionBoxUrl(item, detail.query),
+      title: item.render?.basic?.title || 'Detached Item',
+      icon: resolveItemIcon(item),
+      size: 'medium' as const,
+      keepAlive: true,
+      pluginId: item.source?.id
+    }
+
+    const response = await touchChannel.send('division-box:open', config)
+    if (response?.success) {
+      toast.success(t('corebox.detached', '已分离到独立窗口'))
+    } else {
+      throw new Error(response?.error?.message || 'Failed to open DivisionBox')
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to detach item:', error)
+    toast.error(t('corebox.detachFailed', '分离失败'))
+  }
+}
+
+// Flow Selector state
+const flowSelectorVisible = ref(false)
+const flowSelectorPayload = ref<any>(null)
+const flowSelectorSessionId = ref<string>('')
+
+/**
+ * Handle Command+Shift+D: Flow transfer to another plugin
+ * Opens the Flow selector to transfer data to another plugin
+ */
+async function handleFlowItem(event: Event): Promise<void> {
+  const detail = (event as CustomEvent<{ item: TuffItem; query: string }>).detail
+  if (!detail?.item) return
+
+  const item = detail.item
+  console.log('[CoreBox] Flow transfer item:', item.id)
+
+  try {
+    const payload = {
+      type: 'json' as const,
+      data: {
+        item,
+        query: detail.query
+      },
+      context: {
+        sourcePluginId: item.source?.id || 'corebox',
+        sourceFeatureId: item.meta?.featureId
+      }
+    }
+
+    // Open Flow selector panel
+    flowSelectorPayload.value = payload
+    flowSelectorVisible.value = true
+  } catch (error) {
+    console.error('[CoreBox] Failed to initiate flow:', error)
+    toast.error(t('corebox.flowFailed', '流转失败'))
+  }
+}
+
+/**
+ * Handle Flow selector close
+ */
+function handleFlowSelectorClose(): void {
+  flowSelectorVisible.value = false
+  flowSelectorPayload.value = null
+  flowSelectorSessionId.value = ''
+}
+
+/**
+ * Handle Flow target selection
+ */
+async function handleFlowTargetSelect(targetId: string): Promise<void> {
+  if (!flowSelectorPayload.value) return
+
+  try {
+    const response = await touchChannel.send('flow:dispatch', {
+      senderId: 'corebox',
+      payload: flowSelectorPayload.value,
+      options: {
+        preferredTarget: targetId,
+        skipSelector: true
+      }
+    })
+
+    if (response?.success) {
+      toast.success(t('corebox.flowSent', '已发送到目标插件'))
+    } else {
+      throw new Error(response?.error?.message || 'Flow dispatch failed')
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to dispatch flow:', error)
+    toast.error(t('corebox.flowFailed', '流转失败'))
+  } finally {
+    handleFlowSelectorClose()
+  }
+}
+
+/**
+ * Build DivisionBox URL from TuffItem
+ */
+function buildDivisionBoxUrl(item: TuffItem, query: string): string {
+  // Plugin items with webcontent interaction
+  if (item.meta?.interaction?.type === 'webcontent' && item.meta.interaction.path) {
+    const pluginId = item.source?.id
+    return `plugin://${pluginId}/${item.meta.interaction.path}`
+  }
+
+  // Plugin items with index interaction
+  if (item.meta?.interaction?.type === 'index') {
+    const pluginId = item.source?.id
+    return `plugin://${pluginId}/index.html`
+  }
+
+  // URL items
+  if (item.kind === 'url' && item.meta?.web?.url) {
+    return item.meta.web.url
+  }
+
+  // File items - open in preview
+  if (item.kind === 'file' && item.meta?.file?.path) {
+    return `file://${item.meta.file.path}`
+  }
+
+  // Default: use a generic detached view
+  const params = new URLSearchParams({
+    itemId: item.id,
+    query: query || '',
+    source: item.source?.id || ''
+  })
+  return `tuff://detached?${params.toString()}`
+}
+
+/**
+ * Resolve icon from TuffItem
+ */
+function resolveItemIcon(item: TuffItem): string | undefined {
+  const icon = item.render?.basic?.icon
+  if (!icon) return undefined
+  if (typeof icon === 'string') return icon
+  if (typeof icon === 'object' && 'value' in icon) return icon.value
+  return undefined
+}
+
 onMounted(() => {
   /**
    * Reset autopaste state on CoreBox open
@@ -365,6 +542,8 @@ onMounted(() => {
   window.addEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.addEventListener('corebox:copy-preview', handleCopyPreviewEvent)
   window.addEventListener('corebox:focus-input', handleFocusInputEvent)
+  window.addEventListener('corebox:detach-item', handleDetachItem)
+  window.addEventListener('corebox:flow-item', handleFlowItem)
   window.addEventListener('mousedown', handleGlobalMouseDown)
   window.addEventListener('keydown', handleHistoryKeydown, true)
 })
@@ -373,10 +552,14 @@ onBeforeUnmount(() => {
   cleanupClipboard()
   cleanupVisibility()
   unregUIModeExited()
+  unregDetachShortcut()
+  unregFlowShortcut()
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)
   window.removeEventListener('corebox:focus-input', handleFocusInputEvent)
+  window.removeEventListener('corebox:detach-item', handleDetachItem)
+  window.removeEventListener('corebox:flow-item', handleFlowItem)
   window.removeEventListener('mousedown', handleGlobalMouseDown)
   window.removeEventListener('keydown', handleHistoryKeydown, true)
 })
@@ -461,17 +644,17 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
           :focus="boxOptions.focus"
           @select="handleGridSelect"
         />
-        <template v-else>
+        <TransitionGroup v-else name="item-fade" tag="div" class="item-list">
           <CoreBoxRender
             v-for="(item, index) in res"
-            :key="index"
+            :key="item.id || index"
             :ref="(el) => setItemRef(el, index)"
             :active="boxOptions.focus === index"
             :item="item"
             :index="index"
             @trigger="handleItemTrigger(index, item)"
           />
-        </template>
+        </TransitionGroup>
       </TouchScroll>
       <CoreBoxFooter :display="!!res.length" :item="activeItem" class="CoreBoxFooter-Sticky" />
     </div>
@@ -485,6 +668,15 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
       @apply="applyPreviewHistory"
     />
   </div>
+
+  <!-- Flow Selector Panel -->
+  <FlowSelector
+    :visible="flowSelectorVisible"
+    :session-id="flowSelectorSessionId"
+    :payload="flowSelectorPayload"
+    @close="handleFlowSelectorClose"
+    @select="handleFlowTargetSelect"
+  />
 </template>
 
 <style lang="scss">
@@ -567,8 +759,42 @@ div.CoreBoxRes {
   bottom: 0;
 }
 
-.CoreBoxRes-Main > .scroll-area > .CoreBoxRender:last-child {
+.CoreBoxRes-Main > .scroll-area .item-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.CoreBoxRes-Main > .scroll-area .item-list > .CoreBoxRender:last-child {
   margin-bottom: 40px;
+}
+
+// Item fade-in animation with staggered delay
+.item-fade-enter-active {
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+
+.item-fade-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.item-fade-leave-active {
+  transition: opacity 0.12s ease;
+}
+
+.item-fade-leave-to {
+  opacity: 0;
+}
+
+// Staggered delay for each item (faster at start, slower at end)
+@for $i from 1 through 20 {
+  .item-list > .CoreBoxRender:nth-child(#{$i}) {
+    &.item-fade-enter-active {
+      // Logarithmic delay: first items faster, later items slower
+      transition-delay: #{($i - 1) * 0.03 + ($i * $i * 0.002)}s;
+    }
+  }
 }
 
 div.CoreBox {

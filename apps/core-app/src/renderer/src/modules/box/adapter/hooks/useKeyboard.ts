@@ -19,6 +19,16 @@ declare global {
 const FORWARD_KEYS = new Set(['Enter', 'ArrowUp', 'ArrowDown'])
 
 /**
+ * Event name for triggering DivisionBox detach (Command+D)
+ */
+const COREBOX_DETACH_EVENT = 'corebox:detach-item'
+
+/**
+ * Event name for triggering Flow transfer
+ */
+const COREBOX_FLOW_EVENT = 'corebox:flow-item'
+
+/**
  * Determines if a keyboard event should be forwarded to the plugin UI view.
  *
  * @param event - The keyboard event to check
@@ -213,6 +223,37 @@ export function useKeyboard(
         }
       }
       event.preventDefault()
+    }
+    else if (event.key === 'd' || event.key === 'D') {
+      /**
+       * Command/Ctrl+D: Detach current item to DivisionBox
+       * 
+       * This allows users to "pop out" the currently focused item into
+       * an independent DivisionBox window for persistent access.
+       * 
+       * With Shift: Opens Flow selector to transfer data to another plugin
+       */
+      if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+        const currentItem = res.value[boxOptions.focus]
+        if (!currentItem) {
+          event.preventDefault()
+          return
+        }
+
+        if (event.shiftKey) {
+          // Command+Shift+D: Flow transfer to another plugin
+          window.dispatchEvent(new CustomEvent(COREBOX_FLOW_EVENT, { 
+            detail: { item: currentItem, query: searchVal.value } 
+          }))
+        } else {
+          // Command+D: Detach to DivisionBox
+          window.dispatchEvent(new CustomEvent(COREBOX_DETACH_EVENT, { 
+            detail: { item: currentItem, query: searchVal.value } 
+          }))
+        }
+        event.preventDefault()
+        return
+      }
     }
     else if (event.key === 'Escape') {
       /**
