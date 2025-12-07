@@ -1023,6 +1023,13 @@ export interface TuffMeta {
     source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
     score?: number
   }
+
+  /**
+   * 额外关键词
+   * @description 用于搜索索引的额外关键词，会参与关键字索引匹配
+   * @warning 不建议添加太多关键词（建议 <= 10），过多会影响搜索性能
+   */
+  keywords?: string[]
 }
 
 // ==================== 前端展示结构 ====================
