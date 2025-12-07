@@ -14,6 +14,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
     AgreementTemplate: typeof import('./src/components/addon/AgreementTemplate.vue')['default']
+    AiGlowBorder: typeof import('./src/components/base/effect/AiGlowBorder.vue')['default']
     AISDKCapabilityDetails: typeof import('./src/components/intelligence/capabilities/AISDKCapabilityDetails.vue')['default']
     AppLogo: typeof import('./src/components/icon/AppLogo.vue')['default']
     AppUpgradationView: typeof import('./src/components/base/AppUpgradationView.vue')['default']
@@ -224,6 +225,7 @@ declare module 'vue' {
 declare global {
   const ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
   const AgreementTemplate: typeof import('./src/components/addon/AgreementTemplate.vue')['default']
+  const AiGlowBorder: typeof import('./src/components/base/effect/AiGlowBorder.vue')['default']
   const AISDKCapabilityDetails: typeof import('./src/components/intelligence/capabilities/AISDKCapabilityDetails.vue')['default']
   const AppLogo: typeof import('./src/components/icon/AppLogo.vue')['default']
   const AppUpgradationView: typeof import('./src/components/base/AppUpgradationView.vue')['default']
