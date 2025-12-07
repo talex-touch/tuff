@@ -343,12 +343,17 @@ export class TrayManager extends BaseModule {
     const hideDock = this.getHideDockConfig()
 
     if (hideDock) {
+      // When hideDock is enabled, show dock only when window is visible
       if (mainWindow.isVisible()) {
         app.dock?.show()
       }
       else {
         app.dock?.hide()
       }
+    }
+    else {
+      // When hideDock is disabled, always show dock
+      app.dock?.show()
     }
   }
 

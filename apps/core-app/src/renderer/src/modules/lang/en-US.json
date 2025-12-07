@@ -114,7 +114,10 @@
     "usageDesc": "Guide you to use app when enter.",
     "shortcutDesc": "Define shortcut for {shortcut}",
     "shortcutLabels": {
-      "core_box_toggle": "Open command palette"
+      "core_box_toggle": "Open command palette",
+      "core_box_aiQuickCall": "Open AI Assistant",
+      "flow_detach_to_divisionbox": "Detach to Division Box",
+      "flow_transfer_to_plugin": "Transfer to Plugin"
     },
     "autoPaste": "Auto paste",
     "autoPasteDesc": "Paste what you copied in searchbar.",
