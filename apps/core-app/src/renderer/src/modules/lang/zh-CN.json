@@ -114,7 +114,10 @@
     "usageDesc": "进入时引导您使用应用程序。",
     "shortcutDesc": "为 {shortcut} 定义快捷键",
     "shortcutLabels": {
-      "core_box_toggle": "唤起命令面板"
+      "core_box_toggle": "唤起命令面板",
+      "core_box_aiQuickCall": "唤起 AI 助手",
+      "flow_detach_to_divisionbox": "分离到独立窗口",
+      "flow_transfer_to_plugin": "转移到插件"
     },
     "autoPaste": "自动粘贴",
     "autoPasteDesc": "在搜索栏中粘贴您复制的内容。",
