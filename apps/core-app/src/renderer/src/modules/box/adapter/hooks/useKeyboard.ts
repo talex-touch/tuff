@@ -19,6 +19,15 @@ declare global {
 const FORWARD_KEYS = new Set(['Enter', 'ArrowUp', 'ArrowDown'])
 
 /**
+ * Keys that should be forwarded when Alt/Option key is pressed.
+ * These are common text editing shortcuts:
+ * - Option+Backspace: Delete word backward
+ * - Option+Delete: Delete word forward
+ * - Option+Left/Right: Move by word
+ */
+const ALT_FORWARD_KEYS = new Set(['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight'])
+
+/**
  * Event name for triggering DivisionBox detach (Command+D)
  */
 const COREBOX_DETACH_EVENT = 'corebox:detach-item'
@@ -31,11 +40,28 @@ const COREBOX_FLOW_EVENT = 'corebox:flow-item'
 /**
  * Determines if a keyboard event should be forwarded to the plugin UI view.
  *
+ * Common shortcuts that should be forwarded:
+ * - Cmd/Ctrl+A: Select all
+ * - Cmd/Ctrl+C: Copy
+ * - Cmd/Ctrl+X: Cut
+ * - Cmd/Ctrl+Z: Undo
+ * - Cmd/Ctrl+Shift+Z: Redo
+ * - Cmd/Ctrl+Backspace: Delete to line start
+ * - Option/Alt+Backspace: Delete word backward
+ * - Option/Alt+Delete: Delete word forward
+ * - Option/Alt+Left/Right: Move by word
+ * - Cmd/Ctrl+Left/Right: Move to line start/end
+ *
  * @param event - The keyboard event to check
  * @returns True if the event should be forwarded
  */
 function shouldForwardKey(event: KeyboardEvent): boolean {
+  // Forward all Cmd/Ctrl shortcuts except Cmd+V (handled separately for paste)
   if ((event.metaKey || event.ctrlKey) && event.key !== 'v') {
+    return true
+  }
+  // Forward Alt/Option key combinations for word-level editing
+  if (event.altKey && ALT_FORWARD_KEYS.has(event.key)) {
     return true
   }
   return FORWARD_KEYS.has(event.key)
