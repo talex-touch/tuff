@@ -306,6 +306,11 @@ export class SearchEngineCore
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
+    // Normalize query text: trim leading/trailing whitespace
+    if (query.text) {
+      query.text = query.text.trim()
+    }
+
     const sessionId = crypto.randomUUID()
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
@@ -319,7 +324,7 @@ export class SearchEngineCore
     searchEngineLog.debug(`Starting search session ${sessionId}`)
 
     // Empty query detection: return recommendations
-    if ((!query.text || query.text.trim() === '') && (!query.inputs || query.inputs.length === 0)) {
+    if ((!query.text || query.text === '') && (!query.inputs || query.inputs.length === 0)) {
       searchEngineLog.debug('Empty query detected, generating recommendations')
 
       if (this.recommendationEngine) {
@@ -349,6 +354,7 @@ export class SearchEngineCore
             .build()
 
           result.sessionId = sessionId
+          result.containerLayout = recommendationResult.containerLayout
 
           return result
         } catch (error) {

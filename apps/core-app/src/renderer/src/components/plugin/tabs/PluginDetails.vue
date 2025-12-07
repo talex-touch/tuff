@@ -1,7 +1,14 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { toRef } from 'vue'
+import { ElMessage } from 'element-plus'
+import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
+import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 
 // Props
 const props = defineProps<{
@@ -9,299 +16,365 @@ const props = defineProps<{
 }>()
 const plugin = toRef(props, 'plugin')
 
-// Copy states
-const copyState = ref({
-  pluginId: false,
-})
-
 const { t } = useI18n()
 
-// Copy functionality
-async function copyToClipboard(text: string, type: keyof typeof copyState.value): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text)
-    copyState.value[type] = true
-    setTimeout(() => {
-      copyState.value[type] = false
-    }, 2000)
+// Development settings (editable)
+const devSettings = reactive({
+  enable: false,
+  address: '',
+  source: false,
+  autoStart: true,
+})
+
+// Track if settings have been modified
+const hasChanges = ref(false)
+const isSaving = ref(false)
+
+// Plugin paths
+const pluginPaths = ref<{
+  pluginPath: string
+  dataPath: string
+  configPath: string
+  logsPath: string
+  tempPath: string
+} | null>(null)
+
+// Performance data
+const performanceData = ref<{
+  storage: {
+    totalSize: number
+    fileCount: number
+    dirCount: number
+    maxSize: number
+    usagePercent: number
   }
-  catch (error) {
-    console.error('Failed to copy to clipboard:', error)
+  performance: {
+    loadTime: number
+    memoryUsage: number
+    cpuUsage: number
+    lastActiveTime: number
+  }
+} | null>(null)
+
+// Initialize dev settings from plugin
+function initDevSettings(): void {
+  devSettings.enable = plugin.value.dev?.enable ?? false
+  devSettings.address = plugin.value.dev?.address ?? ''
+  devSettings.source = plugin.value.dev?.source ?? false
+  hasChanges.value = false
+}
+
+// Watch for changes in dev settings
+watch(devSettings, () => {
+  const original = plugin.value.dev
+  hasChanges.value =
+    devSettings.enable !== (original?.enable ?? false) ||
+    devSettings.address !== (original?.address ?? '') ||
+    devSettings.source !== (original?.source ?? false)
+}, { deep: true })
+
+// Load plugin paths
+async function loadPaths(): Promise<void> {
+  pluginPaths.value = await pluginSDK.getPaths(plugin.value.name)
+}
+
+// Load performance data
+async function loadPerformance(): Promise<void> {
+  performanceData.value = await pluginSDK.getPerformance(plugin.value.name)
+}
+
+// Save dev settings
+async function saveDevSettings(): Promise<void> {
+  if (isSaving.value) return
+
+  isSaving.value = true
+  try {
+    const manifest = await pluginSDK.getManifest(plugin.value.name)
+    if (!manifest) {
+      ElMessage.error(t('plugin.details.saveError'))
+      return
+    }
+
+    // Update dev settings in manifest
+    manifest.dev = {
+      enable: devSettings.enable,
+      address: devSettings.address,
+      source: devSettings.source,
+    }
+
+    const success = await pluginSDK.saveManifest(plugin.value.name, manifest, true)
+    if (success) {
+      ElMessage.success(t('plugin.details.saveSuccess'))
+      hasChanges.value = false
+    } else {
+      ElMessage.error(t('plugin.details.saveError'))
+    }
+  } catch (error) {
+    console.error('Failed to save dev settings:', error)
+    ElMessage.error(t('plugin.details.saveError'))
+  } finally {
+    isSaving.value = false
   }
 }
+
+// Open path in file explorer
+async function openPath(pathType: 'plugin' | 'data' | 'config' | 'logs' | 'temp'): Promise<void> {
+  await pluginSDK.openPath(plugin.value.name, pathType)
+}
+
+// Format bytes to human readable
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${Number.parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`
+}
+
+// Format milliseconds
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(2)}s`
+}
+
+// Shorten path for display
+function shortenPath(fullPath: string): string {
+  if (!fullPath) return ''
+  const parts = fullPath.split(/[/\\]/)
+  if (parts.length <= 3) return fullPath
+  return `.../${parts.slice(-2).join('/')}`
+}
+
+// Initialize on mount
+onMounted(() => {
+  initDevSettings()
+  loadPaths()
+  loadPerformance()
+})
+
+// Re-initialize when plugin changes
+watch(() => plugin.value.name, () => {
+  initDevSettings()
+  loadPaths()
+  loadPerformance()
+})
 </script>
 
 <template>
-  <div class="PluginDetails w-full">
-    <div class="PluginDetails-Grid grid grid-cols-1 md:grid-cols-2 gap-6">
-      <!-- Basic Information -->
-      <div
-        class="PluginDetails-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border border-[var(--el-border-color-lighter)] rounded-2xl p-6"
-      >
-        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
-          <i class="i-ri-information-line text-xl text-[var(--el-color-primary)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-            {{ t('plugin.details.basicInfo') }}
-          </h3>
-        </div>
-        <div class="PluginDetails-List space-y-4">
-          <div
-            class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
+  <div class="PluginDetails w-full space-y-4">
+    <!-- 1. Basic Information -->
+    <TuffGroupBlock
+      :name="t('plugin.details.basicInfo')"
+      :description="plugin.desc || t('plugin.details.noDescription')"
+      default-icon="i-carbon-information"
+      active-icon="i-carbon-information-filled"
+      memory-name="plugin-details-basic"
+    >
+      <TuffBlockLine :title="t('plugin.details.pluginId')">
+        <template #description>
+          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{ plugin.name }}</code>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine :title="t('plugin.details.version')">
+        <template #description>
+          <span class="text-[var(--el-color-success)] font-semibold">v{{ plugin.version }}</span>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine :title="t('plugin.details.mode')">
+        <template #description>
+          <span
+            :class="plugin.dev?.enable ? 'text-[var(--el-color-primary)]' : 'text-[var(--el-color-success)]'"
+            class="font-medium"
           >
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.pluginId') }}</span>
-            <div class="PluginDetails-ValueWithCopy flex items-center gap-2">
-              <code
-                class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)]"
-              >{{ plugin.name }}</code>
-              <button
-                class="PluginDetails-CopyButton w-6 h-6 bg-[var(--el-fill-color-light)] border border-[var(--el-border-color-lighter)] rounded flex items-center justify-center transition-colors"
-                :class="
-                  copyState.pluginId
-                    ? 'bg-[var(--el-color-success-light-9)] border-[var(--el-color-success-light-8)] text-[var(--el-color-success)]'
-                    : 'text-[var(--el-text-color-secondary)]'
-                "
-                :title="t('plugin.details.copyPluginId')"
-                @click="copyToClipboard(plugin.name, 'pluginId')"
-              >
-                <i
-                  :class="copyState.pluginId ? 'i-ri-check-line' : 'i-ri-file-copy-line'"
-                  class="text-xs"
-                />
-              </button>
-            </div>
-          </div>
-          <div
-            class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
-          >
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.version') }}</span>
-            <span
-              class="PluginDetails-Value text-sm font-semibold text-[var(--el-color-success)]"
-            >{{ plugin.version }}</span>
-          </div>
-          <div
-            class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
-          >
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.mode') }}</span>
-            <span
-              v-if="plugin.dev?.enable"
-              class="PluginDetails-Value text-sm font-medium text-[var(--el-color-primary)]"
-            >{{ t('plugin.details.development') }}</span>
-            <span
-              v-else
-              class="PluginDetails-Value text-sm font-medium text-[var(--el-color-success)]"
-            >{{ t('plugin.details.production') }}</span>
-          </div>
-          <div
-            v-if="plugin.dev?.address"
-            class="PluginDetails-Row flex justify-between items-center py-3"
-          >
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.devAddress') }}</span>
-            <a
-              :href="plugin.dev.address"
-              class="PluginDetails-Link text-sm text-[var(--el-color-primary)] flex items-center gap-1"
-              target="_blank"
-            >
-              {{ plugin.dev.address }}
-              <i class="i-ri-external-link-line text-xs" />
-            </a>
-          </div>
-        </div>
-      </div>
+            {{ plugin.dev?.enable ? t('plugin.details.development') : t('plugin.details.production') }}
+          </span>
+        </template>
+      </TuffBlockLine>
+    </TuffGroupBlock>
 
-      <!-- Configuration -->
-      <div
-        class="PluginDetails-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border border-[var(--el-border-color-lighter)] rounded-2xl p-6"
-      >
-        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
-          <i class="i-ri-settings-3-line text-xl text-[var(--el-color-info)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-            {{ t('plugin.details.configuration') }}
-          </h3>
-        </div>
-        <div class="PluginDetails-List space-y-4">
-          <div
-            class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
-          >
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.autoStart') }}</span>
-            <div class="PluginDetails-Toggle flex items-center gap-2">
-              <div class="w-2 h-2 bg-[var(--el-color-success)] rounded-full animate-pulse" />
-              <span class="text-sm text-[var(--el-color-success)]">{{
-                t('plugin.details.enabled')
-              }}</span>
-            </div>
-          </div>
-          <div class="PluginDetails-Row flex justify-between items-center py-3">
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.hotReload') }}</span>
-            <div class="PluginDetails-Toggle flex items-center gap-2">
-              <div
-                class="w-2 h-2 rounded-full"
-                :class="
-                  plugin.dev?.enable
-                    ? 'bg-[var(--el-color-success)] animate-pulse'
-                    : 'bg-[var(--el-text-color-placeholder)]'
-                "
-              />
-              <span
-                class="text-sm"
-                :class="
-                  plugin.dev?.enable
-                    ? 'text-[var(--el-color-success)]'
-                    : 'text-[var(--el-text-color-placeholder)]'
-                "
-              >{{
-                plugin.dev?.enable ? t('plugin.details.enabled') : t('plugin.details.disabled')
-              }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- 2. Development Settings (Editable) -->
+    <TuffGroupBlock
+      :name="t('plugin.details.devSettings')"
+      :description="t('plugin.details.devSettingsDesc')"
+      default-icon="i-carbon-code"
+      active-icon="i-carbon-code"
+      memory-name="plugin-details-dev"
+    >
+      <template #header-extra>
+        <button
+          v-if="hasChanges"
+          class="px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer"
+          :class="isSaving
+            ? 'bg-[var(--el-fill-color)] text-[var(--el-text-color-secondary)]'
+            : 'bg-[var(--el-color-primary)] text-white hover:bg-[var(--el-color-primary-light-3)]'"
+          :disabled="isSaving"
+          @click.stop="saveDevSettings"
+        >
+          <i v-if="isSaving" class="i-ri-loader-4-line animate-spin mr-1" />
+          <i v-else class="i-ri-save-line mr-1" />
+          {{ t('plugin.details.save') }}
+        </button>
+      </template>
 
-      <!-- File System -->
-      <div
-        class="PluginDetails-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border border-[var(--el-border-color-lighter)] rounded-2xl p-6"
-      >
-        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
-          <i class="i-ri-folder-line text-xl text-[var(--el-color-warning)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-            {{ t('plugin.details.fileSystem') }}
-          </h3>
-        </div>
-        <div class="PluginDetails-List space-y-4">
-          <div
-            class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
-          >
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.pluginPath') }}</span>
-            <code
-              class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)] max-w-40 truncate"
-            >~/plugins/{{ plugin.name }}</code>
-          </div>
-          <div
-            class="PluginDetails-Row flex justify-between items-center py-3 border-b border-[var(--el-border-color-lighter)]"
-          >
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.dataDirectory') }}</span>
-            <code
-              class="PluginDetails-Value bg-[var(--el-fill-color-darker)] text-[var(--el-text-color-primary)] text-xs px-2 py-1 rounded border border-[var(--el-border-color-lighter)] max-w-40 truncate"
-            >~/data/{{ plugin.name }}</code>
-          </div>
-          <div class="PluginDetails-Row flex justify-between items-center py-3">
-            <span
-              class="PluginDetails-Label text-sm font-medium text-[var(--el-text-color-regular)]"
-            >{{ t('plugin.details.cacheSize') }}</span>
-            <span class="PluginDetails-Value text-sm text-[var(--el-text-color-primary)]">2.4 MB</span>
-          </div>
-        </div>
-      </div>
+      <TuffBlockSwitch
+        v-model="devSettings.autoStart"
+        :title="t('plugin.details.autoStart')"
+        :description="t('plugin.details.autoStartDesc')"
+        default-icon="i-carbon-play-filled-alt"
+        active-icon="i-carbon-play-filled-alt"
+      />
+      <TuffBlockSwitch
+        v-model="devSettings.enable"
+        :title="t('plugin.details.hotReload')"
+        :description="t('plugin.details.hotReloadDesc')"
+        default-icon="i-carbon-restart"
+        active-icon="i-carbon-restart"
+      />
+      <TuffBlockInput
+        v-model="devSettings.address"
+        :title="t('plugin.details.devAddress')"
+        :description="t('plugin.details.devAddressDesc')"
+        :placeholder="t('plugin.details.devAddressPlaceholder')"
+        :disabled="!devSettings.enable"
+        default-icon="i-carbon-link"
+        active-icon="i-carbon-link"
+      />
+      <TuffBlockSwitch
+        v-model="devSettings.source"
+        :title="t('plugin.details.sourceMode')"
+        :description="t('plugin.details.sourceModeDesc')"
+        :disabled="!devSettings.enable"
+        default-icon="i-carbon-document-download"
+        active-icon="i-carbon-document-download"
+      />
+    </TuffGroupBlock>
 
-      <!-- Performance -->
-      <div
-        class="PluginDetails-Card bg-[var(--el-bg-color-overlay)] backdrop-blur-xl border border-[var(--el-border-color-lighter)] rounded-2xl p-6"
+    <!-- 3. Performance -->
+    <TuffGroupBlock
+      :name="t('plugin.details.performance')"
+      :description="t('plugin.details.performanceDesc')"
+      default-icon="i-carbon-meter"
+      active-icon="i-carbon-meter-alt"
+      memory-name="plugin-details-perf"
+    >
+      <TuffBlockSlot
+        :title="t('plugin.details.loadTime')"
+        :description="t('plugin.details.loadTimeDesc')"
+        default-icon="i-carbon-timer"
       >
-        <div class="PluginDetails-CardHeader flex items-center gap-3 mb-6">
-          <i class="i-ri-time-line text-xl text-[var(--el-color-success)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-            {{ t('plugin.details.performance') }}
-          </h3>
+        <span class="text-sm font-semibold text-[var(--el-color-primary)]">
+          {{ performanceData ? formatMs(performanceData.performance.loadTime) : '--' }}
+        </span>
+      </TuffBlockSlot>
+      <TuffBlockSlot
+        :title="t('plugin.details.memoryUsage')"
+        :description="t('plugin.details.memoryUsageDesc')"
+        default-icon="i-carbon-chip"
+      >
+        <span class="text-sm font-semibold text-[var(--el-color-info)]">
+          {{ performanceData ? formatBytes(performanceData.performance.memoryUsage) : '--' }}
+        </span>
+      </TuffBlockSlot>
+      <TuffBlockSlot
+        :title="t('plugin.details.storageUsage')"
+        :description="t('plugin.details.storageUsageDesc')"
+        default-icon="i-carbon-data-base"
+      >
+        <div class="flex items-center gap-2">
+          <div class="w-24 h-2 bg-[var(--el-fill-color)] rounded-full overflow-hidden">
+            <div
+              v-if="performanceData"
+              class="h-full rounded-full transition-all duration-300"
+              :class="performanceData.storage.usagePercent > 80 ? 'bg-[var(--el-color-danger)]' : 'bg-[var(--el-color-primary)]'"
+              :style="{ width: `${performanceData.storage.usagePercent}%` }"
+            />
+          </div>
+          <span class="text-xs text-[var(--el-text-color-secondary)]">
+            {{ performanceData ? `${performanceData.storage.usagePercent.toFixed(1)}%` : '--' }}
+          </span>
         </div>
-        <div class="PluginDetails-Metrics space-y-3">
-          <div
-            class="PluginDetails-Metric bg-[var(--el-fill-color-darker)] rounded-xl p-4 flex justify-between items-center"
-          >
-            <div class="flex items-center gap-3">
-              <div
-                class="w-8 h-8 bg-[var(--el-color-primary-light-9)] rounded-lg flex items-center justify-center"
-              >
-                <i class="i-ri-timer-line text-[var(--el-color-primary)] text-sm" />
-              </div>
-              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]">{{
-                t('plugin.details.loadTime')
-              }}</span>
-            </div>
-            <span
-              class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
-            >156ms</span>
+      </TuffBlockSlot>
+      <TuffBlockLine :title="t('plugin.details.fileCount')">
+        <template #description>
+          <span class="font-semibold">
+            {{ performanceData ? `${performanceData.storage.fileCount} ${t('plugin.details.files')}` : '--' }}
+          </span>
+        </template>
+      </TuffBlockLine>
+    </TuffGroupBlock>
+
+    <!-- 4. Configuration & Paths -->
+    <TuffGroupBlock
+      :name="t('plugin.details.configuration')"
+      :description="t('plugin.details.configurationDesc')"
+      default-icon="i-carbon-folder"
+      active-icon="i-carbon-folder-open"
+      memory-name="plugin-details-config"
+    >
+      <TuffBlockSlot
+        :title="t('plugin.details.pluginPath')"
+        default-icon="i-carbon-folder-details"
+        @click="openPath('plugin')"
+      >
+        <template #label>
+          <div class="flex flex-col">
+            <span class="text-sm font-medium">{{ t('plugin.details.pluginPath') }}</span>
+            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.pluginPath">
+              {{ pluginPaths ? shortenPath(pluginPaths.pluginPath) : '...' }}
+            </code>
           </div>
-          <div
-            class="PluginDetails-Metric bg-[var(--el-fill-color-darker)] rounded-xl p-4 flex justify-between items-center"
-          >
-            <div class="flex items-center gap-3">
-              <div
-                class="w-8 h-8 bg-[var(--el-color-info-light-9)] rounded-lg flex items-center justify-center"
-              >
-                <i class="i-ri-ram-line text-[var(--el-color-info)] text-sm" />
-              </div>
-              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]">{{
-                t('plugin.details.memoryUsage')
-              }}</span>
-            </div>
-            <span
-              class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
-            >8.2 MB</span>
+        </template>
+        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+      </TuffBlockSlot>
+      <TuffBlockSlot
+        :title="t('plugin.details.dataDirectory')"
+        default-icon="i-carbon-data-base"
+        @click="openPath('data')"
+      >
+        <template #label>
+          <div class="flex flex-col">
+            <span class="text-sm font-medium">{{ t('plugin.details.dataDirectory') }}</span>
+            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.dataPath">
+              {{ pluginPaths ? shortenPath(pluginPaths.dataPath) : '...' }}
+            </code>
           </div>
-          <div
-            class="PluginDetails-Metric bg-[var(--el-fill-color-darker)] rounded-xl p-4 flex justify-between items-center"
-          >
-            <div class="flex items-center gap-3">
-              <div
-                class="w-8 h-8 bg-[var(--el-color-success-light-9)] rounded-lg flex items-center justify-center"
-              >
-                <i class="i-ri-cpu-line text-[var(--el-color-success)] text-sm" />
-              </div>
-              <span class="PluginDetails-MetricLabel text-sm text-[var(--el-text-color-regular)]">{{
-                t('plugin.details.cpuUsage')
-              }}</span>
-            </div>
-            <span
-              class="PluginDetails-MetricValue text-sm font-semibold text-[var(--el-text-color-primary)]"
-            >0.3%</span>
+        </template>
+        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+      </TuffBlockSlot>
+      <TuffBlockSlot
+        :title="t('plugin.details.configDirectory')"
+        default-icon="i-carbon-settings"
+        @click="openPath('config')"
+      >
+        <template #label>
+          <div class="flex flex-col">
+            <span class="text-sm font-medium">{{ t('plugin.details.configDirectory') }}</span>
+            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.configPath">
+              {{ pluginPaths ? shortenPath(pluginPaths.configPath) : '...' }}
+            </code>
           </div>
-        </div>
-      </div>
-    </div>
+        </template>
+        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+      </TuffBlockSlot>
+      <TuffBlockSlot
+        :title="t('plugin.details.logsDirectory')"
+        default-icon="i-carbon-document"
+        @click="openPath('logs')"
+      >
+        <template #label>
+          <div class="flex flex-col">
+            <span class="text-sm font-medium">{{ t('plugin.details.logsDirectory') }}</span>
+            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.logsPath">
+              {{ pluginPaths ? shortenPath(pluginPaths.logsPath) : '...' }}
+            </code>
+          </div>
+        </template>
+        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+      </TuffBlockSlot>
+    </TuffGroupBlock>
   </div>
 </template>
 
 <style lang="scss" scoped>
-/* UnoCSS handles most styling, minimal custom styles needed */
-
-.PluginDetails-Row:last-child {
-  @apply border-b-0;
-}
-
-.PluginDetails-Toggle .animate-pulse {
-  animation: pulse 2s infinite;
-}
-
-.PluginDetails-CopyButton {
-  @apply transition-all duration-200;
-
-  &:active {
-    @apply scale-95;
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
+/* Minimal custom styles - Tuff components handle most styling */
 </style>

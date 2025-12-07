@@ -1,4 +1,4 @@
-import type { TuffItem } from '@talex-touch/utils'
+import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { ContextProvider } from './context-provider'
@@ -14,23 +14,17 @@ export class RecommendationEngine {
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder(dbUtils)
-    console.debug('[DEBUG_REC_INIT] RecommendationEngine initialized')
   }
 
-  /**
-   * 生成推荐列表
-   */
+  /** 生成推荐列表 */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
-    console.debug('[DEBUG_REC_INIT] Starting recommendation generation', options)
     const startTime = performance.now()
-
     const context = await this.contextProvider.getCurrentContext()
 
-    // TEMPORARY: Disable cache for testing - remove this line to re-enable cache
+    // TODO: 恢复缓存逻辑
     const forceRefresh = true
     const cached = forceRefresh ? null : await this.getCachedRecommendations(context)
     if (cached && !options.forceRefresh) {
-      console.debug('[RecommendationEngine] Using cached recommendations')
       return {
         items: cached.items,
         context,
@@ -40,59 +34,71 @@ export class RecommendationEngine {
     }
 
     const candidates = await this.getCandidates(context, options)
-    console.debug(`[DEBUG_REC_INIT] Generated ${candidates.length} candidates`)
 
-    // Fallback: if no candidates, use simple usage count
     if (candidates.length === 0) {
-      console.debug('[DEBUG_REC_INIT] No candidates found, using fallback strategy')
       const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
-      console.debug(`[DEBUG_REC_INIT] Fallback generated ${fallbackItems.length} items`)
-
-      const duration = performance.now() - startTime
       return {
         items: fallbackItems,
         context,
-        duration,
+        duration: performance.now() - startTime,
         fromCache: false
       }
     }
 
     const scored = await this.scoreAndRank(candidates, context)
-    console.debug(`[DEBUG_REC_INIT] Scored ${scored.length} items`)
-
     const limit = options.limit || 10
     const diversified = this.applyDiversityFilter(scored, limit)
-    console.debug(`[DEBUG_REC_INIT] After diversity filter: ${diversified.length} items`)
-
     const items = await this.itemRebuilder.rebuildItems(diversified)
-    console.debug(`[DEBUG_REC_INIT] Rebuilt ${items.length} items`)
 
-    // Fallback check: if rebuilding failed, try fallback
     if (items.length === 0 && diversified.length > 0) {
-      console.debug('[DEBUG_REC_INIT] Rebuilding failed, using fallback')
       const fallbackItems = await this.getFallbackRecommendations(limit)
-
-      const duration = performance.now() - startTime
       return {
         items: fallbackItems,
         context,
-        duration,
+        duration: performance.now() - startTime,
         fromCache: false
       }
     }
 
     await this.cacheRecommendations(context, items)
-
     const duration = performance.now() - startTime
-    console.debug(
-      `[RecommendationEngine] Generated ${items.length} recommendations in ${duration.toFixed(2)}ms`
-    )
+
+    const containerLayout = this.buildContainerLayout(options, items)
 
     return {
       items,
       context,
       duration,
-      fromCache: false
+      fromCache: false,
+      containerLayout
+    }
+  }
+
+  /** 构建容器布局配置 */
+  private buildContainerLayout(
+    _options: RecommendationOptions,
+    items: TuffItem[]
+  ): TuffContainerLayout {
+    const itemCount = items.length
+    // 推荐列表默认使用宫格布局
+    return {
+      mode: 'grid',
+      grid: {
+        columns: Math.min(8, itemCount || 8),
+        gap: 12,
+        itemSize: 'medium'
+      },
+      sections: [
+        {
+          id: 'recommendations',
+          title: 'Recommend',
+          layout: 'grid',
+          itemIds: items.map((item) => item.id),
+          meta: {
+            intelligence: true
+          }
+        }
+      ]
     }
   }
 
@@ -108,8 +114,13 @@ export class RecommendationEngine {
         return []
       }
 
+      // 过滤掉文件类型的项目
+      const filteredItems = frequentItems.filter(
+        (item) => item.sourceId !== 'file-provider' && item.sourceType !== 'file'
+      )
+
       const items = await this.itemRebuilder.rebuildItems(
-        frequentItems.map((item) => ({
+        filteredItems.map((item) => ({
           ...item,
           source: 'frequent' as const,
           score: item.usageStats.executeCount
@@ -177,18 +188,23 @@ export class RecommendationEngine {
     // 去重(同一 sourceId + itemId 只保留第一次出现)
     const deduplicated = this.deduplicateCandidates(candidates)
 
+    // 过滤掉文件类型的项目，推荐列表不展示文件
+    const filtered = deduplicated.filter(
+      (item) => item.sourceId !== 'file-provider' && item.sourceType !== 'file'
+    )
+
     // 统计各 source 的分布
     const sourceDistribution = new Map<string, number>()
-    for (const item of deduplicated) {
+    for (const item of filtered) {
       const key = item.sourceId
       sourceDistribution.set(key, (sourceDistribution.get(key) || 0) + 1)
     }
     console.debug(
-      `[DEBUG_REC_INIT] After dedup: ${deduplicated.length} items, distribution:`,
+      `[DEBUG_REC_INIT] After dedup and filter: ${filtered.length} items, distribution:`,
       Object.fromEntries(sourceDistribution)
     )
 
-    return deduplicated
+    return filtered
   }
 
   /**
@@ -842,24 +858,24 @@ export class RecommendationEngine {
   }
 }
 
-/**
- * 推荐选项
- */
+/** 推荐选项 */
 export interface RecommendationOptions {
   limit?: number
   forceRefresh?: boolean
   includeTypes?: string[]
   excludeTypes?: string[]
+  /** 布局模式 */
+  layoutMode?: 'list' | 'grid'
 }
 
-/**
- * 推荐结果
- */
+/** 推荐结果 */
 export interface RecommendationResult {
   items: TuffItem[]
   context: ContextSignal
   duration: number
   fromCache: boolean
+  /** 容器布局配置 */
+  containerLayout?: TuffContainerLayout
 }
 
 /**
@@ -873,11 +889,9 @@ interface ItemCandidate {
   timeStats?: ParsedItemTimeStats
 }
 
-/**
- * 候选项(带来源标记)
- */
+/** 候选项(带来源标记) */
 interface CandidateItem extends ItemCandidate {
-  source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'context'
+  source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'context' | 'pinned'
 }
 
 /**

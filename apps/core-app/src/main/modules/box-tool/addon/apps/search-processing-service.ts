@@ -5,6 +5,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { startTiming, timingLogger } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search/fuzzy-match'
 import { levenshteinDistance } from '@talex-touch/utils/search/levenshtein-utils'
 import chalk from 'chalk'
 import { pinyin } from 'pinyin-pro'
@@ -68,30 +69,41 @@ export async function processSearchResults(
 
     // --- 1. 来源推断与区间计算 ---
     if (isFuzzySearch) {
-      // 模糊搜索：使用滑窗算法找到最佳匹配子串
-      let minFuzzyDist = Infinity
-      let bestFuzzyStart = -1
-      let bestFuzzyEnd = -1
-
-      for (let i = 0; i <= displayName.length - lowerCaseQuery.length; i++) {
-        const sub = displayName.substring(i, i + lowerCaseQuery.length).toLowerCase()
-        const dist = levenshteinDistance(sub, lowerCaseQuery)
-        if (dist < minFuzzyDist) {
-          minFuzzyDist = dist
-          bestFuzzyStart = i
-          bestFuzzyEnd = i + lowerCaseQuery.length
-        }
-      }
-
-      if (minFuzzyDist <= 2 && bestFuzzyStart !== -1) {
-        const clampedStart = Math.max(0, bestFuzzyStart)
-        const clampedEnd = Math.min(displayName.length, Math.max(clampedStart + 1, bestFuzzyEnd))
+      // 模糊搜索：使用新的 fuzzyMatch 算法，支持 typo 容错
+      const fuzzyResult = fuzzyMatch(displayName, lowerCaseQuery, 2)
+      if (fuzzyResult.matched && fuzzyResult.score >= 0.4) {
         updateMatch(
           'name-fuzzy',
-          [{ start: clampedStart, end: clampedEnd }],
-          0.1 + (2 - minFuzzyDist) * 0.05,
-          displayName,
+          indicesToRanges(fuzzyResult.matchedIndices),
+          fuzzyResult.score * 0.3, // 模糊匹配分数较低
+          displayName
         )
+      } else {
+        // 回退到原有的滑窗算法
+        let minFuzzyDist = Infinity
+        let bestFuzzyStart = -1
+        let bestFuzzyEnd = -1
+
+        for (let i = 0; i <= displayName.length - lowerCaseQuery.length; i++) {
+          const sub = displayName.substring(i, i + lowerCaseQuery.length).toLowerCase()
+          const dist = levenshteinDistance(sub, lowerCaseQuery)
+          if (dist < minFuzzyDist) {
+            minFuzzyDist = dist
+            bestFuzzyStart = i
+            bestFuzzyEnd = i + lowerCaseQuery.length
+          }
+        }
+
+        if (minFuzzyDist <= 2 && bestFuzzyStart !== -1) {
+          const clampedStart = Math.max(0, bestFuzzyStart)
+          const clampedEnd = Math.min(displayName.length, Math.max(clampedStart + 1, bestFuzzyEnd))
+          updateMatch(
+            'name-fuzzy',
+            [{ start: clampedStart, end: clampedEnd }],
+            0.1 + (2 - minFuzzyDist) * 0.05,
+            displayName
+          )
+        }
       }
     }
 
@@ -104,8 +116,27 @@ export async function processSearchResults(
         continue
       const normalizedTitle = title.toLowerCase()
 
+      // Check for exact substring match
       if (normalizedTitle.includes(lowerCaseQuery)) {
         updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.9, title)
+      }
+
+      // Check for multi-word query match (each word matches in order)
+      const queryParts = lowerCaseQuery.split(/\s+/).filter(Boolean)
+      if (queryParts.length > 1) {
+        let allPartsMatch = true
+        let searchIndex = 0
+        for (const part of queryParts) {
+          const idx = normalizedTitle.indexOf(part, searchIndex)
+          if (idx === -1) {
+            allPartsMatch = false
+            break
+          }
+          searchIndex = idx + part.length
+        }
+        if (allPartsMatch) {
+          updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.85, title)
+        }
       }
 
       const acronym = generateAcronym(title)

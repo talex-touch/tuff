@@ -38,7 +38,6 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     }
 
     const item = this.buildPreviewItem(query, result)
-    void this.recordHistory(result.payload, query)
     const duration = performance.now() - startedAt
 
     return new TuffSearchResultBuilder(query)
@@ -64,10 +63,12 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     // no-op
   }
 
-  async onExecute({ item }: IExecuteArgs): Promise<null> {
+  async onExecute({ item, searchResult }: IExecuteArgs): Promise<null> {
     const payload = this.extractPayload(item)
     if (payload?.primaryValue) {
       clipboard.writeText(payload.primaryValue)
+      // Record to history only when user explicitly executes (presses Enter)
+      void this.recordHistory(payload, searchResult?.query ?? { text: '', inputs: [] })
     }
     return null
   }

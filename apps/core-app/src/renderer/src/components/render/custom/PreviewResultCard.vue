@@ -30,8 +30,7 @@ onBeforeUnmount(() => {
 })
 
 const resolvedPayload = computed<PreviewCardPayload | undefined>(() => {
-  if (props.payload)
-    return props.payload
+  if (props.payload) return props.payload
   const custom = props.item.render?.custom
   return custom?.data as PreviewCardPayload | undefined
 })
@@ -41,7 +40,7 @@ const chips = computed(() => resolvedPayload.value?.chips ?? [])
 const badges = computed(() => resolvedPayload.value?.badges ?? [])
 
 const detailRows = computed(() => {
-  const rows = sections.value.flatMap(section => section.rows)
+  const rows = sections.value.flatMap((section) => section.rows)
   return rows.slice(0, 4)
 })
 
@@ -52,7 +51,9 @@ const accentStyle = computed(() => {
 </script>
 
 <template>
-  <div class="PreviewResultCard">
+  <div class="PreviewResultCard relative">
+    <gradient-border />
+
     <div class="card-head">
       <div class="left">
         <div v-if="resolvedPayload?.subtitle" class="badge">
@@ -115,6 +116,8 @@ const accentStyle = computed(() => {
           {{ warning }}
         </div>
       </div>
+
+      <div class="absolute right-3 bottom-3 text-[10px] op-20">Powered by TuffIntelligence</div>
     </div>
   </div>
 </template>
@@ -122,11 +125,9 @@ const accentStyle = computed(() => {
 <style scoped lang="scss">
 .PreviewResultCard {
   width: 100%;
-  border-radius: 18px;
+  border-radius: 25px;
   padding: 0.75rem 1rem 0.5rem;
   background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   gap: 10px;

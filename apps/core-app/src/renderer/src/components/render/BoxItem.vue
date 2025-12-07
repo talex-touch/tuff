@@ -68,36 +68,79 @@ interface Range {
   end: number
 }
 
+/**
+ * Generate highlighted HTML from text and match ranges
+ * Supports multiple non-overlapping ranges for proper fuzzy match highlighting
+ */
 function getHighlightedHTML(
   text: string,
   matchedIndices?: Range[],
   opts: {
     className?: string
-    base?: 0 | 1 // 起始基：0 基或 1 基，默认 0 基
-    inclusiveEnd?: boolean // 右端是否包含，默认不包含 (右开)
+    base?: 0 | 1
+    inclusiveEnd?: boolean
   } = {}
 ): string {
   if (!matchedIndices?.length) return text
 
   const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = opts
-
-  const { start, end } = matchedIndices[matchedIndices.length - 1]
-
-  let s0 = base === 1 ? start - 1 : start
-  const e0 = base === 1 ? end - 1 : end
-
-  let eExclusive = inclusiveEnd ? e0 + 1 : e0
-
   const n = text.length
-  s0 = Math.max(0, Math.min(s0, n))
-  eExclusive = Math.max(s0, Math.min(eExclusive, n))
 
-  if (s0 >= eExclusive) return text
+  // Normalize and sort ranges
+  const normalizedRanges = matchedIndices
+    .map((range) => {
+      let s = base === 1 ? range.start - 1 : range.start
+      let e = base === 1 ? range.end - 1 : range.end
+      if (inclusiveEnd) e += 1
+      s = Math.max(0, Math.min(s, n))
+      e = Math.max(s, Math.min(e, n))
+      return { start: s, end: e }
+    })
+    .filter((r) => r.start < r.end)
+    .sort((a, b) => a.start - b.start)
 
-  return `${text.slice(0, s0)}<span class="${className}">${text.slice(
-    s0,
-    eExclusive
-  )}</span>${text.slice(eExclusive)}`
+  if (normalizedRanges.length === 0) return text
+
+  // Merge overlapping ranges
+  const mergedRanges: Range[] = []
+  let current = { ...normalizedRanges[0] }
+
+  for (let i = 1; i < normalizedRanges.length; i++) {
+    const next = normalizedRanges[i]
+    if (next.start <= current.end) {
+      current.end = Math.max(current.end, next.end)
+    } else {
+      mergedRanges.push(current)
+      current = { ...next }
+    }
+  }
+  mergedRanges.push(current)
+
+  // Build HTML with all highlighted ranges
+  let result = ''
+  let lastEnd = 0
+
+  for (const range of mergedRanges) {
+    if (range.start > lastEnd) {
+      result += escapeHtml(text.slice(lastEnd, range.start))
+    }
+    result += `<span class="${className}">${escapeHtml(text.slice(range.start, range.end))}</span>`
+    lastEnd = range.end
+  }
+
+  if (lastEnd < n) {
+    result += escapeHtml(text.slice(lastEnd))
+  }
+
+  return result
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 const sourceMeta = computed(() => resolveSourceMeta(props.item, t))

@@ -1,7 +1,7 @@
 import { match as pinyinMatch } from 'pinyin-pro'
+import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search/fuzzy-match'
 
 export interface Range {
-  // 导出 Range 接口
   start: number
   end: number // 右开 [start, end)
 }
@@ -78,15 +78,20 @@ function matchAcronym(text: string, query: string): Range[] | null {
  * 核心高亮计算函数
  * @param text 要在其中搜索的完整文本 (e.g., "Visual Studio Code")
  * @param query 用户的搜索词 (e.g., "vsc")
+ * @param enableFuzzy 是否启用模糊匹配 (default: true)
  * @returns Range[] | null 返回高亮范围数组，如果没有匹配则返回 null
  */
-export function calculateHighlights(text: string, query: string): Range[] | null {
+export function calculateHighlights(
+  text: string,
+  query: string,
+  enableFuzzy = true
+): Range[] | null {
   const lowerText = text.toLowerCase()
   const lowerQuery = query.toLowerCase()
 
   // 1. 精确/子串匹配 (最高优先级)
   const exactMatches: Range[] = []
-  const queryParts = lowerQuery.split(/\s+/).filter(Boolean) // 按空格分割查询词
+  const queryParts = lowerQuery.split(/\s+/).filter(Boolean)
 
   let allPartsMatched = true
   let currentTextIndex = 0
@@ -95,40 +100,65 @@ export function calculateHighlights(text: string, query: string): Range[] | null
     const index = lowerText.indexOf(part, currentTextIndex)
     if (index !== -1) {
       exactMatches.push({ start: index, end: index + part.length })
-      currentTextIndex = index + part.length // 更新下一个部分的搜索起始位置
-    }
-    else {
+      currentTextIndex = index + part.length
+    } else {
       allPartsMatched = false
       break
     }
   }
 
-  // 如果所有部分都能按顺序匹配到，则返回这些匹配
   if (allPartsMatched && exactMatches.length > 0) {
     return exactMatches
   }
 
-  // 如果整个查询作为连续子串匹配 (无论是否有空格)
-  const fullQueryIndex = lowerText.indexOf(lowerQuery.replace(/\s+/g, '')) // 移除空格后进行匹配
+  // 如果整个查询作为连续子串匹配
+  const fullQueryIndex = lowerText.indexOf(lowerQuery.replace(/\s+/g, ''))
   if (fullQueryIndex !== -1) {
     return [{ start: fullQueryIndex, end: fullQueryIndex + lowerQuery.replace(/\s+/g, '').length }]
   }
 
   // 2. 缩写匹配 (e.g., "vsc" in "visual studio code")
-  const acronymRanges = matchAcronym(text, query) // 传递原始text和query，内部处理大小写
+  const acronymRanges = matchAcronym(text, query)
   if (acronymRanges) {
     return acronymRanges
   }
 
-  // 3. 拼音匹配 (使用 pinyin-pro，但只用它来获取索引)
-  // 仅在查询不含非字母字符时进行，避免符号干扰
-  // 检查 query 是否主要是字母，避免对特殊字符进行拼音匹配
+  // 3. 拼音匹配
   if (/^[a-z]+$/i.test(lowerQuery)) {
-    const pinyinResult = pinyinMatch(text, query) // 这是 pinyin-pro 的 match
+    const pinyinResult = pinyinMatch(text, query)
     if (pinyinResult && pinyinResult.length > 0) {
-      return convertIndicesToRanges(pinyinResult) // 使用我们自己的转换函数
+      return convertIndicesToRanges(pinyinResult)
+    }
+  }
+
+  // 4. 模糊匹配 (typo tolerance, e.g., "helol" -> "hello")
+  if (enableFuzzy && lowerQuery.length >= 2) {
+    const fuzzyResult = fuzzyMatch(text, query, 2)
+    if (fuzzyResult.matched && fuzzyResult.score >= 0.4) {
+      return indicesToRanges(fuzzyResult.matchedIndices)
     }
   }
 
   return null
+}
+
+/**
+ * 计算模糊匹配的高亮范围
+ * @param text 目标文本
+ * @param query 查询文本
+ * @param maxErrors 最大允许错误数
+ * @returns 匹配结果，包含分数和高亮范围
+ */
+export function calculateFuzzyHighlights(
+  text: string,
+  query: string,
+  maxErrors = 2
+): { score: number; ranges: Range[] } | null {
+  const result = fuzzyMatch(text, query, maxErrors)
+  if (!result.matched) return null
+
+  return {
+    score: result.score,
+    ranges: indicesToRanges(result.matchedIndices)
+  }
 }

@@ -20,6 +20,7 @@ import { getConfig } from '../../storage'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from './manager'
 import type { CoreBoxInputChange } from './input-transport'
+import { getBoxItemManager } from '../item-sdk'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
@@ -97,7 +98,7 @@ export class WindowManager {
    */
   public enableInputMonitoring(): void {
     this.inputAllowed = true
-    coreBoxWindowLog.info('Input monitoring enabled for UI view')
+    coreBoxWindowLog.debug('Input monitoring enabled for UI view')
   }
 
   /**
@@ -110,7 +111,35 @@ export class WindowManager {
     }
 
     this.clipboardAllowedTypes = types
-    coreBoxWindowLog.info(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
+    coreBoxWindowLog.debug(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
+  }
+
+  /**
+   * Check if clipboard change should be forwarded to plugin based on allowed types
+   * @param itemType - The type of clipboard item ('text' | 'image' | 'files')
+   * @returns true if the plugin should receive this clipboard change
+   */
+  public shouldForwardClipboardChange(itemType: 'text' | 'image' | 'files'): boolean {
+    if (!this.attachedPlugin || this.clipboardAllowedTypes === 0) {
+      return false
+    }
+
+    // ClipboardType enum values: TEXT = 0b0001, IMAGE = 0b0010, FILE = 0b0100
+    const typeMap: Record<string, number> = {
+      text: 0b0001,
+      image: 0b0010,
+      files: 0b0100
+    }
+
+    const typeBit = typeMap[itemType] ?? 0
+    return (this.clipboardAllowedTypes & typeBit) !== 0
+  }
+
+  /**
+   * Get current clipboard allowed types
+   */
+  public getClipboardAllowedTypes(): number {
+    return this.clipboardAllowedTypes
   }
 
   /**
@@ -179,21 +208,6 @@ export class WindowManager {
       coreBoxWindowLog.debug('BoxWindow closed')
     })
 
-    // window.window.on('blur', () => {
-    //   const settings = this.getAppSettingConfig()
-    //   // Access isUIMode via its public getter
-    //   console.log(
-    //     `[CoreBox] Blur event detected. isUIMode: ${coreBoxManager.isUIMode}, autoHide setting: ${settings.tools.autoHide}`
-    //   )
-    //   if (settings.tools.autoHide && !coreBoxManager.isUIMode) {
-    //     // Only auto-hide if not in UI mode
-    //     console.log('[CoreBox] Auto-hiding CoreBox due to blur event (not in UI mode).')
-    //     coreBoxManager.trigger(false)
-    //   } else if (settings.tools.autoHide && coreBoxManager.isUIMode) {
-    //     console.log('[CoreBox] Blur event ignored in UI mode to prevent unintended hiding.')
-    //   }
-    // })
-
     window.window.on('blur', async () => {
       const settings = this.getAppSettingConfig()
 
@@ -215,7 +229,7 @@ export class WindowManager {
       }
     })
 
-    coreBoxWindowLog.info('NewBox created, WebContents loaded')
+    coreBoxWindowLog.debug('NewBox created, WebContents loaded')
 
     this.windows.push(window)
 
@@ -507,7 +521,6 @@ export class WindowManager {
           root.classList.add('dark');
           root.classList.remove('dark');
         }
-        console.log('[CoreBox] Current app theme:', isDark ? 'dark' : 'light');
       })();
     `
 
@@ -534,7 +547,7 @@ export class WindowManager {
       return
     }
 
-    coreBoxWindowLog.info(`AttachUIView - loading ${url}`)
+    coreBoxWindowLog.debug(`AttachUIView - loading ${url}`)
 
     if (this.uiView) {
       coreBoxWindowLog.warn('UI view already attached, skipping re-attachment')
@@ -822,7 +835,7 @@ export class WindowManager {
       try {
         fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
         preloadPath = path.resolve(tempPreloadPath)
-        coreBoxWindowLog.info(`Created dynamic preload script: ${preloadPath}`)
+        coreBoxWindowLog.debug(`Created dynamic preload script: ${preloadPath}`)
       } catch (error) {
         coreBoxWindowLog.error(`Failed to create preload script: ${tempPreloadPath}`, {
           error
@@ -900,7 +913,7 @@ export class WindowManager {
     })
 
     const finalUrl = this.normalizeUIViewUrl(url, plugin)
-    coreBoxWindowLog.info(`AttachUIView - resolved URL ${finalUrl}`)
+    coreBoxWindowLog.debug(`AttachUIView - resolved URL ${finalUrl}`)
     this.uiView.webContents.loadURL(finalUrl)
 
     // Initial theme is now injected synchronously via preload ($tuffInitialData.theme)
@@ -921,6 +934,12 @@ export class WindowManager {
       // Handle plugin state transition before detaching
       if (this.attachedPlugin && pluginModule.pluginManager) {
         const plugin = this.attachedPlugin
+
+        // Clear items pushed by this plugin from BoxItemManager
+        const boxItemManager = getBoxItemManager()
+        boxItemManager.clear(plugin.name)
+        coreBoxWindowLog.debug(`Cleared BoxItemManager items for plugin: ${plugin.name}`)
+
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED

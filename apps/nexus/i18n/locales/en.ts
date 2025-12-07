@@ -314,8 +314,7 @@ export default {
         },
         license: {
           title: 'Tuff Plugin License Agreement',
-          agreement: `
-# Tuff Plugin License Agreement
+          agreement: `# Tuff Plugin License Agreement
 
 ## 1. Acceptance of Terms
 By submitting a plugin, you agree to comply with all terms of this License Agreement.
@@ -336,11 +335,10 @@ Plugins must meet the following standards:
 Tuff reserves the right to review, reject, or remove any plugin.
 
 ## 5. Disclaimer
-Plugins are provided \"as is\". Tuff makes no warranties regarding plugin quality.
+Plugins are provided "as is". Tuff makes no warranties regarding plugin quality.
 
 ## 6. Agreement Changes
-Tuff may update this agreement at any time. Continued submission indicates acceptance of changes.
-          `.trim(),
+Tuff may update this agreement at any time. Continued submission indicates acceptance of changes.`,
           confirm: 'I agree to the Tuff Plugin License Agreement',
           submit: 'Agree and Submit for Review',
           cancel: 'Cancel',
@@ -1112,4 +1110,4 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       content: 'For technical support or to report issues, please contact us through our official channels.',
     },
   },
-} as const
+}

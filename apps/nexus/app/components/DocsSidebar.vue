@@ -10,6 +10,11 @@ const { t, locale } = useI18n()
 const localePath = useLocalePath()
 const SUPPORTED_LOCALES = ['en', 'zh']
 
+const TOP_SECTIONS = [
+  { key: 'guide', label: 'Guide', icon: 'i-carbon-book' },
+  { key: 'dev', label: 'Dev', icon: 'i-carbon-code' },
+] as const
+
 const docLabels = computed<Record<string, string>>(() => ({
   '/docs/guide/start': t('docsNav.start'),
   '/docs/guide/start.zh': t('docsNav.start'),
@@ -36,9 +41,38 @@ function normalizeContentPath(path: string | null | undefined) {
   return stripLocalePrefix(fullPath).replace(/\.(en|zh)$/, '')
 }
 
-const items = computed(() => navigationTree.value ?? [])
+function isCurrentLocaleItem(item: any): boolean {
+  if (!item?.path)
+    return true
+  const path = item.path as string
+  const currentLocale = locale.value
+  const otherLocale = currentLocale === 'en' ? 'zh' : 'en'
+  
+  // If path ends with other locale suffix, filter it out
+  if (path.endsWith(`.${otherLocale}`))
+    return false
+  
+  return true
+}
 
-const sections = computed(() => {
+function filterByLocale(items: any[]): any[] {
+  return items
+    .filter(isCurrentLocaleItem)
+    .map(item => {
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        return {
+          ...item,
+          children: filterByLocale(item.children),
+        }
+      }
+      return item
+    })
+}
+
+const items = computed(() => navigationTree.value ?? [])
+const normalizedRoutePath = computed(() => stripLocalePrefix(route.path))
+
+const allSections = computed(() => {
   if (!items.value.length)
     return []
   const [first] = items.value
@@ -47,8 +81,47 @@ const sections = computed(() => {
   return items.value
 })
 
+const activeTopSection = computed(() => {
+  const path = normalizedRoutePath.value
+  for (const section of TOP_SECTIONS) {
+    if (path.startsWith(`/docs/${section.key}`))
+      return section.key
+  }
+  return 'guide'
+})
+
+const currentSectionData = computed(() => {
+  return allSections.value.find((s: any) => {
+    const sectionPath = normalizeContentPath(s.path)
+    return sectionPath === `/docs/${activeTopSection.value}`
+  })
+})
+
+const sections = computed(() => {
+  const data = currentSectionData.value
+  if (!data)
+    return []
+  
+  const children = filterByLocale(data.children ?? [])
+  
+  // If there are subdirectories (features, scenes, api, etc.), show them as sections
+  // Otherwise, show the files directly as a flat list
+  const hasSubdirs = children.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
+  
+  if (hasSubdirs) {
+    return children
+  }
+  
+  // For flat file lists, wrap them in a single section
+  return [{
+    title: data.title,
+    path: data.path,
+    children,
+    page: false,
+  }]
+})
+
 const expandedSections = ref<Record<string, boolean>>({})
-const normalizedRoutePath = computed(() => stripLocalePrefix(route.path))
 
 function isLinkActive(path: string) {
   const normalizedTarget = normalizeContentPath(path)
@@ -138,12 +211,43 @@ watch(
 
 <template>
   <nav class="flex flex-col gap-1">
+    <!-- Top-level section tabs -->
+    <div class="mb-4 flex gap-1 border-b border-black/5 pb-3 dark:border-white/5">
+      <NuxtLink
+        v-for="sec in TOP_SECTIONS"
+        :key="sec.key"
+        :to="localePath(`/docs/${sec.key}`)"
+        class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium no-underline transition-all"
+        :class="activeTopSection === sec.key
+          ? 'bg-primary/10 text-primary dark:bg-primary/20'
+          : 'text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white'"
+      >
+        <span :class="sec.icon" class="text-base" />
+        <span>{{ sec.label }}</span>
+      </NuxtLink>
+    </div>
+
     <template v-if="pending">
       <div v-for="index in 6" :key="index" class="h-8 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
     </template>
     <template v-else-if="error">
       <div class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300">
         {{ t('docsSidebar.error') }}
+      </div>
+    </template>
+    <template v-else-if="sections.length === 0">
+      <!-- Show direct links when no subsections -->
+      <div v-if="currentSectionData" class="flex flex-col gap-1">
+        <NuxtLink
+          v-if="linkTarget(currentSectionData)"
+          :to="localePath(linkTarget(currentSectionData)!)"
+          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium no-underline transition-colors"
+          :class="isLinkActive(linkTarget(currentSectionData) || '')
+            ? 'bg-primary/10 text-primary'
+            : 'text-black/70 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white'"
+        >
+          {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
+        </NuxtLink>
       </div>
     </template>
     <template v-else>

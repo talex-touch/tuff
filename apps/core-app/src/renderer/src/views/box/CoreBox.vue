@@ -11,13 +11,16 @@ import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
+import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
+import FlowSelector from '~/components/flow/FlowSelector.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '../../modules/box/adapter'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
+import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
@@ -38,7 +41,8 @@ const boxOptions = reactive<IBoxOptions>({
   mode: BoxMode.INPUT,
   focus: 0,
   file: { buffer: null, paths: [] },
-  data: {}
+  data: {},
+  layout: undefined
 })
 
 // Create shared clipboard state
@@ -98,51 +102,29 @@ const completionDisplay = computed(() => {
   return completion
 })
 
-const shouldShowAiSuggestion = computed(() => {
-  if (loading.value) return false
-  if (res.value.length > 0) return false
-  if (boxOptions.mode !== BoxMode.INPUT && boxOptions.mode !== BoxMode.COMMAND) return false
-  if (activeActivations.value && activeActivations.value.length > 0) return false
 
-  const trimmed = searchVal.value.trim()
-  if (!trimmed.length) return false
-  const lower = trimmed.toLowerCase()
-  if (lower === 'ai' || lower.startsWith('ai ')) return false
-
-  return true
-})
-
-const aiSuggestionTitle = computed(() => t('coreBox.intelligence.suggestionTitle'))
-const aiSuggestionDescription = computed(() => t('coreBox.intelligence.suggestionDesc'))
-const aiSuggestionAction = computed(() => t('coreBox.intelligence.suggestionAction'))
-
-function handleAskAiSuggestion(): void {
-  const current = searchVal.value.trim()
-  const suggestion = current ? `ai ${current}` : 'ai '
-
-  if (searchVal.value !== suggestion) {
-    searchVal.value = suggestion
-  } else {
-    void handleSearchImmediate()
-  }
-
-  focusMainInput()
-}
-
-const { cleanup: cleanupVisibility } = useVisibility(
+const { cleanup: cleanupVisibility } = useVisibility({
   boxOptions,
   searchVal,
   clipboardOptions,
   handleAutoFill,
   handlePaste,
-  clearClipboard,
   boxInputRef,
   deactivateAllProviders
-)
+})
 const itemRefs = ref<HTMLElement[]>([])
 
-watch(res, () => {
+// Track result batch changes for animation
+const resultBatchKey = ref(0)
+let lastResultLength = 0
+
+watch(res, (newRes) => {
   itemRefs.value = []
+  // Only trigger batch animation when results change significantly
+  if (newRes.length !== lastResultLength || newRes.length === 0) {
+    resultBatchKey.value++
+    lastResultLength = newRes.length
+  }
 })
 
 function setItemRef(el: any, index: number) {
@@ -226,8 +208,10 @@ watch(
   }
 )
 
+const { focusWindowAndInput, focusInput } = useFocus({ boxInputRef })
+
 function focusMainInput(): void {
-  boxInputRef.value?.focus?.()
+  focusInput()
 }
 
 function handleFocusInputEvent(): void {
@@ -380,6 +364,182 @@ const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () 
   })
 })
 
+// Handle global shortcut: Detach to DivisionBox (Command+D)
+const unregDetachShortcut = touchChannel.regChannel('flow:trigger-detach', () => {
+  const currentItem = res.value[boxOptions.focus]
+  if (currentItem) {
+    handleDetachItem(new CustomEvent('corebox:detach-item', {
+      detail: { item: currentItem, query: searchVal.value }
+    }))
+  }
+})
+
+// Handle global shortcut: Flow Transfer (Command+Shift+D)
+const unregFlowShortcut = touchChannel.regChannel('flow:trigger-transfer', () => {
+  const currentItem = res.value[boxOptions.focus]
+  if (currentItem) {
+    handleFlowItem(new CustomEvent('corebox:flow-item', {
+      detail: { item: currentItem, query: searchVal.value }
+    }))
+  }
+})
+
+/**
+ * Handle Command+D: Detach item to DivisionBox
+ * Opens the current item in an independent DivisionBox window
+ */
+async function handleDetachItem(event: Event): Promise<void> {
+  const detail = (event as CustomEvent<{ item: TuffItem; query: string }>).detail
+  if (!detail?.item) return
+
+  const item = detail.item
+  console.log('[CoreBox] Detaching item to DivisionBox:', item.id)
+
+  try {
+    // Build DivisionBox config from item
+    const config = {
+      url: buildDivisionBoxUrl(item, detail.query),
+      title: item.render?.basic?.title || 'Detached Item',
+      icon: resolveItemIcon(item),
+      size: 'medium' as const,
+      keepAlive: true,
+      pluginId: item.source?.id
+    }
+
+    const response = await touchChannel.send('division-box:open', config)
+    if (response?.success) {
+      toast.success(t('corebox.detached', '已分离到独立窗口'))
+    } else {
+      throw new Error(response?.error?.message || 'Failed to open DivisionBox')
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to detach item:', error)
+    toast.error(t('corebox.detachFailed', '分离失败'))
+  }
+}
+
+// Flow Selector state
+const flowSelectorVisible = ref(false)
+const flowSelectorPayload = ref<any>(null)
+const flowSelectorSessionId = ref<string>('')
+
+/**
+ * Handle Command+Shift+D: Flow transfer to another plugin
+ * Opens the Flow selector to transfer data to another plugin
+ */
+async function handleFlowItem(event: Event): Promise<void> {
+  const detail = (event as CustomEvent<{ item: TuffItem; query: string }>).detail
+  if (!detail?.item) return
+
+  const item = detail.item
+  console.log('[CoreBox] Flow transfer item:', item.id)
+
+  try {
+    const payload = {
+      type: 'json' as const,
+      data: {
+        item,
+        query: detail.query
+      },
+      context: {
+        sourcePluginId: item.source?.id || 'corebox',
+        sourceFeatureId: item.meta?.featureId
+      }
+    }
+
+    // Open Flow selector panel
+    flowSelectorPayload.value = payload
+    flowSelectorVisible.value = true
+  } catch (error) {
+    console.error('[CoreBox] Failed to initiate flow:', error)
+    toast.error(t('corebox.flowFailed', '流转失败'))
+  }
+}
+
+/**
+ * Handle Flow selector close
+ */
+function handleFlowSelectorClose(): void {
+  flowSelectorVisible.value = false
+  flowSelectorPayload.value = null
+  flowSelectorSessionId.value = ''
+}
+
+/**
+ * Handle Flow target selection
+ */
+async function handleFlowTargetSelect(targetId: string): Promise<void> {
+  if (!flowSelectorPayload.value) return
+
+  try {
+    const response = await touchChannel.send('flow:dispatch', {
+      senderId: 'corebox',
+      payload: flowSelectorPayload.value,
+      options: {
+        preferredTarget: targetId,
+        skipSelector: true
+      }
+    })
+
+    if (response?.success) {
+      toast.success(t('corebox.flowSent', '已发送到目标插件'))
+    } else {
+      throw new Error(response?.error?.message || 'Flow dispatch failed')
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to dispatch flow:', error)
+    toast.error(t('corebox.flowFailed', '流转失败'))
+  } finally {
+    handleFlowSelectorClose()
+  }
+}
+
+/**
+ * Build DivisionBox URL from TuffItem
+ */
+function buildDivisionBoxUrl(item: TuffItem, query: string): string {
+  // Plugin items with webcontent interaction
+  if (item.meta?.interaction?.type === 'webcontent' && item.meta.interaction.path) {
+    const pluginId = item.source?.id
+    return `plugin://${pluginId}/${item.meta.interaction.path}`
+  }
+
+  // Plugin items with index interaction
+  if (item.meta?.interaction?.type === 'index') {
+    const pluginId = item.source?.id
+    return `plugin://${pluginId}/index.html`
+  }
+
+  // URL items
+  if (item.kind === 'url' && item.meta?.web?.url) {
+    return item.meta.web.url
+  }
+
+  // File items - open in preview
+  if (item.kind === 'file' && item.meta?.file?.path) {
+    return `file://${item.meta.file.path}`
+  }
+
+  // Default: use a generic detached view
+  const params = new URLSearchParams({
+    itemId: item.id,
+    query: query || '',
+    source: item.source?.id || ''
+  })
+  return `tuff://detached?${params.toString()}`
+}
+
+/**
+ * Resolve icon from TuffItem
+ */
+function resolveItemIcon(item: TuffItem): string | undefined {
+  const icon = item.render?.basic?.icon
+  if (!icon) return undefined
+  if (typeof icon === 'string') return icon
+  if (typeof icon === 'object' && 'value' in icon) return icon.value
+  return undefined
+}
+
 onMounted(() => {
   /**
    * Reset autopaste state on CoreBox open
@@ -391,6 +551,8 @@ onMounted(() => {
   window.addEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.addEventListener('corebox:copy-preview', handleCopyPreviewEvent)
   window.addEventListener('corebox:focus-input', handleFocusInputEvent)
+  window.addEventListener('corebox:detach-item', handleDetachItem)
+  window.addEventListener('corebox:flow-item', handleFlowItem)
   window.addEventListener('mousedown', handleGlobalMouseDown)
   window.addEventListener('keydown', handleHistoryKeydown, true)
 })
@@ -399,10 +561,14 @@ onBeforeUnmount(() => {
   cleanupClipboard()
   cleanupVisibility()
   unregUIModeExited()
+  unregDetachShortcut()
+  unregFlowShortcut()
   window.removeEventListener('corebox:show-calculation-history', handleHistoryEvent)
   window.removeEventListener('corebox:hide-calculation-history', handleHistoryHideEvent)
   window.removeEventListener('corebox:copy-preview', handleCopyPreviewEvent)
   window.removeEventListener('corebox:focus-input', handleFocusInputEvent)
+  window.removeEventListener('corebox:detach-item', handleDetachItem)
+  window.removeEventListener('corebox:flow-item', handleFlowItem)
   window.removeEventListener('mousedown', handleGlobalMouseDown)
   window.removeEventListener('keydown', handleHistoryKeydown, true)
 })
@@ -439,6 +605,17 @@ const pinIcon = computed<ITuffIcon>(() => ({
   value: appSetting.tools.autoHide ? 'i-ri-pushpin-2-line' : 'i-ri-pushpin-2-fill',
   status: 'normal'
 }))
+
+const isGridMode = computed(() => boxOptions.layout?.mode === 'grid')
+
+function handleGridSelect(index: number, item: TuffItem): void {
+  handleItemTrigger(index, item)
+}
+
+async function handleDeactivateProvider(id?: string): Promise<void> {
+  await deactivateProvider(id)
+  await focusWindowAndInput()
+}
 </script>
 
 <template>
@@ -450,7 +627,7 @@ const pinIcon = computed<ITuffIcon>(() => ({
     <PrefixPart
       :providers="activeActivations"
       @close="handleExit"
-      @deactivate-provider="deactivateProvider"
+      @deactivate-provider="handleDeactivateProvider"
     />
 
     <BoxInput ref="boxInputRef" v-model="searchVal" :box-options="boxOptions">
@@ -469,32 +646,29 @@ const pinIcon = computed<ITuffIcon>(() => ({
   <div class="CoreBoxRes flex" @contextmenu="handleHistoryContextMenu">
     <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
       <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-        <CoreBoxRender
-          v-for="(item, index) in res"
-          :key="index"
-          :ref="(el) => setItemRef(el, index)"
-          :active="boxOptions.focus === index"
-          :item="item"
-          :index="index"
-          @trigger="handleItemTrigger(index, item)"
-        />
-      </TouchScroll>
-      <div v-if="shouldShowAiSuggestion" class="CoreBoxRes-Empty CoreBoxRes-AI">
-        <div class="AiSuggestion">
-          <div class="AiSuggestion-Icon">🤖</div>
-          <div class="AiSuggestion-Body">
-            <h3 class="AiSuggestion-Title">
-              {{ aiSuggestionTitle }}
-            </h3>
-            <p class="AiSuggestion-Description">
-              {{ aiSuggestionDescription }}
-            </p>
+        <Transition name="result-switch" mode="out-in">
+          <BoxGrid
+            v-if="isGridMode"
+            :key="'grid-' + resultBatchKey"
+            :items="res"
+            :layout="boxOptions.layout"
+            :focus="boxOptions.focus"
+            @select="handleGridSelect"
+          />
+          <div v-else :key="'list-' + resultBatchKey" class="item-list">
+            <CoreBoxRender
+              v-for="(item, index) in res"
+              :key="item.id || index"
+              :ref="(el) => setItemRef(el, index)"
+              :active="boxOptions.focus === index"
+              :item="item"
+              :index="index"
+              :style="{ '--item-index': index }"
+              @trigger="handleItemTrigger(index, item)"
+            />
           </div>
-          <button class="AiSuggestion-Action" type="button" @click="handleAskAiSuggestion">
-            {{ aiSuggestionAction }}
-          </button>
-        </div>
-      </div>
+        </Transition>
+      </TouchScroll>
       <CoreBoxFooter :display="!!res.length" :item="activeItem" class="CoreBoxFooter-Sticky" />
     </div>
     <TuffItemAddon :type="addon" :item="activeItem" />
@@ -507,6 +681,15 @@ const pinIcon = computed<ITuffIcon>(() => ({
       @apply="applyPreviewHistory"
     />
   </div>
+
+  <!-- Flow Selector Panel -->
+  <FlowSelector
+    :visible="flowSelectorVisible"
+    :session-id="flowSelectorSessionId"
+    :payload="flowSelectorPayload"
+    @close="handleFlowSelectorClose"
+    @select="handleFlowTargetSelect"
+  />
 </template>
 
 <style lang="scss">
@@ -581,94 +764,6 @@ div.CoreBoxRes {
   }
 }
 
-.CoreBoxRes-Empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 24px;
-  color: var(--el-text-color-secondary);
-  text-align: center;
-
-  .placeholder-graphic {
-    width: 120px;
-    height: 120px;
-    opacity: 0.28;
-  }
-
-  .title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-  }
-
-  .subtitle {
-    font-size: 12px;
-  }
-}
-
-.CoreBoxRes-AI {
-  background: var(--el-bg-color);
-  border: 1px dashed var(--el-border-color);
-  border-radius: 12px;
-  padding: 24px;
-  color: var(--el-text-color-primary);
-
-  .AiSuggestion {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    max-width: 520px;
-  }
-
-  .AiSuggestion-Icon {
-    font-size: 36px;
-    line-height: 1;
-  }
-
-  .AiSuggestion-Body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    text-align: left;
-  }
-
-  .AiSuggestion-Title {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0;
-    color: var(--el-text-color-primary);
-  }
-
-  .AiSuggestion-Description {
-    margin: 0;
-    font-size: 13px;
-    color: var(--el-text-color-secondary);
-  }
-
-  .AiSuggestion-Action {
-    border: none;
-    background: var(--el-color-primary);
-    color: #fff;
-    padding: 10px 16px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition:
-      transform 0.15s ease,
-      box-shadow 0.15s ease;
-
-    &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 8px 16px rgba(79, 70, 229, 0.2);
-    }
-  }
-}
 
 .CoreBoxFooter-Sticky {
   position: absolute;
@@ -677,8 +772,69 @@ div.CoreBoxRes {
   bottom: 0;
 }
 
-.CoreBoxRes-Main > .scroll-area > .CoreBoxRender:last-child {
+.CoreBoxRes-Main > .scroll-area .item-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.CoreBoxRes-Main > .scroll-area .item-list > .CoreBoxRender:last-child {
   margin-bottom: 40px;
+}
+
+// Result switch animation (list <-> grid, or new results)
+.result-switch-enter-active {
+  animation: result-enter 0.28s ease-out;
+  animation-fill-mode: both;
+}
+
+.result-switch-leave-active {
+  animation: result-leave 0.15s ease-in;
+  animation-fill-mode: both;
+}
+
+@keyframes result-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes result-leave {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+// Staggered item animation within list
+.item-list > .CoreBoxRender {
+  animation: item-stagger-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--item-index, 0) * 0.035s);
+}
+
+@keyframes item-stagger-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 div.CoreBox {

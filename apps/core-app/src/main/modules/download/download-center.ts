@@ -6,8 +6,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { eq } from 'drizzle-orm'
-import { downloadTasks } from '../../db/schema'
+import { desc, eq } from 'drizzle-orm'
+import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { ChunkManager } from './chunk-manager'
@@ -62,9 +62,6 @@ export class DownloadCenterModule extends BaseModule {
   private notificationService!: NotificationService
   private errorLogger!: ErrorLogger
   private retryStrategy!: RetryStrategy
-  private databaseService!: any
-  private migrationManager!: any
-  private migrationRunner!: any
 
   // Configuration and state
   private config!: DownloadConfig // Download configuration
@@ -261,7 +258,7 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     task.status = DownloadStatus.CANCELLED
-    await this.databaseService.updateTaskStatus(taskId, DownloadStatus.CANCELLED)
+    await this.updateTaskStatusInDb(taskId, DownloadStatus.CANCELLED)
 
     // 立即清理切片文件和任务临时目录
     await this.chunkManager.cleanupChunks(task.chunks)
@@ -297,8 +294,8 @@ export class DownloadCenterModule extends BaseModule {
     task.updatedAt = new Date()
 
     // 更新数据库
-    await this.databaseService.updateTaskStatus(taskId, DownloadStatus.PENDING)
-    await this.databaseService.updateTaskError(taskId, '')
+    await this.updateTaskStatusInDb(taskId, DownloadStatus.PENDING)
+    await this.updateTaskErrorInDb(taskId, '')
 
     // 清理旧的切片和临时目录
     await this.chunkManager.cleanupChunks(task.chunks)
@@ -364,17 +361,21 @@ export class DownloadCenterModule extends BaseModule {
 
   // 获取下载历史
   async getTaskHistory(limit?: number): Promise<any[]> {
-    return await this.databaseService.getTaskHistory(limit || 50)
+    return await this.getDb()
+      .select()
+      .from(downloadHistory)
+      .orderBy(desc(downloadHistory.createdAt))
+      .limit(limit || 50)
   }
 
   // 清除历史记录
   async clearHistory(): Promise<void> {
-    await this.databaseService.cleanupExpiredData(0) // 清除所有历史记录
+    await this.getDb().delete(downloadHistory)
   }
 
   // 清除单个历史记录
   async clearHistoryItem(historyId: string): Promise<void> {
-    await this.databaseService.deleteHistoryItem(historyId)
+    await this.getDb().delete(downloadHistory).where(eq(downloadHistory.id, historyId))
   }
 
   // 打开文件
@@ -421,7 +422,7 @@ export class DownloadCenterModule extends BaseModule {
     const filePath = path.join(task.destination, task.filename)
     await fs.unlink(filePath)
 
-    await this.databaseService.deleteTask(taskId)
+    await this.deleteTaskFromDb(taskId)
     this.taskQueue.remove(taskId)
     this.broadcastTaskUpdated(task)
   }
@@ -654,6 +655,73 @@ export class DownloadCenterModule extends BaseModule {
   // 更新任务缓存
   private updateTaskCache(task: DownloadTask): void {
     this.taskCache.set(task.id, task)
+  }
+
+  // 更新任务状态到数据库
+  private async updateTaskStatusInDb(taskId: string, status: DownloadStatus): Promise<void> {
+    await this.getDb()
+      .update(downloadTasks)
+      .set({
+        status,
+        updatedAt: Date.now(),
+        completedAt: status === DownloadStatus.COMPLETED ? Date.now() : undefined,
+      })
+      .where(eq(downloadTasks.id, taskId))
+  }
+
+  // 更新任务错误信息到数据库
+  private async updateTaskErrorInDb(taskId: string, error: string): Promise<void> {
+    await this.getDb()
+      .update(downloadTasks)
+      .set({
+        error,
+        updatedAt: Date.now(),
+      })
+      .where(eq(downloadTasks.id, taskId))
+  }
+
+  // 更新下载进度到数据库
+  private async updateProgressInDb(taskId: string, downloadedSize: number, totalSize?: number): Promise<void> {
+    await this.getDb()
+      .update(downloadTasks)
+      .set({
+        downloadedSize,
+        totalSize,
+        updatedAt: Date.now(),
+      })
+      .where(eq(downloadTasks.id, taskId))
+  }
+
+  // 删除任务及其相关数据
+  private async deleteTaskFromDb(taskId: string): Promise<void> {
+    await this.getDb().delete(downloadChunks).where(eq(downloadChunks.taskId, taskId))
+    await this.getDb().delete(downloadTasks).where(eq(downloadTasks.id, taskId))
+  }
+
+  // 保存任务到历史记录
+  private async saveToHistoryDb(task: DownloadTask): Promise<void> {
+    const now = Date.now()
+    const createdAtMs = task.createdAt instanceof Date ? task.createdAt.getTime() : now
+    const completedAtMs = now
+    const duration = Math.round((completedAtMs - createdAtMs) / 1000)
+    const avgSpeed = task.progress.downloadedSize && duration > 0
+      ? Math.round(task.progress.downloadedSize / duration)
+      : undefined
+
+    await this.getDb().insert(downloadHistory).values({
+      id: `${task.id}_history_${now}`,
+      taskId: task.id,
+      url: task.url,
+      filename: task.filename,
+      module: task.module,
+      status: task.status,
+      totalSize: task.progress.totalSize,
+      downloadedSize: task.progress.downloadedSize,
+      duration,
+      averageSpeed: avgSpeed,
+      createdAt: createdAtMs,
+      completedAt: completedAtMs,
+    })
   }
 
   // 初始化下载工作器
@@ -995,46 +1063,21 @@ export class DownloadCenterModule extends BaseModule {
       }
     })
 
-    // 迁移相关通道
+    // 迁移相关通道 - 主数据库已统一管理迁移，这些通道返回已完成状态
     $app.channel.regChannel(ChannelType.MAIN, 'download:check-migration-needed', async () => {
-      try {
-        const needed = await this.migrationManager.needsMigration()
-        return { success: true, needed }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
+      return { success: true, needed: false }
     })
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:start-migration', async () => {
-      try {
-        const result = await this.migrationManager.migrate()
-        return { success: true, result }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
+      return { success: true, result: { migrated: true } }
     })
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:retry-migration', async () => {
-      try {
-        const result = await this.migrationManager.migrate()
-        return { success: true, result }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
+      return { success: true, result: { migrated: true } }
     })
 
     $app.channel.regChannel(ChannelType.MAIN, 'download:get-migration-status', async () => {
-      try {
-        const currentVersion = await this.migrationRunner.getCurrentVersion()
-        const appliedMigrations = await this.migrationRunner.getAppliedMigrations()
-        return { success: true, currentVersion, appliedMigrations }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
+      return { success: true, currentVersion: 1, appliedMigrations: [] }
     })
   }
 
@@ -1105,7 +1148,7 @@ export class DownloadCenterModule extends BaseModule {
   private async startDownloadTask(task: DownloadTask, worker: DownloadWorker): Promise<void> {
     try {
       task.status = DownloadStatus.DOWNLOADING
-      await this.databaseService.updateTaskStatus(task.id, DownloadStatus.DOWNLOADING)
+      await this.updateTaskStatusInDb(task.id, DownloadStatus.DOWNLOADING)
 
       // 使用重试策略启动下载
       const result = await this.retryStrategy.executeWithRetry(
@@ -1142,8 +1185,8 @@ export class DownloadCenterModule extends BaseModule {
       if (result.success) {
         // 下载完成
         task.status = DownloadStatus.COMPLETED
-        await this.databaseService.updateTaskStatus(task.id, DownloadStatus.COMPLETED)
-        await this.databaseService.saveToHistory(task as any)
+        await this.updateTaskStatusInDb(task.id, DownloadStatus.COMPLETED)
+        await this.saveToHistoryDb(task)
 
         this.broadcastTaskCompleted(task)
       }
@@ -1170,8 +1213,8 @@ export class DownloadCenterModule extends BaseModule {
       // 更新任务状态
       task.status = DownloadStatus.FAILED
       task.error = downloadError.userMessage
-      await this.databaseService.updateTaskStatus(task.id, DownloadStatus.FAILED)
-      await this.databaseService.updateTaskError(task.id, downloadError.userMessage)
+      await this.updateTaskStatusInDb(task.id, DownloadStatus.FAILED)
+      await this.updateTaskErrorInDb(task.id, downloadError.userMessage)
 
       this.broadcastTaskFailed(task)
     }
@@ -1195,7 +1238,7 @@ export class DownloadCenterModule extends BaseModule {
     // Update cache
     this.updateTaskCache(task)
 
-    this.databaseService.updateProgress(taskId, progress.downloadedSize, progress.totalSize)
+    this.updateProgressInDb(taskId, progress.downloadedSize, progress.totalSize)
 
     // Throttle progress broadcasts
     this.broadcastTaskProgressThrottled(task)
