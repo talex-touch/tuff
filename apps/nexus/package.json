@@ -53,6 +53,8 @@
     "nitro-cloudflare-dev": "catalog:dev",
     "nuxt": "catalog:build",
     "pinia": "catalog:frontend",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
     "typescript": "catalog:dev",
     "unocss": "catalog:build",
     "vue": "catalog:frontend",

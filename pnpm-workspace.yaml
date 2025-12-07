@@ -16,6 +16,8 @@ catalog:
   markdown-it: ^14.1.0
   motion-v: ^1.7.2
   ogl: ^1.0.11
+  react: ^19.2.1
+  react-dom: ^19.2.1
   sass: ^1.89.2
   simplex-noise: ^4.0.3
   typeit: ^8.8.7
