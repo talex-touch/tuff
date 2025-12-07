@@ -37,6 +37,26 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   public isQuitting = false
 
+  /**
+   * Read startSilent config directly from file before StorageModule is initialized
+   */
+  private readStartSilentConfig(): boolean {
+    try {
+      const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
+      if (fse.existsSync(configPath)) {
+        const content = fse.readFileSync(configPath, 'utf-8')
+        if (content.length > 0) {
+          const config = JSON.parse(content)
+          return config?.window?.startSilent === true
+        }
+      }
+    }
+    catch (error) {
+      mainLog.warn('Failed to read startSilent config, defaulting to false', { error })
+    }
+    return false
+  }
+
   private async showFileNotFoundDialog(filePath: string, triedPaths: string[]): Promise<void> {
     const window = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
 
@@ -60,9 +80,12 @@ export class TouchApp implements TalexTouch.TouchApp {
     })
     checkDirWithCreate(this.rootPath, true)
 
+    // Read startSilent config before creating window
+    const startSilent = this.readStartSilentConfig()
+
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
       ...MainWindowOption,
-      autoShow: true,
+      autoShow: !startSilent,
     }
 
     this.app = app
@@ -71,6 +94,10 @@ export class TouchApp implements TalexTouch.TouchApp {
     if (!app.isPackaged) {
       devProcessManager.init()
       mainLog.debug('Development process manager initialized')
+    }
+
+    if (startSilent) {
+      mainLog.info('Silent start mode enabled, window will not auto-show')
     }
 
     this.window = new TouchWindow(_windowOptions)
