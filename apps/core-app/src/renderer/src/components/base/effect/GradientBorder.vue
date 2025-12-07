@@ -1,6 +1,5 @@
 <template>
-  <component :is="as" class="gradient-border" :style="rootStyle">
-  </component>
+  <component :is="as" class="gradient-border" :style="rootStyle"></component>
 </template>
 
 <script lang="ts">
