@@ -114,8 +114,17 @@ const { cleanup: cleanupVisibility } = useVisibility({
 })
 const itemRefs = ref<HTMLElement[]>([])
 
-watch(res, () => {
+// Track result batch changes for animation
+const resultBatchKey = ref(0)
+let lastResultLength = 0
+
+watch(res, (newRes) => {
   itemRefs.value = []
+  // Only trigger batch animation when results change significantly
+  if (newRes.length !== lastResultLength || newRes.length === 0) {
+    resultBatchKey.value++
+    lastResultLength = newRes.length
+  }
 })
 
 function setItemRef(el: any, index: number) {
@@ -637,24 +646,28 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   <div class="CoreBoxRes flex" @contextmenu="handleHistoryContextMenu">
     <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
       <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-        <BoxGrid
-          v-if="isGridMode"
-          :items="res"
-          :layout="boxOptions.layout"
-          :focus="boxOptions.focus"
-          @select="handleGridSelect"
-        />
-        <TransitionGroup v-else name="item-fade" tag="div" class="item-list">
-          <CoreBoxRender
-            v-for="(item, index) in res"
-            :key="item.id || index"
-            :ref="(el) => setItemRef(el, index)"
-            :active="boxOptions.focus === index"
-            :item="item"
-            :index="index"
-            @trigger="handleItemTrigger(index, item)"
+        <Transition name="result-switch" mode="out-in">
+          <BoxGrid
+            v-if="isGridMode"
+            :key="'grid-' + resultBatchKey"
+            :items="res"
+            :layout="boxOptions.layout"
+            :focus="boxOptions.focus"
+            @select="handleGridSelect"
           />
-        </TransitionGroup>
+          <div v-else :key="'list-' + resultBatchKey" class="item-list">
+            <CoreBoxRender
+              v-for="(item, index) in res"
+              :key="item.id || index"
+              :ref="(el) => setItemRef(el, index)"
+              :active="boxOptions.focus === index"
+              :item="item"
+              :index="index"
+              :style="{ '--item-index': index }"
+              @trigger="handleItemTrigger(index, item)"
+            />
+          </div>
+        </Transition>
       </TouchScroll>
       <CoreBoxFooter :display="!!res.length" :item="activeItem" class="CoreBoxFooter-Sticky" />
     </div>
@@ -769,31 +782,58 @@ div.CoreBoxRes {
   margin-bottom: 40px;
 }
 
-// Item fade-in animation with staggered delay
-.item-fade-enter-active {
-  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+// Result switch animation (list <-> grid, or new results)
+.result-switch-enter-active {
+  animation: result-enter 0.28s ease-out;
+  animation-fill-mode: both;
 }
 
-.item-fade-enter-from {
-  opacity: 0;
-  transform: translateY(12px);
+.result-switch-leave-active {
+  animation: result-leave 0.15s ease-in;
+  animation-fill-mode: both;
 }
 
-.item-fade-leave-active {
-  transition: opacity 0.12s ease;
+@keyframes result-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.item-fade-leave-to {
-  opacity: 0;
+@keyframes result-leave {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 
-// Staggered delay for each item (faster at start, slower at end)
-@for $i from 1 through 20 {
-  .item-list > .CoreBoxRender:nth-child(#{$i}) {
-    &.item-fade-enter-active {
-      // Logarithmic delay: first items faster, later items slower
-      transition-delay: #{($i - 1) * 0.03 + ($i * $i * 0.002)}s;
-    }
+// Staggered item animation within list
+.item-list > .CoreBoxRender {
+  animation: item-stagger-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--item-index, 0) * 0.035s);
+}
+
+@keyframes item-stagger-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

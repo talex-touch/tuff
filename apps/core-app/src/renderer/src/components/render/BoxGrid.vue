@@ -30,7 +30,7 @@ function getQuickKey(index: number): string {
 
 <template>
   <div
-    class="BoxGrid"
+    class="BoxGrid p-4"
     :style="{
       '--grid-cols': gridConfig.columns,
       '--grid-gap': gridConfig.gap + 'px'
@@ -44,6 +44,7 @@ function getQuickKey(index: number): string {
       :active="focus === index"
       :render="item.render"
       :quick-key="getQuickKey(index)"
+      :style="{ '--item-index': index }"
       @click="emit('select', index, item)"
     />
   </div>
@@ -54,7 +55,6 @@ function getQuickKey(index: number): string {
   display: grid;
   grid-template-columns: repeat(var(--grid-cols), 1fr);
   gap: var(--grid-gap);
-  padding: 8px 4px;
   overflow-x: hidden;
   width: 100%;
 
@@ -68,6 +68,28 @@ function getQuickKey(index: number): string {
 
   &.size-large {
     --item-icon-size: 48px;
+  }
+}
+
+// Grid item staggered animation
+:deep(.BoxGridItem) {
+  animation: grid-item-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation-fill-mode: both;
+  animation-delay: calc(var(--item-index, 0) * 0.03s);
+}
+
+@keyframes grid-item-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(6px);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.03) translateY(-1px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 </style>

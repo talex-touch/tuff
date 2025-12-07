@@ -341,7 +341,8 @@ export function useSearch(
       activeActivations.value = newActivationState
 
       // 进入 provider 时清空 query，让插件从空白状态开始
-      if (newActivationState && newActivationState.length > 0) {
+      // 启动应用后也清空输入框
+      if ((newActivationState && newActivationState.length > 0) || !isPluginFeature) {
         searchVal.value = ''
       }
 
