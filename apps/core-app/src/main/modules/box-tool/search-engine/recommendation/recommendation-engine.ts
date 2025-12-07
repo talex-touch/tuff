@@ -63,7 +63,7 @@ export class RecommendationEngine {
     await this.cacheRecommendations(context, items)
     const duration = performance.now() - startTime
 
-    const containerLayout = this.buildContainerLayout(options, items.length)
+    const containerLayout = this.buildContainerLayout(options, items)
 
     return {
       items,
@@ -77,16 +77,28 @@ export class RecommendationEngine {
   /** 构建容器布局配置 */
   private buildContainerLayout(
     _options: RecommendationOptions,
-    itemCount: number
+    items: TuffItem[]
   ): TuffContainerLayout {
+    const itemCount = items.length
     // 推荐列表默认使用宫格布局
     return {
       mode: 'grid',
       grid: {
-        columns: Math.min(5, itemCount || 5),
-        gap: 8,
+        columns: Math.min(8, itemCount || 8),
+        gap: 12,
         itemSize: 'medium'
-      }
+      },
+      sections: [
+        {
+          id: 'recommendations',
+          title: 'Recommend',
+          layout: 'grid',
+          itemIds: items.map((item) => item.id),
+          meta: {
+            intelligence: true
+          }
+        }
+      ]
     }
   }
 
@@ -102,8 +114,13 @@ export class RecommendationEngine {
         return []
       }
 
+      // 过滤掉文件类型的项目
+      const filteredItems = frequentItems.filter(
+        (item) => item.sourceId !== 'file-provider' && item.sourceType !== 'file'
+      )
+
       const items = await this.itemRebuilder.rebuildItems(
-        frequentItems.map((item) => ({
+        filteredItems.map((item) => ({
           ...item,
           source: 'frequent' as const,
           score: item.usageStats.executeCount
@@ -171,18 +188,23 @@ export class RecommendationEngine {
     // 去重(同一 sourceId + itemId 只保留第一次出现)
     const deduplicated = this.deduplicateCandidates(candidates)
 
+    // 过滤掉文件类型的项目，推荐列表不展示文件
+    const filtered = deduplicated.filter(
+      (item) => item.sourceId !== 'file-provider' && item.sourceType !== 'file'
+    )
+
     // 统计各 source 的分布
     const sourceDistribution = new Map<string, number>()
-    for (const item of deduplicated) {
+    for (const item of filtered) {
       const key = item.sourceId
       sourceDistribution.set(key, (sourceDistribution.get(key) || 0) + 1)
     }
     console.debug(
-      `[DEBUG_REC_INIT] After dedup: ${deduplicated.length} items, distribution:`,
+      `[DEBUG_REC_INIT] After dedup and filter: ${filtered.length} items, distribution:`,
       Object.fromEntries(sourceDistribution)
     )
 
-    return deduplicated
+    return filtered
   }
 
   /**
