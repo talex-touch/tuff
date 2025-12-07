@@ -288,6 +288,13 @@ export class SearchIndexService {
     }
 
     if (item.keywords) {
+      // Warn if too many keywords (performance concern)
+      if (item.keywords.length > 10) {
+        console.warn(
+          `[SearchIndexService] Item "${item.itemId}" has ${item.keywords.length} keywords. ` +
+          `Consider reducing to <= 10 for better performance.`
+        )
+      }
       for (const keyword of item.keywords) {
         const { value, priority } = keyword
         const normalized = value.trim().toLowerCase()

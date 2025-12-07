@@ -146,7 +146,9 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   // frequently-used commands to rank higher than occasionally-matched files.
   // A user who searches "hello" and always picks "翻译" should see it ranked higher
   // than a file named "Hello.txt" they never open.
-  const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 5000
+  // 
+  // Frequency weight increased from 5000 to 8000 to give more weight to frequently used items
+  const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 8000
 
   return finalScore
 }
