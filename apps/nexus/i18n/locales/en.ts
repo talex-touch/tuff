@@ -1112,4 +1112,4 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       content: 'For technical support or to report issues, please contact us through our official channels.',
     },
   },
-} as const
+}
