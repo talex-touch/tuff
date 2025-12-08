@@ -43,7 +43,12 @@ export function useFileIndexMonitor() {
     try {
       const stats = await channel.send('file-index:stats', {})
       return stats
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore timeout errors during startup - module may not be ready yet
+      if (error?.message?.includes('timed out')) {
+        console.debug('[FileIndexMonitor] Stats fetch timed out, module may be initializing')
+        return null
+      }
       console.error('[FileIndexMonitor] Failed to get index stats:', error)
       return null
     }

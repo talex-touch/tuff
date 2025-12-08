@@ -4,21 +4,11 @@ import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChann
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 
-/** Max text length to auto-fill into input field */
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
-
-/** TTL for autopaste timestamp records (1 hour) */
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
-
-/** Probability to trigger cleanup on each autofill */
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
-
-/** Tracks timestamps of already auto-pasted items */
 const autoPastedTimestamps = new Set<number>()
 
-/**
- * Normalizes timestamp to milliseconds
- */
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
   if (value == null) return null
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
@@ -30,9 +20,6 @@ function normalizeTimestamp(value?: string | number | Date | null): number | nul
   return Number.isFinite(parsed) ? parsed : null
 }
 
-/**
- * Cleans up expired autopaste records
- */
 function cleanupAutoPastedRecords(): void {
   const expiredAt = Date.now() - AUTOFILL_TIMESTAMP_TTL
   for (const ts of autoPastedTimestamps) {
@@ -40,32 +27,17 @@ function cleanupAutoPastedRecords(): void {
   }
 }
 
-/**
- * Resets autopaste state for new CoreBox session
- */
 function resetAutoPasteState(): void {
   cleanupAutoPastedRecords()
 }
 
-/**
- * Clipboard management hook for CoreBox
- *
- * @param boxOptions - Box state options
- * @param clipboardOptions - Clipboard state
- * @param onPasteCallback - Callback when clipboard changes
- * @param searchVal - Search input ref for auto-fill
- */
+/** Clipboard management hook for CoreBox */
 export function useClipboard(
   boxOptions: IBoxOptions,
   clipboardOptions: IClipboardOptions,
   onPasteCallback?: () => void,
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
-  /**
-   * Checks if auto-paste is allowed based on settings and timing.
-   * Only auto-paste if the clipboard was copied AFTER CoreBox was last hidden.
-   * This prevents old clipboard content from auto-filling when reopening CoreBox.
-   */
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last?.timestamp) return false
     if (!appSetting.tools.autoPaste.enable) return false
@@ -87,18 +59,12 @@ export function useClipboard(
     return elapsed <= limit * 1000
   }
 
-  /**
-   * Marks timestamp as auto-pasted and optionally clears clipboard
-   */
   function markAsAutoPasted(timestamp: number, clear = true): void {
     autoPastedTimestamps.add(timestamp)
     if (clear) clearClipboard({ remember: true })
     if (Math.random() < AUTOFILL_CLEANUP_PROBABILITY) cleanupAutoPastedRecords()
   }
 
-  /**
-   * Auto-fills file paths to FILE mode
-   */
   function autoFillFiles(data: IClipboardItem, timestamp: number): boolean {
     if (data.type !== 'files') return false
 
@@ -115,54 +81,36 @@ export function useClipboard(
     }
   }
 
-  /**
-   * Checks if data is text type (including HTML with text content)
-   */
   function isTextType(data: IClipboardItem): boolean {
     return data.type === 'text' || (data.type as string) === 'html'
   }
 
-  /**
-   * Auto-fills text content based on length:
-   * - <= 80 chars: fills into input field
-   * - > 80 chars: shown as tag (clipboard retained)
-   */
-  function autoFillText(data: IClipboardItem, timestamp: number): boolean {
+  function autoFillText(data: IClipboardItem, timestamp: number, forceFill = false): boolean {
     if (!isTextType(data)) return false
     if (!searchVal) return false
 
     const content = data.content || ''
     const length = content.length
+    if (length === 0) return false
 
-    if (length > 0 && length <= AUTOFILL_INPUT_TEXT_LIMIT) {
+    // Explicit paste (Cmd+V) or short text: fill into input
+    if (forceFill || length <= AUTOFILL_INPUT_TEXT_LIMIT) {
       searchVal.value = content
       markAsAutoPasted(timestamp)
-      onPasteCallback?.()
       return true
     }
 
-    if (length > AUTOFILL_INPUT_TEXT_LIMIT) {
-      autoPastedTimestamps.add(timestamp)
-      onPasteCallback?.()
-      return true
-    }
-
-    return false
-  }
-
-  /**
-   * Auto-fills image (shown as tag)
-   */
-  function autoFillImage(data: IClipboardItem, timestamp: number): boolean {
-    if (data.type !== 'image') return false
+    // Long text: show as tag only
     autoPastedTimestamps.add(timestamp)
-    onPasteCallback?.()
     return true
   }
 
-  /**
-   * Auto-fills clipboard data to CoreBox UI when conditions are met
-   */
+  function autoFillImage(data: IClipboardItem, timestamp: number): boolean {
+    if (data.type !== 'image') return false
+    autoPastedTimestamps.add(timestamp)
+    return true
+  }
+
   function handleAutoFill(): void {
     if (!clipboardOptions.last || !canAutoPaste()) return
 
@@ -175,12 +123,9 @@ export function useClipboard(
       autoFillImage(data, timestamp)
   }
 
-  /**
-   * Fetches and processes latest clipboard data from main process
-   * @param options.overrideDismissed - Re-fetch dismissed clipboard items
-   */
-  function handlePaste(options?: { overrideDismissed?: boolean }): void {
+  function handlePaste(options?: { overrideDismissed?: boolean; triggerSearch?: boolean }): void {
     const overrideDismissed = options?.overrideDismissed ?? false
+    const triggerSearch = options?.triggerSearch ?? false
     const clipboard = getLatestClipboardSync()
 
     if (!clipboard?.timestamp) {
@@ -207,19 +152,22 @@ export function useClipboard(
       clipboardOptions.lastClearedTimestamp = null
 
       const timestamp = normalizeTimestamp(clipboard.timestamp)
-      if (timestamp && !autoPastedTimestamps.has(timestamp)) {
-        autoFillFiles(clipboard, timestamp) ||
-          autoFillText(clipboard, timestamp) ||
-          autoFillImage(clipboard, timestamp)
+      const alreadyPasted = timestamp && autoPastedTimestamps.has(timestamp)
+
+      if (overrideDismissed || (!alreadyPasted && canAutoPaste())) {
+        if (timestamp) {
+          autoFillFiles(clipboard, timestamp) ||
+            autoFillText(clipboard, timestamp, overrideDismissed) ||
+            autoFillImage(clipboard, timestamp)
+        }
       }
 
+      onPasteCallback?.()
+    } else if (triggerSearch && clipboardOptions.last) {
       onPasteCallback?.()
     }
   }
 
-  /**
-   * Applies clipboard item to the active application window
-   */
   async function applyToActiveApp(item?: IClipboardItem): Promise<boolean> {
     const target = item ?? clipboardOptions.last
     if (!target) return false
@@ -232,10 +180,6 @@ export function useClipboard(
     }
   }
 
-  /**
-   * Clears clipboard UI state
-   * @param options.remember - Prevent this item from auto-pasting in the future
-   */
   function clearClipboard(options?: { remember?: boolean }): void {
     const remember = options?.remember ?? false
 
@@ -263,12 +207,15 @@ export function useClipboard(
         return
       }
 
-      // Only store the clipboard item, don't auto-fill here.
-      // Auto-fill should only happen when CoreBox is triggered/focused (via handlePaste or handleAutoFill).
-      // This prevents clipboard updates from auto-filling when CoreBox is pinned but not actively triggered.
+      const changed = clipboardOptions.last?.timestamp !== item.timestamp
       clipboardOptions.last = item
       clipboardOptions.detectedAt = Date.now()
       clipboardOptions.lastClearedTimestamp = null
+
+      // Only trigger search if CoreBox is visible (document is visible)
+      if (changed && document.visibilityState === 'visible') {
+        onPasteCallback?.()
+      }
     }
   })
 

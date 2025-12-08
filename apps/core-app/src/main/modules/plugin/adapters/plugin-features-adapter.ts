@@ -87,12 +87,18 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return false
     }
 
+    // Skip sending empty query for webcontent features - initial query is sent via attachUIView
+    const hasContent = query.text || (query.inputs && query.inputs.length > 0)
+    if (!hasContent && feature.interaction?.type === 'webcontent') {
+      return true
+    }
+
     genTouchApp().channel.sendToPlugin(plugin.name, 'core-box:input-change', {
       source: 'feature-activation',
       query
     })
 
-    if (!query.text) {
+    if (!hasContent) {
       return true
     }
 
@@ -181,7 +187,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     }
 
     if (feature.interaction && feature.interaction.type === 'webcontent') {
-      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature)
+      const query = args.searchResult?.query
+      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature, query)
 
       if (
         plugin.issues.some(
@@ -319,8 +326,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const plugins = pluginModule.pluginManager!.plugins.values()
 
     const queryInputTypes = query.inputs?.map((i) => i.type) || []
+    // Text and Html are considered as text-like inputs
+    const isTextLike = (t: TuffInputType) => t === TuffInputType.Text || t === TuffInputType.Html
     const hasNonTextInput =
-      queryInputTypes.length > 0 && queryInputTypes.some((t) => t !== TuffInputType.Text)
+      queryInputTypes.length > 0 && queryInputTypes.some((t) => !isTextLike(t))
+
+    // Get text content from clipboard inputs for command matching
+    const clipboardTextContent = query.inputs?.find((i) => isTextLike(i.type))?.content ?? ''
 
     for (const plugin of plugins as Iterable<ITouchPlugin>) {
       if (signal.aborted) {
@@ -333,6 +345,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       const features = plugin.getFeatures()
       for (const feature of features as IPluginFeature[]) {
+        // Check if feature accepts the input types
         if (hasNonTextInput) {
           if (!feature.acceptedInputTypes) {
             continue
@@ -347,8 +360,18 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           }
         }
 
-        const isMatch = feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
-        if (isMatch) {
+        // Match against input text OR clipboard content (either one matches = show feature)
+        const matchesQueryText = queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
+        const matchesClipboard = clipboardTextContent && feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
+        const isMatch = matchesQueryText || matchesClipboard
+
+        // If feature accepts the input types and has inputs, show it even if command doesn't match
+        const hasInputs = queryInputTypes.length > 0
+        const featureAcceptsInputs = hasInputs && feature.acceptedInputTypes?.some((t) =>
+          queryInputTypes.includes(t as TuffInputType)
+        )
+
+        if (isMatch || featureAcceptsInputs) {
           matchedItems.push(this.createTuffItem(plugin, feature))
         }
       }

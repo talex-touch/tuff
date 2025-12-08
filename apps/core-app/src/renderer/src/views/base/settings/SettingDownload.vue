@@ -71,7 +71,12 @@ async function loadConfig() {
       downloadConfig.value = response.config
     }
   }
-  catch (error) {
+  catch (error: any) {
+    // Ignore timeout errors during startup - module may not be ready yet
+    if (error?.message?.includes('timed out')) {
+      console.debug('[SettingDownload] Config load timed out, module may be initializing')
+      return
+    }
     console.error('[SettingDownload] Failed to load config:', error)
     toast.warning(t('settings.settingDownload.messages.loadFailed'))
   }

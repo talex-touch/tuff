@@ -1,3 +1,4 @@
+import type { TuffQuery as TuffQueryBase } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ProviderDeactivatedEvent } from '../../../core/eventbus/touch-event'
 import type { TouchPlugin } from '../../plugin/plugin'
@@ -151,11 +152,16 @@ export class CoreBoxManager {
     windowManager.shrink()
   }
 
-  public enterUIMode(url: string, plugin?: TouchPlugin, feature?: IPluginFeature): void {
+  public enterUIMode(
+    url: string,
+    plugin?: TouchPlugin,
+    feature?: IPluginFeature,
+    query?: TuffQueryBase | string,
+  ): void {
     this._isUIMode = true // Use private property
     this.currentFeature = feature || null
     this.expand({ length: 10 })
-    windowManager.attachUIView(url, plugin)
+    windowManager.attachUIView(url, plugin, query)
     this.trigger(true)
   }
 
@@ -175,6 +181,13 @@ export class CoreBoxManager {
           'core-box:ui-mode-exited',
           {}
         )
+
+        // Delay focus to CoreBox after UI mode exits
+        setTimeout(() => {
+          if (!coreBoxWindow.isDestroyed()) {
+            coreBoxWindow.focus()
+          }
+        }, 100)
       }
     }
     else {

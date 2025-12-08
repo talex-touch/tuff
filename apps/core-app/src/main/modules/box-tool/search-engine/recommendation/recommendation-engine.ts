@@ -53,11 +53,14 @@ export class RecommendationEngine {
 
     if (candidates.length === 0) {
       const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
+      // Recommend first, pinned last
+      const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, options.limit || 10)
       return {
-        items: fallbackItems,
+        items: finalItems,
         context,
         duration: performance.now() - startTime,
-        fromCache: false
+        fromCache: false,
+        containerLayout: this.buildContainerLayout(options, finalItems)
       }
     }
 
@@ -68,13 +71,14 @@ export class RecommendationEngine {
 
     if (items.length === 0 && diversified.length > 0) {
       const fallbackItems = await this.getFallbackRecommendations(limit)
-      // Prepend pinned items to fallback
-      const finalItems = [...pinnedTuffItems, ...fallbackItems].slice(0, limit)
+      // Recommend first, pinned last
+      const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, limit)
       return {
         items: finalItems,
         context,
         duration: performance.now() - startTime,
-        fromCache: false
+        fromCache: false,
+        containerLayout: this.buildContainerLayout(options, finalItems)
       }
     }
 
@@ -82,8 +86,16 @@ export class RecommendationEngine {
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
     const filteredItems = items.filter((item) => !pinnedKeys.has(`${item.source.id}:${item.id}`))
 
-    // Combine pinned items (first) with regular recommendations
-    const combinedItems = [...pinnedTuffItems, ...filteredItems].slice(0, limit)
+    // Mark recommend items (not pinned)
+    for (const item of filteredItems) {
+      if (!item.meta) item.meta = {}
+      if (!item.meta.recommendation) {
+        item.meta.recommendation = { source: 'frequent' }
+      }
+    }
+
+    // Combine: recommend items first, pinned items last (for correct ordering)
+    const combinedItems = [...filteredItems, ...pinnedTuffItems].slice(0, limit)
 
     await this.cacheRecommendations(context, combinedItems)
     const duration = performance.now() - startTime
@@ -99,31 +111,47 @@ export class RecommendationEngine {
     }
   }
 
-  /** 构建容器布局配置 */
+  /** Build container layout: Recommend on top, Pinned at bottom (if exists) */
   private buildContainerLayout(
     _options: RecommendationOptions,
     items: TuffItem[]
   ): TuffContainerLayout {
-    const itemCount = items.length
-    // 推荐列表默认使用宫格布局
+    const pinnedItems = items.filter((item) => item.meta?.pinned?.isPinned)
+    const recommendItems = items.filter((item) => !item.meta?.pinned?.isPinned)
+    const totalCount = items.length
+
+    const sections: TuffContainerLayout['sections'] = []
+
+    // Recommend section on top
+    if (recommendItems.length > 0) {
+      sections.push({
+        id: 'recommendations',
+        title: 'Recommend',
+        layout: 'grid',
+        itemIds: recommendItems.map((item) => item.id),
+        meta: { intelligence: true }
+      })
+    }
+
+    // Pinned section at bottom (only if has pinned items)
+    if (pinnedItems.length > 0) {
+      sections.push({
+        id: 'pinned',
+        title: 'Pinned',
+        layout: 'grid',
+        itemIds: pinnedItems.map((item) => item.id),
+        meta: { pinned: true }
+      })
+    }
+
     return {
       mode: 'grid',
       grid: {
-        columns: Math.min(8, itemCount || 8),
+        columns: Math.min(8, totalCount || 8),
         gap: 12,
         itemSize: 'medium'
       },
-      sections: [
-        {
-          id: 'recommendations',
-          title: 'Recommend',
-          layout: 'grid',
-          itemIds: items.map((item) => item.id),
-          meta: {
-            intelligence: true
-          }
-        }
-      ]
+      sections
     }
   }
 
@@ -195,6 +223,12 @@ export class RecommendationEngine {
           score: item.usageStats.executeCount
         }))
       )
+
+      // Mark as recommendation (not pinned)
+      for (const item of items) {
+        if (!item.meta) item.meta = {}
+        item.meta.recommendation = { source: 'frequent' }
+      }
 
       return items.slice(0, limit)
     } catch (error) {

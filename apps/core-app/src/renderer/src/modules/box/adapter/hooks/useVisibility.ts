@@ -12,7 +12,7 @@ interface UseVisibilityOptions {
   searchVal: Ref<string>
   clipboardOptions: IClipboardOptions
   handleAutoFill: () => void
-  handlePaste: (options?: { overrideDismissed?: boolean }) => void
+  handlePaste: (options?: { overrideDismissed?: boolean; triggerSearch?: boolean }) => void
   boxInputRef: Ref<any>
   deactivateAllProviders: () => Promise<void>
 }
@@ -69,8 +69,10 @@ export function useVisibility(options: UseVisibilityOptions) {
    */
   function onShow(): void {
     checkAutoClear()
-    handlePaste()
+    // Trigger search with clipboard content when CoreBox opens
+    handlePaste({ triggerSearch: true })
 
+    // Auto-fill clipboard content when triggered by shortcut
     if (wasTriggeredByShortcut.value && clipboardOptions.last) {
       handleAutoFill()
       wasTriggeredByShortcut.value = false

@@ -203,6 +203,20 @@ export class WindowManager {
       })
     })
 
+    // Intercept Ctrl+R / Cmd+R: disable in production, reload uiView in dev
+    window.window.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && input.key === 'r' && (input.control || input.meta)) {
+        if (app.isPackaged) {
+          event.preventDefault()
+          return
+        }
+        // Dev mode: reload uiView along with CoreBox
+        if (this.uiView && !this.uiView.webContents.isDestroyed()) {
+          this.uiView.webContents.reload()
+        }
+      }
+    })
+
     window.window.addListener('closed', () => {
       this.windows = this.windows.filter((w) => w !== window)
       coreBoxWindowLog.debug('BoxWindow closed')
@@ -540,7 +554,7 @@ export class WindowManager {
     // No real-time broadcasting to prevent channel timeout issues
   }
 
-  public attachUIView(url: string, plugin?: TouchPlugin): void {
+  public attachUIView(url: string, plugin?: TouchPlugin, query?: TuffQuery | string): void {
     const currentWindow = this.current
     if (!currentWindow) {
       coreBoxWindowLog.error('Cannot attach UI view: no window available')
@@ -870,12 +884,23 @@ export class WindowManager {
       this.uiViewFocused = true
     })
 
-    // Listen for ESC key in UI view to exit UI mode
+    // Listen for special keys in UI view
     this.uiView.webContents.on('before-input-event', (event, input) => {
-      if (input.key === 'Escape' && input.type === 'keyDown') {
+      if (input.type !== 'keyDown') return
+
+      // ESC: exit UI mode
+      if (input.key === 'Escape') {
         coreBoxWindowLog.debug('ESC pressed in UI view, exiting UI mode')
         coreBoxManager.exitUIMode()
         event.preventDefault()
+        return
+      }
+
+      // Ctrl+R / Cmd+R: disable in production
+      if (input.key === 'r' && (input.control || input.meta)) {
+        if (app.isPackaged) {
+          event.preventDefault()
+        }
       }
     })
 
@@ -919,6 +944,39 @@ export class WindowManager {
 
     // Initial theme is now injected synchronously via preload ($tuffInitialData.theme)
     // No need to send via channel - data is available immediately when page scripts run
+
+    // Send initial query directly to plugin after dom-ready (bypasses inputAllowed check)
+    if (query && plugin) {
+      const normalizedQuery: TuffQuery = typeof query === 'string' ? { text: query } : { ...query }
+
+      // Dedupe inputs and extract text content if text is empty
+      if (normalizedQuery.inputs && normalizedQuery.inputs.length > 0) {
+        const seen = new Set<string>()
+        normalizedQuery.inputs = normalizedQuery.inputs.filter((input) => {
+          const key = `${input.type}:${input.content?.slice(0, 100)}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+
+        // If text is empty and first input is text-like, move content to text
+        if (!normalizedQuery.text && normalizedQuery.inputs.length > 0) {
+          const firstInput = normalizedQuery.inputs[0]
+          if (firstInput.type === 'text' || firstInput.type === 'html') {
+            normalizedQuery.text = firstInput.content
+            normalizedQuery.inputs = normalizedQuery.inputs.slice(1)
+          }
+        }
+      }
+
+      this.uiView.webContents.once('dom-ready', () => {
+        this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
+          input: normalizedQuery.text ?? '',
+          query: normalizedQuery,
+          source: 'initial',
+        })
+      })
+    }
   }
 
   public detachUIView(): void {
@@ -954,6 +1012,8 @@ export class WindowManager {
       if (currentWindow && !currentWindow.window.isDestroyed()) {
         this.uiView.webContents.closeDevTools()
         currentWindow.window.contentView.removeChildView(this.uiView)
+        // Focus main webContents so renderer input can receive focus
+        currentWindow.window.webContents.focus()
       } else {
         coreBoxWindowLog.warn('Cannot remove child view: current window is null or destroyed')
       }

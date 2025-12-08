@@ -57,6 +57,26 @@ export function useSearch(
   let searchSequence = 0
 
   /**
+   * Safely serialize metadata for IPC transfer
+   */
+  function safeSerializeMetadata(meta: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined {
+    if (!meta) return undefined
+    try {
+      // Only keep primitive values that can be safely cloned
+      const safe: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(meta)) {
+        if (value === null || value === undefined) continue
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+          safe[key] = value
+        }
+      }
+      return Object.keys(safe).length > 0 ? safe : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
    * Build TuffQueryInput array from current clipboard/file state
    */
   function buildQueryInputs(): TuffQueryInput[] {
@@ -67,7 +87,7 @@ export function useSearch(
         type: TuffInputType.Image,
         content: clipboardOptions.last.content,
         thumbnail: clipboardOptions.last.thumbnail ?? undefined,
-        metadata: clipboardOptions.last.meta ?? undefined
+        metadata: safeSerializeMetadata(clipboardOptions.last.meta)
       })
     } else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
       inputs.push({
@@ -79,7 +99,7 @@ export function useSearch(
       inputs.push({
         type: TuffInputType.Files,
         content: clipboardOptions.last.content,
-        metadata: clipboardOptions.last.meta ?? undefined
+        metadata: safeSerializeMetadata(clipboardOptions.last.meta)
       })
     } else if (
       clipboardOptions?.last?.type === 'text' ||
@@ -90,13 +110,13 @@ export function useSearch(
           type: TuffInputType.Html,
           content: clipboardOptions.last.content,
           rawContent: clipboardOptions.last.rawContent,
-          metadata: clipboardOptions.last.meta ?? undefined
+          metadata: safeSerializeMetadata(clipboardOptions.last.meta)
         })
       } else {
         inputs.push({
           type: TuffInputType.Text,
           content: clipboardOptions.last.content,
-          metadata: clipboardOptions.last.meta ?? undefined
+          metadata: safeSerializeMetadata(clipboardOptions.last.meta)
         })
       }
     }
@@ -231,12 +251,7 @@ export function useSearch(
    * Used when clipboard state changes or immediate update is needed
    */
   async function handleSearchImmediate(): Promise<void> {
-    if (!searchVal.value) {
-      if (!activeActivations.value?.length) {
-        searchResults.value.length = 0
-      }
-      return
-    }
+    // Always trigger search - even with empty input, clipboard content should be searched
     debouncedSearch()
     // @ts-ignore - flush method exists on debounced function from lodash-es
     if (debouncedSearch.flush) {
