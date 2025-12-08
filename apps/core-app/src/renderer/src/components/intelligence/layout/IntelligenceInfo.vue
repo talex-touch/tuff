@@ -1,6 +1,6 @@
 <script lang="ts" name="IntelligenceInfo" setup>
 // import IntelligenceTestResults from './IntelligenceTestResults.vue'
-import type { AiProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 /**
  * IntelligenceInfo Component
@@ -36,20 +36,20 @@ import IntelligenceRateLimitConfig from '../config/IntelligenceRateLimitConfig.v
 import IntelligenceHeader from './IntelligenceHeader.vue'
 
 const props = defineProps<{
-  provider: AiProviderConfig
+  provider: IntelligenceProviderConfig
   testResult?: TestResult | null
   isTesting?: boolean
 }>()
 
 const emits = defineEmits<{
-  update: [provider: AiProviderConfig]
+  update: [provider: IntelligenceProviderConfig]
   test: []
   delete: []
 }>()
 
 const { t } = useI18n()
 
-const localProvider = ref<AiProviderConfig>({ ...props.provider })
+const localProvider = ref<IntelligenceProviderConfig>({ ...props.provider })
 const testResult = ref<TestResult | null>(props.testResult || null)
 const isTesting = ref(props.isTesting || false)
 

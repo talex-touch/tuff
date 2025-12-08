@@ -1,7 +1,7 @@
 import type {
-  AiProviderAdapter,
-  AiProviderConfig,
-  AiProviderType,
+  IntelligenceProviderAdapter,
+  IntelligenceProviderConfig,
+  IntelligenceProviderType,
   ProviderManagerAdapter,
 } from '@talex-touch/utils'
 import { createLogger } from '../../../utils/logger'
@@ -9,10 +9,10 @@ import { createLogger } from '../../../utils/logger'
 const providerManagerLog = createLogger('Intelligence').child('ProviderManager')
 
 export class IntelligenceProviderManager implements ProviderManagerAdapter {
-  private providers = new Map<string, AiProviderAdapter>()
-  private factories = new Map<AiProviderType, (config: AiProviderConfig) => AiProviderAdapter>()
+  private providers = new Map<string, IntelligenceProviderAdapter>()
+  private factories = new Map<IntelligenceProviderType, (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter>()
 
-  registerFactory(type: AiProviderType, factory: (config: AiProviderConfig) => AiProviderAdapter): void {
+  registerFactory(type: IntelligenceProviderType, factory: (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter): void {
     this.factories.set(type, factory)
   }
 
@@ -20,12 +20,12 @@ export class IntelligenceProviderManager implements ProviderManagerAdapter {
     this.providers.clear()
   }
 
-  private register(provider: AiProviderAdapter): void {
+  private register(provider: IntelligenceProviderAdapter): void {
     const config = provider.getConfig()
     this.providers.set(config.id, provider)
   }
 
-  registerFromConfig(config: AiProviderConfig): AiProviderAdapter {
+  registerFromConfig(config: IntelligenceProviderConfig): IntelligenceProviderAdapter {
     const factory = this.factories.get(config.type)
     if (!factory) {
       throw new Error(`No provider factory for type ${config.type}`)
@@ -36,15 +36,15 @@ export class IntelligenceProviderManager implements ProviderManagerAdapter {
     return provider
   }
 
-  getEnabled(): AiProviderAdapter[] {
+  getEnabled(): IntelligenceProviderAdapter[] {
     return Array.from(this.providers.values()).filter(provider => provider.isEnabled())
   }
 
-  get(providerId: string): AiProviderAdapter | undefined {
+  get(providerId: string): IntelligenceProviderAdapter | undefined {
     return this.providers.get(providerId)
   }
 
-  createProviderInstance(config: AiProviderConfig): AiProviderAdapter {
+  createProviderInstance(config: IntelligenceProviderConfig): IntelligenceProviderAdapter {
     const factory = this.factories.get(config.type)
     if (!factory) {
       throw new Error(`No provider factory for type ${config.type}`)

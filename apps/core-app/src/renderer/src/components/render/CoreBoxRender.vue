@@ -18,6 +18,11 @@ const emits = defineEmits<{
 const render = computed(() => props.item?.render)
 
 const quickKey = computed(() => {
+  // Check if quickSelect is explicitly hidden via footerHints
+  const footerHints = props.item?.meta?.footerHints
+  if (footerHints?.quickSelect?.visible === false) {
+    return ''
+  }
   if (props.index > 9) return ''
   const key = props.index === 9 ? 0 : props.index + 1
   return `⌘${key}`

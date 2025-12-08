@@ -1,4 +1,4 @@
-import type { AiProviderConfig, AISDKGlobalConfig } from '@talex-touch/utils/renderer/storage'
+import type { IntelligenceProviderConfig, AISDKGlobalConfig } from '@talex-touch/utils/renderer/storage'
 import type {
   AiCapabilityProviderBinding,
   AISDKCapabilityConfig,
@@ -17,11 +17,11 @@ import { computed, ref, watch } from 'vue'
  */
 interface UseIntelligenceManagerReturn {
   /** Array of all AI provider configurations */
-  providers: Ref<AiProviderConfig[]>
+  providers: Ref<IntelligenceProviderConfig[]>
   /** Currently selected provider ID */
   selectedProviderId: Ref<string | null>
   /** Currently selected provider object (computed for reactive updates) */
-  selectedProvider: ComputedRef<AiProviderConfig | null>
+  selectedProvider: ComputedRef<IntelligenceProviderConfig | null>
   /** Global AISDK configuration */
   globalConfig: Ref<AISDKGlobalConfig>
   /** Capability routing configuration */
@@ -31,17 +31,17 @@ interface UseIntelligenceManagerReturn {
   /** Loading state for async operations */
   loading: Ref<boolean>
   /** Computed array of enabled providers */
-  enabledProviders: ComputedRef<AiProviderConfig[]>
+  enabledProviders: ComputedRef<IntelligenceProviderConfig[]>
   /** Computed array of disabled providers */
-  disabledProviders: ComputedRef<AiProviderConfig[]>
+  disabledProviders: ComputedRef<IntelligenceProviderConfig[]>
   /** Function to select a provider by ID */
   selectProvider: (id: string | null) => void
   /** Function to add a new provider */
-  addProvider: (provider: AiProviderConfig) => void
+  addProvider: (provider: IntelligenceProviderConfig) => void
   /** Function to remove a provider */
   removeProvider: (id: string) => void
   /** Function to update a provider configuration */
-  updateProvider: (id: string, updates: Partial<AiProviderConfig>) => void
+  updateProvider: (id: string, updates: Partial<IntelligenceProviderConfig>) => void
   /** Function to toggle provider enabled state */
   toggleProvider: (id: string) => void
   /** Function to update global configuration */
@@ -55,7 +55,7 @@ interface UseIntelligenceManagerReturn {
   /** Function to clear test result for a provider */
   clearTestResult: (id: string) => void
   /** Function to get a provider by ID */
-  getProvider: (id: string) => AiProviderConfig | undefined
+  getProvider: (id: string) => IntelligenceProviderConfig | undefined
 }
 
 /**
@@ -94,7 +94,7 @@ interface UseIntelligenceManagerReturn {
  */
 export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   // Core state - now backed by persistent storage from utils package
-  const providers = computed<AiProviderConfig[]>({
+  const providers = computed<IntelligenceProviderConfig[]>({
     get: () => intelligenceSettings.get().providers,
     set: (value) => {
       const currentData = intelligenceSettings.get()
@@ -134,7 +134,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * - No provider is selected
    * - Selected provider ID doesn't exist
    */
-  const selectedProvider = computed<AiProviderConfig | null>(() => {
+  const selectedProvider = computed<IntelligenceProviderConfig | null>(() => {
     if (!selectedProviderId.value)
       return null
     return providers.value.find(p => p.id === selectedProviderId.value) ?? null
@@ -143,7 +143,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   /**
    * Computed array of enabled providers, sorted by priority
    */
-  const enabledProviders = computed<AiProviderConfig[]>(() => {
+  const enabledProviders = computed<IntelligenceProviderConfig[]>(() => {
     return providers.value
       .filter(p => p.enabled)
       .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
@@ -152,7 +152,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   /**
    * Computed array of disabled providers, sorted by name
    */
-  const disabledProviders = computed<AiProviderConfig[]>(() => {
+  const disabledProviders = computed<IntelligenceProviderConfig[]>(() => {
     return providers.value
       .filter(p => !p.enabled)
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -190,7 +190,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   /**
    * Adds a provider configuration
    */
-  function addProvider(provider: AiProviderConfig): void {
+  function addProvider(provider: IntelligenceProviderConfig): void {
     intelligenceSettings.addProvider(provider)
   }
 
@@ -212,7 +212,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @param id - The unique identifier of the provider to update
    * @param updates - Partial provider configuration to merge
    */
-  function updateProvider(id: string, updates: Partial<AiProviderConfig>): void {
+  function updateProvider(id: string, updates: Partial<IntelligenceProviderConfig>): void {
     intelligenceSettings.updateProvider(id, updates)
   }
 
@@ -316,7 +316,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    * @param id - The unique identifier of the provider
    * @returns The provider configuration or undefined if not found
    */
-  function getProvider(id: string): AiProviderConfig | undefined {
+  function getProvider(id: string): IntelligenceProviderConfig | undefined {
     return intelligenceSettings.get().providers.find(p => p.id === id)
   }
 

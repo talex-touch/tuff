@@ -1,5 +1,5 @@
 import type {
-  AiChatPayload,
+  IntelligenceChatPayload,
   AiUsageInfo,
   IExecuteArgs,
   IProviderActivate,
@@ -142,7 +142,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
   private async dispatchPrompt(requestId: string, prompt: string): Promise<void> {
     try {
       ensureAiConfigLoaded()
-      const payload: AiChatPayload = {
+      const payload: IntelligenceChatPayload = {
         messages: [
           { role: 'system', content: AI_SYSTEM_PROMPT },
           { role: 'user', content: prompt },

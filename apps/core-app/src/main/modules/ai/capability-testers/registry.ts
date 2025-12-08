@@ -1,6 +1,10 @@
 import type { BaseCapabilityTester } from './base-tester'
+import { IntentDetectTester, KeywordsExtractTester, SentimentAnalyzeTester } from './analysis-tester'
 import { ChatCapabilityTester } from './chat-tester'
+import { CodeGenerateTester, CodeReviewTester } from './code-tester'
 import { EmbeddingCapabilityTester } from './embedding-tester'
+import { SummarizeCapabilityTester } from './summarize-tester'
+import { TranslateCapabilityTester } from './translate-tester'
 import { VisionCapabilityTester } from './vision-tester'
 
 class CapabilityTesterRegistry {
@@ -21,7 +25,22 @@ class CapabilityTesterRegistry {
 
 export const capabilityTesterRegistry = new CapabilityTesterRegistry()
 
-// 注册内置测试器
+// Text capabilities
 capabilityTesterRegistry.register('text.chat', new ChatCapabilityTester())
+capabilityTesterRegistry.register('text.translate', new TranslateCapabilityTester())
+capabilityTesterRegistry.register('text.summarize', new SummarizeCapabilityTester())
+
+// Embedding capabilities
 capabilityTesterRegistry.register('embedding.generate', new EmbeddingCapabilityTester())
+
+// Vision capabilities
 capabilityTesterRegistry.register('vision.ocr', new VisionCapabilityTester())
+
+// Code capabilities
+capabilityTesterRegistry.register('code.generate', new CodeGenerateTester())
+capabilityTesterRegistry.register('code.review', new CodeReviewTester())
+
+// Analysis capabilities
+capabilityTesterRegistry.register('intent.detect', new IntentDetectTester())
+capabilityTesterRegistry.register('sentiment.analyze', new SentimentAnalyzeTester())
+capabilityTesterRegistry.register('keywords.extract', new KeywordsExtractTester())

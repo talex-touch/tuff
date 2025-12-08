@@ -1,25 +1,25 @@
 import type {
-  AiChatPayload,
-  AiEmbeddingPayload,
+  IntelligenceChatPayload,
+  IntelligenceEmbeddingPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
-  AiTranslatePayload,
+  IntelligenceTranslatePayload,
   AiUsageInfo,
-  AiVisionOcrPayload,
-  AiVisionOcrResult,
+  IntelligenceVisionOcrPayload,
+  IntelligenceVisionOcrResult,
 } from '@talex-touch/utils'
 import { readFile } from 'node:fs/promises'
 
 import path from 'node:path'
-import { AiProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.siliconflow.cn/v1'
 const DEFAULT_VISION_MODEL = 'deepseek-ai/DeepSeek-OCR'
 
 export class SiliconflowProvider extends IntelligenceProvider {
-  readonly type = AiProviderType.SILICONFLOW
+  readonly type = IntelligenceProviderType.SILICONFLOW
 
   private get baseUrl(): string {
     return this.config.baseUrl || DEFAULT_BASE_URL
@@ -32,7 +32,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }
   }
 
-  async chat(payload: AiChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -68,7 +68,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
   }
 
   async* chatStream(
-    payload: AiChatPayload,
+    payload: IntelligenceChatPayload,
     options: AiInvokeOptions,
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
@@ -132,7 +132,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }
   }
 
-  async embedding(payload: AiEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>> {
+  async embedding(payload: IntelligenceEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>> {
     this.validateApiKey()
     const traceId = this.generateTraceId()
     const startTime = Date.now()
@@ -165,8 +165,8 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }
   }
 
-  async translate(payload: AiTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
-    const chatPayload: AiChatPayload = {
+  async translate(payload: IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+    const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
@@ -183,9 +183,9 @@ export class SiliconflowProvider extends IntelligenceProvider {
   }
 
   async visionOcr(
-    payload: AiVisionOcrPayload,
+    payload: IntelligenceVisionOcrPayload,
     options: AiInvokeOptions,
-  ): Promise<AiInvokeResult<AiVisionOcrResult>> {
+  ): Promise<AiInvokeResult<IntelligenceVisionOcrResult>> {
     this.validateApiKey()
     const traceId = this.generateTraceId()
     const startTime = Date.now()
@@ -233,7 +233,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     const rawContent = this.extractMessageContent(data.choices[0]?.message?.content)
     const parsed = this.safeParseJson(rawContent)
 
-    const ocrResult: AiVisionOcrResult = parsed
+    const ocrResult: IntelligenceVisionOcrResult = parsed
       ? {
           text: parsed.text ?? '',
           confidence: parsed.confidence,
@@ -274,7 +274,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     return this.parseJsonResponse<T>(response, { endpoint })
   }
 
-  private async getImageData(source: AiVisionOcrPayload['source']): Promise<string> {
+  private async getImageData(source: IntelligenceVisionOcrPayload['source']): Promise<string> {
     if (source.type === 'data-url' && source.dataUrl) {
       return source.dataUrl
     }
@@ -333,7 +333,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     return ''
   }
 
-  private safeParseJson(content: string): any | null {
+  protected override safeParseJson(content: string): any | null {
     if (!content)
       return null
     const trimmed = content.trim()

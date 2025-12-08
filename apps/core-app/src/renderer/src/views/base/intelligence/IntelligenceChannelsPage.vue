@@ -1,7 +1,7 @@
 <script lang="ts" name="IntelligenceChannelsPage" setup>
-import type { AiProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
-import { AiProviderType } from '@talex-touch/utils/types/intelligence'
+import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -34,7 +34,7 @@ function handleAddProvider(): void {
   const id = `custom-${Date.now()}`
   addProvider({
     id,
-    type: AiProviderType.CUSTOM,
+    type: IntelligenceProviderType.CUSTOM,
     name: `${t('settings.intelligence.providers')} ${nextIndex}`,
     enabled: false,
     priority: 3,
@@ -50,7 +50,7 @@ function handleSelectProvider(id: string): void {
   testResult.value = null
 }
 
-function handleUpdateProvider(updatedProvider: AiProviderConfig): void {
+function handleUpdateProvider(updatedProvider: IntelligenceProviderConfig): void {
   updateProvider(updatedProvider.id, updatedProvider)
 }
 

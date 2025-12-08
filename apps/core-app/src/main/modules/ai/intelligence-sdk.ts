@@ -1,16 +1,54 @@
 import type {
-  AiAuditLog,
-  AiChatPayload,
-  AiEmbeddingPayload,
-  AiInvokeOptions,
-  AiInvokeResult,
-  AiProviderConfig,
-  AiSDKConfig,
-  AiStreamChunk,
-  AiSummarizePayload,
-  AiTranslatePayload,
-  AiVisionOcrPayload,
-  ProviderManagerAdapter,
+  IntelligenceAgentPayload,
+  IntelligenceAgentResult,
+  IntelligenceAuditLog,
+  IntelligenceChatPayload,
+  IntelligenceClassificationPayload,
+  IntelligenceClassificationResult,
+  IntelligenceCodeDebugPayload,
+  IntelligenceCodeDebugResult,
+  IntelligenceCodeExplainPayload,
+  IntelligenceCodeExplainResult,
+  IntelligenceCodeGeneratePayload,
+  IntelligenceCodeGenerateResult,
+  IntelligenceCodeRefactorPayload,
+  IntelligenceCodeRefactorResult,
+  IntelligenceCodeReviewPayload,
+  IntelligenceCodeReviewResult,
+  IntelligenceContentExtractPayload,
+  IntelligenceContentExtractResult,
+  IntelligenceEmbeddingPayload,
+  IntelligenceGrammarCheckPayload,
+  IntelligenceGrammarCheckResult,
+  IntelligenceImageAnalyzePayload,
+  IntelligenceImageAnalyzeResult,
+  IntelligenceImageCaptionPayload,
+  IntelligenceImageCaptionResult,
+  IntelligenceImageGeneratePayload,
+  IntelligenceImageGenerateResult,
+  IntelligenceIntentDetectPayload,
+  IntelligenceIntentDetectResult,
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceKeywordsExtractPayload,
+  IntelligenceKeywordsExtractResult,
+  IntelligenceProviderConfig,
+  IntelligenceProviderManagerAdapter,
+  IntelligenceRAGQueryPayload,
+  IntelligenceRAGQueryResult,
+  IntelligenceRerankPayload,
+  IntelligenceRerankResult,
+  IntelligenceRewritePayload,
+  IntelligenceSDKConfig,
+  IntelligenceSemanticSearchPayload,
+  IntelligenceSemanticSearchResult,
+  IntelligenceSentimentAnalyzePayload,
+  IntelligenceSentimentAnalyzeResult,
+  IntelligenceStreamChunk,
+  IntelligenceSummarizePayload,
+  IntelligenceTranslatePayload,
+  IntelligenceVisionOcrPayload,
+  IntelligenceVisionOcrResult,
 } from '@talex-touch/utils'
 import chalk from 'chalk'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
@@ -21,14 +59,14 @@ const logInfo = (...args: any[]) => console.log(INTELLIGENCE_TAG, ...args)
 const logWarn = (...args: any[]) => console.warn(INTELLIGENCE_TAG, ...args)
 const logError = (...args: any[]) => console.error(INTELLIGENCE_TAG, ...args)
 
-let providerManager: ProviderManagerAdapter | null = null
+let providerManager: IntelligenceProviderManagerAdapter | null = null
 
-export function setIntelligenceProviderManager(manager: ProviderManagerAdapter): void {
+export function setIntelligenceProviderManager(manager: IntelligenceProviderManagerAdapter): void {
   providerManager = manager
   logInfo('Provider manager injected')
 }
 
-function ensureProviderManager(): ProviderManagerAdapter {
+function ensureProviderManager(): IntelligenceProviderManagerAdapter {
   if (!providerManager) {
     throw new Error('[Intelligence] Provider manager not initialized')
   }
@@ -36,7 +74,7 @@ function ensureProviderManager(): ProviderManagerAdapter {
 }
 
 export class AiSDK {
-  private config: AiSDKConfig = {
+  private config: IntelligenceSDKConfig = {
     providers: [],
     defaultStrategy: 'adaptive-default',
     enableAudit: true,
@@ -44,17 +82,17 @@ export class AiSDK {
     capabilities: {},
   }
 
-  private auditLogs: AiAuditLog[] = []
+  private auditLogs: IntelligenceAuditLog[] = []
   private cache = new Map<string, { result: any, timestamp: number }>()
 
-  constructor(config?: Partial<AiSDKConfig>) {
+  constructor(config?: Partial<IntelligenceSDKConfig>) {
     if (config) {
       this.updateConfig(config)
     }
   }
 
-  updateConfig(config: Partial<AiSDKConfig>): void {
-    const nextConfig: AiSDKConfig = { ...this.config, ...config }
+  updateConfig(config: Partial<IntelligenceSDKConfig>): void {
+    const nextConfig: IntelligenceSDKConfig = { ...this.config, ...config }
 
     if (config.capabilities) {
       nextConfig.capabilities = {
@@ -95,15 +133,15 @@ export class AiSDK {
   async invoke<T = any>(
     capabilityId: string,
     payload: any,
-    options: AiInvokeOptions = {},
-  ): Promise<AiInvokeResult<T>> {
+    options: IntelligenceInvokeOptions = {},
+  ): Promise<IntelligenceInvokeResult<T>> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
       throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
     }
     logInfo(`invoke -> ${capabilityId}`)
 
-    const runtimeOptions: AiInvokeOptions = { ...options }
+    const runtimeOptions: IntelligenceInvokeOptions = { ...options }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
     const configuredProviders
       = capabilityRouting?.providers
@@ -164,23 +202,96 @@ export class AiSDK {
     }
     logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
 
-    let result: AiInvokeResult<T>
+    let result: IntelligenceInvokeResult<T>
     const startTime = Date.now()
 
     try {
       switch (capability.type) {
+        // Core text capabilities
         case 'chat':
-          result = await provider.chat(payload as AiChatPayload, runtimeOptions) as AiInvokeResult<T>
+          result = await provider.chat(payload as IntelligenceChatPayload, runtimeOptions) as IntelligenceInvokeResult<T>
           break
         case 'embedding':
-          result = await provider.embedding(payload as AiEmbeddingPayload, runtimeOptions) as AiInvokeResult<T>
+          result = await provider.embedding(payload as IntelligenceEmbeddingPayload, runtimeOptions) as IntelligenceInvokeResult<T>
           break
         case 'translate':
-          result = await provider.translate(payload as AiTranslatePayload, runtimeOptions) as AiInvokeResult<T>
+          result = await provider.translate(payload as IntelligenceTranslatePayload, runtimeOptions) as IntelligenceInvokeResult<T>
           break
+        case 'summarize':
+          result = await provider.summarize!(payload as IntelligenceSummarizePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'rewrite':
+          result = await provider.rewrite!(payload as IntelligenceRewritePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'grammar-check':
+          result = await provider.grammarCheck!(payload as IntelligenceGrammarCheckPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+
+        // Code capabilities
+        case 'code-generate':
+          result = await provider.codeGenerate!(payload as IntelligenceCodeGeneratePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'code-explain':
+          result = await provider.codeExplain!(payload as IntelligenceCodeExplainPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'code-review':
+          result = await provider.codeReview!(payload as IntelligenceCodeReviewPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'code-refactor':
+          result = await provider.codeRefactor!(payload as IntelligenceCodeRefactorPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'code-debug':
+          result = await provider.codeDebug!(payload as IntelligenceCodeDebugPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+
+        // Analysis capabilities
+        case 'intent-detect':
+          result = await provider.intentDetect!(payload as IntelligenceIntentDetectPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'sentiment-analyze':
+          result = await provider.sentimentAnalyze!(payload as IntelligenceSentimentAnalyzePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'content-extract':
+          result = await provider.contentExtract!(payload as IntelligenceContentExtractPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'keywords-extract':
+          result = await provider.keywordsExtract!(payload as IntelligenceKeywordsExtractPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'classification':
+          result = await provider.classification!(payload as IntelligenceClassificationPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+
+        // Vision capabilities
         case 'vision':
-          result = await provider.visionOcr(payload as AiVisionOcrPayload, runtimeOptions) as AiInvokeResult<T>
+        case 'vision-ocr':
+          result = await provider.visionOcr(payload as IntelligenceVisionOcrPayload, runtimeOptions) as IntelligenceInvokeResult<T>
           break
+        case 'image-caption':
+          result = await provider.imageCaption!(payload as IntelligenceImageCaptionPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'image-analyze':
+          result = await provider.imageAnalyze!(payload as IntelligenceImageAnalyzePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'image-generate':
+          result = await provider.imageGenerate!(payload as IntelligenceImageGeneratePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+
+        // RAG & Search capabilities
+        case 'rag-query':
+          result = await provider.ragQuery!(payload as IntelligenceRAGQueryPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'semantic-search':
+          result = await provider.semanticSearch!(payload as IntelligenceSemanticSearchPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+        case 'rerank':
+          result = await provider.rerank!(payload as IntelligenceRerankPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+
+        // Agent capabilities
+        case 'agent':
+          result = await provider.agent!(payload as IntelligenceAgentPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          break
+
         default:
           throw new Error(`[Intelligence] Capability type ${capability.type} not implemented`)
       }
@@ -232,16 +343,16 @@ export class AiSDK {
           try {
             switch (capability.type) {
               case 'chat':
-                result = await fallbackProvider.chat(payload as AiChatPayload, runtimeOptions) as AiInvokeResult<T>
+                result = await fallbackProvider.chat(payload as IntelligenceChatPayload, runtimeOptions) as IntelligenceInvokeResult<T>
                 break
               case 'embedding':
-                result = await fallbackProvider.embedding(payload as AiEmbeddingPayload, runtimeOptions) as AiInvokeResult<T>
+                result = await fallbackProvider.embedding(payload as IntelligenceEmbeddingPayload, runtimeOptions) as IntelligenceInvokeResult<T>
                 break
               case 'translate':
-                result = await fallbackProvider.translate(payload as AiTranslatePayload, runtimeOptions) as AiInvokeResult<T>
+                result = await fallbackProvider.translate(payload as IntelligenceTranslatePayload, runtimeOptions) as IntelligenceInvokeResult<T>
                 break
               case 'vision':
-                result = await fallbackProvider.visionOcr(payload as AiVisionOcrPayload, runtimeOptions) as AiInvokeResult<T>
+                result = await fallbackProvider.visionOcr(payload as IntelligenceVisionOcrPayload, runtimeOptions) as IntelligenceInvokeResult<T>
                 break
               default:
                 continue
@@ -263,14 +374,14 @@ export class AiSDK {
   async* invokeStream(
     capabilityId: string,
     payload: any,
-    options: AiInvokeOptions = {},
-  ): AsyncGenerator<AiStreamChunk> {
+    options: IntelligenceInvokeOptions = {},
+  ): AsyncGenerator<IntelligenceStreamChunk> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
       throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
     }
 
-    const runtimeOptions: AiInvokeOptions = { ...options, stream: true }
+    const runtimeOptions: IntelligenceInvokeOptions = { ...options, stream: true }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
     const configuredProviders
       = capabilityRouting?.providers
@@ -325,10 +436,10 @@ export class AiSDK {
       throw new Error('[Intelligence] Stream is only supported for chat capability')
     }
 
-    yield* provider.chatStream(payload as AiChatPayload, runtimeOptions)
+    yield* provider.chatStream(payload as IntelligenceChatPayload, runtimeOptions)
   }
 
-  private getCacheKey(capabilityId: string, payload: any, options: AiInvokeOptions): string {
+  private getCacheKey(capabilityId: string, payload: any, options: IntelligenceInvokeOptions): string {
     return `${capabilityId}:${JSON.stringify(payload)}:${JSON.stringify(options)}`
   }
 
@@ -353,14 +464,14 @@ export class AiSDK {
     })
   }
 
-  private addAuditLog(log: AiAuditLog): void {
+  private addAuditLog(log: IntelligenceAuditLog): void {
     this.auditLogs.push(log)
     if (this.auditLogs.length > 1000) {
       this.auditLogs.shift()
     }
   }
 
-  getAuditLogs(limit: number = 100): AiAuditLog[] {
+  getAuditLogs(limit: number = 100): IntelligenceAuditLog[] {
     return this.auditLogs.slice(-limit)
   }
 
@@ -375,22 +486,92 @@ export class AiSDK {
   }
 
   text = {
-    chat: (payload: AiChatPayload, options?: AiInvokeOptions) =>
+    chat: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<string>('text.chat', payload, options),
 
-    chatStream: (payload: AiChatPayload, options?: AiInvokeOptions) =>
+    chatStream: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) =>
       this.invokeStream('text.chat', payload, options),
 
-    translate: (payload: AiTranslatePayload, options?: AiInvokeOptions) =>
+    translate: (payload: IntelligenceTranslatePayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<string>('text.translate', payload, options),
 
-    summarize: (payload: AiSummarizePayload, options?: AiInvokeOptions) =>
+    summarize: (payload: IntelligenceSummarizePayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<string>('text.summarize', payload, options),
+
+    rewrite: (payload: IntelligenceRewritePayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<string>('text.rewrite', payload, options),
+
+    grammarCheck: (payload: IntelligenceGrammarCheckPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceGrammarCheckResult>('text.grammar', payload, options),
   }
 
   embedding = {
-    generate: (payload: AiEmbeddingPayload, options?: AiInvokeOptions) =>
+    generate: (payload: IntelligenceEmbeddingPayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<number[]>('embedding.generate', payload, options),
+  }
+
+  code = {
+    generate: (payload: IntelligenceCodeGeneratePayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceCodeGenerateResult>('code.generate', payload, options),
+
+    explain: (payload: IntelligenceCodeExplainPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceCodeExplainResult>('code.explain', payload, options),
+
+    review: (payload: IntelligenceCodeReviewPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceCodeReviewResult>('code.review', payload, options),
+
+    refactor: (payload: IntelligenceCodeRefactorPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceCodeRefactorResult>('code.refactor', payload, options),
+
+    debug: (payload: IntelligenceCodeDebugPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceCodeDebugResult>('code.debug', payload, options),
+  }
+
+  analysis = {
+    detectIntent: (payload: IntelligenceIntentDetectPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceIntentDetectResult>('intent.detect', payload, options),
+
+    analyzeSentiment: (payload: IntelligenceSentimentAnalyzePayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options),
+
+    extractContent: (payload: IntelligenceContentExtractPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceContentExtractResult>('content.extract', payload, options),
+
+    extractKeywords: (payload: IntelligenceKeywordsExtractPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options),
+
+    classify: (payload: IntelligenceClassificationPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceClassificationResult>('text.classify', payload, options),
+  }
+
+  vision = {
+    ocr: (payload: IntelligenceVisionOcrPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload, options),
+
+    caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceImageCaptionResult>('image.caption', payload, options),
+
+    analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceImageAnalyzeResult>('image.analyze', payload, options),
+
+    generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options),
+  }
+
+  rag = {
+    query: (payload: IntelligenceRAGQueryPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceRAGQueryResult>('rag.query', payload, options),
+
+    semanticSearch: (payload: IntelligenceSemanticSearchPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
+
+    rerank: (payload: IntelligenceRerankPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceRerankResult>('search.rerank', payload, options),
+  }
+
+  agent = {
+    run: (payload: IntelligenceAgentPayload, options?: IntelligenceInvokeOptions) =>
+      this.invoke<IntelligenceAgentResult>('agent.run', payload, options),
   }
 
   /**
@@ -398,7 +579,7 @@ export class AiSDK {
    * @param providerConfig - Provider configuration to test
    * @returns Test result with success status, message, and latency
    */
-  async testProvider(providerConfig: AiProviderConfig): Promise<{
+  async testProvider(providerConfig: IntelligenceProviderConfig): Promise<{
     success: boolean
     message: string
     latency?: number
@@ -430,7 +611,7 @@ export class AiSDK {
       const provider = manager.createProviderInstance(providerConfig)
 
       // Use a simple test payload
-      const testPayload: AiChatPayload = {
+      const testPayload: IntelligenceChatPayload = {
         messages: [
           {
             role: 'user',

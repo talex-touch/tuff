@@ -1,17 +1,17 @@
 import type {
-  AiChatPayload,
+  IntelligenceChatPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
   AiUsageInfo,
 } from '@talex-touch/utils'
-import { AiProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com/v1'
 
 export class AnthropicProvider extends IntelligenceProvider {
-  readonly type = AiProviderType.ANTHROPIC
+  readonly type = IntelligenceProviderType.ANTHROPIC
 
   private get baseUrl(): string {
     return this.config.baseUrl || DEFAULT_BASE_URL
@@ -25,7 +25,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     }
   }
 
-  async chat(payload: AiChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -71,7 +71,7 @@ export class AnthropicProvider extends IntelligenceProvider {
   }
 
   async* chatStream(
-    payload: AiChatPayload,
+    payload: IntelligenceChatPayload,
     options: AiInvokeOptions,
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
@@ -138,8 +138,8 @@ export class AnthropicProvider extends IntelligenceProvider {
     throw new Error('[AnthropicProvider] Embedding not supported')
   }
 
-  async translate(payload: import('@talex-touch/utils').AiTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
-    const chatPayload: import('@talex-touch/utils').AiChatPayload = {
+  async translate(payload: import('@talex-touch/utils').IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+    const chatPayload: import('@talex-touch/utils').IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
@@ -156,7 +156,7 @@ export class AnthropicProvider extends IntelligenceProvider {
   }
 
   async visionOcr(
-    payload: import('@talex-touch/utils').AiVisionOcrPayload,
+    payload: import('@talex-touch/utils').IntelligenceVisionOcrPayload,
     options: AiInvokeOptions,
   ): Promise<AiInvokeResult<import('@talex-touch/utils').AiVisionOcrResult>> {
     this.validateApiKey()
@@ -257,7 +257,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     throw new Error('[AnthropicProvider] Invalid vision image source')
   }
 
-  private safeParseJson(text: string): any {
+  protected override safeParseJson(text: string): any {
     try {
       return JSON.parse(text)
     }

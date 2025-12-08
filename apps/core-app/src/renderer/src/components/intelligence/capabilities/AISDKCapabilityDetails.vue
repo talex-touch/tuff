@@ -1,7 +1,7 @@
 <script lang="ts" name="AISDKCapabilityDetails" setup>
 import type {
   AiCapabilityProviderBinding,
-  AiProviderConfig,
+  IntelligenceProviderConfig,
   AISDKCapabilityConfig,
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
@@ -20,7 +20,7 @@ import CapabilityTestDialog from './CapabilityTestDialog.vue'
 
 const props = defineProps<{
   capability: AISDKCapabilityConfig
-  providers: AiProviderConfig[]
+  providers: IntelligenceProviderConfig[]
   bindings: CapabilityBinding[]
   isTesting: boolean
   testResult?: CapabilityTestResult | null

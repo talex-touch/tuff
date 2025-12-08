@@ -1,13 +1,13 @@
-import type { AiProviderConfig } from '@talex-touch/utils'
-import { AiProviderType } from '@talex-touch/utils'
+import type { IntelligenceProviderConfig } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/utils'
 
-const DEFAULT_BASE_URLS: Partial<Record<AiProviderType, string>> = {
-  [AiProviderType.OPENAI]: 'https://api.openai.com/v1',
-  [AiProviderType.ANTHROPIC]: 'https://api.anthropic.com/v1',
-  [AiProviderType.DEEPSEEK]: 'https://api.deepseek.com/v1',
-  [AiProviderType.SILICONFLOW]: 'https://api.siliconflow.cn/v1',
-  [AiProviderType.CUSTOM]: undefined,
-  [AiProviderType.LOCAL]: undefined,
+const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
+  [IntelligenceProviderType.OPENAI]: 'https://api.openai.com/v1',
+  [IntelligenceProviderType.ANTHROPIC]: 'https://api.anthropic.com/v1',
+  [IntelligenceProviderType.DEEPSEEK]: 'https://api.deepseek.com/v1',
+  [IntelligenceProviderType.SILICONFLOW]: 'https://api.siliconflow.cn/v1',
+  [IntelligenceProviderType.CUSTOM]: undefined,
+  [IntelligenceProviderType.LOCAL]: undefined,
 }
 
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -18,7 +18,7 @@ function joinUrl(base: string, path: string): string {
   return `${normalizedBase}/${normalizedPath}`
 }
 
-function resolveBaseUrl(provider: AiProviderConfig): string {
+function resolveBaseUrl(provider: IntelligenceProviderConfig): string {
   const candidate = provider.baseUrl?.trim() || DEFAULT_BASE_URLS[provider.type]
   if (!candidate) {
     throw new Error(`[${provider.type}] Base URL is required to fetch models`)
@@ -26,9 +26,9 @@ function resolveBaseUrl(provider: AiProviderConfig): string {
   return candidate
 }
 
-function ensureApiKey(provider: AiProviderConfig): string {
+function ensureApiKey(provider: IntelligenceProviderConfig): string {
   const key = provider.apiKey?.trim()
-  if (!key && provider.type !== AiProviderType.LOCAL) {
+  if (!key && provider.type !== IntelligenceProviderType.LOCAL) {
     throw new Error(`[${provider.type}] API key is required to fetch models`)
   }
   return key || ''
@@ -59,8 +59,8 @@ async function parseJsonBody(response: Response): Promise<any> {
   }
 }
 
-export async function fetchProviderModels(provider: AiProviderConfig): Promise<string[]> {
-  if (provider.type === AiProviderType.LOCAL) {
+export async function fetchProviderModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+  if (provider.type === IntelligenceProviderType.LOCAL) {
     return provider.models?.length ? [...new Set(provider.models)] : []
   }
 
@@ -69,7 +69,7 @@ export async function fetchProviderModels(provider: AiProviderConfig): Promise<s
     'Content-Type': 'application/json',
   }
 
-  if (provider.type === AiProviderType.ANTHROPIC) {
+  if (provider.type === IntelligenceProviderType.ANTHROPIC) {
     headers['x-api-key'] = ensureApiKey(provider)
     headers['anthropic-version'] = ANTHROPIC_VERSION
   }

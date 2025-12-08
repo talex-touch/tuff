@@ -1,7 +1,7 @@
-import type { AiProviderConfig, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { IntelligenceProviderConfig, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
-import { AiCapabilityType, AiProviderType } from '@talex-touch/utils'
+import { IntelligenceCapabilityType, IntelligenceProviderType } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
@@ -94,14 +94,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     intelligenceLog.info('Registering builtin provider factories')
 
-    this.manager.registerFactory(AiProviderType.OPENAI, config => new OpenAIProvider(config))
-    this.manager.registerFactory(AiProviderType.ANTHROPIC, config => new AnthropicProvider(config))
-    this.manager.registerFactory(AiProviderType.DEEPSEEK, config => new DeepSeekProvider(config))
+    this.manager.registerFactory(IntelligenceProviderType.OPENAI, config => new OpenAIProvider(config))
+    this.manager.registerFactory(IntelligenceProviderType.ANTHROPIC, config => new AnthropicProvider(config))
+    this.manager.registerFactory(IntelligenceProviderType.DEEPSEEK, config => new DeepSeekProvider(config))
     this.manager.registerFactory(
-      AiProviderType.SILICONFLOW,
+      IntelligenceProviderType.SILICONFLOW,
       config => new SiliconflowProvider(config),
     )
-    this.manager.registerFactory(AiProviderType.LOCAL, config => new LocalProvider(config))
+    this.manager.registerFactory(IntelligenceProviderType.LOCAL, config => new LocalProvider(config))
 
     intelligenceLog.success('Builtin provider factories registered')
   }
@@ -116,7 +116,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     intelligenceLog.info('Registering custom provider factory')
 
     // Custom provider 使用 OpenAI-compatible 接口
-    this.manager.registerFactory(AiProviderType.CUSTOM, (config) => {
+    this.manager.registerFactory(IntelligenceProviderType.CUSTOM, (config) => {
       intelligenceLog.info(`Creating custom provider: ${config.id}`)
       return new OpenAIProvider(config)
     })
@@ -130,52 +130,293 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private registerCapabilities(): void {
     intelligenceLog.info('Registering capabilities')
 
-    // 注册文本聊天能力
+    const ALL_PROVIDERS = [
+      IntelligenceProviderType.OPENAI,
+      IntelligenceProviderType.ANTHROPIC,
+      IntelligenceProviderType.DEEPSEEK,
+      IntelligenceProviderType.SILICONFLOW,
+      IntelligenceProviderType.LOCAL,
+      IntelligenceProviderType.CUSTOM,
+    ]
+
+    const VISION_PROVIDERS = [
+      IntelligenceProviderType.OPENAI,
+      IntelligenceProviderType.ANTHROPIC,
+      IntelligenceProviderType.SILICONFLOW,
+      IntelligenceProviderType.CUSTOM,
+    ]
+
+    // ========================================================================
+    // Core Text Capabilities
+    // ========================================================================
+
     aiCapabilityRegistry.register({
       id: 'text.chat',
-      type: AiCapabilityType.CHAT,
+      type: IntelligenceCapabilityType.CHAT,
       name: 'Text Chat',
       description: 'General-purpose text chat capability',
-      supportedProviders: [
-        AiProviderType.OPENAI,
-        AiProviderType.ANTHROPIC,
-        AiProviderType.DEEPSEEK,
-        AiProviderType.SILICONFLOW,
-        AiProviderType.LOCAL,
-        AiProviderType.CUSTOM,
-      ],
+      supportedProviders: ALL_PROVIDERS,
     })
 
-    // 注册 Embedding 能力
+    aiCapabilityRegistry.register({
+      id: 'text.translate',
+      type: IntelligenceCapabilityType.TRANSLATE,
+      name: 'Translation',
+      description: 'Multi-language text translation',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'text.summarize',
+      type: IntelligenceCapabilityType.SUMMARIZE,
+      name: 'Summarization',
+      description: 'Generate concise summaries of text content',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'text.rewrite',
+      type: IntelligenceCapabilityType.REWRITE,
+      name: 'Text Rewrite',
+      description: 'Rewrite text with different styles and tones',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'text.grammar',
+      type: IntelligenceCapabilityType.GRAMMAR_CHECK,
+      name: 'Grammar Check',
+      description: 'Check and correct grammar, spelling, and style',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    // ========================================================================
+    // Embedding Capabilities
+    // ========================================================================
+
     aiCapabilityRegistry.register({
       id: 'embedding.generate',
-      type: AiCapabilityType.EMBEDDING,
+      type: IntelligenceCapabilityType.EMBEDDING,
       name: 'Generate Embeddings',
       description: 'Generate text embeddings for semantic search',
       supportedProviders: [
-        AiProviderType.OPENAI,
-        AiProviderType.DEEPSEEK,
-        AiProviderType.SILICONFLOW,
-        AiProviderType.LOCAL,
-        AiProviderType.CUSTOM,
+        IntelligenceProviderType.OPENAI,
+        IntelligenceProviderType.DEEPSEEK,
+        IntelligenceProviderType.SILICONFLOW,
+        IntelligenceProviderType.LOCAL,
+        IntelligenceProviderType.CUSTOM,
       ],
     })
 
-    // 注册 Vision OCR 能力
+    // ========================================================================
+    // Code Capabilities
+    // ========================================================================
+
+    aiCapabilityRegistry.register({
+      id: 'code.generate',
+      type: IntelligenceCapabilityType.CODE_GENERATE,
+      name: 'Code Generation',
+      description: 'Generate code from natural language descriptions',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'code.explain',
+      type: IntelligenceCapabilityType.CODE_EXPLAIN,
+      name: 'Code Explanation',
+      description: 'Explain code functionality and logic',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'code.review',
+      type: IntelligenceCapabilityType.CODE_REVIEW,
+      name: 'Code Review',
+      description: 'Review code for issues, security, and best practices',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'code.refactor',
+      type: IntelligenceCapabilityType.CODE_REFACTOR,
+      name: 'Code Refactoring',
+      description: 'Refactor code for better readability and maintainability',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'code.debug',
+      type: IntelligenceCapabilityType.CODE_DEBUG,
+      name: 'Code Debugging',
+      description: 'Analyze and fix code bugs',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    // ========================================================================
+    // Analysis Capabilities
+    // ========================================================================
+
+    aiCapabilityRegistry.register({
+      id: 'intent.detect',
+      type: IntelligenceCapabilityType.INTENT_DETECT,
+      name: 'Intent Detection',
+      description: 'Detect user intent from text input',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'sentiment.analyze',
+      type: IntelligenceCapabilityType.SENTIMENT_ANALYZE,
+      name: 'Sentiment Analysis',
+      description: 'Analyze sentiment and emotions in text',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'content.extract',
+      type: IntelligenceCapabilityType.CONTENT_EXTRACT,
+      name: 'Content Extraction',
+      description: 'Extract entities and key information from text',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'keywords.extract',
+      type: IntelligenceCapabilityType.KEYWORDS_EXTRACT,
+      name: 'Keyword Extraction',
+      description: 'Extract keywords and key phrases from text',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'text.classify',
+      type: IntelligenceCapabilityType.CLASSIFICATION,
+      name: 'Text Classification',
+      description: 'Classify text into predefined categories',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    // ========================================================================
+    // Vision Capabilities
+    // ========================================================================
+
     aiCapabilityRegistry.register({
       id: 'vision.ocr',
-      type: AiCapabilityType.VISION,
+      type: IntelligenceCapabilityType.VISION_OCR,
       name: 'Vision OCR',
       description: 'Optical character recognition from images',
-      supportedProviders: [
-        AiProviderType.OPENAI,
-        AiProviderType.ANTHROPIC,
-        AiProviderType.SILICONFLOW,
-        AiProviderType.CUSTOM,
-      ],
+      supportedProviders: VISION_PROVIDERS,
     })
 
-    intelligenceLog.success('Capabilities registered')
+    aiCapabilityRegistry.register({
+      id: 'image.caption',
+      type: IntelligenceCapabilityType.IMAGE_CAPTION,
+      name: 'Image Captioning',
+      description: 'Generate descriptive captions for images',
+      supportedProviders: VISION_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'image.analyze',
+      type: IntelligenceCapabilityType.IMAGE_ANALYZE,
+      name: 'Image Analysis',
+      description: 'Analyze image content, objects, and scenes',
+      supportedProviders: VISION_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'image.generate',
+      type: IntelligenceCapabilityType.IMAGE_GENERATE,
+      name: 'Image Generation',
+      description: 'Generate images from text prompts',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'image.edit',
+      type: IntelligenceCapabilityType.IMAGE_EDIT,
+      name: 'Image Editing',
+      description: 'Edit and modify images with AI',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM],
+    })
+
+    // ========================================================================
+    // Audio Capabilities
+    // ========================================================================
+
+    aiCapabilityRegistry.register({
+      id: 'audio.tts',
+      type: IntelligenceCapabilityType.TTS,
+      name: 'Text-to-Speech',
+      description: 'Convert text to natural speech',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'audio.stt',
+      type: IntelligenceCapabilityType.STT,
+      name: 'Speech-to-Text',
+      description: 'Convert speech to text',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'audio.transcribe',
+      type: IntelligenceCapabilityType.AUDIO_TRANSCRIBE,
+      name: 'Audio Transcription',
+      description: 'Transcribe audio with timestamps and speaker detection',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+    })
+
+    // ========================================================================
+    // RAG & Search Capabilities
+    // ========================================================================
+
+    aiCapabilityRegistry.register({
+      id: 'rag.query',
+      type: IntelligenceCapabilityType.RAG_QUERY,
+      name: 'RAG Query',
+      description: 'Query documents with retrieval-augmented generation',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'search.semantic',
+      type: IntelligenceCapabilityType.SEMANTIC_SEARCH,
+      name: 'Semantic Search',
+      description: 'Search documents by semantic similarity',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'search.rerank',
+      type: IntelligenceCapabilityType.RERANK,
+      name: 'Document Reranking',
+      description: 'Rerank search results by relevance',
+      supportedProviders: [IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+    })
+
+    // ========================================================================
+    // Workflow & Agent Capabilities
+    // ========================================================================
+
+    aiCapabilityRegistry.register({
+      id: 'workflow.execute',
+      type: IntelligenceCapabilityType.WORKFLOW,
+      name: 'Workflow Execution',
+      description: 'Execute multi-step prompt workflows',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    aiCapabilityRegistry.register({
+      id: 'agent.run',
+      type: IntelligenceCapabilityType.AGENT,
+      name: 'Agent Execution',
+      description: 'Run autonomous AI agents with tool access',
+      supportedProviders: ALL_PROVIDERS,
+    })
+
+    intelligenceLog.success(`Registered ${aiCapabilityRegistry.size()} capabilities`)
   }
 
   /**
@@ -224,7 +465,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('Missing provider payload')
         }
 
-        const { provider } = data as { provider: AiProviderConfig }
+        const { provider } = data as { provider: IntelligenceProviderConfig }
         ensureAiConfigLoaded()
         intelligenceLog.info(`Testing provider: ${provider.id}`)
         const result = await ai.testProvider(provider)
@@ -357,7 +598,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('Missing provider payload')
         }
 
-        const { provider } = data as { provider: AiProviderConfig }
+        const { provider } = data as { provider: IntelligenceProviderConfig }
         ensureAiConfigLoaded()
         intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
 

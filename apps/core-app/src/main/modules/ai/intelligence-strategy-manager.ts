@@ -1,14 +1,14 @@
-import type { AiInvokeOptions, AiProviderConfig } from '@talex-touch/utils'
+import type { AiInvokeOptions, IntelligenceProviderConfig } from '@talex-touch/utils'
 
 export interface StrategySelectionRequest {
   capabilityId: string
   options: AiInvokeOptions
-  availableProviders: AiProviderConfig[]
+  availableProviders: IntelligenceProviderConfig[]
 }
 
 export interface StrategySelectionResult {
-  selectedProvider: AiProviderConfig
-  fallbackProviders: AiProviderConfig[]
+  selectedProvider: IntelligenceProviderConfig
+  fallbackProviders: IntelligenceProviderConfig[]
   reasoning?: string
 }
 

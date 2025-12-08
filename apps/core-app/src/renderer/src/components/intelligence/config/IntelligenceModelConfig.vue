@@ -1,5 +1,5 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
-import type { AiProviderConfig } from '@talex-touch/utils/renderer/storage'
+import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { ElOption, ElOptionGroup, ElSelect, ElTransfer } from 'element-plus'
@@ -13,12 +13,12 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
 
 const props = defineProps<{
-  modelValue: AiProviderConfig
+  modelValue: IntelligenceProviderConfig
   disabled?: boolean
 }>()
 
 const emits = defineEmits<{
-  'update:modelValue': [value: AiProviderConfig]
+  'update:modelValue': [value: IntelligenceProviderConfig]
   'change': []
 }>()
 

@@ -7,7 +7,7 @@ import FlatButton from '~/components/base/button/FlatButton.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 
-enum AiProviderType {
+enum IntelligenceProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   DEEPSEEK = 'deepseek',
@@ -16,9 +16,9 @@ enum AiProviderType {
   CUSTOM = 'custom',
 }
 
-interface AiProviderConfig {
+interface IntelligenceProviderConfig {
   id: string
-  type: AiProviderType | string
+  type: IntelligenceProviderType | string
   name: string
   enabled: boolean
   apiKey?: string
@@ -35,7 +35,7 @@ interface AiProviderConfig {
 }
 
 const props = defineProps<{
-  provider: AiProviderConfig
+  provider: IntelligenceProviderConfig
 }>()
 
 const emits = defineEmits<{
@@ -44,13 +44,13 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
-const providerIconMap: Record<AiProviderType, ITuffIcon> = {
-  [AiProviderType.OPENAI]: { type: 'class', value: 'i-simple-icons-openai' },
-  [AiProviderType.ANTHROPIC]: { type: 'class', value: 'i-simple-icons-anthropic' },
-  [AiProviderType.DEEPSEEK]: { type: 'class', value: 'i-carbon-search-advanced' },
-  [AiProviderType.SILICONFLOW]: { type: 'class', value: 'i-carbon-ibm-watson-machine-learning' },
-  [AiProviderType.LOCAL]: { type: 'class', value: 'i-carbon-bare-metal-server' },
-  [AiProviderType.CUSTOM]: { type: 'class', value: 'i-carbon-settings' },
+const providerIconMap: Record<IntelligenceProviderType, ITuffIcon> = {
+  [IntelligenceProviderType.OPENAI]: { type: 'class', value: 'i-simple-icons-openai' },
+  [IntelligenceProviderType.ANTHROPIC]: { type: 'class', value: 'i-simple-icons-anthropic' },
+  [IntelligenceProviderType.DEEPSEEK]: { type: 'class', value: 'i-carbon-search-advanced' },
+  [IntelligenceProviderType.SILICONFLOW]: { type: 'class', value: 'i-carbon-ibm-watson-machine-learning' },
+  [IntelligenceProviderType.LOCAL]: { type: 'class', value: 'i-carbon-bare-metal-server' },
+  [IntelligenceProviderType.CUSTOM]: { type: 'class', value: 'i-carbon-settings' },
 }
 
 const overflowIcon: ITuffIcon = { type: 'class', value: 'i-carbon-overflow-menu-horizontal' }
@@ -65,7 +65,7 @@ const localEnabled = computed({
 })
 
 const providerIcon = computed<ITuffIcon>(() => {
-  return providerIconMap[props.provider.type as AiProviderType] ?? defaultIcon
+  return providerIconMap[props.provider.type as IntelligenceProviderType] ?? defaultIcon
 })
 
 function handleDelete() {

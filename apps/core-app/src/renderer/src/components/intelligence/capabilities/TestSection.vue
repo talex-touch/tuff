@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { CapabilityTestResult } from './types'
-import type { AiProviderConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -11,7 +11,7 @@ const props = defineProps<{
   isTesting: boolean
   disabled: boolean
   testResult?: CapabilityTestResult | null
-  enabledBindings?: Array<{ providerId: string, provider?: AiProviderConfig, models?: string[] }>
+  enabledBindings?: Array<{ providerId: string, provider?: IntelligenceProviderConfig, models?: string[] }>
 }>()
 
 const emits = defineEmits<{

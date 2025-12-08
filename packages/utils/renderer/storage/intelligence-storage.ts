@@ -1,8 +1,8 @@
-import type { AiProviderConfig, AISDKGlobalConfig, AISDKStorageData } from '../../types/intelligence'
+import type { IntelligenceProviderConfig, AISDKGlobalConfig, AISDKStorageData } from '../../types/intelligence'
 import { StorageList } from '../../common/storage/constants'
 import {
 
-  AiProviderType,
+  IntelligenceProviderType,
 
   DEFAULT_CAPABILITIES,
   DEFAULT_GLOBAL_CONFIG,
@@ -11,8 +11,8 @@ import {
 import { createStorageProxy, TouchStorage } from './base-storage'
 
 // Re-export types for convenience
-export { AiProviderType }
-export type { AiProviderConfig, AISDKGlobalConfig }
+export { IntelligenceProviderType }
+export type { IntelligenceProviderConfig, AISDKGlobalConfig }
 
 const defaultIntelligenceData: AISDKStorageData = {
   providers: [...DEFAULT_PROVIDERS],
@@ -32,7 +32,7 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
   /**
    * 添加新的提供商
    */
-  addProvider(provider: AiProviderConfig): void {
+  addProvider(provider: IntelligenceProviderConfig): void {
     const currentData = this.get()
     const updatedProviders = [...currentData.providers, provider]
     this.set({
@@ -44,7 +44,7 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
   /**
    * 更新提供商配置
    */
-  updateProvider(id: string, updatedProvider: Partial<AiProviderConfig>): void {
+  updateProvider(id: string, updatedProvider: Partial<IntelligenceProviderConfig>): void {
     const currentData = this.get()
     const providerIndex = currentData.providers.findIndex(p => p.id === id)
 
@@ -93,14 +93,14 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
   /**
    * 获取特定类型的提供商
    */
-  getProvidersByType(type: AiProviderType): AiProviderConfig[] {
+  getProvidersByType(type: IntelligenceProviderType): IntelligenceProviderConfig[] {
     return this.get().providers.filter(p => p.type === type)
   }
 
   /**
    * 获取启用的提供商
    */
-  getEnabledProviders(): AiProviderConfig[] {
+  getEnabledProviders(): IntelligenceProviderConfig[] {
     return this.get().providers.filter(p => p.enabled)
   }
 
@@ -113,7 +113,7 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
       return false
 
     // 检查是否有必要的配置项
-    const hasApiKey = provider.type === AiProviderType.LOCAL || !!provider.apiKey
+    const hasApiKey = provider.type === IntelligenceProviderType.LOCAL || !!provider.apiKey
     const hasModels = !!(provider.models && provider.models.length > 0)
 
     return hasApiKey && hasModels

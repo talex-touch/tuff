@@ -274,7 +274,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         interaction: feature.interaction,
         priority: feature.priority ?? 0,
         extension: {
-          commands: feature.commands,
+          // Filter out non-serializable fields (functions, RegExp) from commands
+          commands: feature.commands.map((cmd) => ({
+            type: cmd.type,
+            value: typeof cmd.value === 'function' || cmd.value instanceof RegExp
+              ? String(cmd.value)
+              : cmd.value
+          })),
           searchTokens
         }
       }

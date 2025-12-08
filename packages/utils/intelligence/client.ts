@@ -1,4 +1,4 @@
-import type { AiInvokeOptions, AiInvokeResult, AiProviderConfig } from '../types/intelligence'
+import type { IntelligenceInvokeOptions, IntelligenceInvokeResult, IntelligenceProviderConfig } from '../types/intelligence'
 
 export interface IntelligenceClientChannel {
   send: (eventName: string, payload: unknown) => Promise<any>
@@ -50,10 +50,10 @@ async function assertResponse<T>(promise: Promise<ChannelResponse<T>>): Promise<
 }
 
 export interface IntelligenceClient {
-  invoke: <T = any>(capabilityId: string, payload: any, options?: AiInvokeOptions) => Promise<AiInvokeResult<T>>
-  testProvider: (config: AiProviderConfig) => Promise<unknown>
+  invoke: <T = any>(capabilityId: string, payload: any, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<T>>
+  testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
   testCapability: (params: Record<string, any>) => Promise<unknown>
-  fetchModels: (config: AiProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
+  fetchModels: (config: IntelligenceProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
 }
 
 export function createIntelligenceClient(channel?: IntelligenceClientChannel, resolvers?: IntelligenceChannelResolver[]): IntelligenceClient {
@@ -63,12 +63,12 @@ export function createIntelligenceClient(channel?: IntelligenceClientChannel, re
   }
 
   return {
-    invoke<T = any>(capabilityId: string, payload: any, options?: AiInvokeOptions) {
-      return assertResponse<AiInvokeResult<T>>(
+    invoke<T = any>(capabilityId: string, payload: any, options?: IntelligenceInvokeOptions) {
+      return assertResponse<IntelligenceInvokeResult<T>>(
         resolvedChannel.send('intelligence:invoke', { capabilityId, payload, options }),
       )
     },
-    testProvider(config: AiProviderConfig) {
+    testProvider(config: IntelligenceProviderConfig) {
       return assertResponse(
         resolvedChannel.send('intelligence:test-provider', { provider: config }),
       )
@@ -78,7 +78,7 @@ export function createIntelligenceClient(channel?: IntelligenceClientChannel, re
         resolvedChannel.send('intelligence:test-capability', params),
       )
     },
-    fetchModels(config: AiProviderConfig) {
+    fetchModels(config: IntelligenceProviderConfig) {
       return assertResponse<{ success: boolean, models?: string[], message?: string }>(
         resolvedChannel.send('intelligence:fetch-models', { provider: config }),
       )
