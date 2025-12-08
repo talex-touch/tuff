@@ -115,15 +115,86 @@ const itemRefs = ref<HTMLElement[]>([])
 
 // Track result batch changes for animation
 const resultBatchKey = ref(0)
-let lastResultLength = 0
+const renderedItemIds = ref<Set<string>>(new Set())
+const newItemIds = ref<Set<string>>(new Set())
+let lastResultIds: Set<string> = new Set()
+
+/**
+ * Compute eased stagger delay for item animation
+ * Front items enter quickly, later items have progressively longer delays
+ */
+function getStaggerDelay(index: number, total: number): number {
+  const baseDelay = 0.025 // 25ms base
+  const maxDelay = 0.055 // 55ms max per item
+  // Ease-in curve: delay increases as index grows
+  const progress = total > 1 ? index / (total - 1) : 0
+  const eased = progress * progress // quadratic ease-in
+  const delay = baseDelay + eased * (maxDelay - baseDelay)
+  return index * delay
+}
+
+/**
+ * Compute overlap ratio between two ID sets
+ */
+function computeOverlapRatio(oldIds: Set<string>, newIds: Set<string>): number {
+  if (oldIds.size === 0 && newIds.size === 0) return 1
+  if (oldIds.size === 0 || newIds.size === 0) return 0
+  let overlap = 0
+  for (const id of newIds) {
+    if (oldIds.has(id)) overlap++
+  }
+  return overlap / Math.max(oldIds.size, newIds.size)
+}
 
 watch(res, (newRes) => {
   itemRefs.value = []
-  // Only trigger batch animation when results change significantly
-  if (newRes.length !== lastResultLength || newRes.length === 0) {
+  const currentIds = new Set(newRes.map((item) => item.id))
+  const overlapRatio = computeOverlapRatio(lastResultIds, currentIds)
+
+  // Determine if this is a major change (< 30% overlap) or incremental update
+  const isMajorChange = overlapRatio < 0.3 && lastResultIds.size > 0
+  const isFromEmpty = lastResultIds.size === 0 && currentIds.size > 0
+
+  if (isMajorChange) {
+    // Major change (different results): trigger container transition + staggered items
     resultBatchKey.value++
-    lastResultLength = newRes.length
+    renderedItemIds.value = new Set(currentIds)
+    newItemIds.value = new Set()
+  } else if (isFromEmpty) {
+    // From empty: all items are new, animate them with stagger
+    renderedItemIds.value = new Set(currentIds)
+    newItemIds.value = new Set(currentIds)
+    // Clear flags after animation
+    setTimeout(() => {
+      newItemIds.value = new Set()
+    }, 500)
+  } else {
+    // Incremental update: only animate new items
+    const newIds = new Set<string>()
+    for (const id of currentIds) {
+      if (!renderedItemIds.value.has(id)) {
+        newIds.add(id)
+        renderedItemIds.value.add(id)
+      }
+    }
+    newItemIds.value = newIds
+
+    // Clear new item flags after animation completes
+    if (newIds.size > 0) {
+      setTimeout(() => {
+        newItemIds.value = new Set()
+      }, 320)
+    }
+
+    // Clean up removed items from renderedItemIds
+    for (const id of renderedItemIds.value) {
+      if (!currentIds.has(id)) {
+        renderedItemIds.value.delete(id)
+      }
+    }
   }
+
+  lastResultIds = currentIds
 })
 
 function setItemRef(el: any, index: number) {
@@ -662,7 +733,10 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
               :active="boxOptions.focus === index"
               :item="item"
               :index="index"
-              :style="{ '--item-index': index }"
+              :class="{ 'is-new-item': newItemIds.has(item.id) }"
+              :style="{
+                '--stagger-delay': getStaggerDelay(index, res.length) + 's'
+              }"
               @trigger="handleItemTrigger(index, item)"
             />
           </div>
@@ -814,11 +888,16 @@ div.CoreBoxRes {
   }
 }
 
-// Staggered item animation within list
+// No animation by default for existing items
 .item-list > .CoreBoxRender {
+  animation: none;
+}
+
+// Animation for new items (both initial load and incremental updates)
+.item-list > .CoreBoxRender.is-new-item {
   animation: item-stagger-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
   animation-fill-mode: both;
-  animation-delay: calc(var(--item-index, 0) * 0.035s);
+  animation-delay: var(--stagger-delay, 0s);
 }
 
 @keyframes item-stagger-in {
