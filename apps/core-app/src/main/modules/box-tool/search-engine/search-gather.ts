@@ -33,11 +33,11 @@ interface ExtendedSourceStat {
  * @description Default configuration for the aggregator.
  */
 const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
-  concurrency: 3,
-  coalesceGapMs: 100,
-  firstBatchGraceMs: 50,
-  debouncePushMs: 10,
-  taskTimeoutMs: 5000,
+  concurrency: 4,
+  coalesceGapMs: 50,
+  firstBatchGraceMs: 20,
+  debouncePushMs: 8,
+  taskTimeoutMs: 3000,
 }
 
 /**

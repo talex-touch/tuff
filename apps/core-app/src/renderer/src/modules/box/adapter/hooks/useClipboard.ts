@@ -62,7 +62,9 @@ export function useClipboard(
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
   /**
-   * Checks if auto-paste is allowed based on settings and timing
+   * Checks if auto-paste is allowed based on settings and timing.
+   * Only auto-paste if the clipboard was copied AFTER CoreBox was last hidden.
+   * This prevents old clipboard content from auto-filling when reopening CoreBox.
    */
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last?.timestamp) return false
@@ -70,9 +72,17 @@ export function useClipboard(
 
     const limit = appSetting.tools.autoPaste.time
     if (limit === -1) return false
-    if (limit === 0) return true
 
     const copiedTime = new Date(clipboardOptions.last.timestamp).getTime()
+    const lastHidden = boxOptions.lastHidden ?? 0
+
+    // Only auto-paste if copied AFTER CoreBox was last hidden
+    if (copiedTime <= lastHidden) return false
+
+    // If limit is 0, always auto-paste (for new clipboard content)
+    if (limit === 0) return true
+
+    // Check if within time limit from copy time
     const elapsed = Date.now() - copiedTime
     return elapsed <= limit * 1000
   }
