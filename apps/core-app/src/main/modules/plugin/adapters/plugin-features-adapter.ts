@@ -93,6 +93,16 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return true
     }
 
+    // For webcontent features, only forward input-change to plugin (UI is already loaded)
+    // Don't call triggerFeature again as it would try to re-attach the UI view
+    if (feature.interaction?.type === 'webcontent') {
+      genTouchApp().channel.sendToPlugin(plugin.name, 'core-box:input-change', {
+        source: 'feature-activation',
+        query
+      })
+      return true
+    }
+
     genTouchApp().channel.sendToPlugin(plugin.name, 'core-box:input-change', {
       source: 'feature-activation',
       query
