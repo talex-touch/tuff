@@ -1,21 +1,20 @@
-```
 <script setup lang="ts">
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
+import type { PendingReviewItem } from '~/components/dashboard/PendingReviewSection.vue'
+import type { ReviewItem } from '~/components/dashboard/ReviewModal.vue'
 import VersionDrawer from '~/components/VersionDrawer.vue'
 import CreatePluginDrawer from '~/components/CreatePluginDrawer.vue'
+import PluginListItem from '~/components/dashboard/PluginListItem.vue'
+import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
+import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vue'
+import ReviewModal from '~/components/dashboard/ReviewModal.vue'
 import { useUser } from '@clerk/vue'
-import { useDateFormat } from '@vueuse/core'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { PLUGIN_CATEGORIES, isPluginCategoryId } from '~/utils/plugin-categories'
 import { useDashboardPluginsData } from '~/composables/useDashboardData'
 
 type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
-
-interface DashboardPluginAuthor {
-  name: string
-  avatarColor?: string
-}
 
 interface DashboardPluginVersion {
   id: string
@@ -47,7 +46,6 @@ interface DashboardPlugin {
   homepage?: string | null
   isOfficial: boolean
   badges: string[]
-  author?: DashboardPluginAuthor | null
   status: 'draft' | 'pending' | 'approved' | 'rejected'
   readmeMarkdown?: string | null
   iconUrl?: string | null
@@ -55,6 +53,14 @@ interface DashboardPlugin {
   updatedAt: string
   versions?: DashboardPluginVersion[]
   latestVersion?: DashboardPluginVersion | null
+}
+
+interface VersionFormState {
+  pluginId: string
+  version: string
+  channel: PluginChannel
+  changelog: string
+  packageFile: File | null
 }
 
 interface PluginFormState {
@@ -71,14 +77,6 @@ interface PluginFormState {
   removeIcon: boolean
 }
 
-interface VersionFormState {
-  pluginId: string
-  version: string
-  channel: PluginChannel
-  changelog: string
-  packageFile: File | null
-}
-
 interface ExtractedManifest {
   id?: string
   name?: string
@@ -88,10 +86,6 @@ interface ExtractedManifest {
   changelog?: string
   channel?: string
   category?: string
-  icon?: {
-    type?: string
-    value?: string
-  }
   [key: string]: unknown
 }
 
@@ -344,6 +338,117 @@ const pluginPackageError = ref<string | null>(null)
 const pluginManifestPreview = ref<ExtractedManifest | null>(null)
 const pluginReadmePreview = ref('')
 const pluginPackageFileName = ref<string | null>(null)
+
+// New UI state for refactored plugin list
+const selectedPlugin = ref<DashboardPlugin | null>(null)
+const showDetailDrawer = ref(false)
+const showReviewModal = ref(false)
+const reviewItem = ref<ReviewItem | null>(null)
+const reviewLoading = ref(false)
+
+// Computed: pending review items for admin
+const pendingReviewItems = computed<PendingReviewItem[]>(() => {
+  if (!isAdmin.value) return []
+
+  const items: PendingReviewItem[] = []
+
+  // Pending plugins
+  plugins.value
+    .filter(p => p.status === 'pending')
+    .forEach(p => items.push({ type: 'plugin', plugin: p }))
+
+  // Pending versions
+  plugins.value.forEach(p => {
+    p.versions?.filter(v => v.status === 'pending')
+      .forEach(v => items.push({ type: 'version', plugin: p, version: v }))
+  })
+
+  return items
+})
+
+// Computed: my plugins (owned by current user)
+const myPlugins = computed(() =>
+  plugins.value.filter(p => p.userId === currentUserId.value),
+)
+
+function openPluginDetail(plugin: DashboardPlugin) {
+  selectedPlugin.value = plugin
+  showDetailDrawer.value = true
+}
+
+function closePluginDetail() {
+  showDetailDrawer.value = false
+  selectedPlugin.value = null
+}
+
+function openReviewModal(item: PendingReviewItem) {
+  reviewItem.value = item as ReviewItem
+  showReviewModal.value = true
+}
+
+function closeReviewModal() {
+  showReviewModal.value = false
+  reviewItem.value = null
+}
+
+async function handleReviewApprove(item: ReviewItem) {
+  reviewLoading.value = true
+  try {
+    if (item.type === 'plugin') {
+      await approvePlugin(item.plugin as DashboardPlugin)
+    }
+    else if (item.version) {
+      await approveVersion(item.plugin as DashboardPlugin, item.version as DashboardPluginVersion)
+    }
+    closeReviewModal()
+  }
+  finally {
+    reviewLoading.value = false
+  }
+}
+
+async function handleReviewReject(item: ReviewItem, _reason: string) {
+  reviewLoading.value = true
+  try {
+    if (item.type === 'plugin') {
+      await rejectPlugin(item.plugin as DashboardPlugin)
+    }
+    else if (item.version) {
+      await rejectVersion(item.plugin as DashboardPlugin, item.version as DashboardPluginVersion)
+    }
+    closeReviewModal()
+  }
+  finally {
+    reviewLoading.value = false
+  }
+}
+
+function handleDetailEdit(plugin: DashboardPlugin) {
+  closePluginDetail()
+  openEditPluginForm(plugin)
+}
+
+function handleDetailDelete(plugin: DashboardPlugin) {
+  closePluginDetail()
+  deletePluginItem(plugin)
+}
+
+function handleDetailPublishVersion(plugin: DashboardPlugin) {
+  closePluginDetail()
+  openPublishVersionForm(plugin)
+}
+
+function handleDetailSubmitReview(plugin: DashboardPlugin) {
+  submitPluginForReview(plugin)
+}
+
+function handleDetailWithdrawReview(plugin: DashboardPlugin) {
+  withdrawPluginReview(plugin)
+}
+
+function handleDetailDeleteVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
+  deletePluginVersion(plugin, version)
+}
 
 function resetPluginForm() {
   revokeObjectUrl(iconPreviewObjectUrl.value)
@@ -849,56 +954,60 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
 </script>
 
 <template>
-  <section class="rounded-3xl border border-primary/10 bg-white/80 p-6 shadow-sm backdrop-blur-sm dark:border-light/10 dark:bg-dark/70">
-    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+  <section class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h2 class="text-lg font-semibold text-black dark:text-light">
+        <h2 class="text-xl font-semibold text-black dark:text-white">
           {{ t('dashboard.sections.plugins.title') }}
         </h2>
-        <p class="mt-1 text-sm text-black/70 dark:text-light/80">
+        <p class="mt-1 text-sm text-black/60 dark:text-white/60">
           {{ t('dashboard.sections.plugins.subtitle') }}
         </p>
       </div>
-      <NuxtLink
-        to="/marketplace"
-        class="inline-flex items-center gap-2 rounded-full border border-primary/20 px-4 py-2 text-sm font-medium text-black transition hover:border-primary/40 hover:bg-dark/5 dark:border-light/20 dark:text-light dark:hover:bg-light/10"
-      >
-        <span class="i-carbon-store text-base" />
-        {{ t('dashboard.sections.plugins.cta') }}
-      </NuxtLink>
+      <div class="flex items-center gap-3">
+        <NuxtLink
+          to="/marketplace"
+          class="inline-flex items-center gap-2 rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-black/70 transition hover:border-black/20 hover:text-black dark:border-white/10 dark:text-white/70 dark:hover:border-white/20 dark:hover:text-white"
+        >
+          <span class="i-carbon-store" />
+          {{ t('dashboard.sections.plugins.cta') }}
+        </NuxtLink>
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
+          @click="openCreatePluginForm"
+        >
+          <span class="i-carbon-add" />
+          {{ t('dashboard.sections.plugins.addButton') }}
+        </button>
+      </div>
     </div>
 
-    <div
-      class="mt-6 rounded-2xl border border-dashed border-primary/20 bg-white/70 p-4 text-sm text-black dark:border-light/20 dark:bg-dark/50 dark:text-light"
-    >
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 class="text-sm font-semibold text-black dark:text-light">
-            {{ t('dashboard.sections.plugins.manageTitle') }}
-          </h3>
-          <p class="text-xs text-black/60 dark:text-light/70">
-            {{ t('dashboard.sections.plugins.manageSubtitle') }}
-          </p>
-        </div>
-        <div class="flex items-center gap-2">
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-dark/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black transition hover:border-primary/30 hover:bg-dark/20 dark:border-light/30 dark:bg-light/10 dark:text-light"
-            @click="openCreatePluginForm"
-          >
-            <span class="i-carbon-add text-base" />
-            {{ t('dashboard.sections.plugins.addButton') }}
-          </button>
-          <button
-            v-if="showPluginForm"
-            type="button"
-            class="inline-flex items-center gap-2 rounded-full border border-transparent bg-dark/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black/70 transition hover:bg-dark/15 dark:bg-light/10 dark:text-light/70 dark:hover:bg-light/15"
-            @click="closePluginForm"
-          >
-            <span class="i-carbon-close text-base" />
-            {{ t('dashboard.sections.plugins.closeButton') }}
-          </button>
-        </div>
+    <!-- Admin: Pending Reviews -->
+    <PendingReviewSection
+      v-if="isAdmin"
+      :items="pendingReviewItems"
+      @review="openReviewModal"
+    />
+
+    <!-- Error Messages -->
+    <div v-if="pluginActionError || versionActionError" class="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-500/30 dark:bg-rose-500/10">
+      <p v-if="pluginActionError" class="text-sm text-rose-600 dark:text-rose-400">
+        {{ pluginActionError }}
+      </p>
+      <p v-if="versionActionError" class="text-sm text-rose-600 dark:text-rose-400">
+        {{ versionActionError }}
+      </p>
+    </div>
+
+    <!-- My Plugins Section -->
+    <div class="rounded-2xl border border-black/5 bg-white/80 p-5 dark:border-white/5 dark:bg-white/5">
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="text-sm font-medium text-black/60 dark:text-white/60">
+          {{ t('dashboard.sections.plugins.myPlugins') }}
+          <span class="ml-1 text-black/40 dark:text-white/40">({{ myPlugins.length }})</span>
+        </h3>
       </div>
 
       <form
@@ -1150,335 +1259,71 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         </div>
       </form>
 
-      <div v-if="pluginActionError || versionActionError" class="mt-4 space-y-2">
-        <p
-          v-if="pluginActionError"
-          class="text-xs text-red-500"
-        >
-          {{ pluginActionError }}
-        </p>
-        <p
-          v-if="versionActionError"
-          class="text-xs text-red-500"
-        >
-          {{ versionActionError }}
-        </p>
+      <!-- Plugin List -->
+      <div v-if="pluginsPending" class="py-8 text-center text-sm text-black/50 dark:text-white/50">
+        <span class="i-carbon-circle-dash animate-spin mr-2" />
+        {{ t('dashboard.sections.plugins.loading') }}
       </div>
 
-      <VersionDrawer
-        :is-open="showVersionForm"
-        :plugin-id="versionForm.pluginId"
-        :plugin-name="pluginForm.name"
-        :loading="versionSaving"
-        :error="versionFormError"
-        @close="closeVersionForm"
-        @submit="submitVersionForm"
-      />
+      <div v-else-if="!myPlugins.length" class="py-8 text-center text-sm text-black/40 dark:text-white/40">
+        {{ t('dashboard.sections.plugins.empty') }}
+      </div>
 
-      <CreatePluginDrawer
-        :is-open="showCreateDrawer"
-        :loading="createDrawerLoading"
-        :error="createDrawerError"
-        :is-admin="isAdmin"
-        @close="closeCreateDrawer"
-        @submit="handleCreatePluginSubmit"
-      />
+      <div v-else class="space-y-2">
+        <PluginListItem
+          v-for="plugin in myPlugins"
+          :key="plugin.id"
+          :plugin="plugin"
+          :category-label="resolvePluginCategory(plugin.category)"
+          @click="openPluginDetail"
+        />
+      </div>
     </div>
 
-    <div
-      v-if="pluginsPending"
-      class="mt-6 rounded-2xl border border-primary/15 bg-white/80 p-6 text-sm text-black/70 dark:border-light/15 dark:bg-dark/40 dark:text-light/80"
-    >
-      {{ t('dashboard.sections.plugins.loading') }}
-    </div>
-    <div
-      v-else-if="!plugins.length"
-      class="mt-6 rounded-2xl border border-primary/15 bg-white/80 p-6 text-sm text-black/70 dark:border-light/15 dark:bg-dark/40 dark:text-light/80"
-    >
-      {{ t('dashboard.sections.plugins.empty') }}
-    </div>
-    <div
-      v-else
-      class="mt-6 space-y-6"
-    >
-      <article
-        v-for="plugin in plugins"
-        :key="plugin.id"
-        class="rounded-2xl border border-primary/15 bg-white/90 p-5 shadow-sm dark:border-light/15 dark:bg-dark/50"
-      >
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
-          <div class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-primary/15 bg-dark/5 dark:border-light/20 dark:bg-light/10">
-            <img
-              v-if="plugin.iconUrl"
-              :src="plugin.iconUrl"
-              :alt="`${plugin.name} icon`"
-              class="h-full w-full object-cover"
-            >
-            <span v-else class="text-2xl font-semibold text-black/70 dark:text-light/80">
-              {{ plugin.name.charAt(0) }}
-            </span>
-          </div>
-          <div class="flex-1 space-y-3">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <h3 class="text-base font-semibold text-black dark:text-light">
-                    {{ plugin.name }}
-                  </h3>
-                  <span
-                    class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-                    :class="pluginStatusClass(plugin.status)"
-                  >
-                    <span class="i-carbon-information text-xs" />
-                    {{ resolvePluginStatusLabel(plugin.status) }}
-                  </span>
-                  <span
-                    v-if="plugin.latestVersion"
-                    class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-black dark:bg-light/10 dark:text-light"
-                  >
-                    {{ plugin.latestVersion.channel }}
-                  </span>
-                  <span
-                    v-if="plugin.isOfficial"
-                    class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-black dark:bg-light/10 dark:text-light"
-                  >
-                    <span class="i-carbon-certificate text-xs" />
-                    {{ t('dashboard.sections.plugins.officialBadge') }}
-                  </span>
-                </div>
-                <p class="text-sm text-black/70 dark:text-light/80">
-                  {{ plugin.summary }}
-                </p>
-                <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-black/60 dark:text-light/60">
-                  <span class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-0.5 dark:bg-light/10">
-                    <span class="i-carbon-tag text-sm" />
-                    {{ resolvePluginCategory(plugin.category) }}
-                  </span>
-                  <span class="inline-flex items-center gap-1">
-                    <span class="i-carbon-user-multiple text-sm" />
-                    {{ t('dashboard.sections.plugins.stats.installs', { count: formatInstalls(plugin.installs) }) }}
-                  </span>
-                  <span
-                    v-if="plugin.latestVersion"
-                    class="inline-flex items-center gap-1"
-                  >
-                    <span class="i-carbon-time text-sm" />
-                    {{ formatDate(plugin.latestVersion.createdAt) }}
-                  </span>
-                  <span
-                    v-if="plugin.latestVersion"
-                    class="inline-flex items-center gap-1"
-                  >
-                    <span class="i-carbon-cube text-sm" />
-                    v{{ plugin.latestVersion.version }}
-                  </span>
-                </div>
-                <div v-if="plugin.homepage" class="mt-2">
-                  <a
-                    :href="plugin.homepage"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 text-xs font-medium text-black underline-offset-2 hover:underline dark:text-light"
-                  >
-                    <span class="i-carbon-logo-github text-sm" />
-                    {{ t('dashboard.sections.plugins.homepage') }}
-                  </a>
-                </div>
-                <div v-if="plugin.badges.length" class="mt-3 flex flex-wrap gap-2">
-                  <span
-                    v-for="badge in plugin.badges"
-                    :key="badge"
-                    class="inline-flex items-center rounded-full bg-dark/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black/80 dark:bg-light/10 dark:text-light/80"
-                  >
-                    {{ resolveBadgeLabel(badge) }}
-                  </span>
-                </div>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  v-if="canSubmitPluginForReview(plugin)"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black transition hover:border-primary/30 hover:bg-dark/10 dark:border-light/20 dark:text-light dark:hover:bg-light/10"
-                  :disabled="pluginStatusUpdating === plugin.id"
-                  @click="submitPluginForReview(plugin)"
-                >
-                  <span v-if="pluginStatusUpdating === plugin.id" class="i-carbon-circle-dash animate-spin text-xs" />
-                  <span v-else class="i-carbon-send text-xs" />
-                  {{ t('dashboard.sections.plugins.actions.submitReview') }}
-                </button>
-                <button
-                  v-if="canWithdrawPluginReview(plugin)"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black transition hover:border-primary/30 hover:bg-dark/10 dark:border-light/20 dark:text-light dark:hover:bg-light/10"
-                  :disabled="pluginStatusUpdating === plugin.id"
-                  @click="withdrawPluginReview(plugin)"
-                >
-                  <span v-if="pluginStatusUpdating === plugin.id" class="i-carbon-circle-dash animate-spin text-xs" />
-                  <span v-else class="i-carbon-undo text-xs" />
-                  {{ t('dashboard.sections.plugins.actions.withdrawReview') }}
-                </button>
-                <button
-                  v-if="canApprovePluginStatus(plugin)"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-emerald-200/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-300 hover:bg-emerald-100/60 dark:border-emerald-400/40 dark:text-emerald-200 dark:hover:bg-emerald-400/20"
-                  :disabled="pluginStatusUpdating === plugin.id"
-                  @click="approvePlugin(plugin)"
-                >
-                  <span v-if="pluginStatusUpdating === plugin.id" class="i-carbon-circle-dash animate-spin text-xs" />
-                  <span v-else class="i-carbon-checkmark text-xs" />
-                  {{ t('dashboard.sections.plugins.actions.approve') }}
-                </button>
-                <button
-                  v-if="canRejectPluginStatus(plugin)"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-rose-200/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-rose-600 transition hover:border-rose-300 hover:bg-rose-100/60 dark:border-rose-400/40 dark:text-rose-200 dark:hover:bg-rose-400/20"
-                  :disabled="pluginStatusUpdating === plugin.id"
-                  @click="rejectPlugin(plugin)"
-                >
-                  <span v-if="pluginStatusUpdating === plugin.id" class="i-carbon-circle-dash animate-spin text-xs" />
-                  <span v-else class="i-carbon-close text-xs" />
-                  {{ t('dashboard.sections.plugins.actions.reject') }}
-                </button>
-                <button
-                  v-if="canPublishPluginVersion(plugin)"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black transition hover:border-primary/30 hover:bg-dark/10 dark:border-light/20 dark:text-light dark:hover:bg-light/10"
-                  @click="openPublishVersionForm(plugin)"
-                >
-                  <span class="i-carbon-cloud-upload text-xs" />
-                  {{ t('dashboard.sections.plugins.publishVersion') }}
-                </button>
-                <button
-                  v-if="canEditPlugin(plugin)"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-primary/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-black transition hover:border-primary/30 hover:bg-dark/10 dark:border-light/20 dark:text-light dark:hover:bg-light/10"
-                  @click="openEditPluginForm(plugin)"
-                >
-                  <span class="i-carbon-edit text-xs" />
-                  {{ t('dashboard.sections.plugins.editMetadata') }}
-                </button>
-                <button
-                  v-if="canDeletePlugin(plugin)"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-full border border-red/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-500 transition hover:border-red-400/60 hover:bg-red-50 dark:border-red-400/40 dark:text-red-200 dark:hover:bg-red-400/20"
-                  @click="deletePluginItem(plugin)"
-                >
-                  <span class="i-carbon-trash-can text-xs" />
-                  {{ t('dashboard.sections.plugins.delete') }}
-                </button>
-              </div>
-            </div>
+    <!-- Drawers & Modals -->
+    <VersionDrawer
+      :is-open="showVersionForm"
+      :plugin-id="versionForm.pluginId"
+      :plugin-name="selectedPlugin?.name || ''"
+      :loading="versionSaving"
+      :error="versionFormError"
+      @close="closeVersionForm"
+      @submit="submitVersionForm"
+    />
 
-            <div class="rounded-2xl border border-primary/10 bg-dark/5 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-light/10 dark:text-light/80">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-sm font-semibold text-black dark:text-light">
-                    {{ t('dashboard.sections.plugins.versionHistory') }}
-                  </p>
-                  <p class="text-xs text-black/60 dark:text-light/60">
-                    {{ t('dashboard.sections.plugins.versionDescription') }}
-                  </p>
-                </div>
-              </div>
-              <div v-if="plugin.versions?.length" class="mt-4 space-y-4">
-                <article
-                  v-for="version in plugin.versions"
-                  :key="version.id"
-                  class="rounded-xl border border-primary/15 bg-white/80 p-3 text-xs text-black/80 dark:border-light/15 dark:bg-dark/40 dark:text-light/80"
-                >
-                  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div class="flex flex-wrap items-center gap-2">
-                        <p class="text-sm font-semibold text-black dark:text-light">
-                          v{{ version.version }} · {{ version.channel }}
-                        </p>
-                        <span
-                          class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-                          :class="versionStatusClass(version.status)"
-                        >
-                          <span class="i-carbon-information text-xs" />
-                          {{ resolveVersionStatusLabel(version.status) }}
-                        </span>
-                      </div>
-                      <p class="mt-1 font-mono text-[11px] text-black/70 dark:text-light/70">
-                        {{ t('dashboard.sections.plugins.signature') }}: {{ version.signature }}
-                      </p>
-                      <p class="text-[11px] text-black/60 dark:text-light/60">
-                        {{ formatDate(version.createdAt) }} • {{ version.packageSize ? (version.packageSize / 1024).toFixed(1) : '—' }} KB
-                      </p>
-                      <p
-                        v-if="version.reviewedAt"
-                        class="text-[11px] text-black/50 dark:text-light/50"
-                      >
-                        {{ t('dashboard.sections.plugins.versionReviewedAt', { date: formatDate(version.reviewedAt) }) }}
-                      </p>
-                      <p v-if="version.changelog" class="mt-1 text-[11px] text-black/70 dark:text-light/70">
-                        {{ version.changelog }}
-                      </p>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                      <button
-                        v-if="canApproveVersion(plugin, version)"
-                        type="button"
-                        class="inline-flex items-center gap-1 rounded-full border border-emerald-200/60 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 transition hover:border-emerald-300 hover:bg-emerald-100/60 dark:border-emerald-400/40 dark:text-emerald-200 dark:hover:bg-emerald-400/20"
-                        :disabled="versionStatusUpdating === version.id"
-                        @click="approveVersion(plugin, version)"
-                      >
-                        <span v-if="versionStatusUpdating === version.id" class="i-carbon-circle-dash animate-spin text-xs" />
-                        <span v-else class="i-carbon-checkmark text-xs" />
-                        {{ t('dashboard.sections.plugins.actions.approve') }}
-                      </button>
-                      <button
-                        v-if="canRejectVersion(plugin, version)"
-                        type="button"
-                        class="inline-flex items-center gap-1 rounded-full border border-rose-200/60 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-rose-600 transition hover:border-rose-300 hover:bg-rose-100/60 dark:border-rose-400/40 dark:text-rose-200 dark:hover:bg-rose-400/20"
-                        :disabled="versionStatusUpdating === version.id"
-                        @click="rejectVersion(plugin, version)"
-                      >
-                        <span v-if="versionStatusUpdating === version.id" class="i-carbon-circle-dash animate-spin text-xs" />
-                        <span v-else class="i-carbon-close text-xs" />
-                        {{ t('dashboard.sections.plugins.actions.reject') }}
-                      </button>
-                      <a
-                        :href="version.packageUrl"
-                        target="_blank"
-                        rel="noopener"
-                        class="inline-flex items-center gap-1 rounded-full border border-primary/20 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-black transition hover:border-primary/30 hover:bg-dark/10 dark:border-light/20 dark:text-light dark:hover:bg-light/10"
-                      >
-                        <span class="i-carbon-download text-xs" />
-                        {{ t('dashboard.sections.plugins.downloadPackage') }}
-                      </a>
-                      <button
-                        v-if="canDeletePlugin(plugin)"
-                        type="button"
-                        class="inline-flex items-center gap-1 rounded-full border border-red/20 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-red-500 transition hover:border-red-400/60 hover:bg-red-50 dark:border-red-400/40 dark:text-red-200 dark:hover:bg-red-400/20"
-                        @click="deletePluginVersion(plugin, version)"
-                      >
-                        <span class="i-carbon-trash-can text-xs" />
-                        {{ t('dashboard.sections.plugins.deleteVersion') }}
-                      </button>
-                    </div>
-                  </div>
-                  <details class="mt-3 rounded-lg border border-primary/10 bg-dark/5 p-3 dark:border-light/20 dark:bg-light/5">
-                    <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wide text-black/70 dark:text-light/70">
-                      {{ t('dashboard.sections.plugins.readmePreview') }}
-                    </summary>
-                    <div v-if="version.readmeMarkdown" class="prose prose-sm mt-2 max-w-none dark:prose-invert">
-                      <ContentRendererMarkdown :value="version.readmeMarkdown" />
-                    </div>
-                    <p v-else class="mt-2 text-[11px] text-black/60 dark:text-light/60">
-                      {{ t('dashboard.sections.plugins.noReadme') }}
-                    </p>
-                  </details>
-                </article>
-              </div>
-              <p v-else class="mt-3 text-xs text-black/60 dark:text-light/60">
-                {{ t('dashboard.sections.plugins.noVersions') }}
-              </p>
-            </div>
-          </div>
-        </div>
-      </article>
-    </div>
+    <CreatePluginDrawer
+      :is-open="showCreateDrawer"
+      :loading="createDrawerLoading"
+      :error="createDrawerError"
+      :is-admin="isAdmin"
+      @close="closeCreateDrawer"
+      @submit="handleCreatePluginSubmit"
+    />
+
+    <PluginDetailDrawer
+      :is-open="showDetailDrawer"
+      :plugin="selectedPlugin"
+      :category-label="selectedPlugin ? resolvePluginCategory(selectedPlugin.category) : ''"
+      :is-owner="selectedPlugin ? isPluginOwner(selectedPlugin) : false"
+      :is-admin="isAdmin"
+      :loading="pluginStatusUpdating !== null"
+      @close="closePluginDetail"
+      @edit="handleDetailEdit"
+      @delete="handleDetailDelete"
+      @publish-version="handleDetailPublishVersion"
+      @submit-review="handleDetailSubmitReview"
+      @withdraw-review="handleDetailWithdrawReview"
+      @delete-version="handleDetailDeleteVersion"
+    />
+
+    <ReviewModal
+      :is-open="showReviewModal"
+      :item="reviewItem"
+      :category-label="reviewItem?.plugin ? resolvePluginCategory(reviewItem.plugin.category) : ''"
+      :loading="reviewLoading"
+      @close="closeReviewModal"
+      @approve="handleReviewApprove"
+      @reject="handleReviewReject"
+    />
   </section>
 </template>

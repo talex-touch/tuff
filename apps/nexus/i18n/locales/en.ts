@@ -246,6 +246,9 @@ export default {
         officialBadge: 'Official',
         stats: {
           installs: '{count} installs',
+          category: 'Category',
+          created: 'Created',
+          size: 'Size',
         },
         updatedOn: 'Updated {date}',
         badges: {
@@ -404,6 +407,14 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           unknown: 'Something went wrong while saving the plugin.',
         },
         versionReviewedAt: 'Reviewed {date}',
+        pendingReviews: 'Pending Reviews',
+        pendingReviewsCount: '{count} items pending',
+        reviewPlugin: 'Plugin review',
+        reviewVersion: 'Version review',
+        viewDetails: 'Review',
+        rejectReason: 'Rejection reason',
+        rejectReasonPlaceholder: 'Explain why this submission was rejected (optional)...',
+        myPlugins: 'My Plugins',
       },
       images: {
         title: 'Resource library',
