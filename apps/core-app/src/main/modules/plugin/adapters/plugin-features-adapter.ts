@@ -87,21 +87,15 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return false
     }
 
-    // Skip sending empty query for webcontent features - initial query is sent via attachUIView
-    const hasContent = query.text || (query.inputs && query.inputs.length > 0)
-    if (!hasContent && feature.interaction?.type === 'webcontent') {
+    // For webcontent features, initial query is already sent via attachUIView on dom-ready
+    // Only forward subsequent input changes if plugin has enabled input monitoring
+    if (feature.interaction?.type === 'webcontent') {
+      // Skip initial activation - attachUIView already sends 'initial' source event
+      // Subsequent changes will be forwarded via WindowManager.forwardInputChange if inputAllowed
       return true
     }
 
-    // For webcontent features, only forward input-change to plugin (UI is already loaded)
-    // Don't call triggerFeature again as it would try to re-attach the UI view
-    if (feature.interaction?.type === 'webcontent') {
-      genTouchApp().channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-        source: 'feature-activation',
-        query
-      })
-      return true
-    }
+    const hasContent = query.text || (query.inputs && query.inputs.length > 0)
 
     genTouchApp().channel.sendToPlugin(plugin.name, 'core-box:input-change', {
       source: 'feature-activation',
