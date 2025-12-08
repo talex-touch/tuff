@@ -5,7 +5,43 @@ const path = require('path');
 const os = require('os');
 
 const projectRoot = path.join(__dirname, '..');
+const workspaceRoot = path.resolve(projectRoot, '..', '..');
 process.chdir(projectRoot);
+
+function ensureLocalPnpmLockfile() {
+  const workspaceLockPath = path.join(workspaceRoot, 'pnpm-lock.yaml');
+  const localLockPath = path.join(projectRoot, 'pnpm-lock.yaml');
+
+  if (!fs.existsSync(workspaceLockPath) || fs.existsSync(localLockPath)) {
+    return () => {};
+  }
+
+  fs.copyFileSync(workspaceLockPath, localLockPath);
+  console.log('[build-target] Injected temporary pnpm-lock.yaml for electron-builder');
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    try {
+      if (fs.existsSync(localLockPath)) {
+        fs.rmSync(localLockPath);
+        console.log('[build-target] Removed temporary pnpm-lock.yaml');
+      }
+    } catch (err) {
+      console.warn(`[build-target] Failed to clean up temporary pnpm-lock.yaml: ${err.message}`);
+    }
+  };
+
+  process.once('exit', cleanup);
+  process.once('SIGINT', () => {
+    cleanup();
+    process.exit(1);
+  });
+  process.once('SIGTERM', cleanup);
+
+  return cleanup;
+}
 
 /**
  * Detect if version contains beta
@@ -117,8 +153,10 @@ function resolveBuilderBin() {
 }
 
 function build() {
-  const { target, type, publish, dir, arch } = parseArgs(process.argv.slice(2));
-  const skipInstallAppDeps = process.env.SKIP_INSTALL_APP_DEPS === 'true';
+  const cleanupTempLock = ensureLocalPnpmLockfile();
+  try {
+    const { target, type, publish, dir, arch } = parseArgs(process.argv.slice(2));
+    const skipInstallAppDeps = process.env.SKIP_INSTALL_APP_DEPS === 'true';
 
   if (!target) {
     console.error('Missing build target. Usage: node build-target.js --target=win|mac|linux [--type=snapshot|release]');
@@ -872,6 +910,9 @@ function build() {
   }
 
   console.log('\n✓ Build completed successfully.');
+  } finally {
+    cleanupTempLock();
+  }
 }
 
 build();

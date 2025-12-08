@@ -58,7 +58,6 @@ const {
   searchVal,
   select,
   res,
-  loading,
   activeItem,
   activeActivations,
   handleExecute,

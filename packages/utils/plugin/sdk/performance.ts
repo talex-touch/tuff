@@ -5,23 +5,8 @@
  * and storage statistics.
  */
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { StorageStats } from '../../types/storage'
 import { ensureRendererChannel } from './channel'
-
-/**
- * Storage statistics interface
- */
-export interface StorageStats {
-  /** Total size in bytes */
-  totalSize: number
-  /** Number of files */
-  fileCount: number
-  /** Number of directories */
-  dirCount: number
-  /** Maximum allowed size in bytes */
-  maxSize: number
-  /** Usage percentage (0-100) */
-  usagePercent: number
-}
 
 /**
  * Performance metrics interface
