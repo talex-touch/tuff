@@ -102,6 +102,10 @@ const completionDisplay = computed(() => {
   return completion
 })
 
+// Check if CoreBox is in UI mode (plugin webcontent view attached)
+const isUIMode = computed(() => {
+  return activeActivations.value && activeActivations.value.length > 0
+})
 
 const { cleanup: cleanupVisibility } = useVisibility({
   boxOptions,
@@ -433,6 +437,10 @@ const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () 
   deactivateAllProviders().catch((error) => {
     console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
   })
+  // Focus input after UI mode exits
+  setTimeout(() => {
+    boxInputRef.value?.focus()
+  }, 150)
 })
 
 // Handle global shortcut: Detach to DivisionBox (Command+D)
@@ -791,13 +799,23 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
       @deactivate-provider="handleDeactivateProvider"
     />
 
-    <BoxInput ref="boxInputRef" v-model="searchVal" :box-options="boxOptions">
+    <BoxInput
+      ref="boxInputRef"
+      v-model="searchVal"
+      :box-options="boxOptions"
+      :class="{ 'ui-mode-hidden': isUIMode }"
+      :disabled="isUIMode"
+    >
       <template #completion>
         <div class="text-sm truncate" v-html="completionDisplay" />
       </template>
     </BoxInput>
 
-    <TagSection :box-options="boxOptions" :clipboard-options="clipboardOptions" />
+    <TagSection
+      v-if="!isUIMode"
+      :box-options="boxOptions"
+      :clipboard-options="clipboardOptions"
+    />
 
     <div class="CoreBox-Configure">
       <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
@@ -1057,5 +1075,11 @@ div.CoreBox {
 
   opacity: 0.75;
   background-color: var(--el-fill-color);
+}
+
+// Hide input in UI mode but keep layout
+.ui-mode-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 </style>

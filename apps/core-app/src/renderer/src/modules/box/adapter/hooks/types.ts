@@ -38,7 +38,7 @@ export interface IClipboardOptions {
  */
 export interface IClipboardHook {
   clipboardOptions: IClipboardOptions
-  handlePaste: (options?: { overrideDismissed?: boolean }) => void
+  handlePaste: (options?: { overrideDismissed?: boolean; triggerSearch?: boolean }) => void
   handleAutoFill: () => void
   applyToActiveApp: (item?: IClipboardItem) => Promise<boolean>
   clearClipboard: (options?: { remember?: boolean }) => void

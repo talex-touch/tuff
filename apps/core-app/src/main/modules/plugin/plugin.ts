@@ -247,7 +247,7 @@ export class TouchPlugin implements ITouchPlugin {
           `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`
         )
       }
-      await PluginViewLoader.loadPluginView(this, feature)
+      await PluginViewLoader.loadPluginView(this, feature, query)
       return true
     }
 

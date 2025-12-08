@@ -105,6 +105,15 @@ export class TouchApp implements TalexTouch.TouchApp {
     this.moduleManager = new ModuleManager(this, this.channel)
     this.config = new TouchConfig(this)
 
+    // Disable Ctrl+R / Cmd+R reload in production
+    this.window.window.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && input.key === 'r' && (input.control || input.meta)) {
+        if (app.isPackaged) {
+          event.preventDefault()
+        }
+      }
+    })
+
     app.setAppUserModelId('com.tagzxia.talex-touch')
 
     this.__init__().then(() => {

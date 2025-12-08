@@ -8,7 +8,7 @@ import { coreBoxTransport } from './transport/core-box-transport'
 export interface CoreBoxInputChange {
   input?: string
   query?: TuffQuery
-  source?: 'renderer'
+  source?: 'renderer' | 'initial' | 'ui-monitor'
 }
 
 const coreBoxInputLog = createLogger('CoreBox').child('InputTransport')

@@ -1,3 +1,4 @@
+import type { TuffQuery } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TouchPlugin } from '../plugin'
 import path from 'node:path'
@@ -7,6 +8,7 @@ export class PluginViewLoader {
   public static async loadPluginView(
     plugin: TouchPlugin,
     feature: IPluginFeature,
+    query?: TuffQuery | string,
   ): Promise<void | null> {
     const interactionPath = feature.interaction?.path
 
@@ -52,6 +54,6 @@ export class PluginViewLoader {
       console.log(`[PluginViewLoader] Loading view: ${viewUrl}`)
     }
 
-    coreBoxManager.enterUIMode(viewUrl, plugin, feature)
+    coreBoxManager.enterUIMode(viewUrl, plugin, feature, query)
   }
 }

@@ -114,7 +114,12 @@ export function useDownloadCenter() {
         throw new Error(response.error || 'Failed to get tasks')
       }
     }
-    catch (err) {
+    catch (err: any) {
+      // Ignore timeout errors during startup - module may not be ready yet
+      if (err?.message?.includes('timed out')) {
+        console.debug('[DownloadCenter] Tasks fetch timed out, module may be initializing')
+        return []
+      }
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }

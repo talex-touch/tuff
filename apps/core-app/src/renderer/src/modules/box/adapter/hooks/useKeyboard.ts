@@ -28,6 +28,12 @@ const FORWARD_KEYS = new Set(['Enter', 'ArrowUp', 'ArrowDown'])
 const ALT_FORWARD_KEYS = new Set(['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight'])
 
 /**
+ * Keys that should NOT be forwarded even in input-hidden mode.
+ * These are system-level shortcuts handled by CoreBox itself.
+ */
+const SYSTEM_KEYS = new Set(['Escape'])
+
+/**
  * Event name for triggering DivisionBox detach (Command+D)
  */
 const COREBOX_DETACH_EVENT = 'corebox:detach-item'
@@ -58,9 +64,25 @@ const COREBOX_PIN_EVENT = 'corebox:toggle-pin'
  * - Cmd/Ctrl+Left/Right: Move to line start/end
  *
  * @param event - The keyboard event to check
+ * @param inputHidden - Whether the input is hidden (UI mode with no input box)
  * @returns True if the event should be forwarded
  */
-function shouldForwardKey(event: KeyboardEvent): boolean {
+function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
+  // Never forward system keys (Escape for exit)
+  if (SYSTEM_KEYS.has(event.key)) {
+    return false
+  }
+
+  // In input-hidden mode (UI mode), forward almost all keys except system keys
+  if (inputHidden) {
+    // Don't forward Cmd+V (handled separately for paste)
+    if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
+      return false
+    }
+    return true
+  }
+
+  // Normal mode: forward specific keys
   // Forward all Cmd/Ctrl shortcuts except Cmd+V (handled separately for paste)
   if ((event.metaKey || event.ctrlKey) && event.key !== 'v') {
     return true
@@ -130,15 +152,15 @@ export function useKeyboard(
       return
     }
 
-    // Check if in UI mode and should forward this key
+    // Check if in UI mode - input is hidden when in UI mode
     const uiMode = isInUIMode()
-    if (uiMode && shouldForwardKey(event)) {
+    const inputHidden = uiMode // In UI mode, input box is hidden
+
+    // Forward keys to plugin UI view when in UI mode
+    if (uiMode && shouldForwardKey(event, inputHidden)) {
       forwardToUIView(event)
-      // Don't prevent default for ESC - let it bubble for exit handling
-      if (event.key !== 'Escape') {
-        event.preventDefault()
-        return
-      }
+      event.preventDefault()
+      return
     }
 
     if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
