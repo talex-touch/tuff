@@ -1561,6 +1561,74 @@ export async function deletePluginVersion(event: H3Event, pluginId: string, vers
   return version
 }
 
+export async function incrementPluginInstalls(event: H3Event, pluginId: string): Promise<number> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensurePluginSchema(db)
+
+    await db.prepare(`
+      UPDATE ${PLUGINS_TABLE}
+      SET installs = installs + 1
+      WHERE id = ?1;
+    `).bind(pluginId).run()
+
+    const row = await db.prepare(`
+      SELECT installs FROM ${PLUGINS_TABLE} WHERE id = ?1;
+    `).bind(pluginId).first<{ installs: number }>()
+
+    return Number(row?.installs ?? 0)
+  }
+
+  const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+  const index = plugins.findIndex(item => item.id === pluginId)
+
+  if (index === -1)
+    return 0
+
+  plugins[index] = {
+    ...plugins[index],
+    installs: (plugins[index].installs ?? 0) + 1,
+  }
+  await writeCollection(PLUGINS_KEY, plugins)
+
+  return plugins[index].installs
+}
+
+export async function decrementPluginInstalls(event: H3Event, pluginId: string): Promise<number> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensurePluginSchema(db)
+
+    await db.prepare(`
+      UPDATE ${PLUGINS_TABLE}
+      SET installs = MAX(0, installs - 1)
+      WHERE id = ?1;
+    `).bind(pluginId).run()
+
+    const row = await db.prepare(`
+      SELECT installs FROM ${PLUGINS_TABLE} WHERE id = ?1;
+    `).bind(pluginId).first<{ installs: number }>()
+
+    return Number(row?.installs ?? 0)
+  }
+
+  const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+  const index = plugins.findIndex(item => item.id === pluginId)
+
+  if (index === -1)
+    return 0
+
+  plugins[index] = {
+    ...plugins[index],
+    installs: Math.max(0, (plugins[index].installs ?? 0) - 1),
+  }
+  await writeCollection(PLUGINS_KEY, plugins)
+
+  return plugins[index].installs
+}
+
 export async function findVersionByPackageKey(event: H3Event, packageKey: string) {
   const db = getD1Database(event)
 

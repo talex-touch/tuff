@@ -22,6 +22,13 @@ import { internalPlugins } from '../../plugins/internal'
 import { fileWatchService } from '../../service/file-watch.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import { performMarketHttpRequest } from '../../service/market-http.service'
+import {
+  reportPluginUninstall,
+  startUpdateScheduler,
+  stopUpdateScheduler,
+  triggerUpdateCheck,
+  type PluginWithSource,
+} from '../../service/market-api.service'
 import { createLogger } from '../../utils/logger'
 import { debounce } from '../../utils/common-util'
 import { BaseModule } from '../abstract-base-module'
@@ -722,6 +729,9 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
     const manifestName = pluginInstance?.name ?? identifier
     const pluginDir = path.resolve(pluginPath, folderName)
 
+    // Report uninstall to market (fire and forget, use folder name as slug)
+    reportPluginUninstall(folderName).catch(() => {})
+
     await unloadPlugin(folderName)
 
     if (await fse.pathExists(pluginDir)) {
@@ -1101,11 +1111,49 @@ export class PluginModule extends BaseModule {
   onDestroy(): MaybePromise<void> {
     this.pluginManager?.plugins.forEach(plugin => plugin.disable())
     this.healthMonitor?.destroy()
+    stopUpdateScheduler()
+  }
+
+  /**
+   * Get all plugins with their install source metadata
+   */
+  private async getPluginsWithSource(): Promise<PluginWithSource[]> {
+    const manager = this.pluginManager
+    if (!manager) return []
+
+    const result: PluginWithSource[] = []
+
+    for (const [name, plugin] of manager.plugins) {
+      if ((plugin as any).internal) continue
+
+      try {
+        const sourceData = await manager.dbUtils.getPluginData(name, 'install_source')
+        result.push({
+          name,
+          version: plugin.version,
+          installSource: sourceData?.value ? JSON.parse(sourceData.value) : null,
+        })
+      } catch {
+        result.push({ name, version: plugin.version, installSource: null })
+      }
+    }
+
+    return result
   }
 
   start(): MaybePromise<void> {
     const manager = this.pluginManager!
     const touchChannel = genTouchChannel()
+
+    // Initialize update scheduler
+    startUpdateScheduler({
+      checkIntervalMs: 24 * 60 * 60 * 1000, // 24 hours
+      getPluginsWithSource: () => this.getPluginsWithSource(),
+      onUpdatesFound: (updates) => {
+        // Notify renderer about available updates
+        touchChannel.send(ChannelType.MAIN, 'market:updates-available', { updates })
+      },
+    })
 
     touchChannel.regChannel(ChannelType.MAIN, 'plugin-list', () => {
       try {
@@ -2342,6 +2390,26 @@ export class PluginModule extends BaseModule {
       }
       catch (error) {
         console.error('Error in plugin:api:get-performance handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
+
+    /**
+     * Check for plugin updates from market (manual trigger)
+     * Uses the scheduler to check by install source
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'market:check-updates', async ({ reply }) => {
+      try {
+        const updates = await triggerUpdateCheck()
+        return reply(DataCode.SUCCESS, {
+          updates,
+          checkedAt: new Date().toISOString(),
+        })
+      }
+      catch (error) {
+        console.error('Error in market:check-updates handler:', error)
         return reply(DataCode.ERROR, {
           error: error instanceof Error ? error.message : 'Unknown error',
         })

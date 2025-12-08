@@ -1,5 +1,5 @@
 import { createError, sendRedirect } from 'h3'
-import { getPluginBySlug } from '../../../../utils/pluginsStore'
+import { getPluginBySlug, incrementPluginInstalls } from '../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const slug = event.context.params?.slug
@@ -29,6 +29,9 @@ export default defineEventHandler(async (event) => {
 
   if (!targetVersion?.packageUrl)
     throw createError({ statusCode: 404, statusMessage: 'No downloadable version available.' })
+
+  // Track install count (fire and forget to avoid blocking redirect)
+  incrementPluginInstalls(event, plugin.id).catch(() => {})
 
   return sendRedirect(event, targetVersion.packageUrl, 302)
 })
