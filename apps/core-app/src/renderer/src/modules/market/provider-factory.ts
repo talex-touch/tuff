@@ -3,6 +3,7 @@ import { BaseMarketProvider, type MarketProviderContext } from './providers/base
 import { NexusStoreProvider } from './providers/nexus-store-provider'
 import { RepositoryProvider } from './providers/repository-provider'
 import { NpmPackageProvider } from './providers/npm-package-provider'
+import { TpexApiProvider } from './providers/tpex-api-provider'
 
 export function createMarketProvider(
   definition: MarketProviderDefinition,
@@ -15,6 +16,8 @@ export function createMarketProvider(
       return new RepositoryProvider(definition, ctx)
     case 'npmPackage':
       return new NpmPackageProvider(definition, ctx)
+    case 'tpexApi':
+      return new TpexApiProvider(definition, ctx)
     default:
       console.warn(
         `[Market] Unsupported provider type "${definition.type}" for "${definition.name}".`,

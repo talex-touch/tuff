@@ -1,7 +1,9 @@
 ```
 <script setup lang="ts">
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
+import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import VersionDrawer from '~/components/VersionDrawer.vue'
+import CreatePluginDrawer from '~/components/CreatePluginDrawer.vue'
 import { useUser } from '@clerk/vue'
 import { useDateFormat } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
@@ -322,10 +324,13 @@ function createPluginFormState(): PluginFormState {
 
 const pluginForm = reactive(createPluginFormState())
 const showPluginForm = ref(false)
+const showCreateDrawer = ref(false)
 const pluginFormMode = ref<'create' | 'edit'>('create')
 const editingPluginId = ref<string | null>(null)
 const pluginSaving = ref(false)
 const pluginFormError = ref<string | null>(null)
+const createDrawerError = ref<string | null>(null)
+const createDrawerLoading = ref(false)
 
 const editingPluginInstalls = ref<number | null>(null)
 const pluginStatusUpdating = ref<string | null>(null)
@@ -373,9 +378,105 @@ watch(() => pluginForm.slug, (value, oldValue) => {
 })
 
 function openCreatePluginForm() {
-  pluginFormMode.value = 'create'
-  resetPluginForm()
-  showPluginForm.value = true
+  showCreateDrawer.value = true
+  createDrawerError.value = null
+}
+
+function closeCreateDrawer() {
+  showCreateDrawer.value = false
+  createDrawerError.value = null
+}
+
+async function handleCreatePluginSubmit(data: PluginFormData) {
+  createDrawerLoading.value = true
+  createDrawerError.value = null
+
+  try {
+    const slug = data.slug.trim()
+    if (!isPluginCategoryId(data.category))
+      throw new Error(t('dashboard.sections.plugins.errors.invalidCategory'))
+
+    if (!slug.length)
+      throw new Error(t('dashboard.sections.plugins.errors.missingIdentifier'))
+
+    if (!PLUGIN_IDENTIFIER_PATTERN.test(slug))
+      throw new Error(t('dashboard.sections.plugins.errors.invalidIdentifierFormat'))
+
+    const badges = data.badges
+      .split(',')
+      .map(badge => badge.trim())
+      .filter(Boolean)
+
+    const homepage = data.homepage.trim()
+    const readme = data.readme.trim()
+    const name = data.name.trim()
+    const restrictedBypass = Boolean(isAdmin.value && data.isOfficial)
+
+    if (!restrictedBypass && (containsReservedToken(slug) || containsReservedToken(name)))
+      throw new Error(t('dashboard.sections.plugins.errors.restrictedIdentifier'))
+
+    if (!name.length)
+      throw new Error(t('dashboard.sections.plugins.errors.missingName'))
+    if (!readme.length)
+      throw new Error(t('dashboard.sections.plugins.errors.missingReadme'))
+
+    const formData = new FormData()
+    formData.append('slug', slug)
+    formData.append('name', name)
+    formData.append('summary', data.summary.trim())
+    formData.append('category', data.category.trim())
+    formData.append('readme', readme)
+
+    if (homepage.length)
+      formData.append('homepage', homepage)
+
+    if (badges.length)
+      formData.append('badges', badges.join(', '))
+
+    if (data.iconFile)
+      formData.append('icon', data.iconFile)
+
+    if (isAdmin.value && data.isOfficial)
+      formData.append('isOfficial', 'true')
+    else if (isAdmin.value)
+      formData.append('isOfficial', 'false')
+
+    const result = await $fetch<{ plugin: { id: string } }>('/api/dashboard/plugins', {
+      method: 'POST',
+      body: formData,
+    })
+
+    // Auto-publish initial version if package file was uploaded
+    if (data.packageFile && data.initialVersion) {
+      try {
+        const versionFormData = new FormData()
+        versionFormData.append('version', data.initialVersion)
+        versionFormData.append('channel', data.initialChannel || 'SNAPSHOT')
+        versionFormData.append('changelog', data.initialChangelog || `Initial release v${data.initialVersion}`)
+        versionFormData.append('package', data.packageFile)
+
+        if (homepage.length)
+          versionFormData.append('homepage', homepage)
+
+        await $fetch(`/api/dashboard/plugins/${result.plugin.id}/versions`, {
+          method: 'POST',
+          body: versionFormData,
+        })
+      }
+      catch (versionError) {
+        console.warn('Failed to auto-publish initial version:', versionError)
+      }
+    }
+
+    await refreshPlugins()
+    closeCreateDrawer()
+  }
+  catch (error: unknown) {
+    createDrawerError.value = error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
+  }
+  finally {
+    createDrawerLoading.value = false
+  }
 }
 
 function isPluginOwner(plugin: DashboardPlugin) {
@@ -1072,6 +1173,15 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         :error="versionFormError"
         @close="closeVersionForm"
         @submit="submitVersionForm"
+      />
+
+      <CreatePluginDrawer
+        :is-open="showCreateDrawer"
+        :loading="createDrawerLoading"
+        :error="createDrawerError"
+        :is-admin="isAdmin"
+        @close="closeCreateDrawer"
+        @submit="handleCreatePluginSubmit"
       />
     </div>
 

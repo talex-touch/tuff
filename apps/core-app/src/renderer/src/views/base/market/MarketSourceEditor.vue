@@ -21,6 +21,7 @@ const storageState = marketSourcesStorage.get()
 const sources = storageState.sources
 
 const providerTypeOptions: { label: string; value: MarketProviderType }[] = [
+  { label: 'Tpex API', value: 'tpexApi' },
   { label: 'Nexus Store', value: 'nexusStore' },
   { label: 'Repository', value: 'repository' },
   { label: 'NPM Package', value: 'npmPackage' }
@@ -61,19 +62,24 @@ function handleAdd() {
   const list = sources
   const id = generateSourceId(newSource.name)
 
+  const url = newSource.url.trim()
+  const config: Record<string, string> = {}
+
+  if (newSource.type === 'nexusStore') {
+    config.manifestUrl = url
+  } else if (newSource.type === 'tpexApi') {
+    config.apiUrl = url.endsWith('/api/market/plugins') ? url : `${url.replace(/\/$/, '')}/api/market/plugins`
+  }
+
   list.push({
     id,
     name: newSource.name.trim(),
     type: newSource.type,
-    url: newSource.url.trim(),
+    url,
     enabled: true,
     priority: list.length ? Math.max(...list.map((item) => item.priority ?? 0)) + 1 : 1,
     trustLevel: 'unverified',
-    config: newSource.type === 'nexusStore'
-      ? {
-          manifestUrl: newSource.url.trim()
-        }
-      : {},
+    config,
   })
 
   resetNewSource()

@@ -159,6 +159,8 @@ interface PublishVersionInput {
   packageFile: File
   createdBy: string
   canModerate?: boolean
+  homepage?: string | null
+  iconFile?: File
 }
 
 function sanitizeSerializable(value: unknown): unknown {

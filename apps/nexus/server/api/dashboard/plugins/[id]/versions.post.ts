@@ -39,9 +39,15 @@ export default defineEventHandler(async (event) => {
 
   const normalizedChannel = channel.toUpperCase() as PluginChannel
 
-  const client = clerkClient(event)
-  const user = await client.users.getUser(userId)
-  const isAdmin = user.publicMetadata?.role === 'admin'
+  let isAdmin = false
+  try {
+    const client = clerkClient(event)
+    const user = await client.users.getUser(userId)
+    isAdmin = user.publicMetadata?.role === 'admin'
+  }
+  catch (error) {
+    console.warn('Failed to fetch user metadata for admin check:', error)
+  }
 
   const versionRecord = await publishPluginVersion(event, {
     pluginId: id,

@@ -501,6 +501,9 @@ watch(
 watch(
   () => props.followMouse,
   (newFollowMouse: boolean): void => {
+    if (typeof window === 'undefined')
+      return
+
     if (newFollowMouse) {
       window.addEventListener('mousemove', handleMouseMove, { passive: true })
     }
@@ -531,7 +534,9 @@ onUnmounted((): void => {
     mouseThrottleId = null
   }
 
-  window.removeEventListener('mousemove', handleMouseMove)
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('mousemove', handleMouseMove)
+  }
 })
 </script>
 

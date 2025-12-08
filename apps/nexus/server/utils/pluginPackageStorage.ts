@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 
-const MAX_PACKAGE_SIZE = 5 * 1024 * 1024 // 5MB
+const MAX_PACKAGE_SIZE = 30 * 1024 * 1024 // 30MB
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
 
 const memoryStorage = new Map<string, { data: Buffer, contentType: string }>()
@@ -44,7 +44,7 @@ function ensureTpexFile(file: File) {
   if (file.size > MAX_PACKAGE_SIZE) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Package size exceeds 5MB limit.',
+      statusMessage: 'Package size exceeds 30MB limit.',
     })
   }
 }

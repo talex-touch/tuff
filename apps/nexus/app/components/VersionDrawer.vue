@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-touch/utils/plugin/providers'
 import { computed, ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 
@@ -34,6 +35,10 @@ const formData = ref<VersionFormData>({
   packageFile: null as any,
 })
 
+const packageLoading = ref(false)
+const packageError = ref<string | null>(null)
+const manifestPreview = ref<TpexExtractedManifest | null>(null)
+
 // Reset form when drawer opens
 watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
@@ -44,6 +49,8 @@ watch(() => props.isOpen, (isOpen) => {
       packageFile: null as any,
     }
     step.value = 'form'
+    packageError.value = null
+    manifestPreview.value = null
   }
 })
 
@@ -57,10 +64,54 @@ type Step = 'form' | 'warning' | 'license'
 const step = ref<Step>('form')
 const licenseAgreed = ref(false)
 
-function handlePackageInput(event: Event) {
+async function handlePackageInput(event: Event) {
   const target = event.target as HTMLInputElement
-  if (target.files?.[0]) {
-    formData.value.packageFile = target.files[0]
+  if (!target.files?.[0])
+    return
+
+  const file = target.files[0]
+  formData.value.packageFile = file
+  packageError.value = null
+  manifestPreview.value = null
+
+  // Preview tpex to auto-fill form
+  packageLoading.value = true
+  try {
+    const previewFormData = new FormData()
+    previewFormData.append('package', file)
+
+    const result = await $fetch<TpexPackagePreviewResult>('/api/dashboard/plugins/package/preview', {
+      method: 'POST',
+      body: previewFormData,
+    })
+
+    if (result.manifest) {
+      manifestPreview.value = result.manifest as TpexExtractedManifest
+
+      // Auto-fill version from manifest
+      if (result.manifest.version && !formData.value.version) {
+        formData.value.version = String(result.manifest.version)
+      }
+
+      // Auto-fill channel from manifest
+      if (result.manifest.channel) {
+        const channel = String(result.manifest.channel).toUpperCase()
+        if (['RELEASE', 'BETA', 'SNAPSHOT'].includes(channel)) {
+          formData.value.channel = channel as 'RELEASE' | 'BETA' | 'SNAPSHOT'
+        }
+      }
+
+      // Auto-fill changelog from manifest
+      if (result.manifest.changelog && !formData.value.changelog) {
+        formData.value.changelog = String(result.manifest.changelog)
+      }
+    }
+  }
+  catch (err: unknown) {
+    packageError.value = err instanceof Error ? err.message : 'Failed to preview package'
+  }
+  finally {
+    packageLoading.value = false
   }
 }
 
@@ -197,10 +248,24 @@ const channelVisibility = computed(() =>
                     @change="handlePackageInput"
                   >
                   <div class="flex items-center gap-2 border-b border-black/10 py-2 transition dark:border-white/10">
-                    <span class="i-carbon-document-add text-black/40 dark:text-white/40" />
+                    <span v-if="packageLoading" class="i-carbon-circle-dash animate-spin text-black/40 dark:text-white/40" />
+                    <span v-else class="i-carbon-document-add text-black/40 dark:text-white/40" />
                     <span class="text-sm text-black dark:text-white">
                       {{ formData.packageFile ? formData.packageFile.name : t('dashboard.sections.plugins.packageAwaiting') }}
                     </span>
+                  </div>
+                </div>
+                <p v-if="packageError" class="text-xs text-red-500">{{ packageError }}</p>
+
+                <!-- Manifest Preview -->
+                <div v-if="manifestPreview" class="mt-2 rounded-lg bg-black/5 p-3 dark:bg-white/5">
+                  <p class="mb-2 text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
+                    {{ t('dashboard.sections.plugins.manifestPreview') }}
+                  </p>
+                  <div class="space-y-1 text-xs text-black/70 dark:text-white/70">
+                    <p v-if="manifestPreview.name"><span class="font-medium">Name:</span> {{ manifestPreview.name }}</p>
+                    <p v-if="manifestPreview.version"><span class="font-medium">Version:</span> {{ manifestPreview.version }}</p>
+                    <p v-if="manifestPreview.channel"><span class="font-medium">Channel:</span> {{ manifestPreview.channel }}</p>
                   </div>
                 </div>
               </div>
