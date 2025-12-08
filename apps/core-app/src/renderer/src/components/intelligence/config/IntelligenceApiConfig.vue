@@ -1,5 +1,5 @@
 <script lang="ts" name="IntelligenceApiConfig" setup>
-import type { AiProviderConfig } from '@talex-touch/utils/renderer/storage'
+import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, getCurrentInstance, ref } from 'vue'
@@ -11,11 +11,11 @@ import { touchChannel } from '~/modules/channel/channel-core'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
 
 const props = defineProps<{
-  modelValue: AiProviderConfig
+  modelValue: IntelligenceProviderConfig
 }>()
 
 const emits = defineEmits<{
-  'update:modelValue': [value: AiProviderConfig]
+  'update:modelValue': [value: IntelligenceProviderConfig]
   'change': []
   'testSuccess': [models: string[]]
 }>()

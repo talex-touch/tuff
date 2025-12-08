@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
-interface AiProviderConfig {
+interface IntelligenceProviderConfig {
   id: string
   type: string
   name: string
@@ -23,12 +23,12 @@ interface AiProviderConfig {
 }
 
 const props = defineProps<{
-  modelValue: AiProviderConfig
+  modelValue: IntelligenceProviderConfig
   disabled?: boolean
 }>()
 
 const emits = defineEmits<{
-  'update:modelValue': [value: AiProviderConfig]
+  'update:modelValue': [value: IntelligenceProviderConfig]
   'change': []
 }>()
 

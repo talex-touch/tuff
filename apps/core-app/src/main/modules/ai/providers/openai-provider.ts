@@ -1,19 +1,19 @@
 import type {
-  AiChatPayload,
-  AiEmbeddingPayload,
+  IntelligenceChatPayload,
+  IntelligenceEmbeddingPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
-  AiTranslatePayload,
+  IntelligenceTranslatePayload,
   AiUsageInfo,
 } from '@talex-touch/utils'
-import { AiProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 
 export class OpenAIProvider extends IntelligenceProvider {
-  readonly type = AiProviderType.OPENAI
+  readonly type = IntelligenceProviderType.OPENAI
 
   private get baseUrl(): string {
     return this.config.baseUrl || DEFAULT_BASE_URL
@@ -26,7 +26,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     }
   }
 
-  async chat(payload: AiChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -75,7 +75,7 @@ export class OpenAIProvider extends IntelligenceProvider {
   }
 
   async* chatStream(
-    payload: AiChatPayload,
+    payload: IntelligenceChatPayload,
     options: AiInvokeOptions,
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
@@ -140,7 +140,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     }
   }
 
-  async embedding(payload: AiEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>> {
+  async embedding(payload: IntelligenceEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -182,8 +182,8 @@ export class OpenAIProvider extends IntelligenceProvider {
     }
   }
 
-  async translate(payload: AiTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
-    const chatPayload: AiChatPayload = {
+  async translate(payload: IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+    const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
@@ -200,9 +200,9 @@ export class OpenAIProvider extends IntelligenceProvider {
   }
 
   async visionOcr(
-    payload: import('@talex-touch/utils').AiVisionOcrPayload,
+    payload: import('@talex-touch/utils').IntelligenceVisionOcrPayload,
     options: AiInvokeOptions,
-  ): Promise<AiInvokeResult<import('@talex-touch/utils').AiVisionOcrResult>> {
+  ): Promise<AiInvokeResult<import('@talex-touch/utils').IntelligenceVisionOcrResult>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -257,7 +257,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     const rawContent = data.choices[0]?.message?.content || ''
     const parsed = this.safeParseJson(rawContent)
 
-    const ocrResult: import('@talex-touch/utils').AiVisionOcrResult = parsed
+    const ocrResult: import('@talex-touch/utils').IntelligenceVisionOcrResult = parsed
       ? {
           text: parsed.text ?? rawContent,
           confidence: parsed.confidence,
@@ -300,7 +300,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     throw new Error('[OpenAIProvider] Invalid vision image source')
   }
 
-  private safeParseJson(text: string): any {
+  protected override safeParseJson(text: string): any {
     try {
       return JSON.parse(text)
     }

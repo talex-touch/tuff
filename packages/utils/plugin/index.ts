@@ -134,7 +134,8 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 export interface IFeatureCommand {
   type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
   value: string | string[] | RegExp | Function
-  onTrigger: () => void
+  /** Optional trigger callback - not serialized over IPC */
+  onTrigger?: () => void
 }
 
 export interface IPluginFeature {

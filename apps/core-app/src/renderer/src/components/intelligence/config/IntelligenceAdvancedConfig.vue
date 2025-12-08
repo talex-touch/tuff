@@ -5,7 +5,7 @@ import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
-interface AiProviderConfig {
+interface IntelligenceProviderConfig {
   id: string
   type: string
   name: string
@@ -24,12 +24,12 @@ interface AiProviderConfig {
 }
 
 const props = defineProps<{
-  modelValue: AiProviderConfig
+  modelValue: IntelligenceProviderConfig
   disabled?: boolean
 }>()
 
 const emits = defineEmits<{
-  'update:modelValue': [value: AiProviderConfig]
+  'update:modelValue': [value: IntelligenceProviderConfig]
   'change': []
 }>()
 

@@ -1,5 +1,5 @@
 <script lang="ts" name="CoreBoxFooter" setup>
-import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
+import type { IProviderActivate, ITuffIcon, TuffFooterHints, TuffItem } from '@talex-touch/utils'
 import { useDebounce } from '@vueuse/core'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -10,6 +10,12 @@ import { resolveSourceMeta } from './sourceMeta'
 const props = defineProps<{
   display: boolean
   item: TuffItem | null
+  /** 当前激活的 providers，用于判断是否在搜索结果模式 */
+  activeActivations?: IProviderActivate[] | null
+  /** 搜索结果数量，用于判断是否显示快速选择 */
+  resultCount?: number
+  /** 是否在推荐模式 */
+  isRecommendation?: boolean
 }>()
 
 const displayValue = computed(() => props.display)
@@ -43,7 +49,17 @@ const subtitleMeta = computed(() => resolveSourceMeta(props.item || undefined, t
 
 const isMacPlatform = process.platform === 'darwin'
 
+/** 获取当前 item 的 footerHints 配置 */
+const footerHintsConfig = computed<TuffFooterHints | undefined>(() => {
+  return props.item?.meta?.footerHints
+})
+
+/** 主操作按钮文案 */
 const primaryActionLabel = computed(() => {
+  // 优先使用 item 配置的文案
+  const customLabel = footerHintsConfig.value?.primary?.label
+  if (customLabel) return customLabel
+
   const item = props.item
   const isPluginFeature =
     item?.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
@@ -53,25 +69,72 @@ const primaryActionLabel = computed(() => {
   return translated === translationKey ? (isPluginFeature ? 'Execute' : 'Open') : translated
 })
 
+/** 主操作是否显示 */
+const primaryVisible = computed(() => {
+  return footerHintsConfig.value?.primary?.visible !== false
+})
+
+/** Meta+K 辅助操作是否显示（默认隐藏） */
+const secondaryVisible = computed(() => {
+  return footerHintsConfig.value?.secondary?.visible === true
+})
+
+/** Meta+K 辅助操作文案 */
+const secondaryLabel = computed(() => {
+  return footerHintsConfig.value?.secondary?.label || 'Meta+K'
+})
+
+/**
+ * 快速选择是否显示
+ * 默认逻辑：
+ * - 推荐模式：显示
+ * - 搜索结果模式（无激活 provider）：显示
+ * - 激活 provider 模式（如 AI）：隐藏
+ * - item 显式配置优先级最高
+ */
+const quickSelectVisible = computed(() => {
+  // item 显式配置优先
+  const itemConfig = footerHintsConfig.value?.quickSelect?.visible
+  if (itemConfig !== undefined) return itemConfig
+
+  // 有激活的 provider 时默认隐藏（如 AI 模式）
+  if (props.activeActivations && props.activeActivations.length > 0) {
+    return false
+  }
+
+  // 推荐模式或有搜索结果时显示
+  return props.isRecommendation || (props.resultCount ?? 0) > 0
+})
+
 const keyHints = computed(() => {
   const quickSelectLabelKey = 'coreBox.hints.quickSelect'
   const quickSelectLabel = t(quickSelectLabelKey)
-  const aiHotkeyLabel = 'Meta+K'
 
   const aiHotkey = isMacPlatform ? '⌘K' : 'Meta+K'
   const quickSelectHotkey = isMacPlatform ? '⌘1-0' : 'Alt+1-0'
 
-  return [
-    { key: '↵', label: primaryActionLabel.value },
-    {
-      key: aiHotkey,
-      label: aiHotkeyLabel
-    },
-    {
+  const hints: Array<{ key: string; label: string; visible: boolean }> = []
+
+  // 主操作（回车）
+  if (primaryVisible.value) {
+    hints.push({ key: '↵', label: primaryActionLabel.value, visible: true })
+  }
+
+  // 辅助操作（Meta+K）- 默认隐藏
+  if (secondaryVisible.value) {
+    hints.push({ key: aiHotkey, label: secondaryLabel.value, visible: true })
+  }
+
+  // 快速选择（Meta+1-0）
+  if (quickSelectVisible.value) {
+    hints.push({
       key: quickSelectHotkey,
-      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel
-    }
-  ]
+      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel,
+      visible: true
+    })
+  }
+
+  return hints
 })
 </script>
 

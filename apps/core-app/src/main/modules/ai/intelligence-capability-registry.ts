@@ -1,4 +1,4 @@
-import type { AiCapabilityDescriptor, AiCapabilityType } from '@talex-touch/utils'
+import type { AiCapabilityDescriptor, IntelligenceCapabilityType } from '@talex-touch/utils'
 
 export class AiCapabilityRegistry {
   private capabilities = new Map<string, AiCapabilityDescriptor>()
@@ -25,7 +25,7 @@ export class AiCapabilityRegistry {
     return this.capabilities.get(capabilityId)
   }
 
-  getByType(type: AiCapabilityType): AiCapabilityDescriptor[] {
+  getByType(type: IntelligenceCapabilityType): AiCapabilityDescriptor[] {
     return Array.from(this.capabilities.values()).filter((cap) => cap.type === type)
   }
 

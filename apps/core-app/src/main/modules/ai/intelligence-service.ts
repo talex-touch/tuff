@@ -1,5 +1,5 @@
-import type { AiProviderConfig } from '@talex-touch/utils'
-import { AiProviderType } from '@talex-touch/utils'
+import type { IntelligenceProviderConfig } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import chalk from 'chalk'
 import { genTouchChannel } from '../../core/channel-core'
@@ -32,11 +32,11 @@ export function initAiSdkService(): void {
   initialized = true
 
   const manager = new IntelligenceProviderManager()
-  manager.registerFactory(AiProviderType.OPENAI, config => new OpenAIProvider(config))
-  manager.registerFactory(AiProviderType.DEEPSEEK, config => new DeepSeekProvider(config))
-  manager.registerFactory(AiProviderType.SILICONFLOW, config => new SiliconflowProvider(config))
-  manager.registerFactory(AiProviderType.LOCAL, config => new LocalProvider(config))
-  manager.registerFactory(AiProviderType.ANTHROPIC, config => new AnthropicProvider(config))
+  manager.registerFactory(IntelligenceProviderType.OPENAI, config => new OpenAIProvider(config))
+  manager.registerFactory(IntelligenceProviderType.DEEPSEEK, config => new DeepSeekProvider(config))
+  manager.registerFactory(IntelligenceProviderType.SILICONFLOW, config => new SiliconflowProvider(config))
+  manager.registerFactory(IntelligenceProviderType.LOCAL, config => new LocalProvider(config))
+  manager.registerFactory(IntelligenceProviderType.ANTHROPIC, config => new AnthropicProvider(config))
   setIntelligenceProviderManager(manager)
   logInfo('Provider factories registered')
 
@@ -79,7 +79,7 @@ export function initAiSdkService(): void {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data as { provider: AiProviderConfig }
+      const { provider } = data as { provider: IntelligenceProviderConfig }
       ensureAiConfigLoaded()
       // logInfo(`Testing provider ${provider.id}`) // Remove to reduce noise
       const result = await ai.testProvider(provider)
@@ -162,7 +162,7 @@ export function initAiSdkService(): void {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data as { provider: AiProviderConfig }
+      const { provider } = data as { provider: IntelligenceProviderConfig }
       ensureAiConfigLoaded()
       logInfo(`Fetching models for provider ${provider.id}`)
       const models = await fetchProviderModels(provider)

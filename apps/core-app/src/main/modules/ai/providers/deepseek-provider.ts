@@ -1,18 +1,18 @@
 import type {
-  AiChatPayload,
+  IntelligenceChatPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
-  AiTranslatePayload,
+  IntelligenceTranslatePayload,
   AiUsageInfo,
 } from '@talex-touch/utils'
-import { AiProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1'
 
 export class DeepSeekProvider extends IntelligenceProvider {
-  readonly type = AiProviderType.DEEPSEEK
+  readonly type = IntelligenceProviderType.DEEPSEEK
 
   private get baseUrl(): string {
     return this.config.baseUrl || DEFAULT_BASE_URL
@@ -25,7 +25,7 @@ export class DeepSeekProvider extends IntelligenceProvider {
     }
   }
 
-  async chat(payload: AiChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -75,7 +75,7 @@ export class DeepSeekProvider extends IntelligenceProvider {
   }
 
   async* chatStream(
-    payload: AiChatPayload,
+    payload: IntelligenceChatPayload,
     options: AiInvokeOptions,
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
@@ -141,8 +141,8 @@ export class DeepSeekProvider extends IntelligenceProvider {
     throw new Error('[DeepSeekProvider] Embedding is not supported by DeepSeek')
   }
 
-  async translate(payload: AiTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
-    const chatPayload: AiChatPayload = {
+  async translate(payload: IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+    const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',

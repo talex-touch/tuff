@@ -1,4 +1,4 @@
-import type { AiInvokeResult, AiVisionOcrPayload, AiVisionOcrResult } from '@talex-touch/utils'
+import type { AiInvokeResult, IntelligenceVisionOcrPayload, AiVisionOcrResult } from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
 import { existsSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -9,7 +9,7 @@ import { BaseCapabilityTester } from './base-tester'
 export class VisionCapabilityTester extends BaseCapabilityTester {
   readonly capabilityType = 'vision'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<AiVisionOcrPayload> {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceVisionOcrPayload> {
     const source = input.source ?? (await this.loadSampleImageSource('ocr'))
 
     return {
@@ -48,7 +48,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
     return false
   }
 
-  private async loadSampleImageSource(folder: string): Promise<AiVisionOcrPayload['source']> {
+  private async loadSampleImageSource(folder: string): Promise<IntelligenceVisionOcrPayload['source']> {
     const dir = this.resolveSampleDirectory(folder)
     if (!dir) {
       throw new Error('Sample image directory not found')

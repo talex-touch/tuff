@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { AiProviderConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -9,7 +9,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 const props = defineProps<{
   modelValue: boolean
   capabilityId: string
-  enabledProviders: AiProviderConfig[]
+  enabledProviders: IntelligenceProviderConfig[]
   isTesting: boolean
   testMeta: {
     requiresUserInput: boolean

@@ -803,6 +803,65 @@ export interface TuffContext {
   tags?: string[]
 }
 
+// ==================== Footer Hints 配置 ====================
+
+/**
+ * Footer hint 单项配置
+ */
+export interface TuffFooterHintItem {
+  /** 快捷键显示文本 */
+  key: string
+  /** 提示标签 */
+  label: string
+  /** 是否显示此提示 */
+  visible?: boolean
+  /** 触发的事件名称 */
+  event?: string
+  /** 事件携带的数据 */
+  eventData?: Record<string, unknown>
+}
+
+/**
+ * Footer hints 配置
+ * @description 控制 CoreBox 底部快捷键提示的显示和行为
+ */
+export interface TuffFooterHints {
+  /**
+   * 主操作提示（回车键）
+   * @description 自定义回车键的文案，如 "发送"、"执行"、"打开" 等
+   */
+  primary?: {
+    /** 自定义标签文案 */
+    label?: string
+    /** 是否显示 */
+    visible?: boolean
+  }
+
+  /**
+   * 辅助操作提示（Meta+K）
+   * @description 控制 Meta+K 快捷键的显示和行为
+   */
+  secondary?: {
+    /** 自定义标签文案 */
+    label?: string
+    /** 是否显示，默认 false（隐藏） */
+    visible?: boolean
+    /** 触发的事件名称 */
+    event?: string
+    /** 事件携带的数据 */
+    eventData?: Record<string, unknown>
+  }
+
+  /**
+   * 快速选择提示（Meta+1-0）
+   * @description 控制快速选择快捷键的显示
+   */
+  quickSelect?: {
+    /** 是否显示，默认根据场景自动判断 */
+    visible?: boolean
+  }
+}
+
 // ==================== 扩展元数据 ====================
 
 /**
@@ -1030,6 +1089,12 @@ export interface TuffMeta {
    * @warning 不建议添加太多关键词（建议 <= 10），过多会影响搜索性能
    */
   keywords?: string[]
+
+  /**
+   * Footer hints 配置
+   * @description 控制 CoreBox 底部快捷键提示的显示和行为
+   */
+  footerHints?: TuffFooterHints
 }
 
 // ==================== 前端展示结构 ====================

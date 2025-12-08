@@ -329,8 +329,9 @@ export class TouchPlugin implements ITouchPlugin {
       ...item,
       source: {
         type: 'plugin' as const,
-        id: this.name,
-        name: this.name,
+        // Preserve source.id if already set (e.g., 'plugin-features' for onItemAction routing)
+        id: item.source?.id || this.name,
+        name: item.source?.name || this.name,
         version: this.version
       }
     }

@@ -1,4 +1,4 @@
-import type { AiChatPayload, AiUsageInfo } from '@talex-touch/utils'
+import type { IntelligenceChatPayload, AiUsageInfo } from '@talex-touch/utils'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { IFeatureLifeCycle, IPluginFeature } from '@talex-touch/utils/plugin'
 import crypto from 'node:crypto'
@@ -68,7 +68,7 @@ function createAiFeature(): IPluginFeature {
       {
         type: 'over',
         value: ['ai', '@ai', '/ai']
-      } as any
+      }
     ],
     interaction: {
       type: 'widget'
@@ -83,15 +83,44 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
 
   const buildBaseItem = (id: string): TuffItemBuilder => {
     return new TuffItemBuilder(id)
-      .setSource('plugin', plugin.name, plugin.name)
+      .setSource('plugin', 'plugin-features', plugin.name)
       .setKind('command')
       .setIcon(INTERNAL_AI_ICON)
   }
 
   const createPlaceholderItem = (): TuffItem => {
-    return buildBaseItem(`internal-ai:placeholder:${Date.now()}`)
+    return buildBaseItem('internal-ai:input')
       .setTitle('向 Talex AI 提问')
       .setSubtitle('输入内容后回车即可发送给 AI')
+      .setMeta({
+        keepCoreBoxOpen: true,
+        footerHints: {
+          primary: { label: '发送', visible: true },
+          secondary: { visible: false },
+          quickSelect: { visible: false }
+        }
+      })
+      .build()
+  }
+
+  const createActionItem = (prompt: string): TuffItem => {
+    return buildBaseItem('internal-ai:input')
+      .setTitle(prompt)
+      .setSubtitle('按回车发送给 AI')
+      .setMeta({
+        keepCoreBoxOpen: true,
+        pluginName: plugin.name,
+        defaultAction: 'send-to-ai',
+        intelligence: {
+          prompt,
+          status: 'action'
+        },
+        footerHints: {
+          primary: { label: '发送', visible: true },
+          secondary: { visible: false },
+          quickSelect: { visible: false }
+        }
+      })
       .build()
   }
 
@@ -106,8 +135,13 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
           prompt,
           status: 'pending',
           createdAt: Date.now()
+        },
+        footerHints: {
+          primary: { visible: false },
+          secondary: { visible: false },
+          quickSelect: { visible: false }
         }
-      } as any)
+      })
       .build()
   }
 
@@ -140,8 +174,13 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
           model,
           usage,
           createdAt: Date.now()
+        },
+        footerHints: {
+          primary: { label: '复制', visible: true },
+          secondary: { visible: false },
+          quickSelect: { visible: false }
         }
-      } as any)
+      })
       .build()
   }
 
@@ -157,15 +196,49 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
           status: 'error',
           error: message,
           createdAt: Date.now()
+        },
+        footerHints: {
+          primary: { label: '重试', visible: true },
+          secondary: { visible: false },
+          quickSelect: { visible: false }
         }
-      } as any)
+      })
       .build()
+  }
+
+  const dispatchPrompt = async (requestId: string, prompt: string): Promise<void> => {
+    try {
+      ensureAiConfigLoaded()
+      const payload: IntelligenceChatPayload = {
+        messages: [
+          { role: 'system', content: AI_SYSTEM_PROMPT },
+          { role: 'user', content: prompt }
+        ]
+      }
+
+      let answerText = ''
+      let model: string | undefined
+      let usage: AiUsageInfo | undefined
+
+      const stream = ai.text.chatStream(payload)
+
+      for await (const chunk of stream) {
+        if (chunk.delta) {
+          answerText += chunk.delta
+        }
+        if (chunk.usage) usage = chunk.usage
+
+        push(createAnswerItem(requestId, prompt, answerText, model, usage))
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      push(createErrorItem(requestId, prompt, message))
+    }
   }
 
   return {
     onFeatureTriggered(_id, data) {
       WindowManager.getInstance().expand({ forceMax: true })
-      console.log('force to set max')
 
       const prompt = normalizePrompt(data)
 
@@ -174,38 +247,30 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
         return
       }
 
+      // 显示 action item，等待用户按回车确认
+      push(createActionItem(prompt))
+    },
+
+    async onItemAction(item) {
+      const meta = item.meta as any
+      const intelligence = meta?.intelligence
+
+      // 只处理 action 状态的 item
+      if (!intelligence || intelligence.status !== 'action') {
+        return { shouldActivate: false }
+      }
+
+      const prompt = intelligence.prompt
+      if (!prompt) {
+        return { shouldActivate: false }
+      }
+
+      // 用户确认发送，开始 AI 请求
       const requestId = crypto.randomUUID()
       push(createPendingItem(requestId, prompt))
+      void dispatchPrompt(requestId, prompt)
 
-      void (async () => {
-        try {
-          ensureAiConfigLoaded()
-          const payload: AiChatPayload = {
-            messages: [
-              { role: 'system', content: AI_SYSTEM_PROMPT },
-              { role: 'user', content: prompt }
-            ]
-          }
-
-          let answerText = ''
-          let model: string | undefined
-          let usage: AiUsageInfo | undefined
-
-          const stream = ai.text.chatStream(payload)
-
-          for await (const chunk of stream) {
-            if (chunk.delta) {
-              answerText += chunk.delta
-            }
-            if (chunk.usage) usage = chunk.usage
-
-            push(createAnswerItem(requestId, prompt, answerText, model, usage))
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          push(createErrorItem(requestId, prompt, message))
-        }
-      })()
+      return { shouldActivate: true }
     }
   }
 }

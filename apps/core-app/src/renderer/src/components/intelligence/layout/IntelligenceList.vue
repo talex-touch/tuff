@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import TuffListTemplate from '~/components/tuff/template/TuffListTemplate.vue'
 import IntelligenceItem from './IntelligenceItem.vue'
 
-interface AiProviderConfig {
+interface IntelligenceProviderConfig {
   id: string
   type: string
   name: string
@@ -23,7 +23,7 @@ interface AiProviderConfig {
 }
 
 const props = defineProps<{
-  providers: AiProviderConfig[]
+  providers: IntelligenceProviderConfig[]
   selectedId?: string | null
   searchQuery?: string
 }>()
@@ -93,7 +93,7 @@ const listGroups = computed(() => [
     items: filteredEnabledProviders.value,
     collapsible: false,
     badgeVariant: 'success' as const,
-    itemKey: (provider: AiProviderConfig) => provider.id,
+    itemKey: (provider: IntelligenceProviderConfig) => provider.id,
   },
   {
     id: 'disabled',
@@ -104,7 +104,7 @@ const listGroups = computed(() => [
     collapsible: true,
     collapsed: false,
     badgeVariant: 'info' as const,
-    itemKey: (provider: AiProviderConfig) => provider.id,
+    itemKey: (provider: IntelligenceProviderConfig) => provider.id,
   },
 ])
 

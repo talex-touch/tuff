@@ -7,7 +7,7 @@ import type {
 import { useI18n } from 'vue-i18n'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 
-enum AiProviderType {
+enum IntelligenceProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
   DEEPSEEK = 'deepseek',
@@ -16,7 +16,7 @@ enum AiProviderType {
   CUSTOM = 'custom',
 }
 
-interface AiProviderConfig {
+interface IntelligenceProviderConfig {
   id: string
   type: string
   name: string
@@ -35,7 +35,7 @@ interface AiProviderConfig {
 }
 
 const props = defineProps<{
-  provider: AiProviderConfig
+  provider: IntelligenceProviderConfig
   isSelected: boolean
 }>()
 
@@ -56,7 +56,7 @@ const hasConfigError = computed(() => {
     return false
 
   // Check for missing API key (except for local models)
-  if (props.provider.type !== AiProviderType.LOCAL && !props.provider.apiKey) {
+  if (props.provider.type !== IntelligenceProviderType.LOCAL && !props.provider.apiKey) {
     return true
   }
 
@@ -88,12 +88,12 @@ const statusDot = computed<TuffItemStatusDot>(() => ({
 
 function getProviderIcon(type: string): ITuffIcon {
   const iconMap: Record<string, string> = {
-    [AiProviderType.OPENAI]: 'i-simple-icons-openai',
-    [AiProviderType.ANTHROPIC]: 'i-simple-icons-anthropic',
-    [AiProviderType.DEEPSEEK]: 'i-carbon-search-advanced',
-    [AiProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning',
-    [AiProviderType.LOCAL]: 'i-carbon-bare-metal-server',
-    [AiProviderType.CUSTOM]: 'i-carbon-settings',
+    [IntelligenceProviderType.OPENAI]: 'i-simple-icons-openai',
+    [IntelligenceProviderType.ANTHROPIC]: 'i-simple-icons-anthropic',
+    [IntelligenceProviderType.DEEPSEEK]: 'i-carbon-search-advanced',
+    [IntelligenceProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning',
+    [IntelligenceProviderType.LOCAL]: 'i-carbon-bare-metal-server',
+    [IntelligenceProviderType.CUSTOM]: 'i-carbon-settings',
   }
 
   const iconClass = iconMap[type] || 'i-carbon-ibm-watson-machine-learning'

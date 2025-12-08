@@ -742,7 +742,14 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
           </div>
         </Transition>
       </TouchScroll>
-      <CoreBoxFooter :display="!!res.length" :item="activeItem" class="CoreBoxFooter-Sticky" />
+      <CoreBoxFooter
+        :display="!!res.length"
+        :item="activeItem"
+        :active-activations="activeActivations"
+        :result-count="res.length"
+        :is-recommendation="!searchVal && !activeActivations?.length"
+        class="CoreBoxFooter-Sticky"
+      />
     </div>
     <TuffItemAddon :type="addon" :item="activeItem" />
     <PreviewHistoryPanel

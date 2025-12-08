@@ -1,7 +1,7 @@
 import type {
   AiInvokeResult,
-  AiVisionOcrPayload,
-  AiVisionOcrResult,
+  IntelligenceVisionOcrPayload,
+  IntelligenceVisionOcrResult,
 } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
@@ -474,7 +474,7 @@ class OcrService {
 
   private async normalizeSourceForAgent(
     source: AgentJobPayload['source'],
-  ): Promise<AiVisionOcrPayload['source']> {
+  ): Promise<IntelligenceVisionOcrPayload['source']> {
     if (source.type === 'data-url' && source.dataUrl) {
       return { type: 'data-url', dataUrl: source.dataUrl }
     }
@@ -625,7 +625,7 @@ class OcrService {
 
     const capabilityOptions = getCapabilityOptions('vision.ocr')
     const normalizedSource = await this.normalizeSourceForAgent(parsed.source)
-    const payload: AiVisionOcrPayload = {
+    const payload: IntelligenceVisionOcrPayload = {
       source: normalizedSource,
       language: parsed.options?.language,
       prompt: this.buildAgentPrompt(parsed),
@@ -639,7 +639,7 @@ class OcrService {
     }
 
     try {
-      const invocation = await ai.invoke<AiVisionOcrResult>('vision.ocr', payload, {
+      const invocation = await ai.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload, {
         modelPreference: capabilityOptions.modelPreference,
         allowedProviderIds: capabilityOptions.allowedProviderIds,
       })
@@ -748,7 +748,7 @@ class OcrService {
 
   private async persistAgentSuccess(
     job: typeof ocrJobs.$inferSelect,
-    invocation: AiInvokeResult<AiVisionOcrResult>,
+    invocation: AiInvokeResult<IntelligenceVisionOcrResult>,
   ): Promise<void> {
     if (!this.db)
       return
