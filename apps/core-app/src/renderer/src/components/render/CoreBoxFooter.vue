@@ -74,14 +74,24 @@ const primaryVisible = computed(() => {
   return footerHintsConfig.value?.primary?.visible !== false
 })
 
-/** Meta+K 辅助操作是否显示（默认隐藏） */
+/** Meta+K 辅助操作是否显示（默认显示，用于操作面板） */
 const secondaryVisible = computed(() => {
-  return footerHintsConfig.value?.secondary?.visible === true
+  // 如果 item 显式配置了，使用配置
+  if (footerHintsConfig.value?.secondary?.visible !== undefined) {
+    return footerHintsConfig.value.secondary.visible
+  }
+  // 默认显示（用于固定功能）
+  return true
 })
 
 /** Meta+K 辅助操作文案 */
 const secondaryLabel = computed(() => {
-  return footerHintsConfig.value?.secondary?.label || 'Meta+K'
+  // 如果 item 有自定义配置，使用配置
+  if (footerHintsConfig.value?.secondary?.label) {
+    return footerHintsConfig.value.secondary.label
+  }
+  // 默认显示"操作"
+  return t('coreBox.hints.actions', '操作')
 })
 
 /**
@@ -120,9 +130,13 @@ const keyHints = computed(() => {
     hints.push({ key: '↵', label: primaryActionLabel.value, visible: true })
   }
 
-  // 辅助操作（Meta+K）- 默认隐藏
+  // 辅助操作（Meta+K）- 操作面板
   if (secondaryVisible.value) {
-    hints.push({ key: aiHotkey, label: secondaryLabel.value, visible: true })
+    hints.push({ 
+      key: aiHotkey, 
+      label: secondaryLabel.value, 
+      visible: true
+    })
   }
 
   // 快速选择（Meta+1-0）

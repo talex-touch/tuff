@@ -92,6 +92,13 @@
       "when": 1763818804199,
       "tag": "0012_app_update_records",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1765203015802,
+      "tag": "0013_nebulous_magneto",
+      "breakpoints": true
     }
   ]
 }

@@ -376,6 +376,69 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>): DbUtils {
       }
       return db.delete(schema.pluginData).where(eq(schema.pluginData.pluginId, pluginId))
     },
+
+    // Pinned Items
+    async pinItem(sourceId: string, itemId: string, sourceType: string) {
+      const maxOrderResult = await db
+        .select({ maxOrder: sql<number>`MAX(${schema.pinnedItems.order})` })
+        .from(schema.pinnedItems)
+        .get()
+      const nextOrder = (maxOrderResult?.maxOrder ?? -1) + 1
+
+      return db
+        .insert(schema.pinnedItems)
+        .values({
+          sourceId,
+          itemId,
+          sourceType,
+          pinnedAt: new Date(),
+          order: nextOrder,
+        })
+        .onConflictDoNothing()
+    },
+
+    async unpinItem(sourceId: string, itemId: string) {
+      return db
+        .delete(schema.pinnedItems)
+        .where(
+          and(
+            eq(schema.pinnedItems.sourceId, sourceId),
+            eq(schema.pinnedItems.itemId, itemId),
+          ),
+        )
+    },
+
+    async isPinned(sourceId: string, itemId: string) {
+      const result = await db
+        .select()
+        .from(schema.pinnedItems)
+        .where(
+          and(
+            eq(schema.pinnedItems.sourceId, sourceId),
+            eq(schema.pinnedItems.itemId, itemId),
+          ),
+        )
+        .get()
+      return !!result
+    },
+
+    async getAllPinnedItems() {
+      return db
+        .select()
+        .from(schema.pinnedItems)
+        .orderBy(schema.pinnedItems.order)
+    },
+
+    async togglePin(sourceId: string, itemId: string, sourceType: string) {
+      const isPinned = await this.isPinned(sourceId, itemId)
+      if (isPinned) {
+        await this.unpinItem(sourceId, itemId)
+        return false
+      } else {
+        await this.pinItem(sourceId, itemId, sourceType)
+        return true
+      }
+    },
   }
 }
 
@@ -456,6 +519,11 @@ export interface DbUtils {
   getPluginData: (pluginId: string, key: string) => Promise<any>
   setPluginData: (pluginId: string, key: string, value: any) => Promise<any>
   deletePluginData: (pluginId: string, key?: string) => Promise<any>
+  pinItem: (sourceId: string, itemId: string, sourceType: string) => Promise<any>
+  unpinItem: (sourceId: string, itemId: string) => Promise<any>
+  isPinned: (sourceId: string, itemId: string) => Promise<boolean>
+  getAllPinnedItems: () => Promise<(typeof schema.pinnedItems.$inferSelect)[]>
+  togglePin: (sourceId: string, itemId: string, sourceType: string) => Promise<boolean>
 }
 
 export function createDbUtils(db: LibSQLDatabase<typeof schema>): DbUtils {

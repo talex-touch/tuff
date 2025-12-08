@@ -175,6 +175,8 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
   constructor(pluginName: string, pluginPath: string, devConfig: IPluginDev) {
     super(pluginName, pluginPath)
     this.devConfig = devConfig
+    // Set dev config immediately so it's available even if remote fetch fails
+    this.touchPlugin.dev = devConfig
   }
 
   async load(): Promise<TouchPlugin> {

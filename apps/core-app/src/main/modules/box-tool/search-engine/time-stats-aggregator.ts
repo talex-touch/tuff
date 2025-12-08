@@ -1,6 +1,43 @@
 import { desc, eq } from 'drizzle-orm'
 import type { DbUtils } from '../../../db/utils'
 import * as schema from '../../../db/schema'
+import { sleep } from '@talex-touch/utils'
+
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 100
+
+function isSqliteBusyError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, rawCode, message } = error as {
+    code?: string
+    rawCode?: number
+    message?: string
+  }
+  if (code === 'SQLITE_BUSY' || rawCode === 5) return true
+  return typeof message === 'string' && message.includes('SQLITE_BUSY')
+}
+
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  retries = MAX_RETRIES,
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await operation()
+    }
+    catch (error) {
+      lastError = error
+      if (isSqliteBusyError(error) && attempt < retries) {
+        console.warn(`[TimeStatsAggregator] SQLITE_BUSY, retrying attempt ${attempt + 1}/${retries}`)
+        await sleep(RETRY_DELAY_MS * (attempt + 1))
+        continue
+      }
+      throw error
+    }
+  }
+  throw lastError
+}
 
 /**
  * 时间维度使用统计汇总器
@@ -63,19 +100,35 @@ export class TimeStatsAggregator {
       stats.timeSlotDistribution[timeSlot]++
     }
 
-    // 3. 批量写入数据库
+    // 3. 批量写入数据库（使用事务和重试）
     let updatedCount = 0
-    for (const stats of statsMap.values()) {
-      await this.dbUtils.upsertItemTimeStats({
-        sourceId: stats.sourceId,
-        itemId: stats.itemId,
-        hourDistribution: JSON.stringify(stats.hourDistribution),
-        dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
-        timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
-        lastUpdated: new Date(),
+    
+    await withRetry(async () => {
+      await db.transaction(async (tx) => {
+        for (const stats of statsMap.values()) {
+          await tx
+            .insert(schema.itemTimeStats)
+            .values({
+              sourceId: stats.sourceId,
+              itemId: stats.itemId,
+              hourDistribution: JSON.stringify(stats.hourDistribution),
+              dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
+              timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
+              lastUpdated: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
+              set: {
+                hourDistribution: JSON.stringify(stats.hourDistribution),
+                dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
+                timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
+                lastUpdated: new Date(),
+              },
+            })
+          updatedCount++
+        }
       })
-      updatedCount++
-    }
+    })
 
     const duration = performance.now() - startTime
     console.log(

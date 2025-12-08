@@ -33,6 +33,22 @@ export class RecommendationEngine {
       }
     }
 
+    // Get pinned items first
+    const pinnedItems = await this.getPinnedItems()
+    const pinnedTuffItems = await this.itemRebuilder.rebuildItems(
+      pinnedItems.map((item) => ({
+        ...item,
+        source: 'pinned' as const,
+        score: Number.MAX_SAFE_INTEGER
+      }))
+    )
+    // Mark pinned items
+    for (const item of pinnedTuffItems) {
+      if (!item.meta) item.meta = {}
+      item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
+      item.meta.recommendation = { source: 'pinned' }
+    }
+
     const candidates = await this.getCandidates(context, options)
 
     if (candidates.length === 0) {
@@ -52,21 +68,30 @@ export class RecommendationEngine {
 
     if (items.length === 0 && diversified.length > 0) {
       const fallbackItems = await this.getFallbackRecommendations(limit)
+      // Prepend pinned items to fallback
+      const finalItems = [...pinnedTuffItems, ...fallbackItems].slice(0, limit)
       return {
-        items: fallbackItems,
+        items: finalItems,
         context,
         duration: performance.now() - startTime,
         fromCache: false
       }
     }
 
-    await this.cacheRecommendations(context, items)
+    // Filter out pinned items from regular results to avoid duplicates
+    const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
+    const filteredItems = items.filter((item) => !pinnedKeys.has(`${item.source.id}:${item.id}`))
+
+    // Combine pinned items (first) with regular recommendations
+    const combinedItems = [...pinnedTuffItems, ...filteredItems].slice(0, limit)
+
+    await this.cacheRecommendations(context, combinedItems)
     const duration = performance.now() - startTime
 
-    const containerLayout = this.buildContainerLayout(options, items)
+    const containerLayout = this.buildContainerLayout(options, combinedItems)
 
     return {
-      items,
+      items: combinedItems,
       context,
       duration,
       fromCache: false,
@@ -99,6 +124,50 @@ export class RecommendationEngine {
           }
         }
       ]
+    }
+  }
+
+  /**
+   * Get all pinned items from database
+   */
+  private async getPinnedItems(): Promise<ItemCandidate[]> {
+    try {
+      const pinnedRecords = await this.dbUtils.getAllPinnedItems()
+      if (pinnedRecords.length === 0) return []
+
+      const keys = pinnedRecords.map((p) => ({ sourceId: p.sourceId, itemId: p.itemId }))
+      const usageStatsMap = new Map(
+        (await this.dbUtils.getUsageStatsBatch(keys)).map((stat) => [
+          `${stat.sourceId}:${stat.itemId}`,
+          stat
+        ])
+      )
+
+      return pinnedRecords.map((record) => {
+        const key = `${record.sourceId}:${record.itemId}`
+        const usageStats = usageStatsMap.get(key)
+        return {
+          sourceId: record.sourceId,
+          itemId: record.itemId,
+          sourceType: record.sourceType,
+          usageStats: usageStats || {
+            sourceId: record.sourceId,
+            itemId: record.itemId,
+            sourceType: record.sourceType,
+            searchCount: 0,
+            executeCount: 0,
+            cancelCount: 0,
+            lastSearched: null,
+            lastExecuted: null,
+            lastCancelled: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        }
+      })
+    } catch (error) {
+      console.error('[RecommendationEngine] Failed to get pinned items:', error)
+      return []
     }
   }
 

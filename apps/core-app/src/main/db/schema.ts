@@ -462,7 +462,32 @@ export const recommendationCache = sqliteTable(
 )
 
 // =============================================================================
-// 9. 应用更新记录 (App Update Records)
+// 9. 固定项目 (Pinned Items)
+// =============================================================================
+
+/**
+ * 固定项目表
+ * 存储用户手动固定的项目，用于在推荐列表中优先展示
+ */
+export const pinnedItems = sqliteTable(
+  'pinned_items',
+  {
+    sourceId: text('source_id').notNull(),
+    itemId: text('item_id').notNull(),
+    sourceType: text('source_type').notNull(),
+    pinnedAt: integer('pinned_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    order: integer('order').notNull().default(0),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
+    orderIdx: index('idx_pinned_items_order').on(table.order),
+  }),
+)
+
+// =============================================================================
+// 10. 应用更新记录 (App Update Records)
 // =============================================================================
 
 export const appUpdateRecords = sqliteTable(

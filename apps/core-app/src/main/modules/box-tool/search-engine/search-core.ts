@@ -910,6 +910,38 @@ export class SearchEngineCore
         return { success: false, error: String(error) }
       }
     })
+
+    // Pin/Unpin item
+    channel.regChannel(ChannelType.MAIN, 'core-box:toggle-pin', async ({ data }) => {
+      if (!instance.dbUtils) {
+        return { success: false, error: 'Database not initialized' }
+      }
+
+      try {
+        const { sourceId, itemId, sourceType } = data
+        const isPinned = await instance.dbUtils.togglePin(sourceId, itemId, sourceType)
+        return { success: true, isPinned }
+      } catch (error) {
+        searchEngineLog.error('Failed to toggle pin', { error })
+        return { success: false, error: String(error) }
+      }
+    })
+
+    // Check if item is pinned
+    channel.regChannel(ChannelType.MAIN, 'core-box:is-pinned', async ({ data }) => {
+      if (!instance.dbUtils) {
+        return { success: false, isPinned: false }
+      }
+
+      try {
+        const { sourceId, itemId } = data
+        const isPinned = await instance.dbUtils.isPinned(sourceId, itemId)
+        return { success: true, isPinned }
+      } catch (error) {
+        searchEngineLog.error('Failed to check pin status', { error })
+        return { success: false, isPinned: false }
+      }
+    })
   }
 
   destroy(): void {
