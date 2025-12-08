@@ -38,6 +38,11 @@ const COREBOX_DETACH_EVENT = 'corebox:detach-item'
 const COREBOX_FLOW_EVENT = 'corebox:flow-item'
 
 /**
+ * Event name for triggering pin toggle (Command+K)
+ */
+const COREBOX_PIN_EVENT = 'corebox:toggle-pin'
+
+/**
  * Determines if a keyboard event should be forwarded to the plugin UI view.
  *
  * Common shortcuts that should be forwarded:
@@ -277,6 +282,27 @@ export function useKeyboard(
             detail: { item: currentItem, query: searchVal.value } 
           }))
         }
+        event.preventDefault()
+        return
+      }
+    }
+    else if (event.key === 'k' || event.key === 'K') {
+      /**
+       * Command/Ctrl+K: Toggle pin for current item
+       * 
+       * Pins or unpins the currently focused item. Pinned items appear
+       * at the top of the recommendation list when CoreBox opens.
+       */
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        const currentItem = res.value[boxOptions.focus]
+        if (!currentItem) {
+          event.preventDefault()
+          return
+        }
+
+        window.dispatchEvent(new CustomEvent(COREBOX_PIN_EVENT, { 
+          detail: { item: currentItem } 
+        }))
         event.preventDefault()
         return
       }

@@ -4,8 +4,45 @@ import { lt, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
 import { TimeStatsAggregator } from './time-stats-aggregator'
+import { sleep } from '@talex-touch/utils'
 
 const log = createLogger('UsageSummaryService')
+
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 100
+
+function isSqliteBusyError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, rawCode, message } = error as {
+    code?: string
+    rawCode?: number
+    message?: string
+  }
+  if (code === 'SQLITE_BUSY' || rawCode === 5) return true
+  return typeof message === 'string' && message.includes('SQLITE_BUSY')
+}
+
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  retries = MAX_RETRIES,
+): Promise<T> {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await operation()
+    }
+    catch (error) {
+      lastError = error
+      if (isSqliteBusyError(error) && attempt < retries) {
+        log.warn(`SQLITE_BUSY, retrying attempt ${attempt + 1}/${retries}`)
+        await sleep(RETRY_DELAY_MS * (attempt + 1))
+        continue
+      }
+      throw error
+    }
+  }
+  throw lastError
+}
 
 export interface SummaryConfig {
   retentionDays: number
@@ -179,14 +216,44 @@ export class UsageSummaryService {
 
       const updates = Array.from(aggregated.values())
 
-      for (const stat of updates) {
-        await this.dbUtils.incrementUsageStats(
-          stat.sourceId,
-          stat.itemId,
-          stat.sourceType,
-          'execute',
-        )
-      }
+      // Use transaction with retry for batch upsert
+      await withRetry(async () => {
+        await db.transaction(async (tx) => {
+          for (const stat of updates) {
+            const now = new Date()
+            const updateFields: Record<string, unknown> = { updatedAt: now }
+
+            if (stat.searchCount > 0) {
+              updateFields.searchCount = sql`${schema.itemUsageStats.searchCount} + ${stat.searchCount}`
+              updateFields.lastSearched = stat.lastSearched ?? now
+            }
+            if (stat.executeCount > 0) {
+              updateFields.executeCount = sql`${schema.itemUsageStats.executeCount} + ${stat.executeCount}`
+              updateFields.lastExecuted = stat.lastExecuted ?? now
+            }
+
+            await tx
+              .insert(schema.itemUsageStats)
+              .values({
+                sourceId: stat.sourceId,
+                itemId: stat.itemId,
+                sourceType: stat.sourceType,
+                searchCount: stat.searchCount,
+                executeCount: stat.executeCount,
+                cancelCount: 0,
+                lastSearched: stat.lastSearched,
+                lastExecuted: stat.lastExecuted,
+                lastCancelled: null,
+                createdAt: now,
+                updatedAt: now,
+              })
+              .onConflictDoUpdate({
+                target: [schema.itemUsageStats.sourceId, schema.itemUsageStats.itemId],
+                set: updateFields,
+              })
+          }
+        })
+      })
 
       timer.end('debug')
       return logs.length

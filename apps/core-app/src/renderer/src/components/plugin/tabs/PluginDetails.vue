@@ -3,6 +3,7 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { ElMessage } from 'element-plus'
 import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -200,21 +201,18 @@ watch(() => plugin.value.name, () => {
       active-icon="i-carbon-code"
       memory-name="plugin-details-dev"
     >
-      <template #header-extra>
-        <button
-          v-if="hasChanges"
-          class="px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer"
-          :class="isSaving
-            ? 'bg-[var(--el-fill-color)] text-[var(--el-text-color-secondary)]'
-            : 'bg-[var(--el-color-primary)] text-white hover:bg-[var(--el-color-primary-light-3)]'"
-          :disabled="isSaving"
-          @click.stop="saveDevSettings"
-        >
-          <i v-if="isSaving" class="i-ri-loader-4-line animate-spin mr-1" />
-          <i v-else class="i-ri-save-line mr-1" />
-          {{ t('plugin.details.save') }}
-        </button>
-      </template>
+      <TuffBlockSlot
+        :title="t('plugin.details.save')"
+        :description="t('plugin.details.saveDesc')"
+        default-icon="i-ri-save-line"
+        active-icon="i-ri-save-line"
+      >
+        <FlatButton :disabled="!hasChanges || isSaving" @click="saveDevSettings">
+          <i v-if="isSaving" class="i-ri-loader-4-line animate-spin" />
+          <i v-else class="i-ri-save-line" />
+          <span>{{ isSaving ? t('plugin.details.saving') : t('plugin.details.save') }}</span>
+        </FlatButton>
+      </TuffBlockSlot>
 
       <TuffBlockSwitch
         v-model="devSettings.autoStart"

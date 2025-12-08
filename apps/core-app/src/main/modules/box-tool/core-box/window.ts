@@ -294,7 +294,7 @@ export class WindowManager {
 
     this.updatePosition(window)
     window.window.showInactive()
-    
+
     // Notify renderer about shortcut trigger for autopaste control
     if (triggeredByShortcut) {
       this.touchApp.channel
@@ -303,7 +303,7 @@ export class WindowManager {
           coreBoxWindowLog.error('Failed to send shortcut trigger event', { error })
         })
     }
-    
+
     setTimeout(() => {
       window.window.focus()
     }, 100)
@@ -581,7 +581,7 @@ export class WindowManager {
       const channelScript = `
 (function() {
   const uniqueKey = "${plugin._uniqueChannelKey}";
-  
+
   // Inject initial data synchronously so it's available immediately
   window['$tuffInitialData'] = ${JSON.stringify({ theme: initialThemeData })};
   const { ipcRenderer } = require('electron')
@@ -852,7 +852,8 @@ export class WindowManager {
       contextIsolation: false,
       sandbox: false,
       webviewTag: true,
-      scrollBounce: true
+      scrollBounce: true,
+      transparent: true
     }
 
     const view = (this.uiView = new WebContentsView({ webPreferences }))

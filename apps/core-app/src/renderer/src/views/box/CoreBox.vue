@@ -15,6 +15,7 @@ import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
+import ActionPanel from '~/components/render/ActionPanel.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '../../modules/box/adapter'
@@ -454,6 +455,94 @@ const unregFlowShortcut = touchChannel.regChannel('flow:trigger-transfer', () =>
   }
 })
 
+// Action Panel state
+const actionPanelVisible = ref(false)
+const actionPanelItem = ref<TuffItem | null>(null)
+const actionPanelIsPinned = ref(false)
+
+/**
+ * Handle Command+K: Open action panel for current item
+ */
+function handleOpenActionPanel(event: Event): void {
+  const detail = (event as CustomEvent<{ item: TuffItem }>).detail
+  if (!detail?.item) return
+
+  actionPanelItem.value = detail.item
+  actionPanelIsPinned.value = !!(detail.item.meta as any)?.pinned?.isPinned
+  actionPanelVisible.value = true
+}
+
+/**
+ * Handle action panel close
+ */
+function handleActionPanelClose(): void {
+  actionPanelVisible.value = false
+  actionPanelItem.value = null
+}
+
+/**
+ * Handle action from action panel
+ */
+async function handleActionPanelAction(actionId: string): Promise<void> {
+  const item = actionPanelItem.value
+  if (!item) return
+
+  handleActionPanelClose()
+
+  switch (actionId) {
+    case 'toggle-pin':
+      await togglePinItem(item)
+      break
+    case 'copy-title':
+      if (item.render?.basic?.title) {
+        await touchChannel.send('clipboard:write-text', { text: item.render.basic.title })
+        toast.success(t('corebox.copied', '已复制'))
+      }
+      break
+    case 'reveal-in-finder':
+      if (item.meta?.app?.path || item.meta?.file?.path) {
+        const path = item.meta?.app?.path || item.meta?.file?.path
+        await touchChannel.send('shell:show-item-in-folder', { path })
+      }
+      break
+    case 'detach':
+      handleDetachItem(new CustomEvent('corebox:detach-item', {
+        detail: { item, query: searchVal.value }
+      }))
+      break
+  }
+}
+
+/**
+ * Toggle pin for an item
+ */
+async function togglePinItem(item: TuffItem): Promise<void> {
+  console.log('[CoreBox] Toggling pin for item:', item.id)
+
+  try {
+    const response = await touchChannel.send('core-box:toggle-pin', {
+      sourceId: item.source.id,
+      itemId: item.id,
+      sourceType: item.source.type
+    })
+
+    if (response?.success) {
+      const isPinned = response.isPinned
+      toast.success(isPinned ? t('corebox.pinned', '已固定') : t('corebox.unpinned', '已取消固定'))
+      
+      // Update item meta locally for immediate UI feedback
+      if (item.meta) {
+        item.meta.pinned = isPinned ? { isPinned: true, pinnedAt: Date.now() } : undefined
+      }
+    } else {
+      throw new Error(response?.error || 'Failed to toggle pin')
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to toggle pin:', error)
+    toast.error(t('corebox.pinFailed', '固定失败'))
+  }
+}
+
 /**
  * Handle Command+D: Detach item to DivisionBox
  * Opens the current item in an independent DivisionBox window
@@ -623,6 +712,7 @@ onMounted(() => {
   window.addEventListener('corebox:focus-input', handleFocusInputEvent)
   window.addEventListener('corebox:detach-item', handleDetachItem)
   window.addEventListener('corebox:flow-item', handleFlowItem)
+  window.addEventListener('corebox:toggle-pin', handleOpenActionPanel)
   window.addEventListener('mousedown', handleGlobalMouseDown)
   window.addEventListener('keydown', handleHistoryKeydown, true)
 })
@@ -639,6 +729,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('corebox:focus-input', handleFocusInputEvent)
   window.removeEventListener('corebox:detach-item', handleDetachItem)
   window.removeEventListener('corebox:flow-item', handleFlowItem)
+  window.removeEventListener('corebox:toggle-pin', handleOpenActionPanel)
   window.removeEventListener('mousedown', handleGlobalMouseDown)
   window.removeEventListener('keydown', handleHistoryKeydown, true)
 })
@@ -769,6 +860,15 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
     :payload="flowSelectorPayload"
     @close="handleFlowSelectorClose"
     @select="handleFlowTargetSelect"
+  />
+
+  <!-- Action Panel (⌘K) -->
+  <ActionPanel
+    :visible="actionPanelVisible"
+    :item="actionPanelItem"
+    :is-pinned="actionPanelIsPinned"
+    @close="handleActionPanelClose"
+    @action="handleActionPanelAction"
   />
 </template>
 
