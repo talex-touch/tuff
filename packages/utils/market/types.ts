@@ -1,6 +1,6 @@
 import type { StorageList } from '../common/storage/constants'
 
-export type MarketProviderType = 'repository' | 'nexusStore' | 'npmPackage'
+export type MarketProviderType = 'repository' | 'nexusStore' | 'npmPackage' | 'tpexApi'
 
 export type MarketProviderTrustLevel = 'official' | 'verified' | 'unverified'
 

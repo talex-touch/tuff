@@ -1,7 +1,10 @@
+import { getRequestURL } from 'h3'
 import { listPlugins } from '../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
-  // Market 页面显示所有插件，依据可见规则过滤版本
+  const requestUrl = getRequestURL(event)
+  const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`
+
   const plugins = await listPlugins(event, {
     includeVersions: true,
     forMarket: true,
@@ -18,6 +21,7 @@ export default defineEventHandler(async (event) => {
       return {
         ...plugin,
         latestVersion: latest,
+        readmeUrl: plugin.readmeMarkdown ? `${baseUrl}/api/market/plugins/${plugin.slug}/readme` : null,
       }
     })
     .filter((value): value is NonNullable<typeof value> => Boolean(value))

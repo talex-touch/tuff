@@ -277,12 +277,15 @@ export default {
           packageHelp: '上传 .tpex 压缩包即可自动填充 manifest 信息，实际提交后才会保存。',
           readme: 'README 内容',
           readmeHelp: '支持 Markdown，内容会展示在市场详情页面。',
+          uploadPackage: '上传包',
+          manualInput: '手动填写',
+          autoPublishHint: '创建插件后将自动发布版本 {version}。',
         },
         versionForm: {
           version: '版本号',
           channel: '发布通道',
           changelog: '更新日志',
-          package: '插件包（.tpex tar，≤5 MB）',
+          package: '插件包（.tpex tar，≤30 MB）',
           submit: '提交审核',
         },
         channels: {

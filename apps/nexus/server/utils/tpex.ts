@@ -1,9 +1,7 @@
+import type { TpexMetadata } from '@talex-touch/utils/plugin/providers'
 import type { Buffer } from 'node:buffer'
 
-export interface TpexMetadata {
-  readmeMarkdown?: string | null
-  manifest?: Record<string, unknown> | null
-}
+export type { TpexMetadata }
 
 const TAR_BLOCK_SIZE = 512
 

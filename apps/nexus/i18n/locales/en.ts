@@ -279,12 +279,15 @@ export default {
           packageHelp: 'Upload a .tpex archive to prefill manifest details. This file is only stored after you submit.',
           readme: 'README',
           readmeHelp: 'Supports Markdown. Displayed on the marketplace plugin detail page.',
+          uploadPackage: 'Upload Package',
+          manualInput: 'Manual Input',
+          autoPublishHint: 'Version {version} will be automatically published after plugin creation.',
         },
         versionForm: {
           version: 'Version',
           channel: 'Release Channel',
           changelog: 'Changelog',
-          package: 'Plugin Package (.tpex tar, ≤5 MB)',
+          package: 'Plugin Package (.tpex tar, ≤30 MB)',
           submit: 'Submit for Review',
         },
         channels: {

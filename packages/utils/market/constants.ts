@@ -22,6 +22,20 @@ function defineProvider(
 
 export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
   defineProvider({
+    id: 'tuff-nexus',
+    name: 'Tuff Nexus',
+    type: 'tpexApi',
+    url: 'https://tuff.tagzxia.com',
+    description: 'Tuff 官方插件市场，提供经过审核的插件。',
+    enabled: true,
+    priority: 110,
+    trustLevel: 'official',
+    readOnly: true,
+    config: {
+      apiUrl: 'https://tuff.tagzxia.com/api/market/plugins',
+    },
+  }),
+  defineProvider({
     id: 'talex-official',
     name: 'Talex Official',
     type: 'nexusStore',

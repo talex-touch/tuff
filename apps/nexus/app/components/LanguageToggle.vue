@@ -15,7 +15,7 @@ const tooltipLabel = computed(() =>
   t(nextLocale.value === 'zh' ? 'ui.languageToggle.zhLabel' : 'ui.languageToggle.enLabel'),
 )
 async function toggleLocale(targetTag: string) {
-  const targetLocale = nextLocale.value
+  const targetLocale = targetTag.startsWith('zh') ? 'zh' : 'en'
   const rawPath = route.path || '/'
   const normalizedPath = rawPath.replace(/^\/(en|zh)(?=\/|$)/i, '') || '/'
 
