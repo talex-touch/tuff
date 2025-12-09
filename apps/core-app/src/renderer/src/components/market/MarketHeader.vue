@@ -8,6 +8,12 @@ import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'
 defineProps<{
   loading: boolean
   sourcesCount: number
+  providerStats?: {
+    total: number
+    success: number
+    failed: number
+    totalPlugins: number
+  }
 }>()
 
 const emit = defineEmits<{
@@ -49,9 +55,21 @@ const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
           <FlatButton mini @click="emit('open-source-editor')">
             <div class="i-carbon-list" />
           </FlatButton>
-          <span text-xs op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
-            {{ sourcesCount }} {{ t('market.sources') }}
-          </span>
+          <div flex items-center gap-2 text-xs>
+            <span op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
+              {{ sourcesCount }} {{ t('market.sources') }}
+            </span>
+            <span v-if="providerStats" class="provider-status">
+              <span class="status-success">
+                <i class="i-ri-check-line" />
+                {{ providerStats.success }}
+              </span>
+              <span v-if="providerStats.failed > 0" class="status-failed">
+                <i class="i-ri-close-line" />
+                {{ providerStats.failed }}
+              </span>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -74,6 +92,32 @@ const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
 .search-input :deep(.FlatInput-Container) {
   width: 280px;
   margin: 0;
+}
+
+.provider-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.status-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--el-color-success);
+  font-weight: 500;
+}
+
+.status-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--el-color-danger);
+  font-weight: 500;
 }
 
 .animate-spin {

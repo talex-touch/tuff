@@ -1,0 +1,156 @@
+# Bridge Hooks API
+
+## 概述
+
+Bridge Hooks 提供了插件渲染进程与 CoreBox 主进程之间的事件订阅机制。系统自动处理事件缓存与回放，确保插件不会错过初始化时的早期事件。
+
+## 核心 Hooks
+
+### onCoreBoxInputChange
+
+监听 CoreBox 输入框变化。
+
+```ts
+import { onCoreBoxInputChange } from '@talex-touch/utils/plugin/sdk/hooks'
+
+onCoreBoxInputChange(({ data, meta }) => {
+  console.log('输入内容:', data.query.text)
+  console.log('剪贴板输入:', data.query.inputs)
+  console.log('是否来自缓存:', meta.fromCache)
+  console.log('事件时间戳:', meta.timestamp)
+})
+```
+
+**Payload 类型**:
+```ts
+interface BridgeEventPayload<CoreBoxInputData> {
+  data: {
+    query: {
+      text: string
+      inputs: Array<{ type: string; content: string }>
+    }
+  }
+  meta: {
+    timestamp: number
+    fromCache: boolean
+  }
+}
+```
+
+### onCoreBoxClipboardChange
+
+监听剪贴板内容变化。
+
+```ts
+import { onCoreBoxClipboardChange } from '@talex-touch/utils/plugin/sdk/hooks'
+
+onCoreBoxClipboardChange(({ data, meta }) => {
+  console.log('剪贴板项:', data.item)
+  console.log('是否来自缓存:', meta.fromCache)
+})
+```
+
+### onCoreBoxKeyEvent
+
+监听从 CoreBox 转发的键盘事件。
+
+```ts
+import { onCoreBoxKeyEvent } from '@talex-touch/utils/plugin/sdk/hooks'
+
+onCoreBoxKeyEvent(({ data, meta }) => {
+  if (data.key === 'Enter' && !data.metaKey) {
+    // 处理回车
+  }
+})
+```
+
+**Payload 类型**:
+```ts
+interface BridgeEventPayload<CoreBoxKeyEventData> {
+  data: {
+    key: string
+    code: string
+    metaKey: boolean
+    ctrlKey: boolean
+    altKey: boolean
+    shiftKey: boolean
+    repeat: boolean
+  }
+  meta: {
+    timestamp: number
+    fromCache: boolean
+  }
+}
+```
+
+## 自动事件缓存
+
+### 问题背景
+
+当插件 UIView 挂载到 CoreBox 时，主进程会在 `dom-ready` 后立即发送初始 query。但此时插件 JS 可能还未执行到 hook 注册代码，导致事件丢失。
+
+### 解决方案
+
+SDK 自动实现事件缓存机制：
+
+1. **自动缓存** - 模块加载时即开始监听并缓存事件
+2. **自动回放** - 调用 `onCoreBoxInputChange` 等 hook 时，自动回放缓存的事件
+3. **自动清理** - 回放后自动清除缓存
+
+```
+时序图:
+────────────────────────────────────────────────────────►
+
+主进程:
+    [dom-ready] ──► 发送 input-change 事件
+
+插件渲染进程:
+    [模块加载] ──► 自动缓存事件
+                            │
+    [JS 执行] ──► onCoreBoxInputChange(handler)
+                            │
+                            └─► 回放缓存的事件给 handler
+```
+
+### 控制 API
+
+#### clearBridgeEventCache
+
+手动清除事件缓存（通常不需要调用）。
+
+```ts
+import { clearBridgeEventCache } from '@talex-touch/utils/plugin/sdk/hooks'
+
+// 清除特定事件类型的缓存
+clearBridgeEventCache('core-box:input-change')
+
+// 清除所有缓存
+clearBridgeEventCache()
+```
+
+**使用场景**:
+- 插件需要忽略旧的初始查询
+- 插件重新初始化时清理状态
+
+## 最佳实践
+
+1. **尽早注册 hook** - 虽然有缓存机制，但仍建议在插件入口尽早注册
+2. **处理空值** - 始终检查 `query.text` 和 `query.inputs` 是否存在
+3. **避免重复注册** - hook 不会自动去重，多次调用会触发多次回调
+
+```ts
+// ✅ 推荐：在顶层注册
+onCoreBoxInputChange(({ data, meta }) => {
+  const { query } = data
+  if (!query.text && (!query.inputs || query.inputs.length === 0)) {
+    return // 空查询
+  }
+  // 可以根据 meta.fromCache 判断是否为初始化时的缓存事件
+  handleSearch(query)
+})
+
+// ❌ 避免：在异步回调中注册
+setTimeout(() => {
+  onCoreBoxInputChange(handler) // 可能错过缓存回放窗口
+}, 1000)
+```

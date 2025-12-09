@@ -359,6 +359,48 @@ export class DownloadCenterModule extends BaseModule {
     return this.getAllTasks().filter(task => task.status === status)
   }
 
+  // 更新任务优先级
+  async updateTaskPriority(taskId: string, priority: number): Promise<void> {
+    const task = this.taskQueue.getTask(taskId)
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`)
+    }
+
+    // Update in queue (handles heap reordering)
+    this.taskQueue.updatePriority(taskId, priority)
+    task.updatedAt = new Date()
+
+    await this.getDb()
+      .update(downloadTasks)
+      .set({
+        priority,
+        updatedAt: Date.now(),
+      })
+      .where(eq(downloadTasks.id, taskId))
+
+    this.broadcastTaskUpdated(task)
+  }
+
+  // 移除任务（不删除文件）
+  async removeTask(taskId: string): Promise<void> {
+    const task = this.taskQueue.remove(taskId)
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`)
+    }
+
+    // 清理切片文件和临时目录
+    await this.chunkManager.cleanupChunks(task.chunks)
+    await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+
+    // 从数据库删除
+    await this.deleteTaskFromDb(taskId)
+
+    // 清除缓存
+    this.clearTaskCache(taskId)
+
+    this.broadcastTaskUpdated({ ...task, status: DownloadStatus.CANCELLED })
+  }
+
   // 获取下载历史
   async getTaskHistory(limit?: number): Promise<any[]> {
     return await this.getDb()
@@ -886,6 +928,34 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const tasks = this.getTasksByStatus(status)
           return { success: true, tasks }
+        }
+        catch (error: any) {
+          return { success: false, error: error.message }
+        }
+      },
+    )
+
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:update-priority',
+      async ({ data }: any) => {
+        try {
+          await this.updateTaskPriority(data.taskId, data.priority)
+          return { success: true }
+        }
+        catch (error: any) {
+          return { success: false, error: error.message }
+        }
+      },
+    )
+
+    $app.channel.regChannel(
+      ChannelType.MAIN,
+      'download:remove-task',
+      async ({ data: taskId }: any) => {
+        try {
+          await this.removeTask(taskId)
+          return { success: true }
         }
         catch (error: any) {
           return { success: false, error: error.message }

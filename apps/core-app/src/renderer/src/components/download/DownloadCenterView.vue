@@ -40,6 +40,7 @@ const {
   removeTask: removeTaskHook,
   clearHistory: clearHistoryHook,
   updateConfig: updateConfigHook,
+  updateTaskPriority: updateTaskPriorityHook,
 } = useDownloadCenter()
 
 const settingsVisible = ref(false)
@@ -279,9 +280,9 @@ async function clearHistory() {
   }
 }
 
-async function handlePriorityChange(_taskId: string, _newPriority: number) {
+async function handlePriorityChange(taskId: string, newPriority: number) {
   try {
-    // TODO: Implement priority change API
+    await updateTaskPriorityHook(taskId, newPriority)
     toast.success(t('download.priority_updated'))
   }
   catch (err: unknown) {

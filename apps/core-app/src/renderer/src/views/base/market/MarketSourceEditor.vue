@@ -49,6 +49,14 @@ function deleteSource(ind: number) {
   list.splice(ind, 1)
 }
 
+function toggleSource(ind: number) {
+  const target = sources[ind]
+  if (!target)
+    return
+
+  target.enabled = !target.enabled
+}
+
 function resetNewSource() {
   newSource.name = ''
   newSource.url = ''
@@ -100,6 +108,7 @@ function handleAdd() {
           <div
             v-for="(item, ind) in sources"
             :key="ind"
+            :class="{ 'is-disabled': item.enabled === false }"
             class="MarketSourceEditor-Content-Item Item"
           >
             <div class="handle" />
@@ -108,18 +117,26 @@ function handleAdd() {
             <div class="Item-Container">
               <div class="Item-Title">
                 {{ item.name }}<span class="adapter">({{ item.type }})</span>
+                <span v-if="item.readOnly" class="readonly-badge">readonly</span>
               </div>
               <div class="Item-Desc">
                 {{ item.url }}
               </div>
             </div>
-            <div
-              :class="{ disabled: sources.length === 1 || item.readOnly }"
-              class="transition-cubic action"
-              @click="deleteSource(ind)"
-            >
-              <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
-              <div v-else class="i-carbon-carbon-for-salesforce" />
+            <div class="Item-Actions">
+              <el-switch
+                :model-value="item.enabled !== false"
+                size="small"
+                @change="toggleSource(ind)"
+              />
+              <div
+                :class="{ disabled: sources.length === 1 || item.readOnly }"
+                class="transition-cubic action-btn"
+                @click="deleteSource(ind)"
+              >
+                <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
+                <div v-else class="i-carbon-carbon-for-salesforce" />
+              </div>
             </div>
           </div>
 
@@ -164,7 +181,7 @@ function handleAdd() {
   &.ghost {
     .Item-Title,
     .Item-Desc,
-    .action {
+    .Item-Actions {
       opacity: 0 !important;
       transition: none !important;
     }
@@ -179,40 +196,50 @@ function handleAdd() {
     background-color: var(--el-fill-color-dark);
   }
 
-  &:hover .action {
-    &:hover {
-      opacity: 0.95;
-
-      width: 100%;
-      font-size: 2rem;
-      border-radius: 8px 8px 8px 8px;
+  &.is-disabled {
+    opacity: 0.5;
+    
+    .Item-Container {
+      text-decoration: line-through;
     }
-    opacity: 1;
-    transform: translate(0, 0);
   }
 
-  .action {
+  .Item-Actions {
     position: absolute;
     display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    top: 50%;
+    right: 0.75rem;
+    transform: translateY(-50%);
+  }
 
-    & > div {
-      font-weight: 600;
-    }
+  .action-btn {
+    display: flex;
     align-items: center;
     justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: var(--el-color-danger-light-7);
+    color: var(--el-color-danger);
 
-    top: 0;
-    right: 0;
+    &:hover {
+      background-color: var(--el-color-danger);
+      color: white;
+    }
 
-    width: 10%;
-    height: 100%;
-
-    opacity: 0;
-    border-radius: 0 8px 8px 0;
-    transform: translateX(100%);
-    background-color: var(--el-color-danger);
     &.disabled {
-      background-color: var(--el-color-success);
+      background-color: var(--el-color-success-light-7);
+      color: var(--el-color-success);
+      cursor: not-allowed;
+      
+      &:hover {
+        background-color: var(--el-color-success-light-7);
+        color: var(--el-color-success);
+      }
     }
   }
 
@@ -242,6 +269,7 @@ function handleAdd() {
   .Item-Container {
     position: relative;
     text-align: left;
+    width: calc(100% - 120px);
 
     left: 6%;
     .Item-Title {
@@ -249,14 +277,27 @@ function handleAdd() {
         margin-left: 2px;
         opacity: 0.58;
       }
+      .readonly-badge {
+        margin-left: 6px;
+        padding: 2px 6px;
+        font-size: 10px;
+        font-weight: 500;
+        border-radius: 4px;
+        background-color: var(--el-color-info-light-7);
+        color: var(--el-color-info);
+      }
       font-weight: 600;
     }
     .Item-Desc {
       opacity: 0.75;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
   &.New .Item-Container {
     left: 0%;
+    width: 100%;
     .Item-Title {
       .adapter {
         margin-left: 2px;
