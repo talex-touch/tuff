@@ -16,11 +16,16 @@ pnpm add @talex-touch/utils
 | [Box SDK](./box.en.md) | `useBox()` | Control CoreBox window |
 | [Clipboard SDK](./clipboard.en.md) | `useClipboard()` | Clipboard read/write and history |
 | [Storage SDK](./storage.en.md) | `usePluginStorage()` | Plugin data persistence |
-| [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication |
+| [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
+| [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication (legacy) |
 | [Feature SDK](./feature.en.md) | `useFeature()` | Search result management |
 | [DivisionBox SDK](./division-box.en.md) | `useDivisionBox()` | Independent window management |
 | [Flow SDK](./flow-transfer.en.md) | `createFlowSDK()` | Inter-plugin data transfer |
 | [Intelligence SDK](./intelligence.en.md) | `useIntelligence()` | AI capabilities |
+
+::alert{type="info"}
+**New:** [TuffTransport](./transport.en.md) is the recommended IPC API for new plugins. It provides type-safe events, automatic batching, and streaming support. See also [TuffTransport Internals](./transport-internals.en.md) for technical details.
+::
 
 ---
 

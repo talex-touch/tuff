@@ -1,8 +1,24 @@
-# TuffTransport 通信系统设计文档
+# TuffTransport Communication System Design Document
 
-## 1. 概述
+## Implementation Status
 
-TuffTransport 是新一代进程间通信系统，替代现有的 Channel 系统，提供类型安全、高性能、可扩展的通信能力。
+✅ **Implemented:**
+- Event Builder (`defineEvent()`) with full TSDoc
+- Type definitions for all domains (App, CoreBox, Storage, Plugin, BoxItem)
+- Predefined events (`AppEvents`, `CoreBoxEvents`, `StorageEvents`, `PluginEvents`, `BoxItemEvents`)
+- Error types and factory functions
+- Plugin security context types (compatible with existing key mechanism)
+- Legacy API marked with `@deprecated` TSDoc
+
+⏳ **Pending Implementation:**
+- BatchManager (SDK implementation)
+- StreamServer/StreamClient (MessagePort)
+- `useTuffTransport()` / `getTuffTransportMain()` (SDK functions)
+- Compatibility layer
+
+## 1. Overview
+
+TuffTransport is the next-generation IPC communication system, replacing the existing Channel system with type-safe, high-performance, and extensible capabilities.
 
 ### 1.1 核心特性
 
@@ -1562,38 +1578,43 @@ const data = await transport.send(MyPluginEvents.data.fetch, { id: '123' })
 
 ---
 
-## 8. 目录结构
+## 8. Directory Structure
 
 ```
 packages/utils/transport/
-├── index.ts                    # 公共导出
+├── index.ts                    # Public exports with TSDoc
+├── types.ts                    # Core SDK types (ITuffTransport, etc.)
+├── errors.ts                   # Error types and factories
 ├── event/
-│   ├── types.ts               # 事件类型定义
-│   └── builder.ts             # Event Builder
+│   ├── index.ts               # Event module exports
+│   ├── types.ts               # TuffEvent type definitions
+│   └── builder.ts             # Event Builder (defineEvent)
 ├── events/
-│   ├── index.ts               # 预定义事件导出
-│   ├── app.ts                 # App 事件
-│   ├── core-box.ts            # CoreBox 事件
-│   ├── storage.ts             # Storage 事件
-│   ├── plugin.ts              # Plugin 事件
-│   └── box-item.ts            # BoxItem 事件
+│   ├── index.ts               # All predefined events + TuffEvents
+│   └── types/
+│       ├── index.ts           # Type re-exports
+│       ├── app.ts             # App domain types (OSInfo, PackageInfo, etc.)
+│       ├── core-box.ts        # CoreBox types (TuffQuery, TuffSearchResult, etc.)
+│       ├── storage.ts         # Storage types (StorageGetRequest, etc.)
+│       ├── plugin.ts          # Plugin types (PluginInfo, FeatureTriggerRequest, etc.)
+│       └── box-item.ts        # BoxItem types (BoxItem, BoxItemUpsertRequest, etc.)
 ├── batch/
-│   ├── types.ts               # 批量类型
-│   └── manager.ts             # BatchManager
+│   ├── types.ts               # Batch types
+│   └── manager.ts             # BatchManager implementation
 ├── stream/
-│   ├── types.ts               # 流类型
-│   ├── server.ts              # StreamServer (Main)
+│   ├── types.ts               # Stream types
+│   ├── server.ts              # StreamServer (Main Process)
 │   └── client.ts              # StreamClient (Renderer)
 ├── sdk/
 │   ├── use-transport.ts       # useTuffTransport (Renderer)
-│   ├── main-transport.ts      # TuffTransportMain (Main)
+│   ├── main-transport.ts      # TuffTransportMain (Main Process)
 │   └── plugin-transport.ts    # usePluginTransport (Plugin)
 ├── compat/
-│   ├── channel-compat.ts      # 旧 Channel 兼容
-│   └── alias-map.ts           # 事件别名映射
+│   ├── channel-compat.ts      # Legacy Channel API compatibility
+│   └── alias-map.ts           # Event name alias mapping
 └── utils/
-    ├── serializer.ts          # 序列化工具
-    └── error.ts               # 错误类型
+    ├── serializer.ts          # Serialization utilities
+    └── logger.ts              # Debug logging
 ```
 
 ---
