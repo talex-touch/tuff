@@ -1,4 +1,4 @@
-name = "tuff-nexus"
+name = "tuff"
 compatibility_date = "2024-08-14"
 pages_build_output_dir = "apps/nexus/dist"
 
