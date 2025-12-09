@@ -1,6 +1,6 @@
 name = "tuff-nexus"
 compatibility_date = "2024-08-14"
-pages_build_output_dir = "dist"
+pages_build_output_dir = "apps/nexus/dist"
 
 [[d1_databases]]
 binding = "DB"
