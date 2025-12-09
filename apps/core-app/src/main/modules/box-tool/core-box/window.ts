@@ -192,28 +192,35 @@ export class WindowManager {
       }
     }, 200)
 
-    window.window.webContents.addListener('dom-ready', () => {
-      coreBoxWindowLog.debug(
-        `BoxWindow ${window.window.webContents.id} dom loaded, registering ...`
-      )
-
+    window.window.webContents.on('dom-ready', () => {
       this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
         id: window.window.webContents.id,
-        show: false
+        show: window.window.isVisible()
       })
     })
 
-    // Intercept Ctrl+R / Cmd+R: disable in production, reload uiView in dev
+    let wasVisibleBeforeReload = false
+
     window.window.webContents.on('before-input-event', (event, input) => {
       if (input.type === 'keyDown' && input.key === 'r' && (input.control || input.meta)) {
         if (app.isPackaged) {
           event.preventDefault()
           return
         }
-        // Dev mode: reload uiView along with CoreBox
+        wasVisibleBeforeReload = window.window.isVisible()
         if (this.uiView && !this.uiView.webContents.isDestroyed()) {
           this.uiView.webContents.reload()
         }
+      }
+    })
+
+    window.window.webContents.on('did-finish-load', () => {
+      if (wasVisibleBeforeReload) {
+        this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+          id: window.window.webContents.id,
+          show: true
+        })
+        wasVisibleBeforeReload = false
       }
     })
 
@@ -309,31 +316,34 @@ export class WindowManager {
     this.updatePosition(window)
     window.window.showInactive()
 
-    // Notify renderer about shortcut trigger for autopaste control
+    this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+      id: window.window.webContents.id,
+      show: true
+    })
+
     if (triggeredByShortcut) {
       this.touchApp.channel
         .sendTo(window.window, ChannelType.MAIN, 'core-box:shortcut-triggered', {})
-        .catch((error) => {
-          coreBoxWindowLog.error('Failed to send shortcut trigger event', { error })
-        })
+        .catch(() => {})
     }
 
-    setTimeout(() => {
-      window.window.focus()
-    }, 100)
+    setTimeout(() => window.window.focus(), 100)
   }
 
   public hide(): void {
     const window = this.current
     if (!window) return
 
+    this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+      id: window.window.webContents.id,
+      show: false
+    })
+
     if (process.platform !== 'darwin') {
       window.window.setPosition(-1000000, -1000000)
     }
 
-    setTimeout(() => {
-      window.window.hide()
-    }, 100)
+    setTimeout(() => window.window.hide(), 100)
   }
 
   public expand(

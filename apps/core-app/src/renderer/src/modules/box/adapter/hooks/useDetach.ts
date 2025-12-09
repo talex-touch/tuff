@@ -48,13 +48,17 @@ export function useDetach(options: UseDetachOptions) {
 
   async function detachItem(item: TuffItem): Promise<void> {
     try {
+      const interaction = item.meta?.interaction
+      const showInput = interaction?.type !== 'widget'
+      
       const config = {
         url: buildUrl(item, searchVal.value),
         title: item.render?.basic?.title || 'Detached Item',
         icon: resolveIcon(item),
         size: 'medium' as const,
         keepAlive: true,
-        pluginId: item.source?.id
+        pluginId: item.source?.id,
+        ui: { showInput, initialInput: showInput ? searchVal.value : '' }
       }
       const response = await touchChannel.send('division-box:open', config)
       if (response?.success) {

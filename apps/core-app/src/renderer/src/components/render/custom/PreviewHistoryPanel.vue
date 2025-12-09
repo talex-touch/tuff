@@ -98,19 +98,22 @@ watch(
 
 <style scoped lang="scss">
 .PreviewHistoryPanel {
-  position: relative;
-  width: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 320px;
   height: 100%;
   overflow: hidden;
-  transition: width 0.25s ease;
   pointer-events: none;
-  border-left: 1px solid transparent;
+  opacity: 0;
+  transform: translateX(100%);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 10;
 
   &.is-visible {
-    width: 320px;
     pointer-events: auto;
-    border-color: var(--el-border-color);
-    padding-left: 12px;
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
