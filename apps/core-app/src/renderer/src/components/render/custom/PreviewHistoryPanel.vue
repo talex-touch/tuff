@@ -98,28 +98,23 @@ watch(
 
 <style scoped lang="scss">
 .PreviewHistoryPanel {
-  position: absolute;
-  right: 0;
+  z-index: 1;
+  position: relative;
   top: 0;
-  width: 320px;
+  right: 0;
+  width: 0;
   height: 100%;
   overflow: hidden;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateX(100%);
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  z-index: 10;
+  border-left: 1px solid var(--el-border-color);
+  transition: width 0.3s ease, opacity 0.25s ease;
 
   &.is-visible {
-    pointer-events: auto;
-    opacity: 1;
-    transform: translateX(0);
+    width: 280px;
   }
 }
 
 .panel {
   height: 100%;
-  border-radius: 18px;
   border: 1px solid var(--el-border-color);
   background: var(--el-bg-color);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
@@ -190,7 +185,6 @@ header {
 
 .history-list li {
   padding: 12px 14px;
-  border-radius: 14px;
   border: 1px solid transparent;
   cursor: pointer;
   background: var(--el-fill-color-light);

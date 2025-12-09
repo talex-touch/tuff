@@ -129,7 +129,8 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {
     if (!payload?.primaryValue)
       return
-    await clipboardModule.saveCustomEntry({
+    console.log('[PreviewProvider] Saving preview history:', { expression: query.text, value: payload.primaryValue })
+    const result = await clipboardModule.saveCustomEntry({
       content: payload.primaryValue,
       rawContent: query.text ?? '',
       category: 'preview',
@@ -139,5 +140,6 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
         payload,
       },
     })
+    console.log('[PreviewProvider] Save result:', result?.id)
   }
 }

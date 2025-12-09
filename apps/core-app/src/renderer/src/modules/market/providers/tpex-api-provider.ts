@@ -1,5 +1,6 @@
 import type { MarketPlugin, MarketProviderListOptions } from '@talex-touch/utils/market'
 import { BaseMarketProvider } from './base-provider'
+import { getAuthToken } from '../auth-token-service'
 
 interface TpexApiPlugin {
   id: string
@@ -112,5 +113,51 @@ export class TpexApiProvider extends BaseMarketProvider {
       trusted: this.isTrusted,
       official: entry.isOfficial || this.trustLevel === 'official',
     }
+  }
+
+  /**
+   * Fetch user's own plugins from dashboard API (requires authentication)
+   */
+  async listUserPlugins(): Promise<MarketPlugin[]> {
+    const baseUrl = this.resolveBaseUrl()
+    if (!baseUrl) {
+      return []
+    }
+
+    const token = await getAuthToken()
+    if (!token) {
+      console.warn('[TpexApiProvider] Not authenticated, cannot fetch user plugins')
+      return []
+    }
+
+    const apiUrl = `${baseUrl}/api/dashboard/plugins`
+
+    const response = await this.request<TpexApiResponse>({
+      url: apiUrl,
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.data?.plugins || !Array.isArray(response.data.plugins)) {
+      return []
+    }
+
+    return response.data.plugins.map((entry) => this.normalizeEntry(entry))
+  }
+
+  private resolveBaseUrl(): string | null {
+    if (typeof this.definition.url === 'string') {
+      return this.definition.url.replace(/\/$/, '')
+    }
+
+    if (typeof this.definition.config?.apiUrl === 'string') {
+      const url = new URL(this.definition.config.apiUrl)
+      return `${url.protocol}//${url.host}`
+    }
+
+    return null
   }
 }

@@ -322,19 +322,17 @@ export function useKeyboard(
       }
     }
     else if (event.key === 'k' || event.key === 'K') {
-      /**
-       * Command/Ctrl+K: Toggle pin for current item
-       * 
-       * Pins or unpins the currently focused item. Pinned items appear
-       * at the top of the recommendation list when CoreBox opens.
-       */
+      // Command/Ctrl+K: Toggle pin for current item
       if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        console.log('[useKeyboard] ⌘K detected, focus:', boxOptions.focus, 'item:', res.value[boxOptions.focus]?.render?.basic?.title)
         const currentItem = res.value[boxOptions.focus]
         if (!currentItem) {
+          console.log('[useKeyboard] ⌘K no current item')
           event.preventDefault()
           return
         }
 
+        console.log('[useKeyboard] ⌘K dispatching event for item:', currentItem.id)
         window.dispatchEvent(new CustomEvent(COREBOX_PIN_EVENT, { 
           detail: { item: currentItem } 
         }))

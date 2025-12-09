@@ -43,10 +43,24 @@ export function useClerkProvider() {
     }
   }
 
+  const getToken = async (): Promise<string | null> => {
+    if (!clerkInstance?.session) {
+      return null
+    }
+    try {
+      return await clerkInstance.session.getToken()
+    }
+    catch (error) {
+      console.error('Failed to get Clerk token:', error)
+      return null
+    }
+  }
+
   return {
     initializeClerk,
     getClerk,
     isClerkInitialized,
     cleanupClerk,
+    getToken,
   }
 }

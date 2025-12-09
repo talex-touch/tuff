@@ -51,7 +51,9 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
     loading.value = true
     try {
       const response = await touchChannel.send('clipboard:query', { category: 'preview', limit: 20 })
+      console.log('[usePreviewHistory] Query response:', response)
       items.value = response?.data ?? []
+      console.log('[usePreviewHistory] Loaded items:', items.value.length)
       ensureSelection()
     } catch (error) {
       console.error('[usePreviewHistory] Failed to load:', error)

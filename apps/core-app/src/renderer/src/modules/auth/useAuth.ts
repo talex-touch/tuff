@@ -9,13 +9,25 @@ import {
   useClerkProvider,
   useCurrentUser,
 } from '@talex-touch/utils/renderer'
-import { computed, onMounted, onUnmounted, reactive, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { appSetting } from '../channel/storage/index'
+import { touchChannel } from '../channel/channel-core'
 
 let eventListenerCleanup: (() => void) | null = null
+let authCallbackCleanup: (() => void) | null = null
 let isInitialized = false
 let activeConsumers = 0
+
+// Nexus URL for browser auth
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
+
+// Pending browser login state
+const pendingBrowserLogin = ref<{
+  resolve: (result: LoginResult) => void
+  reject: (error: Error) => void
+  timeoutId: NodeJS.Timeout
+} | null>(null)
 
 // 认证操作加载状态
 const authLoadingState = reactive({
@@ -436,6 +448,123 @@ async function logout(): Promise<void> {
 }
 
 /**
+ * Login via external browser (opens Nexus sign-in page)
+ * User completes auth in browser, then app receives callback via tuff:// protocol
+ */
+async function loginWithBrowser(): Promise<LoginResult> {
+  authLoadingState.isLoggingIn = true
+  authLoadingState.loginProgress = 0
+
+  return new Promise((resolve) => {
+    const timeoutMs = 5 * 60 * 1000 // 5 minutes timeout
+
+    const timeoutId = setTimeout(() => {
+      if (pendingBrowserLogin.value) {
+        pendingBrowserLogin.value = null
+        authLoadingState.isLoggingIn = false
+        authLoadingState.loginProgress = 0
+        const error = new Error('Browser login timeout')
+        toast.error(getErrorMessage(error, 'LOGIN_TIMEOUT'))
+        resolve({ success: false, error })
+      }
+    }, timeoutMs)
+
+    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId }
+
+    // Open browser to Nexus sign-in with app callback redirect
+    const signInUrl = `${NEXUS_URL}/sign-in?redirect_url=/auth/app-callback`
+    touchChannel.send('open-external', { url: signInUrl }).catch((err) => {
+      console.error('[useAuth] Failed to open browser:', err)
+      clearTimeout(timeoutId)
+      pendingBrowserLogin.value = null
+      authLoadingState.isLoggingIn = false
+      toast.error('无法打开浏览器')
+      resolve({ success: false, error: err })
+    })
+
+    toast.info('请在浏览器中完成登录')
+  })
+}
+
+/**
+ * Handle external auth callback from tuff:// protocol
+ */
+async function handleExternalAuthCallback(token: string): Promise<void> {
+  console.log('[useAuth] Handling external auth callback, token length:', token.length)
+
+  if (!pendingBrowserLogin.value) {
+    console.warn('[useAuth] Received auth callback but no pending login')
+    // Still try to use the token
+  }
+
+  try {
+    // Use the token to authenticate with Clerk
+    const { getClerk } = useClerkProvider()
+    const clerk = getClerk()
+
+    if (!clerk) {
+      throw new Error('Clerk not initialized')
+    }
+
+    // Set the session token - Clerk will validate and create session
+    // Note: This uses Clerk's signIn with ticket strategy
+    if (!clerk.client) {
+      throw new Error('Clerk client not available')
+    }
+    await clerk.client.signIn.create({
+      strategy: 'ticket',
+      ticket: token,
+    })
+
+    // Update auth state
+    updateAuthState(clerk)
+
+    authLoadingState.loginProgress = 100
+    toast.success('登录成功')
+
+    if (pendingBrowserLogin.value) {
+      clearTimeout(pendingBrowserLogin.value.timeoutId)
+      pendingBrowserLogin.value.resolve({
+        success: true,
+        user: currentUser.value,
+      })
+      pendingBrowserLogin.value = null
+    }
+  }
+  catch (error) {
+    console.error('[useAuth] External auth callback failed:', error)
+    const errorMessage = getErrorMessage(error, 'AUTH_ERROR')
+    toast.error(errorMessage)
+
+    if (pendingBrowserLogin.value) {
+      clearTimeout(pendingBrowserLogin.value.timeoutId)
+      pendingBrowserLogin.value.resolve({ success: false, error })
+      pendingBrowserLogin.value = null
+    }
+  }
+  finally {
+    authLoadingState.isLoggingIn = false
+  }
+}
+
+function setupAuthCallbackListener(): void {
+  if (authCallbackCleanup) return
+
+  authCallbackCleanup = touchChannel.regChannel('auth:external-callback', ({ data }) => {
+    if (data?.token) {
+      handleExternalAuthCallback(data.token)
+    }
+  })
+}
+
+function cleanupAuthCallbackListener(): void {
+  if (authCallbackCleanup) {
+    authCallbackCleanup()
+    authCallbackCleanup = null
+  }
+}
+
+/**
  * Authentication hook
  *
  * Note: Skip auth status check on first launch (before onboarding is complete) to avoid login prompts during onboarding
@@ -443,6 +572,9 @@ async function logout(): Promise<void> {
 export function useAuth() {
   onMounted(() => {
     activeConsumers += 1
+
+    // Setup auth callback listener for browser login
+    setupAuthCallbackListener()
 
     if (!appSetting?.beginner?.init) {
       console.log('[useAuth] Skipping auth status check on first launch')
@@ -465,6 +597,7 @@ export function useAuth() {
 
   onUnmounted(() => {
     cleanup()
+    cleanupAuthCallbackListener()
   })
 
   return {
@@ -484,6 +617,7 @@ export function useAuth() {
     signUp,
     signOut,
     login,
+    loginWithBrowser,
     logout,
 
     // 工具方法
