@@ -18,8 +18,9 @@
 
 ## Onboarding Path
 1. Follow **[Quick Start](./start.en.md)** for install and account basics.
-2. Explore modules in **[Plugin Ecosystem](./features/plugin-ecosystem.en.md)**.
-3. Jump into relevant **scenes** (developer, student, creator) for ready-made templates.
+2. Discover **[Quick Preview](./features/preview.en.md)** for CoreBox's built-in instant calculations and conversions.
+3. Explore modules in **[Plugin Ecosystem](./features/plugin-ecosystem.en.md)**.
+4. Jump into relevant **scenes** (developer, student, creator) for ready-made templates.
 
 ## Deep Dive
 - Efficiency tips live in `/tips`.
