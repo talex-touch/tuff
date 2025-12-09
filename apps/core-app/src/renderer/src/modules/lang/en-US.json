@@ -291,6 +291,13 @@
     "empty": {
       "title": "No plugins found",
       "subtitle": "Try adjusting your search or browse different categories"
+    },
+    "updates": {
+      "available": "{count} plugin update(s) available",
+      "viewAll": "View updates",
+      "checking": "Checking for updates...",
+      "noUpdates": "All plugins are up to date",
+      "checkFailed": "Failed to check for updates"
     }
   },
   "plugin": {

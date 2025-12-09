@@ -309,11 +309,45 @@ export function useDownloadCenter() {
    */
   const removeTask = async (taskId: string): Promise<void> => {
     try {
-      // For now, just remove from local list
-      // TODO: Add backend API to remove task from database
+      const response = await touchSDK.rawChannel.send('download:remove-task', taskId)
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to remove task')
+      }
+
+      // Also remove from local list
       const index = downloadTasks.value.findIndex(t => t.id === taskId)
       if (index !== -1) {
         downloadTasks.value.splice(index, 1)
+      }
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      throw err
+    }
+  }
+
+  /**
+   * Update task priority
+   * @param taskId - The task ID to update
+   * @param priority - New priority value
+   * @returns Promise that resolves when priority is updated
+   */
+  const updateTaskPriority = async (taskId: string, priority: number): Promise<void> => {
+    try {
+      const response = await touchSDK.rawChannel.send('download:update-priority', {
+        taskId,
+        priority,
+      })
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to update priority')
+      }
+
+      // Update local task
+      const task = downloadTasks.value.find(t => t.id === taskId)
+      if (task) {
+        task.priority = priority
       }
     }
     catch (err) {
@@ -608,6 +642,7 @@ export function useDownloadCenter() {
     getAllTasks,
     getTaskStatus,
     updateConfig,
+    updateTaskPriority,
     openFile,
     showInFolder,
     deleteFile,

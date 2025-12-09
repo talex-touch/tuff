@@ -3,11 +3,23 @@ import { ensureRendererChannel } from '../channel'
 
 export type BridgeEvent = BridgeEventForCoreBox
 
-/**
- * Defines the shape of a bridge hook function.
- * @template T The type of data the hook will receive.
- */
-export type BridgeHook<T = any> = (data: T) => void
+export interface BridgeEventMeta {
+  timestamp: number
+  fromCache: boolean
+}
+
+export interface BridgeEventPayload<T = any> {
+  data: T
+  meta: BridgeEventMeta
+}
+
+/** @template T The type of data the hook will receive. */
+export type BridgeHook<T = any> = (payload: BridgeEventPayload<T>) => void
+
+interface CachedEvent<T = any> {
+  data: T
+  timestamp: number
+}
 
 const __hooks: Record<BridgeEvent, Array<BridgeHook>> = {
   [BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE]: [],
@@ -15,42 +27,85 @@ const __hooks: Record<BridgeEvent, Array<BridgeHook>> = {
   [BridgeEventForCoreBox.CORE_BOX_KEY_EVENT]: [],
 }
 
-/**
- * Injects a hook for a given bridge event.
- * @param type The bridge event type.
- * @param hook The hook function to inject.
- * @returns The wrapped hook function.
- * @internal
- * @template T The type of data the hook will receive.
- */
+const __eventCache: Map<BridgeEvent, CachedEvent[]> = new Map()
+const __channelRegistered = new Set<BridgeEvent>()
+
+const CACHE_MAX_SIZE: Record<BridgeEvent, number> = {
+  [BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE]: 1,
+  [BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE]: 1,
+  [BridgeEventForCoreBox.CORE_BOX_KEY_EVENT]: 10,
+}
+
+function invokeHook<T>(hook: BridgeHook<T>, data: T, fromCache: boolean, timestamp: number): void {
+  try {
+    hook({ data, meta: { timestamp, fromCache } })
+  }
+  catch (e) {
+    console.error('[TouchSDK] Bridge hook error:', e)
+  }
+}
+
+function registerEarlyListener(type: BridgeEvent): void {
+  if (__channelRegistered.has(type)) return
+
+  try {
+    const channel = ensureRendererChannel()
+    channel.regChannel(type, ({ data }) => {
+      const timestamp = Date.now()
+      const hooks = __hooks[type]
+
+      if (hooks && hooks.length > 0) {
+        hooks.forEach(h => invokeHook(h, data, false, timestamp))
+      }
+      else {
+        if (!__eventCache.has(type)) __eventCache.set(type, [])
+        const cache = __eventCache.get(type)!
+        const maxSize = CACHE_MAX_SIZE[type] ?? 1
+        cache.push({ data, timestamp })
+        while (cache.length > maxSize) cache.shift()
+        console.debug(`[TouchSDK] ${type} cached, size: ${cache.length}`)
+      }
+    })
+    __channelRegistered.add(type)
+  }
+  catch {
+    // Channel not ready yet
+  }
+}
+
+/** Clears the event cache for a specific event type or all types. */
+export function clearBridgeEventCache(type?: BridgeEvent): void {
+  if (type) {
+    __eventCache.delete(type)
+  }
+  else {
+    __eventCache.clear()
+  }
+}
+
+// Auto-init on module load
+;(function initBridgeEventCache() {
+  setTimeout(() => {
+    Object.values(BridgeEventForCoreBox).forEach(e => registerEarlyListener(e as BridgeEvent))
+  }, 0)
+})()
+
+/** @internal Injects a hook for a given bridge event with cache replay. */
 export function injectBridgeEvent<T>(type: BridgeEvent, hook: BridgeHook<T>) {
   const hooks: Array<BridgeHook<T>> = __hooks[type] || (__hooks[type] = [])
 
-  // Only register the channel listener once per event type
-  if (hooks.length === 0) {
-    const channel = ensureRendererChannel('[TouchSDK] Bridge channel not available. Make sure hooks run in plugin renderer context.')
-    channel.regChannel(type, ({ data }) => {
-      console.debug(`[TouchSDK] ${type} event received: `, data)
-      // When the event is received, call all registered hooks for this type
-      const registeredHooks = __hooks[type]
-      if (registeredHooks) {
-        registeredHooks.forEach(h => h(data))
-      }
-    })
+  // Ensure channel listener is registered
+  registerEarlyListener(type)
+
+  // Replay cached events to this new hook
+  const cached = __eventCache.get(type)
+  if (cached && cached.length > 0) {
+    cached.forEach(({ data, timestamp }) => invokeHook(hook, data as T, true, timestamp))
+    __eventCache.delete(type)
   }
 
-  const wrappedHook = (data: T) => {
-    try {
-      hook(data)
-    }
-    catch (e) {
-      console.error(`[TouchSDK] ${type} hook error: `, e)
-    }
-  }
-
-  hooks.push(wrappedHook)
-
-  return wrappedHook
+  hooks.push(hook)
+  return hook
 }
 
 /**
@@ -61,22 +116,11 @@ export function injectBridgeEvent<T>(type: BridgeEvent, hook: BridgeHook<T>) {
  */
 export const createBridgeHook = <T>(type: BridgeEvent) => (hook: BridgeHook<T>) => injectBridgeEvent<T>(type, hook)
 
-/**
- * Hook for when the core box input changes.
- * The hook receives the new input value as a string.
- * @param data The input change data (string).
- */
-export const onCoreBoxInputChange = createBridgeHook<{ query: { inputs: Array<any>, text: string } }>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
+export interface CoreBoxInputData {
+  query: { inputs: Array<any>, text: string }
+}
 
-export const onCoreBoxClipboardChange = createBridgeHook<{ item: any }>(BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE)
-
-/**
- * Hook for when a keyboard event is forwarded from CoreBox.
- * This is triggered when the plugin's UI view is attached and the user
- * presses certain keys (Enter, Arrow keys, Meta+key combinations).
- * @param data The forwarded keyboard event data.
- */
-export const onCoreBoxKeyEvent = createBridgeHook<{
+export interface CoreBoxKeyEventData {
   key: string
   code: string
   metaKey: boolean
@@ -84,4 +128,17 @@ export const onCoreBoxKeyEvent = createBridgeHook<{
   altKey: boolean
   shiftKey: boolean
   repeat: boolean
-}>(BridgeEventForCoreBox.CORE_BOX_KEY_EVENT)
+}
+
+export interface CoreBoxClipboardData {
+  item: any
+}
+
+/** Hook for CoreBox input changes. Payload includes `data` and `meta` (timestamp, fromCache). */
+export const onCoreBoxInputChange = createBridgeHook<CoreBoxInputData>(BridgeEventForCoreBox.CORE_BOX_INPUT_CHANGE)
+
+/** Hook for CoreBox clipboard changes. Payload includes `data` and `meta` (timestamp, fromCache). */
+export const onCoreBoxClipboardChange = createBridgeHook<CoreBoxClipboardData>(BridgeEventForCoreBox.CORE_BOX_CLIPBOARD_CHANGE)
+
+/** Hook for keyboard events forwarded from CoreBox. Payload includes `data` and `meta` (timestamp, fromCache). */
+export const onCoreBoxKeyEvent = createBridgeHook<CoreBoxKeyEventData>(BridgeEventForCoreBox.CORE_BOX_KEY_EVENT)

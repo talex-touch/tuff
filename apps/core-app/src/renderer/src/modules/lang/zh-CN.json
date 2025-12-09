@@ -291,6 +291,13 @@
     "empty": {
       "title": "未找到插件",
       "subtitle": "请尝试调整搜索或浏览不同类别"
+    },
+    "updates": {
+      "available": "{count} 个插件可更新",
+      "viewAll": "查看更新",
+      "checking": "正在检查更新...",
+      "noUpdates": "所有插件均为最新",
+      "checkFailed": "检查更新失败"
     }
   },
   "plugin": {

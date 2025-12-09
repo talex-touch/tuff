@@ -48,6 +48,14 @@ const routes: any = [
     }
   },
   {
+    path: '/downloads',
+    name: 'Downloads',
+    component: () => import('../components/download/DownloadCenterView.vue'),
+    meta: {
+      index: 7
+    }
+  },
+  {
     path: '/details',
     name: '详细信息',
     component: () => import('../views/base/LingPan.vue'),
