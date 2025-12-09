@@ -1,0 +1,467 @@
+# 插件 index.js 上下文 API
+
+插件的 `index.js` 是在 Node.js 沙箱环境中运行的后端脚本。系统会向沙箱注入一组全局对象，供插件使用。
+
+## 全局上下文对象
+
+插件 index.js 可以通过 `globalThis` 访问以下 API：
+
+```javascript
+const {
+  // 核心 API
+  logger,           // 日志记录器
+  http,             // HTTP 请求 (axios)
+  clipboard,        // 剪贴板操作
+  storage,          // 插件专属存储
+  
+  // 功能 API
+  feature,          // Feature SDK (推送搜索结果)
+  search,           // 搜索管理器 (已废弃，用 feature 替代)
+  box,              // CoreBox 控制
+  boxItems,         // BoxItem 管理
+  
+  // 插件管理
+  plugin,           // 当前插件信息
+  plugins,          // 其他插件 API
+  features,         // 动态 Feature 管理
+  
+  // 通信
+  channel,          // IPC 通道桥接
+  $event,           // Feature 事件监听
+  
+  // UI
+  dialog,           // 系统对话框
+  divisionBox,      // DivisionBox SDK
+  
+  // 工具
+  TuffItemBuilder,  // 搜索结果构建器
+  URLSearchParams,  // URL 参数处理
+  openUrl,          // 打开外部链接
+} = globalThis
+```
+
+---
+
+## logger
+
+插件日志记录器，日志会保存到插件的日志目录。
+
+```javascript
+logger.info('信息日志', { extra: 'data' })
+logger.warn('警告日志')
+logger.error('错误日志', error)
+logger.debug('调试日志')
+```
+
+---
+
+## http
+
+HTTP 请求库 (基于 axios)：
+
+```javascript
+// GET 请求
+const response = await http.get('https://api.example.com/data', {
+  headers: { 'Authorization': 'Bearer token' },
+  signal // AbortSignal 用于取消请求
+})
+
+// POST 请求
+const result = await http.post('https://api.example.com/submit', {
+  data: 'payload'
+}, { signal })
+```
+
+---
+
+## clipboard
+
+剪贴板操作：
+
+```javascript
+// 写入文本
+clipboard.writeText('复制的内容')
+
+// 读取文本
+const text = clipboard.readText()
+
+// 读取图片
+const image = clipboard.readImage()
+
+// 写入图片
+clipboard.writeImage(nativeImage)
+```
+
+---
+
+## storage
+
+插件专属存储（每个插件 10MB 限制）：
+
+```javascript
+// 读取配置文件
+const config = storage.getFile('providers_config')
+
+// 保存配置文件
+storage.setFile('providers_config', { key: 'value' })
+
+// 删除配置文件
+storage.deleteFile('old_config')
+
+// 列出所有文件
+const files = storage.listFiles()  // ['file1', 'file2']
+
+// 监听配置变化
+const unsubscribe = storage.onDidChange('providers_config', (newConfig) => {
+  console.log('配置已更新:', newConfig)
+})
+
+// 取消监听
+unsubscribe()
+```
+
+---
+
+## feature
+
+Feature SDK，用于管理搜索结果：
+
+```javascript
+// 推送搜索结果
+feature.pushItems([
+  new TuffItemBuilder('item-1')
+    .setTitle('搜索结果标题')
+    .setSubtitle('副标题')
+    .setIcon({ type: 'file', value: 'assets/icon.svg' })
+    .build()
+])
+
+// 清空当前插件的搜索结果
+feature.clearItems()
+
+// 获取当前插件的搜索结果
+const items = feature.getItems()
+```
+
+---
+
+## box
+
+CoreBox 控制 SDK：
+
+```javascript
+// 隐藏 CoreBox
+box.hide()
+
+// 显示 CoreBox
+box.show()
+
+// 设置输入框内容
+box.setInput('新的输入内容')
+
+// 获取输入框内容
+const input = box.getInput()
+```
+
+---
+
+## boxItems
+
+BoxItem 管理 SDK（新版 API）：
+
+```javascript
+// 推送单个 item
+boxItems.push(item)
+
+// 批量推送 items
+boxItems.pushItems([item1, item2])
+
+// 更新指定 item
+boxItems.update('item-id', { title: '新标题' })
+
+// 删除指定 item
+boxItems.remove('item-id')
+
+// 清空该插件的所有 items
+boxItems.clear()
+
+// 获取该插件的所有 items
+const items = boxItems.getItems()
+```
+
+---
+
+## plugin
+
+当前插件信息 API：
+
+```javascript
+// 获取插件完整信息
+const info = plugin.getInfo()
+// { name, version, desc, readme, dev, status, features, issues, ... }
+
+// 获取插件路径
+const path = plugin.getPath()
+
+// 获取数据目录
+const dataPath = plugin.getDataPath()
+
+// 获取配置目录
+const configPath = plugin.getConfigPath()
+
+// 获取日志目录
+const logsPath = plugin.getLogsPath()
+
+// 获取临时目录
+const tempPath = plugin.getTempPath()
+
+// 获取当前状态
+const status = plugin.getStatus()
+
+// 获取开发配置
+const devInfo = plugin.getDevInfo()
+
+// 获取平台支持信息
+const platforms = plugin.getPlatforms()
+```
+
+---
+
+## plugins
+
+其他插件 API（只读访问）：
+
+```javascript
+// 获取所有插件列表
+const allPlugins = await plugins.list()
+
+// 获取指定插件信息
+const otherPlugin = await plugins.get('other-plugin-name')
+
+// 获取插件状态
+const status = await plugins.getStatus('other-plugin-name')
+```
+
+---
+
+## features
+
+动态 Feature 管理：
+
+```javascript
+// 动态添加 Feature
+features.addFeature({
+  id: 'dynamic-feature',
+  name: '动态功能',
+  desc: '运行时添加的功能',
+  icon: { type: 'file', value: 'assets/icon.svg' },
+  push: true,
+  commands: [{ type: 'over', value: ['动态'] }],
+  priority: 5
+})
+
+// 移除 Feature
+features.removeFeature('dynamic-feature')
+
+// 获取所有 Features
+const allFeatures = features.getFeatures()
+
+// 获取指定 Feature
+const feature = features.getFeature('feature-id')
+
+// 设置优先级
+features.setPriority('feature-id', 10)
+
+// 获取优先级
+const priority = features.getPriority('feature-id')
+
+// 按优先级排序获取
+const sorted = features.getFeaturesByPriority()
+```
+
+---
+
+## channel
+
+IPC 通道桥接：
+
+```javascript
+// 发送消息到主进程
+const result = await channel.sendToMain('event-name', { data: 'payload' })
+
+// 发送消息到渲染进程
+await channel.sendToRenderer('event-name', { data: 'payload' })
+
+// 监听主进程消息
+const dispose = channel.onMain('event-name', (data) => {
+  console.log('收到主进程消息:', data)
+})
+
+// 监听渲染进程消息
+const dispose = channel.onRenderer('event-name', (data) => {
+  console.log('收到渲染进程消息:', data)
+})
+
+// 访问原始 channel 对象
+channel.raw
+```
+
+---
+
+## $event
+
+Feature 事件监听：
+
+```javascript
+// 监听 Feature 生命周期
+$event.onFeatureLifeCycle('feature-id', {
+  onLaunch: (feature) => { console.log('启动', feature) },
+  onFeatureTriggered: (data, feature) => { console.log('触发', data) },
+  onInputChanged: (input) => { console.log('输入变化', input) },
+  onClose: (feature) => { console.log('关闭', feature) }
+})
+
+// 取消监听
+$event.offFeatureLifeCycle('feature-id', callback)
+```
+
+---
+
+## dialog
+
+系统对话框：
+
+```javascript
+// 消息对话框
+await dialog.showMessageBox({
+  type: 'info',
+  title: '标题',
+  message: '消息内容',
+  buttons: ['确定', '取消']
+})
+
+// 打开文件对话框
+const result = await dialog.showOpenDialog({
+  properties: ['openFile', 'multiSelections'],
+  filters: [{ name: 'Images', extensions: ['jpg', 'png'] }]
+})
+
+// 保存文件对话框
+const result = await dialog.showSaveDialog({
+  defaultPath: 'file.txt'
+})
+```
+
+---
+
+## divisionBox
+
+DivisionBox SDK，用于创建独立窗口：
+
+```javascript
+// 打开 DivisionBox
+const session = await divisionBox.open({
+  url: 'plugin://my-plugin/index.html',
+  title: '独立窗口',
+  size: 'medium',  // 'compact' | 'medium' | 'expanded'
+  keepAlive: true
+})
+
+// 关闭 DivisionBox
+await divisionBox.close(session.sessionId)
+
+// 监听状态变化
+divisionBox.onStateChange(session.sessionId, (state) => {
+  console.log('状态变化:', state)
+})
+```
+
+---
+
+## TuffItemBuilder
+
+搜索结果构建器：
+
+```javascript
+const item = new TuffItemBuilder('unique-id')
+  .setSource('plugin', 'plugin-features')
+  .setTitle('标题')
+  .setSubtitle('副标题')
+  .setIcon({ type: 'file', value: 'assets/icon.svg' })
+  .createAndAddAction('action-id', 'copy', '复制', '复制的内容')
+  .addTag('标签', 'blue')
+  .setMeta({
+    pluginName: 'my-plugin',
+    featureId: 'my-feature',
+    customData: 'any value'
+  })
+  .build()
+```
+
+---
+
+## openUrl
+
+打开外部链接：
+
+```javascript
+openUrl('https://example.com')
+```
+
+---
+
+## 生命周期钩子
+
+插件 index.js 需要导出生命周期钩子对象：
+
+```javascript
+const pluginLifecycle = {
+  /**
+   * Feature 被触发时调用
+   * @param {string} featureId - Feature ID
+   * @param {string|TuffQuery} query - 查询内容
+   * @param {IPluginFeature} feature - Feature 定义
+   * @param {AbortSignal} signal - 用于取消操作
+   */
+  async onFeatureTriggered(featureId, query, feature, signal) {
+    // 兼容新版本：query 可能是字符串或 TuffQuery 对象
+    const queryText = typeof query === 'string' ? query : query?.text
+    
+    // 处理 Feature 逻辑...
+  },
+
+  /**
+   * 搜索结果项被点击时调用
+   * @param {TuffItem} item - 被点击的项
+   */
+  async onItemAction(item) {
+    if (item.meta?.defaultAction === 'copy') {
+      const copyAction = item.actions.find(a => a.type === 'copy')
+      if (copyAction?.payload) {
+        clipboard.writeText(copyAction.payload)
+        box.hide()
+      }
+    }
+  }
+}
+
+module.exports = pluginLifecycle
+```
+
+---
+
+## 最佳实践
+
+1. **使用 AbortSignal**：在异步操作中传递 signal 参数，支持用户取消
+2. **错误处理**：使用 try-catch 包装所有异步操作
+3. **日志记录**：使用 logger 而不是 console，便于调试和收集
+4. **存储限制**：注意 10MB 存储限制，大文件使用 tempPath
+5. **兼容 TuffQuery**：处理 query 时兼容字符串和对象两种格式
+
+---
+
+## 相关文档
+
+- [Feature SDK](./feature-sdk.zh.md) - Feature 详细 API
+- [DivisionBox API](./division-box.zh.md) - 独立窗口系统
+- [Flow Transfer API](./flow-transfer.zh.md) - 插件间数据流转

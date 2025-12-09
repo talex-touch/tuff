@@ -12,6 +12,7 @@ pnpm add @talex-touch/utils
 
 | 模块 | 导入方式 | 说明 |
 |------|----------|------|
+| [Plugin Context](./plugin-context.zh.md) | `globalThis` | index.js 全局上下文 API |
 | [Box SDK](./box.zh.md) | `useBox()` | 控制 CoreBox 窗口 |
 | [Clipboard SDK](./clipboard.zh.md) | `useClipboard()` | 剪贴板读写和历史 |
 | [Storage SDK](./storage.zh.md) | `usePluginStorage()` | 插件数据持久化 |
