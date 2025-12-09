@@ -55,6 +55,7 @@
     "iconv-lite": "^0.7.0",
     "js-md5": "^0.8.3",
     "log4js": "^6.9.1",
+    "mathjs": "^13.2.0",
     "mac-windows": "1.0.0",
     "mousetrap": "^1.6.5",
     "original-fs": "^1.2.0",

@@ -179,51 +179,43 @@ watch(activeHash, () => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 text-sm">
-    <div class="space-y-1">
-      <div class="text-xs text-black/40 tracking-[0.2em] uppercase dark:text-light/40">
-        {{ t('docs.outlineLabel') }}
-      </div>
-      <div class="text-base text-black font-semibold leading-tight op-60 dark:text-light">
-        {{ docTitleState || t('docs.defaultTitle') }}
-      </div>
+  <div class="flex flex-col gap-3 text-sm">
+    <div class="text-[11px] font-semibold tracking-wider text-black/35 uppercase dark:text-white/35">
+      {{ t('docs.outlineLabel') }}
     </div>
 
-    <div v-if="hasOutline" class="relative flex-1">
+    <nav v-if="hasOutline" ref="navRef" class="flex flex-col gap-0.5 pl-3 relative">
       <!-- Track line -->
-      <div class="absolute inset-y-2 left-2 w-px bg-dark/5 dark:bg-light/10" />
+      <div class="absolute top-1 bottom-1 left-0 w-px bg-black/6 dark:bg-white/8" />
       
       <!-- Sliding Marker -->
       <div
-        class="absolute left-2 w-0.5 rounded-full bg-primary transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)]"
+        class="absolute left-0 w-0.5 rounded-full bg-primary transition-all duration-300 ease-out"
         :style="{
           top: `${markerTop}px`,
           height: `${markerHeight}px`,
           opacity: hasActive ? 1 : 0
         }"
       />
-
-      <nav ref="navRef" class="flex flex-col gap-1 pl-5 relative">
         <NuxtLink
           v-for="entry in outlineEntries"
           :key="entry.id"
           :to="`#${entry.id}`"
           replace
-          class="group relative flex items-center gap-2 rounded-md px-2 py-1.5 text-sm leading-snug no-underline transition-colors duration-200"
-          :style="{ marginLeft: `${entry.indent * 12}px` }"
+          class="group relative flex items-center py-1.5 text-[13px] leading-snug no-underline transition-all duration-150"
+          :style="{ paddingLeft: `${entry.indent * 10}px` }"
           :class="[
             activeHash === entry.id
               ? 'text-primary font-medium'
-              : 'text-black/60 hover:text-black dark:text-light/60 dark:hover:text-light',
+              : 'text-black/45 hover:text-black/70 dark:text-white/45 dark:hover:text-white/70',
           ]"
           :data-id="entry.id"
           @click.prevent="scrollToHeading(entry.id)"
         >
           <span class="line-clamp-2">{{ entry.text }}</span>
         </NuxtLink>
-      </nav>
-    </div>
-    <div v-else class="border border-primary/15 rounded-2xl border-dashed bg-white/40 px-4 py-6 text-xs text-black/50 dark:border-light/15 dark:bg-light/5 dark:text-light/50">
+    </nav>
+    <div v-else class="text-[12px] text-black/30 dark:text-white/30">
       {{ t('docs.noOutline') }}
     </div>
   </div>

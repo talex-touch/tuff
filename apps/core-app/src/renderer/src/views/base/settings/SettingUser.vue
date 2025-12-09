@@ -8,11 +8,11 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 
 const { t } = useI18n()
-const { isLoggedIn, currentUser, login, logout } = useAuth()
+const { isLoggedIn, currentUser, loginWithBrowser, logout } = useAuth()
 
 async function handleLogin() {
   try {
-    const result = await login()
+    const result = await loginWithBrowser()
 
     if (result.success) {
       console.log('登录结果:', result)
