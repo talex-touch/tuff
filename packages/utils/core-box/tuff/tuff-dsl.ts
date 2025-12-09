@@ -1369,6 +1369,8 @@ export interface TuffContainerLayout {
 export interface TuffSectionMeta {
   /** 是否为智能推荐分组 */
   intelligence?: boolean
+  /** 是否为置顶分组 */
+  pinned?: boolean
   /** 扩展字段 */
   [key: string]: unknown
 }

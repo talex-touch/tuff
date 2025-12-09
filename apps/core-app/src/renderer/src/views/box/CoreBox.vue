@@ -339,7 +339,8 @@ const detach = useDetach({
 
 // Action Panel hook
 const actionPanel = useActionPanel({
-  detachItem: detach.detachItem
+  openFlowSelector: detach.openFlowSelector,
+  refreshSearch: handleSearchImmediate
 })
 
 // Channel: focus input
