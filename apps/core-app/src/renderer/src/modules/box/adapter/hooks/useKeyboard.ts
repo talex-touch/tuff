@@ -1,9 +1,134 @@
+import type { TuffSection } from '@talex-touch/utils'
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import { BoxMode } from '..'
 import { onBeforeUnmount } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { createCoreBoxKeyTransport, type ForwardedKeyEvent } from '../transport/key-transport'
+
+interface SectionRange {
+  start: number
+  end: number
+  count: number
+}
+
+/** Build section ranges from sections config */
+function buildSectionRanges(sections: TuffSection[]): SectionRange[] {
+  const ranges: SectionRange[] = []
+  let start = 0
+  for (const section of sections) {
+    const count = section.itemIds.length
+    if (count > 0) {
+      ranges.push({ start, end: start + count - 1, count })
+      start += count
+    }
+  }
+  return ranges
+}
+
+/** Find which section a global index belongs to */
+function findSectionIndex(index: number, ranges: SectionRange[]): number {
+  for (let i = 0; i < ranges.length; i++) {
+    if (index >= ranges[i].start && index <= ranges[i].end) {
+      return i
+    }
+  }
+  return ranges.length - 1
+}
+
+/** Navigate down in multi-section grid */
+function navigateGridDown(
+  currentIndex: number,
+  cols: number,
+  sections: TuffSection[],
+  totalItems: number
+): number {
+  const ranges = buildSectionRanges(sections)
+  if (ranges.length === 0) return currentIndex
+
+  const sectionIdx = findSectionIndex(currentIndex, ranges)
+  const section = ranges[sectionIdx]
+  const localIndex = currentIndex - section.start
+  const localCol = localIndex % cols
+  const localRow = Math.floor(localIndex / cols)
+  const sectionRows = Math.ceil(section.count / cols)
+
+  // Try to move down within current section
+  const nextLocalRow = localRow + 1
+  if (nextLocalRow < sectionRows) {
+    const nextLocalIndex = nextLocalRow * cols + localCol
+    if (nextLocalIndex < section.count) {
+      return section.start + nextLocalIndex
+    }
+    // Target column doesn't exist in last row, go to last item in section
+    return section.end
+  }
+
+  // Move to next section
+  if (sectionIdx < ranges.length - 1) {
+    const nextSection = ranges[sectionIdx + 1]
+    // Go to same column in first row of next section, or last item if not enough
+    const targetIndex = Math.min(localCol, nextSection.count - 1)
+    return nextSection.start + targetIndex
+  }
+
+  // Already at last section, cycle to first section
+  if (totalItems <= 20) {
+    return Math.min(localCol, ranges[0].count - 1)
+  }
+
+  return currentIndex
+}
+
+/** Navigate up in multi-section grid */
+function navigateGridUp(
+  currentIndex: number,
+  cols: number,
+  sections: TuffSection[]
+): number {
+  const ranges = buildSectionRanges(sections)
+  if (ranges.length === 0) return currentIndex
+
+  const sectionIdx = findSectionIndex(currentIndex, ranges)
+  const section = ranges[sectionIdx]
+  const localIndex = currentIndex - section.start
+  const localCol = localIndex % cols
+  const localRow = Math.floor(localIndex / cols)
+
+  // Try to move up within current section
+  if (localRow > 0) {
+    return section.start + (localRow - 1) * cols + localCol
+  }
+
+  // Move to previous section
+  if (sectionIdx > 0) {
+    const prevSection = ranges[sectionIdx - 1]
+    const prevSectionRows = Math.ceil(prevSection.count / cols)
+    const lastRowStart = (prevSectionRows - 1) * cols
+    // Go to same column in last row of previous section
+    const targetLocalIndex = lastRowStart + localCol
+    if (targetLocalIndex < prevSection.count) {
+      return prevSection.start + targetLocalIndex
+    }
+    // Target column doesn't exist, go to last item
+    return prevSection.end
+  }
+
+  // Already at first section, cycle to last section
+  const totalItems = ranges.reduce((sum, r) => sum + r.count, 0)
+  if (totalItems <= 20 && ranges.length > 0) {
+    const lastSection = ranges[ranges.length - 1]
+    const lastSectionRows = Math.ceil(lastSection.count / cols)
+    const lastRowStart = (lastSectionRows - 1) * cols
+    const targetLocalIndex = lastRowStart + localCol
+    if (targetLocalIndex < lastSection.count) {
+      return lastSection.start + targetLocalIndex
+    }
+    return lastSection.end
+  }
+
+  return currentIndex
+}
 
 declare global {
   interface Window {
@@ -209,31 +334,45 @@ export function useKeyboard(
     else if (event.key === 'ArrowDown') {
       const isGrid = boxOptions.layout?.mode === 'grid'
       const cols = boxOptions.layout?.grid?.columns || 5
-      const step = isGrid ? cols : 1
-      const nextIndex = boxOptions.focus + step
+      const sections = boxOptions.layout?.sections
 
-      if (nextIndex < res.value.length) {
+      if (isGrid && sections && sections.length > 1) {
+        // Multi-section grid navigation
+        const nextIndex = navigateGridDown(boxOptions.focus, cols, sections, res.value.length)
         boxOptions.focus = nextIndex
-      } else if (res.value.length <= 20) {
-        // Cycle to first item for small lists
-        boxOptions.focus = isGrid ? (boxOptions.focus % cols) : 0
+      } else {
+        const step = isGrid ? cols : 1
+        const nextIndex = boxOptions.focus + step
+
+        if (nextIndex < res.value.length) {
+          boxOptions.focus = nextIndex
+        } else if (res.value.length <= 20) {
+          boxOptions.focus = isGrid ? (boxOptions.focus % cols) : 0
+        }
       }
       event.preventDefault()
     }
     else if (event.key === 'ArrowUp') {
       const isGrid = boxOptions.layout?.mode === 'grid'
       const cols = boxOptions.layout?.grid?.columns || 5
-      const step = isGrid ? cols : 1
-      const prevIndex = boxOptions.focus - step
+      const sections = boxOptions.layout?.sections
 
-      if (prevIndex >= 0) {
+      if (isGrid && sections && sections.length > 1) {
+        // Multi-section grid navigation
+        const prevIndex = navigateGridUp(boxOptions.focus, cols, sections)
         boxOptions.focus = prevIndex
-      } else if (res.value.length <= 20) {
-        // Cycle to last row for small lists
-        const lastRowStart = Math.floor((res.value.length - 1) / cols) * cols
-        const targetCol = boxOptions.focus % cols
-        const targetIndex = Math.min(lastRowStart + targetCol, res.value.length - 1)
-        boxOptions.focus = isGrid ? targetIndex : (res.value.length - 1)
+      } else {
+        const step = isGrid ? cols : 1
+        const prevIndex = boxOptions.focus - step
+
+        if (prevIndex >= 0) {
+          boxOptions.focus = prevIndex
+        } else if (res.value.length <= 20) {
+          const lastRowStart = Math.floor((res.value.length - 1) / cols) * cols
+          const targetCol = boxOptions.focus % cols
+          const targetIndex = Math.min(lastRowStart + targetCol, res.value.length - 1)
+          boxOptions.focus = isGrid ? targetIndex : (res.value.length - 1)
+        }
       }
       event.preventDefault()
     }

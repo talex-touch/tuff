@@ -1654,5 +1654,31 @@
     "restart": "重启应用",
     "quit": "退出 Talex Touch",
     "tooltip": "Talex Touch"
+  },
+  "flow": {
+    "selectTarget": "选择目标",
+    "selectTargetDesc": "选择要将数据发送到的插件",
+    "searchTargets": "搜索目标...",
+    "noTargets": "没有可用的目标",
+    "navigate": "导航",
+    "confirm": "确认",
+    "cancel": "取消"
+  },
+  "corebox": {
+    "pinned": "已固定",
+    "unpinned": "已取消固定",
+    "pinFailed": "固定失败",
+    "copied": "已复制",
+    "flowSent": "已发送到目标插件",
+    "flowFailed": "流转失败",
+    "actions": {
+      "title": "操作",
+      "close": "关闭",
+      "pin": "固定到推荐",
+      "unpin": "取消固定",
+      "copyTitle": "复制名称",
+      "revealInFinder": "在 Finder 中显示",
+      "flowTransfer": "流转到其他插件"
+    }
   }
 }

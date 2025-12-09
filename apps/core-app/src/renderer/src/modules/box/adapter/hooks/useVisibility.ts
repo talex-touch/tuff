@@ -44,7 +44,7 @@ export function useVisibility(options: UseVisibilityOptions) {
   function onHide(): void {
     boxOptions.lastHidden = Date.now()
     wasTriggeredByShortcut.value = false
-    searchVal.value = ''
+    // Don't clear searchVal here - let checkAutoClear handle it based on time threshold
     deactivateAllProviders().catch(() => {})
   }
 

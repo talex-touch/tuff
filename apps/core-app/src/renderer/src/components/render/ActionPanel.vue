@@ -63,12 +63,12 @@ const actions = computed<ActionItem[]>(() => {
     })
   }
 
-  // Detach to DivisionBox
+  // Flow Transfer to another plugin
   list.push({
-    id: 'detach',
-    label: t('corebox.actions.detach', '分离到独立窗口'),
-    icon: 'i-ri-external-link-line',
-    shortcut: isMac ? '⌘D' : 'Ctrl+D'
+    id: 'flow-transfer',
+    label: t('corebox.actions.flowTransfer', '流转到其他插件'),
+    icon: 'i-ri-share-forward-line',
+    shortcut: isMac ? '⌘⇧D' : 'Ctrl+Shift+D'
   })
 
   return list

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
+import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
 import { computed } from 'vue'
 import BoxGridItem from './BoxGridItem.vue'
 
@@ -7,6 +7,12 @@ interface Props {
   items: TuffItem[]
   layout?: TuffContainerLayout
   focus: number
+}
+
+interface SectionData {
+  section: TuffSection
+  items: TuffItem[]
+  startIndex: number
 }
 
 const props = defineProps<Props>()
@@ -21,34 +27,91 @@ const gridConfig = computed(() => ({
   itemSize: props.layout?.grid?.itemSize || 'medium'
 }))
 
-const sectionTitle = computed(() => {
+/** Build sections with their items and global indices */
+const sectionsData = computed<SectionData[]>(() => {
   const sections = props.layout?.sections
-  if (sections && sections.length > 0) {
-    return sections[0].title
+  if (!sections || sections.length === 0) {
+    return []
   }
-  return undefined
+
+  const itemIdToItem = new Map(props.items.map((item) => [item.id, item]))
+  const result: SectionData[] = []
+  let currentIndex = 0
+
+  for (const section of sections) {
+    const sectionItems = section.itemIds
+      .map((id) => itemIdToItem.get(id))
+      .filter((item): item is TuffItem => !!item)
+
+    if (sectionItems.length > 0) {
+      result.push({
+        section,
+        items: sectionItems,
+        startIndex: currentIndex
+      })
+      currentIndex += sectionItems.length
+    }
+  }
+
+  return result
 })
 
-const isIntelligence = computed(() => {
-  const sections = props.layout?.sections
-  if (sections && sections.length > 0) {
-    return sections[0].meta?.intelligence === true
-  }
-  return false
-})
+const hasSections = computed(() => sectionsData.value.length > 0)
 
 function getQuickKey(index: number): string {
   if (index > 9) return ''
   const key = index === 9 ? 0 : index + 1
   return `⌘${key}`
 }
+
+function isIntelligenceSection(section: TuffSection): boolean {
+  return section.meta?.intelligence === true
+}
+
+function isPinnedSection(section: TuffSection): boolean {
+  return section.meta?.pinned === true
+}
 </script>
 
 <template>
-  <div class="BoxGridWrapper" :class="{ 'is-intelligence': isIntelligence }">
-    <div v-if="sectionTitle" class="BoxGridTitle">
-      {{ sectionTitle }}
+  <!-- Multiple sections mode -->
+  <template v-if="hasSections">
+    <div
+      v-for="sectionData in sectionsData"
+      :key="sectionData.section.id"
+      class="BoxGridWrapper"
+      :class="{
+        'is-intelligence': isIntelligenceSection(sectionData.section),
+        'is-pinned': isPinnedSection(sectionData.section)
+      }"
+    >
+      <div v-if="sectionData.section.title" class="BoxGridTitle">
+        {{ sectionData.section.title }}
+      </div>
+      <div
+        class="BoxGrid p-4"
+        :style="{
+          '--grid-cols': gridConfig.columns,
+          '--grid-gap': gridConfig.gap + 'px'
+        }"
+        :class="`size-${gridConfig.itemSize}`"
+      >
+        <BoxGridItem
+          v-for="(item, localIndex) in sectionData.items"
+          :key="item.id"
+          :item="item"
+          :active="focus === sectionData.startIndex + localIndex"
+          :render="item.render"
+          :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
+          :style="{ '--item-index': localIndex }"
+          @click="emit('select', sectionData.startIndex + localIndex, item)"
+        />
+      </div>
     </div>
+  </template>
+
+  <!-- Single grid fallback (no sections) -->
+  <div v-else class="BoxGridWrapper">
     <div
       class="BoxGrid p-4"
       :style="{
@@ -105,6 +168,24 @@ function getQuickKey(index: number): string {
       mask-composite: exclude;
       pointer-events: none;
       opacity: 0.7;
+    }
+  }
+
+  &.is-pinned {
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      padding: 0.125rem;
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      opacity: 0.5;
     }
   }
 }

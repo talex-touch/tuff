@@ -5,11 +5,12 @@ import { toast } from 'vue-sonner'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface UseActionPanelOptions {
-  detachItem?: (item: TuffItem) => Promise<void>
+  openFlowSelector?: (item: TuffItem) => void
+  refreshSearch?: () => void
 }
 
 export function useActionPanel(options: UseActionPanelOptions = {}) {
-  const { detachItem } = options
+  const { openFlowSelector, refreshSearch } = options
   const { t } = useI18n()
 
   const visible = ref(false)
@@ -40,6 +41,8 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         if (targetItem.meta) {
           targetItem.meta.pinned = pinned ? { isPinned: true, pinnedAt: Date.now() } : undefined
         }
+        // Refresh search results to reflect pin state change
+        refreshSearch?.()
       } else {
         throw new Error(response?.error || 'Failed')
       }
@@ -69,8 +72,8 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         if (path) await touchChannel.send('shell:show-item-in-folder', { path })
         break
       }
-      case 'detach':
-        if (detachItem) await detachItem(targetItem)
+      case 'flow-transfer':
+        if (openFlowSelector) openFlowSelector(targetItem)
         break
     }
   }
@@ -80,13 +83,13 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     if (data?.item) open(data.item)
   })
 
-  // Window event listener for ⌘K toggle-pin shortcut
+  // Window event listener for ⌘K - opens ActionPanel
   function handleTogglePinEvent(event: Event): void {
-    console.log('[useActionPanel] toggle-pin event received')
+    console.log('[useActionPanel] ⌘K event received')
     const detail = (event as CustomEvent).detail
     if (detail?.item) {
-      console.log('[useActionPanel] toggling pin for item:', detail.item.id)
-      togglePin(detail.item)
+      console.log('[useActionPanel] opening action panel for item:', detail.item.id)
+      open(detail.item)
     }
   }
 

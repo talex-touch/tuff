@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useAuth } from '@clerk/nuxt'
 
 definePageMeta({
   layout: false,

@@ -1662,5 +1662,31 @@
     "restart": "Restart Application",
     "quit": "Quit Talex Touch",
     "tooltip": "Talex Touch"
+  },
+  "flow": {
+    "selectTarget": "Select Target",
+    "selectTargetDesc": "Choose a plugin to send data to",
+    "searchTargets": "Search targets...",
+    "noTargets": "No targets available",
+    "navigate": "Navigate",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
+  "corebox": {
+    "pinned": "Pinned",
+    "unpinned": "Unpinned",
+    "pinFailed": "Pin failed",
+    "copied": "Copied",
+    "flowSent": "Sent to target plugin",
+    "flowFailed": "Flow transfer failed",
+    "actions": {
+      "title": "Actions",
+      "close": "Close",
+      "pin": "Pin to Recommendations",
+      "unpin": "Unpin",
+      "copyTitle": "Copy Title",
+      "revealInFinder": "Reveal in Finder",
+      "flowTransfer": "Transfer to Plugin"
+    }
   }
 }
