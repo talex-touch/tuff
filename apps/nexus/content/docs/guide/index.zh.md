@@ -18,8 +18,9 @@
 
 ## 新手路径
 1. 阅读《[快速开始](./start.zh.md)》完成安装与账号配置。
-2. 在《[插件生态](./features/plugin-ecosystem.zh.md)》了解可用功能包。
-3. 根据身份跳转至《[场景指南](./scenes/developer.zh.md)》等篇章，复制推荐模板。
+2. 探索《[快速预览](./features/preview.zh.md)》了解 CoreBox 内置的即时计算与转换能力。
+3. 在《[插件生态](./features/plugin-ecosystem.zh.md)》了解可用功能包。
+4. 根据身份跳转至《[场景指南](./scenes/developer.zh.md)》等篇章，复制推荐模板。
 
 ## 深度使用
 - **效率技巧**：前往《/tips》章节，掌握智能工作流、剪贴板编排等隐藏能力。
