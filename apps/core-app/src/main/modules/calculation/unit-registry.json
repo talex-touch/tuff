@@ -1,0 +1,94 @@
+{
+  "length": {
+    "base": "m",
+    "units": {
+      "km": { "factor": 1000, "aliases": ["千米", "公里", "kilometer", "kilometers"] },
+      "m": { "factor": 1, "aliases": ["米", "公尺", "meter", "meters"] },
+      "cm": { "factor": 0.01, "aliases": ["厘米", "centimeter", "centimeters"] },
+      "mm": { "factor": 0.001, "aliases": ["毫米", "millimeter", "millimeters"] },
+      "mi": { "factor": 1609.344, "aliases": ["英里", "mile", "miles"] },
+      "yd": { "factor": 0.9144, "aliases": ["码", "yard", "yards"] },
+      "ft": { "factor": 0.3048, "aliases": ["英尺", "foot", "feet"] },
+      "in": { "factor": 0.0254, "aliases": ["英寸", "inch", "inches"] }
+    }
+  },
+  "mass": {
+    "base": "kg",
+    "units": {
+      "t": { "factor": 1000, "aliases": ["吨", "ton", "tons", "tonne"] },
+      "kg": { "factor": 1, "aliases": ["千克", "公斤", "kilogram", "kilograms"] },
+      "g": { "factor": 0.001, "aliases": ["克", "gram", "grams"] },
+      "mg": { "factor": 0.000001, "aliases": ["毫克", "milligram", "milligrams"] },
+      "lb": { "factor": 0.453592, "aliases": ["磅", "pound", "pounds"] },
+      "oz": { "factor": 0.0283495, "aliases": ["盎司", "ounce", "ounces"] }
+    }
+  },
+  "temperature": {
+    "base": "K",
+    "units": {
+      "C": { "type": "formula", "toBase": "x + 273.15", "fromBase": "x - 273.15", "aliases": ["℃", "摄氏度", "celsius"] },
+      "F": { "type": "formula", "toBase": "(x - 32) * 5/9 + 273.15", "fromBase": "(x - 273.15) * 9/5 + 32", "aliases": ["℉", "华氏度", "fahrenheit"] },
+      "K": { "type": "formula", "toBase": "x", "fromBase": "x", "aliases": ["开尔文", "kelvin"] }
+    }
+  },
+  "data": {
+    "base": "B",
+    "binary": true,
+    "units": {
+      "B": { "factor": 1, "aliases": ["字节", "byte", "bytes"] },
+      "KB": { "factor": 1024, "aliases": ["千字节", "kilobyte", "kilobytes"] },
+      "MB": { "factor": 1048576, "aliases": ["兆字节", "megabyte", "megabytes"] },
+      "GB": { "factor": 1073741824, "aliases": ["吉字节", "gigabyte", "gigabytes"] },
+      "TB": { "factor": 1099511627776, "aliases": ["太字节", "terabyte", "terabytes"] },
+      "bit": { "factor": 0.125, "aliases": ["比特", "bits"] },
+      "Kb": { "factor": 128, "aliases": ["千比特", "kilobit", "kilobits"] },
+      "Mb": { "factor": 131072, "aliases": ["兆比特", "megabit", "megabits"] },
+      "Gb": { "factor": 134217728, "aliases": ["吉比特", "gigabit", "gigabits"] }
+    }
+  },
+  "time": {
+    "base": "s",
+    "units": {
+      "s": { "factor": 1, "aliases": ["秒", "sec", "second", "seconds"] },
+      "ms": { "factor": 0.001, "aliases": ["毫秒", "millisecond", "milliseconds"] },
+      "min": { "factor": 60, "aliases": ["分", "分钟", "minute", "minutes"] },
+      "h": { "factor": 3600, "aliases": ["小时", "hour", "hours", "hr"] },
+      "d": { "factor": 86400, "aliases": ["天", "日", "day", "days"] },
+      "w": { "factor": 604800, "aliases": ["周", "星期", "week", "weeks"] }
+    }
+  },
+  "area": {
+    "base": "m2",
+    "units": {
+      "km2": { "factor": 1000000, "aliases": ["平方千米", "平方公里", "sq km"] },
+      "m2": { "factor": 1, "aliases": ["平方米", "sq m", "sqm"] },
+      "cm2": { "factor": 0.0001, "aliases": ["平方厘米", "sq cm"] },
+      "ha": { "factor": 10000, "aliases": ["公顷", "hectare", "hectares"] },
+      "acre": { "factor": 4046.86, "aliases": ["英亩", "acres"] },
+      "ft2": { "factor": 0.092903, "aliases": ["平方英尺", "sq ft", "sqft"] }
+    }
+  },
+  "volume": {
+    "base": "L",
+    "units": {
+      "L": { "factor": 1, "aliases": ["升", "liter", "liters", "litre"] },
+      "mL": { "factor": 0.001, "aliases": ["毫升", "milliliter", "ml"] },
+      "m3": { "factor": 1000, "aliases": ["立方米", "cubic meter"] },
+      "gal": { "factor": 3.78541, "aliases": ["加仑", "gallon", "gallons"] },
+      "qt": { "factor": 0.946353, "aliases": ["夸脱", "quart", "quarts"] },
+      "pt": { "factor": 0.473176, "aliases": ["品脱", "pint", "pints"] },
+      "cup": { "factor": 0.236588, "aliases": ["杯"] },
+      "fl oz": { "factor": 0.0295735, "aliases": ["液体盎司", "fluid ounce"] }
+    }
+  },
+  "speed": {
+    "base": "m/s",
+    "units": {
+      "m/s": { "factor": 1, "aliases": ["米每秒", "meters per second"] },
+      "km/h": { "factor": 0.277778, "aliases": ["千米每小时", "公里每小时", "kph", "kmh"] },
+      "mph": { "factor": 0.44704, "aliases": ["英里每小时", "miles per hour"] },
+      "knot": { "factor": 0.514444, "aliases": ["节", "knots", "kn"] },
+      "ft/s": { "factor": 0.3048, "aliases": ["英尺每秒", "feet per second", "fps"] }
+    }
+  }
+}

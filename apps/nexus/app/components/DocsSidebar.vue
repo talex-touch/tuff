@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useUser } from '@clerk/vue'
 import DocSection from './docs/DocSection.vue'
 
+const { isSignedIn } = useUser()
 const { data: navigationTree, pending, error } = await useAsyncData(
   'docs-navigation',
   () => queryCollectionNavigation('docs'),
@@ -11,9 +13,11 @@ const localePath = useLocalePath()
 const SUPPORTED_LOCALES = ['en', 'zh']
 
 const TOP_SECTIONS = [
-  { key: 'guide', label: 'Guide', icon: 'i-carbon-book' },
-  { key: 'dev', label: 'Dev', icon: 'i-carbon-code' },
+  { key: 'guide', label: 'Guide', icon: 'i-carbon-book', description: 'User Guide' },
+  { key: 'dev', label: 'Developer', icon: 'i-carbon-code', description: 'Developer Docs' },
 ] as const
+
+const defaultSection = computed(() => isSignedIn.value ? 'dev' : 'guide')
 
 const docLabels = computed<Record<string, string>>(() => ({
   '/docs/guide/start': t('docsNav.start'),
@@ -87,7 +91,7 @@ const activeTopSection = computed(() => {
     if (path.startsWith(`/docs/${section.key}`))
       return section.key
   }
-  return 'guide'
+  return defaultSection.value
 })
 
 const currentSectionData = computed(() => {
@@ -108,15 +112,22 @@ const sections = computed(() => {
   // Otherwise, show the files directly as a flat list
   const hasSubdirs = children.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
   
+  // Sort sections alphabetically by title
+  const sortedChildren = [...children].sort((a, b) => {
+    const titleA = (a.title || '').toLowerCase()
+    const titleB = (b.title || '').toLowerCase()
+    return titleA.localeCompare(titleB)
+  })
+  
   if (hasSubdirs) {
-    return children
+    return sortedChildren
   }
   
   // For flat file lists, wrap them in a single section
   return [{
     title: data.title,
     path: data.path,
-    children,
+    children: sortedChildren,
     page: false,
   }]
 })
@@ -180,10 +191,7 @@ function sectionContainsActive(item: any): boolean {
 
 function toggleSection(item: any) {
   const key = sectionKey(item)
-  expandedSections.value = {
-    ...expandedSections.value,
-    [key]: !expandedSections.value[key],
-  }
+  expandedSections.value[key] = !expandedSections.value[key]
 }
 
 function isSectionExpanded(item: any) {
@@ -191,38 +199,49 @@ function isSectionExpanded(item: any) {
   return expandedSections.value[key] ?? sectionContainsActive(item)
 }
 
+// Initialize all sections as expanded by default
 watch(
-  () => [sections.value, normalizedRoutePath.value, locale.value],
+  () => [sections.value, locale.value],
   () => {
-    const next: Record<string, boolean> = {}
-    for (const section of sections.value) {
-      const key = sectionKey(section)
-      const shouldOpen = sectionContainsActive(section)
-      if (shouldOpen)
-        next[key] = true
-      else if (expandedSections.value[key])
-        next[key] = true
+    // Only initialize if expandedSections is empty (first load)
+    if (Object.keys(expandedSections.value).length === 0) {
+      const next: Record<string, boolean> = {}
+      for (const section of sections.value) {
+        next[sectionKey(section)] = true
+      }
+      expandedSections.value = next
     }
-    expandedSections.value = next
   },
   { immediate: true },
+)
+
+// When route changes, expand the section containing the active link
+watch(
+  () => normalizedRoutePath.value,
+  () => {
+    for (const section of sections.value) {
+      if (sectionContainsActive(section)) {
+        expandedSections.value[sectionKey(section)] = true
+      }
+    }
+  },
 )
 </script>
 
 <template>
   <nav class="flex flex-col gap-1">
     <!-- Top-level section tabs -->
-    <div class="mb-4 flex gap-1 border-b border-black/5 pb-3 dark:border-white/5">
+    <div class="mb-4 flex gap-1 rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.08]">
       <NuxtLink
         v-for="sec in TOP_SECTIONS"
         :key="sec.key"
         :to="localePath(`/docs/${sec.key}`)"
-        class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium no-underline transition-all"
+        class="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium no-underline transition-all duration-200"
         :class="activeTopSection === sec.key
-          ? 'bg-primary/10 text-primary dark:bg-primary/20'
-          : 'text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white'"
+          ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
+          : 'text-black/45 hover:text-black/65 dark:text-white/45 dark:hover:text-white/65'"
       >
-        <span :class="sec.icon" class="text-base" />
+        <span :class="sec.icon" class="text-sm" />
         <span>{{ sec.label }}</span>
       </NuxtLink>
     </div>
@@ -269,10 +288,10 @@ watch(
           <NuxtLink
             v-if="linkTarget(child)"
             :to="localePath(linkTarget(child)!)"
-            class="group/link flex items-center gap-2 border-l border-transparent px-4 py-1.5 text-sm no-underline transition-colors"
+            class="group/link flex items-center rounded-lg py-2 pl-3 pr-2 text-[13px] no-underline transition-all duration-150"
             :class="isLinkActive(linkTarget(child) || child.path || '')
-              ? 'border-primary text-primary font-medium'
-              : 'text-black/60 hover:border-black/10 hover:text-black dark:text-white/60 dark:hover:border-white/10 dark:hover:text-white'"
+              ? 'bg-primary/12 text-primary font-medium dark:bg-primary/18'
+              : 'text-black/50 hover:text-black/70 dark:text-white/50 dark:hover:text-white/70'"
           >
             <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
           </NuxtLink>

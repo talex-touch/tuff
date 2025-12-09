@@ -1,4 +1,5 @@
 import type { PreviewAbilityRegistry } from '../preview-registry'
+import { AdvancedExpressionAbility } from './advanced-expression-ability'
 import { BasicExpressionAbility } from './basic-expression-ability'
 import { ColorPreviewAbility } from './color-ability'
 import { CurrencyPreviewAbility } from './currency-ability'
@@ -9,6 +10,7 @@ import { TimeDeltaAbility } from './time-delta-ability'
 import { UnitConversionAbility } from './unit-conversion-ability'
 
 export function registerDefaultPreviewAbilities(registry: PreviewAbilityRegistry): void {
+  registry.register(new AdvancedExpressionAbility()) // Higher priority for advanced math
   registry.register(new BasicExpressionAbility())
   registry.register(new UnitConversionAbility())
   registry.register(new ScientificConstantsAbility())
