@@ -1,4 +1,8 @@
-# Channel API
+# Channel API（传统）
+
+::alert{type="warning"}
+**已弃用：** Channel API 已弃用，建议使用 [TuffTransport](./transport.zh.md)。虽然它仍然可用，但我们建议新开发使用 TuffTransport。查看[迁移指南](./transport.zh.md#从传统-channel-迁移)。
+::
 
 Channel SDK 提供插件与主程序之间的 IPC 通信能力，基于 Promise 异步返回。
 

@@ -1,4 +1,8 @@
-# Channel API
+# Channel API (Legacy)
+
+::alert{type="warning"}
+**Deprecated:** The Channel API is deprecated in favor of [TuffTransport](./transport.en.md). While it continues to work, we recommend migrating to TuffTransport for new development. See the [Migration Guide](./transport.en.md#migration-from-legacy-channel).
+::
 
 The Channel SDK provides IPC communication between plugins and the main process.
 

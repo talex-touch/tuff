@@ -16,11 +16,16 @@ pnpm add @talex-touch/utils
 | [Box SDK](./box.zh.md) | `useBox()` | 控制 CoreBox 窗口 |
 | [Clipboard SDK](./clipboard.zh.md) | `useClipboard()` | 剪贴板读写和历史 |
 | [Storage SDK](./storage.zh.md) | `usePluginStorage()` | 插件数据持久化 |
-| [Channel SDK](./channel.zh.md) | `useChannel()` | IPC 通信 |
+| [**TuffTransport**](./transport.zh.md) | `useTuffTransport()` | **新一代 IPC（推荐）** |
+| [Channel SDK](./channel.zh.md) | `useChannel()` | IPC 通信（传统） |
 | [Feature SDK](./feature.zh.md) | `useFeature()` | 搜索结果管理 |
 | [DivisionBox SDK](./division-box.zh.md) | `useDivisionBox()` | 独立窗口管理 |
 | [Flow SDK](./flow-transfer.zh.md) | `createFlowSDK()` | 插件间数据流转 |
 | [Intelligence SDK](./intelligence.zh.md) | `useIntelligence()` | AI 能力调用 |
+
+::alert{type="info"}
+**新功能：** [TuffTransport](./transport.zh.md) 是新插件推荐使用的 IPC API。它提供类型安全的事件、自动批量处理和流式传输支持。查看 [TuffTransport 技术内幕](./transport-internals.zh.md) 了解技术细节。
+::
 
 ---
 
