@@ -269,7 +269,7 @@ export class DivisionBoxSession {
     if (!this.touchWindow || !this.uiView) return
     
     const bounds = this.touchWindow.window.getBounds()
-    const headerHeight = 60
+    const headerHeight = 64 // Match .CoreBox height in CoreBox.vue
     this.uiView.setBounds({
       x: 0,
       y: headerHeight,

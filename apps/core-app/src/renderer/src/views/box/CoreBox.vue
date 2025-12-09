@@ -123,9 +123,12 @@ const divisionBoxConfig = computed(() => windowState.divisionBox?.config)
 const divisionBoxMeta = computed(() => windowState.divisionBox?.meta)
 
 // UI visibility based on DivisionBox config
+// In DivisionBox mode, wait for config to arrive before showing input
 const showInput = computed(() => {
   if (!isDivisionBox.value) return true
-  return divisionBoxConfig.value?.ui?.showInput !== false
+  // Wait for config to arrive in DivisionBox mode
+  if (!divisionBoxConfig.value) return false
+  return divisionBoxConfig.value.ui?.showInput !== false
 })
 
 const _showResults = computed(() => {
@@ -138,6 +141,42 @@ const inputPlaceholder = computed(() => {
     return divisionBoxConfig.value.ui.inputPlaceholder
   }
   return undefined
+})
+
+// In DivisionBox mode, create a provider from the session meta
+const divisionBoxProviders = computed(() => {
+  if (!isDivisionBox.value || !divisionBoxMeta.value) return []
+  
+  const meta = divisionBoxMeta.value
+  const iconValue = meta.icon
+  
+  // Build icon object - handle string or object formats
+  let icon: { type: string; value: string } | undefined
+  if (iconValue) {
+    if (typeof iconValue === 'string') {
+      icon = { type: 'class', value: iconValue }
+    } else if (typeof iconValue === 'object' && 'value' in iconValue) {
+      icon = iconValue as { type: string; value: string }
+    }
+  }
+  // Default icon if none provided
+  if (!icon) {
+    icon = { type: 'class', value: 'i-carbon-application' }
+  }
+  
+  return [{
+    id: meta.pluginId || 'division-box',
+    name: meta.title || 'DivisionBox',
+    icon
+  }]
+})
+
+// Merge activeActivations with divisionBoxProviders
+const effectiveProviders = computed(() => {
+  if (isDivisionBox.value) {
+    return divisionBoxProviders.value
+  }
+  return activeActivations.value
 })
 
 // Initial input from DivisionBox config (reserved for future use)
@@ -376,6 +415,8 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
         :box-options="boxOptions"
         :show-input="showInput"
         :placeholder="inputPlaceholder"
+        :providers="effectiveProviders"
+        @deactivate-provider="handleDeactivateProvider"
       />
     </template>
 
@@ -673,7 +714,12 @@ div.CoreBox {
 
 // DivisionBox specific styles
 .division-box {
-  .CoreBox {
+  // Ensure CoreBox is visible in DivisionBox mode
+  div.CoreBox {
+    display: flex !important;
+    // Remove padding - DivisionBoxHeader handles its own spacing
+    padding: 0 !important;
+
     // Allow window dragging in DivisionBox header area
     -webkit-app-region: drag;
 
@@ -681,8 +727,9 @@ div.CoreBox {
     .BoxInput,
     .CoreBox-Configure,
     .PrefixPart,
-    .DivisionBox-Title,
-    .DivisionBox-Controls {
+    .DivisionBox-Controls,
+    .DivisionBox-Input,
+    .ActivatedProvidersContainer {
       -webkit-app-region: no-drag;
     }
   }
