@@ -132,7 +132,13 @@
     "dashboard": "Details",
     "dashboardDesc": "Enable system details page to display indexing, applications, logs and OCR status.",
     "searchEngineLogs": "Search Engine Logs",
-    "searchEngineLogsDesc": "Enable detailed logging for search engine operations to help debug search issues."
+    "searchEngineLogsDesc": "Enable detailed logging for search engine operations to help debug search issues.",
+    "recommendationEnabled": "Smart Recommendations",
+    "recommendationEnabledDesc": "Enable smart recommendations based on your usage patterns.",
+    "recommendationShowReason": "Show Recommendation Reason",
+    "recommendationShowReasonDesc": "Display the reason for each recommendation.",
+    "recommendationMaxItems": "Max Recommendations",
+    "recommendationMaxItemsDesc": "Maximum number of recommended items to show in search bar."
   },
   "settingUser": {
     "groupTitle": "Account",

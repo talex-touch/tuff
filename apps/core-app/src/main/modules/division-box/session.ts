@@ -284,6 +284,9 @@ export class DivisionBoxSession {
    * @param plugin - Optional plugin reference for injection
    */
   async attachUIView(url: string, plugin?: TouchPlugin): Promise<void> {
+    const startTime = performance.now()
+    const metrics = { preload: 0, viewCreate: 0, loadUrl: 0, total: 0 }
+
     if (!this.touchWindow) {
       throw new DivisionBoxError(
         DivisionBoxErrorCode.STATE_ERROR,
@@ -325,6 +328,8 @@ export class DivisionBoxSession {
       }
     }
 
+    metrics.preload = performance.now() - startTime
+
     const webPreferences: WebPreferences = {
       preload: preloadPath || undefined,
       webSecurity: false,
@@ -337,7 +342,9 @@ export class DivisionBoxSession {
       transparent: true
     }
 
+    const viewCreateStart = performance.now()
     this.uiView = new WebContentsView({ webPreferences })
+    metrics.viewCreate = performance.now() - viewCreateStart
     this.attachedPlugin = plugin ?? null
 
     // Attach to window
@@ -368,10 +375,15 @@ export class DivisionBoxSession {
       }
     })
 
+    const loadUrlStart = performance.now()
     await this.uiView.webContents.loadURL(url)
+    metrics.loadUrl = performance.now() - loadUrlStart
+    metrics.total = performance.now() - startTime
+
     await this.setState(DivisionBoxState.ACTIVE)
 
-    console.log(`[DivisionBoxSession] UI view attached: ${this.sessionId}`)
+    // Log metrics for performance tracking
+    console.log(`[DivisionBoxSession] UI view attached: ${this.sessionId} | preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms loadUrl=${metrics.loadUrl.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`)
   }
 
   /**

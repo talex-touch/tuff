@@ -565,6 +565,9 @@ export class WindowManager {
   }
 
   public attachUIView(url: string, plugin?: TouchPlugin, query?: TuffQuery | string): void {
+    const startTime = performance.now()
+    const metrics = { preload: 0, viewCreate: 0, total: 0 }
+
     const currentWindow = this.current
     if (!currentWindow) {
       coreBoxWindowLog.error('Cannot attach UI view: no window available')
@@ -868,6 +871,8 @@ export class WindowManager {
       }
     }
 
+    metrics.preload = performance.now() - startTime
+
     const webPreferences: Electron.WebPreferences = {
       preload: preloadPath || undefined,
       webSecurity: false,
@@ -880,7 +885,9 @@ export class WindowManager {
       transparent: true
     }
 
+    const viewCreateStart = performance.now()
     const view = (this.uiView = new WebContentsView({ webPreferences }))
+    metrics.viewCreate = performance.now() - viewCreateStart
     this.attachedPlugin = plugin ?? null
 
     this.uiViewFocused = true
@@ -951,6 +958,9 @@ export class WindowManager {
     const finalUrl = this.normalizeUIViewUrl(url, plugin)
     coreBoxWindowLog.debug(`AttachUIView - resolved URL ${finalUrl}`)
     this.uiView.webContents.loadURL(finalUrl)
+
+    metrics.total = performance.now() - startTime
+    coreBoxWindowLog.info(`AttachUIView metrics: preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`)
 
     // Initial theme is now injected synchronously via preload ($tuffInitialData.theme)
     // No need to send via channel - data is available immediately when page scripts run
