@@ -36,16 +36,12 @@ export class DivisionBoxModule extends BaseModule {
   /**
    * Initializes the DivisionBox module
    * 
-   * - Initializes window pool for fast detach
    * - Registers IPC handlers
    * - Registers command provider with CoreBox search engine
    */
   async onInit(): Promise<void> {
     // Get the channel from the app
     const channel: ITouchChannel = $app.channel
-    
-    // Initialize window pool (pre-warm windows for fast detach)
-    await windowPool.initialize()
     
     // Initialize IPC handlers
     this.ipc = initializeDivisionBoxIPC(channel)
@@ -55,6 +51,17 @@ export class DivisionBoxModule extends BaseModule {
     searchEngineCore.registerProvider(commandProvider)
     
     console.log(LOG_PREFIX, '✓ Module initialized')
+  }
+  
+  /**
+   * Starts the DivisionBox module after all modules are loaded
+   * 
+   * - Initializes window pool for fast detach (delayed to ensure dev server is ready)
+   */
+  async start(): Promise<void> {
+    // Initialize window pool after all modules loaded (dev server should be ready)
+    await windowPool.initialize()
+    console.log(LOG_PREFIX, '✓ Window pool started')
   }
   
   /**

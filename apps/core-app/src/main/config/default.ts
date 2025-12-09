@@ -75,9 +75,10 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
   show: false,
   transparent: true,
   titleBarStyle: 'hidden',
+  trafficLightPosition: { x: 18, y: 22 },
   titleBarOverlay: {
     color: 'rgba(0,0,0,0)',
-    height: 35,
+    height: 60,
     symbolColor: 'white'
   },
   webPreferences: {

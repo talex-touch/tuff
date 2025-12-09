@@ -34,26 +34,17 @@ declare global {
  * @returns Mapped command line arguments as key-value pairs
  */
 export function useArgMapper(args: string[] = process.argv): IArgMapperOptions {
-  if (window.$argMapper) {
-    console.log('[useArgMapper] Using cached argMapper:', window.$argMapper)
-    return window.$argMapper
-  }
+  if (window.$argMapper) return window.$argMapper
 
   const mapper: IArgMapperOptions = {}
-
-  console.log('[useArgMapper] Parsing args:', args)
-  
   for (const arg of args) {
     if (arg.startsWith('--') && arg.includes('=')) {
       const [key, ...valueParts] = arg.slice(2).split('=')
       const value = valueParts.join('=')
-
       const camelCaseKey = key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
       mapper[camelCaseKey] = value
     }
   }
-
-  console.log('[useArgMapper] Parsed mapper:', mapper)
   return window.$argMapper = mapper
 }
 
@@ -97,7 +88,5 @@ export function useCoreType() {
  * @returns True if the current window is a division-box
  */
 export function isDivisionBox() {
-  const result = isCoreBox() && useCoreType() === 'division-box'
-  console.log('[isDivisionBox] isCoreBox:', isCoreBox(), 'coreType:', useCoreType(), 'result:', result)
-  return result
+  return isCoreBox() && useCoreType() === 'division-box'
 }

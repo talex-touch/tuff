@@ -73,6 +73,11 @@ function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
     return false
   }
 
+  // Never forward ⌘←/⌘→ - reserved for CoreBox history panel
+  if ((event.metaKey || event.ctrlKey) && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+    return false
+  }
+
   // In input-hidden mode (UI mode), forward almost all keys except system keys
   if (inputHidden) {
     // Don't forward Cmd+V (handled separately for paste)
@@ -148,6 +153,11 @@ export function useKeyboard(
    * @param event - KeyboardEvent from user interaction
    */
   function onKeyDown(event: KeyboardEvent): void {
+    // Debug: log all meta+arrow events at entry point
+    if (event.metaKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      console.log('[useKeyboard] META+ARROW at entry, key:', event.key, 'hasClass:', document.body.classList.contains('core-box'))
+    }
+
     if (!document.body.classList.contains('core-box')) {
       return
     }
@@ -155,6 +165,11 @@ export function useKeyboard(
     // Check if in UI mode - input is hidden when in UI mode
     const uiMode = isInUIMode()
     const inputHidden = uiMode // In UI mode, input box is hidden
+
+    // Debug: log ⌘← events
+    if (event.metaKey && event.key === 'ArrowLeft') {
+      console.log('[useKeyboard] ⌘← after class check, uiMode:', uiMode, 'shouldForward:', shouldForwardKey(event, inputHidden))
+    }
 
     // Forward keys to plugin UI view when in UI mode
     if (uiMode && shouldForwardKey(event, inputHidden)) {
@@ -223,23 +238,21 @@ export function useKeyboard(
       event.preventDefault()
     }
     else if (event.key === 'ArrowLeft') {
+      // Meta+Left: show calculation history (check first to ensure it works in all modes)
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        console.log('[useKeyboard] Dispatching corebox:show-calculation-history event')
+        window.dispatchEvent(new CustomEvent('corebox:show-calculation-history'))
+        event.preventDefault()
+        return
+      }
       const isGrid = boxOptions.layout?.mode === 'grid'
       // Grid mode: move left
-      if (isGrid && !event.metaKey) {
+      if (isGrid) {
         if (boxOptions.focus > 0) {
           boxOptions.focus -= 1
         }
         event.preventDefault()
         return
-      }
-      // Meta+Left: show calculation history
-      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-        const current = res.value[boxOptions.focus]
-        if (current?.source?.id === 'preview-provider') {
-          window.dispatchEvent(new CustomEvent('corebox:show-calculation-history', { detail: current }))
-          event.preventDefault()
-          return
-        }
       }
     }
     else if (event.key === 'ArrowRight') {

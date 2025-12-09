@@ -1,10 +1,9 @@
 import { reactive } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { isDivisionBox as isDivisionBoxArg } from '@talex-touch/utils/renderer'
 import type { DivisionBoxConfig, SessionMeta } from '@talex-touch/utils'
 
 /**
- * DivisionBox initial data injected via IPC trigger
+ * DivisionBox initial data from unified channel
  */
 export interface DivisionBoxInitialData {
   type: 'division-box'
@@ -14,11 +13,18 @@ export interface DivisionBoxInitialData {
   theme: { dark: boolean }
 }
 
+declare global {
+  interface Window {
+    /** DivisionBox mode flag set by preload */
+    $isDivisionBox?: boolean
+  }
+}
+
 /**
  * Window type state
+ * Uses preload flag $isDivisionBox for initial detection
  */
-const initialType = isDivisionBoxArg() ? 'division-box' : 'corebox'
-console.log('[core-box.ts] Initial window type:', initialType, 'isDivisionBoxArg:', isDivisionBoxArg())
+const initialType = window.$isDivisionBox ? 'division-box' : 'corebox'
 
 export const windowState = reactive<{
   type: 'corebox' | 'division-box'
@@ -43,20 +49,15 @@ export function getDivisionBoxConfig(): DivisionBoxConfig | null {
 }
 
 export function useCoreBox(): void {
-  // Check if DivisionBox via command line argument (--core-type=division-box)
-  const isDivisionBoxByArg = isDivisionBoxArg()
-  console.log('[useCoreBox] isDivisionBoxArg:', isDivisionBoxByArg, 'process.argv:', process.argv)
-  
-  if (isDivisionBoxByArg) {
+  // Use preload flag for DivisionBox detection
+  if (window.$isDivisionBox) {
     windowState.type = 'division-box'
+    document.body.classList.add('core-box', 'division-box')
     
     console.log(
       '%c DivisionBox MODE ',
       'background: #e91e63; color: #fff;padding: 2px 4px; border-radius: 4px;font-weight: bold;',
     )
-    
-    // Auto-show for DivisionBox
-    document.body.classList.add('core-box', 'division-box')
   } else {
     console.log(
       '%c CoreBox MODE ',

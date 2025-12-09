@@ -9,13 +9,15 @@ import {
   PRELOAD_LOADING_CHANNEL,
 
 } from '@talex-touch/utils/preload'
-import { isCoreBox, isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
+import { isCoreBox, isDivisionBox, isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge, ipcRenderer } from 'electron'
 
 declare global {
   interface Window {
     $startupInfo?: StartupInfo
+    /** DivisionBox mode flag - set by preload based on command line args */
+    $isDivisionBox?: boolean
   }
 }
 import appLogoAsset from '../../public/logo.png?asset'
@@ -122,6 +124,12 @@ else {
   if (startupInfo) {
     window.$startupInfo = startupInfo
   }
+}
+
+// Set DivisionBox flag in preload (before renderer initialization)
+if (isDivisionBox()) {
+  window.$isDivisionBox = true
+  console.log('[preload] DivisionBox mode detected')
 }
 
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']): Promise<boolean> {
