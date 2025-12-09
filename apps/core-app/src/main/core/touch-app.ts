@@ -247,7 +247,7 @@ export class TouchApp implements TalexTouch.TouchApp {
         meta: { url },
       })
 
-      await this.window.loadURL(url, { devtools: true })
+      await this.window.loadURL(url, { devtools: !startSilent })
     }
 
     renderTimer.end('Renderer ready', {

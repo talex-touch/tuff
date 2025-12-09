@@ -8,7 +8,7 @@ import { coreBoxManager } from './manager'
 import { coreBoxInputTransport } from './input-transport'
 import { coreBoxKeyTransport } from './key-transport'
 import { getCoreBoxWindow, windowManager } from './window'
-import { getBoxItemManager } from '../item-sdk'
+import { BOX_ITEM_CHANNELS, getBoxItemManager } from '../item-sdk'
 
 /**
  * @class IpcManager
@@ -298,6 +298,17 @@ export class IpcManager {
 
     coreBoxInputTransport.register()
     coreBoxKeyTransport.register()
+
+    // BoxItem SDK sync channel
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      BOX_ITEM_CHANNELS.SYNC,
+      ({ reply }) => {
+        const boxItemManager = getBoxItemManager()
+        boxItemManager.handleSyncRequest()
+        reply(DataCode.SUCCESS, {})
+      }
+    )
 
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
