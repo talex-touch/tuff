@@ -29,6 +29,14 @@ export default {
     linuxdoWaitlistNotice:
       'LinuxDo level 2 and 3 members can join the waitlist immediately without waiting. Sign in with the same email you use on LinuxDo so we can verify your status quickly.',
     backToHome: 'Back to homepage',
+    // App callback translations
+    notSignedIn: 'You are not signed in.',
+    tokenFailed: 'Failed to get authentication token.',
+    redirectingToApp: 'Redirecting to Tuff…',
+    redirectSuccess: 'Authentication successful! Opening Tuff…',
+    manualOpen: 'If the app does not open automatically, please open Tuff manually.',
+    authFailed: 'Authentication failed',
+    tryAgain: 'Try Again',
   },
   pricing: {
     title: 'Choose the plan that matches your momentum.',

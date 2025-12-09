@@ -34,8 +34,48 @@ function macOSAdapter(touchApp: TalexTouch.TouchApp): void {
   })
 }
 
-function onSchema(url: string): void {
-  console.log(`[Addon] Opened schema: ${url}`)
+interface SchemaHandler {
+  pattern: RegExp
+  handler: (url: URL, matches: RegExpMatchArray) => void
+}
+
+const schemaHandlers: SchemaHandler[] = [
+  {
+    pattern: /^\/auth\/callback/,
+    handler: (url) => {
+      const token = url.searchParams.get('token')
+      if (token) {
+        console.log('[Addon] Auth callback received, token length:', token.length)
+        const touchChannel = genTouchChannel()
+        touchChannel.send(ChannelType.MAIN, 'auth:external-callback', { token })
+      }
+      else {
+        console.warn('[Addon] Auth callback received without token')
+      }
+    },
+  },
+]
+
+function onSchema(rawUrl: string): void {
+  console.log(`[Addon] Opened schema: ${rawUrl}`)
+
+  try {
+    const url = new URL(rawUrl)
+    const pathname = url.pathname
+
+    for (const { pattern, handler } of schemaHandlers) {
+      const matches = pathname.match(pattern)
+      if (matches) {
+        handler(url, matches)
+        return
+      }
+    }
+
+    console.log(`[Addon] No handler matched for path: ${pathname}`)
+  }
+  catch (error) {
+    console.error('[Addon] Failed to parse schema URL:', error)
+  }
 }
 
 export class AddonOpenerModule extends BaseModule {

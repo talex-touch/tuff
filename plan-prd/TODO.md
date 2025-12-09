@@ -56,12 +56,21 @@
 **来源**: `plan-prd/03-features/plugin/plugin-market-provider-frontend-plan.md`
 **工期**: 5.5 天
 
-- [ ] 类型与默认源 (0.5d)
-- [ ] Provider Registry & Storage (1d)
-- [ ] Provider 实现 - 官方 + HTTP (1d)
-- [ ] UI 集成 - Market 页面 + Source Editor (1d)
+- [x] 类型与默认源 (0.5d)
+- [x] Provider Registry & Storage (1d)
+- [x] Provider 实现 - 官方 + HTTP (1d) - TpexApiProvider 完成
+- [x] UI 集成 - Market 页面 + Source Editor (1d)
 - [ ] 扩展 Provider - NPM/GitHub/Gitee (1.5d)
 - [ ] 验收 & 文档 (0.5d)
+
+#### 2.1 ✅ Nexus 联动与 Clerk 登录优化 (2025-12-09)
+- [x] Nexus app-callback 页面 - 浏览器登录后回调到 App
+- [x] tuff:// 协议处理 - addon-opener.ts 支持 auth/callback
+- [x] useAuth.loginWithBrowser() - 外部浏览器登录方法
+- [x] AuthTokenService - Clerk token 获取与缓存
+- [x] TpexApiProvider.listUserPlugins() - 认证 API 支持
+- [x] useUserPlugins composable - 获取用户插件列表
+- [x] i18n 翻译 - en/zh 完整
 
 ---
 
@@ -314,6 +323,7 @@
 - ~~Flow Transfer (P2)~~ - 2025-12
 - ~~DivisionBox 深化 (P2)~~ - 2025-12
 - ~~智能推荐系统 (P2)~~ - 2025-12
+- ~~Nexus 联动 + Clerk 登录优化 (P1)~~ - 2025-12-09
 
 ### Q4 2026 (10-12月)
 12. 平台能力体系 (P3)

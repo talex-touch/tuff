@@ -1,5 +1,5 @@
 import type { TuffItem } from '@talex-touch/utils'
-import { onBeforeUnmount, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { touchChannel } from '~/modules/channel/channel-core'
@@ -80,8 +80,23 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     if (data?.item) open(data.item)
   })
 
+  // Window event listener for ⌘K toggle-pin shortcut
+  function handleTogglePinEvent(event: Event): void {
+    console.log('[useActionPanel] toggle-pin event received')
+    const detail = (event as CustomEvent).detail
+    if (detail?.item) {
+      console.log('[useActionPanel] toggling pin for item:', detail.item.id)
+      togglePin(detail.item)
+    }
+  }
+
+  onMounted(() => {
+    window.addEventListener('corebox:toggle-pin', handleTogglePinEvent)
+  })
+
   onBeforeUnmount(() => {
     unregOpen()
+    window.removeEventListener('corebox:toggle-pin', handleTogglePinEvent)
   })
 
   return reactive({ visible, item, isPinned, open, close, handleAction, togglePin })

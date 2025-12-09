@@ -29,6 +29,14 @@ export default {
     linuxdoWaitlistNotice:
       'LinuxDo 2、3 级用户可直接加入 Waitlist，无需排队等待。请使用与 LinuxDo 相同的邮箱登录，以便我们快速核验资格。',
     backToHome: '返回首页',
+    // App 回调翻译
+    notSignedIn: '您尚未登录。',
+    tokenFailed: '获取认证令牌失败。',
+    redirectingToApp: '正在跳转到 Tuff…',
+    redirectSuccess: '认证成功！正在打开 Tuff…',
+    manualOpen: '如果应用未自动打开，请手动启动 Tuff。',
+    authFailed: '认证失败',
+    tryAgain: '重试',
   },
   pricing: {
     title: '选择与你节奏匹配的订阅方案',
