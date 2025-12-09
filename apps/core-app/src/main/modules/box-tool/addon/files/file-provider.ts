@@ -473,6 +473,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   async onLoad(context: ProviderContext): Promise<void> {
     const loadStart = performance.now()
+
+    // Windows 平台暂时禁用文件索引，避免权限问题导致闪退
+    // TODO: Phase 2 将使用 Everything SDK 替代
+    if (process.platform === 'win32') {
+      this.logInfo('File indexing disabled on Windows platform (Everything SDK integration planned)')
+      this.dbUtils = createDbUtils(context.databaseManager.getDb())
+      this.searchIndex = context.searchIndex
+      this.touchApp = context.touchApp
+      this.initializationContext = context
+      // 只注册必要的 channel，不启动扫描
+      this.registerOpenersChannel(context)
+      this.registerIndexingChannels(context)
+      return
+    }
+
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
@@ -2489,6 +2504,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
+    // Windows 平台禁用文件搜索，直接返回空结果
+    if (process.platform === 'win32') {
+      return new TuffSearchResultBuilder(query).build()
+    }
+
     searchLogger.logProviderSearch('file-provider', query.text, 'File System')
     searchLogger.fileSearchStart(query.text)
     if (!this.dbUtils || !this.searchIndex) {
