@@ -168,5 +168,37 @@ function getShortcutLabel(id: string): string {
       default-icon="i-carbon-warning-alt"
       active-icon="i-carbon-warning-alt"
     />
+
+    <!-- Recommendation Enabled switch -->
+    <TuffBlockSwitch
+      v-model="appSetting.recommendation.enabled"
+      :title="t('settingTools.recommendationEnabled')"
+      :description="t('settingTools.recommendationEnabledDesc')"
+      default-icon="i-carbon-star"
+      active-icon="i-carbon-star-filled"
+    />
+
+    <!-- Recommendation Show Reason switch -->
+    <TuffBlockSwitch
+      v-model="appSetting.recommendation.showReason"
+      :title="t('settingTools.recommendationShowReason')"
+      :description="t('settingTools.recommendationShowReasonDesc')"
+      default-icon="i-carbon-information"
+      active-icon="i-carbon-information-filled"
+    />
+
+    <!-- Recommendation Max Items select -->
+    <TuffBlockSelect
+      v-model="appSetting.recommendation.maxItems"
+      :title="t('settingTools.recommendationMaxItems')"
+      :description="t('settingTools.recommendationMaxItemsDesc')"
+      default-icon="i-carbon-list"
+      active-icon="i-carbon-list"
+    >
+      <TSelectItem :model-value="5">5</TSelectItem>
+      <TSelectItem :model-value="10">10</TSelectItem>
+      <TSelectItem :model-value="15">15</TSelectItem>
+      <TSelectItem :model-value="20">20</TSelectItem>
+    </TuffBlockSelect>
   </TuffGroupBlock>
 </template>

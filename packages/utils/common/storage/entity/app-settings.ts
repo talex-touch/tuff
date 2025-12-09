@@ -39,6 +39,11 @@ const _appSettingOriginData = {
   searchEngine: {
     logsEnabled: false,
   },
+  recommendation: {
+    enabled: true,
+    maxItems: 10,
+    showReason: true,
+  },
   window: {
     closeToTray: true,
     startMinimized: false,
