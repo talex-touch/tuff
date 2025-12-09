@@ -74,20 +74,45 @@ function isPinnedSection(section: TuffSection): boolean {
 </script>
 
 <template>
-  <!-- Multiple sections mode -->
-  <template v-if="hasSections">
-    <div
-      v-for="sectionData in sectionsData"
-      :key="sectionData.section.id"
-      class="BoxGridWrapper"
-      :class="{
-        'is-intelligence': isIntelligenceSection(sectionData.section),
-        'is-pinned': isPinnedSection(sectionData.section)
-      }"
-    >
-      <div v-if="sectionData.section.title" class="BoxGridTitle">
-        {{ sectionData.section.title }}
+  <div class="BoxGridContainer">
+    <!-- Multiple sections mode -->
+    <template v-if="hasSections">
+      <div
+        v-for="sectionData in sectionsData"
+        :key="sectionData.section.id"
+        class="BoxGridWrapper"
+        :class="{
+          'is-intelligence': isIntelligenceSection(sectionData.section),
+          'is-pinned': isPinnedSection(sectionData.section)
+        }"
+      >
+        <div v-if="sectionData.section.title" class="BoxGridTitle">
+          {{ sectionData.section.title }}
+        </div>
+        <div
+          class="BoxGrid p-4"
+          :style="{
+            '--grid-cols': gridConfig.columns,
+            '--grid-gap': gridConfig.gap + 'px'
+          }"
+          :class="`size-${gridConfig.itemSize}`"
+        >
+          <BoxGridItem
+            v-for="(item, localIndex) in sectionData.items"
+            :key="item.id"
+            :item="item"
+            :active="focus === sectionData.startIndex + localIndex"
+            :render="item.render"
+            :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
+            :style="{ '--item-index': localIndex }"
+            @click="emit('select', sectionData.startIndex + localIndex, item)"
+          />
+        </div>
       </div>
+    </template>
+
+    <!-- Single grid fallback (no sections) -->
+    <div v-else class="BoxGridWrapper">
       <div
         class="BoxGrid p-4"
         :style="{
@@ -97,44 +122,25 @@ function isPinnedSection(section: TuffSection): boolean {
         :class="`size-${gridConfig.itemSize}`"
       >
         <BoxGridItem
-          v-for="(item, localIndex) in sectionData.items"
+          v-for="(item, index) in items"
           :key="item.id"
           :item="item"
-          :active="focus === sectionData.startIndex + localIndex"
+          :active="focus === index"
           :render="item.render"
-          :quick-key="getQuickKey(sectionData.startIndex + localIndex)"
-          :style="{ '--item-index': localIndex }"
-          @click="emit('select', sectionData.startIndex + localIndex, item)"
+          :quick-key="getQuickKey(index)"
+          :style="{ '--item-index': index }"
+          @click="emit('select', index, item)"
         />
       </div>
-    </div>
-  </template>
-
-  <!-- Single grid fallback (no sections) -->
-  <div v-else class="BoxGridWrapper">
-    <div
-      class="BoxGrid p-4"
-      :style="{
-        '--grid-cols': gridConfig.columns,
-        '--grid-gap': gridConfig.gap + 'px'
-      }"
-      :class="`size-${gridConfig.itemSize}`"
-    >
-      <BoxGridItem
-        v-for="(item, index) in items"
-        :key="item.id"
-        :item="item"
-        :active="focus === index"
-        :render="item.render"
-        :quick-key="getQuickKey(index)"
-        :style="{ '--item-index': index }"
-        @click="emit('select', index, item)"
-      />
     </div>
   </div>
 </template>
 
 <style scoped lang="scss">
+.BoxGridContainer {
+  width: 100%;
+}
+
 .BoxGridWrapper {
   width: calc(100% - 1rem);
   border-radius: 18px;

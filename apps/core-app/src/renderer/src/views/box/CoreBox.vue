@@ -484,7 +484,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
       </TouchScroll>
       <CoreBoxFooter
         :display="!!res.length"
-        :item="activeItem"
+        :item="activeItem ?? null"
         :active-activations="activeActivations"
         :result-count="res.length"
         :is-recommendation="!searchVal && !activeActivations?.length"
