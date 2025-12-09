@@ -1052,6 +1052,43 @@ export class WindowManager {
   }
 
   /**
+   * Extracts the UI view from CoreBox without destroying it.
+   * Used for transferring the view to a DivisionBox window.
+   * @returns The extracted UI view and plugin, or null if no view is attached
+   */
+  public extractUIView(): { view: WebContentsView; plugin: TouchPlugin } | null {
+    if (!this.uiView || !this.attachedPlugin) {
+      return null
+    }
+
+    const currentWindow = this.current
+    if (!currentWindow) {
+      return null
+    }
+
+    // Remove from CoreBox window (but don't destroy)
+    try {
+      currentWindow.window.contentView.removeChildView(this.uiView)
+    } catch (err) {
+      console.error('[WindowManager] Failed to remove UI view from CoreBox:', err)
+      return null
+    }
+
+    const result = {
+      view: this.uiView,
+      plugin: this.attachedPlugin
+    }
+
+    // Clear references without destroying
+    this.uiView = null
+    this.attachedPlugin = null
+    this.uiViewFocused = false
+
+    coreBoxWindowLog.info('UI view extracted for transfer')
+    return result
+  }
+
+  /**
    * Check if UI view is currently active and focused
    */
   public isUIViewActive(): boolean {

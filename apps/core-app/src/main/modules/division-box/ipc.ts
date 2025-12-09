@@ -195,6 +195,42 @@ export class DivisionBoxIPC {
     )
     this.unregisterFunctions.push(unregFlowTrigger)
 
+    // Register window control handlers
+    const unregTogglePin = this.channel.regChannel(
+      ChannelType.MAIN,
+      'division-box:toggle-pin',
+      this.handleTogglePin.bind(this)
+    )
+    this.unregisterFunctions.push(unregTogglePin)
+
+    const unregSetOpacity = this.channel.regChannel(
+      ChannelType.MAIN,
+      'division-box:set-opacity',
+      this.handleSetOpacity.bind(this)
+    )
+    this.unregisterFunctions.push(unregSetOpacity)
+
+    const unregToggleDevTools = this.channel.regChannel(
+      ChannelType.MAIN,
+      'division-box:toggle-devtools',
+      this.handleToggleDevTools.bind(this)
+    )
+    this.unregisterFunctions.push(unregToggleDevTools)
+
+    const unregGetWindowState = this.channel.regChannel(
+      ChannelType.MAIN,
+      'division-box:get-window-state',
+      this.handleGetWindowState.bind(this)
+    )
+    this.unregisterFunctions.push(unregGetWindowState)
+
+    const unregInputChange = this.channel.regChannel(
+      ChannelType.MAIN,
+      'division-box:input-change',
+      this.handleInputChange.bind(this)
+    )
+    this.unregisterFunctions.push(unregInputChange)
+
     console.log('[DivisionBoxIPC] All IPC handlers registered')
   }
 
@@ -421,6 +457,163 @@ export class DivisionBoxIPC {
       data.reply(DataCode.SUCCESS, createSuccessResponse({ sessionId }))
     } catch (error) {
       console.error('[DivisionBoxIPC] Error in handleFlowTrigger:', error)
+      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
+    }
+  }
+
+  // ==================== Window Control Handlers ====================
+
+  /**
+   * Handles division-box:toggle-pin IPC message
+   */
+  private async handleTogglePin(data: StandardChannelData): Promise<void> {
+    try {
+      const { sessionId } = data.data as { sessionId: string }
+      const validation = validateSessionId(sessionId)
+      if (!validation.valid) {
+        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
+        return
+      }
+
+      const session = this.manager.getSession(sessionId)
+      if (!session) {
+        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
+        return
+      }
+
+      const isPinned = session.toggleAlwaysOnTop()
+      data.reply(DataCode.SUCCESS, createSuccessResponse({ isPinned }))
+    } catch (error) {
+      console.error('[DivisionBoxIPC] Error in handleTogglePin:', error)
+      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
+    }
+  }
+
+  /**
+   * Handles division-box:set-opacity IPC message
+   */
+  private async handleSetOpacity(data: StandardChannelData): Promise<void> {
+    try {
+      const { sessionId, opacity } = data.data as { sessionId: string; opacity: number }
+      const validation = validateSessionId(sessionId)
+      if (!validation.valid) {
+        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
+        return
+      }
+
+      const session = this.manager.getSession(sessionId)
+      if (!session) {
+        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
+        return
+      }
+
+      session.setOpacity(opacity)
+      data.reply(DataCode.SUCCESS, createSuccessResponse({ opacity: session.getOpacity() }))
+    } catch (error) {
+      console.error('[DivisionBoxIPC] Error in handleSetOpacity:', error)
+      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
+    }
+  }
+
+  /**
+   * Handles division-box:toggle-devtools IPC message
+   */
+  private async handleToggleDevTools(data: StandardChannelData): Promise<void> {
+    try {
+      const { sessionId } = data.data as { sessionId: string }
+      const validation = validateSessionId(sessionId)
+      if (!validation.valid) {
+        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
+        return
+      }
+
+      const session = this.manager.getSession(sessionId)
+      if (!session) {
+        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
+        return
+      }
+
+      if (session.isDevToolsOpen()) {
+        session.closeDevTools()
+      } else {
+        session.openDevTools()
+      }
+      
+      data.reply(DataCode.SUCCESS, createSuccessResponse({ isOpen: session.isDevToolsOpen() }))
+    } catch (error) {
+      console.error('[DivisionBoxIPC] Error in handleToggleDevTools:', error)
+      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
+    }
+  }
+
+  /**
+   * Handles division-box:get-window-state IPC message
+   */
+  private async handleGetWindowState(data: StandardChannelData): Promise<void> {
+    try {
+      const { sessionId } = data.data as { sessionId: string }
+      const validation = validateSessionId(sessionId)
+      if (!validation.valid) {
+        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
+        return
+      }
+
+      const session = this.manager.getSession(sessionId)
+      if (!session) {
+        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
+        return
+      }
+
+      const windowState = {
+        isPinned: session.isAlwaysOnTop(),
+        opacity: session.getOpacity(),
+        isDevToolsOpen: session.isDevToolsOpen()
+      }
+      
+      data.reply(DataCode.SUCCESS, createSuccessResponse(windowState))
+    } catch (error) {
+      console.error('[DivisionBoxIPC] Error in handleGetWindowState:', error)
+      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
+    }
+  }
+
+  /**
+   * Handles division-box:input-change IPC message
+   * Forwards input changes to the plugin UI view
+   */
+  private async handleInputChange(data: StandardChannelData): Promise<void> {
+    try {
+      const { sessionId, input, query } = data.data as { 
+        sessionId: string
+        input: string
+        query: any 
+      }
+      
+      const validation = validateSessionId(sessionId)
+      if (!validation.valid) {
+        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
+        return
+      }
+
+      const session = this.manager.getSession(sessionId)
+      if (!session) {
+        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
+        return
+      }
+
+      // Forward input to plugin via channel
+      const plugin = session.getAttachedPlugin()
+      if (plugin) {
+        this.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
+          input,
+          query,
+          source: 'division-box'
+        })
+      }
+
+      data.reply(DataCode.SUCCESS, createSuccessResponse({ received: true }))
+    } catch (error) {
+      console.error('[DivisionBoxIPC] Error in handleInputChange:', error)
       data.reply(DataCode.ERROR, createErrorResponse(error as Error))
     }
   }

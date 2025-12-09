@@ -21,14 +21,14 @@ import { LRUCache } from './lru-cache'
  * Resource limits for DivisionBox system
  */
 const RESOURCE_LIMITS = {
-  /** Maximum number of active DivisionBox instances globally */
-  MAX_ACTIVE_SESSIONS: 20,
+  /** Maximum number of active DivisionBox instances globally (matches window pool) */
+  MAX_ACTIVE_SESSIONS: 5,
   
   /** Maximum number of WebContentsView instances per session */
   MAX_VIEWS_PER_SESSION: 3,
   
   /** Maximum number of cached keepAlive sessions */
-  MAX_CACHED_SESSIONS: 10
+  MAX_CACHED_SESSIONS: 5
 }
 
 /**
@@ -156,7 +156,7 @@ export class DivisionBoxManager {
    * Creates a new DivisionBox session
    * 
    * Validates configuration, enforces resource limits, generates unique sessionId,
-   * creates DivisionBoxSession instance, and registers it.
+   * creates DivisionBoxSession instance, creates window, and optionally attaches UI view.
    * 
    * @param config - Configuration for the new DivisionBox
    * @param stateChangeCallback - Optional callback for state changes (used by IPC layer for broadcasting)
@@ -207,7 +207,89 @@ export class DivisionBoxManager {
       })
     }
 
+    // Create and show the window
+    try {
+      await session.createWindow()
+      
+      // Attach UI view with plugin URL if provided
+      if (validatedConfig.url) {
+        // Get plugin reference if pluginId is provided
+        const { pluginModule } = await import('../plugin/plugin-module')
+        const plugin = validatedConfig.pluginId 
+          ? pluginModule.pluginManager?.getPluginByName(validatedConfig.pluginId) as any
+          : undefined
+        
+        await session.attachUIView(validatedConfig.url, plugin)
+      }
+    } catch (error) {
+      // Clean up on error
+      this.sessions.delete(sessionId)
+      throw error
+    }
+
     console.log(`[DivisionBoxManager] Created session: ${sessionId}`)
+    return session
+  }
+
+  /**
+   * Creates a new DivisionBox session without attaching a UI view.
+   * Used when transferring an existing WebContentsView from CoreBox.
+   * 
+   * @param config - Configuration for the new DivisionBox
+   * @param stateChangeCallback - Optional callback for state changes
+   * @returns The created DivisionBoxSession (window only, no UI view)
+   */
+  async createSessionWithoutUI(
+    config: DivisionBoxConfig,
+    stateChangeCallback?: (event: import('@talex-touch/utils').StateChangeEvent) => void
+  ): Promise<DivisionBoxSession> {
+    // Check global session limit
+    if (this.sessions.size >= RESOURCE_LIMITS.MAX_ACTIVE_SESSIONS) {
+      throw new DivisionBoxError(
+        DivisionBoxErrorCode.LIMIT_EXCEEDED,
+        `Maximum number of active sessions (${RESOURCE_LIMITS.MAX_ACTIVE_SESSIONS}) exceeded`
+      )
+    }
+
+    // Validate and apply defaults to configuration
+    const validatedConfig = this.validateAndApplyDefaults(config)
+
+    // Generate unique session ID
+    const sessionId = this.generateSessionId()
+
+    // Create new session
+    const session = new DivisionBoxSession(sessionId, validatedConfig)
+
+    // Register session
+    this.sessions.set(sessionId, session)
+
+    // Register state change callback if provided
+    if (stateChangeCallback) {
+      session.onStateChange(stateChangeCallback)
+    }
+
+    // If keepAlive is enabled, add to LRU cache when it becomes inactive
+    if (validatedConfig.keepAlive) {
+      session.onStateChange((event) => {
+        if (event.newState === DivisionBoxState.INACTIVE) {
+          this.lruCache.add(session)
+        } else if (event.newState === DivisionBoxState.ACTIVE) {
+          this.lruCache.updateAccess(sessionId)
+        } else if (event.newState === DivisionBoxState.DESTROY) {
+          this.lruCache.remove(sessionId)
+        }
+      })
+    }
+
+    // Create window only (no UI view attachment)
+    try {
+      await session.createWindow()
+    } catch (error) {
+      this.sessions.delete(sessionId)
+      throw error
+    }
+
+    console.log(`[DivisionBoxManager] Created session without UI: ${sessionId}`)
     return session
   }
 

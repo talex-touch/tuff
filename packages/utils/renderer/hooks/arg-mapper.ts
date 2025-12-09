@@ -5,6 +5,8 @@
 export interface IArgMapperOptions {
   /** The type of touch window - either main window or core-box popup */
   touchType?: 'main' | 'core-box'
+  /** The sub-type for core-box windows (e.g., division-box) */
+  coreType?: 'division-box'
   /** User data directory path */
   userDataDir?: string
   /** Application path */
@@ -33,11 +35,14 @@ declare global {
  */
 export function useArgMapper(args: string[] = process.argv): IArgMapperOptions {
   if (window.$argMapper) {
+    console.log('[useArgMapper] Using cached argMapper:', window.$argMapper)
     return window.$argMapper
   }
 
   const mapper: IArgMapperOptions = {}
 
+  console.log('[useArgMapper] Parsing args:', args)
+  
   for (const arg of args) {
     if (arg.startsWith('--') && arg.includes('=')) {
       const [key, ...valueParts] = arg.slice(2).split('=')
@@ -48,6 +53,7 @@ export function useArgMapper(args: string[] = process.argv): IArgMapperOptions {
     }
   }
 
+  console.log('[useArgMapper] Parsed mapper:', mapper)
   return window.$argMapper = mapper
 }
 
@@ -75,4 +81,23 @@ export function isMainWindow() {
  */
 export function isCoreBox() {
   return useTouchType() === 'core-box'
+}
+
+/**
+ * Gets the core-box sub-type from command line arguments
+ * @returns The core type ('division-box') or undefined
+ */
+export function useCoreType() {
+  const argMapper = useArgMapper()
+  return argMapper.coreType
+}
+
+/**
+ * Checks if the current window is a division-box window
+ * @returns True if the current window is a division-box
+ */
+export function isDivisionBox() {
+  const result = isCoreBox() && useCoreType() === 'division-box'
+  console.log('[isDivisionBox] isCoreBox:', isCoreBox(), 'coreType:', useCoreType(), 'result:', result)
+  return result
 }

@@ -13,6 +13,7 @@ interface Props {
       }
     }
   }
+  placeholder?: string
 }
 
 interface Emits {
@@ -41,6 +42,9 @@ const inputValue = computed({
 })
 
 const placeholder = computed(() => {
+  // Use custom placeholder if provided
+  if (props.placeholder) return props.placeholder
+  
   return props.boxOptions.mode === BoxMode.FEATURE
     ? (props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name)
     : t('boxInput.placeholder')

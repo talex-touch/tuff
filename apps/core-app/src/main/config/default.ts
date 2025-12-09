@@ -60,3 +60,35 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
     additionalArguments: ['--touch-type=core-box']
   }
 }
+
+export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions = {
+  title: `${AppName} Division`,
+  frame: false,
+  minWidth: 900,
+  minHeight: 400,
+  width: 900,
+  height: 600,
+  movable: true,
+  resizable: true,
+  skipTaskbar: false,
+  autoHideMenuBar: true,
+  show: false,
+  transparent: true,
+  titleBarStyle: 'hidden',
+  titleBarOverlay: {
+    color: 'rgba(0,0,0,0)',
+    height: 35,
+    symbolColor: 'white'
+  },
+  webPreferences: {
+    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    webSecurity: false,
+    nodeIntegration: true,
+    nodeIntegrationInSubFrames: true,
+    contextIsolation: false,
+    sandbox: false,
+    webviewTag: true,
+    scrollBounce: true,
+    additionalArguments: ['--touch-type=core-box', '--core-type=division-box']
+  }
+}

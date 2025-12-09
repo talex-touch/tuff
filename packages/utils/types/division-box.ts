@@ -94,6 +94,23 @@ export interface HeaderConfig {
 export type DivisionBoxSize = 'compact' | 'medium' | 'expanded'
 
 /**
+ * UI configuration for DivisionBox CoreBox header
+ */
+export interface DivisionBoxUIConfig {
+  /** Show the search input in header */
+  showInput?: boolean
+  
+  /** Placeholder text for search input */
+  inputPlaceholder?: string
+  
+  /** Show result list area */
+  showResults?: boolean
+  
+  /** Initial input value */
+  initialInput?: string
+}
+
+/**
  * Configuration for creating a DivisionBox instance
  */
 export interface DivisionBoxConfig {
@@ -117,6 +134,9 @@ export interface DivisionBoxConfig {
   
   /** Header configuration */
   header?: HeaderConfig
+  
+  /** UI configuration for CoreBox header display */
+  ui?: DivisionBoxUIConfig
   
   /** WebContentsView preferences (main process only) */
   webPreferences?: any

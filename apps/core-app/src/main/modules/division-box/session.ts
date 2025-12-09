@@ -2,11 +2,15 @@
  * DivisionBoxSession - Main Process
  * 
  * Manages a single DivisionBox instance lifecycle, state, and resources.
+ * Uses TouchWindow + WebContentsView (attached) pattern, similar to CoreBox.
  * Implements a six-state lifecycle: prepare → attach → active → inactive → detach → destroy
  */
 
-import { WebContentsView } from 'electron'
+import { app, WebContentsView, nativeTheme } from 'electron'
 import type { WebPreferences } from 'electron'
+import path from 'node:path'
+import os from 'node:os'
+import fse from 'fs-extra'
 import {
   DivisionBoxState,
   DivisionBoxError,
@@ -15,6 +19,11 @@ import {
   type SessionMeta,
   type StateChangeEvent
 } from '@talex-touch/utils'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { TouchWindow } from '../../core/touch-window'
+import { genTouchApp } from '../../core'
+import type { TouchPlugin } from '../plugin/plugin'
+import { pluginModule } from '../plugin/plugin-module'
 
 /**
  * Type for state change listener callback
@@ -34,16 +43,30 @@ const VALID_TRANSITIONS: Record<DivisionBoxState, DivisionBoxState[]> = {
 }
 
 /**
+ * Initial data injected into the renderer via preload
+ */
+export interface DivisionBoxInitialData {
+  type: 'division-box'
+  sessionId: string
+  config: DivisionBoxConfig
+  meta: SessionMeta
+  theme: { dark: boolean }
+}
+
+/**
  * DivisionBoxSession class
  * 
  * Manages the lifecycle, state, and resources of a single DivisionBox instance.
+ * Creates a TouchWindow and attaches a WebContentsView for plugin UI.
  */
 export class DivisionBoxSession {
-  /** Unique session identifier */
   readonly sessionId: string
 
-  /** WebContentsView instance (null when not created or destroyed) */
-  private webContentsView: WebContentsView | null = null
+  /** TouchWindow instance for this DivisionBox */
+  private touchWindow: TouchWindow | null = null
+
+  /** WebContentsView for plugin UI (attached to touchWindow) */
+  private uiView: WebContentsView | null = null
 
   /** Current lifecycle state */
   private state: DivisionBoxState = DivisionBoxState.PREPARE
@@ -61,19 +84,15 @@ export class DivisionBoxSession {
   private stateChangeListeners: Set<StateChangeListener> = new Set()
 
   /** Configuration used to create this session */
-  private readonly config: DivisionBoxConfig
+  readonly config: DivisionBoxConfig
 
-  /**
-   * Creates a new DivisionBoxSession
-   * 
-   * @param sessionId - Unique identifier for this session
-   * @param config - Configuration for the DivisionBox
-   */
+  /** Attached plugin reference */
+  private attachedPlugin: TouchPlugin | null = null
+
   constructor(sessionId: string, config: DivisionBoxConfig) {
     this.sessionId = sessionId
     this.config = config
 
-    // Initialize metadata with defaults
     const now = Date.now()
     this.meta = {
       pluginId: config.pluginId,
@@ -184,69 +203,465 @@ export class DivisionBoxSession {
   }
 
   /**
-   * Creates and configures a WebContentsView
-   * 
-   * @param url - URL to load in the view
-   * @throws {DivisionBoxError} If view creation fails
+   * Creates and initializes the DivisionBox window
+   * Uses window pool for faster acquisition
    */
-  async createWebContentsView(url: string): Promise<void> {
-    if (this.webContentsView) {
+  async createWindow(): Promise<void> {
+    console.log(`[DivisionBoxSession] createWindow called: ${this.sessionId}`)
+    
+    if (this.touchWindow) {
       throw new DivisionBoxError(
         DivisionBoxErrorCode.STATE_ERROR,
-        'WebContentsView already exists',
+        'Window already exists',
         this.sessionId
       )
     }
 
     try {
-      // Create WebContentsView with configuration
-      const webPreferences: WebPreferences = {
-        nodeIntegration: false,
-        contextIsolation: true,
-        ...this.config.webPreferences
+      console.log(`[DivisionBoxSession] Acquiring window from pool...`)
+      // Acquire window from pool (pre-warmed)
+      const { windowPool } = await import('./window-pool')
+      console.log(`[DivisionBoxSession] windowPool imported, calling acquire...`)
+      this.touchWindow = await windowPool.acquire()
+      console.log(`[DivisionBoxSession] Window acquired successfully`)
+      
+      // Update window title
+      this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
+
+      // Prepare initial data for injection
+      const initialData: DivisionBoxInitialData = {
+        type: 'division-box',
+        sessionId: this.sessionId,
+        config: this.config,
+        meta: this.meta,
+        theme: { dark: nativeTheme.shouldUseDarkColors }
       }
 
-      this.webContentsView = new WebContentsView({
-        webPreferences
+      // Inject initial data via executeJavaScript (window is already loaded)
+      const script = `window.$tuffInitialData = ${JSON.stringify(initialData)};`
+      await this.touchWindow.window.webContents.executeJavaScript(script).catch(err => {
+        console.error('[DivisionBoxSession] Failed to inject initial data:', err)
       })
 
-      // Load URL
-      await this.webContentsView.webContents.loadURL(url)
+      // Notify renderer about DivisionBox trigger
+      genTouchApp().channel.sendTo(
+        this.touchWindow.window,
+        ChannelType.MAIN,
+        'core-box:trigger',
+        {
+          type: 'division-box',
+          sessionId: this.sessionId,
+          config: this.config,
+          meta: this.meta
+        }
+      )
 
-      // Transition to ATTACH state
+      // Handle window close
+      this.touchWindow.window.on('closed', () => {
+        console.log(`[DivisionBoxSession] Window closed: ${this.sessionId}`)
+        if (this.touchWindow) {
+          windowPool.release(this.touchWindow.window)
+        }
+        this.touchWindow = null
+        this.destroy().catch(err => {
+          console.error('[DivisionBoxSession] Error in destroy after close:', err)
+        })
+      })
+
+      // Handle window resize - update UI view bounds
+      this.touchWindow.window.on('resize', () => {
+        this.updateUIViewBounds()
+      })
+
+      // Show window
+      this.touchWindow.window.show()
+
       await this.setState(DivisionBoxState.ATTACH)
+      console.log(`[DivisionBoxSession] Window acquired from pool: ${this.sessionId}`)
     } catch (error) {
-      this.webContentsView = null
+      this.destroyWindow()
       throw new DivisionBoxError(
         DivisionBoxErrorCode.RESOURCE_ERROR,
-        `Failed to create WebContentsView: ${error}`,
+        `Failed to create window: ${error}`,
         this.sessionId
       )
     }
   }
 
   /**
-   * Destroys the WebContentsView and cleans up resources
+   * Updates UI view bounds to match window size
    */
-  destroyWebContentsView(): void {
-    if (this.webContentsView) {
+  private updateUIViewBounds(): void {
+    if (!this.touchWindow || !this.uiView) return
+    
+    const bounds = this.touchWindow.window.getBounds()
+    const headerHeight = 60
+    this.uiView.setBounds({
+      x: 0,
+      y: headerHeight,
+      width: bounds.width,
+      height: bounds.height - headerHeight
+    })
+  }
+
+  /**
+   * Attaches a WebContentsView for plugin UI
+   * @param url - Plugin UI URL to load
+   * @param plugin - Optional plugin reference for injection
+   */
+  async attachUIView(url: string, plugin?: TouchPlugin): Promise<void> {
+    if (!this.touchWindow) {
+      throw new DivisionBoxError(
+        DivisionBoxErrorCode.STATE_ERROR,
+        'Window must be created before attaching UI view',
+        this.sessionId
+      )
+    }
+
+    if (this.uiView) {
+      console.warn('[DivisionBoxSession] UI view already attached, detaching first')
+      this.detachUIView()
+    }
+
+    const injections = plugin?.__getInjections__()
+    let preloadPath = injections?._.preload
+
+    // Create dynamic preload for plugin channel if available
+    if (plugin && injections?.js) {
+      const tempPreloadPath = path.resolve(
+        os.tmpdir(),
+        `tuff-division-preload-${plugin.name}-${Date.now()}.js`
+      )
+
+      const channelScript = this.generateChannelScript(plugin._uniqueChannelKey)
+      const pluginInjectionCode = injections.js.trim()
+
+      const combinedPreload = `
+// DivisionBox preload for ${plugin.name}
+(function() {
+  try { ${pluginInjectionCode}; } catch(e) { console.error('[DivisionBox] Plugin inject failed:', e); }
+  try { ${channelScript} } catch(e) { console.error('[DivisionBox] Channel inject failed:', e); }
+})();
+`
       try {
-        // @ts-ignore - webContents.destroy() exists but may not be in types
-        this.webContentsView.webContents.destroy()
+        fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
+        preloadPath = tempPreloadPath
       } catch (error) {
-        console.error('[DivisionBoxSession] Error destroying WebContentsView:', error)
+        console.error('[DivisionBoxSession] Failed to create preload:', error)
       }
-      this.webContentsView = null
+    }
+
+    const webPreferences: WebPreferences = {
+      preload: preloadPath || undefined,
+      webSecurity: false,
+      nodeIntegration: true,
+      nodeIntegrationInSubFrames: true,
+      contextIsolation: false,
+      sandbox: false,
+      webviewTag: true,
+      scrollBounce: true,
+      transparent: true
+    }
+
+    this.uiView = new WebContentsView({ webPreferences })
+    this.attachedPlugin = plugin ?? null
+
+    // Attach to window
+    this.touchWindow.window.contentView.addChildView(this.uiView)
+
+    // Set bounds (below header area)
+    const bounds = this.touchWindow.window.getBounds()
+    const headerHeight = 60
+    this.uiView.setBounds({
+      x: 0,
+      y: headerHeight,
+      width: bounds.width,
+      height: bounds.height - headerHeight
+    })
+
+    // Handle dom-ready
+    this.uiView.webContents.once('dom-ready', () => {
+      if (plugin) {
+        if (!app.isPackaged || plugin.dev.enable) {
+          this.uiView?.webContents.openDevTools({ mode: 'detach' })
+        }
+        if (injections?.styles) {
+          this.uiView?.webContents.insertCSS(injections.styles)
+        }
+        if (pluginModule.pluginManager) {
+          pluginModule.pluginManager.setActivePlugin(plugin.name)
+        }
+      }
+    })
+
+    await this.uiView.webContents.loadURL(url)
+    await this.setState(DivisionBoxState.ACTIVE)
+
+    console.log(`[DivisionBoxSession] UI view attached: ${this.sessionId}`)
+  }
+
+  /**
+   * Generate plugin channel script for preload injection
+   */
+  private generateChannelScript(uniqueKey: string): string {
+    return `
+(function() {
+  const uniqueKey = "${uniqueKey}";
+  window['$tuffInitialData'] = window['$tuffInitialData'] || {};
+  const { ipcRenderer } = require('electron');
+  const ChannelType = ${JSON.stringify(ChannelType)};
+  const DataCode = ${JSON.stringify(DataCode)};
+  const CHANNEL_DEFAULT_TIMEOUT = 10000;
+
+  class TouchChannel {
+    channelMap = new Map();
+    pendingMap = new Map();
+    earlyMessageQueue = new Map();
+
+    constructor() {
+      ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
+    }
+
+    __parse_raw_data(e, arg) {
+      if (!arg?.header) return null;
+      const { uniqueKey: thisKey } = arg.header;
+      if (thisKey && thisKey !== uniqueKey) return null;
+      return {
+        header: { status: arg.header.status || 'request', type: ChannelType.MAIN, _originData: arg },
+        sync: arg.sync, code: arg.code, data: arg.data, plugin: arg.plugin, name: arg.name
+      };
+    }
+
+    __handle_main(e, arg) {
+      const rawData = this.__parse_raw_data(e, arg);
+      if (!rawData?.header) return;
+      if (rawData.header.status === 'reply' && rawData.sync) {
+        return this.pendingMap.get(rawData.sync.id)?.(rawData);
+      }
+      const listeners = this.channelMap.get(rawData.name);
+      if (listeners?.length > 0) {
+        this.__dispatch(e, rawData, listeners);
+      } else {
+        const queue = this.earlyMessageQueue.get(rawData.name) || [];
+        queue.push({ e, rawData });
+        this.earlyMessageQueue.set(rawData.name, queue);
+      }
+    }
+
+    __dispatch(e, rawData, listeners) {
+      listeners.forEach(func => {
+        func({ reply: (code, data) => e.sender.send('@plugin-process-message', {
+          code, data, sync: rawData.sync ? { ...rawData.sync, timeStamp: Date.now() } : undefined,
+          name: rawData.name, header: { status: 'reply', type: rawData.header.type }
+        }), ...rawData });
+      });
+    }
+
+    regChannel(eventName, callback) {
+      const listeners = this.channelMap.get(eventName) || [];
+      if (!listeners.includes(callback)) listeners.push(callback);
+      this.channelMap.set(eventName, listeners);
+      const early = this.earlyMessageQueue.get(eventName);
+      if (early?.length) {
+        this.earlyMessageQueue.delete(eventName);
+        early.forEach(({ e, rawData }) => this.__dispatch(e, rawData, [callback]));
+      }
+      return () => { const idx = listeners.indexOf(callback); if (idx !== -1) listeners.splice(idx, 1); };
+    }
+
+    send(eventName, arg) {
+      const uniqueId = Date.now() + '#' + eventName + '@' + Math.random().toString(12);
+      const data = { code: DataCode.SUCCESS, data: arg, sync: { timeStamp: Date.now(), timeout: CHANNEL_DEFAULT_TIMEOUT, id: uniqueId },
+        name: eventName, header: { uniqueKey, status: 'request', type: ChannelType.PLUGIN }
+      };
+      return new Promise((resolve, reject) => {
+        ipcRenderer.send('@plugin-process-message', data);
+        const timeout = setTimeout(() => { this.pendingMap.delete(uniqueId); reject(new Error('Timeout')); }, CHANNEL_DEFAULT_TIMEOUT);
+        this.pendingMap.set(uniqueId, res => { clearTimeout(timeout); this.pendingMap.delete(uniqueId); resolve(res.data); });
+      });
+    }
+  }
+
+  window['$channel'] = new TouchChannel();
+})();
+`
+  }
+
+  /**
+   * Attaches an existing WebContentsView (transferred from CoreBox)
+   * @param view - The existing WebContentsView to attach
+   * @param plugin - The plugin reference
+   */
+  async attachExistingUIView(view: WebContentsView, plugin: TouchPlugin): Promise<void> {
+    if (!this.touchWindow) {
+      throw new DivisionBoxError(
+        DivisionBoxErrorCode.STATE_ERROR,
+        'Window must be created before attaching UI view',
+        this.sessionId
+      )
+    }
+
+    if (this.uiView) {
+      console.warn('[DivisionBoxSession] UI view already attached, detaching first')
+      this.detachUIView()
+    }
+
+    this.uiView = view
+    this.attachedPlugin = plugin
+
+    // Attach to DivisionBox window
+    this.touchWindow.window.contentView.addChildView(view)
+
+    // Update bounds for the new window
+    this.updateUIViewBounds()
+
+    // Set active plugin
+    if (pluginModule.pluginManager) {
+      pluginModule.pluginManager.setActivePlugin(plugin.name)
+    }
+
+    // Send trigger to notify renderer about DivisionBox mode
+    // This populates windowState.divisionBox in the renderer
+    genTouchApp().channel.sendTo(
+      this.touchWindow.window,
+      ChannelType.MAIN,
+      'core-box:trigger',
+      {
+        type: 'division-box',
+        sessionId: this.sessionId,
+        config: this.config,
+        meta: this.meta
+      }
+    )
+
+    await this.setState(DivisionBoxState.ACTIVE)
+
+    console.log(`[DivisionBoxSession] Existing UI view attached: ${this.sessionId}`)
+  }
+
+  /**
+   * Detaches the UI view from the window
+   */
+  detachUIView(): void {
+    if (this.uiView) {
+      try {
+        this.touchWindow?.window.contentView.removeChildView(this.uiView)
+        this.uiView.webContents.close()
+      } catch (error) {
+        console.error('[DivisionBoxSession] Error detaching UI view:', error)
+      }
+      this.uiView = null
+      this.attachedPlugin = null
     }
   }
 
   /**
-   * Gets the WebContentsView instance
-   * 
-   * @returns WebContentsView or null if not created
+   * Destroys the window and cleans up resources
+   */
+  destroyWindow(): void {
+    this.detachUIView()
+
+    if (this.touchWindow) {
+      try {
+        this.touchWindow.window.destroy()
+      } catch (error) {
+        console.error('[DivisionBoxSession] Error destroying window:', error)
+      }
+      this.touchWindow = null
+    }
+  }
+
+  /**
+   * Gets the TouchWindow instance
+   */
+  getWindow(): TouchWindow | null {
+    return this.touchWindow
+  }
+
+  /**
+   * Gets the UI WebContentsView
+   */
+  getUIView(): WebContentsView | null {
+    return this.uiView
+  }
+
+  /**
+   * Gets the attached plugin reference
+   */
+  getAttachedPlugin(): TouchPlugin | null {
+    return this.attachedPlugin
+  }
+
+  // ==================== Window Control Methods ====================
+
+  /**
+   * Toggles always-on-top state for this window
+   */
+  toggleAlwaysOnTop(): boolean {
+    if (!this.touchWindow) return false
+    
+    const current = this.touchWindow.window.isAlwaysOnTop()
+    this.touchWindow.window.setAlwaysOnTop(!current)
+    
+    console.log(`[DivisionBoxSession] Always on top: ${!current}`)
+    return !current
+  }
+
+  /**
+   * Gets always-on-top state
+   */
+  isAlwaysOnTop(): boolean {
+    return this.touchWindow?.window.isAlwaysOnTop() ?? false
+  }
+
+  /**
+   * Sets window opacity (0.0 - 1.0)
+   */
+  setOpacity(opacity: number): void {
+    if (!this.touchWindow) return
+    
+    const clampedOpacity = Math.max(0.1, Math.min(1.0, opacity))
+    this.touchWindow.window.setOpacity(clampedOpacity)
+  }
+
+  /**
+   * Gets window opacity
+   */
+  getOpacity(): number {
+    return this.touchWindow?.window.getOpacity() ?? 1.0
+  }
+
+  /**
+   * Opens DevTools for the UI view
+   */
+  openDevTools(): void {
+    if (this.uiView && !this.uiView.webContents.isDestroyed()) {
+      this.uiView.webContents.openDevTools({ mode: 'detach' })
+    }
+  }
+
+  /**
+   * Closes DevTools for the UI view
+   */
+  closeDevTools(): void {
+    if (this.uiView && !this.uiView.webContents.isDestroyed()) {
+      this.uiView.webContents.closeDevTools()
+    }
+  }
+
+  /**
+   * Checks if DevTools is open
+   */
+  isDevToolsOpen(): boolean {
+    return this.uiView?.webContents.isDevToolsOpened() ?? false
+  }
+
+
+  /**
+   * @deprecated Use getUIView() instead
    */
   getWebContentsView(): WebContentsView | null {
-    return this.webContentsView
+    return this.uiView
   }
 
   /**
@@ -302,34 +717,19 @@ export class DivisionBoxSession {
 
   /**
    * Destroys the session and cleans up all resources
-   * 
-   * - Destroys WebContentsView
-   * - Clears session state
-   * - Removes all event listeners
-   * - Stops keepAlive timer
-   * - Transitions to DESTROY state
    */
   async destroy(): Promise<void> {
-    // Stop keepAlive timer
     this.stopKeepAliveTimer()
-
-    // Destroy WebContentsView
-    this.destroyWebContentsView()
-
-    // Clear session state
+    this.destroyWindow()
     this.clearSessionState()
-
-    // Clear all listeners
     this.stateChangeListeners.clear()
 
-    // Transition to DESTROY state
-    // We need to allow this transition from any state for cleanup
+    const oldState = this.state
     this.state = DivisionBoxState.DESTROY
 
-    // Emit final state change
     const event: StateChangeEvent = {
       sessionId: this.sessionId,
-      oldState: this.state,
+      oldState,
       newState: DivisionBoxState.DESTROY,
       timestamp: Date.now()
     }
