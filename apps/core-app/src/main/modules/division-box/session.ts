@@ -6,7 +6,7 @@
  * Implements a six-state lifecycle: prepare → attach → active → inactive → detach → destroy
  */
 
-import { app, WebContentsView, nativeTheme } from 'electron'
+import { app, WebContentsView } from 'electron'
 import type { WebPreferences } from 'electron'
 import path from 'node:path'
 import os from 'node:os'
@@ -40,17 +40,6 @@ const VALID_TRANSITIONS: Record<DivisionBoxState, DivisionBoxState[]> = {
   [DivisionBoxState.INACTIVE]: [DivisionBoxState.ACTIVE, DivisionBoxState.DETACH, DivisionBoxState.DESTROY],
   [DivisionBoxState.DETACH]: [DivisionBoxState.DESTROY],
   [DivisionBoxState.DESTROY]: []
-}
-
-/**
- * Initial data injected into the renderer via preload
- */
-export interface DivisionBoxInitialData {
-  type: 'division-box'
-  sessionId: string
-  config: DivisionBoxConfig
-  meta: SessionMeta
-  theme: { dark: boolean }
 }
 
 /**
@@ -228,22 +217,7 @@ export class DivisionBoxSession {
       // Update window title
       this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
 
-      // Prepare initial data for injection
-      const initialData: DivisionBoxInitialData = {
-        type: 'division-box',
-        sessionId: this.sessionId,
-        config: this.config,
-        meta: this.meta,
-        theme: { dark: nativeTheme.shouldUseDarkColors }
-      }
-
-      // Inject initial data via executeJavaScript (window is already loaded)
-      const script = `window.$tuffInitialData = ${JSON.stringify(initialData)};`
-      await this.touchWindow.window.webContents.executeJavaScript(script).catch(err => {
-        console.error('[DivisionBoxSession] Failed to inject initial data:', err)
-      })
-
-      // Notify renderer about DivisionBox trigger
+      // Notify renderer about DivisionBox trigger via unified channel
       genTouchApp().channel.sendTo(
         this.touchWindow.window,
         ChannelType.MAIN,

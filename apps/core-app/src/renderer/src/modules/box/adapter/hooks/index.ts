@@ -4,5 +4,7 @@ export { useClipboard } from './useClipboard'
 export { useClipboardChannel, CLIPBOARD_CHANNELS, type ClipboardChannelHandlers, type ClipboardMetaUpdate } from './useClipboardChannel'
 export { useKeyboard } from './useKeyboard'
 export { useSearch } from './useSearch'
-
 export { useVisibility } from './useVisibility'
+export { usePreviewHistory, type PreviewHistoryState, type CalculationHistoryEntry } from './usePreviewHistory'
+export { useActionPanel } from './useActionPanel'
+export { useDetach } from './useDetach'
