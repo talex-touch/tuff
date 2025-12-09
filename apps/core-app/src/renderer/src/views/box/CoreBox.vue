@@ -25,6 +25,7 @@ import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
+import { windowState, isDivisionBoxMode } from '~/modules/hooks/core-box'
 import BoxInput from './BoxInput.vue'
 import PrefixPart from './PrefixPart.vue'
 import TagSection from './tag/TagSection.vue'
@@ -106,6 +107,102 @@ const completionDisplay = computed(() => {
 const isUIMode = computed(() => {
   return activeActivations.value && activeActivations.value.length > 0
 })
+
+// DivisionBox mode computed properties
+const isDivisionBox = computed(() => {
+  const result = isDivisionBoxMode()
+  console.log('[CoreBox] isDivisionBox computed:', result, 'windowState:', windowState.type, windowState.divisionBox?.sessionId)
+  return result
+})
+const divisionBoxConfig = computed(() => windowState.divisionBox?.config)
+const divisionBoxMeta = computed(() => windowState.divisionBox?.meta)
+
+// UI visibility based on DivisionBox config
+const showInput = computed(() => {
+  if (!isDivisionBox.value) return true
+  return divisionBoxConfig.value?.ui?.showInput !== false
+})
+
+const _showResults = computed(() => {
+  if (!isDivisionBox.value) return true
+  return divisionBoxConfig.value?.ui?.showResults !== false
+})
+
+const inputPlaceholder = computed(() => {
+  if (isDivisionBox.value && divisionBoxConfig.value?.ui?.inputPlaceholder) {
+    return divisionBoxConfig.value.ui.inputPlaceholder
+  }
+  return undefined
+})
+
+// Initial input from DivisionBox config (reserved for future use)
+const _initialInput = computed(() => {
+  return divisionBoxConfig.value?.ui?.initialInput ?? ''
+})
+
+// DivisionBox window control state
+const divisionBoxPinned = ref(false)
+const divisionBoxOpacity = ref(1.0)
+
+const divisionBoxOpacityIcon = computed(() => {
+  if (divisionBoxOpacity.value >= 0.9) return 'i-lucide-circle'
+  if (divisionBoxOpacity.value >= 0.5) return 'i-lucide-circle-dot'
+  return 'i-lucide-circle-dashed'
+})
+
+// DivisionBox window control handlers
+async function handleDivisionBoxPin(): Promise<void> {
+  if (!windowState.divisionBox?.sessionId) return
+  
+  try {
+    const response = await touchChannel.send('division-box:toggle-pin', {
+      sessionId: windowState.divisionBox.sessionId
+    })
+    if (response?.success) {
+      divisionBoxPinned.value = response.data.isPinned
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to toggle pin:', error)
+  }
+}
+
+async function handleDivisionBoxOpacity(): Promise<void> {
+  if (!windowState.divisionBox?.sessionId) return
+  
+  // Cycle through opacity values: 1.0 -> 0.8 -> 0.5 -> 1.0
+  const nextOpacity = divisionBoxOpacity.value >= 0.9 ? 0.8 
+    : divisionBoxOpacity.value >= 0.6 ? 0.5 
+    : 1.0
+  
+  try {
+    const response = await touchChannel.send('division-box:set-opacity', {
+      sessionId: windowState.divisionBox.sessionId,
+      opacity: nextOpacity
+    })
+    if (response?.success) {
+      divisionBoxOpacity.value = response.data.opacity
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to set opacity:', error)
+  }
+}
+
+async function handleDivisionBoxDebug(): Promise<void> {
+  if (!windowState.divisionBox?.sessionId) return
+  
+  try {
+    await touchChannel.send('division-box:toggle-devtools', {
+      sessionId: windowState.divisionBox.sessionId
+    })
+  } catch (error) {
+    console.error('[CoreBox] Failed to toggle devtools:', error)
+  }
+}
+
+function handleDivisionBoxSettings(): void {
+  // TODO: Open DivisionBox settings panel
+  toast.info(t('divisionBox.settingsComingSoon', '设置面板即将推出'))
+}
 
 const { cleanup: cleanupVisibility } = useVisibility({
   boxOptions,
@@ -444,8 +541,20 @@ const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () 
 })
 
 // Handle global shortcut: Detach to DivisionBox (Command+D)
+console.log('[CoreBox] Registering flow:trigger-detach handler')
 const unregDetachShortcut = touchChannel.regChannel('flow:trigger-detach', () => {
+  console.log('[CoreBox] Received flow:trigger-detach', { isUIMode: isUIMode.value, activeActivations: activeActivations.value?.length })
+  
+  // If in UI mode (plugin UI attached), detach the current active UI to DivisionBox
+  if (isUIMode.value && activeActivations.value?.length) {
+    const activation = activeActivations.value[0]
+    handleDetachUIMode(activation)
+    return
+  }
+  
+  // Otherwise detach the selected search result item
   const currentItem = res.value[boxOptions.focus]
+  console.log('[CoreBox] Detaching item:', currentItem?.id)
   if (currentItem) {
     handleDetachItem(new CustomEvent('corebox:detach-item', {
       detail: { item: currentItem, query: searchVal.value }
@@ -581,6 +690,42 @@ async function handleDetachItem(event: Event): Promise<void> {
     }
   } catch (error) {
     console.error('[CoreBox] Failed to detach item:', error)
+    toast.error(t('corebox.detachFailed', '分离失败'))
+  }
+}
+
+/**
+ * Handle Command+D in UI mode: Detach current plugin UI to DivisionBox
+ * Opens the current active plugin UI in an independent DivisionBox window
+ */
+async function handleDetachUIMode(activation: { id: string; name?: string; icon?: any; meta?: any }): Promise<void> {
+  console.log('[CoreBox] Detaching UI mode to DivisionBox:', activation.id)
+
+  try {
+    // Build DivisionBox config from current activation
+    const config = {
+      url: `plugin://${activation.id}/index.html`,
+      title: activation.name || activation.id,
+      icon: activation.icon?.value,
+      size: 'medium' as const,
+      keepAlive: true,
+      pluginId: activation.id,
+      ui: {
+        showInput: true,
+        initialInput: searchVal.value
+      }
+    }
+
+    const response = await touchChannel.send('division-box:open', config)
+    if (response?.success) {
+      // Deactivate the provider in CoreBox after successful detach
+      await deactivateProvider(activation.id)
+      toast.success(t('corebox.detached', '已分离到独立窗口'))
+    } else {
+      throw new Error(response?.error?.message || 'Failed to open DivisionBox')
+    }
+  } catch (error) {
+    console.error('[CoreBox] Failed to detach UI mode:', error)
     toast.error(t('corebox.detachFailed', '分离失败'))
   }
 }
@@ -800,25 +945,63 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
     />
 
     <BoxInput
+      v-if="showInput"
       ref="boxInputRef"
       v-model="searchVal"
       :box-options="boxOptions"
       :class="{ 'ui-mode-hidden': isUIMode }"
       :disabled="isUIMode"
+      :placeholder="inputPlaceholder"
     >
       <template #completion>
         <div class="text-sm truncate" v-html="completionDisplay" />
       </template>
     </BoxInput>
 
+    <!-- DivisionBox title when input is hidden -->
+    <div v-if="isDivisionBox && !showInput" class="DivisionBox-Title">
+      <TuffIcon v-if="divisionBoxMeta?.icon" :icon="{ type: 'class', value: divisionBoxMeta.icon }" />
+      <span>{{ divisionBoxMeta?.title || divisionBoxConfig?.title }}</span>
+    </div>
+
     <TagSection
-      v-if="!isUIMode"
+      v-if="!isUIMode && !isDivisionBox"
       :box-options="boxOptions"
       :clipboard-options="clipboardOptions"
     />
 
-    <div class="CoreBox-Configure">
+    <!-- CoreBox pin button (non-DivisionBox mode) -->
+    <div v-if="!isDivisionBox" class="CoreBox-Configure">
       <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+    </div>
+
+    <!-- DivisionBox window controls -->
+    <div v-if="isDivisionBox" class="DivisionBox-Controls">
+      <TuffIcon 
+        :icon="{ type: 'class', value: 'i-lucide-settings' }" 
+        alt="设置"
+        class="control-btn"
+        @click="handleDivisionBoxSettings" 
+      />
+      <TuffIcon 
+        :icon="{ type: 'class', value: divisionBoxOpacityIcon }" 
+        alt="透明度"
+        class="control-btn"
+        @click="handleDivisionBoxOpacity" 
+      />
+      <TuffIcon 
+        :icon="{ type: 'class', value: 'i-lucide-bug' }" 
+        alt="调试"
+        class="control-btn"
+        @click="handleDivisionBoxDebug" 
+      />
+      <TuffIcon 
+        :icon="{ type: 'class', value: divisionBoxPinned ? 'i-lucide-pin-off' : 'i-lucide-pin' }" 
+        alt="置顶"
+        class="control-btn"
+        :class="{ active: divisionBoxPinned }"
+        @click="handleDivisionBoxPin" 
+      />
     </div>
   </div>
 
@@ -1081,5 +1264,75 @@ div.CoreBox {
 .ui-mode-hidden {
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+// DivisionBox specific styles
+.division-box {
+  .CoreBox {
+    // Allow window dragging in DivisionBox header area
+    -webkit-app-region: drag;
+    
+    // Make interactive elements clickable
+    .BoxInput,
+    .CoreBox-Configure,
+    .PrefixPart,
+    .DivisionBox-Title,
+    .DivisionBox-Controls {
+      -webkit-app-region: no-drag;
+    }
+  }
+
+  .CoreBoxRes {
+    display: flex !important;
+  }
+}
+
+.DivisionBox-Controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  
+  .control-btn {
+    padding: 0.35rem;
+    font-size: 1rem;
+    color: var(--el-text-color-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    
+    &:hover {
+      color: var(--el-text-color-primary);
+      background-color: var(--el-fill-color-light);
+    }
+    
+    &.active {
+      color: var(--el-color-primary);
+      background-color: var(--el-color-primary-light-9);
+    }
+  }
+}
+
+.DivisionBox-Title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  padding: 0 0.75rem;
+  
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  
+  .TuffIcon {
+    font-size: 1.25rem;
+    opacity: 0.8;
+  }
+  
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 </style>

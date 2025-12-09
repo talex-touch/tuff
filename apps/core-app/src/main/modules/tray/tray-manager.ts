@@ -338,16 +338,21 @@ export class TrayManager extends BaseModule {
     }
   }
 
-  private updateDockVisibility(): void {
+  public updateDockVisibility(): void {
     if (process.platform !== 'darwin')
       return
 
     const mainWindow = $app.window.window
     const hideDock = this.getHideDockConfig()
 
+    // Check if there are active DivisionBox sessions
+    const hasDivisionBox = this.hasActiveDivisionBox()
+
     if (hideDock) {
-      // When hideDock is enabled, show dock only when window is visible
-      if (mainWindow.isVisible()) {
+      // When hideDock is enabled, show dock if:
+      // 1. Main window is visible, OR
+      // 2. There are active DivisionBox windows
+      if (mainWindow.isVisible() || hasDivisionBox) {
         app.dock?.show()
       }
       else {
@@ -357,6 +362,19 @@ export class TrayManager extends BaseModule {
     else {
       // When hideDock is disabled, always show dock
       app.dock?.show()
+    }
+  }
+
+  /**
+   * Check if there are any active DivisionBox sessions
+   */
+  private hasActiveDivisionBox(): boolean {
+    try {
+      const { DivisionBoxManager } = require('../division-box/manager')
+      const manager = DivisionBoxManager.getInstance()
+      return manager.getActiveSessions().length > 0
+    } catch {
+      return false
     }
   }
 

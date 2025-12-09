@@ -8,12 +8,17 @@
 import type { MaybePromise } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { BrowserWindow } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { genTouchApp } from '../../core'
 import { BaseModule } from '../abstract-base-module'
 import { shortcutModule } from '../global-shortcon'
 import { FlowBusIPC, initializeFlowBusIPC } from './ipc'
 import { flowTargetRegistry } from './target-registry'
+import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
+import { coreBoxManager } from '../box-tool/core-box/manager'
+import { DivisionBoxManager } from '../division-box/manager'
+
+const LOG_PREFIX = '[FlowBus]'
 
 /** Shortcut IDs for Flow operations */
 export const FLOW_SHORTCUT_IDS = {
@@ -79,24 +84,74 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   }
 
   /**
-   * Triggers detach operation - sends event to focused CoreBox window
+   * Triggers detach operation - transfers UI view from CoreBox to new DivisionBox
    */
-  private triggerDetach(): void {
-    const focusedWindow = BrowserWindow.getFocusedWindow()
-    if (!focusedWindow) return
+  private async triggerDetach(): Promise<void> {
+    try {
+      // Check if CoreBox is in UI mode
+      if (!coreBoxManager.isUIMode) {
+        console.log(LOG_PREFIX, 'CoreBox not in UI mode, nothing to detach')
+        return
+      }
 
-    $app.channel.sendTo(focusedWindow, ChannelType.MAIN, 'flow:trigger-detach', {})
-    console.log('[FlowBusModule] Triggered detach shortcut')
+      // Extract the UI view from CoreBox (doesn't destroy it)
+      const extracted = windowManager.extractUIView()
+      if (!extracted) {
+        console.warn(LOG_PREFIX, 'No UI view to extract from CoreBox')
+        return
+      }
+
+      const { view, plugin } = extracted
+      console.log(LOG_PREFIX, `Detaching plugin → ${plugin.name}`)
+
+      // Create DivisionBox session config (without URL - we'll attach existing view)
+      const config = {
+        url: `plugin://${plugin.name}/index.html`, // Required by config validation
+        title: plugin.name,
+        icon: plugin.icon?.value || plugin.icon?.toString?.() || undefined,
+        size: 'medium' as const,
+        keepAlive: true,
+        pluginId: plugin.name,
+        ui: {
+          showInput: true
+        }
+      }
+
+      // Create DivisionBox session (creates window only)
+      const manager = DivisionBoxManager.getInstance()
+      const session = await manager.createSessionWithoutUI(config)
+
+      // Attach the extracted UI view to DivisionBox
+      await session.attachExistingUIView(view, plugin)
+
+      console.log(LOG_PREFIX, `✓ DivisionBox created (${session.sessionId})`)
+
+      // Reset CoreBox to default state (shrink, exit UI mode flag)
+      coreBoxManager.exitUIMode()
+      
+      // Hide CoreBox
+      const coreBoxWindow = getCoreBoxWindow()
+      if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+        coreBoxWindow.window.hide()
+      }
+
+      console.log(LOG_PREFIX, '✓ Detach completed')
+    } catch (error) {
+      console.error(LOG_PREFIX, '✗ Failed to detach:', error)
+    }
   }
 
   /**
-   * Triggers flow transfer operation - sends event to focused CoreBox window
+   * Triggers flow transfer operation - sends event to CoreBox window
    */
   private triggerFlowTransfer(): void {
-    const focusedWindow = BrowserWindow.getFocusedWindow()
-    if (!focusedWindow) return
+    const coreBoxWindow = getCoreBoxWindow()
+    if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+      console.warn('[FlowBusModule] CoreBox window not available for flow transfer')
+      return
+    }
 
-    $app.channel.sendTo(focusedWindow, ChannelType.MAIN, 'flow:trigger-transfer', {})
+    genTouchApp().channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, 'flow:trigger-transfer', {})
     console.log('[FlowBusModule] Triggered flow transfer shortcut')
   }
 
@@ -104,8 +159,10 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    * Sets up integration with plugin system
    */
   private setupPluginIntegration(): void {
+    const channel = genTouchApp().channel
+    
     // Register channel to receive plugin flow target registrations
-    $app.channel.regChannel(
+    channel.regChannel(
       ChannelType.MAIN,
       'flow:register-targets',
       (data) => {
@@ -130,7 +187,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     )
 
     // Register channel to unregister plugin targets
-    $app.channel.regChannel(
+    channel.regChannel(
       ChannelType.MAIN,
       'flow:unregister-targets',
       (data) => {
@@ -141,7 +198,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     )
 
     // Register channel to update plugin enabled state
-    $app.channel.regChannel(
+    channel.regChannel(
       ChannelType.MAIN,
       'flow:set-plugin-enabled',
       (data) => {

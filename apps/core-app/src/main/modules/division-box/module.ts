@@ -11,6 +11,9 @@ import { BaseModule } from '../abstract-base-module'
 import { DivisionBoxIPC, initializeDivisionBoxIPC } from './ipc'
 import { createDivisionBoxCommandProvider } from './command-provider'
 import searchEngineCore from '../box-tool/search-engine/search-core'
+import { windowPool } from './window-pool'
+
+const LOG_PREFIX = '[DivisionBox]'
 
 /**
  * DivisionBoxModule
@@ -33,12 +36,16 @@ export class DivisionBoxModule extends BaseModule {
   /**
    * Initializes the DivisionBox module
    * 
+   * - Initializes window pool for fast detach
    * - Registers IPC handlers
    * - Registers command provider with CoreBox search engine
    */
   async onInit(): Promise<void> {
     // Get the channel from the app
     const channel: ITouchChannel = $app.channel
+    
+    // Initialize window pool (pre-warm windows for fast detach)
+    await windowPool.initialize()
     
     // Initialize IPC handlers
     this.ipc = initializeDivisionBoxIPC(channel)
@@ -47,16 +54,20 @@ export class DivisionBoxModule extends BaseModule {
     const commandProvider = createDivisionBoxCommandProvider()
     searchEngineCore.registerProvider(commandProvider)
     
-    console.log('[DivisionBoxModule] Module initialized')
+    console.log(LOG_PREFIX, '✓ Module initialized')
   }
   
   /**
    * Cleans up the DivisionBox module
    * 
+   * - Destroys window pool
    * - Unregisters IPC handlers
    * - Unregisters command provider
    */
   onDestroy(): MaybePromise<void> {
+    // Destroy window pool
+    windowPool.destroy()
+    
     // Unregister IPC handlers
     if (this.ipc) {
       this.ipc.unregisterHandlers()
@@ -66,7 +77,7 @@ export class DivisionBoxModule extends BaseModule {
     // Unregister command provider
     searchEngineCore.unregisterProvider('division-box-commands')
     
-    console.log('[DivisionBoxModule] Module destroyed')
+    console.log(LOG_PREFIX, 'Module destroyed')
   }
 }
 

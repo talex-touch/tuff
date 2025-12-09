@@ -17,6 +17,7 @@ import { appSetting } from '~/modules/channel/storage'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
 import { BoxMode } from '..'
 import { useResize } from './useResize'
+import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 
 export function useSearch(
   boxOptions: IBoxOptions,
@@ -127,6 +128,32 @@ export function useSearch(
   const debouncedSearch = useDebounceFn(async () => {
     const currentSequence = ++searchSequence
     const inputs = buildQueryInputs()
+
+    // In DivisionBox mode, only broadcast input changes - no search
+    if (isDivisionBoxMode()) {
+      const query: TuffQuery = {
+        text: searchVal.value,
+        inputs
+      }
+      
+      // Broadcast input to plugin UI via IPC
+      inputTransport.broadcast({
+        input: query.text,
+        query,
+        source: 'renderer'
+      })
+      
+      // Also send via main channel to plugin
+      if (windowState.divisionBox?.sessionId) {
+        touchChannel.send('division-box:input-change', {
+          sessionId: windowState.divisionBox.sessionId,
+          input: searchVal.value,
+          query
+        })
+      }
+      
+      return
+    }
 
     // Empty text query (with or without inputs): show recommendations or input-aware results
     if (!searchVal.value && !activeActivations.value?.length) {
