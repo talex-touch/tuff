@@ -12,13 +12,14 @@ pnpm add @talex-touch/utils
 
 | Module | Import | Description |
 |--------|--------|-------------|
+| [Plugin Context](./plugin-context.en.md) | `globalThis` | index.js global context API |
 | [Box SDK](./box.en.md) | `useBox()` | Control CoreBox window |
-| [Clipboard SDK](./clipboard.zh.md) | `useClipboard()` | Clipboard read/write and history |
+| [Clipboard SDK](./clipboard.en.md) | `useClipboard()` | Clipboard read/write and history |
 | [Storage SDK](./storage.en.md) | `usePluginStorage()` | Plugin data persistence |
 | [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication |
 | [Feature SDK](./feature.en.md) | `useFeature()` | Search result management |
-| [DivisionBox SDK](./division-box.zh.md) | `useDivisionBox()` | Independent window management |
-| [Flow SDK](./flow-transfer.zh.md) | `createFlowSDK()` | Inter-plugin data transfer |
+| [DivisionBox SDK](./division-box.en.md) | `useDivisionBox()` | Independent window management |
+| [Flow SDK](./flow-transfer.en.md) | `createFlowSDK()` | Inter-plugin data transfer |
 | [Intelligence SDK](./intelligence.en.md) | `useIntelligence()` | AI capabilities |
 
 ---
