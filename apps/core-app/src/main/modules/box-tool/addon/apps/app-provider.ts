@@ -1188,6 +1188,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _subscribeToFSEvents(): void {
+    // Windows: 跳过文件系统事件订阅，避免权限问题
+    if (process.platform === 'win32') {
+      console.log(formatLog('AppProvider', 'Skipping FS event subscription on Windows', LogStyle.info))
+      return
+    }
+
     console.log(formatLog('AppProvider', 'Subscribing to file system events', LogStyle.info))
 
     if (this.isMac) {
@@ -1212,6 +1218,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _registerWatchPaths(): void {
+    // Windows: 跳过目录监视，避免 EPERM 权限错误
+    if (process.platform === 'win32') {
+      console.log(formatLog('AppProvider', 'Skipping watch path registration on Windows', LogStyle.info))
+      return
+    }
+
     const watchPaths = appScanner.getWatchPaths()
     console.log(
       formatLog(
