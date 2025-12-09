@@ -1,29 +1,152 @@
 # Storage API
 
+The Plugin Storage SDK provides file-based persistent storage that survives application restarts.
+
+## Quick Start
+
+```ts
+import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+
+const storage = usePluginStorage()
+
+// Save settings
+await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
+
+// Read settings
+const settings = await storage.getFile('settings.json')
+console.log(settings) // { theme: 'dark', fontSize: 14 }
+```
+
+---
+
 ## Limits
-- 10 MB quota per plugin; writes past the limit are rejected.
-- Data lives under `config/plugins/<id>.json` with automatic cleanup.
 
-## Read & Write
+- **10 MB quota per plugin**; writes past the limit are rejected
+- Data stored in `<userData>/config/plugins/<pluginName>/`
+- Automatic filename sanitization to prevent path traversal attacks
+
+---
+
+## API Reference
+
+### Getting Storage Instance
+
 ```ts
-const storage = ctx.storage
-await storage.setItem('settings', { theme: 'dark' })
-const value = await storage.getItem('settings')
-await storage.removeItem('legacy')
+import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+
+const storage = usePluginStorage()
 ```
 
-## Sync Signals
-- Updates broadcast to all windows and plugin instances.
+> **Note**: Must be called within plugin renderer context.
+
+### File Operations
+
+#### `getFile(fileName)`
+
+Read storage file content.
+
 ```ts
-storage.onChange(payload => {
-  console.log('storage update', payload)
+const config = await storage.getFile('config.json')
+// Returns null if file doesn't exist
+```
+
+#### `setFile(fileName, content)`
+
+Write to storage file.
+
+```ts
+await storage.setFile('settings.json', { 
+  theme: 'dark',
+  shortcuts: ['Cmd+K']
 })
+// Returns { success: true }
 ```
 
-## Secret Fields
-- `storage.setSecret(key, value)` stores encrypted values.
-- Secrets are decrypted on-demand and only kept in memory briefly.
+#### `deleteFile(fileName)`
+
+Delete a storage file.
+
+```ts
+await storage.deleteFile('old-cache.json')
+```
+
+#### `listFiles()`
+
+List all storage files for the plugin.
+
+```ts
+const files = await storage.listFiles()
+// ['settings.json', 'data/cache.json']
+```
+
+#### `clearAll()`
+
+Clear all storage data for the plugin.
+
+```ts
+await storage.clearAll()
+// ⚠️ This operation is irreversible
+```
+
+---
+
+### Advanced Features
+
+#### `getStats()`
+
+Get storage statistics.
+
+```ts
+const stats = await storage.getStats()
+// {
+//   totalSize: 1024,
+//   fileCount: 3,
+//   limit: 10485760,
+//   usagePercent: 0.01
+// }
+```
+
+#### `getTree()`
+
+Get directory tree structure.
+
+```ts
+const tree = await storage.getTree()
+```
+
+#### `getFileDetails(fileName)`
+
+Get detailed file information.
+
+```ts
+const details = await storage.getFileDetails('settings.json')
+```
+
+#### `openFolder()`
+
+Open plugin storage directory in system file manager.
+
+```ts
+await storage.openFolder()
+```
+
+---
+
+### Listening to Changes
+
+```ts
+const unsubscribe = storage.onDidChange('settings.json', (data) => {
+  console.log('Config updated:', data)
+})
+
+// Stop listening
+unsubscribe()
+```
+
+---
 
 ## Debug
-- Use `plugin:storage:get-item` via IPC to inspect state.
-- `pnpm core:dev` prints storage diffs in DevTools.
+
+- **View storage contents**: Use `openFolder()` to inspect files directly
+- **DevTools**: `pnpm core:dev` prints storage change logs in Console
+- **IPC command**: Use `plugin:storage:get-file` for direct queries

@@ -1,0 +1,655 @@
+# Intelligence SDK
+
+Intelligence SDK 提供插件访问 AI 能力的统一接口，支持多种 AI Provider（OpenAI、Anthropic、DeepSeek、SiliconFlow 等）。
+
+## 快速开始
+
+```typescript
+import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+
+const { text, vision, code, isLoading, lastError } = useIntelligence()
+
+// AI 对话
+const result = await text.chat({
+  messages: [{ role: 'user', content: 'Hello!' }]
+})
+
+// 翻译
+const translated = await text.translate({
+  text: 'Hello World',
+  targetLang: 'zh-CN'
+})
+
+// OCR 识别
+const ocrResult = await vision.ocr({
+  source: { type: 'data-url', dataUrl: imageDataUrl }
+})
+```
+
+---
+
+## API 参考
+
+### useIntelligence()
+
+获取 Intelligence SDK 实例（Vue Composable）。
+
+```typescript
+import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+
+const intelligence = useIntelligence()
+```
+
+返回值包含以下属性和方法：
+
+| 属性/方法 | 说明 |
+|-----------|------|
+| `invoke` | 通用调用接口 |
+| `text` | 文本处理能力 |
+| `code` | 代码处理能力 |
+| `analysis` | 分析能力 |
+| `vision` | 视觉处理能力 |
+| `embedding` | 向量嵌入能力 |
+| `rag` | RAG 检索能力 |
+| `agent` | Agent 能力 |
+| `isLoading` | 加载状态（Ref） |
+| `lastError` | 最后错误信息（Ref） |
+
+---
+
+## 文本处理 (text)
+
+### `text.chat(payload, options?)`
+
+AI 对话。
+
+```typescript
+const result = await text.chat({
+  messages: [
+    { role: 'system', content: '你是一个翻译助手' },
+    { role: 'user', content: '翻译：Hello World' }
+  ],
+  temperature: 0.7,
+  maxTokens: 1000
+})
+
+console.log(result.result) // 翻译结果
+console.log(result.usage)  // { promptTokens, completionTokens, totalTokens }
+```
+
+**Payload 参数**：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `messages` | `IntelligenceMessage[]` | 对话消息列表 |
+| `temperature` | `number` | 采样温度 (0-2) |
+| `maxTokens` | `number` | 最大生成 token 数 |
+| `topP` | `number` | Top-p 采样参数 |
+| `stop` | `string[]` | 停止序列 |
+
+### `text.translate(payload, options?)`
+
+文本翻译。
+
+```typescript
+const result = await text.translate({
+  text: 'Hello World',
+  sourceLang: 'en',    // 可选，自动检测
+  targetLang: 'zh-CN'
+})
+
+console.log(result.result) // "你好世界"
+```
+
+### `text.summarize(payload, options?)`
+
+文本摘要。
+
+```typescript
+const result = await text.summarize({
+  text: longArticle,
+  maxLength: 200,
+  style: 'bullet-points'  // 'concise' | 'detailed' | 'bullet-points'
+})
+```
+
+### `text.rewrite(payload, options?)`
+
+文本改写。
+
+```typescript
+const result = await text.rewrite({
+  text: '这个产品很好用',
+  style: 'formal',        // 'formal' | 'casual' | 'professional' | 'creative'
+  tone: 'authoritative'   // 'neutral' | 'friendly' | 'authoritative'
+})
+```
+
+### `text.grammarCheck(payload, options?)`
+
+语法检查。
+
+```typescript
+const result = await text.grammarCheck({
+  text: 'I has a apple',
+  language: 'en',
+  checkTypes: ['spelling', 'grammar', 'punctuation']
+})
+
+// result.result: {
+//   correctedText: 'I have an apple',
+//   issues: [{ type: 'grammar', original: 'has', suggestion: 'have', ... }],
+//   score: 85
+// }
+```
+
+---
+
+## 代码处理 (code)
+
+### `code.generate(payload, options?)`
+
+代码生成。
+
+```typescript
+const result = await code.generate({
+  description: '实现一个快速排序算法',
+  language: 'typescript',
+  includeTests: true,
+  includeComments: true
+})
+
+// result.result: {
+//   code: '...',
+//   explanation: '...',
+//   dependencies: [],
+//   tests: '...'
+// }
+```
+
+### `code.explain(payload, options?)`
+
+代码解释。
+
+```typescript
+const result = await code.explain({
+  code: 'const [a, b] = [b, a]',
+  language: 'javascript',
+  depth: 'detailed',
+  targetAudience: 'beginner'
+})
+
+// result.result: {
+//   explanation: '...',
+//   summary: '...',
+//   keyPoints: ['...'],
+//   complexity: 'simple'
+// }
+```
+
+### `code.review(payload, options?)`
+
+代码审查。
+
+```typescript
+const result = await code.review({
+  code: myCode,
+  language: 'typescript',
+  focusAreas: ['security', 'performance', 'best-practices']
+})
+
+// result.result: {
+//   summary: '...',
+//   score: 75,
+//   issues: [{ severity: 'warning', type: 'security', message: '...' }],
+//   improvements: ['...']
+// }
+```
+
+### `code.refactor(payload, options?)`
+
+代码重构。
+
+```typescript
+const result = await code.refactor({
+  code: legacyCode,
+  language: 'javascript',
+  goals: ['readability', 'maintainability']
+})
+```
+
+### `code.debug(payload, options?)`
+
+代码调试。
+
+```typescript
+const result = await code.debug({
+  code: buggyCode,
+  error: 'TypeError: Cannot read property...',
+  stackTrace: '...'
+})
+
+// result.result: {
+//   diagnosis: '...',
+//   rootCause: '...',
+//   fixedCode: '...',
+//   preventionTips: ['...']
+// }
+```
+
+---
+
+## 分析能力 (analysis)
+
+### `analysis.detectIntent(payload, options?)`
+
+意图检测。
+
+```typescript
+const result = await analysis.detectIntent({
+  text: '帮我订一张明天去北京的机票',
+  possibleIntents: ['book_flight', 'book_hotel', 'query_weather']
+})
+
+// result.result: {
+//   intent: 'book_flight',
+//   confidence: 0.95,
+//   entities: [
+//     { type: 'destination', value: '北京' },
+//     { type: 'date', value: '明天' }
+//   ]
+// }
+```
+
+### `analysis.analyzeSentiment(payload, options?)`
+
+情感分析。
+
+```typescript
+const result = await analysis.analyzeSentiment({
+  text: '这个产品太棒了，强烈推荐！',
+  granularity: 'document'
+})
+
+// result.result: {
+//   sentiment: 'positive',
+//   score: 0.9,
+//   confidence: 0.95,
+//   emotions: [{ emotion: 'joy', score: 0.8 }]
+// }
+```
+
+### `analysis.extractContent(payload, options?)`
+
+内容提取。
+
+```typescript
+const result = await analysis.extractContent({
+  text: '请联系张三，电话：13800138000，邮箱：zhangsan@example.com',
+  extractTypes: ['people', 'phones', 'emails']
+})
+
+// result.result: {
+//   entities: {
+//     people: [{ value: '张三', confidence: 0.98 }],
+//     phones: [{ value: '13800138000', confidence: 0.99 }],
+//     emails: [{ value: 'zhangsan@example.com', confidence: 0.99 }]
+//   }
+// }
+```
+
+### `analysis.extractKeywords(payload, options?)`
+
+关键词提取。
+
+```typescript
+const result = await analysis.extractKeywords({
+  text: articleContent,
+  maxKeywords: 10,
+  includeScores: true
+})
+```
+
+### `analysis.classify(payload, options?)`
+
+文本分类。
+
+```typescript
+const result = await analysis.classify({
+  text: '苹果发布了新款 iPhone',
+  categories: ['科技', '体育', '娱乐', '财经'],
+  multiLabel: false
+})
+
+// result.result: {
+//   predictions: [{ category: '科技', confidence: 0.95 }]
+// }
+```
+
+---
+
+## 视觉处理 (vision)
+
+### `vision.ocr(payload, options?)`
+
+OCR 文字识别。
+
+```typescript
+const result = await vision.ocr({
+  source: { 
+    type: 'data-url', 
+    dataUrl: 'data:image/png;base64,...' 
+  },
+  language: 'zh-CN',
+  includeLayout: true,
+  includeKeywords: true
+})
+
+// result.result: {
+//   text: '识别的文字...',
+//   confidence: 0.95,
+//   language: 'zh-CN',
+//   keywords: ['关键词1', '关键词2'],
+//   blocks: [{ text: '...', boundingBox: [...] }]
+// }
+```
+
+**Image Source 类型**：
+
+```typescript
+// Data URL
+{ type: 'data-url', dataUrl: 'data:image/png;base64,...' }
+
+// 文件路径
+{ type: 'file', filePath: '/path/to/image.png' }
+
+// Base64
+{ type: 'base64', base64: '...' }
+```
+
+### `vision.caption(payload, options?)`
+
+图片描述生成。
+
+```typescript
+const result = await vision.caption({
+  source: { type: 'data-url', dataUrl: imageUrl },
+  style: 'detailed',
+  language: 'zh-CN'
+})
+
+// result.result: {
+//   caption: '图片描述...',
+//   tags: ['标签1', '标签2']
+// }
+```
+
+### `vision.analyze(payload, options?)`
+
+图片分析。
+
+```typescript
+const result = await vision.analyze({
+  source: { type: 'data-url', dataUrl: imageUrl },
+  analysisTypes: ['objects', 'faces', 'colors', 'scene']
+})
+
+// result.result: {
+//   description: '...',
+//   objects: [{ name: 'person', confidence: 0.95 }],
+//   faces: [{ age: 25, emotion: 'happy' }],
+//   colors: [{ color: 'blue', percentage: 0.3 }],
+//   scene: { type: 'outdoor', confidence: 0.9 }
+// }
+```
+
+### `vision.generate(payload, options?)`
+
+图片生成。
+
+```typescript
+const result = await vision.generate({
+  prompt: '一只可爱的猫咪坐在沙发上',
+  width: 1024,
+  height: 1024,
+  quality: 'hd',
+  count: 1
+})
+
+// result.result: {
+//   images: [{ url: '...', revisedPrompt: '...' }]
+// }
+```
+
+---
+
+## 向量嵌入 (embedding)
+
+### `embedding.generate(payload, options?)`
+
+生成文本向量。
+
+```typescript
+const result = await embedding.generate({
+  text: '这是一段文本',
+  model: 'text-embedding-3-small'
+})
+
+// result.result: [0.123, -0.456, ...] // 向量数组
+```
+
+---
+
+## RAG 检索 (rag)
+
+### `rag.query(payload, options?)`
+
+RAG 查询。
+
+```typescript
+const result = await rag.query({
+  query: '如何配置插件？',
+  documents: [...],
+  topK: 5
+})
+```
+
+### `rag.semanticSearch(payload, options?)`
+
+语义搜索。
+
+```typescript
+const result = await rag.semanticSearch({
+  query: '用户界面设计',
+  corpus: 'documentation',
+  limit: 10
+})
+```
+
+### `rag.rerank(payload, options?)`
+
+结果重排序。
+
+```typescript
+const result = await rag.rerank({
+  query: '搜索查询',
+  documents: searchResults,
+  topK: 5
+})
+```
+
+---
+
+## Agent 能力 (agent)
+
+### `agent.run(payload, options?)`
+
+运行 Agent。
+
+```typescript
+const result = await agent.run({
+  task: '帮我分析这份数据',
+  tools: ['calculator', 'web_search'],
+  context: { data: [...] }
+})
+```
+
+---
+
+## 通用调用
+
+### `invoke(capabilityId, payload, options?)`
+
+直接调用任意能力。
+
+```typescript
+const result = await invoke('text.chat', {
+  messages: [{ role: 'user', content: 'Hello' }]
+})
+```
+
+---
+
+## 调用选项
+
+所有方法都支持第二个参数 `options`：
+
+```typescript
+interface IntelligenceInvokeOptions {
+  strategy?: string           // 策略 ID
+  modelPreference?: string[]  // 优先模型列表
+  costCeiling?: number        // 成本上限
+  latencyTarget?: number      // 目标延迟 (ms)
+  timeout?: number            // 超时时间 (ms)
+  stream?: boolean            // 是否流式输出
+  preferredProviderId?: string // 优先 Provider
+  allowedProviderIds?: string[] // 允许的 Provider 列表
+}
+```
+
+---
+
+## 响应结构
+
+所有 API 返回统一的响应结构：
+
+```typescript
+interface IntelligenceInvokeResult<T> {
+  result: T                    // 结果数据
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    cost?: number
+  }
+  model: string               // 使用的模型
+  latency: number             // 请求延迟 (ms)
+  traceId: string             // 追踪 ID
+  provider: string            // 使用的 Provider
+}
+```
+
+---
+
+## 状态管理
+
+```typescript
+const { isLoading, lastError } = useIntelligence()
+
+// 监听加载状态
+watch(isLoading, (loading) => {
+  if (loading) {
+    showLoadingSpinner()
+  } else {
+    hideLoadingSpinner()
+  }
+})
+
+// 监听错误
+watch(lastError, (error) => {
+  if (error) {
+    showErrorToast(error)
+  }
+})
+```
+
+---
+
+## 完整示例
+
+### 翻译插件
+
+```typescript
+import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+import { useClipboard } from '@talex-touch/utils/plugin/sdk'
+
+const { text, isLoading } = useIntelligence()
+const clipboard = useClipboard()
+
+async function translateAndPaste(content: string, targetLang: string) {
+  const result = await text.translate({
+    text: content,
+    targetLang
+  })
+  
+  await clipboard.copyAndPaste({ text: result.result })
+}
+```
+
+### OCR 识别插件
+
+```typescript
+import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+
+const { vision } = useIntelligence()
+
+async function recognizeText(imageDataUrl: string) {
+  const result = await vision.ocr({
+    source: { type: 'data-url', dataUrl: imageDataUrl },
+    includeKeywords: true
+  })
+  
+  return {
+    text: result.result.text,
+    keywords: result.result.keywords
+  }
+}
+```
+
+---
+
+## Provider 类型
+
+```typescript
+enum IntelligenceProviderType {
+  OPENAI = 'openai',
+  ANTHROPIC = 'anthropic',
+  DEEPSEEK = 'deepseek',
+  SILICONFLOW = 'siliconflow',
+  LOCAL = 'local',
+  CUSTOM = 'custom'
+}
+```
+
+---
+
+## 能力类型
+
+```typescript
+enum IntelligenceCapabilityType {
+  // 文本
+  CHAT, COMPLETION, EMBEDDING, SUMMARIZE, TRANSLATE, REWRITE, GRAMMAR_CHECK,
+  // 代码
+  CODE_GENERATE, CODE_EXPLAIN, CODE_REVIEW, CODE_REFACTOR, CODE_DEBUG,
+  // 分析
+  INTENT_DETECT, SENTIMENT_ANALYZE, CONTENT_EXTRACT, KEYWORDS_EXTRACT, CLASSIFICATION,
+  // 音频
+  TTS, STT, AUDIO_TRANSCRIBE,
+  // 视觉
+  VISION, VISION_OCR, IMAGE_CAPTION, IMAGE_ANALYZE, IMAGE_GENERATE, IMAGE_EDIT,
+  // RAG
+  RAG_QUERY, SEMANTIC_SEARCH, RERANK,
+  // 工作流
+  WORKFLOW, AGENT
+}
+```

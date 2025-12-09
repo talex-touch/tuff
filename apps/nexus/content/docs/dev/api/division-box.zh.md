@@ -133,28 +133,105 @@ async function getActiveSessions() {
 
 ## 插件 SDK
 
-### 在插件中使用 DivisionBox
+### 快速开始
 
 ```typescript
-import { createDivisionBoxSDK } from '@talex-touch/utils/plugin/sdk'
+import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
 
-const divisionBox = createDivisionBoxSDK(channel, 'my-plugin')
+const divisionBox = useDivisionBox()
 
 // 打开 DivisionBox
-async function openPanel() {
-  const session = await divisionBox.open({
-    url: '/panel.html',
-    title: '设置面板',
-    size: 'expanded'
-  })
-  
-  console.log('Opened session:', session.sessionId)
-}
-
-// 监听状态变化
-divisionBox.onStateChange((event) => {
-  console.log('State changed:', event.previousState, '->', event.currentState)
+const { sessionId } = await divisionBox.open({
+  url: 'https://example.com/tool',
+  title: '我的工具',
+  size: 'medium',
+  keepAlive: true
 })
+
+// 关闭 DivisionBox
+await divisionBox.close(sessionId)
+```
+
+### 完整 API
+
+#### `open(config)`
+
+打开新的 DivisionBox 窗口。
+
+```typescript
+import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
+
+const divisionBox = useDivisionBox()
+
+const { sessionId } = await divisionBox.open({
+  url: 'https://example.com',
+  title: 'Web Tool',
+  icon: 'ri:tools-line',
+  size: 'medium',
+  keepAlive: true,
+  header: {
+    show: true,
+    title: 'Custom Title',
+    actions: [
+      { label: 'Refresh', icon: 'ri:refresh-line', onClick: () => {} }
+    ]
+  }
+})
+```
+
+#### `close(sessionId, options?)`
+
+关闭 DivisionBox 窗口。
+
+```typescript
+// 简单关闭
+await divisionBox.close(sessionId)
+
+// 带延迟和动画
+await divisionBox.close(sessionId, {
+  delay: 1000,
+  animation: true
+})
+
+// 强制关闭（忽略 keepAlive）
+await divisionBox.close(sessionId, { force: true })
+```
+
+#### `onStateChange(handler)`
+
+监听状态变化。
+
+```typescript
+const unsubscribe = divisionBox.onStateChange((data) => {
+  console.log(`Session ${data.sessionId} changed to ${data.state}`)
+})
+
+// 停止监听
+unsubscribe()
+```
+
+#### `updateState(sessionId, key, value)`
+
+更新会话状态数据。
+
+```typescript
+// 保存滚动位置
+await divisionBox.updateState(sessionId, 'scrollY', 150)
+
+// 保存草稿
+await divisionBox.updateState(sessionId, 'draft', {
+  text: 'Hello world',
+  timestamp: Date.now()
+})
+```
+
+#### `getState(sessionId, key)`
+
+获取会话状态数据。
+
+```typescript
+const scrollY = await divisionBox.getState(sessionId, 'scrollY')
+const draft = await divisionBox.getState(sessionId, 'draft')
 ```
 
 ## URL 协议
