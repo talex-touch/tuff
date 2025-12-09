@@ -16,6 +16,15 @@ import type {
 import { FlowIPCChannel } from '../../types/flow'
 
 /**
+ * Flow transfer handler function type
+ */
+export type FlowTransferHandler = (
+  payload: FlowPayload,
+  sessionId: string,
+  senderInfo: { senderId: string; senderName?: string }
+) => Promise<void> | void
+
+/**
  * Flow SDK interface
  */
 export interface IFlowSDK {
@@ -52,6 +61,24 @@ export interface IFlowSDK {
   getAvailableTargets(payloadType?: FlowPayloadType): Promise<FlowTargetInfo[]>
 
   /**
+   * Registers a handler for incoming flow transfers
+   * This tells the system that your plugin can handle flow data
+   *
+   * @param handler - Handler function for incoming flows
+   * @returns Unsubscribe function
+   *
+   * @example
+   * ```typescript
+   * const unsubscribe = flow.onFlowTransfer(async (payload, sessionId, sender) => {
+   *   console.log(`Received ${payload.type} from ${sender.senderName}`)
+   *   // Process the payload...
+   *   await flow.acknowledge(sessionId, { processed: true })
+   * })
+   * ```
+   */
+  onFlowTransfer(handler: FlowTransferHandler): () => void
+
+  /**
    * Listens for session updates
    *
    * @param sessionId - Session to listen to
@@ -85,6 +112,14 @@ export interface IFlowSDK {
    * @param message - Error message
    */
   reportError(sessionId: string, message: string): Promise<void>
+
+  /**
+   * Uses native system share functionality
+   *
+   * @param payload - Data to share
+   * @param target - Optional preferred native target (system, airdrop, mail, messages)
+   */
+  nativeShare(payload: FlowPayload, target?: string): Promise<{ success: boolean; target?: string; error?: string }>
 }
 
 /**
@@ -99,6 +134,8 @@ export function createFlowSDK(
   pluginId: string
 ): IFlowSDK {
   const sessionListeners = new Map<string, Set<(update: FlowSessionUpdate) => void>>()
+  const flowTransferHandlers = new Set<FlowTransferHandler>()
+  let hasRegisteredHandler = false
 
   // Listen for session updates
   if (typeof window !== 'undefined') {
@@ -205,6 +242,57 @@ export function createFlowSDK(
       if (!response?.success) {
         throw new Error(response?.error?.message || 'Failed to report error')
       }
+    },
+
+    onFlowTransfer(handler: FlowTransferHandler): () => void {
+      flowTransferHandlers.add(handler)
+
+      // Notify the system that this plugin has a flow handler
+      if (!hasRegisteredHandler) {
+        hasRegisteredHandler = true
+        channel.send('flow:set-plugin-handler', {
+          pluginId,
+          hasHandler: true
+        }).catch((err) => {
+          console.warn('[FlowSDK] Failed to register flow handler:', err)
+        })
+
+        // Listen for incoming flow transfers
+        if (typeof window !== 'undefined') {
+          window.addEventListener('message', (event) => {
+            if (event.data?.type === FlowIPCChannel.DELIVER && event.data?.targetPluginId === pluginId) {
+              const { payload, sessionId, senderId, senderName } = event.data
+              for (const h of flowTransferHandlers) {
+                try {
+                  h(payload, sessionId, { senderId, senderName })
+                } catch (error) {
+                  console.error('[FlowSDK] Error in flow transfer handler:', error)
+                }
+              }
+            }
+          })
+        }
+      }
+
+      return () => {
+        flowTransferHandlers.delete(handler)
+        if (flowTransferHandlers.size === 0) {
+          hasRegisteredHandler = false
+          channel.send('flow:set-plugin-handler', {
+            pluginId,
+            hasHandler: false
+          }).catch(() => {})
+        }
+      }
+    },
+
+    async nativeShare(payload: FlowPayload, target?: string): Promise<{ success: boolean; target?: string; error?: string }> {
+      const response = await channel.send('flow:native-share', {
+        payload,
+        target
+      })
+
+      return response?.data || { success: false, error: 'Native share failed' }
     }
   }
 }

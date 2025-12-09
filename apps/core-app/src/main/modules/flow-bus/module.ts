@@ -14,6 +14,7 @@ import { BaseModule } from '../abstract-base-module'
 import { shortcutModule } from '../global-shortcon'
 import { FlowBusIPC, initializeFlowBusIPC } from './ipc'
 import { flowTargetRegistry } from './target-registry'
+import { nativeShareService } from './native-share'
 import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 import { DivisionBoxManager } from '../division-box/manager'
@@ -51,6 +52,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     // Initialize IPC handlers
     this.ipc = initializeFlowBusIPC(channel)
 
+    // Register native share targets
+    this.registerNativeShareTargets()
+
     // Listen for plugin load/unload to register/unregister flow targets
     this.setupPluginIntegration()
 
@@ -58,6 +62,29 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     this.registerShortcuts()
 
     console.log('[FlowBusModule] Module initialized')
+  }
+
+  /**
+   * Registers native system share targets
+   */
+  private registerNativeShareTargets(): void {
+    const targets = nativeShareService.getAvailableTargets()
+    
+    for (const target of targets) {
+      flowTargetRegistry.registerTarget(
+        'native',
+        target,
+        {
+          pluginName: '系统分享',
+          pluginIcon: 'ri:share-forward-line',
+          isEnabled: true,
+          hasFlowHandler: true, // Native share always has handler
+          isNativeShare: true
+        }
+      )
+    }
+
+    console.log(LOG_PREFIX, `Registered ${targets.length} native share targets`)
   }
 
   /**
@@ -205,6 +232,32 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         const { pluginId, enabled } = data.data as { pluginId: string; enabled: boolean }
         flowTargetRegistry.setPluginEnabled(pluginId, enabled)
         data.reply(DataCode.SUCCESS, { success: true })
+      }
+    )
+
+    // Register channel for plugin to report flow handler status
+    channel.regChannel(
+      ChannelType.MAIN,
+      'flow:set-plugin-handler',
+      (data) => {
+        const { pluginId, hasHandler } = data.data as { pluginId: string; hasHandler: boolean }
+        flowTargetRegistry.setPluginFlowHandler(pluginId, hasHandler)
+        data.reply(DataCode.SUCCESS, { success: true })
+      }
+    )
+
+    // Register channel for native share
+    channel.regChannel(
+      ChannelType.MAIN,
+      'flow:native-share',
+      async (data) => {
+        const { payload, target } = data.data as { payload: any; target?: string }
+        const options = nativeShareService.payloadToShareOptions(payload)
+        if (target) {
+          options.target = target as any
+        }
+        const result = await nativeShareService.share(options)
+        data.reply(DataCode.SUCCESS, result)
       }
     )
   }
