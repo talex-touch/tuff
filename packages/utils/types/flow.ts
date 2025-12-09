@@ -150,6 +150,15 @@ export interface FlowTargetInfo extends FlowTarget {
   /** Whether the plugin is currently enabled */
   isEnabled: boolean
 
+  /** Whether plugin has registered onFlowTransfer handler */
+  hasFlowHandler: boolean
+
+  /** Whether this is a native system share target */
+  isNativeShare?: boolean
+
+  /** Adaptation status message (for unhandled plugins) */
+  adaptationHint?: string
+
   /** Recent usage count */
   usageCount?: number
 
@@ -280,4 +289,43 @@ export interface FlowManifestConfig {
 
   /** Flow targets this plugin can receive */
   flowTargets?: FlowTarget[]
+}
+
+/**
+ * Native share target types
+ */
+export type NativeShareTarget = 'system' | 'airdrop' | 'mail' | 'messages'
+
+/**
+ * Native share options
+ */
+export interface NativeShareOptions {
+  /** Share title */
+  title?: string
+
+  /** Share text content */
+  text?: string
+
+  /** Share URL */
+  url?: string
+
+  /** File paths to share */
+  files?: string[]
+
+  /** Preferred native target (optional) */
+  target?: NativeShareTarget
+}
+
+/**
+ * Native share result
+ */
+export interface NativeShareResult {
+  /** Whether share was successful */
+  success: boolean
+
+  /** Target used (if known) */
+  target?: string
+
+  /** Error message if failed */
+  error?: string
 }

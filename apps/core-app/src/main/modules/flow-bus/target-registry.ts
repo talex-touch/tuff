@@ -19,6 +19,8 @@ interface TargetEntry {
   pluginName?: string
   pluginIcon?: string
   isEnabled: boolean
+  hasFlowHandler: boolean
+  isNativeShare?: boolean
   usageCount: number
   lastUsed?: number
 }
@@ -64,6 +66,8 @@ export class FlowTargetRegistry {
       pluginName?: string
       pluginIcon?: string
       isEnabled?: boolean
+      hasFlowHandler?: boolean
+      isNativeShare?: boolean
     }
   ): boolean {
     const fullId = this.getFullTargetId(pluginId, target.id)
@@ -85,6 +89,8 @@ export class FlowTargetRegistry {
       pluginName: options?.pluginName,
       pluginIcon: options?.pluginIcon,
       isEnabled: options?.isEnabled ?? true,
+      hasFlowHandler: options?.hasFlowHandler ?? false,
+      isNativeShare: options?.isNativeShare ?? false,
       usageCount: 0
     }
 
@@ -110,6 +116,7 @@ export class FlowTargetRegistry {
       pluginName?: string
       pluginIcon?: string
       isEnabled?: boolean
+      hasFlowHandler?: boolean
     }
   ): number {
     let count = 0
@@ -251,9 +258,52 @@ export class FlowTargetRegistry {
       pluginName: entry.pluginName,
       pluginIcon: entry.pluginIcon,
       isEnabled: entry.isEnabled,
+      hasFlowHandler: entry.hasFlowHandler,
+      isNativeShare: entry.isNativeShare,
+      adaptationHint: entry.hasFlowHandler ? undefined : '该插件尚未适配 Flow Transfer',
       usageCount: entry.usageCount,
       lastUsed: entry.lastUsed
     }
+  }
+
+  /**
+   * Updates plugin's flow handler status
+   */
+  setPluginFlowHandler(pluginId: string, hasHandler: boolean): void {
+    const targetIds = this.pluginTargets.get(pluginId)
+    if (!targetIds) return
+
+    for (const targetId of targetIds) {
+      const entry = this.targets.get(targetId)
+      if (entry) {
+        entry.hasFlowHandler = hasHandler
+      }
+    }
+    console.log(`[FlowTargetRegistry] Plugin ${pluginId} flow handler: ${hasHandler}`)
+  }
+
+  /**
+   * Gets targets sorted by adaptation status
+   * Adapted plugins first, then unadapted plugins at the end
+   */
+  getTargetsSortedByAdaptation(payloadType?: FlowPayloadType): FlowTargetInfo[] {
+    let targets = payloadType
+      ? this.getTargetsByPayloadType(payloadType)
+      : this.getAllTargets()
+
+    // Sort: native share first, then adapted, then unadapted
+    return targets.sort((a, b) => {
+      // Native share always first
+      if (a.isNativeShare && !b.isNativeShare) return -1
+      if (!a.isNativeShare && b.isNativeShare) return 1
+
+      // Adapted plugins before unadapted
+      if (a.hasFlowHandler && !b.hasFlowHandler) return -1
+      if (!a.hasFlowHandler && b.hasFlowHandler) return 1
+
+      // Then by usage count
+      return (b.usageCount ?? 0) - (a.usageCount ?? 0)
+    })
   }
 
   /**
