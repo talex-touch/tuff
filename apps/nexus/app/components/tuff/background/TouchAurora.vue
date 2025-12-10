@@ -158,7 +158,7 @@ function initAurora() {
   let program: Program | undefined
 
   const resize = () => {
-    if (!container)
+    if (!container || !renderer)
       return
 
     const parentWidth = container.parentElement?.offsetWidth || container.offsetWidth || window.innerWidth
@@ -167,7 +167,7 @@ function initAurora() {
     const width = Math.max(parentWidth, 300)
     const height = Math.max(parentHeight, 300)
 
-    renderer!.setSize(width, height)
+    renderer.setSize(width, height)
     if (program) {
       program.uniforms.uResolution.value = [width, height]
     }
@@ -227,7 +227,7 @@ function initAurora() {
         const c = new Color(hex)
         return [c.r, c.g, c.b]
       })
-      renderer!.render({ scene: mesh })
+      renderer?.render({ scene: mesh })
     }
   }
   animateId = requestAnimationFrame(update)
