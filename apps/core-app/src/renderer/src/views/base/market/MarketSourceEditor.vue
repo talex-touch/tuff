@@ -295,25 +295,30 @@ function handleAdd() {
       white-space: nowrap;
     }
   }
-  &.New .Item-Container {
-    left: 0%;
-    width: 100%;
-    .Item-Title {
-      .adapter {
-        margin-left: 2px;
-        opacity: 0.58;
+  &.New {
+    height: auto;
+    min-height: 140px;
+    
+    .Item-Container {
+      left: 0%;
+      width: 100%;
+      .Item-Title {
+        .adapter {
+          margin-left: 2px;
+          opacity: 0.58;
+        }
+        font-weight: 600;
       }
-      font-weight: 600;
-    }
-    .Item-Desc {
-      opacity: 0.75;
+      .Item-Desc {
+        opacity: 0.75;
+      }
     }
   }
   position: relative;
   margin: 0.5rem;
   padding: 0.5rem;
 
-  height: 65px;
+  min-height: 65px;
 
   cursor: pointer;
   overflow: hidden;
@@ -329,7 +334,9 @@ function handleAdd() {
 }
 
 .MarketSourceEditor-Container {
-  height: 80%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .TypeSelect {
@@ -347,6 +354,8 @@ function handleAdd() {
   }
   z-index: 100;
   position: absolute;
+  display: flex;
+  flex-direction: column;
   padding: 1rem;
 
   top: 50%;
