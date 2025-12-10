@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginListModule" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { computed } from 'vue'
 import PluginItem from './PluginItem.vue'
 
 const props = defineProps<{
@@ -9,11 +9,11 @@ const props = defineProps<{
   shrink?: boolean
 }>()
 
-const emits = defineEmits<{
+defineEmits<{
   (e: 'update:modelValue', value: ITouchPlugin): void
 }>()
 
-const value = useModelWrapper(props, emits)
+const value = computed(() => props.modelValue)
 </script>
 
 <template>
@@ -35,14 +35,14 @@ const value = useModelWrapper(props, emits)
       v-text="`No selection made.`"
     />
 
-    <transition-group name="list">
+    <transition-group name="list" tag="div">
       <PluginItem
-        v-for="(plugin, index) in Object.values(plugins)"
-        :key="index"
+        v-for="plugin in plugins"
+        :key="plugin.name"
         :plugin="plugin"
         :shrink="shrink"
-        :is-target="plugin.name === value"
-        @click="value = plugin.name"
+        :is-target="value?.name === plugin.name"
+        @click="$emit('update:modelValue', plugin)"
       />
     </transition-group>
   </div>

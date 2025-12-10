@@ -92,6 +92,16 @@ abstract class BaseModule {
 
 ### 插件系统
 
+**插件三层架构命名**:
+
+| 层级 | 英文名 | 中文名 | 文件 | 说明 |
+|------|--------|--------|------|------|
+| 声明层 | **Manifest** | **清单文件** | `manifest.json` | 插件元数据、功能声明、权限配置 |
+| 脚本层 | **Prelude** | **先导脚本** | `index.js` | 轻量入口，注册能力、处理回调 |
+| 展示层 | **Surface** | **展面** | `attachUIView` | 重量级 UI 渲染（WebContents） |
+
+**加载流程**: Manifest → Prelude → (按需) Surface
+
 **核心特性**:
 - 插件从用户数据目录运行时加载（不打包到应用）
 - Manifest 驱动：`manifest.json` 定义功能、元数据、权限
@@ -269,7 +279,7 @@ interface TuffMeta {
 
 - Node.js 版本: 22.16.0+ (pnpm preinstall hook 和 Volta 强制)
 - 开发时支持热重载，通过 DevProcessManager 进行进程清理
-- 插件开发支持 manifest.json 或主文件变更时的实时重载
+- 插件开发支持 Manifest (`manifest.json`) 或 Prelude (`index.js`) 变更时的实时重载
 - CoreBox 定位支持屏幕感知，适应多显示器设置
 - 数据库使用 Drizzle ORM + LibSQL 进行类型安全查询
 - 使用 log4js 进行结构化日志记录，带命名空间、时间戳和彩色输出
