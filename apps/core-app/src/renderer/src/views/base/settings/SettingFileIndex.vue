@@ -214,15 +214,17 @@ const triggerRebuild = async () => {
       <div class="stats-container">
         <div class="stat-item">
           <span class="stat-label">{{ t('settings.settingFileIndex.totalFiles') }}</span>
-          <span class="stat-value">{{ indexStats.totalFiles }}</span>
+          <span class="stat-value">&nbsp;{{ indexStats.totalFiles }}</span>
         </div>
+        <span class="stat-divider">·</span>
         <div class="stat-item">
           <span class="stat-label">{{ t('settings.settingFileIndex.failedFiles') }}</span>
-          <span class="stat-value failed">{{ indexStats.failedFiles }}</span>
+          <span class="stat-value failed">&nbsp;{{ indexStats.failedFiles }}</span>
         </div>
+        <span class="stat-divider">·</span>
         <div class="stat-item">
           <span class="stat-label">{{ t('settings.settingFileIndex.skippedFiles') }}</span>
-          <span class="stat-value skipped">{{ indexStats.skippedFiles }}</span>
+          <span class="stat-value skipped">&nbsp;{{ indexStats.skippedFiles }}</span>
         </div>
       </div>
     </TuffBlockSlot>
@@ -268,30 +270,32 @@ const triggerRebuild = async () => {
 
 .stats-container {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .stat-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
 }
 
-.stat-item:last-child {
-  border-bottom: none;
+.stat-divider {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 12px;
+  margin: 0 2px;
 }
 
 .stat-label {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
   font-weight: 400;
 }
 
 .stat-value {
-  font-size: 14px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.9);
   font-weight: 600;
   font-variant-numeric: tabular-nums;

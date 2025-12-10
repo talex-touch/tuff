@@ -37,6 +37,8 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   public isQuitting = false
 
+  private _startSilent = false
+
   /**
    * Read startSilent config directly from file before StorageModule is initialized
    */
@@ -81,11 +83,11 @@ export class TouchApp implements TalexTouch.TouchApp {
     checkDirWithCreate(this.rootPath, true)
 
     // Read startSilent config before creating window
-    const startSilent = this.readStartSilentConfig()
+    this._startSilent = this.readStartSilentConfig()
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
       ...MainWindowOption,
-      autoShow: !startSilent,
+      autoShow: !this._startSilent,
     }
 
     this.app = app
@@ -96,7 +98,7 @@ export class TouchApp implements TalexTouch.TouchApp {
       mainLog.debug('Development process manager initialized')
     }
 
-    if (startSilent) {
+    if (this._startSilent) {
       mainLog.info('Silent start mode enabled, window will not auto-show')
     }
 
@@ -128,7 +130,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     checkDirWithCreate(this.rootPath, true)
 
-    const startSilent = (this.config.data as any)?.window?.startSilent ?? false
+    const startSilent = this._startSilent
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
       mainLog.info('Booting packaged build', {

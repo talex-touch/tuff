@@ -138,7 +138,13 @@
     "recommendationShowReason": "Show Recommendation Reason",
     "recommendationShowReasonDesc": "Display the reason for each recommendation.",
     "recommendationMaxItems": "Max Recommendations",
-    "recommendationMaxItemsDesc": "Maximum number of recommended items to show in search bar."
+    "recommendationMaxItemsDesc": "Maximum number of recommended items to show in search bar.",
+    "animationGroupTitle": "Animation Settings",
+    "animationGroupDesc": "Control CoreBox interface animations. Disable to improve performance.",
+    "listItemStagger": "List Item Animation",
+    "listItemStaggerDesc": "Staggered entrance animation for search result items.",
+    "resultTransition": "Result Transition",
+    "resultTransitionDesc": "Transition animation when search results change."
   },
   "settingUser": {
     "groupTitle": "Account",
