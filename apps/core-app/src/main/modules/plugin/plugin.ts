@@ -168,11 +168,10 @@ export class TouchPlugin implements ITouchPlugin {
     this._status = v
 
     const channel = genTouchChannel()!
-    channel &&
-      channel.send(ChannelType.MAIN, 'plugin-status-updated', {
-        plugin: this.name,
-        status: this._status
-      })
+    channel?.broadcast(ChannelType.MAIN, 'plugin-status-updated', {
+      plugin: this.name,
+      status: this._status
+    })
   }
 
   addFeature(feature: IPluginFeature): boolean {
@@ -519,10 +518,7 @@ export class TouchPlugin implements ITouchPlugin {
     this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
 
     this.pluginLifecycle?.onInit?.()
-    genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:enabled', {
-      ...this.toJSONObject(),
-      plugin: this.name
-    })
+    genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:enabled', this.toJSONObject())
 
     console.log(`[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`)
     console.log(`[Plugin] Plugin ${this.name} is enabled.`)
@@ -548,10 +544,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING
     this.logger.debug('Disabling plugin')
 
-    genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:disabled', {
-      ...this.toJSONObject(),
-      plugin: this.name
-    })
+    genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:disabled', this.toJSONObject())
 
     this._windows.forEach((win, id) => {
       try {

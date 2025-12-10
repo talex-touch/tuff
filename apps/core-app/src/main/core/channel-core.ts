@@ -163,7 +163,20 @@ class TouchChannel implements ITouchChannel {
 
       const res = func(handInData)
 
-      if (res && res instanceof Promise) return
+      if (res && res instanceof Promise) {
+        res
+          .then((data) => {
+            if (!_replied) {
+              handInData.reply(DataCode.SUCCESS, data)
+            }
+          })
+          .catch((err) => {
+            if (!_replied) {
+              handInData.reply(DataCode.ERROR, err)
+            }
+          })
+        return
+      }
 
       // Only auto-reply if the handler hasn't already replied
       if (!_replied) {
@@ -434,8 +447,98 @@ class TouchChannel implements ITouchChannel {
     return this.sendTo(this.app.window.window, ChannelType.MAIN, eventName, arg)
   }
 
+  /**
+   * Broadcast a message without waiting for a response.
+   * Use for notification-style messages that don't need acknowledgment.
+   */
+  broadcast(type: ChannelType, eventName: string, arg: any): void {
+    this.broadcastTo(this.app.window.window, type, eventName, arg)
+  }
+
+  /**
+   * Broadcast a message to a specific window without waiting for a response.
+   */
+  broadcastTo(
+    win: Electron.BrowserWindow | WebContentsView | undefined,
+    type: ChannelType,
+    eventName: string,
+    arg: any
+  ): void {
+    const webContents = (win as any)?.webContents as Electron.WebContents | undefined
+
+    if (!webContents || webContents.isDestroyed()) {
+      return
+    }
+
+    const data = {
+      code: DataCode.SUCCESS,
+      data: arg,
+      name: eventName,
+      header: {
+        status: 'request',
+        type
+      }
+    } as RawStandardChannelData
+
+    let finalData: RawStandardChannelData
+    try {
+      finalData = JSON.parse(structuredStrictStringify(data))
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      console.error(`[Channel] Failed to serialize broadcast for "${eventName}": ${errorMessage}`)
+      return
+    }
+
+    const channel = type === ChannelType.PLUGIN ? '@plugin-process-message' : '@main-process-message'
+
+    try {
+      webContents.send(channel, finalData)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (!errorMessage.includes('EPIPE') && !errorMessage.includes('write')) {
+        console.error(`[Channel] Error broadcasting "${eventName}":`, error)
+      }
+    }
+  }
+
   sendToMain(win: Electron.BrowserWindow, eventName: string, arg?: any): Promise<any> {
     return this.sendTo(win, ChannelType.MAIN, eventName, arg)
+  }
+
+  /**
+   * Broadcast a message to a plugin without waiting for a response.
+   */
+  broadcastPlugin(pluginName: string, eventName: string, arg?: any): void {
+    const uiView = WindowManager.getInstance().getUIView()
+    if (!uiView) return
+
+    const key = this.nameToKeyMap.get(pluginName)
+    const webContents = (uiView as any)?.webContents as Electron.WebContents | undefined
+    if (!webContents || webContents.isDestroyed()) return
+
+    const data = {
+      code: DataCode.SUCCESS,
+      data: { ...arg, plugin: pluginName },
+      name: eventName,
+      header: {
+        status: 'request',
+        type: ChannelType.PLUGIN,
+        uniqueKey: key
+      }
+    } as RawStandardChannelData
+
+    let finalData: RawStandardChannelData
+    try {
+      finalData = JSON.parse(structuredStrictStringify(data))
+    } catch {
+      return
+    }
+
+    try {
+      webContents.send('@plugin-process-message', finalData)
+    } catch {
+      // Ignore send errors for broadcasts
+    }
   }
 
   sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
