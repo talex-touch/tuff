@@ -2410,6 +2410,83 @@ export class PluginModule extends BaseModule {
         })
       }
     })
+
+    /**
+     * Search plugins in the market (NPM + TPEX)
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'market:search', async ({ data, reply }) => {
+      try {
+        const { searchPlugins } = await import('../../service/plugin-market.service')
+        const result = await searchPlugins({
+          keyword: data?.keyword,
+          source: data?.source,
+          category: data?.category,
+          limit: data?.limit,
+          offset: data?.offset,
+        })
+        return reply(DataCode.SUCCESS, result)
+      }
+      catch (error: any) {
+        console.error('Market search failed:', error)
+        return reply(DataCode.ERROR, {
+          error: error?.message ?? 'MARKET_SEARCH_FAILED',
+        })
+      }
+    })
+
+    /**
+     * Get plugin details from market
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'market:get-plugin', async ({ data, reply }) => {
+      try {
+        const { getPluginDetails } = await import('../../service/plugin-market.service')
+        const plugin = await getPluginDetails(data?.identifier, data?.source)
+        if (plugin) {
+          return reply(DataCode.SUCCESS, plugin)
+        }
+        return reply(DataCode.ERROR, { error: 'Plugin not found' })
+      }
+      catch (error: any) {
+        console.error('Get plugin details failed:', error)
+        return reply(DataCode.ERROR, {
+          error: error?.message ?? 'GET_PLUGIN_FAILED',
+        })
+      }
+    })
+
+    /**
+     * Get featured plugins from market
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'market:featured', async ({ data, reply }) => {
+      try {
+        const { getFeaturedPlugins } = await import('../../service/plugin-market.service')
+        const plugins = await getFeaturedPlugins(data?.limit)
+        return reply(DataCode.SUCCESS, { plugins })
+      }
+      catch (error: any) {
+        console.error('Get featured plugins failed:', error)
+        return reply(DataCode.ERROR, {
+          error: error?.message ?? 'GET_FEATURED_FAILED',
+        })
+      }
+    })
+
+    /**
+     * List plugins from NPM
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'market:npm-list', async ({ reply }) => {
+      try {
+        const { listNpmPlugins } = await import('../../service/plugin-market.service')
+        const plugins = await listNpmPlugins()
+        return reply(DataCode.SUCCESS, { plugins })
+      }
+      catch (error: any) {
+        console.error('List NPM plugins failed:', error)
+        return reply(DataCode.ERROR, {
+          error: error?.message ?? 'NPM_LIST_FAILED',
+        })
+      }
+    })
   }
 }
 

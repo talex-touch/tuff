@@ -2,59 +2,31 @@ import type { PreviewAbilityResult, PreviewCardPayload } from '@talex-touch/util
 import type { PreviewAbilityContext } from '../preview-ability'
 import { performance } from 'node:perf_hooks'
 import { BasePreviewAbility } from '../preview-ability'
+import { fxRateProvider } from '../providers'
 
-interface RateEntry {
-  name: string
-  rate: number // rate against base USD
-}
-
-const CURRENCY_TABLE: Record<string, RateEntry> = {
-  usd: { name: '美元', rate: 1 },
-  cny: { name: '人民币', rate: 7.25 },
-  eur: { name: '欧元', rate: 0.92 },
-  jpy: { name: '日元', rate: 151.2 },
-  hkd: { name: '港币', rate: 7.81 },
-  twd: { name: '新台币', rate: 32.4 },
-  gbp: { name: '英镑', rate: 0.79 },
-  krw: { name: '韩元', rate: 1364 },
-  aud: { name: '澳元', rate: 1.49 },
-  cad: { name: '加元', rate: 1.37 },
-  sgd: { name: '新加坡元', rate: 1.36 },
-  thb: { name: '泰铢', rate: 36.4 },
-  vnd: { name: '越南盾', rate: 24840 },
-  inr: { name: '印度卢比', rate: 83.2 },
-  CHF: { name: '瑞士法郎', rate: 0.86 },
-  btc: { name: '比特币', rate: 0.000018 },
-  eth: { name: '以太坊', rate: 0.00026 },
-}
-
-const SYMBOL_MAP: Record<string, string> = {
-  '$': 'usd',
-  '¥': 'cny',
-  '￥': 'cny',
-  '€': 'eur',
-  '£': 'gbp',
-  '₩': 'krw',
-  '₫': 'vnd',
-  '฿': 'thb',
-  '₿': 'btc',
-  'Ξ': 'eth',
+// 货币名称映射
+const CURRENCY_NAMES: Record<string, string> = {
+  USD: '美元',
+  CNY: '人民币',
+  EUR: '欧元',
+  JPY: '日元',
+  GBP: '英镑',
+  HKD: '港币',
+  TWD: '新台币',
+  KRW: '韩元',
+  AUD: '澳元',
+  CAD: '加元',
+  SGD: '新加坡元',
+  THB: '泰铢',
+  VND: '越南盾',
+  INR: '印度卢比',
+  CHF: '瑞士法郎',
+  BTC: '比特币',
+  ETH: '以太坊',
 }
 
 const CURRENCY_PATTERN
-  = /^\s*(?:([$€¥£₩₫฿₿Ξ]|[a-z]{3})\s*)?([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:([a-z]{3})\s*)?(?:to|in|=|->)\s*([a-z]{3})\s*$/i
-
-function normalizeCurrency(rawSymbol?: string, rawCode?: string): string | null {
-  if (rawCode) {
-    const code = rawCode.toLowerCase()
-    if (CURRENCY_TABLE[code])
-      return code
-  }
-  if (rawSymbol && SYMBOL_MAP[rawSymbol]) {
-    return SYMBOL_MAP[rawSymbol]
-  }
-  return null
-}
+  = /^\s*(?:([$€¥£₩₫฿₿Ξ]|[a-z]{3})\s*)?([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:([a-z]{3})\s*)?(?:to|in|=|->|转|换)\s*([a-z\u4e00-\u9fa5]{2,})\s*$/i
 
 export class CurrencyPreviewAbility extends BasePreviewAbility {
   readonly id = 'preview.currency'
@@ -78,36 +50,56 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
     if (Number.isNaN(amount))
       return null
 
-    const source = normalizeCurrency(symbol, sourceCode) ?? 'usd'
-    const target = normalizeCurrency(undefined, targetCodeRaw)
-    if (!target || !CURRENCY_TABLE[source] || !CURRENCY_TABLE[target]) {
+    // Normalize currencies using FxRateProvider
+    const sourceInput = sourceCode || symbol || 'USD'
+    const source = fxRateProvider.normalizeCurrency(sourceInput)
+    const target = fxRateProvider.normalizeCurrency(targetCodeRaw)
+
+    if (!source || !target) {
       return null
     }
 
     this.throwIfAborted(context.signal)
 
-    const sourceRate = CURRENCY_TABLE[source].rate
-    const targetRate = CURRENCY_TABLE[target].rate
-    const usdValue = amount / sourceRate
-    const converted = usdValue * targetRate
+    // Get conversion result from provider
+    const conversion = fxRateProvider.convert(amount, source, target)
+    if (!conversion || !conversion.rate) {
+      return null
+    }
+
+    const { result: converted, rate } = conversion
+    const status = fxRateProvider.getStatus()
+
+    // Get USD equivalent
+    const usdConversion = fxRateProvider.convert(amount, source, 'USD')
+    const usdValue = usdConversion?.result ?? amount
+
+    const sourceName = CURRENCY_NAMES[source] || source
+    const targetName = CURRENCY_NAMES[target] || target
+
+    // Format update time
+    const updateTime = new Date(status.lastRefresh).toLocaleString('zh-CN')
+    const subtitle = status.isStale
+      ? `汇率换算 ⚠️ 数据较旧 (${updateTime})`
+      : `汇率换算 · ${status.source === 'ecb' ? 'ECB' : '内置'} · ${updateTime}`
 
     const payload: PreviewCardPayload = {
       abilityId: this.id,
-      title: `${amount} ${source.toUpperCase()} -> ${target.toUpperCase()}`,
-      subtitle: '汇率换算（内部参考值）',
-      primaryLabel: `${CURRENCY_TABLE[source].name} → ${CURRENCY_TABLE[target].name}`,
+      title: `${amount} ${source} → ${target}`,
+      subtitle,
+      primaryLabel: `${sourceName} → ${targetName}`,
       primaryValue: converted.toFixed(4),
       secondaryLabel: '折合美元',
       secondaryValue: usdValue.toFixed(4),
       chips: [
-        { label: '源汇率', value: `1 ${source.toUpperCase()} = ${(1 / sourceRate).toFixed(4)} USD` },
-        { label: '目标汇率', value: `1 ${target.toUpperCase()} = ${(targetRate).toFixed(4)} USD` },
+        { label: '汇率', value: `1 ${source} = ${rate.rate.toFixed(6)} ${target}` },
+        { label: '数据源', value: status.source.toUpperCase() },
       ],
       sections: [
         {
           rows: [
-            { label: '源金额', value: `${amount} ${source.toUpperCase()}` },
-            { label: '目标金额', value: `${converted.toFixed(4)} ${target.toUpperCase()}` },
+            { label: '源金额', value: `${amount} ${source}` },
+            { label: '目标金额', value: `${converted.toFixed(4)} ${target}` },
           ],
         },
       ],
@@ -115,7 +107,7 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
 
     return {
       abilityId: this.id,
-      confidence: 0.7,
+      confidence: 0.75,
       payload,
       durationMs: performance.now() - startedAt,
     }

@@ -165,12 +165,45 @@ interface PreviewCandidate {
 
 ## 七、实施计划
 
-| 阶段 | 内容 | 交付物 | 预计 |
-| --- | --- | --- | --- |
-| Phase 0 | Unit/FX 数据准备、库选型、沙箱 PoC | Demo CLI | 2 天 |
-| Phase 1 | 表达式 + 单位换算 | 可交付 PR + UI 卡片 | 5-6 天 |
-| Phase 2 | 汇率 + 日期时间 | 汇率刷新服务、时区解析 | 4-5 天 |
-| Phase 3 | 组合查询/变量、指标埋点 | 完整仪表盘、开放变量 API | 3-4 天 |
+| 阶段 | 内容 | 交付物 | 预计 | 状态 |
+| --- | --- | --- | --- | --- |
+| Phase 0 | Unit/FX 数据准备、库选型、沙箱 PoC | Demo CLI | 2 天 | ✅ |
+| Phase 1 | 表达式 + 单位换算 | 可交付 PR + UI 卡片 | 5-6 天 | ✅ |
+| Phase 2 | 汇率 + 日期时间 | 汇率刷新服务、时区解析 | 4-5 天 | ✅ |
+| Phase 3 | 组合查询/变量、指标埋点 | 完整仪表盘、开放变量 API | 3-4 天 | ⏳ |
+
+### 已实现文件 (2025-12-10)
+
+```
+modules/box-tool/addon/preview/
+├── abilities/
+│   ├── advanced-expression-ability.ts  # 高级表达式
+│   ├── basic-expression-ability.ts     # 基础算式
+│   ├── unit-conversion-ability.ts      # 单位换算
+│   ├── currency-ability.ts             # 汇率换算 ✨
+│   ├── time-delta-ability.ts           # 时间计算
+│   ├── color-ability.ts                # 颜色解析
+│   ├── percentage-ability.ts           # 百分比
+│   ├── scientific-constants-ability.ts # 科学常量
+│   └── text-stats-ability.ts           # 文本统计
+└── providers/
+    ├── fx-rate-provider.ts             # 实时汇率服务 ✨ NEW
+    ├── time-engine.ts                  # 时间计算引擎 ✨ NEW
+    └── index.ts                        # 模块导出
+```
+
+**FxRateProvider 特性**:
+- ECB + 备用 API 双源获取
+- 1 小时自动刷新
+- 72 小时缓存 + 离线 fallback
+- 支持 17 种货币 + BTC/ETH
+- 中英文货币别名
+
+**TimeEngine 特性**:
+- 时间解析: now, today, tomorrow, 日期字符串
+- 时间偏移: +3h, -2d, +1h30m
+- 时区转换: 30+ 时区别名
+- 时间差计算: 年/月/日/时/分/秒
 
 ## 八、验收标准
 1. 关键场景（算式/单位/汇率/时间）命中率 ≥ 95%，平均响应 < 50ms。

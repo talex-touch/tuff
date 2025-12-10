@@ -8,6 +8,7 @@ import type { AgentDescriptor, AgentResult, AgentTask, AgentTool } from '@talex-
 import { ChannelType } from '@talex-touch/utils/channel'
 import chalk from 'chalk'
 import { genTouchChannel } from '../../../core/channel-core'
+import { agentMarketService } from '../../../service/agent-market.service'
 import { agentManager } from './agent-manager'
 
 const TAG = chalk.hex('#9c27b0').bold('[AgentChannels]')
@@ -118,6 +119,66 @@ export function registerAgentChannels(): () => void {
   cleanups.push(
     channel.regChannel(ChannelType.MAIN, 'agents:stats', async () => {
       return agentManager.getStats()
+    }),
+  )
+
+  // ============================================================================
+  // Agent Market
+  // ============================================================================
+
+  // Search agents in market
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:search', async ({ data }) => {
+      return agentMarketService.searchAgents(data || {})
+    }),
+  )
+
+  // Get agent details
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:get', async ({ data }) => {
+      return agentMarketService.getAgentDetails(data?.agentId)
+    }),
+  )
+
+  // Get featured agents
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:featured', async () => {
+      return agentMarketService.getFeaturedAgents()
+    }),
+  )
+
+  // Get installed agents
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:installed', async () => {
+      return agentMarketService.getInstalledAgents()
+    }),
+  )
+
+  // Get categories
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:categories', async () => {
+      return agentMarketService.getCategories()
+    }),
+  )
+
+  // Install agent
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:install', async ({ data }) => {
+      return agentMarketService.installAgent(data)
+    }),
+  )
+
+  // Uninstall agent
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:uninstall', async ({ data }) => {
+      return agentMarketService.uninstallAgent(data?.agentId)
+    }),
+  )
+
+  // Check for updates
+  cleanups.push(
+    channel.regChannel(ChannelType.MAIN, 'agents:market:check-updates', async () => {
+      return agentMarketService.checkUpdates()
     }),
   )
 

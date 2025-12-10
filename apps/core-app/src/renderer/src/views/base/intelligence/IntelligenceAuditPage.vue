@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
+import IntelligenceUsageChart from '~/components/intelligence/audit/IntelligenceUsageChart.vue'
 import IntelligenceUsageStats from '~/components/intelligence/audit/IntelligenceUsageStats.vue'
 import IntelligenceGlobalSettings from '~/components/intelligence/config/IntelligenceGlobalSettings.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
@@ -48,6 +49,18 @@ function handleCacheExpirationBlur() {
         :default-expanded="true"
       >
         <IntelligenceUsageStats />
+      </TuffGroupBlock>
+
+      <!-- Usage Chart Section -->
+      <TuffGroupBlock
+        :name="t('intelligence.usage.chartTitle')"
+        :description="t('intelligence.usage.chartDescription')"
+        default-icon="i-carbon-chart-line"
+        active-icon="i-carbon-chart-line"
+        memory-name="intelligence-usage-chart"
+        :default-expanded="true"
+      >
+        <IntelligenceUsageChart :days="14" />
       </TuffGroupBlock>
 
       <!-- Audit Logs Section -->

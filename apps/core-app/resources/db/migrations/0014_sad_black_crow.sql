@@ -42,7 +42,6 @@ CREATE TABLE `intelligence_quotas` (
 --> statement-breakpoint
 CREATE INDEX `idx_quota_caller` ON `intelligence_quotas` (`caller_id`,`caller_type`);--> statement-breakpoint
 CREATE TABLE `intelligence_usage_stats` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`caller_id` text NOT NULL,
 	`caller_type` text NOT NULL,
 	`period` text NOT NULL,

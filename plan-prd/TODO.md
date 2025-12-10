@@ -61,7 +61,7 @@
 - [x] Provider 实现 - 官方 TpexApiProvider (1d)
 - [x] Provider 实现 - NexusStoreProvider (1d)
 - [x] UI 集成 - Market 页面 + Source Editor (1d)
-- [ ] 扩展 Provider - NPM (npm-package-provider.ts) - 未实现
+- [x] 扩展 Provider - NPM (npm-package-provider.ts) ✅ (2025-12-10)
 - [ ] 扩展 Provider - GitHub/Gitee (repository-provider.ts) - 未实现
 - [ ] 验收 & 文档 (0.5d)
 
@@ -117,9 +117,9 @@
   - [x] 查询识别正则
   - [x] PreviewCard 组件
 
-- [ ] **Phase 2**: 汇率 + 日期时间 (待实现)
-  - [ ] FxRateProvider (ECB API)
-  - [ ] TimeEngine (luxon)
+- [x] **Phase 2**: 汇率 + 日期时间 ✅ (2025-12-10)
+  - [x] FxRateProvider (ECB API + 备用源)
+  - [x] TimeEngine (时区转换 + 时间计算)
 
 **已实现文件**:
 - `calculation-service.ts` - 主服务
@@ -245,7 +245,7 @@
   - [x] 用量统计聚合 (日/月维度)
   - [x] IPC 通道 (9 个)
   - [x] 导出功能 (CSV/JSON) ✅
-  - [ ] 用量统计 UI 图表 (待实现)
+  - [x] 用量统计 UI 图表 ✅ (2025-12-10)
 - [x] Demo & 文档 ✅ (2025-12-10)
   - [x] SDK 使用文档 (`README.md`)
   - [x] Renderer Hooks (`useIntelligenceStats`)
@@ -268,39 +268,44 @@
 
 ---
 
-### 3. Intelligence Agents 系统 🟡 详细规划完成
+### 3. Intelligence Agents 系统 ✅ Phase 1+2 完成
 **来源**: `plan-prd/02-architecture/intelligence-agents-system-prd.md`
-**工期**: 23 天
+**工期**: 23 天 → **Phase 1+2 已完成**
 
-#### Phase 1: 基础框架 (v2.5.0) - 5天
-- [ ] **Day 1**: 类型定义 + AgentRegistry
-  - [ ] `packages/utils/types/agent.ts` - 核心类型
-  - [ ] `modules/ai/agents/agent-registry.ts` - 代理注册表
-- [ ] **Day 2**: AgentManager + Scheduler
-  - [ ] `agent-manager.ts` - 代理管理器
-  - [ ] `agent-scheduler.ts` - 任务调度器 (优先级队列)
-- [ ] **Day 3**: AgentExecutor + IntelligenceSDK 集成
-  - [ ] `agent-executor.ts` - 任务执行器
-  - [ ] LLM 调用封装 (system prompt 构建)
-- [ ] **Day 4**: ToolRegistry + 基础工具
-  - [ ] `tools/tool-registry.ts` - 工具注册
-  - [ ] `tools/file-tools.ts` - 文件操作工具 (基础版)
-- [ ] **Day 5**: IPC 通道 + 基础 UI
-  - [ ] `agents:list`, `agents:execute`, `agents:cancel` 通道
-  - [ ] 代理列表界面
+#### Phase 1: 基础框架 (v2.5.0) - 5天 ✅
+- [x] **Day 1**: 类型定义 + AgentRegistry ✅
+  - [x] `packages/utils/types/agent.ts` - 核心类型 (+300行)
+  - [x] `modules/ai/agents/agent-registry.ts` - 智能体注册表
+- [x] **Day 2**: AgentManager + Scheduler ✅
+  - [x] `agent-manager.ts` - 智能体管理器
+  - [x] `agent-scheduler.ts` - 任务调度器 (优先级队列)
+- [x] **Day 3**: AgentExecutor + IntelligenceSDK 集成 ✅
+  - [x] `agent-executor.ts` - 任务执行器
+  - [x] LLM 调用封装 (system prompt 构建)
+- [x] **Day 4**: ToolRegistry + 基础工具 ✅
+  - [x] `tools/tool-registry.ts` - 工具注册
+  - [x] `tools/file-tools.ts` - 8个文件操作工具
+- [x] **Day 5**: IPC 通道 + 基础 UI ✅
+  - [x] `agents:list`, `agents:execute`, `agents:cancel` 通道
+  - [x] 智能体列表界面 (IntelligenceAgentsPage)
 
-#### Phase 2: 核心代理 (v2.6.0) - 8天
-- [ ] **Day 1-2**: FileAgent 完整实现
-  - [ ] 文件搜索与筛选
-  - [ ] 批量重命名
-  - [ ] 自动整理归档
-- [ ] **Day 3-4**: SearchAgent + 语义搜索
-  - [ ] 与 SearchEngineCore 集成
-  - [ ] 语义重排功能
-- [ ] **Day 5-6**: DataAgent + 格式转换
-  - [ ] 数据提取与转换
-  - [ ] JSON/CSV/XML 互转
-- [ ] **Day 7-8**: 代理市场 API + 文档
+#### Phase 2: 核心智能体 (v2.6.0) - 8天 ✅
+- [x] **Day 1-2**: FileAgent 完整实现 ✅
+  - [x] 文件搜索与筛选
+  - [x] 批量重命名
+  - [x] 自动整理归档
+  - [x] 重复文件检测
+- [x] **Day 3-4**: SearchAgent ✅
+  - [x] 智能搜索、语义搜索
+  - [x] 搜索建议、结果排序
+- [x] **Day 5-6**: DataAgent ✅
+  - [x] 数据提取与转换
+  - [x] JSON/CSV/YAML 互转
+  - [x] 数据清洗与分析
+- [x] **Day 7-8**: 智能体市场 API + 文档 ✅ (2025-12-10)
+  - [x] AgentMarketService (搜索/安装/卸载)
+  - [x] 8 个 IPC 通道
+  - [x] useAgentMarket composable
 
 #### Phase 3: 高级功能 (v2.7.0) - 10天
 - [ ] **Day 1-3**: WorkflowAgent + 编辑器
@@ -369,10 +374,10 @@
 | 优先级 | 任务数 | 已完成 | 剩余 | 状态 |
 |--------|--------|--------|------|------|
 | P0 紧急 | 1 | 0 | 1 | 待启动 |
-| P1 重要 | 4 | 2 | 2 | 托盘+计算完成, 插件市场进行中 |
+| P1 重要 | 4 | 3 | 1 | 托盘+计算+NPM完成 |
 | P2 增强 | 6 | 4 | 2 | Widget+Flow+Division+推荐完成 |
-| P3 长期 | 4 | 2 | 2 | Intelligence SDK + 下载中心完成, Agents 待开发 |
-| **总计** | **15** | **8** | **7** | **53% 完成** |
+| P3 长期 | 4 | 3 | 1 | Intelligence + 下载中心 + Agents P1+P2 完成 |
+| **总计** | **15** | **10** | **5** | **67% 完成** |
 
 ---
 
@@ -404,9 +409,12 @@
 - ~~Widget 动态加载 (P2)~~ - 2025-12-10 (核心完成)
 - ~~Intelligence SDK (P3)~~ - 2025-12-10 (核心完成)
 - ~~下载中心 (P3)~~ - 2025-12-10 (核心完成)
+- ~~Intelligence Agents Phase 1+2 (P3)~~ - 2025-12-10 ✨ NEW
+- ~~插件市场 NPM Provider (P1)~~ - 2025-12-10 ✨ NEW
+- ~~汇率/时间计算引擎 (P1)~~ - 2025-12-10 ✨ NEW
 
 ---
 
-**文档版本**: v1.4
+**文档版本**: v1.5
 **更新时间**: 2025-12-10
 **维护者**: Development Team

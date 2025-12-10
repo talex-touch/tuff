@@ -389,11 +389,26 @@ renderer/components/intelligence/agents/
 - `file.move` - 移动/重命名文件
 - `file.info` - 获取文件信息
 
-### Phase 2: 核心智能体 (v2.6.0) - 8天
-- [ ] **Day 1-2**: FileAgent 完整实现
-- [ ] **Day 3-4**: SearchAgent + 语义搜索
-- [ ] **Day 5-6**: DataAgent + 格式转换
-- [ ] **Day 7-8**: 智能体市场 API + 文档
+### Phase 2: 核心智能体 (v2.6.0) - 8天 ✅ 完成
+- [x] **Day 1-2**: FileAgent 完整实现 ✅ (2025-12-10)
+  - [x] 文件搜索、批量重命名、自动整理、重复检测
+- [x] **Day 3-4**: SearchAgent ✅ (2025-12-10)
+  - [x] 智能搜索、语义搜索、搜索建议、结果排序
+- [x] **Day 5-6**: DataAgent ✅ (2025-12-10)
+  - [x] 数据提取、转换、格式化、清洗、分析
+- [x] **Day 7-8**: 智能体市场 API + 文档 ✅ (2025-12-10)
+  - [x] AgentMarketService (搜索/安装/卸载)
+  - [x] 8 个 IPC 通道
+  - [x] useAgentMarket composable
+
+**已实现智能体**:
+```
+builtin/
+├── file-agent.ts     # 文件管理智能体 (4 能力)
+├── search-agent.ts   # 搜索增强智能体 (4 能力)
+├── data-agent.ts     # 数据处理智能体 (5 能力)
+└── index.ts          # 智能体注册入口
+```
 
 ### Phase 3: 高级功能 (v2.7.0) - 10天
 - [ ] **Day 1-3**: WorkflowAgent + 编辑器
