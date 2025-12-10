@@ -1,5 +1,6 @@
 <script setup lang="ts" name="BoxInput">
 import { useI18n } from 'vue-i18n'
+import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '../../modules/box/adapter'
 
 interface Props {
@@ -42,12 +43,16 @@ const inputValue = computed({
 })
 
 const placeholder = computed(() => {
-  // Use custom placeholder if provided
+  // Use custom placeholder if provided via props
   if (props.placeholder) return props.placeholder
   
-  return props.boxOptions.mode === BoxMode.FEATURE
-    ? (props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name)
-    : t('boxInput.placeholder')
+  // Feature mode: show feature description
+  if (props.boxOptions.mode === BoxMode.FEATURE) {
+    return props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name
+  }
+  
+  // Use custom placeholder from settings, fallback to i18n default
+  return appSetting.coreBox?.customPlaceholder || t('boxInput.placeholder')
 })
 </script>
 

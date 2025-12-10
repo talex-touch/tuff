@@ -105,21 +105,29 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 
 <style lang="scss" scoped>
 .LayoutSection-List {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.25rem;
+  padding: 0.5rem;
 }
 
 .LayoutSection-Item {
   display: flex;
   flex-direction: column;
-  width: 220px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 12px;
+  border: 1.5px solid var(--el-border-color-lighter);
+  border-radius: 16px;
   background: var(--el-bg-color);
   cursor: pointer;
   padding: 0;
-  gap: 0.5rem;
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.LayoutSection-Item:hover {
+  border-color: var(--el-border-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 .LayoutSection-Item:focus-visible {
@@ -129,15 +137,26 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 
 .LayoutSection-Item.active {
   border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  background: linear-gradient(135deg, var(--el-color-primary-light-9) 0%, var(--el-bg-color) 100%);
+  box-shadow: 0 4px 20px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.15);
+}
+
+.LayoutSection-Item.active:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.2);
 }
 
 .LayoutSection-Preview {
   width: 100%;
-  height: 140px;
-  border-radius: 10px 10px 0 0;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
-  background: var(--el-bg-color-page);
+  background: var(--el-fill-color-lighter);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  position: relative;
+}
+
+.LayoutSection-Item.active .LayoutSection-Preview {
+  border-bottom-color: var(--el-color-primary-light-7);
 }
 
 .LayoutSection-PreviewLayout,
@@ -150,6 +169,8 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
   width: 100%;
   height: 100%;
   pointer-events: none;
+  transform: scale(0.95);
+  transform-origin: center center;
 
   :deep(.AppLayout-Container) {
     width: 100%;
@@ -161,43 +182,58 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 .LayoutSection-PreviewSkeleton {
   display: flex;
   flex-direction: column;
+  padding: 8px;
+  gap: 4px;
 }
 
 .LayoutSection-Skeleton-Header {
-  height: 28px;
-  background: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color);
+  height: 20px;
+  background: var(--el-fill-color);
+  border-radius: 4px;
 }
 
 .LayoutSection-Skeleton-Body {
   flex: 1;
   display: flex;
+  gap: 4px;
 }
 
 .LayoutSection-Skeleton-Sidebar {
-  width: 36px;
-  background: var(--el-bg-color);
-  border-right: 1px solid var(--el-border-color);
+  width: 28px;
+  background: var(--el-fill-color);
+  border-radius: 4px;
 }
 
 .LayoutSection-Skeleton-Main {
   flex: 1;
-  background: var(--el-bg-color-page);
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
 }
 
 .LayoutSection-Info {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1rem 1rem;
+  padding: 0.875rem 1rem;
+  gap: 0.5rem;
 }
 
 .LayoutSection-Name {
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--el-text-color-primary);
+}
+
+.LayoutSection-Item.active .LayoutSection-Name {
+  color: var(--el-color-primary);
 }
 
 .LayoutSection-Status {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 500;
   color: var(--el-color-primary);
+  background: var(--el-color-primary-light-8);
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
 }
 </style>

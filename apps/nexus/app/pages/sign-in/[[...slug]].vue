@@ -112,7 +112,7 @@ const currentPath = computed(() => route.path)
         </div>
         <SignIn
           :appearance="{ elements: { rootBox: 'shadow-lg rounded-2xl bg-white dark:bg-gray-800' } }"
-          :path="currentPath"
+          path="/sign-in"
           routing="path"
           :sign-up-url="signUpUrl"
           :force-redirect-url="redirectTarget"

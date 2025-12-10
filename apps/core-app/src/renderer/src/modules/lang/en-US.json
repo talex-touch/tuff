@@ -110,6 +110,8 @@
   "settingTools": {
     "groupTitle": "Utilities",
     "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
+    "customPlaceholder": "Custom Placeholder",
+    "customPlaceholderDesc": "Customize the CoreBox input placeholder text. Leave empty for default.",
     "usage": "Usage",
     "usageDesc": "Guide you to use app when enter.",
     "shortcutDesc": "Define shortcut for {shortcut}",
@@ -138,13 +140,7 @@
     "recommendationShowReason": "Show Recommendation Reason",
     "recommendationShowReasonDesc": "Display the reason for each recommendation.",
     "recommendationMaxItems": "Max Recommendations",
-    "recommendationMaxItemsDesc": "Maximum number of recommended items to show in search bar.",
-    "animationGroupTitle": "Animation Settings",
-    "animationGroupDesc": "Control CoreBox interface animations. Disable to improve performance.",
-    "listItemStagger": "List Item Animation",
-    "listItemStaggerDesc": "Staggered entrance animation for search result items.",
-    "resultTransition": "Result Transition",
-    "resultTransitionDesc": "Transition animation when search results change."
+    "recommendationMaxItemsDesc": "Maximum number of recommended items to show in search bar."
   },
   "settingUser": {
     "groupTitle": "Account",
@@ -180,7 +176,13 @@
     "highContrast": "High Contrast",
     "highContrastDesc": "Suitable for amblyopia and light sensitive contrast pattern",
     "themeHelp": "Theme Help",
-    "themeHelpDesc": "Find help in the official Github Discussions"
+    "themeHelpDesc": "Find help in the official Github Discussions",
+    "animationGroupTitle": "Animation Settings",
+    "animationGroupDesc": "Control CoreBox interface animations. Disable to improve performance.",
+    "listItemStagger": "List Item Animation",
+    "listItemStaggerDesc": "Staggered entrance animation for search result items.",
+    "resultTransition": "Result Transition",
+    "resultTransitionDesc": "Transition animation when search results change."
   },
   "layoutSection": {
     "title": "Layouts",

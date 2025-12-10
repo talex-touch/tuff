@@ -246,7 +246,7 @@ export default {
       plugins: {
         title: '插件',
         subtitle: '统一管理官方构建与社区提交的插件。',
-        cta: '提交插件',
+        cta: '探索市场',
         loading: '正在加载插件…',
         empty: '暂时还没有插件，发布你的第一个插件来展示它。',
         officialBadge: '官方',

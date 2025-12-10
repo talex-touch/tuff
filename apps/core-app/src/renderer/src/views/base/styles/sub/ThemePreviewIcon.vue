@@ -9,6 +9,9 @@ withDefaults(
       | 'coloring'
       | 'contrast'
       | 'guide'
+      | 'animation'
+      | 'stagger'
+      | 'transition'
     active?: boolean
   }>(),
   {
@@ -78,6 +81,32 @@ withDefaults(
         d="M32 14 C27 14 23.5 17.5 23.5 21.5 C23.5 22.5 24.3 24 25.8 24 C27.1 24 27.8 23.3 28.2 22.4 C28.9 20.9 30.3 19.9 32 19.9 C34.1 19.9 35.7 21.2 35.7 23.2 C35.7 25 34.6 26.2 32.5 27.3 C30.2 28.6 29.1 30.2 29.1 33.2 V34 H34.9 V33.1 C34.9 31.5 35.7 30.7 37.6 29.6 C40.2 28.1 41.8 25.7 41.8 22.8 C41.8 17.9 37.8 14 32 14 Z"
       />
       <circle cx="32" cy="38" r="2.4" class="question-dot" />
+    </svg>
+
+    <!-- Animation group icon -->
+    <svg v-else-if="variant === 'animation'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+      <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
+      <circle cx="18" cy="24" r="6" class="anim-dot anim-dot-1" />
+      <circle cx="32" cy="24" r="6" class="anim-dot anim-dot-2" />
+      <circle cx="46" cy="24" r="6" class="anim-dot anim-dot-3" />
+      <path d="M24 24 L26 22 L26 26 Z" class="anim-arrow" />
+      <path d="M38 24 L40 22 L40 26 Z" class="anim-arrow" />
+    </svg>
+
+    <!-- Stagger animation icon -->
+    <svg v-else-if="variant === 'stagger'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+      <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
+      <rect x="10" y="10" width="44" height="7" rx="3" class="stagger-bar stagger-bar-1" />
+      <rect x="10" y="20" width="44" height="7" rx="3" class="stagger-bar stagger-bar-2" />
+      <rect x="10" y="30" width="44" height="7" rx="3" class="stagger-bar stagger-bar-3" />
+    </svg>
+
+    <!-- Transition animation icon -->
+    <svg v-else-if="variant === 'transition'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+      <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
+      <rect x="8" y="14" width="20" height="20" rx="4" class="trans-box trans-box-1" />
+      <rect x="36" y="14" width="20" height="20" rx="4" class="trans-box trans-box-2" />
+      <path d="M30 24 L34 20 L34 28 Z" class="trans-arrow" />
     </svg>
   </div>
 </template>
@@ -195,5 +224,48 @@ withDefaults(
 .variant-guide .question-dot {
   fill: currentColor;
   opacity: 0.75;
+}
+
+/* Animation variants */
+.variant-animation .anim-dot {
+  fill: currentColor;
+  opacity: 0.4;
+}
+.variant-animation .anim-dot-2 {
+  opacity: 0.6;
+}
+.variant-animation .anim-dot-3 {
+  opacity: 0.9;
+}
+.variant-animation .anim-arrow {
+  fill: currentColor;
+  opacity: 0.5;
+}
+
+.variant-stagger .stagger-bar {
+  fill: currentColor;
+}
+.variant-stagger .stagger-bar-1 {
+  opacity: 0.9;
+}
+.variant-stagger .stagger-bar-2 {
+  opacity: 0.55;
+}
+.variant-stagger .stagger-bar-3 {
+  opacity: 0.25;
+}
+
+.variant-transition .trans-box {
+  fill: currentColor;
+}
+.variant-transition .trans-box-1 {
+  opacity: 0.35;
+}
+.variant-transition .trans-box-2 {
+  opacity: 0.85;
+}
+.variant-transition .trans-arrow {
+  fill: currentColor;
+  opacity: 0.6;
 }
 </style>

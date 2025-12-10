@@ -238,25 +238,23 @@ function isPinnedSection(section: TuffSection): boolean {
   }
 }
 
-// Grid item staggered animation
+// Grid item staggered animation - Q弹丝滑
 :deep(.BoxGridItem) {
-  animation: grid-item-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: grid-item-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   animation-fill-mode: both;
-  animation-delay: calc(var(--item-index, 0) * 0.03s);
+  animation-delay: calc(var(--item-index, 0) * 0.04s);
 }
 
 @keyframes grid-item-in {
   0% {
     opacity: 0;
-    transform: scale(0.85) translateY(6px);
-  }
-  65% {
-    opacity: 1;
-    transform: scale(1.03) translateY(-1px);
+    transform: scale(0.6) translateY(20px);
+    filter: blur(8px);
   }
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: blur(0);
   }
 }
 </style>

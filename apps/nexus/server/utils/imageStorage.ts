@@ -365,3 +365,54 @@ export async function listImages(event: H3Event): Promise<string[]> {
     return Array.from(memoryStorage.keys())
   }
 }
+
+/**
+ * 从 Buffer 上传图片（用于从 tpex 包中提取的 icon）
+ */
+export async function uploadImageFromBuffer(
+  event: H3Event,
+  buffer: Buffer,
+  fileName: string,
+  mimeType: string,
+): Promise<UploadResult> {
+  // Get extension from filename
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? 'svg'
+
+  // Validate extension
+  if (!IMAGE_ALLOWED_EXTENSIONS.includes(ext)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Invalid image extension: ${ext}. Allowed: ${IMAGE_ALLOWED_EXTENSIONS.join(', ')}`,
+    })
+  }
+
+  // Validate size
+  if (buffer.length > MAX_FILE_SIZE) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+    })
+  }
+
+  const key = `${randomUUID()}.${ext}`
+  const bucket = getR2Bucket(event)
+
+  if (bucket) {
+    // Production: upload to R2
+    await bucket.put(key, buffer, {
+      httpMetadata: { contentType: mimeType },
+    })
+    return {
+      url: `/api/images/${key}`,
+      key,
+    }
+  }
+  else {
+    // Development: use memory storage
+    memoryStorage.set(key, { data: buffer, contentType: mimeType })
+    return {
+      url: `/api/images/${key}`,
+      key,
+    }
+  }
+}

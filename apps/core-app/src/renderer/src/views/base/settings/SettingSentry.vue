@@ -172,40 +172,67 @@ onMounted(() => {
   </TuffGroupBlock>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .SentryBanner {
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px solid var(--el-border-color);
-  background: color-mix(in srgb, var(--el-color-primary) 6%, transparent);
-  margin-bottom: 16px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--el-color-primary) 5%, transparent) 0%,
+    color-mix(in srgb, var(--el-color-primary) 8%, transparent) 100%
+  );
+  margin-bottom: 12px;
   color: var(--el-text-color-regular);
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
+  backdrop-filter: blur(8px);
+
+  p {
+    margin: 0;
+  }
 }
 
 .SentryBanner.warning {
-  background: color-mix(in srgb, var(--el-color-warning) 10%, transparent);
-  border-color: color-mix(in srgb, var(--el-color-warning) 45%, var(--el-border-color));
-  color: var(--el-color-warning-dark-2, #b15c00);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--el-color-warning) 8%, transparent) 0%,
+    color-mix(in srgb, var(--el-color-warning) 12%, transparent) 100%
+  );
+  border-color: color-mix(in srgb, var(--el-color-warning) 30%, var(--el-border-color-lighter));
+  color: var(--el-text-color-regular);
+
+  :deep(.dark) & {
+    color: var(--el-color-warning-light-3);
+  }
 }
 
 .SentryLinks {
-  margin-top: 8px;
-  padding: 0 4px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 10px;
+  display: inline-flex;
 }
 
 .sentry-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--el-color-primary);
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: all 0.2s ease;
+  padding: 4px 0;
 
   &:hover {
-    opacity: 0.8;
+    opacity: 0.85;
+    transform: translateX(2px);
+  }
+
+  span {
+    font-size: 14px;
   }
 }
 </style>

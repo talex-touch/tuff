@@ -70,6 +70,21 @@ function getShortcutLabel(id: string): string {
     active-icon="i-carbon-application"
     memory-name="setting-tools"
   >
+    <!-- Custom CoreBox Placeholder -->
+    <TuffBlockSlot
+      :title="t('settingTools.customPlaceholder')"
+      :description="t('settingTools.customPlaceholderDesc')"
+      default-icon="i-carbon-text-short-paragraph"
+      active-icon="i-carbon-text-short-paragraph"
+    >
+      <input
+        v-model="appSetting.coreBox.customPlaceholder"
+        type="text"
+        class="TuffBlockInput"
+        :placeholder="t('boxInput.placeholder')"
+      />
+    </TuffBlockSlot>
+
     <!-- Beginner usage guide switch -->
     <TuffBlockSwitch
       v-model="appSetting.beginner.init"
@@ -201,31 +216,29 @@ function getShortcutLabel(id: string): string {
       <TSelectItem :model-value="20">20</TSelectItem>
     </TuffBlockSelect>
   </TuffGroupBlock>
-
-  <!-- Animation settings group block -->
-  <TuffGroupBlock
-    :name="t('settingTools.animationGroupTitle')"
-    :description="t('settingTools.animationGroupDesc')"
-    default-icon="i-carbon-rocket"
-    active-icon="i-carbon-rocket"
-    memory-name="setting-animation"
-  >
-    <!-- List item stagger animation switch -->
-    <TuffBlockSwitch
-      v-model="appSetting.animation.listItemStagger"
-      :title="t('settingTools.listItemStagger')"
-      :description="t('settingTools.listItemStaggerDesc')"
-      default-icon="i-carbon-fade"
-      active-icon="i-carbon-fade"
-    />
-
-    <!-- Result transition animation switch -->
-    <TuffBlockSwitch
-      v-model="appSetting.animation.resultTransition"
-      :title="t('settingTools.resultTransition')"
-      :description="t('settingTools.resultTransitionDesc')"
-      default-icon="i-carbon-transition"
-      active-icon="i-carbon-transition"
-    />
-  </TuffGroupBlock>
 </template>
+
+<style scoped>
+.TuffBlockInput {
+  width: 200px;
+  padding: 8px 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.TuffBlockInput:focus {
+  border-color: var(--el-color-primary);
+  background: var(--el-bg-color);
+  box-shadow: 0 0 0 2px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.1);
+}
+
+.TuffBlockInput::placeholder {
+  color: var(--el-text-color-placeholder);
+  opacity: 0.7;
+}
+</style>
