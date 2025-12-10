@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AuthenticateWithRedirectCallback, SignIn } from '@clerk/nuxt/components'
+import { AuthenticateWithRedirectCallback, SignUp } from '@clerk/nuxt/components'
 import { computed, watchEffect } from 'vue'
 
 definePageMeta({
@@ -19,10 +19,36 @@ const slugSegments = computed(() => {
 })
 
 const isSsoCallback = computed(() => slugSegments.value[0] === 'sso-callback')
+
+// Store and restore redirect_url across SSO callback
+const REDIRECT_STORAGE_KEY = 'tuff_sign_up_redirect'
+
 const redirectTarget = computed(() => {
   const redirect = route.query.redirect_url
-  return typeof redirect === 'string' && redirect.length > 0 ? redirect : '/dashboard'
+  if (typeof redirect === 'string' && redirect.length > 0) {
+    if (import.meta.client) {
+      sessionStorage.setItem(REDIRECT_STORAGE_KEY, redirect)
+    }
+    return redirect
+  }
+
+  if (isSsoCallback.value && import.meta.client) {
+    const stored = sessionStorage.getItem(REDIRECT_STORAGE_KEY)
+    if (stored) {
+      return stored
+    }
+  }
+
+  return '/dashboard'
 })
+
+if (import.meta.client) {
+  onUnmounted(() => {
+    if (!isSsoCallback.value) {
+      sessionStorage.removeItem(REDIRECT_STORAGE_KEY)
+    }
+  })
+}
 
 const langParam = computed(() => {
   const raw = route.query.lang
@@ -51,18 +77,18 @@ watchEffect(() => {
 })
 
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
-const signUpUrl = computed(() => `/sign-up?lang=${langTag.value}`)
+const signInUrl = computed(() => `/sign-in?lang=${langTag.value}`)
 const currentPath = computed(() => route.path)
 </script>
 
 <template>
   <div class="relative min-h-screen flex items-center justify-center bg-white px-4 py-16 dark:bg-gray-900">
-    <div class="max-w-md w-full">
+    <div class="w-full max-w-md">
       <AuthenticateWithRedirectCallback
         v-if="isSsoCallback"
-        :redirect-url="redirectTarget"
-        :after-sign-in-url="redirectTarget"
-        :after-sign-up-url="redirectTarget"
+        :force-redirect-url="redirectTarget"
+        :sign-in-force-redirect-url="redirectTarget"
+        :sign-up-force-redirect-url="redirectTarget"
       >
         <template #fallback>
           <div class="flex flex-col items-center gap-4 text-center text-sm text-gray-600 dark:text-gray-300">
@@ -72,23 +98,15 @@ const currentPath = computed(() => route.path)
         </template>
       </AuthenticateWithRedirectCallback>
 
-      <div
+      <SignUp
         v-else
-        class="space-y-6"
-      >
-        <div class="border-box max-w-[400px] border border-primary/15 rounded-2xl bg-dark/5 px-4 py-3 text-sm text-black/80 dark:border-light/20 dark:bg-light/10 dark:text-light/80">
-          {{ t('auth.linuxdoWaitlistNotice') }}
-        </div>
-        <SignIn
-          :appearance="{ elements: { rootBox: 'shadow-lg rounded-2xl bg-white dark:bg-gray-800' } }"
-          :path="currentPath"
-          routing="path"
-          :sign-up-url="signUpUrl"
-          :redirect-url="redirectTarget"
-          :after-sign-in-url="redirectTarget"
-          :after-sign-up-url="redirectTarget"
-        />
-      </div>
+        :appearance="{ elements: { rootBox: 'shadow-lg rounded-2xl bg-white dark:bg-gray-800' } }"
+        path="/sign-up"
+        routing="path"
+        :sign-in-url="signInUrl"
+        :force-redirect-url="redirectTarget"
+        :fallback-redirect-url="redirectTarget"
+      />
     </div>
     <div class="fixed bottom-6 left-6">
       <NuxtLink

@@ -248,7 +248,7 @@ export default {
       plugins: {
         title: 'Plugins',
         subtitle: 'Manage official builds and community submissions from one surface.',
-        cta: 'Submit plugin',
+        cta: 'Explore market',
         loading: 'Loading plugins…',
         empty: 'No plugins yet. Publish your first plugin to see it here.',
         officialBadge: 'Official',

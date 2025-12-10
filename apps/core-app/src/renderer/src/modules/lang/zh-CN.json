@@ -110,6 +110,8 @@
   "settingTools": {
     "groupTitle": "实用工具",
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
+    "customPlaceholder": "自定义占位文本",
+    "customPlaceholderDesc": "自定义 CoreBox 输入框的占位提示文本，留空使用默认。",
     "usage": "使用",
     "usageDesc": "进入时引导您使用应用程序。",
     "shortcutDesc": "为 {shortcut} 定义快捷键",
@@ -138,13 +140,7 @@
     "recommendationShowReason": "显示推荐理由",
     "recommendationShowReasonDesc": "在推荐项目旁显示推荐原因。",
     "recommendationMaxItems": "推荐数量",
-    "recommendationMaxItemsDesc": "搜索栏中显示的最大推荐项目数量。",
-    "animationGroupTitle": "动效设置",
-    "animationGroupDesc": "控制 CoreBox 界面动画效果，关闭可提升性能。",
-    "listItemStagger": "列表入场动画",
-    "listItemStaggerDesc": "搜索结果列表项依次入场的交错动画效果。",
-    "resultTransition": "结果切换动画",
-    "resultTransitionDesc": "搜索结果变化时的过渡动画效果。"
+    "recommendationMaxItemsDesc": "搜索栏中显示的最大推荐项目数量。"
   },
   "settingUser": {
     "groupTitle": "账户",
@@ -180,7 +176,13 @@
     "highContrast": "高对比度",
     "highContrastDesc": "适用于弱视和光敏感的对比模式",
     "themeHelp": "主题帮助",
-    "themeHelpDesc": "在官方 Github Discussions 中寻求帮助"
+    "themeHelpDesc": "在官方 Github Discussions 中寻求帮助",
+    "animationGroupTitle": "动效设置",
+    "animationGroupDesc": "控制 CoreBox 界面动画效果，关闭可提升性能。",
+    "listItemStagger": "列表入场动画",
+    "listItemStaggerDesc": "搜索结果列表项依次入场的交错动画效果。",
+    "resultTransition": "结果切换动画",
+    "resultTransitionDesc": "搜索结果变化时的过渡动画效果。"
   },
   "layoutSection": {
     "title": "布局样式",

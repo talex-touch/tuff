@@ -6,7 +6,7 @@ import { useStorage } from '#imports'
 import { createError } from 'h3'
 import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
-import { deleteImage, uploadImage } from './imageStorage'
+import { deleteImage, uploadImage, uploadImageFromBuffer } from './imageStorage'
 import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
 import { extractTpexMetadata } from './tpex'
 
@@ -1095,6 +1095,40 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
   return updated
 }
 
+/**
+ * Update plugin icon (used when auto-extracting icon from tpex package)
+ */
+async function updatePluginIcon(event: H3Event, pluginId: string, iconKey: string, iconUrl: string) {
+  const db = getD1Database(event)
+  const now = new Date().toISOString()
+
+  if (db) {
+    await ensurePluginSchema(db)
+
+    await db.prepare(`
+      UPDATE ${PLUGINS_TABLE}
+      SET
+        icon_key = ?1,
+        icon_url = ?2,
+        updated_at = ?3
+      WHERE id = ?4;
+    `).bind(iconKey, iconUrl, now, pluginId).run()
+  }
+  else {
+    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+    const index = plugins.findIndex(item => item.id === pluginId)
+    if (index !== -1) {
+      plugins[index] = {
+        ...plugins[index],
+        iconKey,
+        iconUrl,
+        updatedAt: now,
+      }
+      await writeCollection(PLUGINS_KEY, plugins)
+    }
+  }
+}
+
 export async function deletePlugin(event: H3Event, id: string) {
   const plugin = await getPluginById(event, id, { includeVersions: true })
 
@@ -1342,9 +1376,43 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
   const signature = createHash('sha256').update(packageBuffer).digest('hex')
 
   const metadata = await extractTpexMetadata(packageBuffer)
-  // Use plugin's existing icon
-  const iconKey = plugin.iconKey ?? ''
-  const iconUrl = plugin.iconUrl ?? ''
+
+  // Auto-extract and upload icon from package if plugin doesn't have one
+  let iconKey = plugin.iconKey ?? null
+  let iconUrl = plugin.iconUrl ?? null
+
+  if (!iconKey || !iconUrl) {
+    // Try to extract icon from package
+    if (metadata.iconBuffer && metadata.iconFileName && metadata.iconMimeType) {
+      try {
+        const iconResult = await uploadImageFromBuffer(
+          event,
+          metadata.iconBuffer,
+          metadata.iconFileName,
+          metadata.iconMimeType,
+        )
+        iconKey = iconResult.key
+        iconUrl = iconResult.url
+
+        // Update plugin with the new icon
+        await updatePluginIcon(event, plugin.id, iconKey, iconUrl)
+      }
+      catch (err) {
+        console.error('[publishPluginVersion] Failed to upload extracted icon:', err)
+        throw createError({
+          statusCode: 400,
+          statusMessage: 'Failed to extract icon from package. Please ensure your package includes a valid icon file (SVG recommended).',
+        })
+      }
+    }
+    else {
+      // No icon in package and plugin has no icon - reject
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Plugin icon is required. Please include an icon file (icon.svg or logo.svg recommended) in your package, or set the "icon" field in manifest.json.',
+      })
+    }
+  }
 
   const packageResult = await uploadPluginPackage(event, input.packageFile, packageArrayBuffer)
 

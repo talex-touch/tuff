@@ -8,6 +8,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
+import { appSetting } from '~/modules/channel/storage'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
@@ -123,6 +124,38 @@ function handleThemeChange(value: string | number, event?: Event): void {
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="contrast" :active="active" />
+        </template>
+      </TuffBlockSwitch>
+    </TuffGroupBlock>
+
+    <!-- Animation settings group block -->
+    <TuffGroupBlock
+      :name="t('themeStyle.animationGroupTitle')"
+      :description="t('themeStyle.animationGroupDesc')"
+      memory-name="theme-style-animation"
+    >
+      <template #icon="{ active }">
+        <ThemePreviewIcon variant="animation" :active="active" />
+      </template>
+      <!-- List item stagger animation switch -->
+      <TuffBlockSwitch
+        v-model="appSetting.animation.listItemStagger"
+        :title="t('themeStyle.listItemStagger')"
+        :description="t('themeStyle.listItemStaggerDesc')"
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="stagger" :active="active" />
+        </template>
+      </TuffBlockSwitch>
+
+      <!-- Result transition animation switch -->
+      <TuffBlockSwitch
+        v-model="appSetting.animation.resultTransition"
+        :title="t('themeStyle.resultTransition')"
+        :description="t('themeStyle.resultTransitionDesc')"
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="transition" :active="active" />
         </template>
       </TuffBlockSwitch>
     </TuffGroupBlock>

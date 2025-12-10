@@ -967,10 +967,10 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       </div>
       <div class="flex items-center gap-3">
         <NuxtLink
-          to="/marketplace"
+          to="/market"
           class="inline-flex items-center gap-2 rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-black/70 transition hover:border-black/20 hover:text-black dark:border-white/10 dark:text-white/70 dark:hover:border-white/20 dark:hover:text-white"
         >
-          <span class="i-carbon-store" />
+          <span class="i-carbon-explore" />
           {{ t('dashboard.sections.plugins.cta') }}
         </NuxtLink>
         <button

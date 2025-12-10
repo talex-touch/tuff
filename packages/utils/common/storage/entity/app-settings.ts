@@ -51,6 +51,10 @@ const _appSettingOriginData = {
     /** 结果切换过渡动画 */
     resultTransition: true,
   },
+  coreBox: {
+    /** 自定义 placeholder 文本，空则使用默认 */
+    customPlaceholder: '',
+  },
   window: {
     closeToTray: true,
     startMinimized: false,
