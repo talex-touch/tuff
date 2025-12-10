@@ -305,9 +305,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
           `Deactivating plugin ${pluginTag(active)}: ${PluginStatus[previousPlugin.status]} → ENABLED`,
         )
 
-        genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:inactive', {
-          plugin: active,
-        })
+        genTouchChannel().broadcastPlugin(active, 'plugin:lifecycle:inactive', {})
 
         if (previousPlugin.status === PluginStatus.ACTIVE) {
           previousPlugin.status = PluginStatus.ENABLED
@@ -346,9 +344,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
       plugin.status = PluginStatus.ACTIVE
       active = pluginName
 
-      genTouchChannel().send(ChannelType.PLUGIN, 'plugin:lifecycle:active', {
-        plugin: pluginName,
-      })
+      genTouchChannel().broadcastPlugin(pluginName, 'plugin:lifecycle:active', {})
     }
     else {
       // Clear active plugin if no name provided
@@ -546,7 +542,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
         plugins.set(pluginName, touchPlugin)
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+        genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject(),
         })
@@ -612,7 +608,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
           touchPlugin.issues.length,
         )
 
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+        genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject(),
         })
@@ -643,7 +639,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
         plugins.set(pluginName, touchPlugin)
-        genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+        genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:state-changed', {
           type: 'added',
           plugin: touchPlugin.toJSONObject(),
         })
@@ -694,7 +690,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
 
     logWarn('Plugin unloaded', pluginTag(pluginName))
 
-    genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+    genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:state-changed', {
       type: 'removed',
       name: pluginName,
     })
@@ -968,7 +964,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
 
             plugin = plugins.get(pluginName) as TouchPlugin
 
-            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
+            genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:reload', {
               source: 'disk',
               plugin: (plugin as TouchPlugin).toJSONObject(),
             })
@@ -982,12 +978,12 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
           else if (baseName === 'README.md') {
             plugin.readme = fse.readFileSync(_path, 'utf-8')
 
-            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload-readme', {
+            genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:reload-readme', {
               source: 'disk',
               plugin: pluginName,
               readme: plugin.readme,
             })
-            genTouchChannel().send(ChannelType.MAIN, 'plugin:state-changed', {
+            genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:state-changed', {
               type: 'readme-updated',
               name: pluginName,
               readme: plugin.readme,
@@ -1019,7 +1015,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
 
           if (hasPlugin(pluginName)) {
             logInfo('Reload existing plugin after directory add', pluginTag(pluginName))
-            genTouchChannel().send(ChannelType.MAIN, 'plugin:reload', {
+            genTouchChannel().broadcast(ChannelType.MAIN, 'plugin:reload', {
               source: 'disk',
               plugin: pluginName,
             })
@@ -1242,14 +1238,13 @@ export class PluginModule extends BaseModule {
       manager.plugins.get(data!.name))
 
     touchChannel.regChannel(ChannelType.PLUGIN, 'crash', async ({ data, plugin }) => {
-      touchChannel.send(ChannelType.MAIN, 'plugin-crashed', {
+      touchChannel.broadcast(ChannelType.MAIN, 'plugin-crashed', {
         plugin,
         ...data,
       })
-      touchChannel.send(ChannelType.PLUGIN, 'plugin:lifecycle:crashed', {
-        plugin,
-        ...data,
-      })
+      if (plugin) {
+        touchChannel.broadcastPlugin(plugin, 'plugin:lifecycle:crashed', data ?? {})
+      }
     })
 
     touchChannel.regChannel(ChannelType.PLUGIN, 'core-box:clear-items', ({ plugin }) => {
@@ -1979,7 +1974,7 @@ export class PluginModule extends BaseModule {
         if (success) {
           const plugin = manager.plugins.get(name)
           if (plugin) {
-            touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
+            touchChannel.broadcast(ChannelType.MAIN, 'plugin:state-changed', {
               type: 'status-changed',
               name,
               status: plugin.status,
@@ -2009,7 +2004,7 @@ export class PluginModule extends BaseModule {
         if (success) {
           const plugin = manager.plugins.get(name)
           if (plugin) {
-            touchChannel.send(ChannelType.MAIN, 'plugin:state-changed', {
+            touchChannel.broadcast(ChannelType.MAIN, 'plugin:state-changed', {
               type: 'status-changed',
               name,
               status: plugin.status,

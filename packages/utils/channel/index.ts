@@ -111,6 +111,23 @@ export interface ITouchChannel {
   sendToPlugin: (pluginName: string, eventName: string, arg?: any) => Promise<any>
 
   /**
+   * Broadcast a message without waiting for a response.
+   * Use for notification-style messages that don't need acknowledgment.
+   * @param type - The channel type
+   * @param eventName - The event name
+   * @param arg - The message payload
+   */
+  broadcast: (type: ChannelType, eventName: string, arg?: any) => void
+
+  /**
+   * Broadcast a message to a plugin without waiting for a response.
+   * @param pluginName - The target plugin name
+   * @param eventName - The event name
+   * @param arg - The message payload
+   */
+  broadcastPlugin: (pluginName: string, eventName: string, arg?: any) => void
+
+  /**
    * Request an encrypted key for plugin identification.
    * @remarks This mechanism is preserved in TuffTransport via PluginKeyManager.
    * @param name - The plugin name

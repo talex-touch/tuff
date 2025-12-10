@@ -1022,9 +1022,7 @@ export class WindowManager {
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
-          genTouchApp().channel.send(ChannelType.PLUGIN, 'plugin:lifecycle:inactive', {
-            plugin: plugin.name
-          })
+          genTouchApp().channel.broadcastPlugin(plugin.name, 'plugin:lifecycle:inactive', {})
         }
       }
 

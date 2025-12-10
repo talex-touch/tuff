@@ -1440,19 +1440,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
       }
 
-      this.touchApp.channel
-        .send(ChannelType.MAIN, 'file-index:progress', {
-          stage,
-          current,
-          total,
-          progress: total > 0 ? Math.round((current / total) * 100) : 0,
-          startTime: this.indexingStartTime,
-          estimatedRemainingMs,
-          averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
-        })
-        .catch((error) => {
-          console.warn('[FileProvider] Failed to emit indexing progress:', error)
-        })
+      this.touchApp.channel.broadcast(ChannelType.MAIN, 'file-index:progress', {
+        stage,
+        current,
+        total,
+        progress: total > 0 ? Math.round((current / total) * 100) : 0,
+        startTime: this.indexingStartTime,
+        estimatedRemainingMs,
+        averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
+      })
     }
   }
 

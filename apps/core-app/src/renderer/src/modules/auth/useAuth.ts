@@ -141,10 +141,17 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
   void (async () => {
     try {
       const { touchChannel } = await import('~/modules/channel/channel-core')
-      // Notify main process Sentry
-      await touchChannel.send('sentry:update-user', {
-        user: authState.user,
-      })
+      // Notify main process Sentry - only send serializable data
+      const safeUser = authState.user
+        ? {
+            id: authState.user.id,
+            username: authState.user.username ?? null,
+            emailAddresses: authState.user.emailAddresses?.map(e => ({
+              emailAddress: e.emailAddress,
+            })),
+          }
+        : null
+      await touchChannel.send('sentry:update-user', { user: safeUser })
       // Notify renderer process Sentry
       try {
         const { updateSentryUserContext } = await import('~/modules/sentry/sentry-renderer')
