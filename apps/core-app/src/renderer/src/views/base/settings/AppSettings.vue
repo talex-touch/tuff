@@ -6,6 +6,7 @@ import SettingDownload from './SettingDownload.vue'
 import SettingFileIndex from './SettingFileIndex.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
+import SettingSentry from './SettingSentry.vue'
 import SettingSetup from './SettingSetup.vue'
 import SettingTools from './SettingTools.vue'
 import SettingUpdate from './SettingUpdate.vue'
@@ -30,6 +31,8 @@ import SettingUser from './SettingUser.vue'
       <SettingDownload />
 
       <SettingUpdate />
+
+      <SettingSentry />
 
       <!-- <SettingStorage /> -->
 

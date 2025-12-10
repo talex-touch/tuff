@@ -30,6 +30,9 @@ const sectionPaths: Record<string, string> = {
   team: '/dashboard/team',
   updates: '/dashboard/updates',
   images: '/dashboard/images',
+  account: '/dashboard/account',
+  devices: '/dashboard/devices',
+  privacy: '/dashboard/privacy',
 }
 
 const menuItems = computed(() => {
@@ -37,14 +40,17 @@ const menuItems = computed(() => {
     {
       id: 'overview',
       label: t('dashboard.sections.menu.overview'),
+      section: 'main',
     },
     {
       id: 'plugins',
       label: t('dashboard.sections.menu.plugins'),
+      section: 'main',
     },
     {
       id: 'team',
       label: t('dashboard.sections.menu.team'),
+      section: 'main',
     },
   ]
 
@@ -52,16 +58,41 @@ const menuItems = computed(() => {
     items.push({
       id: 'updates',
       label: t('dashboard.sections.menu.updates'),
+      section: 'main',
     })
     items.push({
       id: 'images',
       label: t('dashboard.sections.menu.images', 'Resources'),
+      section: 'main',
     })
   }
 
   return items.map(item => ({
     ...item,
     to: sectionPaths[item.id] ?? '/dashboard/overview',
+  }))
+})
+
+const accountMenuItems = computed(() => {
+  return [
+    {
+      id: 'account',
+      label: t('dashboard.sections.menu.account', '账户设置'),
+      icon: 'i-carbon-user-avatar',
+    },
+    {
+      id: 'devices',
+      label: t('dashboard.sections.menu.devices', '设备管理'),
+      icon: 'i-carbon-devices',
+    },
+    {
+      id: 'privacy',
+      label: t('dashboard.sections.menu.privacy', '隐私设置'),
+      icon: 'i-carbon-security',
+    },
+  ].map(item => ({
+    ...item,
+    to: sectionPaths[item.id] ?? '/dashboard/account',
   }))
 })
 
@@ -103,6 +134,40 @@ const activeSection = computed(() => {
                   :aria-selected="activeSection === item.id"
                 >
                   <span>{{ item.label }}</span>
+                  <span class="i-carbon-arrow-right text-base opacity-20 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-70" />
+                </NuxtLink>
+              </li>
+            </ul>
+          </nav>
+
+          <!-- Account Menu -->
+          <nav
+            class="relative border border-primary/10 rounded-3xl bg-white/80 dark:border-light/10 dark:bg-dark/70"
+            aria-label="Account settings"
+          >
+            <p class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/80">
+              {{ t('dashboard.sections.menu.accountTitle', '账户') }}
+            </p>
+            <ul
+              class="mt-4 flex flex-col list-none gap-2 p-0 text-sm"
+              role="listbox"
+              aria-label="Account panels"
+            >
+              <li
+                v-for="item in accountMenuItems"
+                :key="item.id"
+              >
+                <NuxtLink
+                  :to="item.to"
+                  class="group w-full flex items-center justify-between rounded-2xl px-3 py-2 text-left text-black/75 no-underline transition hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
+                  :class="activeSection === item.id ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
+                  role="option"
+                  :aria-selected="activeSection === item.id"
+                >
+                  <span class="flex items-center gap-2">
+                    <span :class="item.icon" class="text-base opacity-60" />
+                    {{ item.label }}
+                  </span>
                   <span class="i-carbon-arrow-right text-base opacity-20 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-70" />
                 </NuxtLink>
               </li>
