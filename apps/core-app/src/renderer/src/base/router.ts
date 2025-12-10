@@ -145,6 +145,14 @@ const routes: any = [
     meta: {
       index: 8
     }
+  },
+  {
+    path: '/intelligence/agents',
+    name: 'IntelligenceAgents',
+    component: () => import('../views/base/intelligence/IntelligenceAgentsPage.vue'),
+    meta: {
+      index: 8
+    }
   }
 ]
 
