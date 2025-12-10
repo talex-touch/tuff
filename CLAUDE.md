@@ -299,6 +299,7 @@ Modules subscribe to events: `touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, (
 
 ```
 packages/utils/
+├── account/           # AccountSDK (user info, subscription, quota)
 ├── base/              # Base types and enums
 ├── channel/           # IPC channel interfaces
 ├── core-box/          # CoreBox SDK (result builder, search format)
@@ -314,6 +315,46 @@ packages/utils/
 ```
 
 This package is shared between the main app, plugins, and published to npm for external plugin developers.
+
+### AccountSDK
+
+Provides user account information, subscription status, and quota management for plugins and Prelude scripts.
+
+**Subscription Plans**: `FREE`, `PRO`, `PLUS`, `TEAM`, `ENTERPRISE`
+
+**Core API**:
+```typescript
+import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
+
+// User info
+await accountSDK.getProfile()        // Get user profile
+await accountSDK.isLoggedIn()        // Check login status
+await accountSDK.getDisplayName()    // Get display name
+
+// Subscription checks
+await accountSDK.getPlan()           // Current plan
+await accountSDK.isPaidUser()        // Is paid user
+await accountSDK.isProOrAbove()      // Pro or higher
+await accountSDK.isPlusOrAbove()     // Plus or higher
+await accountSDK.isTeamOrAbove()     // Team or higher
+
+// Quota checks
+await accountSDK.checkAiRequestQuota() // AI request quota
+await accountSDK.checkAiTokenQuota()   // AI token quota
+await accountSDK.getUsagePercentage('aiRequests') // Usage percentage
+
+// Feature access
+await accountSDK.hasApiAccess()           // API access
+await accountSDK.hasCustomModelAccess()   // Custom model access
+await accountSDK.hasPrioritySupport()     // Priority support
+```
+
+**Data Types**:
+- `UserProfile` - User profile with email, avatar, social connections
+- `Subscription` - Current plan, status, quota, usage
+- `PlanQuota` - AI requests/tokens limits, storage, plugins count
+- `UsageStats` - Current usage statistics
+- `Team` - Team/organization info with role
 
 ## Development Notes
 

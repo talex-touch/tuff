@@ -195,6 +195,7 @@ enum TalexEvents {
 **`@talex-touch/utils`** (npm v1.0.23) 提供共享类型和工具:
 ```
 packages/utils/
+├── account/           # AccountSDK（用户信息、订阅、配额）
 ├── base/              # 基础类型和枚举
 ├── channel/           # IPC 通道接口
 ├── core-box/          # CoreBox SDK（结果构建器、搜索格式）
@@ -207,6 +208,42 @@ packages/utils/
 │   ├── hooks/         # Vue composables
 │   └── storage/       # 存储客户端
 └── types/             # TypeScript 定义
+```
+
+### AccountSDK
+
+**订阅计划类型**:
+- `FREE` - 免费版
+- `PRO` - 专业版
+- `PLUS` - 增强版
+- `TEAM` - 团队版
+- `ENTERPRISE` - 企业版
+
+**核心 API**:
+```typescript
+import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
+
+// 用户信息
+await accountSDK.getProfile()        // 获取用户资料
+await accountSDK.isLoggedIn()        // 是否登录
+await accountSDK.getDisplayName()    // 显示名称
+
+// 订阅检查
+await accountSDK.getPlan()           // 当前计划
+await accountSDK.isPaidUser()        // 是否付费用户
+await accountSDK.isProOrAbove()      // Pro 或更高
+await accountSDK.isPlusOrAbove()     // Plus 或更高
+await accountSDK.isTeamOrAbove()     // Team 或更高
+
+// 配额检查
+await accountSDK.checkAiRequestQuota() // AI 请求配额
+await accountSDK.checkAiTokenQuota()   // AI Token 配额
+await accountSDK.getUsagePercentage('aiRequests') // 使用率
+
+// 功能权限
+await accountSDK.hasApiAccess()           // API 访问权限
+await accountSDK.hasCustomModelAccess()   // 自定义模型
+await accountSDK.hasPrioritySupport()     // 优先支持
 ```
 
 ## 非显而易见的架构概念
