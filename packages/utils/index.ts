@@ -1,4 +1,5 @@
 // export * from './auth' // Renderer-only, use @talex-touch/utils/renderer instead
+export * from './account'
 export * from './base'
 export * from './channel'
 export * from './common'

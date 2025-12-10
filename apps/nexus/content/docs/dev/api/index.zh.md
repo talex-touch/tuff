@@ -16,6 +16,7 @@ pnpm add @talex-touch/utils
 | [Box SDK](./box.zh.md) | `useBox()` | 控制 CoreBox 窗口 |
 | [Clipboard SDK](./clipboard.zh.md) | `useClipboard()` | 剪贴板读写和历史 |
 | [Storage SDK](./storage.zh.md) | `usePluginStorage()` | 插件数据持久化 |
+| [**Account SDK**](./account.zh.md) | `accountSDK` | **用户信息、订阅、配额** |
 | [**TuffTransport**](./transport.zh.md) | `useTuffTransport()` | **新一代 IPC（推荐）** |
 | [Channel SDK](./channel.zh.md) | `useChannel()` | IPC 通信（传统） |
 | [Feature SDK](./feature.zh.md) | `useFeature()` | 搜索结果管理 |

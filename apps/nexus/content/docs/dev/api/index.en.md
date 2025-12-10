@@ -16,6 +16,7 @@ pnpm add @talex-touch/utils
 | [Box SDK](./box.en.md) | `useBox()` | Control CoreBox window |
 | [Clipboard SDK](./clipboard.en.md) | `useClipboard()` | Clipboard read/write and history |
 | [Storage SDK](./storage.en.md) | `usePluginStorage()` | Plugin data persistence |
+| [**Account SDK**](./account.en.md) | `accountSDK` | **User info, subscription, quota** |
 | [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
 | [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication (legacy) |
 | [Feature SDK](./feature.en.md) | `useFeature()` | Search result management |
