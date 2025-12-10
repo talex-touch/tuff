@@ -95,18 +95,40 @@ export class AddonOpenerModule extends BaseModule {
     windowsAdapter($app)
     macOSAdapter($app)
 
-    if (!$app.app.isDefaultProtocolClient(APP_SCHEMA)) {
+    // Register protocol handler
+    // In dev mode, we need to register with the correct electron executable path
+    const registerProtocol = () => {
       if ($app.app.isPackaged) {
+        // Production: register with bundled app
         $app.app.setAsDefaultProtocolClient(APP_SCHEMA)
       }
       else {
-        $app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.execPath, [
-          path.resolve(process.argv[1]),
-        ])
-      }
-      // app.app.setAsDefaultProtocolClient(APP_SCHEMA, process.cwd());
+        // Development: need to use electron-vite's dev server path
+        // On macOS, we need to pass the project path as argument
+        const electronPath = process.execPath
+        const appPath = path.resolve(process.cwd())
 
+        // Remove old registration first to ensure clean state
+        $app.app.removeAsDefaultProtocolClient(APP_SCHEMA)
+
+        // Register with electron binary and project path
+        $app.app.setAsDefaultProtocolClient(APP_SCHEMA, electronPath, [
+          '--inspect',
+          appPath,
+        ])
+
+        console.log(`[Addon] Dev mode protocol registration:`)
+        console.log(`  - electronPath: ${electronPath}`)
+        console.log(`  - appPath: ${appPath}`)
+      }
       console.log(`[Addon] Set as default protocol handler: ${APP_SCHEMA}`)
+    }
+
+    if (!$app.app.isDefaultProtocolClient(APP_SCHEMA)) {
+      registerProtocol()
+    }
+    else {
+      console.log(`[Addon] Already registered as protocol handler: ${APP_SCHEMA}`)
     }
 
     // protocol.registerFileProtocol('touch-plugin', (request, callback) => {
