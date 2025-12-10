@@ -1,5 +1,5 @@
 import { clerkClient } from '@clerk/nuxt/server'
-import { readFormData } from 'h3'
+import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../utils/auth'
 import { createPlugin } from '../../utils/pluginsStore'
 import { uploadImage } from '../../utils/imageStorage'
@@ -12,9 +12,25 @@ export default defineEventHandler(async (event) => {
   const formData = await readFormData(event)
 
   const client = clerkClient(event)
-  const user = await client.users.getUser(userId)
-  const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
-  const ownerOrgId = orgMemberships.data?.[0]?.organization.id ?? null
+
+  let user
+  let ownerOrgId: string | null = null
+
+  try {
+    user = await client.users.getUser(userId)
+  }
+  catch (err) {
+    console.error('[plugins.post] Failed to fetch user:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to fetch user information.' })
+  }
+
+  try {
+    const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
+    ownerOrgId = orgMemberships.data?.[0]?.organization.id ?? null
+  }
+  catch (err) {
+    console.error('[plugins.post] Failed to fetch org memberships (non-fatal):', err)
+  }
 
   const isAdmin = user.publicMetadata?.role === 'admin'
 
@@ -50,9 +66,15 @@ export default defineEventHandler(async (event) => {
   let iconUrl: string | null = null
 
   if (isFile(iconFile) && iconFile.size > 0) {
-    const iconResult = await uploadImage(event, iconFile)
-    iconKey = iconResult.key
-    iconUrl = iconResult.url
+    try {
+      const iconResult = await uploadImage(event, iconFile)
+      iconKey = iconResult.key
+      iconUrl = iconResult.url
+    }
+    catch (err) {
+      console.error('[plugins.post] Failed to upload icon:', err)
+      throw createError({ statusCode: 500, statusMessage: 'Failed to upload plugin icon.' })
+    }
   }
 
   const deriveAuthorName = () => {
@@ -82,22 +104,33 @@ export default defineEventHandler(async (event) => {
     ? (statusField as (typeof ALLOWED_STATUSES)[number])
     : 'draft'
 
-  const plugin = await createPlugin(event, {
-    userId,
-    ownerOrgId,
-    slug,
-    name,
-    summary,
-    category,
-    homepage,
-    isOfficial: isAdmin ? isOfficialField === 'true' || isOfficialField === '1' : false,
-    badges,
-    author: { name: deriveAuthorName() },
-    readmeMarkdown,
-    iconKey,
-    iconUrl,
-    status,
-  })
+  let plugin
+  try {
+    plugin = await createPlugin(event, {
+      userId,
+      ownerOrgId,
+      slug,
+      name,
+      summary,
+      category,
+      homepage,
+      isOfficial: isAdmin ? isOfficialField === 'true' || isOfficialField === '1' : false,
+      badges,
+      author: { name: deriveAuthorName() },
+      readmeMarkdown,
+      iconKey,
+      iconUrl,
+      status,
+    })
+  }
+  catch (err: unknown) {
+    // Re-throw H3 errors (validation errors from createPlugin)
+    if (err && typeof err === 'object' && 'statusCode' in err)
+      throw err
+
+    console.error('[plugins.post] Failed to create plugin:', err)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to create plugin.' })
+  }
 
   return {
     plugin,
