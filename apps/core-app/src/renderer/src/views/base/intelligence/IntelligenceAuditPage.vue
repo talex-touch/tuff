@@ -1,8 +1,9 @@
 <script lang="ts" name="IntelligenceAuditPage" setup>
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
+import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
+import IntelligenceUsageStats from '~/components/intelligence/audit/IntelligenceUsageStats.vue'
 import IntelligenceGlobalSettings from '~/components/intelligence/config/IntelligenceGlobalSettings.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -29,7 +30,6 @@ function handleCacheExpirationBlur() {
     handleGlobalChange()
   }
   else {
-    // Reset to current value if invalid
     cacheExpirationInput.value = String(globalConfig.value.cacheExpiration || 3600)
   }
 }
@@ -38,6 +38,31 @@ function handleCacheExpirationBlur() {
 <template>
   <div class="flex h-full flex-col" role="main" aria-label="Intelligence Audit & Settings">
     <div class="flex-1 overflow-auto p-6">
+      <!-- Usage Statistics Section -->
+      <TuffGroupBlock
+        :name="t('intelligence.usage.title')"
+        :description="t('intelligence.usage.description')"
+        default-icon="i-carbon-analytics"
+        active-icon="i-carbon-analytics"
+        memory-name="intelligence-usage-stats"
+        :default-expanded="true"
+      >
+        <IntelligenceUsageStats />
+      </TuffGroupBlock>
+
+      <!-- Audit Logs Section -->
+      <TuffGroupBlock
+        v-if="globalConfig.enableAudit"
+        :name="t('intelligence.audit.logsTitle')"
+        :description="t('intelligence.audit.logsDescription')"
+        default-icon="i-carbon-document-view"
+        active-icon="i-carbon-document-view"
+        memory-name="intelligence-audit-logs"
+        :default-expanded="true"
+      >
+        <IntelligenceAuditLogs />
+      </TuffGroupBlock>
+
       <!-- Global Settings Section -->
       <TuffGroupBlock
         :name="t('intelligence.global.title')"
@@ -71,19 +96,6 @@ function handleCacheExpirationBlur() {
             v-model="globalConfig.enableAudit"
             @update:model-value="handleGlobalChange"
           />
-        </TuffBlockSlot>
-
-        <TuffBlockSlot
-          v-if="globalConfig.enableAudit"
-          :title="t('intelligence.audit.logsTitle')"
-          :description="t('intelligence.audit.logsDescription')"
-          default-icon="i-carbon-document-view"
-          active-icon="i-carbon-document-view"
-        >
-          <FlatButton>
-            <i class="i-carbon-view" />
-            {{ t('intelligence.audit.viewLogs') }}
-          </FlatButton>
         </TuffBlockSlot>
       </TuffGroupBlock>
 

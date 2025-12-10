@@ -623,6 +623,201 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     })
 
+    // ========================================================================
+    // Audit & Usage Statistics Channels
+    // ========================================================================
+
+    // 获取审计日志
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-audit-logs', async ({ data, reply }) => {
+      try {
+        const options = (data as any) || {}
+        const logs = await ai.queryAuditLogs(options)
+        reply(DataCode.SUCCESS, { ok: true, result: logs })
+      }
+      catch (error) {
+        intelligenceLog.error('Get audit logs failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 获取今日统计
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-today-stats', async ({ data, reply }) => {
+      try {
+        const { callerId } = (data as any) || {}
+        const stats = await ai.getTodayStats(callerId)
+        reply(DataCode.SUCCESS, { ok: true, result: stats })
+      }
+      catch (error) {
+        intelligenceLog.error('Get today stats failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 获取本月统计
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-month-stats', async ({ data, reply }) => {
+      try {
+        const { callerId } = (data as any) || {}
+        const stats = await ai.getMonthStats(callerId)
+        reply(DataCode.SUCCESS, { ok: true, result: stats })
+      }
+      catch (error) {
+        intelligenceLog.error('Get month stats failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 获取用量统计
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-usage-stats', async ({ data, reply }) => {
+      try {
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid payload')
+        }
+        const { callerId, periodType, startPeriod, endPeriod } = data as {
+          callerId: string
+          periodType: 'day' | 'month'
+          startPeriod?: string
+          endPeriod?: string
+        }
+        const stats = await ai.getUsageStats(callerId, periodType, startPeriod, endPeriod)
+        reply(DataCode.SUCCESS, { ok: true, result: stats })
+      }
+      catch (error) {
+        intelligenceLog.error('Get usage stats failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // ========================================================================
+    // Quota Management Channels
+    // ========================================================================
+
+    // 获取配额
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-quota', async ({ data, reply }) => {
+      try {
+        const { callerId, callerType } = (data as any) || {}
+        if (!callerId) {
+          throw new Error('callerId is required')
+        }
+        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+        const quota = await intelligenceQuotaManager.getQuota(callerId, callerType || 'plugin')
+        reply(DataCode.SUCCESS, { ok: true, result: quota })
+      }
+      catch (error) {
+        intelligenceLog.error('Get quota failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 设置配额
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:set-quota', async ({ data, reply }) => {
+      try {
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid quota config')
+        }
+        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+        await intelligenceQuotaManager.setQuota(data as any)
+        reply(DataCode.SUCCESS, { ok: true })
+      }
+      catch (error) {
+        intelligenceLog.error('Set quota failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 删除配额
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:delete-quota', async ({ data, reply }) => {
+      try {
+        const { callerId, callerType } = (data as any) || {}
+        if (!callerId) {
+          throw new Error('callerId is required')
+        }
+        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+        await intelligenceQuotaManager.deleteQuota(callerId, callerType || 'plugin')
+        reply(DataCode.SUCCESS, { ok: true })
+      }
+      catch (error) {
+        intelligenceLog.error('Delete quota failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 获取所有配额
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-all-quotas', async ({ reply }) => {
+      try {
+        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+        const quotas = await intelligenceQuotaManager.getAllQuotas()
+        reply(DataCode.SUCCESS, { ok: true, result: quotas })
+      }
+      catch (error) {
+        intelligenceLog.error('Get all quotas failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 检查配额
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:check-quota', async ({ data, reply }) => {
+      try {
+        const { callerId, callerType, estimatedTokens } = (data as any) || {}
+        if (!callerId) {
+          throw new Error('callerId is required')
+        }
+        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+        const result = await intelligenceQuotaManager.checkQuota(callerId, callerType || 'plugin', estimatedTokens || 0)
+        reply(DataCode.SUCCESS, { ok: true, result })
+      }
+      catch (error) {
+        intelligenceLog.error('Check quota failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
+    // 获取当前用量
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-current-usage', async ({ data, reply }) => {
+      try {
+        const { callerId, callerType } = (data as any) || {}
+        if (!callerId) {
+          throw new Error('callerId is required')
+        }
+        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+        const usage = await intelligenceQuotaManager.getCurrentUsage(callerId, callerType || 'plugin')
+        reply(DataCode.SUCCESS, { ok: true, result: usage })
+      }
+      catch (error) {
+        intelligenceLog.error('Get current usage failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
     intelligenceLog.success('IPC channels registered')
   }
 }

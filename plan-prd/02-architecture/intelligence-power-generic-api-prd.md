@@ -117,8 +117,54 @@ for await (const chunk of stream) {
 2. **[x] Provider 接入框架**: 搭建统一 Provider SDK，已接入 5 家供应商 (OpenAI, Anthropic, DeepSeek, Siliconflow, Local)。 ✅
 3. **[x] 策略引擎**: 实现 RuleBased 与 Adaptive 基础策略 + 配置界面。 ✅
 4. **[x] SDK 封装**: 提供 `intelligence.invoke`、语法糖方法、类型定义。 ✅
-5. **[ ] 观测 & 计费**: 对接日志、指标、配额，完善审计与告警。 (进行中)
-6. **[ ] Demo & 文档**: 构建示例插件，提供最佳实践与安全指南。
+5. **[x] 观测 & 计费** ✅ (2025-12-10):
+   - [x] 审计日志记录 (`intelligence-audit-logger.ts`)
+     - traceId 生成与跟踪
+     - prompt hash 记录
+     - token 用量统计 + 成本估算
+     - 调用方记录 (pluginId/userId)
+     - 持久化到数据库 (`intelligence_audit_logs` 表)
+   - [x] 配额控制 (`intelligence-quota-manager.ts`)
+     - 按插件/用户配额
+     - 请求数/Token/成本限制 (分钟/日/月)
+     - 速率限制检查
+   - [x] 用量统计聚合
+     - 自动聚合到 `intelligence_usage_stats` 表
+     - 日/月维度统计
+   - [x] IPC 通道
+     - `intelligence:get-audit-logs` - 查询审计日志
+     - `intelligence:get-today-stats` / `intelligence:get-month-stats` - 统计
+     - `intelligence:get-quota` / `intelligence:set-quota` - 配额管理
+     - `intelligence:check-quota` - 配额检查
+   - [x] 导出功能 (CSV/JSON) ✅
+   - [ ] 用量统计 UI (待实现 - 图表组件)
+6. **[x] Demo & 文档** ✅ (2025-12-10):
+   - [x] SDK 使用文档 (`README.md`)
+   - [x] Renderer Hooks (`useIntelligenceStats`)
+   - [ ] 示例插件 `touch-intelligence-demo` (可选)
+
+**已实现文件**:
+```
+modules/ai/
+├── intelligence-module.ts         # 主模块
+├── intelligence-sdk.ts            # SDK 封装
+├── intelligence-audit-logger.ts   # 审计日志 ✨
+├── intelligence-quota-manager.ts  # 配额管理 ✨
+├── README.md                      # SDK 文档 ✨
+├── intelligence-service.ts        # 服务层
+├── intelligence-capability-registry.ts
+├── intelligence-strategy-manager.ts
+├── intelligence-config.ts
+├── provider-models.ts
+├── providers/                     # 5 家供应商
+│   ├── openai-provider.ts
+│   ├── anthropic-provider.ts
+│   ├── deepseek-provider.ts
+│   ├── siliconflow-provider.ts
+│   └── local-provider.ts
+├── capability-testers/
+└── runtime/
+```
 
 ## 8. 风险与待决问题
 
