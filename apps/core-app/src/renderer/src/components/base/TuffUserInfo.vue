@@ -1,11 +1,23 @@
 <script lang="ts" setup>
 import { useAuth } from '~/modules/auth/useAuth'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 const { currentUser, isLoggedIn } = useAuth()
+
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
+
+function openUserProfile() {
+  const profileUrl = `${NEXUS_URL}/dashboard/account`
+  touchChannel.send('open-external', { url: profileUrl })
+}
 </script>
 
 <template>
-  <div :class="{ active: isLoggedIn }" class="FlatUserInfo">
+  <div
+    :class="{ active: isLoggedIn, clickable: isLoggedIn }"
+    class="FlatUserInfo"
+    @click="isLoggedIn && openUserProfile()"
+  >
     <template v-if="isLoggedIn && currentUser?.name">
       <div class="user-avatar">
         <img
@@ -26,6 +38,7 @@ const { currentUser, isLoggedIn } = useAuth()
           {{ currentUser.email }}
         </span>
       </div>
+      <span class="open-external-icon i-carbon-launch" />
     </template>
   </div>
 </template>
@@ -49,6 +62,25 @@ const { currentUser, isLoggedIn } = useAuth()
   &.active {
     animation: user-info-enter 0.5s 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86) forwards;
   }
+
+  &.clickable {
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.2s ease;
+
+    &:hover {
+      background-color: var(--el-fill-color-light);
+
+      .open-external-icon {
+        opacity: 1;
+      }
+    }
+
+    &:active {
+      background-color: var(--el-fill-color);
+    }
+  }
+
   position: relative;
   display: flex;
   align-items: center;
@@ -58,6 +90,14 @@ const { currentUser, isLoggedIn } = useAuth()
   box-sizing: border-box;
 
   transform: translate(0, 120px);
+
+  .open-external-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    color: var(--el-text-color-secondary);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
 
   &:before {
     content: '';

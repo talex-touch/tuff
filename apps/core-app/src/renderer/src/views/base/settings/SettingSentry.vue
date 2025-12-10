@@ -7,12 +7,16 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
+
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
 
 const enabled = ref(false)
 const anonymous = ref(true)
@@ -70,6 +74,15 @@ async function updateEnabled(value: boolean) {
 async function updateAnonymous(value: boolean) {
   anonymous.value = value
   await saveConfig()
+}
+
+function openPrivacySettings() {
+  const privacyUrl = `${NEXUS_URL}/dashboard/privacy`
+  touchChannel.send('open-external', { url: privacyUrl })
+}
+
+function openSentryDashboard() {
+  touchChannel.send('open-external', { url: 'https://sentry.io' })
 }
 
 onMounted(() => {
@@ -135,6 +148,27 @@ onMounted(() => {
         }}
       </p>
     </section>
+
+    <!-- Privacy Management -->
+    <TuffBlockSlot
+      :title="t('settingSentry.privacyManagement', '隐私数据管理')"
+      :description="t('settingSentry.privacyManagementDesc', '在官网管理您的隐私设置和数据')"
+      default-icon="i-carbon-security"
+      active-icon="i-carbon-security"
+      @click="openPrivacySettings"
+    >
+      <FlatButton mini>
+        <span class="i-carbon-launch text-sm" />
+      </FlatButton>
+    </TuffBlockSlot>
+
+    <!-- Learn More -->
+    <section class="SentryLinks">
+      <a class="sentry-link" @click="openSentryDashboard">
+        <span class="i-carbon-information text-sm" />
+        {{ t('settingSentry.learnMore', '了解 Sentry 如何处理数据') }}
+      </a>
+    </section>
   </TuffGroupBlock>
 </template>
 
@@ -154,5 +188,24 @@ onMounted(() => {
   background: color-mix(in srgb, var(--el-color-warning) 10%, transparent);
   border-color: color-mix(in srgb, var(--el-color-warning) 45%, var(--el-border-color));
   color: var(--el-color-warning-dark-2, #b15c00);
+}
+
+.SentryLinks {
+  margin-top: 8px;
+  padding: 0 4px;
+}
+
+.sentry-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+
+  &:hover {
+    opacity: 0.8;
+  }
 }
 </style>

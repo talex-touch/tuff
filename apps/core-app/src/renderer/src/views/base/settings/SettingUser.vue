@@ -1,14 +1,16 @@
 <script setup lang="ts" name="SettingUser">
 import { useI18n } from 'vue-i18n'
-// import { appSetting } from '~/modules/channel/storage'
 import { toast } from 'vue-sonner'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
-const { isLoggedIn, currentUser, loginWithBrowser, logout } = useAuth()
+const { isLoggedIn, currentUser, loginWithBrowser, logout, authLoadingState } = useAuth()
+
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
 
 async function handleLogin() {
   try {
@@ -34,6 +36,16 @@ async function handleLogout() {
     toast.error('登出失败')
   }
 }
+
+function openUserProfile() {
+  const profileUrl = `${NEXUS_URL}/dashboard/account`
+  touchChannel.send('open-external', { url: profileUrl })
+}
+
+function openDeviceManagement() {
+  const devicesUrl = `${NEXUS_URL}/dashboard/devices`
+  touchChannel.send('open-external', { url: devicesUrl })
+}
 </script>
 
 <template>
@@ -44,30 +56,58 @@ async function handleLogout() {
     active-icon="i-carbon-user-avatar"
     memory-name="setting-user"
   >
+    <!-- Logged in state -->
     <TuffBlockSlot
       v-if="isLoggedIn"
       :title="currentUser?.name || '用户'"
-      disabled
       :description="currentUser?.email || '已登录'"
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
+      @click="openUserProfile"
     >
-      <FlatButton type="danger" @click="handleLogout">
+      <template #tags>
+        <span class="user-tag">
+          <span class="i-carbon-checkmark-filled text-xs text-green-500" />
+          {{ t('settingUser.verified', '已验证') }}
+        </span>
+      </template>
+      <FlatButton mini @click.stop="openDeviceManagement">
+        <span class="i-carbon-devices text-sm" />
+      </FlatButton>
+      <FlatButton type="danger" @click.stop="handleLogout">
         {{ t('settingUser.logout') }}
       </FlatButton>
     </TuffBlockSlot>
 
+    <!-- Not logged in state -->
     <TuffBlockSlot
       v-else
       :title="t('settingUser.noAccount')"
-      disabled
       :description="t('settingUser.noAccountDesc')"
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
     >
-      <FlatButton type="primary" @click="handleLogin">
-        {{ t('settingUser.login') }}
+      <FlatButton
+        type="primary"
+        :disabled="authLoadingState.isLoggingIn"
+        @click="handleLogin"
+      >
+        <span v-if="authLoadingState.isLoggingIn" class="i-carbon-circle-dash animate-spin mr-1" />
+        {{ authLoadingState.isLoggingIn ? t('settingUser.loggingIn', '登录中...') : t('settingUser.login') }}
       </FlatButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>
+
+<style scoped>
+.user-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--el-color-success) 15%, transparent);
+  color: var(--el-color-success);
+}
+</style>
