@@ -20,7 +20,16 @@ let isInitialized = false
 let activeConsumers = 0
 
 // Nexus URL for browser auth
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
+const NEXUS_URL_PRODUCTION = 'https://tuff.quotawish.com'
+const NEXUS_URL_LOCAL = 'http://localhost:3200'
+
+function getNexusUrl(): string {
+  // In dev mode, check appSetting for auth server preference
+  if (import.meta.env.DEV && appSetting?.dev?.authServer === 'local') {
+    return NEXUS_URL_LOCAL
+  }
+  return import.meta.env.VITE_NEXUS_URL || NEXUS_URL_PRODUCTION
+}
 
 // Pending browser login state
 const pendingBrowserLogin = ref<{
@@ -472,7 +481,8 @@ async function loginWithBrowser(): Promise<LoginResult> {
     pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId }
 
     // Open browser to Nexus sign-in with app callback redirect
-    const signInUrl = `${NEXUS_URL}/sign-in?redirect_url=/auth/app-callback`
+    const nexusUrl = getNexusUrl()
+    const signInUrl = `${nexusUrl}/sign-in?redirect_url=/auth/app-callback`
     touchChannel.send('open-external', { url: signInUrl }).catch((err) => {
       console.error('[useAuth] Failed to open browser:', err)
       clearTimeout(timeoutId)
@@ -511,10 +521,22 @@ async function handleExternalAuthCallback(token: string): Promise<void> {
     if (!clerk.client) {
       throw new Error('Clerk client not available')
     }
-    await clerk.client.signIn.create({
+
+    const signInAttempt = await clerk.client.signIn.create({
       strategy: 'ticket',
       ticket: token,
     })
+
+    console.log('[useAuth] Sign-in attempt status:', signInAttempt.status)
+
+    // Activate the session after successful sign-in
+    if (signInAttempt.status === 'complete' && signInAttempt.createdSessionId) {
+      await clerk.setActive({ session: signInAttempt.createdSessionId })
+      console.log('[useAuth] Session activated:', signInAttempt.createdSessionId)
+    }
+    else {
+      console.warn('[useAuth] Sign-in not complete:', signInAttempt.status)
+    }
 
     // Update auth state
     updateAuthState(clerk)
@@ -555,6 +577,24 @@ function setupAuthCallbackListener(): void {
       handleExternalAuthCallback(data.token)
     }
   })
+
+  // Dev mode: listen for manual token input via custom event
+  if (import.meta.env.DEV) {
+    const devTokenHandler = (e: CustomEvent<string>) => {
+      if (e.detail) {
+        console.log('[useAuth] Dev mode: received manual token')
+        handleExternalAuthCallback(e.detail)
+      }
+    }
+    window.addEventListener('dev-auth-token', devTokenHandler as EventListener)
+
+    // Also expose a global helper for easier dev usage
+    ;(window as any).__devAuthToken = (token: string) => {
+      console.log('[useAuth] Dev mode: __devAuthToken called')
+      handleExternalAuthCallback(token)
+    }
+    console.log('[useAuth] Dev mode: Use window.__devAuthToken("token") to manually authenticate')
+  }
 }
 
 function cleanupAuthCallbackListener(): void {
