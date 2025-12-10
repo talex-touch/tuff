@@ -11,6 +11,7 @@ const _appSettingOriginData = {
   },
   dev: {
     autoCloseDev: true,
+    authServer: 'production' as 'production' | 'local',
   },
   lang: {
     followSystem: true,

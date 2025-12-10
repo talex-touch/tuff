@@ -3,14 +3,26 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { touchChannel } from '~/modules/channel/channel-core'
+import { appSetting } from '~/modules/channel/storage'
 
 const { t } = useI18n()
 const { isLoggedIn, currentUser, loginWithBrowser, logout, authLoadingState } = useAuth()
 
+const isDev = import.meta.env.DEV
 const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
+
+const useLocalServer = computed({
+  get: () => appSetting?.dev?.authServer === 'local',
+  set: (val: boolean) => {
+    if (appSetting?.dev) {
+      appSetting.dev.authServer = val ? 'local' : 'production'
+    }
+  },
+})
 
 async function handleLogin() {
   try {
@@ -96,6 +108,16 @@ function openDeviceManagement() {
         {{ authLoadingState.isLoggingIn ? t('settingUser.loggingIn', '登录中...') : t('settingUser.login') }}
       </FlatButton>
     </TuffBlockSlot>
+
+    <!-- Dev mode: Auth server selector -->
+    <TuffBlockSwitch
+      v-if="isDev && !isLoggedIn"
+      v-model="useLocalServer"
+      :title="t('settingUser.devAuthServer', '本地服务器')"
+      :description="useLocalServer ? 'localhost:3200' : 'tuff.quotawish.com'"
+      default-icon="i-carbon-development"
+      active-icon="i-carbon-development"
+    />
   </TuffGroupBlock>
 </template>
 

@@ -19,10 +19,41 @@ const slugSegments = computed(() => {
 })
 
 const isSsoCallback = computed(() => slugSegments.value[0] === 'sso-callback')
+
+// Store and restore redirect_url across SSO callback
+const REDIRECT_STORAGE_KEY = 'tuff_sign_in_redirect'
+
 const redirectTarget = computed(() => {
+  // First check query param
   const redirect = route.query.redirect_url
-  return typeof redirect === 'string' && redirect.length > 0 ? redirect : '/dashboard'
+  if (typeof redirect === 'string' && redirect.length > 0) {
+    // Store for SSO callback restoration
+    if (import.meta.client) {
+      sessionStorage.setItem(REDIRECT_STORAGE_KEY, redirect)
+    }
+    return redirect
+  }
+
+  // For SSO callback, restore from sessionStorage
+  if (isSsoCallback.value && import.meta.client) {
+    const stored = sessionStorage.getItem(REDIRECT_STORAGE_KEY)
+    if (stored) {
+      return stored
+    }
+  }
+
+  return '/dashboard'
 })
+
+// Clean up storage after successful redirect
+if (import.meta.client) {
+  onUnmounted(() => {
+    // Only clean up if not in callback
+    if (!isSsoCallback.value) {
+      sessionStorage.removeItem(REDIRECT_STORAGE_KEY)
+    }
+  })
+}
 
 const langParam = computed(() => {
   const raw = route.query.lang
@@ -60,9 +91,9 @@ const currentPath = computed(() => route.path)
     <div class="w-full max-w-md">
       <AuthenticateWithRedirectCallback
         v-if="isSsoCallback"
-        :redirect-url="redirectTarget"
-        :after-sign-in-url="redirectTarget"
-        :after-sign-up-url="redirectTarget"
+        :force-redirect-url="redirectTarget"
+        :sign-in-force-redirect-url="redirectTarget"
+        :sign-up-force-redirect-url="redirectTarget"
       >
         <template #fallback>
           <div class="flex flex-col items-center gap-4 text-center text-sm text-gray-600 dark:text-gray-300">
@@ -84,9 +115,8 @@ const currentPath = computed(() => route.path)
           :path="currentPath"
           routing="path"
           :sign-up-url="signUpUrl"
-          :redirect-url="redirectTarget"
-          :after-sign-in-url="redirectTarget"
-          :after-sign-up-url="redirectTarget"
+          :force-redirect-url="redirectTarget"
+          :fallback-redirect-url="redirectTarget"
         />
       </div>
     </div>
