@@ -138,7 +138,13 @@
     "recommendationShowReason": "显示推荐理由",
     "recommendationShowReasonDesc": "在推荐项目旁显示推荐原因。",
     "recommendationMaxItems": "推荐数量",
-    "recommendationMaxItemsDesc": "搜索栏中显示的最大推荐项目数量。"
+    "recommendationMaxItemsDesc": "搜索栏中显示的最大推荐项目数量。",
+    "animationGroupTitle": "动效设置",
+    "animationGroupDesc": "控制 CoreBox 界面动画效果，关闭可提升性能。",
+    "listItemStagger": "列表入场动画",
+    "listItemStaggerDesc": "搜索结果列表项依次入场的交错动画效果。",
+    "resultTransition": "结果切换动画",
+    "resultTransitionDesc": "搜索结果变化时的过渡动画效果。"
   },
   "settingUser": {
     "groupTitle": "账户",

@@ -456,7 +456,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   <div class="CoreBoxRes flex" @contextmenu="previewHistory.handleContextMenu">
     <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
       <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-        <Transition name="result-switch" mode="out-in">
+        <Transition :name="appSetting.animation?.resultTransition !== false ? 'result-switch' : ''" mode="out-in">
           <BoxGrid
             v-if="isGridMode"
             :key="'grid-' + resultBatchKey"
@@ -473,7 +473,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
               :active="boxOptions.focus === index"
               :item="item"
               :index="index"
-              :class="{ 'is-new-item': newItemIds.has(item.id) }"
+              :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && newItemIds.has(item.id) }"
               :style="{
                 '--stagger-delay': getStaggerDelay(index, res.length) + 's'
               }"

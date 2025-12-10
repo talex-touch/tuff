@@ -214,7 +214,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
-    await this._forceSyncAllKeywords()
+    // 注意：_initialize() 已在新增/更新应用时调用 _syncKeywordsForApp()
+    // 只在需要时异步同步，避免阻塞启动（如数据库迁移后）
+    // await this._forceSyncAllKeywords()
     this._subscribeToFSEvents()
     this._registerWatchPaths()
     this._scheduleMdlsUpdateScan()

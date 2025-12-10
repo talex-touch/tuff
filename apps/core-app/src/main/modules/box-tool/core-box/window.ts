@@ -289,7 +289,7 @@ export class WindowManager {
     }
 
     const left = Math.round(bounds.x + bounds.width / 2 - 450)
-    const top = Math.round(bounds.y + bounds.height * 0.25)
+    const top = Math.round(bounds.y + bounds.height * 0.3)
 
     if (isNaN(left) || isNaN(top)) {
       coreBoxWindowLog.error('Invalid position calculation', {

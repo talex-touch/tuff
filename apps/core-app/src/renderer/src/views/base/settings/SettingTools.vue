@@ -201,4 +201,31 @@ function getShortcutLabel(id: string): string {
       <TSelectItem :model-value="20">20</TSelectItem>
     </TuffBlockSelect>
   </TuffGroupBlock>
+
+  <!-- Animation settings group block -->
+  <TuffGroupBlock
+    :name="t('settingTools.animationGroupTitle')"
+    :description="t('settingTools.animationGroupDesc')"
+    default-icon="i-carbon-rocket"
+    active-icon="i-carbon-rocket"
+    memory-name="setting-animation"
+  >
+    <!-- List item stagger animation switch -->
+    <TuffBlockSwitch
+      v-model="appSetting.animation.listItemStagger"
+      :title="t('settingTools.listItemStagger')"
+      :description="t('settingTools.listItemStaggerDesc')"
+      default-icon="i-carbon-fade"
+      active-icon="i-carbon-fade"
+    />
+
+    <!-- Result transition animation switch -->
+    <TuffBlockSwitch
+      v-model="appSetting.animation.resultTransition"
+      :title="t('settingTools.resultTransition')"
+      :description="t('settingTools.resultTransitionDesc')"
+      default-icon="i-carbon-transition"
+      active-icon="i-carbon-transition"
+    />
+  </TuffGroupBlock>
 </template>

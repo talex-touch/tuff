@@ -49,7 +49,14 @@ export function useVisibility(options: UseVisibilityOptions) {
   }
 
   /**
-   * Checks and applies auto-clear if threshold exceeded
+   * Checks and applies auto-clear if threshold exceeded.
+   * Performs a complete reset of CoreBox state including:
+   * - Input text
+   * - Box mode and data
+   * - File attachments
+   * - Layout configuration
+   * - Clipboard state
+   * - Active providers (triggers detachUIView in main process)
    */
   function checkAutoClear(): void {
     if (appSetting.tools.autoClear === -1 || boxOptions.lastHidden <= 0) return
@@ -58,9 +65,29 @@ export function useVisibility(options: UseVisibilityOptions) {
     const autoClearMs = appSetting.tools.autoClear * 1000
 
     if (timeSinceHidden > autoClearMs) {
+      // Reset input
       searchVal.value = ''
+
+      // Reset box mode and state
       boxOptions.mode = BoxMode.INPUT
       boxOptions.data = {}
+
+      // Reset file attachments
+      boxOptions.file = { buffer: null, paths: [] }
+
+      // Reset layout configuration
+      boxOptions.layout = undefined
+
+      // Reset clipboard state (attachments)
+      clipboardOptions.last = null
+      clipboardOptions.detectedAt = null
+      clipboardOptions.lastClearedTimestamp = null
+
+      // Deactivate all providers - this triggers:
+      // 1. Main process exitUIMode()
+      // 2. detachUIView() to remove plugin WebContentsView
+      // 3. BoxItemManager.clear() for plugin pushed items
+      deactivateAllProviders().catch(() => {})
     }
   }
 

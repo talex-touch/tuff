@@ -45,6 +45,12 @@ const _appSettingOriginData = {
     maxItems: 10,
     showReason: true,
   },
+  animation: {
+    /** CoreBox 列表项入场动画 */
+    listItemStagger: true,
+    /** 结果切换过渡动画 */
+    resultTransition: true,
+  },
   window: {
     closeToTray: true,
     startMinimized: false,

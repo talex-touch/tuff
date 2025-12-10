@@ -9,6 +9,7 @@ import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import fs from 'node:fs'
 import path from 'node:path'
 import { AppPreviewChannel, ChannelType, DataCode, UpdateProviderType } from '@talex-touch/utils'
+import { app } from 'electron'
 import axios from 'axios'
 import { TalexEvents, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -157,6 +158,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     // Load settings
     this.loadSettings()
+
+    // Skip update checks in development mode
+    if (!app.isPackaged) {
+      updateLog.info('Development mode detected, skipping automatic update checks')
+      return
+    }
 
     // Start polling as soon as the app boots
     if (this.settings.enabled) {

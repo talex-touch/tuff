@@ -2,7 +2,6 @@ import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import chalk from 'chalk'
 import { formatLog, LogStyle } from './app-utils'
@@ -181,37 +180,45 @@ export class AppScanner {
     const deletedApps: any[] = []
     const startTime = Date.now()
 
-    await runAdaptiveTaskQueue(
-      apps,
-      async (app) => {
-        try {
-          // 先检查文件是否存在
-          if (!existsSync(app.path)) {
-            console.warn(
-              formatLog(
-                'AppScanner',
-                `App not found, will be deleted from database: ${chalk.yellow(app.path)}`,
-                LogStyle.warning,
-              ),
-            )
-            deletedApps.push(app)
-            return
-          }
+    // 先过滤掉不存在的应用
+    const existingApps: typeof apps = []
+    for (const app of apps) {
+      if (!existsSync(app.path)) {
+        console.warn(
+          formatLog(
+            'AppScanner',
+            `App not found, will be deleted from database: ${chalk.yellow(app.path)}`,
+            LogStyle.warning,
+          ),
+        )
+        deletedApps.push(app)
+      }
+      else {
+        existingApps.push(app)
+      }
+    }
 
-          const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
-          const { stdout, stderr } = await this._execCommand(command)
+    // 批量处理：每批 50 个应用，使用一次 mdls 调用
+    const BATCH_SIZE = 50
+    const batches: (typeof apps)[] = []
+    for (let i = 0; i < existingApps.length; i += BATCH_SIZE) {
+      batches.push(existingApps.slice(i, i + BATCH_SIZE))
+    }
 
-          if (stderr) {
-            console.warn(
-              formatLog(
-                'AppScanner',
-                `mdls command warning for ${chalk.yellow(app.path)}: ${stderr}`,
-                LogStyle.warning,
-              ),
-            )
-          }
+    for (const batch of batches) {
+      try {
+        // 使用 mdls 一次查询多个文件（每个文件输出用 null 字符分隔）
+        const paths = batch.map(app => `"${app.path}"`).join(' ')
+        const command = `mdls -name kMDItemDisplayName -raw ${paths}`
+        const { stdout } = await this._execCommand(command)
 
-          let spotlightName = stdout.trim()
+        // mdls -raw 对多个文件输出时，用 null 字符 (\0) 分隔
+        const results = stdout.split('\0')
+
+        for (let i = 0; i < batch.length; i++) {
+          const app = batch[i]
+          let spotlightName = (results[i] || '').trim()
+
           if (spotlightName.endsWith('.app')) {
             spotlightName = spotlightName.slice(0, -4)
           }
@@ -236,54 +243,50 @@ export class AppScanner {
             })
           }
         }
-        catch (error) {
-          // 记录更详细的错误信息
-          const hasCode
-            = typeof error === 'object' && error !== null && 'code' in error
-              ? (error as { code?: unknown }).code
-              : undefined
-          const errorDetails
-            = error instanceof Error
-              ? `${error.message}${hasCode ? ` (code: ${String(hasCode)})` : ''}`
-              : String(error)
+      }
+      catch (error) {
+        // 批量失败时回退到逐个处理
+        console.warn(
+          formatLog(
+            'AppScanner',
+            `Batch mdls failed, falling back to individual processing: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+            LogStyle.warning,
+          ),
+        )
 
-          console.error(
-            formatLog(
-              'AppScanner',
-              `Error processing app ${chalk.red(app.path)}: ${errorDetails}`,
-              LogStyle.error,
-            ),
-          )
-        }
-        finally {
-          processedCount++
-          if (processedCount % 50 === 0) {
-            console.debug(
-              formatLog(
-                'AppScanner',
-                `mdls progress: processed ${chalk.cyan(processedCount)}/${chalk.cyan(apps.length)} apps`,
-                LogStyle.info,
-              ),
-            )
+        for (const app of batch) {
+          try {
+            const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
+            const { stdout } = await this._execCommand(command)
+            let spotlightName = stdout.trim()
+            if (spotlightName.endsWith('.app')) {
+              spotlightName = spotlightName.slice(0, -4)
+            }
+            if (spotlightName && spotlightName !== '(null)' && spotlightName !== app.displayName) {
+              updatedCount++
+              updatedApps.push({ ...app, displayName: spotlightName })
+            }
+          }
+          catch {
+            // 忽略单个应用的错误
           }
         }
-      },
-      {
-        estimatedTaskTimeMs: 20,
-        label: 'AppScanner::mdlsScan',
-        onYield: ({ processed, total, elapsedMs }) => {
+      }
+      finally {
+        processedCount += batch.length
+        if (processedCount % 100 === 0 || processedCount === existingApps.length) {
           console.debug(
             formatLog(
               'AppScanner',
-              `Yield after ${chalk.cyan(processed)}/${chalk.cyan(total)} apps, elapsed ${chalk.cyan(
-                (elapsedMs / 1000).toFixed(1),
-              )}s`,
-              LogStyle.process,
+              `mdls progress: processed ${chalk.cyan(processedCount)}/${chalk.cyan(existingApps.length)} apps`,
+              LogStyle.info,
             ),
           )
-        },
-      },
-    )
+        }
+      }
+    }
 
     console.log(
       formatLog(
