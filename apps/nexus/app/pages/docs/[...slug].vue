@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useUser } from '@clerk/vue'
+
 definePageMeta({
   layout: 'docs',
 })
@@ -6,6 +8,12 @@ definePageMeta({
 const route = useRoute()
 const { locale, t } = useI18n()
 const localePath = useLocalePath()
+const { user } = useUser()
+
+const isAdmin = computed(() => {
+  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
+  return metadata?.role === 'admin'
+})
 
 const SUPPORTED_LOCALES = ['en', 'zh']
 const GITHUB_EDIT_BASE_URL = 'https://github.com/talex-touch/tuff-nexus/edit/main'
@@ -239,6 +247,62 @@ onBeforeUnmount(() => {
   outlineState.value = []
   docTitleState.value = ''
 })
+
+// View tracking (admin only display)
+const viewCount = ref<number | null>(null)
+const viewCountLoading = ref(false)
+
+async function trackView() {
+  if (!docPath.value)
+    return
+
+  try {
+    viewCountLoading.value = true
+    const result = await $fetch('/api/docs/view', {
+      method: 'POST',
+      body: { path: docPath.value },
+    })
+    viewCount.value = result.views
+  }
+  catch (error) {
+    console.warn('[docs] Failed to track view:', error)
+  }
+  finally {
+    viewCountLoading.value = false
+  }
+}
+
+async function fetchViewCount() {
+  if (!docPath.value || !isAdmin.value)
+    return
+
+  try {
+    const result = await $fetch('/api/docs/view', {
+      method: 'GET',
+      query: { path: docPath.value },
+    })
+    viewCount.value = result.views
+  }
+  catch (error) {
+    console.warn('[docs] Failed to fetch view count:', error)
+  }
+}
+
+// Track view on mount
+onMounted(() => {
+  trackView()
+})
+
+// Refetch view count when doc changes (for admins)
+watch(
+  () => [docPath.value, isAdmin.value],
+  () => {
+    if (isAdmin.value && viewCount.value === null) {
+      fetchViewCount()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -260,15 +324,21 @@ onBeforeUnmount(() => {
         class="docs-prose markdown-body max-w-none prose prose-neutral dark:prose-invert"
       />
       <div
-        v-if="githubEditUrl || formattedLastUpdated"
+        v-if="githubEditUrl || formattedLastUpdated || isAdmin"
         class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-dark/5 pt-6 text-sm text-black/40 dark:border-light/5 dark:text-light/40"
       >
-        <div v-if="formattedLastUpdated" class="flex items-center gap-1.5">
-          <span class="i-carbon-time" />
-          <span>
-            {{ t('docs.lastUpdatedLabel') }}
-            <span class="text-black/70 dark:text-light/70">{{ formattedLastUpdated }}</span>
-          </span>
+        <div class="flex flex-wrap items-center gap-4">
+          <div v-if="formattedLastUpdated" class="flex items-center gap-1.5">
+            <span class="i-carbon-time" />
+            <span>
+              {{ t('docs.lastUpdatedLabel') }}
+              <span class="text-black/70 dark:text-light/70">{{ formattedLastUpdated }}</span>
+            </span>
+          </div>
+          <div v-if="isAdmin && viewCount !== null" class="flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-primary">
+            <span class="i-carbon-view" />
+            <span class="font-medium">{{ viewCount }}</span>
+          </div>
         </div>
         <NuxtLink
           v-if="githubEditUrl"

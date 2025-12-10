@@ -203,13 +203,12 @@ function isSectionExpanded(item: any) {
 watch(
   () => [sections.value, locale.value],
   () => {
-    // Only initialize if expandedSections is empty (first load)
-    if (Object.keys(expandedSections.value).length === 0) {
-      const next: Record<string, boolean> = {}
-      for (const section of sections.value) {
-        next[sectionKey(section)] = true
+    // Expand all sections by default (including new ones when switching tabs)
+    for (const section of sections.value) {
+      const key = sectionKey(section)
+      if (expandedSections.value[key] === undefined) {
+        expandedSections.value[key] = true
       }
-      expandedSections.value = next
     }
   },
   { immediate: true },

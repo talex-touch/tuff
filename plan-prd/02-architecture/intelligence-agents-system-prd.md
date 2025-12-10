@@ -1,8 +1,10 @@
-# AI Agents 系统设计文档
+# Intelligence Agents 系统设计文档 (v1.1)
+
+> 更新: 2025-12-10 - 统一命名为 Intelligence 模块
 
 ## 概述
 
-AI Agents 是 Talex Touch 的智能自动化功能模块，旨在提供可编程的AI代理服务，用于处理复杂的用户任务和自动化工作流。
+Intelligence Agents 是 Talex Touch 的智能自动化功能模块，旨在提供可编程的智能代理服务，用于处理复杂的用户任务和自动化工作流。
 
 ## 核心功能
 
@@ -17,7 +19,7 @@ AI Agents 是 Talex Touch 的智能自动化功能模块，旨在提供可编程
 - **集成代理**: 与外部服务连接（API、数据库等）
 
 ### 3. 能力接口
-基于现有AI能力系统扩展：
+基于现有 Intelligence 能力系统扩展：
 - **聊天能力**: `agents.chat`
 - **执行能力**: `agents.execute`
 - **规划能力**: `agents.plan`
@@ -27,7 +29,7 @@ AI Agents 是 Talex Touch 的智能自动化功能模块，旨在提供可编程
 
 ### 代理管理器
 ```typescript
-class AgentManager {
+class IntelligenceAgentManager {
   registerAgent(agentId: string, agent: Agent): void;
   executeTask(task: AgentTask): Promise<AgentResult>;
   getAvailableAgents(): Agent[];
@@ -57,7 +59,7 @@ interface Agent {
 - [ ] 代理注册系统
 - [ ] 基础代理类型
 - [ ] 任务调度器
-- [ ] 与现有AI SDK集成
+- [ ] 与现有 IntelligenceSDK 集成
 
 ### Phase 2: 核心代理 (2.6.0)
 - [ ] 文件管理代理
@@ -73,9 +75,9 @@ interface Agent {
 
 ## 与现有系统集成
 
-### AI 系统集成
-- 利用 `AiSDK` 提供的聊天、嵌入等功能
-- 通过 `aiCapabilityRegistry` 注册代理相关能力
+### Intelligence 系统集成
+- 利用 `IntelligenceSDK` 提供的聊天、嵌入等功能
+- 通过 `intelligenceCapabilityRegistry` 注册代理相关能力
 - 使用现有 provider 管理系统
 
 ### 搜索系统集成
@@ -109,7 +111,7 @@ interface Agent {
 ## 排期建议
 
 - **当前版本 (2.4.7)**: 完成现有功能优化
-- **下一版本 (2.5.0)**: AI Agents 基础框架
+- **下一版本 (2.5.0)**: Intelligence Agents 基础框架
 - **后续版本 (2.6.0+)**: 逐步实现各类智能代理
 
 ## 成功指标
