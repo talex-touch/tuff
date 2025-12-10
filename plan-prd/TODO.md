@@ -239,34 +239,105 @@
 - [x] Provider 接入框架 (OpenAI/Anthropic/DeepSeek/Siliconflow/Local)
 - [x] 策略引擎 (RuleBased/Adaptive)
 - [x] SDK 封装 (intelligence.invoke)
-- [ ] 观测 & 计费 (进行中)
-- [ ] Demo & 文档
+- [x] 观测 & 计费 ✅ (2025-12-10)
+  - [x] 审计日志记录 (`intelligence-audit-logger.ts`)
+  - [x] 配额控制 (`intelligence-quota-manager.ts`)
+  - [x] 用量统计聚合 (日/月维度)
+  - [x] IPC 通道 (9 个)
+  - [x] 导出功能 (CSV/JSON) ✅
+  - [ ] 用量统计 UI 图表 (待实现)
+- [x] Demo & 文档 ✅ (2025-12-10)
+  - [x] SDK 使用文档 (`README.md`)
+  - [x] Renderer Hooks (`useIntelligenceStats`)
+  - [ ] 示例插件 (touch-intelligence-demo) - 可选
+
+**已实现文件**:
+- `intelligence-module.ts` - 主模块
+- `intelligence-sdk.ts` - SDK 封装
+- `intelligence-audit-logger.ts` - 审计日志 ✨
+- `intelligence-quota-manager.ts` - 配额管理 ✨
+- `README.md` - SDK 文档 ✨
+- `intelligence-service.ts` - 服务层
+- `intelligence-capability-registry.ts` - 能力注册
+- `intelligence-strategy-manager.ts` - 策略管理
+- `providers/` - 5 家供应商适配
+
+**Renderer Hooks** (`@talex-touch/utils`):
+- `useIntelligence` - AI 能力调用
+- `useIntelligenceStats` - 审计/统计/配额 ✨
 
 ---
 
-### 3. Intelligence Agents 系统
+### 3. Intelligence Agents 系统 🟡 详细规划完成
 **来源**: `plan-prd/02-architecture/intelligence-agents-system-prd.md`
-**工期**: 15-25 天
+**工期**: 23 天
 
-- [ ] **Phase 1**: 基础框架 (v2.5.0)
-  - [ ] 代理注册系统
-  - [ ] 基础代理类型
-  - [ ] 任务调度器
-  - [ ] 与现有 IntelligenceSDK 集成
+#### Phase 1: 基础框架 (v2.5.0) - 5天
+- [ ] **Day 1**: 类型定义 + AgentRegistry
+  - [ ] `packages/utils/types/agent.ts` - 核心类型
+  - [ ] `modules/ai/agents/agent-registry.ts` - 代理注册表
+- [ ] **Day 2**: AgentManager + Scheduler
+  - [ ] `agent-manager.ts` - 代理管理器
+  - [ ] `agent-scheduler.ts` - 任务调度器 (优先级队列)
+- [ ] **Day 3**: AgentExecutor + IntelligenceSDK 集成
+  - [ ] `agent-executor.ts` - 任务执行器
+  - [ ] LLM 调用封装 (system prompt 构建)
+- [ ] **Day 4**: ToolRegistry + 基础工具
+  - [ ] `tools/tool-registry.ts` - 工具注册
+  - [ ] `tools/file-tools.ts` - 文件操作工具 (基础版)
+- [ ] **Day 5**: IPC 通道 + 基础 UI
+  - [ ] `agents:list`, `agents:execute`, `agents:cancel` 通道
+  - [ ] 代理列表界面
 
-- [ ] **Phase 2**: 核心代理 (v2.6.0)
-  - [ ] 文件管理代理
-  - [ ] 搜索增强代理
-  - [ ] 数据处理代理
+#### Phase 2: 核心代理 (v2.6.0) - 8天
+- [ ] **Day 1-2**: FileAgent 完整实现
+  - [ ] 文件搜索与筛选
+  - [ ] 批量重命名
+  - [ ] 自动整理归档
+- [ ] **Day 3-4**: SearchAgent + 语义搜索
+  - [ ] 与 SearchEngineCore 集成
+  - [ ] 语义重排功能
+- [ ] **Day 5-6**: DataAgent + 格式转换
+  - [ ] 数据提取与转换
+  - [ ] JSON/CSV/XML 互转
+- [ ] **Day 7-8**: 代理市场 API + 文档
 
-- [ ] **Phase 3**: 高级功能 (v2.7.0)
-  - [ ] 工作流编辑器
-  - [ ] 用户自定义代理
+#### Phase 3: 高级功能 (v2.7.0) - 10天
+- [ ] **Day 1-3**: WorkflowAgent + 编辑器
+- [ ] **Day 4-6**: 记忆系统 + 上下文管理
+- [ ] **Day 7-8**: 用户自定义代理
+- [ ] **Day 9-10**: 代理协作 + 测试
 
 **验收标准**:
 - 代理执行成功率 > 95%
 - 任务完成时间优化 50%
 - 代理响应时间 < 2秒
+
+---
+
+### 4. 下载中心 ✅ 已完成
+**来源**: `plan-prd/03-features/download-update/DOWNLOAD_CENTER_REFERENCE.md`
+**状态**: 核心功能已完成
+
+**已实现功能**:
+- [x] DownloadCenterModule - 主模块 (39KB)
+- [x] TaskQueue - 最小堆优先级队列
+- [x] ChunkManager - 切片下载 + 断点续传
+- [x] DownloadWorker - 并发下载工作器
+- [x] NetworkMonitor - 网络监控 + 自适应并发
+- [x] ConcurrencyAdjuster - 并发调整器
+- [x] MigrationManager - 数据迁移
+- [x] NotificationService - 下载通知
+- [x] ErrorLogger + RetryStrategy - 错误处理
+- [x] ProgressTracker - 进度跟踪 + 节流
+- [x] PriorityCalculator - 优先级计算
+
+**待优化项** (P3):
+- [ ] 下载中心 UI 美化
+- [ ] 批量下载模板
+- [ ] 下载速度限制配置
+
+**代码位置**: `apps/core-app/src/main/modules/download/`
 
 ---
 
@@ -300,22 +371,28 @@
 | P0 紧急 | 1 | 0 | 1 | 待启动 |
 | P1 重要 | 4 | 2 | 2 | 托盘+计算完成, 插件市场进行中 |
 | P2 增强 | 6 | 4 | 2 | Widget+Flow+Division+推荐完成 |
-| P3 长期 | 3 | 1 | 2 | Intelligence SDK 核心完成 |
-| **总计** | **14** | **7** | **7** | **50% 完成** |
+| P3 长期 | 4 | 2 | 2 | Intelligence SDK + 下载中心完成, Agents 待开发 |
+| **总计** | **15** | **8** | **7** | **53% 完成** |
 
 ---
 
 ## 🎯 建议实施顺序 (更新)
 
 ### Q1 2026 (1-3月)
-1. 模块日志系统 (P0)
+1. 模块日志系统 (P0) - 8-11天
 2. 插件市场多源 (P1) - NPM/GitHub Provider 待实现
-3. View Mode 增强 (P1)
+3. View Mode 增强 (P1) - 10-15天
+4. Intelligence Agents Phase 1 (P3) - 5天
 
 ### Q2 2026 (4-6月)
-4. 多视图并行 (P2)
-5. AttachUIView 缓存 (P2)
-6. Intelligence 观测 & 计费 (P3)
+5. 多视图并行 (P2) - 10-15天
+6. AttachUIView 缓存 (P2) - 10-12天
+7. Intelligence 观测 & 计费 (P3) - 3-5天
+8. Intelligence Agents Phase 2 (P3) - 8天
+
+### Q3 2026 (7-9月)
+9. 平台能力体系 (P3) - 20-30天
+10. Intelligence Agents Phase 3 (P3) - 10天
 
 ### 已完成 ✅
 - ~~托盘系统优化 (P1)~~ - 2025-12
@@ -326,13 +403,10 @@
 - ~~直接预览计算 (P1)~~ - 2025-12-10 (核心完成)
 - ~~Widget 动态加载 (P2)~~ - 2025-12-10 (核心完成)
 - ~~Intelligence SDK (P3)~~ - 2025-12-10 (核心完成)
-
-### Q4 2026 (10-12月)
-7. 平台能力体系 (P3)
-8. Intelligence Agents 系统 (P3)
+- ~~下载中心 (P3)~~ - 2025-12-10 (核心完成)
 
 ---
 
-**文档版本**: v1.3
+**文档版本**: v1.4
 **更新时间**: 2025-12-10
 **维护者**: Development Team

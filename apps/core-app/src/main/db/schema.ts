@@ -487,7 +487,109 @@ export const pinnedItems = sqliteTable(
 )
 
 // =============================================================================
-// 10. 应用更新记录 (App Update Records)
+// 10. Intelligence 审计与配额 (Intelligence Audit & Quota)
+// =============================================================================
+
+/**
+ * Intelligence 调用审计日志表
+ * 记录每次 AI 调用的详细信息，用于用量统计、成本分析和问题排查
+ */
+export const intelligenceAuditLogs = sqliteTable(
+  'intelligence_audit_logs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    traceId: text('trace_id').notNull().unique(),
+    timestamp: integer('timestamp').notNull(),
+    capabilityId: text('capability_id').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    promptHash: text('prompt_hash'),
+    caller: text('caller'), // pluginId or 'system'
+    userId: text('user_id'),
+    promptTokens: integer('prompt_tokens').notNull().default(0),
+    completionTokens: integer('completion_tokens').notNull().default(0),
+    totalTokens: integer('total_tokens').notNull().default(0),
+    estimatedCost: real('estimated_cost'),
+    latency: integer('latency').notNull(),
+    success: integer('success', { mode: 'boolean' }).notNull(),
+    error: text('error'),
+    metadata: text('metadata'), // JSON string for additional info
+  },
+  table => ({
+    timestampIdx: index('idx_audit_timestamp').on(table.timestamp),
+    callerIdx: index('idx_audit_caller').on(table.caller),
+    capabilityIdx: index('idx_audit_capability').on(table.capabilityId),
+    providerIdx: index('idx_audit_provider').on(table.provider),
+  }),
+)
+
+/**
+ * Intelligence 配额配置表
+ * 存储每个调用者（插件/用户）的配额限制
+ */
+export const intelligenceQuotas = sqliteTable(
+  'intelligence_quotas',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    callerId: text('caller_id').notNull(), // pluginId or userId
+    callerType: text('caller_type', { enum: ['plugin', 'user', 'system'] }).notNull(),
+    // 请求次数限制
+    requestsPerMinute: integer('requests_per_minute'),
+    requestsPerDay: integer('requests_per_day'),
+    requestsPerMonth: integer('requests_per_month'),
+    // Token 限制
+    tokensPerMinute: integer('tokens_per_minute'),
+    tokensPerDay: integer('tokens_per_day'),
+    tokensPerMonth: integer('tokens_per_month'),
+    // 成本限制
+    costLimitPerDay: real('cost_limit_per_day'),
+    costLimitPerMonth: real('cost_limit_per_month'),
+    // 配置状态
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+  },
+  table => ({
+    callerIdx: index('idx_quota_caller').on(table.callerId, table.callerType),
+  }),
+)
+
+/**
+ * Intelligence 用量统计表
+ * 存储每个调用者的累计用量，定期从 audit_logs 聚合
+ */
+export const intelligenceUsageStats = sqliteTable(
+  'intelligence_usage_stats',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    callerId: text('caller_id').notNull(),
+    callerType: text('caller_type', { enum: ['plugin', 'user', 'system'] }).notNull(),
+    period: text('period').notNull(), // 'minute:2025-12-10T12:30', 'day:2025-12-10', 'month:2025-12'
+    periodType: text('period_type', { enum: ['minute', 'day', 'month'] }).notNull(),
+    requestCount: integer('request_count').notNull().default(0),
+    successCount: integer('success_count').notNull().default(0),
+    failureCount: integer('failure_count').notNull().default(0),
+    totalTokens: integer('total_tokens').notNull().default(0),
+    promptTokens: integer('prompt_tokens').notNull().default(0),
+    completionTokens: integer('completion_tokens').notNull().default(0),
+    totalCost: real('total_cost').notNull().default(0),
+    avgLatency: real('avg_latency').notNull().default(0),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.callerId, table.callerType, table.period] }),
+    periodIdx: index('idx_usage_period').on(table.periodType, table.period),
+  }),
+)
+
+// =============================================================================
+// 11. 应用更新记录 (App Update Records)
 // =============================================================================
 
 export const appUpdateRecords = sqliteTable(

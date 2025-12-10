@@ -1421,6 +1421,8 @@ export interface IntelligenceSDKConfig {
   enableAudit: boolean
   /** Enable result caching. */
   enableCache: boolean
+  /** Enable quota management. */
+  enableQuota?: boolean
   /** Cache expiration in seconds. */
   cacheExpiration?: number
   /** Capability routing configurations. */

@@ -1634,6 +1634,37 @@
       "cacheExpiration1hour": "1 hour",
       "cacheExpiration6hours": "6 hours",
       "cacheExpiration24hours": "24 hours"
+    },
+    "usage": {
+      "title": "Usage Statistics",
+      "description": "View AI usage and cost statistics",
+      "today": "Today",
+      "thisMonth": "This Month",
+      "requests": "Requests",
+      "tokens": "Tokens",
+      "cost": "Cost",
+      "successRate": "Success Rate"
+    },
+    "audit": {
+      "title": "Audit Settings",
+      "description": "Configure audit logging options",
+      "enableTitle": "Enable Audit",
+      "enableDescription": "Record all AI request details for analysis and debugging",
+      "logsTitle": "Audit Logs",
+      "logsDescription": "View and export AI call records",
+      "viewLogs": "View Logs",
+      "records": "records",
+      "noLogs": "No audit logs yet"
+    },
+    "cache": {
+      "title": "Cache Settings",
+      "description": "Configure response caching for better performance",
+      "enableTitle": "Enable Cache",
+      "enableDescription": "Cache AI responses to reduce duplicate requests",
+      "expirationTitle": "Expiration Time",
+      "expirationDescription": "How long to keep cached responses",
+      "expirationPlaceholder": "seconds",
+      "seconds": "seconds"
     }
   },
   "Intelligence": {

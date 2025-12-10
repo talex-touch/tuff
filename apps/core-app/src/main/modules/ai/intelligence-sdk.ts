@@ -1,7 +1,6 @@
 import type {
   IntelligenceAgentPayload,
   IntelligenceAgentResult,
-  IntelligenceAuditLog,
   IntelligenceChatPayload,
   IntelligenceClassificationPayload,
   IntelligenceClassificationResult,
@@ -52,6 +51,8 @@ import type {
 } from '@talex-touch/utils'
 import chalk from 'chalk'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
+import { type IntelligenceAuditLogEntry, intelligenceAuditLogger } from './intelligence-audit-logger'
+import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
 
 const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
@@ -79,10 +80,10 @@ export class AiSDK {
     defaultStrategy: 'adaptive-default',
     enableAudit: true,
     enableCache: false,
+    enableQuota: true,
     capabilities: {},
   }
 
-  private auditLogs: IntelligenceAuditLog[] = []
   private cache = new Map<string, { result: any, timestamp: number }>()
 
   constructor(config?: Partial<IntelligenceSDKConfig>) {
@@ -140,6 +141,15 @@ export class AiSDK {
       throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
     }
     logInfo(`invoke -> ${capabilityId}`)
+
+    // Check quota if caller is specified
+    const caller = options.metadata?.caller
+    if (this.config.enableQuota && caller) {
+      const quotaCheck = await this.checkQuota(caller)
+      if (!quotaCheck.allowed) {
+        throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
+      }
+    }
 
     const runtimeOptions: IntelligenceInvokeOptions = { ...options }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
@@ -301,7 +311,7 @@ export class AiSDK {
       }
 
       if (this.config.enableAudit) {
-        this.addAuditLog({
+        await this.logAudit({
           traceId: result.traceId,
           timestamp: startTime,
           capabilityId,
@@ -310,6 +320,8 @@ export class AiSDK {
           usage: result.usage,
           latency: result.latency,
           success: true,
+          caller: runtimeOptions.metadata?.caller,
+          userId: runtimeOptions.metadata?.userId,
         })
       }
 
@@ -320,8 +332,8 @@ export class AiSDK {
       logError(`Invoke error for ${capabilityId}`, error)
 
       if (this.config.enableAudit) {
-        this.addAuditLog({
-          traceId: `error-${Date.now()}`,
+        await this.logAudit({
+          traceId: intelligenceAuditLogger.generateTraceId(),
           timestamp: startTime,
           capabilityId,
           provider: strategyResult.selectedProvider.id,
@@ -330,6 +342,8 @@ export class AiSDK {
           latency: Date.now() - startTime,
           success: false,
           error: error instanceof Error ? error.message : String(error),
+          caller: runtimeOptions.metadata?.caller,
+          userId: runtimeOptions.metadata?.userId,
         })
       }
 
@@ -464,15 +478,80 @@ export class AiSDK {
     })
   }
 
-  private addAuditLog(log: IntelligenceAuditLog): void {
-    this.auditLogs.push(log)
-    if (this.auditLogs.length > 1000) {
-      this.auditLogs.shift()
+  private async logAudit(log: IntelligenceAuditLogEntry): Promise<void> {
+    try {
+      await intelligenceAuditLogger.log(log)
+    }
+    catch (error) {
+      logError('Failed to log audit entry:', error)
     }
   }
 
-  getAuditLogs(limit: number = 100): IntelligenceAuditLog[] {
-    return this.auditLogs.slice(-limit)
+  /**
+   * Check quota before invoking a capability
+   */
+  async checkQuota(
+    caller?: string,
+    estimatedTokens: number = 0,
+  ): Promise<{ allowed: boolean, reason?: string }> {
+    if (!this.config.enableQuota || !caller) {
+      return { allowed: true }
+    }
+
+    try {
+      const result = await intelligenceQuotaManager.checkQuota(caller, 'plugin', estimatedTokens)
+      return { allowed: result.allowed, reason: result.reason }
+    }
+    catch (error) {
+      logError('Failed to check quota:', error)
+      return { allowed: true } // Fail open on quota check errors
+    }
+  }
+
+  /**
+   * Get recent audit logs (from memory cache)
+   */
+  getRecentAuditLogs(limit: number = 100): IntelligenceAuditLogEntry[] {
+    return intelligenceAuditLogger.getRecentLogs(limit)
+  }
+
+  /**
+   * Query audit logs from database
+   */
+  async queryAuditLogs(options: {
+    caller?: string
+    capabilityId?: string
+    startTime?: number
+    endTime?: number
+    limit?: number
+  } = {}): Promise<IntelligenceAuditLogEntry[]> {
+    return intelligenceAuditLogger.queryLogs(options)
+  }
+
+  /**
+   * Get usage statistics for today
+   */
+  async getTodayStats(callerId?: string) {
+    return intelligenceAuditLogger.getTodayStats(callerId)
+  }
+
+  /**
+   * Get usage statistics for this month
+   */
+  async getMonthStats(callerId?: string) {
+    return intelligenceAuditLogger.getMonthStats(callerId)
+  }
+
+  /**
+   * Get usage statistics for a period
+   */
+  async getUsageStats(
+    callerId: string,
+    periodType: 'day' | 'month',
+    startPeriod?: string,
+    endPeriod?: string,
+  ) {
+    return intelligenceAuditLogger.getUsageStats(callerId, periodType, startPeriod, endPeriod)
   }
 
   clearCache(): void {
@@ -480,9 +559,60 @@ export class AiSDK {
     logInfo('Cache cleared')
   }
 
-  clearAuditLogs(): void {
-    this.auditLogs = []
-    logInfo('Audit logs cleared')
+  /**
+   * Export audit logs to CSV format
+   */
+  exportLogsToCSV(logs: IntelligenceAuditLogEntry[]): string {
+    const headers = [
+      'Trace ID',
+      'Timestamp',
+      'Capability',
+      'Provider',
+      'Model',
+      'Caller',
+      'Prompt Tokens',
+      'Completion Tokens',
+      'Total Tokens',
+      'Estimated Cost',
+      'Latency (ms)',
+      'Success',
+      'Error',
+    ]
+
+    const rows = logs.map(log => [
+      log.traceId,
+      new Date(log.timestamp).toISOString(),
+      log.capabilityId,
+      log.provider,
+      log.model,
+      log.caller || '',
+      log.usage.promptTokens,
+      log.usage.completionTokens,
+      log.usage.totalTokens,
+      log.estimatedCost?.toFixed(6) || '',
+      log.latency,
+      log.success ? 'Yes' : 'No',
+      log.error || '',
+    ])
+
+    return [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n')
+  }
+
+  /**
+   * Export audit logs to JSON format
+   */
+  exportLogsToJSON(logs: IntelligenceAuditLogEntry[]): string {
+    return JSON.stringify(logs, null, 2)
+  }
+
+  /**
+   * Cleanup old audit logs (retention policy)
+   */
+  async cleanupOldLogs(retentionDays: number = 30): Promise<number> {
+    return intelligenceAuditLogger.cleanupOldLogs(retentionDays)
   }
 
   text = {
