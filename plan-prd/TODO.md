@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2025-12-07
+> 更新时间: 2025-12-10
 
 ---
 
@@ -58,9 +58,11 @@
 
 - [x] 类型与默认源 (0.5d)
 - [x] Provider Registry & Storage (1d)
-- [x] Provider 实现 - 官方 + HTTP (1d) - TpexApiProvider 完成
+- [x] Provider 实现 - 官方 TpexApiProvider (1d)
+- [x] Provider 实现 - NexusStoreProvider (1d)
 - [x] UI 集成 - Market 页面 + Source Editor (1d)
-- [ ] 扩展 Provider - NPM/GitHub/Gitee (1.5d)
+- [ ] 扩展 Provider - NPM (npm-package-provider.ts) - 未实现
+- [ ] 扩展 Provider - GitHub/Gitee (repository-provider.ts) - 未实现
 - [ ] 验收 & 文档 (0.5d)
 
 #### 2.1 ✅ Nexus 联动与 Clerk 登录优化 (2025-12-09)
@@ -104,54 +106,48 @@
 
 ---
 
-### 4. 直接预览计算能力
+### 4. ✅ 直接预览计算能力 (v2.4.7) - 核心完成
 **来源**: `plan-prd/04-implementation/performance/direct-preview-calculation-prd.md`
-**工期**: 14-20 天
+**工期**: 14-20 天 → **已完成核心功能**
 
-- [ ] **Phase 0**: 准备工作 (2天)
-  - [ ] Unit/FX 数据准备
-  - [ ] 库选型 (mathjs/decimal.js)
-  - [ ] 沙箱 PoC
+- [x] **Phase 1**: 表达式 + 单位换算
+  - [x] CalculationService (Main)
+  - [x] ExpressionEvaluator (mathjs)
+  - [x] UnitRegistry + UnitConverter
+  - [x] 查询识别正则
+  - [x] PreviewCard 组件
 
-- [ ] **Phase 1**: 表达式 + 单位换算 (5-6天)
-  - [ ] CalculationPreviewService (Main)
-  - [ ] ExpressionEvaluator (mathjs)
-  - [ ] UnitRegistry (JSON 配置)
-  - [ ] 查询识别正则
-  - [ ] PreviewCard 组件
-  - [ ] 复制结果交互
-
-- [ ] **Phase 2**: 汇率 + 日期时间 (4-5天)
+- [ ] **Phase 2**: 汇率 + 日期时间 (待实现)
   - [ ] FxRateProvider (ECB API)
-  - [ ] 汇率定时刷新 Cron
   - [ ] TimeEngine (luxon)
-  - [ ] 时区解析
 
-- [ ] **Phase 3**: 组合查询/变量 (3-4天)
-  - [ ] 变量支持 (let foo = 18kg)
-  - [ ] 组合查询解析
-  - [ ] 指标埋点
-  - [ ] 历史记录 (复用 clipboard_history)
-
-**验收标准**:
-- 算式/单位/汇率/时间命中率 ≥ 95%
-- 平均响应 < 50ms
-- 结果卡片在搜索结果首行
-- 断网情况下显示最近汇率快照
+**已实现文件**:
+- `calculation-service.ts` - 主服务
+- `expression-evaluator.ts` - mathjs 表达式计算
+- `unit-converter.ts` - 单位换算
+- `unit-registry.json` - 单位定义
 
 ---
 
 ## 🟢 P2 增强任务
 
-### 1. Widget 动态加载 🟡 部分完成
+### 1. ✅ Widget 动态加载 (v2.4.7) - 核心完成
 **来源**: `plan-prd/03-features/plugin/widget-dynamic-loading-plan.md`
-**工期**: 8-12 天
+**工期**: 8-12 天 → **已完成核心功能**
 
 - [x] Internal Widget 流程梳理
 - [x] WidgetLoader 运行时概览
-- [ ] 非 internal Widget 动态编译
-- [ ] 动态组件缓存与更新
-- [ ] Dev 模式与远程源码
+- [x] WidgetCompiler (@vue/compiler-sfc + esbuild)
+- [x] WidgetManager (chokidar 监听 + 缓存)
+- [x] IPC 通道 (plugin:widget:register/update/unregister)
+- [x] 渲染器注册 (widget-registry.ts)
+- [ ] Dev 模式与远程源码 (待完善)
+
+**已实现文件**:
+- `widget-loader.ts` - 源码加载与缓存
+- `widget-compiler.ts` - Vue SFC 编译
+- `widget-manager.ts` - 生命周期管理
+- `widget-registry.ts` (renderer) - 动态组件注册
 
 ---
 
@@ -235,28 +231,28 @@
 
 ---
 
-### 2. AI 能力泛化接口
-**来源**: `plan-prd/02-architecture/ai-power-generic-api-prd.md`
-**工期**: 15-20 天
+### 2. Intelligence 能力泛化接口 ✅ 核心完成
+**来源**: `plan-prd/02-architecture/intelligence-power-generic-api-prd.md`
+**工期**: 15-20 天 → **已完成核心功能**
 
-- [ ] 能力描述体系 (AiCapabilityRegistry)
-- [ ] Provider 接入框架
-- [ ] 策略引擎 (RuleBased/Adaptive)
-- [ ] SDK 封装 (ai.invoke)
-- [ ] 观测 & 计费
+- [x] 能力描述体系 (IntelligenceCapabilityRegistry)
+- [x] Provider 接入框架 (OpenAI/Anthropic/DeepSeek/Siliconflow/Local)
+- [x] 策略引擎 (RuleBased/Adaptive)
+- [x] SDK 封装 (intelligence.invoke)
+- [ ] 观测 & 计费 (进行中)
 - [ ] Demo & 文档
 
 ---
 
-### 3. AI Agents 系统
-**来源**: `plan-prd/02-architecture/ai-agents-system-prd.md`
+### 3. Intelligence Agents 系统
+**来源**: `plan-prd/02-architecture/intelligence-agents-system-prd.md`
 **工期**: 15-25 天
 
 - [ ] **Phase 1**: 基础框架 (v2.5.0)
   - [ ] 代理注册系统
   - [ ] 基础代理类型
   - [ ] 任务调度器
-  - [ ] 与现有 AI SDK 集成
+  - [ ] 与现有 IntelligenceSDK 集成
 
 - [ ] **Phase 2**: 核心代理 (v2.6.0)
   - [ ] 文件管理代理
@@ -276,12 +272,16 @@
 
 ## 📝 已完成功能备注
 
-> **2025-12 重大更新**: 4 项核心功能已完成
+> **2025-12 重大更新**: 8 项核心功能已完成
 >
 > - ✅ **托盘系统优化** - TrayManager 完整实现
 > - ✅ **Flow Transfer 流转能力** - FlowBus 核心调度完成
 > - ✅ **DivisionBox 深化** - Manager + LRU 缓存 + SDK
 > - ✅ **智能推荐系统** - RecommendationEngine 上线
+> - ✅ **直接预览计算** - 表达式 + 单位换算完成
+> - ✅ **Widget 动态加载** - Loader + Compiler + Manager 完成
+> - ✅ **Intelligence SDK** - 5 家 Provider + 策略引擎完成
+> - ✅ **插件市场多源** - TpexApi + Nexus Provider 完成
 
 > **2025-11 UI/UX 改进**: 完成 15+ 项页面重构与优化
 >
@@ -298,10 +298,10 @@
 | 优先级 | 任务数 | 已完成 | 剩余 | 状态 |
 |--------|--------|--------|------|------|
 | P0 紧急 | 1 | 0 | 1 | 待启动 |
-| P1 重要 | 4 | 1 | 3 | 1 完成, 1 进行中 |
-| P2 增强 | 6 | 3 | 3 | 3 完成, 1 部分完成 |
-| P3 长期 | 3 | 0 | 3 | 规划中 |
-| **总计** | **14** | **4** | **10** | **28.5% 完成** |
+| P1 重要 | 4 | 2 | 2 | 托盘+计算完成, 插件市场进行中 |
+| P2 增强 | 6 | 4 | 2 | Widget+Flow+Division+推荐完成 |
+| P3 长期 | 3 | 1 | 2 | Intelligence SDK 核心完成 |
+| **总计** | **14** | **7** | **7** | **50% 完成** |
 
 ---
 
@@ -309,14 +309,13 @@
 
 ### Q1 2026 (1-3月)
 1. 模块日志系统 (P0)
-2. 插件市场多源 (P1) - 进行中
-3. 直接预览计算 (P1)
-4. View Mode 增强 (P1)
+2. 插件市场多源 (P1) - NPM/GitHub Provider 待实现
+3. View Mode 增强 (P1)
 
 ### Q2 2026 (4-6月)
-5. Widget 动态加载 (P2) - 部分完成
-6. 多视图并行 (P2)
-7. AttachUIView 缓存 (P2)
+4. 多视图并行 (P2)
+5. AttachUIView 缓存 (P2)
+6. Intelligence 观测 & 计费 (P3)
 
 ### 已完成 ✅
 - ~~托盘系统优化 (P1)~~ - 2025-12
@@ -324,14 +323,16 @@
 - ~~DivisionBox 深化 (P2)~~ - 2025-12
 - ~~智能推荐系统 (P2)~~ - 2025-12
 - ~~Nexus 联动 + Clerk 登录优化 (P1)~~ - 2025-12-09
+- ~~直接预览计算 (P1)~~ - 2025-12-10 (核心完成)
+- ~~Widget 动态加载 (P2)~~ - 2025-12-10 (核心完成)
+- ~~Intelligence SDK (P3)~~ - 2025-12-10 (核心完成)
 
 ### Q4 2026 (10-12月)
-12. 平台能力体系 (P3)
-13. AI 能力接口 (P3)
-14. AI Agents 系统 (P3)
+7. 平台能力体系 (P3)
+8. Intelligence Agents 系统 (P3)
 
 ---
 
-**文档版本**: v1.2
-**更新时间**: 2025-12-09
+**文档版本**: v1.3
+**更新时间**: 2025-12-10
 **维护者**: Development Team

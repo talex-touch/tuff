@@ -13,10 +13,10 @@ plan-prd/
 │   └── DESIGN_IMPROVEMENTS.md # 设计改进建议
 │
 ├── 02-architecture/         # 架构设计
-│   ├── platform-capabilities-prd.md    # P3 平台能力体系
-│   ├── ai-power-generic-api-prd.md     # P3 AI 能力泛化接口
-│   ├── ai-agents-system-prd.md         # P3 AI Agents 系统
-│   └── module-logging-system-prd.md    # P0 模块日志系统
+│   ├── platform-capabilities-prd.md           # P3 平台能力体系
+│   ├── intelligence-power-generic-api-prd.md  # ✅ Intelligence 能力泛化接口 (核心完成)
+│   ├── intelligence-agents-system-prd.md      # P3 Intelligence Agents 系统
+│   └── module-logging-system-prd.md           # P0 模块日志系统
 │
 ├── 03-features/             # 功能 PRD
 │   ├── search/              # 搜索功能
@@ -74,8 +74,8 @@ plan-prd/
 ### 架构师
 - [模块日志系统](02-architecture/module-logging-system-prd.md) - **P0 紧急**
 - [平台能力](02-architecture/platform-capabilities-prd.md) - P3
-- [AI 通用 API](02-architecture/ai-power-generic-api-prd.md) - P3
-- [AI Agents](02-architecture/ai-agents-system-prd.md) - P3
+- [Intelligence 通用 API](02-architecture/intelligence-power-generic-api-prd.md) - ✅ 核心完成
+- [Intelligence Agents](02-architecture/intelligence-agents-system-prd.md) - P3
 
 ## 📖 文档类型说明
 
@@ -158,5 +158,5 @@ plan-prd/
 
 ---
 
-**最后更新**: 2025-12-07
+**最后更新**: 2025-12-10
 **维护者**: Talex Touch Team

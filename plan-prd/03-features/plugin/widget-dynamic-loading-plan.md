@@ -1,4 +1,17 @@
-# Widget 动态渲染策划
+# Widget 动态渲染策划 (v1.1)
+
+> 更新: 2025-12-10 - 核心功能已完成
+
+## 完成状态
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| WidgetLoader | ✅ | 源码加载与缓存 |
+| WidgetCompiler | ✅ | @vue/compiler-sfc + esbuild |
+| WidgetManager | ✅ | 生命周期 + chokidar 监听 |
+| IPC 通道 | ✅ | register/update/unregister |
+| 渲染器注册 | ✅ | widget-registry.ts |
+| Dev 模式 | 🟡 | 待完善 |
 
 ## 背景
 - 目前插件的 `interaction.type` 支持 `webcontent`，`apps/core-app/src/main/modules/plugin/view/plugin-view-loader.ts` 已经处理了加载 HTML 页面，但 `widget` 可以暴露更轻量的 Vue 组件，目前在 `TouchPlugin` 里只是打了个 warning。
@@ -51,12 +64,18 @@
 - `TouchPlugin` 在 `internal` 路径里可以直接调用 `setCustomRender('vue', 'core-intelligence-answer', payload)`，不走动态编译。
 - 可以在 `internal` 插件注册阶段硬编码 `widgetId`（如 `core-widgets::intelligence-answer`），同时在 renderer 启动流程中 `registerCustomRenderer`。
 
-## TODO（本阶段先以策划为主，后续再拆任务）
-1. 确定 internal 和非 internal 的判定逻辑（插件命名规则 / 所在路径 / `dev` 配置）。
-2. 设计并实现主进程的 widget loader（编译管线 + 缓存 + 错误收集），并暴露 `plugin:widget:*` 系列 channel。
-3. renderer 端拓展 `custom-render` 模块，支持动态注册组件、自动注入样式、透明处理未注册组件。
-4. 在 plugin SDK / feature 生命周期中打钩新接口，确保触发 `interaction.type === 'widget'` 时会调用新 loader 并自动 `setCustomRender(...)`。
-5. 撰写 dev 模式和安全策略相关文档，在 `apps/docs` 或 `plan-prd` 中补充使用指引。
+## TODO
+
+### 已完成 ✅
+1. ✅ 确定 internal 和非 internal 的判定逻辑
+2. ✅ 设计并实现主进程的 WidgetLoader/Compiler/Manager
+3. ✅ renderer 端 custom-render 模块拓展
+4. ✅ plugin:widget:* IPC 通道
+5. ✅ chokidar 文件监听与热更新
+
+### 待完成 🟡
+6. [ ] Dev 模式与远程源码支持
+7. [ ] 撰写使用文档
 
 ## 详细拆解
 1. **Internal 判定与 default renderer 注册**

@@ -1,15 +1,17 @@
-# PRD: AI Power 泛化接口与能力路由 (v1.0)
+# PRD: Intelligence Power 泛化接口与能力路由 (v1.1)
+
+> 更新: 2025-12-10 - 统一命名为 Intelligence 模块
 
 ## 1. 背景与目标
 
-- **AI 服务碎片化**: 当前插件与系统各自接入不同的 AI 模型与供应商，缺乏统一抽象，重复造轮子。
+- **Intelligence 服务碎片化**: 当前插件与系统各自接入不同的 LLM 模型与供应商，缺乏统一抽象，重复造轮子。
 - **多模型策略**: 需要支持多家 LLM、Embedding、语音、视觉等服务，根据场景自动选择最优模型。
 - **合规与成本控制**: 统一接口有利于集中控制调用权限、统计用量、优化成本。
 
 ## 2. 用户价值与场景
 
-- **插件快速接入 AI**: 开发者无需关注底层供应商细节，即可调用统一 AI 能力（对话、补全、翻译、检测等）。
-- **智能工作流**: 系统可将 Flow Transfer、DivisionBox 中的 AI 功能复用，并按需切换模型。
+- **插件快速接入 Intelligence**: 开发者无需关注底层供应商细节，即可调用统一 Intelligence 能力（对话、补全、翻译、检测等）。
+- **智能工作流**: 系统可将 Flow Transfer、DivisionBox 中的 Intelligence 功能复用，并按需切换模型。
 - **企业级需求**: 企业可定制专用模型策略（私有部署、网络隔离），插件通过统一接口获得能力。
 
 ## 3. 功能需求
@@ -23,7 +25,7 @@
 
 ### 3.2 接口设计
 
-- 统一调用入口：`ai.invoke(capabilityId, payload, options)`。
+- 统一调用入口：`intelligence.invoke(capabilityId, payload, options)`。
 - 支持同步与流式响应，流式采用可迭代 AsyncGenerator。
 - 允许指定 `modelPreference`、`costCeiling`、`latencyTarget`，平台自动路由。
 - 返回结构包含 `result`, `usage`, `model`, `latency`, `traceId`。
@@ -42,8 +44,8 @@
 
 ### 3.5 开发者体验
 
-- SDK 提供类型安全封装，如 `ai.text.chat({ messages })`。
-- 内置 Prompt 库，可通过 `ai.prompt.render(templateId, variables)` 复用。
+- SDK 提供类型安全封装，如 `intelligence.text.chat({ messages })`。
+- 内置 Prompt 库，可通过 `intelligence.prompt.render(templateId, variables)` 复用。
 - 提供调试工具，实时查看模型选择、token 用量、响应内容。
 
 ## 4. 非功能需求
@@ -56,9 +58,9 @@
 
 ### 5.1 能力描述 & 注册
 
-- 定义 `AiCapabilityDescriptor`：
+- 定义 `IntelligenceCapabilityDescriptor`：
   ```ts
-  interface AiCapabilityDescriptor {
+  interface IntelligenceCapabilityDescriptor {
     id: string
     type: 'chat' | 'completion' | 'embedding' | 'tts' | 'stt' | 'vision'
     inputSchema: JsonSchema
@@ -66,7 +68,7 @@
     defaultStrategy: string
   }
   ```
-- 所有能力注册到 `AiCapabilityRegistry`，并在设置中心可视化管理。
+- 所有能力注册到 `IntelligenceCapabilityRegistry`，并在设置中心可视化管理。
 
 ### 5.2 策略引擎
 
@@ -92,7 +94,7 @@
 
 ```ts
 // 插件调用示例
-const stream = await ai.invoke('text.chat', {
+const stream = await intelligence.invoke('text.chat', {
   messages: history,
   context: {
     source: 'translation-flow',
@@ -111,11 +113,11 @@ for await (const chunk of stream) {
 
 ## 7. 实施计划
 
-1. **[ ] 能力描述体系**: 设计 `AiCapabilityRegistry` 与能力定义规范。
-2. **[ ] Provider 接入框架**: 搭建统一 Provider SDK，接入至少 3 家供应商。
-3. **[ ] 策略引擎**: 实现 RuleBased 与 Adaptive 基础策略 + 配置界面。
-4. **[ ] SDK 封装**: 提供 `ai.invoke`、语法糖方法、类型定义。
-5. **[ ] 观测 & 计费**: 对接日志、指标、配额，完善审计与告警。
+1. **[x] 能力描述体系**: 设计 `IntelligenceCapabilityRegistry` 与能力定义规范。 ✅
+2. **[x] Provider 接入框架**: 搭建统一 Provider SDK，已接入 5 家供应商 (OpenAI, Anthropic, DeepSeek, Siliconflow, Local)。 ✅
+3. **[x] 策略引擎**: 实现 RuleBased 与 Adaptive 基础策略 + 配置界面。 ✅
+4. **[x] SDK 封装**: 提供 `intelligence.invoke`、语法糖方法、类型定义。 ✅
+5. **[ ] 观测 & 计费**: 对接日志、指标、配额，完善审计与告警。 (进行中)
 6. **[ ] Demo & 文档**: 构建示例插件，提供最佳实践与安全指南。
 
 ## 8. 风险与待决问题
@@ -134,7 +136,7 @@ for await (const chunk of stream) {
 
 ## 10. 成功指标
 
-- 接入统一接口的插件数量 ≥ 10，调用成功率 ≥ 98%。
+- 接入统一接口的插件数量 ≥ 10，调用成功率 ≥ 98%。 (目标)
 - 模型调用平均成本降低 20%。
 - 开发接入效率提升（从 2 天降至 0.5 天）。
 
