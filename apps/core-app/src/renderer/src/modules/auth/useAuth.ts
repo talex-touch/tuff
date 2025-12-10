@@ -123,13 +123,6 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
       && 'id' in candidateSession
       && !!candidateSession.id
 
-  console.log('updateAuthState resolved state:', {
-    user: candidateUser,
-    session: candidateSession,
-    isUserValid,
-    isSessionValid,
-  })
-
   const resolvedSessionId = isSessionValid ? (candidateSession as { id: string }).id : null
 
   authState.isLoaded = true
@@ -199,15 +192,6 @@ async function initializeAuth() {
     }
 
     eventListenerCleanup = clerk.addListener((resources: ClerkResourceSnapshot) => {
-      console.log('Clerk auth resources emitted:', resources)
-      console.log('Clerk object structure:', {
-        hasUser: 'user' in clerk,
-        hasSession: 'session' in clerk,
-        userType: typeof clerk.user,
-        sessionType: typeof clerk.session,
-        clerkKeys: Object.keys(clerk),
-      })
-
       updateAuthState(resources)
     })
 

@@ -107,6 +107,16 @@ abstract class BaseModule {
 ### Plugin System
 Plugins are loaded from the user data directory at runtime, not bundled with the application.
 
+**Plugin Three-Layer Architecture**:
+
+| Layer | English Name | Chinese Name | File | Description |
+|-------|--------------|--------------|------|-------------|
+| Declaration | **Manifest** | **清单文件** | `manifest.json` | Plugin metadata, feature declarations, permission config |
+| Script | **Prelude** | **先导脚本** | `index.js` | Lightweight entry, capability registration, callback handling |
+| Display | **Surface** | **展面** | `attachUIView` | Heavy UI rendering (WebContents) |
+
+**Loading Flow**: Manifest → Prelude → (on-demand) Surface
+
 **Plugin Architecture:**
 - Manifest-driven: Each plugin has `manifest.json` defining features, metadata, and permissions
 - Features can be triggered via CoreBox search interface
@@ -310,7 +320,7 @@ This package is shared between the main app, plugins, and published to npm for e
 - Node.js version: 22.16.0+ (enforced by pnpm preinstall hook and Volta)
 - Uses Electron 37.2.4+ with Vue 3.5.18+
 - Development uses hot-reloading with process cleanup via DevProcessManager
-- Plugin development supports live reloading when manifest.json or main files change
+- Plugin development supports live reloading when Manifest (`manifest.json`) or Prelude (`index.js`) files change
 - CoreBox positioning is screen-aware and adapts to multi-monitor setups
 - Database uses Drizzle ORM with LibSQL for type-safe queries
 - Logging via log4js with structured namespaces, timestamps, and colored output

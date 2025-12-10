@@ -1,5 +1,6 @@
 <script lang="ts" name="PluginList" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
+import { computed, ref, watch } from 'vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 
 const props = defineProps<{

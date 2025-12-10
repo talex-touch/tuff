@@ -1,5 +1,5 @@
 <script lang="ts" name="TouchMenuItem" setup>
-import { onMounted, onUnmounted } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
