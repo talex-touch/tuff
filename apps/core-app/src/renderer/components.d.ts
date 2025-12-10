@@ -14,6 +14,9 @@ declare module 'vue' {
   export interface GlobalComponents {
     ActionPanel: typeof import('./src/components/render/ActionPanel.vue')['default']
     ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
+    AgentDetail: typeof import('./src/components/intelligence/agents/AgentDetail.vue')['default']
+    AgentItem: typeof import('./src/components/intelligence/agents/AgentItem.vue')['default']
+    AgentsList: typeof import('./src/components/intelligence/agents/AgentsList.vue')['default']
     AgreementTemplate: typeof import('./src/components/addon/AgreementTemplate.vue')['default']
     AISDKCapabilityDetails: typeof import('./src/components/intelligence/capabilities/AISDKCapabilityDetails.vue')['default']
     AppLogo: typeof import('./src/components/icon/AppLogo.vue')['default']
@@ -230,6 +233,9 @@ declare module 'vue' {
 declare global {
   const ActionPanel: typeof import('./src/components/render/ActionPanel.vue')['default']
   const ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
+  const AgentDetail: typeof import('./src/components/intelligence/agents/AgentDetail.vue')['default']
+  const AgentItem: typeof import('./src/components/intelligence/agents/AgentItem.vue')['default']
+  const AgentsList: typeof import('./src/components/intelligence/agents/AgentsList.vue')['default']
   const AgreementTemplate: typeof import('./src/components/addon/AgreementTemplate.vue')['default']
   const AISDKCapabilityDetails: typeof import('./src/components/intelligence/capabilities/AISDKCapabilityDetails.vue')['default']
   const AppLogo: typeof import('./src/components/icon/AppLogo.vue')['default']

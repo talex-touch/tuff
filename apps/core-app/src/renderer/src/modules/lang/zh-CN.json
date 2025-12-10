@@ -636,7 +636,17 @@
     "total_completed": "总完成",
     "total_failed": "总失败",
     "no_tasks": "暂无下载任务",
+    "no_tasks_hint": "下载的文件会在这里显示",
     "no_tasks_in_category": "此分类暂无任务",
+    "messages": {
+      "paused": "任务已暂停",
+      "cancelled": "任务已取消",
+      "retrying": "正在重试",
+      "removed": "任务已移除",
+      "pauseFailed": "暂停失败",
+      "cancelFailed": "取消失败",
+      "retryFailed": "重试失败"
+    },
     "open_settings": "打开设置",
     "url": "下载地址",
     "destination": "保存位置",
@@ -1657,6 +1667,25 @@
       "expirationDescription": "缓存响应的保留时间",
       "expirationPlaceholder": "秒",
       "seconds": "秒"
+    },
+    "agents": {
+      "title": "智能体",
+      "search": "搜索智能体...",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "empty": "暂无智能体",
+      "select_hint": "选择一个智能体查看详情",
+      "description": "描述",
+      "capabilities": "能力",
+      "tools": "工具",
+      "active": "活跃",
+      "inactive": "未激活",
+      "quick_execute": "快速执行",
+      "input_placeholder": "输入任务指令...",
+      "execute": "执行",
+      "result": "执行结果",
+      "task_success": "任务执行成功",
+      "task_failed": "任务执行失败"
     }
   },
   "Intelligence": {

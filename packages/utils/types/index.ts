@@ -1,3 +1,4 @@
+export * from './agent'
 export * from './division-box'
 export * from './flow'
 export * from './intelligence'

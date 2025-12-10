@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Check, Clock, Close, Download, Loading, Setting } from '@element-plus/icons-vue'
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
-import DownloadSettings from './DownloadSettings.vue'
 import DownloadTaskItem from './DownloadTask.vue'
+
+const { t } = useI18n()
 
 const {
   downloadTasks,
@@ -14,164 +15,100 @@ const {
   pauseTask: pauseTaskHook,
   resumeTask: resumeTaskHook,
   cancelTask: cancelTaskHook,
-  updateConfig: updateConfigHook,
   formatSpeed,
 } = useDownloadCenter()
 
-// Remove unused variables from destructuring if needed
-
-const settingsVisible = ref(false)
-
-function openSettings() {
-  settingsVisible.value = true
-}
+const hasActiveTasks = computed(() => taskStats.value.downloading > 0 || taskStats.value.pending > 0)
 
 async function pauseTask(taskId: string) {
   try {
     await pauseTaskHook(taskId)
-    toast.success('任务已暂停')
+    toast.success(t('download.messages.paused'))
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    toast.error(`暂停任务失败: ${message}`)
+    toast.error(`${t('download.messages.pauseFailed')}: ${message}`)
   }
 }
 
-// 取消任务
 async function cancelTask(taskId: string) {
   try {
     await cancelTaskHook(taskId)
-    toast.success('任务已取消')
+    toast.success(t('download.messages.cancelled'))
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    toast.error(`取消任务失败: ${message}`)
+    toast.error(`${t('download.messages.cancelFailed')}: ${message}`)
   }
 }
 
-// 重试任务
 async function retryTask(taskId: string) {
   try {
     await resumeTaskHook(taskId)
-    toast.success('任务已重试')
+    toast.success(t('download.messages.retrying'))
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    toast.error(`重试任务失败: ${message}`)
+    toast.error(`${t('download.messages.retryFailed')}: ${message}`)
   }
 }
 
-// 移除任务
 function removeTask(_taskId: string) {
-  // 这里可以实现移除任务的逻辑
-  toast.success('任务已移除')
-}
-
-// 更新配置
-async function updateConfig(config: any) {
-  try {
-    await updateConfigHook(config)
-    toast.success('配置已更新')
-  }
-  catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`更新配置失败: ${message}`)
-  }
+  toast.success(t('download.messages.removed'))
 }
 </script>
 
 <template>
   <div class="download-center">
-    <!-- 头部 -->
-    <div class="download-center-header">
-      <div class="header-left">
-        <h2 class="title">
-          <el-icon><Download /></el-icon>
-          {{ $t('download.title') }}
-        </h2>
-        <div class="stats">
-          <span class="stat-item">
-            {{ $t('download.downloading') }} ({{ taskStats.downloading }})
-          </span>
-          <span class="stat-item"> {{ $t('download.waiting') }} ({{ taskStats.pending }}) </span>
-          <span class="stat-item">
-            {{ $t('download.completed') }} ({{ taskStats.completed }})
-          </span>
-          <span class="stat-item"> {{ $t('download.failed') }} ({{ taskStats.failed }}) </span>
+    <!-- 统计卡片 -->
+    <div class="stats-grid">
+      <div class="stat-card speed" :class="{ active: hasActiveTasks }">
+        <div class="stat-icon">
+          <i class="i-carbon-arrow-down" />
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ formatSpeed(currentDownloadSpeed) }}</div>
+          <div class="stat-label">{{ $t('download.current_speed') }}</div>
         </div>
       </div>
-      <div class="header-right">
-        <el-button type="primary" @click="openSettings">
-          <el-icon><Setting /></el-icon>
-          {{ $t('download.settings') }}
-        </el-button>
+      <div class="stat-card">
+        <div class="stat-icon downloading">
+          <i class="i-carbon-in-progress" />
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ taskStats.downloading }}</div>
+          <div class="stat-label">{{ $t('download.active_downloads') }}</div>
+        </div>
       </div>
-    </div>
-
-    <!-- 下载统计 -->
-    <div class="download-stats">
-      <el-row :gutter="16">
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-content">
-              <div class="stat-value">
-                {{ formatSpeed(currentDownloadSpeed) }}
-              </div>
-              <div class="stat-label">
-                {{ $t('download.current_speed') }}
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-content">
-              <div class="stat-value">
-                {{ taskStats.downloading }}
-              </div>
-              <div class="stat-label">
-                {{ $t('download.active_downloads') }}
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-content">
-              <div class="stat-value">
-                {{ taskStats.completed }}
-              </div>
-              <div class="stat-label">
-                {{ $t('download.total_completed') }}
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="stat-card">
-            <div class="stat-card">
-              <div class="stat-content">
-                <div class="stat-value">
-                  {{ taskStats.failed }}
-                </div>
-                <div class="stat-label">
-                  {{ $t('download.total_failed') }}
-                </div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
+      <div class="stat-card">
+        <div class="stat-icon completed">
+          <i class="i-carbon-checkmark-filled" />
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ taskStats.completed }}</div>
+          <div class="stat-label">{{ $t('download.total_completed') }}</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon failed">
+          <i class="i-carbon-warning-filled" />
+        </div>
+        <div class="stat-info">
+          <div class="stat-value">{{ taskStats.failed }}</div>
+          <div class="stat-label">{{ $t('download.total_failed') }}</div>
+        </div>
+      </div>
     </div>
 
     <!-- 下载任务列表 -->
     <div class="download-tasks">
       <!-- 进行中的任务 -->
       <div v-if="tasksByStatus.downloading.length > 0" class="task-section">
-        <h3 class="section-title">
-          <el-icon><Loading /></el-icon>
-          {{ $t('download.downloading') }} ({{ tasksByStatus.downloading.length }})
-        </h3>
+        <div class="section-header">
+          <i class="i-carbon-in-progress section-icon downloading" />
+          <span class="section-title">{{ $t('download.downloading') }}</span>
+          <span class="section-count">{{ tasksByStatus.downloading.length }}</span>
+        </div>
         <div class="task-list">
           <DownloadTaskItem
             v-for="task in tasksByStatus.downloading"
@@ -185,10 +122,11 @@ async function updateConfig(config: any) {
 
       <!-- 等待中的任务 -->
       <div v-if="tasksByStatus.pending.length > 0" class="task-section">
-        <h3 class="section-title">
-          <el-icon><Clock /></el-icon>
-          {{ $t('download.waiting') }} ({{ tasksByStatus.pending.length }})
-        </h3>
+        <div class="section-header">
+          <i class="i-carbon-time section-icon pending" />
+          <span class="section-title">{{ $t('download.waiting') }}</span>
+          <span class="section-count">{{ tasksByStatus.pending.length }}</span>
+        </div>
         <div class="task-list">
           <DownloadTaskItem
             v-for="task in tasksByStatus.pending"
@@ -202,10 +140,11 @@ async function updateConfig(config: any) {
 
       <!-- 已完成的任务 -->
       <div v-if="tasksByStatus.completed.length > 0" class="task-section">
-        <h3 class="section-title">
-          <el-icon><Check /></el-icon>
-          {{ $t('download.completed') }} ({{ tasksByStatus.completed.length }})
-        </h3>
+        <div class="section-header">
+          <i class="i-carbon-checkmark-filled section-icon completed" />
+          <span class="section-title">{{ $t('download.completed') }}</span>
+          <span class="section-count">{{ tasksByStatus.completed.length }}</span>
+        </div>
         <div class="task-list">
           <DownloadTaskItem
             v-for="task in tasksByStatus.completed"
@@ -218,10 +157,11 @@ async function updateConfig(config: any) {
 
       <!-- 失败的任务 -->
       <div v-if="tasksByStatus.failed.length > 0" class="task-section">
-        <h3 class="section-title">
-          <el-icon><Close /></el-icon>
-          {{ $t('download.failed') }} ({{ tasksByStatus.failed.length }})
-        </h3>
+        <div class="section-header">
+          <i class="i-carbon-warning-filled section-icon failed" />
+          <span class="section-title">{{ $t('download.failed') }}</span>
+          <span class="section-count">{{ tasksByStatus.failed.length }}</span>
+        </div>
         <div class="task-list">
           <DownloadTaskItem
             v-for="task in tasksByStatus.failed"
@@ -235,139 +175,195 @@ async function updateConfig(config: any) {
 
       <!-- 空状态 -->
       <div v-if="downloadTasks.length === 0" class="empty-state">
-        <el-empty :description="$t('download.no_tasks')">
-          <el-button type="primary" @click="openSettings">
-            {{ $t('download.open_settings') }}
-          </el-button>
-        </el-empty>
+        <div class="empty-icon">
+          <i class="i-carbon-cloud-download" />
+        </div>
+        <div class="empty-text">{{ $t('download.no_tasks') }}</div>
+        <div class="empty-hint">{{ $t('download.no_tasks_hint') }}</div>
       </div>
     </div>
-
-    <!-- 设置对话框 -->
-    <DownloadSettings v-model:visible="settingsVisible" @update-config="updateConfig" />
   </div>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
 .download-center {
-  padding: 20px;
-  max-width: 1200px;
+  padding: 24px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
-.download-center-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.stats {
-  display: flex;
-  gap: 16px;
-  font-size: 14px;
-  color: var(--el-text-color-regular);
-}
-
-.stat-item {
-  padding: 4px 8px;
-  background: var(--el-bg-color-page);
-  border-radius: 4px;
-}
-
-.download-stats {
+// Stats Grid
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   margin-bottom: 24px;
 }
 
 .stat-card {
-  text-align: center;
-}
-
-.stat-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 16px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--el-border-color);
+  }
+
+  &.speed.active {
+    background: rgba(var(--el-color-primary-rgb), 0.08);
+    border-color: var(--el-color-primary-light-5);
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    background: var(--el-fill-color);
+    color: var(--el-text-color-secondary);
+
+    &.downloading {
+      background: rgba(var(--el-color-primary-rgb), 0.1);
+      color: var(--el-color-primary);
+    }
+
+    &.completed {
+      background: rgba(var(--el-color-success-rgb), 0.1);
+      color: var(--el-color-success);
+    }
+
+    &.failed {
+      background: rgba(var(--el-color-danger-rgb), 0.1);
+      color: var(--el-color-danger);
+    }
+  }
+
+  .stat-info {
+    flex: 1;
+    min-width: 0;
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--el-text-color-primary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      margin-top: 2px;
+    }
+  }
 }
 
-.stat-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--el-color-primary);
-  margin-bottom: 8px;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: var(--el-text-color-regular);
-}
-
+// Task Sections
 .download-tasks {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .task-section {
-  background: var(--el-bg-color);
-  border-radius: 8px;
-  padding: 20px;
-  border: 1px solid var(--el-border-color-light);
+  background: var(--el-fill-color-lighter);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+
+    .section-icon {
+      font-size: 16px;
+
+      &.downloading { color: var(--el-color-primary); }
+      &.pending { color: var(--el-color-warning); }
+      &.completed { color: var(--el-color-success); }
+      &.failed { color: var(--el-color-danger); }
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--el-text-color-primary);
+    }
+
+    .section-count {
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      background: var(--el-fill-color);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+  }
+
+  .task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 16px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.task-list {
+// Empty State
+.empty-state {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  color: var(--el-text-color-secondary);
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+
+  .empty-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--el-text-color-primary);
+    margin-bottom: 8px;
+  }
+
+  .empty-hint {
+    font-size: 13px;
+  }
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-}
-
-/* 响应式设计 */
+// Responsive
 @media (max-width: 768px) {
   .download-center {
     padding: 16px;
   }
 
-  .download-center-header {
-    flex-direction: column;
-    gap: 16px;
-    align-items: flex-start;
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
-  .stats {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
+  .stat-card {
+    padding: 12px;
 
-  .download-stats .el-col {
-    margin-bottom: 16px;
+    .stat-icon {
+      width: 32px;
+      height: 32px;
+      font-size: 16px;
+    }
+
+    .stat-info .stat-value {
+      font-size: 16px;
+    }
   }
 }
 </style>

@@ -4,7 +4,7 @@
 
 ## 概述
 
-Intelligence Agents 是 Talex Touch 的智能自动化功能模块，基于现有 IntelligenceSDK 扩展，提供可编程的智能代理服务。
+Intelligence Agents 是 Talex Touch 的智能自动化功能模块，基于现有 IntelligenceSDK 扩展，提供可编程的智能智能体服务。
 
 ---
 
@@ -14,16 +14,16 @@ Intelligence Agents 是 Talex Touch 的智能自动化功能模块，基于现�
 ```
 modules/ai/agents/
 ├── index.ts                    # 模块入口
-├── agent-manager.ts            # 代理管理器
-├── agent-registry.ts           # 代理注册表
+├── agent-manager.ts            # 智能体管理器
+├── agent-registry.ts           # 智能体注册表
 ├── agent-executor.ts           # 任务执行器
 ├── agent-scheduler.ts          # 任务调度器
-├── agents/                     # 内置代理
-│   ├── file-agent.ts           # 文件管理代理
-│   ├── search-agent.ts         # 搜索增强代理
-│   ├── data-agent.ts           # 数据处理代理
-│   └── workflow-agent.ts       # 工作流代理
-├── tools/                      # 代理工具
+├── agents/                     # 内置智能体
+│   ├── file-agent.ts           # 文件管理智能体
+│   ├── search-agent.ts         # 搜索增强智能体
+│   ├── data-agent.ts           # 数据处理智能体
+│   └── workflow-agent.ts       # 工作流智能体
+├── tools/                      # 智能体工具
 │   ├── tool-registry.ts        # 工具注册
 │   ├── file-tools.ts           # 文件操作工具
 │   ├── search-tools.ts         # 搜索工具
@@ -100,7 +100,7 @@ export class AgentManager {
   private executor: AgentExecutor
   private scheduler: AgentScheduler
 
-  // 代理注册
+  // 智能体注册
   registerAgent(descriptor: AgentDescriptor, impl: AgentImpl): void
   unregisterAgent(agentId: string): void
   getAgent(agentId: string): Agent | null
@@ -155,9 +155,9 @@ export class ToolRegistry {
 
 ---
 
-## 3. 内置代理
+## 3. 内置智能体
 
-### 3.1 FileAgent - 文件管理代理
+### 3.1 FileAgent - 文件管理智能体
 **能力**:
 - 文件搜索与筛选
 - 批量重命名
@@ -172,7 +172,7 @@ export class ToolRegistry {
 - `file.delete` - 删除文件
 - `file.organize` - 自动整理
 
-### 3.2 SearchAgent - 搜索增强代理
+### 3.2 SearchAgent - 搜索增强智能体
 **能力**:
 - 语义搜索
 - 搜索结果排序
@@ -185,7 +185,7 @@ export class ToolRegistry {
 - `search.suggest` - 生成建议
 - `search.rerank` - 结果重排
 
-### 3.3 DataAgent - 数据处理代理
+### 3.3 DataAgent - 数据处理智能体
 **能力**:
 - 数据提取与转换
 - 格式转换
@@ -198,7 +198,7 @@ export class ToolRegistry {
 - `data.format` - 格式化输出
 - `data.analyze` - 简单分析
 
-### 3.4 WorkflowAgent - 工作流代理
+### 3.4 WorkflowAgent - 工作流智能体
 **能力**:
 - 多步骤任务编排
 - 条件分支处理
@@ -280,7 +280,7 @@ class FileAgent implements AgentImpl {
 
 ## 5. IPC 通道
 
-### 5.1 代理管理
+### 5.1 智能体管理
 ```typescript
 // Renderer → Main
 'agents:list'              → AgentDescriptor[]
@@ -338,34 +338,68 @@ interface AgentPermissionRequest {
 
 ## 7. 实现计划
 
-### Phase 1: 基础框架 (v2.5.0) - 5天
-- [ ] **Day 1**: 类型定义 + AgentRegistry
-  - [ ] `packages/utils/types/agent.ts`
-  - [ ] `agent-registry.ts`
-- [ ] **Day 2**: AgentManager + Scheduler
-  - [ ] `agent-manager.ts`
-  - [ ] `agent-scheduler.ts`
-- [ ] **Day 3**: AgentExecutor + IntelligenceSDK 集成
-  - [ ] `agent-executor.ts`
-  - [ ] LLM 调用封装
-- [ ] **Day 4**: ToolRegistry + 基础工具
-  - [ ] `tools/tool-registry.ts`
-  - [ ] `tools/file-tools.ts` (基础版)
-- [ ] **Day 5**: IPC 通道 + 基础 UI
-  - [ ] IPC handlers
-  - [ ] 代理列表界面
+### Phase 1: 基础框架 (v2.5.0) - 5天 🟢 大部分完成
+- [x] **Day 1**: 类型定义 + AgentRegistry ✅ (2025-12-10)
+  - [x] `packages/utils/types/agent.ts` - 完整类型定义 (300+ 行)
+  - [x] `agent-registry.ts` - 智能体注册表
+- [x] **Day 2**: AgentManager + Scheduler ✅ (2025-12-10)
+  - [x] `agent-scheduler.ts` - 优先级任务调度
+  - [x] `agent-manager.ts` - 智能体管理器
+- [x] **Day 3**: AgentExecutor + IntelligenceSDK 集成 ✅ (2025-12-10)
+  - [x] `agent-executor.ts` - 任务执行器
+  - [x] LLM 调用封装 (IntelligenceSDKInterface)
+- [x] **Day 4**: ToolRegistry + 基础工具 ✅ (2025-12-10)
+  - [x] `tool-registry.ts` - 工具注册表
+  - [x] `tools/file-tools.ts` - 文件操作工具 (8个工具)
+- [x] **Day 5**: IPC 通道 + UI ✅ (2025-12-10)
+  - [x] `agent-channels.ts` - IPC handlers
+  - [x] 智能体列表界面 - `IntelligenceAgentsPage.vue`
 
-### Phase 2: 核心代理 (v2.6.0) - 8天
+**已实现文件**:
+```
+packages/utils/types/agent.ts           # 类型定义 (+300 行)
+modules/ai/agents/
+├── index.ts                            # 模块入口
+├── agent-registry.ts                   # 智能体注册表
+├── agent-scheduler.ts                  # 任务调度器
+├── agent-executor.ts                   # 任务执行器
+├── agent-manager.ts                    # 智能体管理器
+├── agent-channels.ts                   # IPC 通道
+├── tool-registry.ts                    # 工具注册表
+└── tools/
+    ├── index.ts                        # 工具入口
+    └── file-tools.ts                   # 文件工具 (8个)
+
+renderer/views/base/intelligence/
+└── IntelligenceAgentsPage.vue          # 智能体列表页面
+
+renderer/components/intelligence/agents/
+├── AgentsList.vue                       # 智能体列表组件
+├── AgentItem.vue                        # 智能体列表项
+└── AgentDetail.vue                      # 智能体详情组件
+```
+
+**已实现工具**:
+- `file.read` - 读取文件
+- `file.write` - 写入文件
+- `file.exists` - 检查文件是否存在
+- `file.list` - 列出目录内容
+- `file.delete` - 删除文件
+- `file.copy` - 复制文件
+- `file.move` - 移动/重命名文件
+- `file.info` - 获取文件信息
+
+### Phase 2: 核心智能体 (v2.6.0) - 8天
 - [ ] **Day 1-2**: FileAgent 完整实现
 - [ ] **Day 3-4**: SearchAgent + 语义搜索
 - [ ] **Day 5-6**: DataAgent + 格式转换
-- [ ] **Day 7-8**: 代理市场 API + 文档
+- [ ] **Day 7-8**: 智能体市场 API + 文档
 
 ### Phase 3: 高级功能 (v2.7.0) - 10天
 - [ ] **Day 1-3**: WorkflowAgent + 编辑器
 - [ ] **Day 4-6**: 记忆系统 + 上下文管理
-- [ ] **Day 7-8**: 用户自定义代理
-- [ ] **Day 9-10**: 代理协作 + 测试
+- [ ] **Day 7-8**: 用户自定义智能体
+- [ ] **Day 9-10**: 智能体协作 + 测试
 
 ---
 
@@ -373,9 +407,9 @@ interface AgentPermissionRequest {
 
 | 指标 | 目标值 |
 |------|--------|
-| 代理执行成功率 | > 95% |
+| 智能体执行成功率 | > 95% |
 | 任务完成时间优化 | ≥ 50% |
-| 代理响应时间 | < 2s |
+| 智能体响应时间 | < 2s |
 | 用户自动化采用率 | > 30% |
 | 工具调用成功率 | > 98% |
 

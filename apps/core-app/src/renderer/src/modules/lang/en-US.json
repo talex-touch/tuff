@@ -636,7 +636,17 @@
     "total_completed": "Total Completed",
     "total_failed": "Total Failed",
     "no_tasks": "No download tasks",
+    "no_tasks_hint": "Downloaded files will appear here",
     "no_tasks_in_category": "No tasks in this category",
+    "messages": {
+      "paused": "Task paused",
+      "cancelled": "Task cancelled",
+      "retrying": "Retrying task",
+      "removed": "Task removed",
+      "pauseFailed": "Failed to pause",
+      "cancelFailed": "Failed to cancel",
+      "retryFailed": "Failed to retry"
+    },
     "open_settings": "Open Settings",
     "url": "Download URL",
     "destination": "Save Location",
@@ -1665,6 +1675,25 @@
       "expirationDescription": "How long to keep cached responses",
       "expirationPlaceholder": "seconds",
       "seconds": "seconds"
+    },
+    "agents": {
+      "title": "Agents",
+      "search": "Search agents...",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "empty": "No agents available",
+      "select_hint": "Select an agent to view details",
+      "description": "Description",
+      "capabilities": "Capabilities",
+      "tools": "Tools",
+      "active": "Active",
+      "inactive": "Inactive",
+      "quick_execute": "Quick Execute",
+      "input_placeholder": "Enter task instructions...",
+      "execute": "Execute",
+      "result": "Result",
+      "task_success": "Task executed successfully",
+      "task_failed": "Task execution failed"
     }
   },
   "Intelligence": {
