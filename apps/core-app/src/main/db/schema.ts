@@ -561,11 +561,11 @@ export const intelligenceQuotas = sqliteTable(
 /**
  * Intelligence 用量统计表
  * 存储每个调用者的累计用量，定期从 audit_logs 聚合
+ * 使用复合主键 (caller_id, caller_type, period)
  */
 export const intelligenceUsageStats = sqliteTable(
   'intelligence_usage_stats',
   {
-    id: integer('id').primaryKey({ autoIncrement: true }),
     callerId: text('caller_id').notNull(),
     callerType: text('caller_type', { enum: ['plugin', 'user', 'system'] }).notNull(),
     period: text('period').notNull(), // 'minute:2025-12-10T12:30', 'day:2025-12-10', 'month:2025-12'

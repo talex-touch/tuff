@@ -1640,12 +1640,18 @@
     "usage": {
       "title": "用量统计",
       "description": "查看 AI 调用用量和成本统计",
+      "chartTitle": "用量趋势",
+      "chartDescription": "查看过去 14 天的 AI 调用趋势图表",
       "today": "今日",
       "thisMonth": "本月",
       "requests": "请求数",
       "tokens": "Token 用量",
       "cost": "成本",
-      "successRate": "成功率"
+      "successRate": "成功率",
+      "success": "成功",
+      "failure": "失败",
+      "promptTokens": "输入 Token",
+      "completionTokens": "输出 Token"
     },
     "audit": {
       "title": "审计设置",

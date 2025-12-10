@@ -1648,12 +1648,18 @@
     "usage": {
       "title": "Usage Statistics",
       "description": "View AI usage and cost statistics",
+      "chartTitle": "Usage Trend",
+      "chartDescription": "View AI usage trend over the last 14 days",
       "today": "Today",
       "thisMonth": "This Month",
       "requests": "Requests",
       "tokens": "Tokens",
       "cost": "Cost",
-      "successRate": "Success Rate"
+      "successRate": "Success Rate",
+      "success": "Success",
+      "failure": "Failure",
+      "promptTokens": "Prompt Tokens",
+      "completionTokens": "Completion Tokens"
     },
     "audit": {
       "title": "Audit Settings",

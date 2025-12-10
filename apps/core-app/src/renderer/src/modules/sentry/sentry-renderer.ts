@@ -19,6 +19,12 @@ export async function initSentryRenderer(): Promise<void> {
     return
   }
 
+  // Skip Sentry in development mode to avoid CSP warnings
+  if (import.meta.env.DEV) {
+    console.debug('[SentryRenderer] Sentry disabled in development mode')
+    return
+  }
+
   try {
     // Check if Sentry is enabled
     const config = (await touchChannel.send('sentry:get-config')) as {

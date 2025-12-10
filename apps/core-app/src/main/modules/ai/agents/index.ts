@@ -20,3 +20,6 @@ export { toolRegistry } from './tool-registry'
 
 // Tools
 export { registerBuiltinTools } from './tools'
+
+// Built-in Agents
+export { registerBuiltinAgents, registerDataAgent, registerFileAgent, registerSearchAgent } from './builtin'

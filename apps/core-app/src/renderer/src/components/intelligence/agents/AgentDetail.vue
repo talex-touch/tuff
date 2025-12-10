@@ -1,16 +1,15 @@
 <script lang="ts" name="AgentDetail" setup>
+import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
+import { ElMessage } from 'element-plus'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
-import { useChannel } from '~/modules/hooks/useChannel'
-import { ElMessage } from 'element-plus'
+import { touchChannel } from '~/modules/channel/channel-core'
 
 const props = defineProps<{
   agent: AgentDescriptor
 }>()
 
 const { t } = useI18n()
-const { send } = useChannel()
 
 const taskInput = ref('')
 const executing = ref(false)
@@ -29,7 +28,7 @@ async function executeTask() {
       input: { query: taskInput.value },
     }
 
-    const result = await send('agents:execute-immediate', task)
+    const result = await touchChannel.send('agents:execute-immediate', task)
     taskResult.value = result
 
     if (result?.success) {

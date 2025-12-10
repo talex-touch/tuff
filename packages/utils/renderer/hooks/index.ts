@@ -1,6 +1,7 @@
 export * from './arg-mapper'
 export * from './initialize'
 export * from './performance'
+export * from './use-agent-market'
 export * from './use-channel'
 export * from './use-intelligence'
 export * from './use-intelligence-stats'
