@@ -243,6 +243,8 @@
     "install": "安装",
     "installed": "已安装",
     "installing": "安装中...",
+    "upgrade": "升级",
+    "upgradeAvailable": "有新版本",
     "officialBadge": "官方",
     "lastUpdated": "上次更新 {time}",
     "categories": {
@@ -284,9 +286,9 @@
     },
     "installation": {
       "successTitle": "安装完成",
-      "successMessage": "插件“{name}”已准备就绪。",
+      "successMessage": "插件「{name}」已准备就绪。",
       "failureTitle": "安装失败",
-      "failureMessage": "未能安装“{name}”：{reason}",
+      "failureMessage": "未能安装「{name}」：{reason}",
       "browserNotSupported": "请在桌面客户端中安装官方插件。",
       "status": {
         "queued": "排队中",
@@ -299,10 +301,21 @@
         "cancelled": "已取消"
       },
       "confirmTitle": "安装确认",
-      "confirmMessage": "插件“{name}”来自非官方来源，确定继续安装吗？",
+      "confirmMessage": "插件「{name}」来自非官方来源，确定继续安装吗？",
       "confirmInstall": "继续安装",
       "confirmReject": "取消",
       "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？"
+    },
+    "upgradeDialog": {
+      "confirmTitle": "确认更新",
+      "confirmMessage": "即将更新插件「{name}」。\n\n更新将会：\n• 停止当前运行的插件\n• 删除旧版本并安装新版本\n• 更新完成后自动重新启用",
+      "confirmUpgrade": "开始更新",
+      "confirmCancel": "取消",
+      "successTitle": "更新完成",
+      "successMessage": "插件「{name}」已更新到最新版本。",
+      "failureTitle": "更新失败",
+      "activeUITitle": "无法更新",
+      "activeUIMessage": "插件「{name}」正在使用中（{ui}）。\n\n请先关闭插件窗口后再尝试更新。"
     },
     "empty": {
       "title": "未找到插件",

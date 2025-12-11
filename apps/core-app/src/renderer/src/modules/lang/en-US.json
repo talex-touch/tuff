@@ -243,6 +243,8 @@
     "install": "Install",
     "installed": "Installed",
     "installing": "Installing...",
+    "upgrade": "Upgrade",
+    "upgradeAvailable": "Update available",
     "officialBadge": "Official",
     "lastUpdated": "Last updated {time}",
     "categories": {
@@ -303,6 +305,17 @@
       "confirmInstall": "Install",
       "confirmReject": "Cancel",
       "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?"
+    },
+    "upgradeDialog": {
+      "confirmTitle": "Confirm Update",
+      "confirmMessage": "About to update plugin \"{name}\".\n\nThis will:\n• Stop the currently running plugin\n• Remove old version and install new version\n• Automatically re-enable after update",
+      "confirmUpgrade": "Update",
+      "confirmCancel": "Cancel",
+      "successTitle": "Update Complete",
+      "successMessage": "Plugin \"{name}\" has been updated to the latest version.",
+      "failureTitle": "Update Failed",
+      "activeUITitle": "Cannot Update",
+      "activeUIMessage": "Plugin \"{name}\" is currently in use ({ui}).\n\nPlease close the plugin window and try again."
     },
     "empty": {
       "title": "No plugins found",

@@ -1,10 +1,12 @@
 import type { StandardChannelData } from '@talex-touch/utils/channel'
 import type { PluginInstallConfirmRequest, PluginInstallConfirmResponse, PluginInstallProgressEvent, PluginInstallRequest } from '@talex-touch/utils/plugin'
 import type { PluginInstaller, PreparedPluginInstall } from './plugin-installer'
+import type { ResolverInstallOptions } from './plugin-resolver'
 import crypto from 'node:crypto'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../../core/channel-core'
 import { extractSignatureInfo, verifyPackageSignature } from './signature-verifier'
+import { checkPluginActiveUI } from './plugin-ui-utils'
 
 interface InstallTask {
   id: string
@@ -17,6 +19,10 @@ interface InstallTask {
   officialActual?: boolean
   /** Whether the user already confirmed installation on the client side */
   trustedHint?: boolean
+  /** Force update existing plugin */
+  forceUpdate?: boolean
+  /** Auto re-enable plugin after update */
+  autoReEnable?: boolean
 }
 
 const PROGRESS_EVENT = 'plugin:install-progress'
@@ -82,6 +88,10 @@ export class PluginInstallQueue {
           typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined,
         trustedHint:
           typeof request.metadata?.trusted === 'boolean' ? request.metadata.trusted : undefined,
+        forceUpdate:
+          typeof request.metadata?.forceUpdate === 'boolean' ? request.metadata.forceUpdate : undefined,
+        autoReEnable:
+          typeof request.metadata?.autoReEnable === 'boolean' ? request.metadata.autoReEnable : undefined,
       }
 
       this.queue.push(task)
@@ -122,6 +132,17 @@ export class PluginInstallQueue {
   private async runTask(task: InstallTask): Promise<void> {
     // const channel = genTouchChannel()
     try {
+      // Check for active UI views if this is an update
+      if (task.forceUpdate) {
+        const pluginName = extractClientString(task.clientMetadata, 'pluginName')
+        if (pluginName) {
+          const activeUIStatus = await checkPluginActiveUI(pluginName)
+          if (activeUIStatus.hasActiveUI) {
+            throw new Error(`PLUGIN_HAS_ACTIVE_UI:${activeUIStatus.description}`)
+          }
+        }
+      }
+
       const prepared = await this.installer.prepareInstall(task.request, {
         autoResolve: false,
         onDownloadProgress: (progress) => {
@@ -212,11 +233,26 @@ export class PluginInstallQueue {
 
   private buildInstallOptions(
     task: InstallTask,
-  ): { enforceProdMode: boolean } | undefined {
+  ): ResolverInstallOptions | undefined {
+    const options: ResolverInstallOptions = {}
+    let hasOptions = false
+
     if (this.shouldEnforceProdMode(task)) {
-      return { enforceProdMode: true }
+      options.enforceProdMode = true
+      hasOptions = true
     }
-    return undefined
+
+    if (task.forceUpdate) {
+      options.forceUpdate = true
+      hasOptions = true
+    }
+
+    if (task.autoReEnable) {
+      options.autoReEnable = true
+      hasOptions = true
+    }
+
+    return hasOptions ? options : undefined
   }
 
   private shouldEnforceProdMode(task: InstallTask): boolean {

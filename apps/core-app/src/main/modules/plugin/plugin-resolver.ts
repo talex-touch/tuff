@@ -15,6 +15,10 @@ export enum ResolverStatus {
 
 export interface ResolverInstallOptions {
   enforceProdMode?: boolean
+  /** Force update: stop existing plugin, remove, and reinstall */
+  forceUpdate?: boolean
+  /** Auto re-enable plugin after update (only applies if forceUpdate is true) */
+  autoReEnable?: boolean
 }
 
 export interface ResolverOptions {
@@ -61,22 +65,56 @@ export class PluginResolver {
   ): Promise<void> {
     console.log(`[PluginResolver] Installing plugin: ${manifest.name}`)
     const _target = path.join(pluginModule.filePath!, manifest.name)
+    const existingPlugin = fse.existsSync(_target)
+    let wasEnabled = false
 
-    if (fse.existsSync(_target)) {
-      return cb('plugin already exists')
+    // Handle existing plugin
+    if (existingPlugin) {
+      if (!options?.forceUpdate) {
+        return cb('plugin already exists')
+      }
+
+      // Stop and remove existing plugin for update
+      console.log(`[PluginResolver] Updating existing plugin: ${manifest.name}`)
+      try {
+        const existingPluginInstance = pluginModule.pluginManager?.getPluginByName(manifest.name)
+        if (existingPluginInstance) {
+          // Check if plugin was enabled before update
+          wasEnabled = existingPluginInstance.status === 4 || existingPluginInstance.status === 5 // ENABLED or ACTIVE
+
+          // Disable the plugin first
+          await existingPluginInstance.disable()
+
+          // Unload the plugin from manager
+          await pluginModule.pluginManager!.unloadPlugin(manifest.name)
+        }
+
+        // Remove old plugin files
+        await fse.remove(_target)
+        console.log(`[PluginResolver] Removed old plugin files: ${manifest.name}`)
+      } catch (e: any) {
+        console.error(`[PluginResolver] Failed to remove old plugin ${manifest.name}:`, e)
+        return cb(`Failed to remove old plugin: ${e.message}`, 'error')
+      }
     }
+
     await checkDirWithCreate(_target, true)
 
     try {
       await this.uncompress(this.filePath, _target)
       await this.applyInstallOptions(manifest, _target, options)
 
-      // const manifestPath = path.join(_target, 'key.talex')
-      // if (fse.existsSync(manifestPath)) {
-      //   await fse.rename(manifestPath, path.join(_target, 'manifest.json'))
-      // }
+      // Load the new plugin
+      await pluginModule.pluginManager!.loadPlugin(manifest.name)
 
-      pluginModule.pluginManager!.loadPlugin(manifest.name)
+      // Auto re-enable if requested and was previously enabled
+      if (options?.forceUpdate && options?.autoReEnable && wasEnabled) {
+        console.log(`[PluginResolver] Auto re-enabling plugin: ${manifest.name}`)
+        const newPluginInstance = pluginModule.pluginManager?.getPluginByName(manifest.name)
+        if (newPluginInstance) {
+          await newPluginInstance.enable()
+        }
+      }
 
       cb('success', 'success')
     }

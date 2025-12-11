@@ -19,7 +19,7 @@ import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { useMarketDetail } from '~/composables/market/useMarketDetail'
 import { useMarketReadme } from '~/composables/market/useMarketReadme'
-import { usePluginStore } from '~/stores/plugin'
+import { usePluginVersionStatus } from '~/composables/market/usePluginVersionStatus'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -28,9 +28,8 @@ const router = useRouter()
 const { plugins: officialPlugins, loading, loadMarketPlugins: loadOfficialPlugins } = useMarketData()
 const { handleInstall, getInstallTask } = useMarketInstall()
 
-// Check if plugin is installed locally
-const pluginStore = usePluginStore()
-const installedPluginNames = computed(() => new Set([...pluginStore.plugins.keys()]))
+// Plugin version status (for checking installed plugins and upgrade availability)
+const { usePluginStatus } = usePluginVersionStatus()
 
 const pluginId = computed(() => route.params.id as string)
 const activePlugin = computed<MarketPluginListItem | null>(() => {
@@ -39,14 +38,12 @@ const activePlugin = computed<MarketPluginListItem | null>(() => {
 
 const notFound = computed(() => !activePlugin.value && officialPlugins.value.length > 0)
 
-const { detailMeta } = useMarketDetail(activePlugin, t)
+/** Plugin version status (installed, upgrade available, etc.) */
+const pluginStatus = usePluginStatus(activePlugin)
+
+const { detailMeta } = useMarketDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
 const { readmeContent, readmeLoading, readmeError } = useMarketReadme(readmeUrl, t)
-
-/** Whether the current plugin is installed locally */
-const isInstalled = computed(() =>
-  activePlugin.value ? installedPluginNames.value.has(activePlugin.value.name) : false
-)
 
 /** Current installation task for this plugin */
 const installTask = computed(() =>
@@ -74,7 +71,9 @@ async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
 async function onInstall(): Promise<void> {
   if (!activePlugin.value) return
   const channel = await getRendererChannel()
-  await handleInstall(activePlugin.value, channel)
+  // Check if this is an upgrade
+  const isUpgrade = pluginStatus.value.hasUpgrade
+  await handleInstall(activePlugin.value, channel, isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined)
 }
 
 function goBack(): void {
@@ -125,7 +124,10 @@ onBeforeUnmount(() => {
         </div>
         <MarketInstallButton
           :plugin-name="activePlugin.name"
-          :is-installed="isInstalled"
+          :is-installed="pluginStatus.isInstalled"
+          :has-upgrade="pluginStatus.hasUpgrade"
+          :installed-version="pluginStatus.installedVersion"
+          :market-version="pluginStatus.marketVersion"
           :install-task="installTask"
           :mini="false"
           @install="onInstall"
@@ -153,7 +155,7 @@ onBeforeUnmount(() => {
           <div class="sidebar-card">
             <h4>{{ t('market.detailDialog.information') }}</h4>
             <div class="meta-list">
-              <div v-for="meta in detailMeta" :key="meta.label" class="meta-item">
+              <div v-for="meta in detailMeta" :key="meta.label" class="meta-item" :class="meta.highlight && `highlight-${meta.highlight}`">
                 <div class="meta-label">
                   <i :class="meta.icon" />
                   <span>{{ meta.label }}</span>
@@ -342,6 +344,27 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &.highlight-upgrade {
+    .meta-label {
+      color: var(--el-color-primary);
+      opacity: 1;
+    }
+    .meta-value {
+      color: var(--el-color-primary);
+      font-weight: 600;
+    }
+  }
+
+  &.highlight-installed {
+    .meta-label {
+      color: var(--el-color-success);
+      opacity: 0.8;
+    }
+    .meta-value {
+      color: var(--el-color-success);
+    }
   }
 }
 
