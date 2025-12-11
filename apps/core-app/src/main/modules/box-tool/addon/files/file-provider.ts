@@ -143,6 +143,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   readonly name = 'File Provider'
   readonly type = 'file' as const
   readonly supportedInputTypes = [TuffInputType.Text, TuffInputType.Files]
+  readonly priority = 'deferred' as const
+  readonly expectedDuration = 500
 
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<void> | null = null

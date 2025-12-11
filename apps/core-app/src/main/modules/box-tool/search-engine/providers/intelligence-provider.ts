@@ -57,6 +57,8 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
     TuffInputType.Files,
     TuffInputType.Html,
   ]
+  readonly priority = 'deferred' as const
+  readonly expectedDuration = 300
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const normalized = query.text?.trim() ?? ''
