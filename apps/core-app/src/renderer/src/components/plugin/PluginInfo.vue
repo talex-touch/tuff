@@ -37,7 +37,8 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 const loadingStates = ref({
   reload: false,
   openFolder: false,
-  uninstall: false
+  uninstall: false,
+  openDevTools: false
 })
 
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
@@ -95,6 +96,20 @@ async function handleOpenPluginFolder(): Promise<void> {
     console.error('Failed to open plugin folder:', error)
   } finally {
     loadingStates.value.openFolder = false
+  }
+}
+
+async function handleOpenDevTools(): Promise<void> {
+  if (!props.plugin || loadingStates.value.openDevTools) return
+
+  loadingStates.value.openDevTools = true
+  try {
+    await touchSdk.openPluginDevTools(props.plugin.name)
+  } catch (error) {
+    console.error('Failed to open plugin DevTools:', error)
+    toast.error(t('plugin.actions.openDevToolsFailed'))
+  } finally {
+    loadingStates.value.openDevTools = false
   }
 }
 
@@ -217,6 +232,15 @@ async function handleUninstallPlugin(): Promise<void> {
                 ? t('plugin.actions.opening')
                 : t('plugin.actions.openFolder')
             }}</span>
+          </div>
+          <div
+            class="action-item"
+            :class="{ disabled: loadingStates.openDevTools }"
+            @click="handleOpenDevTools"
+          >
+            <i v-if="!loadingStates.openDevTools" class="i-ri-bug-line" />
+            <i v-else class="i-ri-loader-4-line animate-spin" />
+            <span>{{ t('plugin.actions.openDevTools') }}</span>
           </div>
           <div
             class="action-item danger"
