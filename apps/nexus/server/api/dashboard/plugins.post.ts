@@ -128,8 +128,15 @@ export default defineEventHandler(async (event) => {
     if (err && typeof err === 'object' && 'statusCode' in err)
       throw err
 
-    console.error('[plugins.post] Failed to create plugin:', err)
-    throw createError({ statusCode: 500, statusMessage: 'Failed to create plugin.' })
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorStack = err instanceof Error ? err.stack : undefined
+    console.error('[plugins.post] Failed to create plugin:', {
+      error: errorMessage,
+      stack: errorStack,
+      slug: slug,
+      userId,
+    })
+    throw createError({ statusCode: 500, statusMessage: `Failed to create plugin: ${errorMessage}` })
   }
 
   return {
