@@ -1,0 +1,39 @@
+{
+  "devServer": {
+    "disconnected": "Dev Server Disconnected",
+    "disconnectedDesc": "Connection to Dev Server lost. Server may have crashed or network interrupted.",
+    "reconnected": "Dev Server Reconnected",
+    "reconnecting": "Reconnecting to Dev Server...",
+    "checkServer": "Check if Dev Server is running correctly, or try manual reconnection.",
+    "connectionLost": "Dev Server connection lost",
+    "connectionRestored": "Dev Server connection restored"
+  },
+  "flowTransfer": {
+    "shareComplete": "Share Complete",
+    "shareFailed": "Share Failed",
+    "copiedToClipboard": "Copied to Clipboard",
+    "fileRevealed": "File Revealed",
+    "airdropReady": "AirDrop Ready",
+    "mailReady": "Mail Opened",
+    "messagesReady": "Messages Opened"
+  },
+  "plugin": {
+    "loadFailed": "Plugin Load Failed",
+    "manifestInvalid": "Invalid Manifest",
+    "dependencyMissing": "Missing Dependency",
+    "versionMismatch": "Version Mismatch",
+    "permissionDenied": "Permission Denied"
+  },
+  "widget": {
+    "compileFailed": "Widget Compile Failed",
+    "unsupportedType": "Unsupported Widget Type",
+    "invalidDependency": "Invalid Dependency",
+    "loadFailed": "Widget Load Failed"
+  },
+  "system": {
+    "networkError": "Network Error",
+    "timeout": "Request Timeout",
+    "unknownError": "Unknown Error",
+    "operationCancelled": "Operation Cancelled"
+  }
+}

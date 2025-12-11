@@ -76,7 +76,7 @@ export class WidgetLoader {
       return result
     }
     catch (error) {
-      plugin.logger.error(`[WidgetLoader] 从 ${widgetFile} 读取 widget 失败：`, error as Error)
+      plugin.logger.error(`[WidgetLoader] Failed to read widget from ${widgetFile}:`, error as Error)
       this.pushIssue(
         plugin,
         feature,

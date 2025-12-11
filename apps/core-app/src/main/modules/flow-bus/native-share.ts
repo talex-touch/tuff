@@ -14,6 +14,7 @@ import type {
   NativeShareOptions,
   NativeShareResult
 } from '@talex-touch/utils'
+import { shareNotificationService } from './share-notification'
 
 const execAsync = promisify(exec)
 
@@ -54,8 +55,8 @@ export class NativeShareService {
       // macOS supports Share Sheet
       targets.push({
         id: 'system-share',
-        name: '系统共享',
-        description: '使用 macOS 系统共享功能',
+        name: 'System Share',
+        description: 'Share via macOS system share sheet',
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:share-line'
       })
@@ -63,23 +64,23 @@ export class NativeShareService {
       targets.push({
         id: 'airdrop',
         name: 'AirDrop',
-        description: '通过 AirDrop 发送到附近设备',
+        description: 'Send to nearby devices via AirDrop',
         supportedTypes: ['files', 'image'],
         icon: 'ri:wireless-charging-line'
       })
 
       targets.push({
         id: 'mail',
-        name: '邮件',
-        description: '通过邮件发送',
+        name: 'Mail',
+        description: 'Send via email',
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:mail-line'
       })
 
       targets.push({
         id: 'messages',
-        name: '信息',
-        description: '通过 iMessage 发送',
+        name: 'Messages',
+        description: 'Send via iMessage',
         supportedTypes: ['text', 'image'],
         icon: 'ri:message-3-line'
       })
@@ -87,16 +88,16 @@ export class NativeShareService {
       // Windows Share API
       targets.push({
         id: 'system-share',
-        name: '系统共享',
-        description: '使用 Windows 共享功能',
+        name: 'System Share',
+        description: 'Share via Windows share functionality',
         supportedTypes: ['text', 'files', 'image'],
         icon: 'ri:share-line'
       })
 
       targets.push({
         id: 'mail',
-        name: '邮件',
-        description: '通过邮件发送',
+        name: 'Mail',
+        description: 'Send via email',
         supportedTypes: ['text', 'files'],
         icon: 'ri:mail-line'
       })
@@ -104,8 +105,8 @@ export class NativeShareService {
       // Linux - basic share via xdg-open
       targets.push({
         id: 'mail',
-        name: '邮件',
-        description: '通过邮件发送',
+        name: 'Mail',
+        description: 'Send via email',
         supportedTypes: ['text'],
         icon: 'ri:mail-line'
       })
@@ -118,20 +119,27 @@ export class NativeShareService {
    * Shares content using native system share
    */
   async share(options: NativeShareOptions): Promise<NativeShareResult> {
+    let result: NativeShareResult
+
     try {
       if (process.platform === 'darwin') {
-        return await this.shareMacOS(options)
+        result = await this.shareMacOS(options)
       } else if (process.platform === 'win32') {
-        return await this.shareWindows(options)
+        result = await this.shareWindows(options)
       } else {
-        return await this.shareLinux(options)
+        result = await this.shareLinux(options)
       }
     } catch (error) {
-      return {
+      result = {
         success: false,
         error: error instanceof Error ? error.message : 'Share failed'
       }
     }
+
+    // Show notification for share result
+    shareNotificationService.showShareResult(result)
+
+    return result
   }
 
   /**

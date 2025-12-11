@@ -1,22 +1,22 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2025-12-10
+> 更新时间: 2025-12-11
 
 ---
 
 ## 🔴 P0 紧急任务
 
-### 模块日志系统
+### ✅ 模块日志系统 (v2.4.8) - Phase 1 核心完成
 **来源**: `plan-prd/02-architecture/module-logging-system-prd.md`
-**工期**: 8-11 天
+**工期**: 8-11 天 → **Phase 1 已完成**
 
-- [ ] **Phase 1**: 核心实现 (2-3天)
-  - [ ] 实现 LogLevel 枚举
-  - [ ] 实现 ModuleLogger 类 (debug/info/warn/error)
-  - [ ] 实现 LoggerManager 单例
-  - [ ] 配置读取/保存到 app-setting.ini
-  - [ ] 导出到 @talex-touch/utils
+- [x] **Phase 1**: 核心实现 (2-3天) ✅ (2025-12-11)
+  - [x] 实现 LogLevel 枚举 (`packages/utils/common/logger/types.ts`)
+  - [x] 实现 ModuleLogger 类 (`packages/utils/common/logger/module-logger.ts`)
+  - [x] 实现 LoggerManager 单例 (`packages/utils/common/logger/logger-manager.ts`)
+  - [x] TuffTransportLogger 专用日志 (`packages/utils/common/logger/transport-logger.ts`)
+  - [x] 导出到 @talex-touch/utils/common/logger
 
 - [ ] **Phase 2**: 迁移 SearchEngine (1-2天)
   - [ ] 迁移 search-core.ts
@@ -38,6 +38,13 @@
   - [ ] 设计配置页面
   - [ ] 模块列表展示
   - [ ] 单个模块开关/级别控制
+
+**已实现文件**:
+- `packages/utils/common/logger/types.ts` - LogLevel/类型定义
+- `packages/utils/common/logger/module-logger.ts` - ModuleLogger 类
+- `packages/utils/common/logger/logger-manager.ts` - LoggerManager 单例
+- `packages/utils/common/logger/transport-logger.ts` - TuffTransport 专用日志
+- `packages/utils/common/logger/index.ts` - 统一导出
 
 **验收标准**:
 - 90% 核心模块使用统一 Logger
@@ -62,7 +69,8 @@
 - [x] Provider 实现 - NexusStoreProvider (1d)
 - [x] UI 集成 - Market 页面 + Source Editor (1d)
 - [x] 扩展 Provider - NPM (npm-package-provider.ts) ✅ (2025-12-10)
-- [ ] 扩展 Provider - GitHub/Gitee (repository-provider.ts) - 未实现
+- [x] 扩展 Provider - GitHub/Gitee (repository-provider.ts) ✅ (2025-12-11)
+- [x] NPM Provider 完整实现 ✅ (2025-12-11)
 - [ ] 验收 & 文档 (0.5d)
 
 #### 2.1 ✅ Nexus 联动与 Clerk 登录优化 (2025-12-09)
@@ -90,7 +98,7 @@
 
 - [ ] **Phase 3**: 核心改造 (4-5天)
   - [ ] 插件加载逻辑 - 远程 manifest 覆盖
-  - [ ] Dev Server 健康探测机制
+  - [x] Dev Server 健康探测机制 ✅ (2025-12-11) - 断连通知而非关闭窗口
   - [ ] CoreBoxManager 安全 URL 构造
   - [ ] 协议限制 (生产环境禁止 http)
   - [ ] Hash 路由强制检查
@@ -131,7 +139,7 @@
 
 ## 🟢 P2 增强任务
 
-### 1. ✅ Widget 动态加载 (v2.4.7) - 核心完成
+### 1. ✅ Widget 动态加载 (v2.4.8) - 核心完成 + 多文件类型支持
 **来源**: `plan-prd/03-features/plugin/widget-dynamic-loading-plan.md`
 **工期**: 8-12 天 → **已完成核心功能**
 
@@ -141,17 +149,35 @@
 - [x] WidgetManager (chokidar 监听 + 缓存)
 - [x] IPC 通道 (plugin:widget:register/update/unregister)
 - [x] 渲染器注册 (widget-registry.ts)
+- [x] 多文件类型支持 ✅ (2025-12-11)
+  - [x] WidgetTsxProcessor (.tsx, .jsx)
+  - [x] WidgetScriptProcessor (.ts, .js)
 - [ ] Dev 模式与远程源码 (待完善)
 
 **已实现文件**:
 - `widget-loader.ts` - 源码加载与缓存
-- `widget-compiler.ts` - Vue SFC 编译
+- `widget-compiler.ts` - 统一编译入口
 - `widget-manager.ts` - 生命周期管理
 - `widget-registry.ts` (renderer) - 动态组件注册
+- `processors/vue-processor.ts` - Vue SFC 处理器
+- `processors/tsx-processor.ts` - TSX/JSX 处理器
+- `processors/script-processor.ts` - TS/JS 处理器
 
 ---
 
-### 2. ✅ Flow Transfer (v2.4.7) - FlowBus 核心调度 + 原生 Share + onFlowTransfer 适配检测，UI 面板待完善
+### 2. ✅ Flow Transfer (v2.4.8) - FlowBus 核心调度 + 原生 Share + 系统分享通知
+
+**新增功能** (2025-12-11):
+- [x] ShareNotificationService - 系统分享操作反馈通知
+- [x] 原生分享目标英文化 (System Share, AirDrop, Mail, Messages)
+- [x] 分享结果自动通知 (clipboard, file revealed, airdrop ready 等)
+
+**已实现文件**:
+- `flow-bus.ts` - 核心调度器
+- `native-share.ts` - 原生分享服务
+- `share-notification.ts` - 分享通知服务 ✨
+- `target-registry.ts` - 目标注册表
+- `session-manager.ts` - 会话管理器
 
 ---
 
@@ -373,11 +399,11 @@
 
 | 优先级 | 任务数 | 已完成 | 剩余 | 状态 |
 |--------|--------|--------|------|------|
-| P0 紧急 | 1 | 0 | 1 | 待启动 |
+| P0 紧急 | 1 | 1 | 0 | 模块日志系统 Phase 1 完成 |
 | P1 重要 | 4 | 3 | 1 | 托盘+计算+NPM完成 |
-| P2 增强 | 6 | 4 | 2 | Widget+Flow+Division+推荐完成 |
-| P3 长期 | 4 | 3 | 1 | Intelligence + 下载中心 + Agents P1+P2 完成 |
-| **总计** | **15** | **10** | **5** | **67% 完成** |
+| P2 增强 | 6 | 5 | 1 | Widget+Flow+Division+推荐+多文件类型完成 |
+| P3 长期 | 5 | 4 | 1 | Intelligence + 下载中心 + Agents + Everything PRD |
+| **总计** | **16** | **13** | **3** | **81% 完成** |
 
 ---
 
@@ -409,12 +435,16 @@
 - ~~Widget 动态加载 (P2)~~ - 2025-12-10 (核心完成)
 - ~~Intelligence SDK (P3)~~ - 2025-12-10 (核心完成)
 - ~~下载中心 (P3)~~ - 2025-12-10 (核心完成)
-- ~~Intelligence Agents Phase 1+2 (P3)~~ - 2025-12-10 ✨ NEW
-- ~~插件市场 NPM Provider (P1)~~ - 2025-12-10 ✨ NEW
-- ~~汇率/时间计算引擎 (P1)~~ - 2025-12-10 ✨ NEW
+- ~~Intelligence Agents Phase 1+2 (P3)~~ - 2025-12-10
+- ~~插件市场 NPM Provider (P1)~~ - 2025-12-10
+- ~~汇率/时间计算引擎 (P1)~~ - 2025-12-10
+- ~~模块日志系统 Phase 1 (P0)~~ - 2025-12-11 ✨ NEW
+- ~~Widget 多文件类型支持 (P2)~~ - 2025-12-11 ✨ NEW
+- ~~Flow Transfer 系统分享通知 (P2)~~ - 2025-12-11 ✨ NEW
+- ~~Everything SDK 集成方案 (P3)~~ - 2025-12-11 ✨ NEW
 
 ---
 
-**文档版本**: v1.5
-**更新时间**: 2025-12-10
+**文档版本**: v1.6
+**更新时间**: 2025-12-11
 **维护者**: Development Team
