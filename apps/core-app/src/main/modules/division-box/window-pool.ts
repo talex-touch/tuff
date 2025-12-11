@@ -8,7 +8,7 @@
 import { BrowserWindow } from 'electron'
 import { TouchWindow } from '../../core/touch-window'
 import { DivisionBoxWindowOption } from '../../config/default'
-import { getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
+import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 
 const LOG_PREFIX = '[DivisionBox Pool]'
 
@@ -135,7 +135,7 @@ export class DivisionBoxWindowPool {
       if (isDevMode()) {
         await touchWindow.loadURL(rendererUrl)
       } else {
-        await touchWindow.loadFile(rendererUrl.replace('file://', ''))
+        await touchWindow.loadFile(getCoreBoxRendererPath())
       }
       console.log(LOG_PREFIX, 'Renderer loaded successfully')
       

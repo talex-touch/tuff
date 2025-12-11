@@ -2,6 +2,7 @@ import type { TuffQuery } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TouchPlugin } from '../plugin'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { coreBoxManager } from '../../box-tool/core-box/manager'
 
 export class PluginViewLoader {
@@ -43,13 +44,13 @@ export class PluginViewLoader {
 
       if (hasFileExtension) {
         const viewPath = path.join(plugin.pluginPath, interactionPath)
-        viewUrl = `file://${viewPath}`
+        viewUrl = pathToFileURL(viewPath).href
       }
       else {
         // Route path: use hash routing with index.html
         const indexPath = path.join(plugin.pluginPath, 'index.html')
         const hashPath = interactionPath.startsWith('/') ? interactionPath : `/${interactionPath}`
-        viewUrl = `file://${indexPath}#${hashPath}`
+        viewUrl = pathToFileURL(indexPath).href + '#' + hashPath
       }
       console.log(`[PluginViewLoader] Loading view: ${viewUrl}`)
     }

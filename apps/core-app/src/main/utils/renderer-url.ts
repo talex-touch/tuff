@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { app } from 'electron'
 
 /**
@@ -7,7 +8,8 @@ import { app } from 'electron'
  */
 export function getCoreBoxRendererUrl(): string {
   if (app.isPackaged) {
-    return `file://${path.join(__dirname, '..', 'renderer', 'index.html')}`
+    const filePath = path.join(__dirname, '..', 'renderer', 'index.html')
+    return pathToFileURL(filePath).href
   }
 
   const devUrl = process.env.ELECTRON_RENDERER_URL
