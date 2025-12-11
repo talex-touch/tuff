@@ -241,6 +241,7 @@
     "loading": "正在加载官方插件...",
     "refresh": "刷新",
     "install": "安装",
+    "installed": "已安装",
     "installing": "安装中...",
     "officialBadge": "官方",
     "lastUpdated": "上次更新 {time}",
@@ -290,6 +291,7 @@
       "status": {
         "queued": "排队中",
         "downloading": "下载中",
+        "verifying": "校验中",
         "awaitingConfirm": "等待确认",
         "installing": "安装中",
         "completed": "已安装",
@@ -329,6 +331,8 @@
       "opening": "打开中...",
       "reload": "重新加载",
       "reloading": "重新加载中...",
+      "openDevTools": "打开开发者工具",
+      "openDevToolsFailed": "打开开发者工具失败",
       "uninstall": "卸载插件",
       "uninstalling": "正在卸载..."
     },

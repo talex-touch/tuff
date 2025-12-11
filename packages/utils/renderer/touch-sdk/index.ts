@@ -86,6 +86,15 @@ export class TouchSDK {
   }
 
   /**
+   * Opens the DevTools for a plugin's Surface WebContents
+   * @param pluginName - The name of the plugin to open DevTools for
+   * @returns Promise that resolves when DevTools is opened
+   */
+  async openPluginDevTools(pluginName: string): Promise<void> {
+    return this.channel.send('plugin:open-devtools', pluginName)
+  }
+
+  /**
    * Reloads a plugin by its name
    * @param pluginName - The name of the plugin to reload
    * @returns Promise that resolves when the reload operation completes

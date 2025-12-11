@@ -1303,6 +1303,39 @@ export class PluginModule extends BaseModule {
         console.error('Exception while opening plugin folder:', error)
       }
     })
+
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:open-devtools', async ({ data }) => {
+      const pluginName = data as string
+      if (!pluginName) return
+
+      // Try to open DevTools for DivisionBox session
+      try {
+        const { DivisionBoxManager } = await import('../division-box/manager')
+        const divisionBoxManager = DivisionBoxManager.getInstance()
+        const sessions = divisionBoxManager.getActiveSessions()
+        
+        for (const session of sessions) {
+          // Check if this session belongs to the plugin by checking the config pluginId
+          if (session.config?.pluginId === pluginName) {
+            session.openDevTools()
+            return
+          }
+        }
+      } catch (err) {
+        console.warn('[PluginModule] Could not open DevTools via DivisionBox:', err)
+      }
+
+      // Try to open DevTools for CoreBox session
+      try {
+        const { windowManager } = await import('../box-tool/core-box/window')
+        if (windowManager.openPluginDevTools(pluginName)) {
+          return
+        }
+      } catch (err) {
+        console.warn('[PluginModule] Could not open DevTools via CoreBox:', err)
+      }
+    })
+
     touchChannel.regChannel(ChannelType.PLUGIN, 'window:new', async ({ data, plugin, reply }) => {
       const touchPlugin = manager.plugins.get(plugin!) as TouchPlugin
       if (!touchPlugin)

@@ -1,23 +1,36 @@
 <script lang="ts" name="MarketDetail" setup>
+/**
+ * MarketDetail - Plugin detail page component
+ *
+ * Displays detailed information about a market plugin including:
+ * - Plugin header with icon, name, description, and install button
+ * - README content rendered from markdown
+ * - Sidebar with plugin metadata
+ */
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import FlatButton from '~/components/base/button/FlatButton.vue'
 import MarketIcon from '~/components/market/MarketIcon.vue'
+import MarketInstallButton from '~/components/market/MarketInstallButton.vue'
 import MarketDetailSkeleton from '~/components/market/MarketDetailSkeleton.vue'
 import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { useMarketDetail } from '~/composables/market/useMarketDetail'
 import { useMarketReadme } from '~/composables/market/useMarketReadme'
+import { usePluginStore } from '~/stores/plugin'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
 const { plugins: officialPlugins, loading, loadMarketPlugins: loadOfficialPlugins } = useMarketData()
-const { handleInstall } = useMarketInstall()
+const { handleInstall, getInstallTask } = useMarketInstall()
+
+// Check if plugin is installed locally
+const pluginStore = usePluginStore()
+const installedPluginNames = computed(() => new Set([...pluginStore.plugins.keys()]))
 
 const pluginId = computed(() => route.params.id as string)
 const activePlugin = computed<MarketPluginListItem | null>(() => {
@@ -29,6 +42,16 @@ const notFound = computed(() => !activePlugin.value && officialPlugins.value.len
 const { detailMeta } = useMarketDetail(activePlugin, t)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
 const { readmeContent, readmeLoading, readmeError } = useMarketReadme(readmeUrl, t)
+
+/** Whether the current plugin is installed locally */
+const isInstalled = computed(() =>
+  activePlugin.value ? installedPluginNames.value.has(activePlugin.value.name) : false
+)
+
+/** Current installation task for this plugin */
+const installTask = computed(() =>
+  activePlugin.value ? getInstallTask(activePlugin.value.id) : undefined
+)
 
 let rendererChannel: ITouchClientChannel | undefined
 let channelLoadFailed = false
@@ -100,10 +123,13 @@ onBeforeUnmount(() => {
             </p>
           </div>
         </div>
-        <FlatButton :primary="true" @click="onInstall">
-          <i class="i-ri-download-line" />
-          <span>{{ t('market.install') }}</span>
-        </FlatButton>
+        <MarketInstallButton
+          :plugin-name="activePlugin.name"
+          :is-installed="isInstalled"
+          :install-task="installTask"
+          :mini="false"
+          @install="onInstall"
+        />
       </div>
 
       <div class="detail-content">

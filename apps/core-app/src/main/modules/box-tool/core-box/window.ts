@@ -1225,6 +1225,24 @@ export class WindowManager {
     return keyMap[key] || key
   }
 
+  /**
+   * Opens DevTools for the plugin's WebContentsView if the specified plugin is currently attached.
+   * @param pluginName - Name of the plugin to open DevTools for
+   * @returns true if DevTools was opened, false otherwise
+   */
+  public openPluginDevTools(pluginName: string): boolean {
+    if (!this.attachedPlugin || this.attachedPlugin.name !== pluginName) {
+      return false
+    }
+
+    if (this.uiView && !this.uiView.webContents.isDestroyed()) {
+      this.uiView.webContents.openDevTools({ mode: 'detach' })
+      return true
+    }
+
+    return false
+  }
+
   private normalizeUIViewUrl(url: string, plugin?: TouchPlugin): string {
     const isDevPlugin = Boolean(plugin && plugin.dev && plugin.dev.enable)
     if (!isDevPlugin) {

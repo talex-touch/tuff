@@ -1,9 +1,14 @@
 <script setup lang="ts" name="MarketItemCard">
+/**
+ * MarketItemCard - Card component for displaying a plugin in the market list
+ *
+ * Shows plugin icon, name, description and install button.
+ * Delegates installation state logic to MarketInstallButton component.
+ */
 import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
 import MarketIcon from '~/components/market/MarketIcon.vue'
+import MarketInstallButton from '~/components/market/MarketInstallButton.vue'
 
 interface MarketItem {
   id?: string
@@ -20,111 +25,39 @@ interface MarketItem {
 }
 
 interface MarketItemCardProps {
+  /** Plugin item data */
   item: MarketItem
+  /** Card index in list (for animations) */
   index?: number
-  installing?: boolean
+  /** Current installation task progress */
   installTask?: PluginInstallProgressEvent
+  /** Whether plugin is already installed locally */
+  isInstalled?: boolean
 }
 
-const props = defineProps<MarketItemCardProps>()
+defineProps<MarketItemCardProps>()
 
-const emits = defineEmits<{
+const emit = defineEmits<{
+  /** Emitted when install button is clicked */
   (e: 'install'): void
+  /** Emitted when card is clicked to open details */
   (e: 'open'): void
 }>()
 
 const { t } = useI18n()
 
-const isInstalling = computed(() => props.installing === true)
-const activeStages = new Set<PluginInstallProgressEvent['stage']>([
-  'queued',
-  'downloading',
-  'awaiting-confirmation',
-  'installing'
-])
-
-const installStage = computed<PluginInstallProgressEvent['stage'] | null>(() => {
-  if (props.installTask?.stage) return props.installTask.stage
-  return isInstalling.value ? 'installing' : null
-})
-
-const isActiveStage = computed(() =>
-  installStage.value ? activeStages.has(installStage.value) : false
-)
-
-const progressValue = computed(() => {
-  if (typeof props.installTask?.progress === 'number') {
-    const normalized = Math.round(props.installTask.progress)
-    return Math.max(0, Math.min(100, normalized))
-  }
-  if (installStage.value === 'installing') return 100
-  return null
-})
-
-const showProgressCircle = computed(
-  () => installStage.value === 'downloading' && progressValue.value !== null
-)
-
-const progressCircleStyle = computed(() =>
-  showProgressCircle.value
-    ? ({ '--progress': `${progressValue.value}%` } as Record<string, string>)
-    : {}
-)
-
-const progressDisplay = computed(() =>
-  progressValue.value !== null ? `${progressValue.value}` : ''
-)
-
-const showSpinner = computed(() => installStage.value === 'installing' && !showProgressCircle.value)
-
-const buttonIcon = computed(() => {
-  switch (installStage.value) {
-    case 'queued':
-      return 'i-ri-time-line'
-    case 'awaiting-confirmation':
-      return 'i-ri-shield-keyhole-line'
-    case 'completed':
-      return 'i-ri-check-line'
-    case 'failed':
-      return 'i-ri-error-warning-line'
-    case 'cancelled':
-      return 'i-ri-close-line'
-    default:
-      return ''
-  }
-})
-
-const buttonLabel = computed(() => {
-  switch (installStage.value) {
-    case 'queued':
-      return t('market.installation.status.queued')
-    case 'downloading':
-      return t('market.installation.status.downloading')
-    case 'awaiting-confirmation':
-      return t('market.installation.status.awaitingConfirm')
-    case 'installing':
-      return t('market.installation.status.installing')
-    case 'completed':
-      return t('market.installation.status.completed')
-    case 'failed':
-      return t('market.installation.status.failed')
-    case 'cancelled':
-      return t('market.installation.status.cancelled')
-    default:
-      return isInstalling.value ? t('market.installing') : t('market.install')
-  }
-})
-
-const disableInstall = computed(() => isActiveStage.value)
-
-function handleInstall(event: MouseEvent): void {
-  event.stopPropagation()
-  emits('install')
+/**
+ * Handles card click to open plugin details
+ */
+function handleOpen(): void {
+  emit('open')
 }
 
-function handleOpen(): void {
-  if (isInstalling.value) return
-  emits('open')
+/**
+ * Handles install button click
+ */
+function handleInstall(): void {
+  emit('install')
 }
 </script>
 
@@ -156,16 +89,12 @@ function handleOpen(): void {
       </div>
 
       <div class="market-item-actions">
-        <FlatButton :primary="true" mini :disabled="disableInstall" @click="handleInstall">
-          <div class="install-button-content">
-            <div v-if="showProgressCircle" class="install-progress" :style="progressCircleStyle">
-              <span>{{ progressDisplay }}</span>
-            </div>
-            <i v-else-if="showSpinner" class="i-ri-loader-4-line animate-spin" />
-            <i v-else-if="buttonIcon" :class="buttonIcon" />
-            <span>{{ buttonLabel }}</span>
-          </div>
-        </FlatButton>
+        <MarketInstallButton
+          :plugin-name="item.name"
+          :is-installed="isInstalled"
+          :install-task="installTask"
+          @install="handleInstall"
+        />
       </div>
     </div>
   </div>
@@ -245,48 +174,5 @@ function handleOpen(): void {
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.install-progress {
-  position: relative;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: conic-gradient(
-    var(--el-color-primary) var(--progress),
-    rgba(var(--el-color-primary-rgb), 0.15) 0
-  );
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--el-color-primary);
-  font-weight: 600;
-  font-size: 0.65rem;
-}
-
-.install-progress::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--el-bg-color-overlay);
-}
-
-.install-progress span {
-  position: relative;
-  z-index: 1;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

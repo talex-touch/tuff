@@ -1,15 +1,32 @@
 <script setup lang="ts" name="MarketGridView">
+/**
+ * MarketGridView - Grid/List view for displaying market plugins
+ *
+ * Features:
+ * - Responsive grid layout with smooth animations
+ * - FLIP animation for view type transitions
+ * - Shows loading, empty, and plugin list states
+ */
 import gsap from 'gsap'
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MarketPluginListItem } from '~/composables/market/useMarketData'
+import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import MarketItemCard from './MarketItemCard.vue'
 
 const props = defineProps<{
+  /** List of plugins to display */
   plugins: MarketPluginListItem[]
+  /** View mode: grid or list */
   viewType: 'grid' | 'list'
+  /** Whether data is loading */
   loading: boolean
+  /** Set of installed plugin names */
+  installedNames?: Set<string>
 }>()
+
+// Get install task tracker
+const { getInstallTask } = useMarketInstall()
 
 const emit = defineEmits<{
   install: [plugin: MarketPluginListItem]
@@ -135,6 +152,8 @@ watch(
         :item="item"
         :index="index"
         :data-index="index"
+        :is-installed="installedNames?.has(item.name) ?? false"
+        :install-task="getInstallTask(item.id)"
         class="market-grid-item"
         @install="emit('install', item)"
         @open="emit('open-detail', item)"

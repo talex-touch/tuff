@@ -2,7 +2,6 @@
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { useToggle } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import MarketGridView from '~/components/market/MarketGridView.vue'
 import MarketHeader from '~/components/market/MarketHeader.vue'
@@ -11,9 +10,9 @@ import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { marketSourcesStorage } from '~/modules/storage/market-sources'
+import { usePluginStore } from '~/stores/plugin'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 
-const { t } = useI18n()
 const router = useRouter()
 
 // Market data management
@@ -24,6 +23,10 @@ const { tags: _tags, tagInd: _tagInd, selectedTag, updateCategoryTags } = useMar
 
 // Installation management
 const { handleInstall } = useMarketInstall()
+
+// Installed plugins (for checking if a market plugin is already installed)
+const pluginStore = usePluginStore()
+const installedPluginNames = computed(() => new Set([...pluginStore.plugins.keys()]))
 
 // UI state
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
@@ -128,6 +131,7 @@ onMounted(() => {
       :plugins="displayedPlugins"
       :view-type="viewType"
       :loading="loading"
+      :installed-names="installedPluginNames"
       @install="onInstall"
       @open-detail="openPluginDetail"
     />

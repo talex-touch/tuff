@@ -241,6 +241,7 @@
     "loading": "Loading official plugins...",
     "refresh": "Refresh",
     "install": "Install",
+    "installed": "Installed",
     "installing": "Installing...",
     "officialBadge": "Official",
     "lastUpdated": "Last updated {time}",
@@ -290,6 +291,7 @@
       "status": {
         "queued": "Queued",
         "downloading": "Downloading",
+        "verifying": "Verifying",
         "awaitingConfirm": "Awaiting Confirmation",
         "installing": "Installing",
         "completed": "Installed",
@@ -329,6 +331,8 @@
       "opening": "Opening...",
       "reload": "Reload",
       "reloading": "Reloading...",
+      "openDevTools": "Open DevTools",
+      "openDevToolsFailed": "Failed to open DevTools",
       "uninstall": "Uninstall Plugin",
       "uninstalling": "Uninstalling..."
     },
