@@ -1,0 +1,39 @@
+{
+  "devServer": {
+    "disconnected": "开发服务器已断开",
+    "disconnectedDesc": "与开发服务器的连接已断开，可能是服务器崩溃或网络中断。",
+    "reconnected": "开发服务器已重连",
+    "reconnecting": "正在重连开发服务器...",
+    "checkServer": "请检查开发服务器是否正常运行，或尝试手动重连。",
+    "connectionLost": "开发服务器连接已断开",
+    "connectionRestored": "开发服务器连接已恢复"
+  },
+  "flowTransfer": {
+    "shareComplete": "分享完成",
+    "shareFailed": "分享失败",
+    "copiedToClipboard": "已复制到剪贴板",
+    "fileRevealed": "文件已显示",
+    "airdropReady": "AirDrop 已就绪",
+    "mailReady": "邮件已打开",
+    "messagesReady": "信息已打开"
+  },
+  "plugin": {
+    "loadFailed": "插件加载失败",
+    "manifestInvalid": "清单文件无效",
+    "dependencyMissing": "缺少依赖",
+    "versionMismatch": "版本不匹配",
+    "permissionDenied": "权限被拒绝"
+  },
+  "widget": {
+    "compileFailed": "Widget 编译失败",
+    "unsupportedType": "不支持的 Widget 类型",
+    "invalidDependency": "无效的依赖",
+    "loadFailed": "Widget 加载失败"
+  },
+  "system": {
+    "networkError": "网络错误",
+    "timeout": "请求超时",
+    "unknownError": "未知错误",
+    "operationCancelled": "操作已取消"
+  }
+}

@@ -1,6 +1,7 @@
 export * from '../electron/file-parsers'
 export * from './file-scan-constants'
 export * from './file-scan-utils'
+export * from './logger'
 export * from './search'
 export * from './storage/index'
 export * from './utils'

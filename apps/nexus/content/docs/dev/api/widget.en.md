@@ -1,6 +1,19 @@
 # Widget API
 
-## Types
+Widgets are lightweight UI components that plugins can render in CoreBox or DivisionBox.
+
+## Supported File Types
+
+| Extension | Description | Processor |
+|-----------|-------------|-----------|
+| `.vue` | Vue Single File Component | WidgetVueProcessor |
+| `.tsx` | TypeScript JSX (React-style) | WidgetTsxProcessor |
+| `.jsx` | JavaScript JSX | WidgetTsxProcessor |
+| `.ts` | Plain TypeScript | WidgetScriptProcessor |
+| `.js` | Plain JavaScript | WidgetScriptProcessor |
+
+## Widget Types
+
 | Type | Use case |
 | --- | --- |
 | Panel | Anchored inside a workspace |
@@ -8,31 +21,101 @@
 | Notification Center | Card-style summaries |
 
 ## Manifest Entry
+
 ```json
 {
   "type": "widget",
   "id": "todo.widget",
   "title": "Task Panel",
   "size": { "width": 4, "height": 3 },
-  "entry": "src/widget/index.ts"
+  "interaction": {
+    "type": "widget",
+    "path": "todo-panel.vue"
+  }
 }
 ```
 
-## Render Entry
-`src/widget/index.ts`
-```ts
-import { createApp } from 'vue'
-import Widget from './Widget.vue'
+## File Structure
 
-const app = createApp(Widget)
-app.mount('#app')
+```
+my-plugin/
+├── widgets/
+│   ├── todo-panel.vue      # Vue SFC
+│   ├── quick-action.tsx    # TSX component
+│   └── helper.ts           # Plain TS module
+├── manifest.json
+└── index.js
 ```
 
+## Vue Widget Example
+
+`widgets/todo-panel.vue`
+```vue
+<template>
+  <div class="todo-panel">
+    <h3>{{ title }}</h3>
+    <ul>
+      <li v-for="item in items" :key="item.id">{{ item.text }}</li>
+    </ul>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { usePluginContext } from '@talex-touch/utils/plugin/sdk'
+
+const ctx = usePluginContext()
+const title = ref('My Tasks')
+const items = ref([{ id: 1, text: 'Learn Widgets' }])
+</script>
+
+<style scoped>
+.todo-panel { padding: 16px; }
+</style>
+```
+
+## TSX Widget Example
+
+`widgets/quick-action.tsx`
+```tsx
+import { defineComponent, ref } from 'vue'
+
+export default defineComponent({
+  setup() {
+    const count = ref(0)
+    return () => (
+      <div class="action-panel">
+        <button onClick={() => count.value++}>
+          Clicked {count.value} times
+        </button>
+      </div>
+    )
+  }
+})
+```
+
+## Allowed Dependencies
+
+Widgets run in a sandboxed environment. Only these packages are allowed:
+
+- `vue`
+- `@talex-touch/utils`
+- `@talex-touch/utils/plugin`
+- `@talex-touch/utils/plugin/sdk`
+- `@talex-touch/utils/core-box`
+- `@talex-touch/utils/channel`
+- `@talex-touch/utils/common`
+- `@talex-touch/utils/types`
+
 ## Communication
-- Use Channels to sync with the main process.
-- `ctx.widget.send` exchanges size, theme, or focus signals.
+
+- Use TuffTransport for type-safe IPC communication
+- `ctx.widget.send` exchanges size, theme, or focus signals
+- Access plugin storage via `ctx.storage`
 
 ## Craft Guidelines
-- Respect light/dark mode automatically.
-- Keep animations subtle; re-render within 16 ms.
-- Provide empty states and clear error hints.
+
+- Respect light/dark mode automatically
+- Keep animations subtle; re-render within 16 ms
+- Provide empty states and clear error hints
+- Use `@talex-touch/utils` hooks for consistent behavior

@@ -6,6 +6,7 @@ import type {
 import {
   PluginStatus,
 } from '@talex-touch/utils/plugin'
+import { DevServerKeys, i18nMsg } from '@talex-touch/utils/i18n'
 import axios from 'axios'
 import { createLogger } from '../../utils/logger'
 
@@ -195,11 +196,14 @@ export class DevServerHealthMonitor {
     // 重置失败计数
     this.failureCount.delete(plugin.name)
 
-    // 如果之前是断连状态，现在恢复了
+    // If previously disconnected, now restored
     if (plugin.status === PluginStatus.DEV_DISCONNECTED) {
       plugin.status = PluginStatus.ENABLED
       plugin.issues = plugin.issues.filter(issue => issue.code !== 'DEV_SERVER_DISCONNECTED')
       plugin.logger.info('Dev Server connection restored')
+
+      // Notify view windows about reconnection
+      this.notifyViewWindowsReconnected(plugin)
     }
   }
 
@@ -225,45 +229,75 @@ export class DevServerHealthMonitor {
     if (plugin.status !== PluginStatus.DEV_DISCONNECTED) {
       plugin.status = PluginStatus.DEV_DISCONNECTED
 
-      // 添加断连警告
+      // Add disconnection warning with i18n message
       plugin.issues.push({
         type: 'warning',
         code: 'DEV_SERVER_DISCONNECTED',
-        message: 'Dev Server 连接已断开，可能是服务器崩溃或网络中断',
-        suggestion: '请检查 Dev Server 是否正常运行，或尝试手动重连',
+        message: i18nMsg(DevServerKeys.DISCONNECTED_DESC),
+        suggestion: i18nMsg(DevServerKeys.CHECK_SERVER),
         timestamp: Date.now(),
       })
 
       plugin.logger.warn('Dev Server disconnected')
 
-      // 关闭所有相关 view 窗口
-      this.closeAllViewWindows(plugin)
+      // Notify all view windows instead of closing them (per PRD requirement)
+      this.notifyViewWindowsDisconnected(plugin)
     }
   }
 
   /**
-   * 关闭插件的所有 view 窗口
+   * Notify all view windows about disconnection (instead of closing them)
+   * Per PRD: Already opened view windows should NOT be forcibly closed
    */
-  private closeAllViewWindows(plugin: ITouchPlugin): void {
-    // 使用类型断言访问内部实现细节
+  private notifyViewWindowsDisconnected(plugin: ITouchPlugin): void {
     const pluginImpl = plugin as any
     if (pluginImpl._windows && typeof pluginImpl._windows.forEach === 'function') {
-      pluginImpl._windows.forEach((window: any, id: number) => {
+      pluginImpl._windows.forEach((windowInfo: any, id: number) => {
         try {
-          if (window?.window && !window.window.isDestroyed()) {
-            plugin.logger.info(`Closing view window ${id} due to Dev Server disconnection`)
-            window.window.close()
+          const win = windowInfo?.window
+          if (win && !win.isDestroyed() && win.webContents) {
+            // Send IPC message to trigger in-view UI notification (i18n format)
+            win.webContents.send('tuff:dev-server-disconnected', {
+              pluginName: plugin.name,
+              title: i18nMsg(DevServerKeys.DISCONNECTED),
+              message: i18nMsg(DevServerKeys.CONNECTION_LOST),
+              suggestion: i18nMsg(DevServerKeys.CHECK_SERVER),
+              canReconnect: true,
+              timestamp: Date.now()
+            })
+            plugin.logger.info(`Notified view window ${id} about Dev Server disconnection`)
           }
         }
         catch (error: any) {
-          plugin.logger.warn(`Error closing view window ${id}:`, error)
+          plugin.logger.warn(`Error notifying view window ${id}:`, error)
         }
       })
+    }
+  }
 
-      // 清理窗口引用
-      if (typeof pluginImpl._windows.clear === 'function') {
-        pluginImpl._windows.clear()
-      }
+  /**
+   * Notify view windows about reconnection success
+   */
+  private notifyViewWindowsReconnected(plugin: ITouchPlugin): void {
+    const pluginImpl = plugin as any
+    if (pluginImpl._windows && typeof pluginImpl._windows.forEach === 'function') {
+      pluginImpl._windows.forEach((windowInfo: any, id: number) => {
+        try {
+          const win = windowInfo?.window
+          if (win && !win.isDestroyed() && win.webContents) {
+            win.webContents.send('tuff:dev-server-reconnected', {
+              pluginName: plugin.name,
+              title: i18nMsg(DevServerKeys.RECONNECTED),
+              message: i18nMsg(DevServerKeys.CONNECTION_RESTORED),
+              timestamp: Date.now()
+            })
+            plugin.logger.info(`Notified view window ${id} about Dev Server reconnection`)
+          }
+        }
+        catch (error: any) {
+          plugin.logger.warn(`Error notifying view window ${id}:`, error)
+        }
+      })
     }
   }
 

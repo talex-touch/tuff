@@ -2,11 +2,15 @@ import path from 'node:path'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetSource } from './widget-loader'
 import { WidgetVueProcessor } from './processors/vue-processor'
+import { WidgetTsxProcessor } from './processors/tsx-processor'
+import { WidgetScriptProcessor } from './processors/script-processor'
 import { widgetProcessorRegistry } from './widget-processor'
 import type { CompiledWidget, WidgetCompilationContext } from './widget-processor'
 
 // Register default processors
 widgetProcessorRegistry.register(new WidgetVueProcessor())
+widgetProcessorRegistry.register(new WidgetTsxProcessor())
+widgetProcessorRegistry.register(new WidgetScriptProcessor())
 
 /**
  * Legacy interface for backward compatibility

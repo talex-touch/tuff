@@ -196,10 +196,16 @@ enum TalexEvents {
 ```
 packages/utils/
 ├── account/           # AccountSDK（用户信息、订阅、配额）
-├── base/              # 基础类型和枚举
+├── base/              # 基础类型和枚举（含统一 LogLevel）
 ├── channel/           # IPC 通道接口
+├── common/            # 通用工具
+│   └── logger/        # 模块日志系统（ModuleLogger, LoggerManager）
 ├── core-box/          # CoreBox SDK（结果构建器、搜索格式）
 ├── eventbus/          # 事件系统接口
+├── i18n/              # 国际化消息系统
+│   ├── message-keys.ts  # 消息键定义
+│   ├── resolver.ts      # 前端解析器
+│   └── locales/         # 翻译文件 (en.json, zh.json)
 ├── plugin/            # 插件 SDK 和接口
 │   ├── log/           # 插件日志
 │   ├── providers/     # 插件发现提供者
@@ -245,6 +251,64 @@ await accountSDK.hasApiAccess()           // API 访问权限
 await accountSDK.hasCustomModelAccess()   // 自定义模型
 await accountSDK.hasPrioritySupport()     // 优先支持
 ```
+
+### I18n 消息系统
+
+**后端发送国际化消息**（使用 `$i18n:key` 格式）:
+```typescript
+import { i18nMsg, DevServerKeys } from '@talex-touch/utils/i18n'
+
+// 发送给前端的消息使用 i18n 键
+win.webContents.send('notification', {
+  title: i18nMsg(DevServerKeys.DISCONNECTED),    // => '$i18n:devServer.disconnected'
+  message: i18nMsg(DevServerKeys.CONNECTION_LOST)
+})
+```
+
+**前端解析消息**:
+```typescript
+import { resolveI18nMessage, i18nResolver } from '@talex-touch/utils/i18n'
+
+// 设置语言
+i18nResolver.setLocale('zh')
+
+// 解析消息
+const text = resolveI18nMessage('$i18n:devServer.disconnected')
+// => '开发服务器已断开'
+```
+
+**消息键分类**:
+- `DevServerKeys` - Dev Server 相关消息
+- `FlowTransferKeys` - Flow Transfer 分享消息
+- `PluginKeys` - 插件相关消息
+- `WidgetKeys` - Widget 相关消息
+- `SystemKeys` - 系统通用消息
+
+**翻译文件位置**: `packages/utils/i18n/locales/`
+
+### 统一 LogLevel
+
+**单一日志级别定义**（位于 `packages/utils/base/log-level.ts`）:
+```typescript
+import { LogLevel, stringToLogLevel, logLevelToString } from '@talex-touch/utils'
+
+enum LogLevel {
+  DEBUG = 0,
+  INFO = 1,
+  WARN = 2,
+  ERROR = 3,
+  NONE = 4
+}
+
+// 字符串转换
+const level = stringToLogLevel('debug')  // => LogLevel.DEBUG
+const str = logLevelToString(LogLevel.INFO)  // => 'INFO'
+```
+
+**统一使用场景**:
+- 模块日志 (`common/logger/`)
+- 插件日志 (`plugin/log/`)
+- TuffTransport 日志
 
 ## 非显而易见的架构概念
 
