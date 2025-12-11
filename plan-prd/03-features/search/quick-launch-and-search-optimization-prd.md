@@ -429,9 +429,16 @@ async function handleSearch(value: string): Promise<void> {
 
 ### 2.3 技术方案
 
-#### 2.3.1 分层搜索架构
+#### 2.3.1 核心设计原则
 
-**核心思路**: 将搜索分为 **快速层** 和 **延迟层**
+1. **非阻塞输入**: 搜索执行不得阻塞 UI 线程和用户输入
+2. **渐进式呈现**: 优先展示高优先级结果，低优先级异步追加
+3. **资源隔离**: 快速层和延迟层使用独立资源池，避免互相影响
+4. **可取消**: 新搜索触发时，旧搜索应立即中止
+
+#### 2.3.2 分层搜索架构
+
+**核心思路**: 将搜索分为 **快速层 (Fast Layer)** 和 **延迟层 (Deferred Layer)**
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -461,7 +468,7 @@ async function handleSearch(value: string): Promise<void> {
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-#### 2.3.2 Provider 优先级配置
+#### 2.3.3 Provider 优先级配置
 
 **修改文件**: `packages/utils/plugin/search-provider.ts`
 
@@ -496,27 +503,47 @@ export interface ISearchProvider<TContext = unknown> {
 | `preview-provider` | `deferred` | 200ms |
 | `file-provider` | `deferred` | 500ms |
 
-#### 2.3.3 Gather 聚合器改造
+#### 2.3.4 Gather 聚合器改造
 
 **修改文件**: `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts`
 
+##### 配置扩展
+
 ```typescript
 export interface ITuffGatherOptions {
-  // ... 现有配置 ...
+  // 现有配置
+  concurrency?: number           // 并发度 (默认 4)
+  coalesceGapMs?: number         // 结果合并间隔 (默认 50ms)
+  firstBatchGraceMs?: number     // 首批等待时间 (默认 20ms)
+  debouncePushMs?: number        // 推送防抖 (默认 8ms)
+  taskTimeoutMs?: number         // 单任务超时 (默认 3000ms)
   
+  // 新增配置
   /**
    * 快速层 Provider 的最大等待时间
-   * 超时后立即返回已有结果
+   * 超时后立即返回已有结果，不等待慢 Provider
    * @default 80
    */
   fastLayerTimeoutMs?: number
   
   /**
    * 延迟层的启动延迟
-   * 避免与快速层竞争资源
+   * 让快速层先完成，避免 CPU 竞争
    * @default 50
    */
   deferredLayerDelayMs?: number
+  
+  /**
+   * 快速层并发度 (独立于 concurrency)
+   * @default 3
+   */
+  fastLayerConcurrency?: number
+  
+  /**
+   * 延迟层并发度
+   * @default 2
+   */
+  deferredLayerConcurrency?: number
 }
 
 const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
@@ -525,48 +552,294 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
   firstBatchGraceMs: 20,
   debouncePushMs: 8,
   taskTimeoutMs: 3000,
-  fastLayerTimeoutMs: 80,      // 新增
-  deferredLayerDelayMs: 50     // 新增
+  // 新增默认值
+  fastLayerTimeoutMs: 80,
+  deferredLayerDelayMs: 50,
+  fastLayerConcurrency: 3,
+  deferredLayerConcurrency: 2
 }
 ```
 
-**新搜索流程**:
+##### 核心实现改造
 
 ```typescript
-async function handleGather(
+export function createGatherAggregator(options: ITuffGatherOptions = {}) {
+  const config = { ...defaultTuffGatherOptions, ...options }
+
+  return function executeSearch(
+    providers: ISearchProvider<ProviderContext>[],
+    params: TuffQuery,
+    onUpdate: TuffAggregatorCallback,
+  ): IGatherController {
+    
+    async function handleGather(
+      signal: AbortSignal,
+      resolve: (value: number) => void
+    ): Promise<number> {
+      const startTime = performance.now()
+      
+      // 1. 按优先级分组
+      const fastProviders = providers.filter(p => p.priority === 'fast')
+      const deferredProviders = providers.filter(p => p.priority !== 'fast')
+      
+      const allResults: TuffSearchResult[] = []
+      const sourceStats: ExtendedSourceStat[] = []
+      
+      // 2. 快速层执行 (带超时保护)
+      if (fastProviders.length > 0) {
+        const fastResults = await runFastLayer(
+          fastProviders, 
+          params, 
+          signal,
+          config.fastLayerTimeoutMs,
+          config.fastLayerConcurrency
+        )
+        
+        allResults.push(...fastResults.results)
+        sourceStats.push(...fastResults.stats)
+        
+        // 立即推送快速层结果
+        const itemCount = countItems(allResults)
+        onUpdate({
+          newResults: fastResults.results,
+          totalCount: itemCount,
+          isDone: deferredProviders.length === 0,
+          sourceStats,
+          layer: 'fast'  // 新增：标识结果来源层
+        })
+        
+        searchLogger.fastLayerComplete(performance.now() - startTime, itemCount)
+      }
+      
+      // 3. 检查是否已取消
+      if (signal.aborted) {
+        resolve(countItems(allResults))
+        return countItems(allResults)
+      }
+      
+      // 4. 延迟层执行 (不阻塞返回)
+      if (deferredProviders.length > 0) {
+        // 延迟启动，让 UI 先渲染快速层结果
+        await delay(config.deferredLayerDelayMs)
+        
+        // 异步执行延迟层
+        runDeferredLayer(
+          deferredProviders,
+          params,
+          signal,
+          config.deferredLayerConcurrency,
+          (deferredResult) => {
+            if (signal.aborted) return
+            
+            allResults.push(deferredResult)
+            sourceStats.push(deferredResult.stat)
+            
+            onUpdate({
+              newResults: [deferredResult],
+              totalCount: countItems(allResults),
+              isDone: false,
+              sourceStats,
+              layer: 'deferred'
+            })
+          },
+          () => {
+            // 延迟层全部完成
+            onUpdate({
+              newResults: [],
+              totalCount: countItems(allResults),
+              isDone: true,
+              sourceStats,
+              layer: 'deferred'
+            })
+            resolve(countItems(allResults))
+          }
+        )
+      } else {
+        resolve(countItems(allResults))
+      }
+      
+      return countItems(allResults)
+    }
+    
+    return createGatherController(handleGather)
+  }
+}
+
+/**
+ * 快速层执行器 - 并行执行所有 fast providers，带总体超时
+ */
+async function runFastLayer(
+  providers: ISearchProvider[],
+  query: TuffQuery,
   signal: AbortSignal,
-  resolve: (value: number) => void
-): Promise<number> {
-  // 1. 分离快速层和延迟层
-  const fastProviders = providers.filter(p => p.priority === 'fast')
-  const deferredProviders = providers.filter(p => p.priority !== 'fast')
+  timeoutMs: number,
+  concurrency: number
+): Promise<{ results: TuffSearchResult[], stats: ExtendedSourceStat[] }> {
+  const results: TuffSearchResult[] = []
+  const stats: ExtendedSourceStat[] = []
   
-  // 2. 快速层并行执行，带超时
-  const fastResults = await Promise.race([
-    runProviderPool(fastProviders, signal),
-    timeout(fastLayerTimeoutMs)
+  // 使用 Promise.allSettled + 总体超时
+  const racePromise = Promise.race([
+    runProviderPool(providers, query, signal, concurrency, (result, stat) => {
+      results.push(result)
+      stats.push(stat)
+    }),
+    new Promise<void>(resolve => setTimeout(resolve, timeoutMs))
   ])
   
-  // 3. 立即返回快速层结果
-  onUpdate({
-    newResults: fastResults,
-    totalCount: countItems(fastResults),
-    isDone: deferredProviders.length === 0,
-    sourceStats: buildStats(fastResults)
-  })
+  await racePromise
+  return { results, stats }
+}
+
+/**
+ * 延迟层执行器 - 逐个完成，逐个推送
+ */
+function runDeferredLayer(
+  providers: ISearchProvider[],
+  query: TuffQuery,
+  signal: AbortSignal,
+  concurrency: number,
+  onResult: (result: TuffSearchResult & { stat: ExtendedSourceStat }) => void,
+  onComplete: () => void
+): void {
+  const queue = [...providers]
+  let completed = 0
   
-  // 4. 如果有延迟层，异步执行
-  if (deferredProviders.length > 0 && !signal.aborted) {
-    // 延迟启动，避免资源竞争
-    await delay(deferredLayerDelayMs)
+  const runNext = async () => {
+    while (queue.length > 0 && !signal.aborted) {
+      const provider = queue.shift()!
+      const startTime = performance.now()
+      
+      try {
+        const result = await provider.onSearch(query, signal)
+        const duration = performance.now() - startTime
+        
+        onResult({
+          ...result,
+          stat: {
+            providerId: provider.id,
+            providerName: provider.name || provider.id,
+            duration,
+            resultCount: result.items.length,
+            status: 'success'
+          }
+        })
+      } catch (error) {
+        // 静默处理延迟层错误，不影响用户体验
+        console.warn(`[DeferredLayer] Provider ${provider.id} failed:`, error)
+      }
+      
+      completed++
+    }
     
-    // 在后台执行延迟层搜索
-    runDeferredLayer(deferredProviders, signal, onUpdate)
+    if (completed >= providers.length) {
+      onComplete()
+    }
+  }
+  
+  // 启动并发 workers
+  for (let i = 0; i < concurrency; i++) {
+    runNext()
   }
 }
 ```
 
-#### 2.3.4 渲染层优化
+##### 关键时序图
+
+```
+时间轴 (ms):   0     20    40    60    80   100   150   200   500
+              │     │     │     │     │     │     │     │     │
+用户输入 "h"  ●─────┐
+              │     │
+debounce      │     ●────► 触发搜索
+              │           │
+Fast Layer    │           ├─app-provider──────●(30ms) 结果1
+              │           ├─system-provider──●(15ms) 结果2
+              │           └─plugin-provider────●(45ms) 结果3
+              │           │
+首批返回      │           │                    ●═══════════► UI 渲染
+              │           │                    │
+Deferred      │           │                    ├─50ms delay─┤
+Layer Start   │           │                    │            ●
+              │           │                    │            ├─url-provider────●(80ms)
+              │           │                    │            ├─preview-provider──────●(180ms)
+              │           │                    │            └─file-provider──────────────────●(450ms)
+              │           │                    │                                              │
+增量更新      │           │                    │            ●                ●               ●
+              │           │                    │            └────────────────┴───────────────┴──► UI
+```
+
+#### 2.3.5 SearchEngineCore 改造
+
+**修改文件**: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+
+```typescript
+export class SearchEngineCore {
+  private currentController: IGatherController | null = null
+  private searchSequence = 0
+  
+  async search(query: TuffQuery): Promise<TuffSearchResult> {
+    // 1. 取消上一次搜索
+    this.cancelPreviousSearch()
+    
+    // 2. 递增序列号，用于结果校验
+    const sequence = ++this.searchSequence
+    
+    // 3. 获取并分类 providers
+    const providers = this.getActiveProviders()
+    const sortedProviders = this.sortProvidersByPriority(providers)
+    
+    // 4. 创建新的聚合器实例（使用分层配置）
+    const aggregator = createGatherAggregator({
+      fastLayerTimeoutMs: 80,
+      deferredLayerDelayMs: 50,
+      fastLayerConcurrency: 3,
+      deferredLayerConcurrency: 2
+    })
+    
+    // 5. 执行搜索
+    this.currentController = aggregator(
+      sortedProviders,
+      query,
+      (update) => {
+        // 校验序列号，丢弃过期结果
+        if (sequence !== this.searchSequence) return
+        
+        this.broadcastUpdate(update)
+      }
+    )
+    
+    // 6. 等待完成或取消
+    await this.currentController.promise
+    return this.buildFinalResult(query)
+  }
+  
+  private sortProvidersByPriority(
+    providers: ISearchProvider[]
+  ): ISearchProvider[] {
+    // Fast providers 在前，Deferred 在后
+    return providers.sort((a, b) => {
+      const priorityOrder = { fast: 0, deferred: 1 }
+      const aPriority = priorityOrder[a.priority || 'deferred']
+      const bPriority = priorityOrder[b.priority || 'deferred']
+      
+      if (aPriority !== bPriority) return aPriority - bPriority
+      
+      // 同层内按 expectedDuration 排序
+      return (a.expectedDuration || 1000) - (b.expectedDuration || 1000)
+    })
+  }
+  
+  private cancelPreviousSearch(): void {
+    if (this.currentController && !this.currentController.signal.aborted) {
+      this.currentController.abort()
+      searchLogger.logSearchPhase('Cancel', 'Previous search cancelled')
+    }
+  }
+}
+```
+
+#### 2.3.6 渲染层优化
 
 **修改文件**: `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
 
@@ -608,7 +881,7 @@ import { shallowRef } from 'vue'
 const searchResults = shallowRef<TuffItem[]>([])
 ```
 
-#### 2.3.5 输入防抖策略优化
+#### 2.3.7 输入防抖策略优化
 
 **当前策略**:
 ```
@@ -645,24 +918,52 @@ function calculateDebounceMs(input: string, prevInput: string): number {
 
 ### 2.4 性能目标
 
-| 指标 | 当前 | 目标 |
-|------|------|------|
-| 输入响应延迟 | 100-200ms | < 50ms |
-| 首批结果时间 | 150-300ms | < 100ms |
-| 完整结果时间 | 500-1000ms | < 500ms |
-| 输入丢帧 | 明显 | 无感知 |
+| 指标 | 当前值 | 目标值 | 测量方法 |
+|------|--------|--------|----------|
+| 输入响应延迟 | 100-200ms | < 50ms | 从 keydown 到字符显示 |
+| 首批结果时间 (P50) | 150ms | < 80ms | Fast Layer 完成时间 |
+| 首批结果时间 (P95) | 300ms | < 120ms | - |
+| 完整结果时间 (P50) | 500ms | < 300ms | 所有 Provider 完成 |
+| 完整结果时间 (P95) | 1000ms | < 600ms | - |
+| 输入丢帧率 | ~15% | < 2% | 连续输入时的帧丢失 |
+| 内存占用增量 | - | < 5MB | 搜索期间额外内存 |
 
-### 2.5 实现步骤
+### 2.5 搜索取消与序列化
 
-| 阶段 | 任务 | 预期时间 |
-|------|------|----------|
-| **Phase 1** | Provider 优先级属性定义 | 0.5d |
-| **Phase 1** | search-gather.ts 分层改造 | 1d |
-| **Phase 2** | 渲染层 shallowRef 优化 | 0.5d |
-| **Phase 2** | 动态防抖策略 | 0.5d |
-| **Phase 3** | 性能测试与调优 | 1d |
+**问题**: 快速输入 "hello" 时，每次按键都触发搜索，需要正确处理结果的时序和取消。
 
-### 2.6 风险与降级
+```typescript
+// 输入序列示例
+t=0ms:   输入 "h"   → 搜索 #1 启动
+t=50ms:  输入 "e"   → 搜索 #1 取消, 搜索 #2 启动
+t=100ms: 输入 "l"   → 搜索 #2 取消, 搜索 #3 启动
+t=150ms: 输入 "l"   → 搜索 #3 取消, 搜索 #4 启动
+t=200ms: 输入 "o"   → 搜索 #4 取消, 搜索 #5 启动
+t=280ms: 搜索 #5 fast layer 完成 → 显示结果
+t=500ms: 搜索 #5 deferred layer 完成 → 追加结果
+```
+
+**实现要点**:
+
+1. **AbortController 传递**: Signal 传递到每个 Provider，Provider 内部检查 `signal.aborted`
+2. **序列号校验**: 渲染层维护 `searchSequence`，丢弃过期结果
+3. **资源清理**: 取消时清理定时器、中止网络请求
+
+### 2.6 实现步骤
+
+| 阶段 | 任务 | 文件 | 预期时间 |
+|------|------|------|----------|
+| **Phase 1** | Provider 优先级属性定义 | `packages/utils/plugin/search-provider.ts` | 0.5d |
+| **Phase 1** | ITuffGatherOptions 扩展 | `search-gather.ts` | 0.5d |
+| **Phase 1** | runFastLayer / runDeferredLayer 实现 | `search-gather.ts` | 1d |
+| **Phase 2** | SearchEngineCore 分层调用改造 | `search-core.ts` | 0.5d |
+| **Phase 2** | Provider 优先级配置 | `app-provider.ts`, `file-provider.ts` 等 | 0.5d |
+| **Phase 3** | 渲染层 shallowRef 优化 | `useSearch.ts` | 0.5d |
+| **Phase 3** | 动态防抖策略 | `useSearch.ts` | 0.5d |
+| **Phase 4** | 性能测试与调优 | - | 1d |
+| **Phase 4** | 日志与监控埋点 | `search-logger.ts` | 0.5d |
+
+### 2.7 风险与降级
 
 | 风险 | 影响 | 降级方案 |
 |------|------|----------|
@@ -670,21 +971,61 @@ function calculateDebounceMs(input: string, prevInput: string): number {
 | 快速层超时过短 | 首批结果不完整 | 监控 P95 延迟，动态调整阈值 |
 | 复杂度增加 | 维护成本 | 保留单层模式作为 fallback |
 
-### 2.7 监控指标
+### 2.8 监控指标
 
 ```typescript
 interface SearchMetrics {
+  // 基础信息
   sessionId: string
   query: string
-  fastLayerDuration: number      // 快速层耗时
-  fastLayerResultCount: number   // 快速层结果数
-  deferredLayerDuration: number  // 延迟层耗时
+  queryLength: number
+  timestamp: number
+  
+  // 性能指标
+  inputTimestamp: number          // 用户输入时间戳
+  searchStartTimestamp: number    // 搜索启动时间戳
+  debounceDelay: number           // 实际防抖延迟
+  
+  // 快速层
+  fastLayerDuration: number       // 快速层总耗时
+  fastLayerResultCount: number    // 快速层结果数
+  fastLayerProviderStats: ProviderStat[]
+  
+  // 延迟层
+  deferredLayerDuration: number   // 延迟层总耗时
   deferredLayerResultCount: number
+  deferredLayerProviderStats: ProviderStat[]
+  
+  // 总体
   totalDuration: number
-  inputToFirstResultMs: number   // 输入到首批结果的延迟
+  totalResultCount: number
+  inputToFirstResultMs: number    // 输入到首批结果的延迟 (关键指标)
+  inputToCompleteMs: number       // 输入到完整结果的延迟
+  
+  // 状态
   wasAborted: boolean
+  abortReason?: 'new-search' | 'user-cancel' | 'timeout'
+}
+
+interface ProviderStat {
+  providerId: string
+  priority: 'fast' | 'deferred'
+  duration: number
+  resultCount: number
+  status: 'success' | 'timeout' | 'error' | 'aborted'
 }
 ```
+
+### 2.9 测试用例
+
+| 场景 | 输入 | 预期行为 | 验收标准 |
+|------|------|----------|----------|
+| 快速输入 | 连续输入 "hello" (100ms间隔) | 中间搜索被取消，只显示最终结果 | 无结果闪烁，无报错 |
+| 慢 Provider | app-provider 正常，file-provider 超时 | 先显示 app 结果，file 超时不影响 | Fast Layer < 100ms 返回 |
+| 空查询 | 清空输入框 | 显示推荐结果 | 200ms 内切换到推荐 |
+| 长查询 | 输入 50 字符 | 正常搜索 | 无 OOM，结果正常 |
+| 并发取消 | 快速输入后立即清空 | 所有搜索被取消 | 无残留结果，无内存泄漏 |
+| 激活 Provider | 选中结果后继续输入 | 保持 Provider 激活状态 | 激活态搜索正常 |
 
 ---
 
