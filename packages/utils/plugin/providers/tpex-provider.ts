@@ -41,6 +41,7 @@ export interface TpexPluginInfo {
     channel: string
     packageUrl: string
     packageSize: number
+    signature?: string
     manifest?: Record<string, unknown> | null
     changelog?: string | null
   }
@@ -59,6 +60,7 @@ export interface TpexDetailResponse {
       channel: string
       packageUrl: string
       packageSize: number
+      signature?: string
       manifest?: Record<string, unknown> | null
       changelog?: string | null
     }>

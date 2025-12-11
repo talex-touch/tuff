@@ -99,6 +99,14 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2024-08-14',
 
+  vite: {
+    server: {
+      hmr: {
+        overlay: false,
+      },
+    },
+  },
+
   nitro: {
     preset: 'cloudflare-pages',
     ...(isDev

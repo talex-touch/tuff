@@ -399,7 +399,9 @@ export async function uploadImageFromBuffer(
 
   if (bucket) {
     // Production: upload to R2
-    await bucket.put(key, buffer, {
+    // Convert Node.js Buffer to Uint8Array for R2 compatibility
+    const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+    await bucket.put(key, uint8Array, {
       httpMetadata: { contentType: mimeType },
     })
     return {

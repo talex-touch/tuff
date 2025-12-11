@@ -21,6 +21,7 @@ interface InstallTaskState extends PluginInstallProgressEvent {
 const ACTIVE_STAGES: Set<PluginInstallProgressEvent['stage']> = new Set([
   'queued',
   'downloading',
+  'verifying',
   'awaiting-confirmation',
   'installing',
 ])

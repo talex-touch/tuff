@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
+import { Buffer } from 'node:buffer'
 import { clerkClient } from '@clerk/nuxt/server'
-import { createError } from 'h3'
+import { createError, send, setResponseHeader } from 'h3'
 import { getPluginPackage } from '../../../utils/pluginPackageStorage'
 import { findVersionByPackageKey } from '../../../utils/pluginsStore'
 
@@ -68,9 +69,15 @@ export default defineEventHandler(async (event) => {
   if (!packageResult)
     throw createError({ statusCode: 404, statusMessage: 'Package not found.' })
 
-  event.node.res.setHeader('Content-Type', packageResult.contentType)
-  event.node.res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate')
-  event.node.res.setHeader('Content-Disposition', `attachment; filename="${version.version}.tpex"`)
+  // Ensure we have a proper Buffer for binary response
+  const buffer = Buffer.isBuffer(packageResult.data)
+    ? packageResult.data
+    : Buffer.from(packageResult.data)
 
-  return packageResult.data
+  setResponseHeader(event, 'Content-Type', packageResult.contentType)
+  setResponseHeader(event, 'Content-Length', buffer.length)
+  setResponseHeader(event, 'Cache-Control', 'private, max-age=0, must-revalidate')
+  setResponseHeader(event, 'Content-Disposition', `attachment; filename="${version.version}.tpex"`)
+
+  return send(event, buffer)
 })

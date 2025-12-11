@@ -4,6 +4,7 @@ import type { PluginInstaller, PreparedPluginInstall } from './plugin-installer'
 import crypto from 'node:crypto'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../../core/channel-core'
+import { extractSignatureInfo, verifyPackageSignature } from './signature-verifier'
 
 interface InstallTask {
   id: string
@@ -14,6 +15,8 @@ interface InstallTask {
   prepared?: PreparedPluginInstall
   officialHint?: boolean
   officialActual?: boolean
+  /** Whether the user already confirmed installation on the client side */
+  trustedHint?: boolean
 }
 
 const PROGRESS_EVENT = 'plugin:install-progress'
@@ -51,27 +54,40 @@ export class PluginInstallQueue {
     this.options = options
   }
 
-  enqueue(request: PluginInstallRequest, reply: StandardChannelData['reply']): InstallTask {
+  /**
+   * Enqueue a plugin install request.
+   * Returns a Promise that resolves when the install completes (success or failure).
+   * The Promise resolves to undefined - actual result is sent via reply callback.
+   */
+  enqueue(request: PluginInstallRequest, reply: StandardChannelData['reply']): Promise<void> {
     const id
       = request.metadata?.taskId && typeof request.metadata.taskId === 'string'
         ? request.metadata.taskId
         : crypto.randomUUID()
 
-    const task: InstallTask = {
-      id,
-      request,
-      reply,
-      clientMetadata: request.clientMetadata,
-      lastProgress: -1,
-      officialHint:
-        typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined,
-    }
+    return new Promise<void>((resolve) => {
+      // Wrap reply to also resolve the promise when done
+      const wrappedReply: StandardChannelData['reply'] = (code, data) => {
+        reply(code, data)
+        resolve()
+      }
 
-    this.queue.push(task)
-    this.emitProgress(task, 'queued')
-    this.process()
+      const task: InstallTask = {
+        id,
+        request,
+        reply: wrappedReply,
+        clientMetadata: request.clientMetadata,
+        lastProgress: -1,
+        officialHint:
+          typeof request.metadata?.official === 'boolean' ? request.metadata.official : undefined,
+        trustedHint:
+          typeof request.metadata?.trusted === 'boolean' ? request.metadata.trusted : undefined,
+      }
 
-    return task
+      this.queue.push(task)
+      this.emitProgress(task, 'queued')
+      this.process()
+    })
   }
 
   handleConfirmResponse(response: PluginInstallConfirmResponse): void {
@@ -116,11 +132,34 @@ export class PluginInstallQueue {
       task.prepared = prepared
       task.officialActual = Boolean(prepared.providerResult.official)
 
-      if (!task.officialActual) {
+      // Verify package signature if available
+      if (prepared.providerResult.filePath) {
+        this.emitProgress(task, 'verifying', { progress: 0 })
+
+        const signatureInfo = extractSignatureInfo(prepared.providerResult.metadata)
+        const verifyResult = await verifyPackageSignature(
+          prepared.providerResult.filePath,
+          signatureInfo?.signature,
+          signatureInfo?.packageSize,
+        )
+
+        if (!verifyResult.valid && signatureInfo?.signature) {
+          // Only fail if signature was expected but invalid
+          throw new Error(`Package verification failed: ${verifyResult.reason}`)
+        }
+
+        this.emitProgress(task, 'verifying', { progress: 100 })
+      }
+
+      // Skip confirmation if:
+      // 1. Plugin is official (from provider result)
+      // 2. User already confirmed on client side (trustedHint)
+      const needsConfirmation = !task.officialActual && !task.trustedHint
+      if (needsConfirmation) {
         await this.requestConfirmation(task)
       }
 
-      this.emitProgress(task, 'installing', { progress: 100 })
+      this.emitProgress(task, 'installing', { progress: 0 })
 
       const summary = await this.installer.finalizeInstall(prepared, {
         installOptions: this.buildInstallOptions(task),

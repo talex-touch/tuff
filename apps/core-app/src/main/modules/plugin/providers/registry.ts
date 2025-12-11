@@ -86,7 +86,7 @@ export async function installFromRegistry(
       handled = entry.provider.canHandle(request)
     }
     catch (error) {
-      entry.log.error('canHandle() 抛出异常', {
+      entry.log.error('canHandle() threw exception', {
         meta: { source: request.source },
         error,
       })
@@ -107,7 +107,7 @@ export async function installFromRegistry(
   }
 
   if (!selected) {
-    providerRegistryLog.warn('没有找到可处理该请求的插件 provider', {
+    providerRegistryLog.warn('No provider found to handle this request', {
       meta: { source: request.source, hint: request.hintType },
     })
     return undefined
@@ -120,13 +120,13 @@ export async function installFromRegistry(
   }
 
   try {
-    selected.log.info('开始安装插件资源', {
+    selected.log.info('Starting plugin resource installation', {
       meta: { source: request.source },
     })
 
     const result = await selected.provider.install(request, resolvedContext)
 
-    selected.log.success('插件资源安装完成', {
+    selected.log.success('Plugin resource installation completed', {
       meta: {
         provider: selected.provider.type,
         official: result.official ? 'true' : 'false',
@@ -138,7 +138,7 @@ export async function installFromRegistry(
     return result
   }
   catch (error) {
-    selected.log.error('插件资源安装失败', {
+    selected.log.error('Plugin resource installation failed', {
       meta: {
         source: request.source,
         provider: selected.provider.type,

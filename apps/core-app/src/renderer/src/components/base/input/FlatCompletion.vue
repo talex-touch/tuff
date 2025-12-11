@@ -32,6 +32,8 @@ watch(
   () => res.value,
   async () => {
     const el = completionWrapper.value
+    if (!el)
+      return
 
     for (const item of [...el.children].reverse()) {
       setTimeout(async () => {
@@ -71,6 +73,9 @@ function blur() {
     res.value = res.value.slice(0, 8)
 
   nextTick(async () => {
+    if (!completionInput.value || !completionWrapper.value)
+      return
+
     const floating = await computePosition(completionInput.value, completionWrapper.value)
 
     Object.assign(completionWrapper.value.style, {

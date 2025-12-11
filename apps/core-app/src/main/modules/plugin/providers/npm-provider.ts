@@ -49,7 +49,24 @@ export class NpmPluginProvider implements PluginProvider {
   private readonly log = createProviderLogger(this.type)
 
   canHandle(request: PluginInstallRequest): boolean {
-    return Boolean(parseNpmSource(request.source))
+    const source = request.source.trim()
+    
+    // Skip URLs (http://, https://, file://)
+    if (/^[a-z]+:\/\//i.test(source)) {
+      return false
+    }
+    
+    // Skip file extensions that other providers handle (.tpex, .tar, .tgz, .zip)
+    if (/\.(tpex|tar|tgz|zip)$/i.test(source)) {
+      return false
+    }
+    
+    // Skip absolute file paths
+    if (source.startsWith('/') || /^[a-z]:\\/i.test(source)) {
+      return false
+    }
+    
+    return Boolean(parseNpmSource(source))
   }
 
   async install(

@@ -27,6 +27,9 @@ function fixPointer(el: HTMLElement) {
   })
 
   setTimeout(() => {
+    if (!pointer.value || !target)
+      return
+
     const pointerRect = pointer.value.getBoundingClientRect()
     const rect = target.getBoundingClientRect()
 

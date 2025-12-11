@@ -312,7 +312,13 @@
       "checking": "Checking for updates...",
       "noUpdates": "All plugins are up to date",
       "checkFailed": "Failed to check for updates"
-    }
+    },
+    "errorDetails": "Provider Status",
+    "clickToViewErrors": "Click to view error details",
+    "statusSuccess": "Success",
+    "statusFailed": "Failed",
+    "plugins": "plugins",
+    "noProviderData": "No provider data available"
   },
   "plugin": {
     "opening": "Opening...",
