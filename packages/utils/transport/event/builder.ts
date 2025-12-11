@@ -3,7 +3,7 @@
  * @module @talex-touch/utils/transport/event/builder
  */
 
-import type { TuffEvent, BatchConfig, StreamConfig, EventOptions } from './types'
+import type { TuffEvent, EventOptions } from './types'
 
 // ============================================================================
 // Builder Classes

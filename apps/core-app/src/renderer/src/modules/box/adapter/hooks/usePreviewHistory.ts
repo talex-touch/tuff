@@ -3,11 +3,14 @@ import { toast } from 'vue-sonner'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 export interface CalculationHistoryEntry {
-  id: string
+  id?: string | number
   content: string
+  timestamp?: string
   meta?: {
     expression?: string
-    payload?: { title?: string }
+    payload?: { title?: string; primaryValue?: string }
+    abilityId?: string
+    [key: string]: any
   }
 }
 

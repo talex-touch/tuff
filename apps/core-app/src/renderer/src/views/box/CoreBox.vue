@@ -1,6 +1,6 @@
 <script setup lang="ts" name="CoreBox">
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
-import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
+import type { ITuffIcon, IProviderActivate, TuffItem } from '@talex-touch/utils'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -103,9 +103,8 @@ const completionDisplay = computed(() => {
 })
 
 // Check if CoreBox is in UI mode (plugin webcontent view attached)
-const isUIMode = computed(() => {
-  return activeActivations.value && activeActivations.value.length > 0
-})
+const isUIMode = computed(() => Boolean(activeActivations.value?.length))
+const activeActivationsList = computed<IProviderActivate[]>(() => activeActivations.value ?? [])
 
 // DivisionBox mode computed properties
 const isDivisionBox = computed(() => {
@@ -131,11 +130,6 @@ const showInput = computed(() => {
   return divisionBoxConfig.value.ui?.showInput !== false
 })
 
-const _showResults = computed(() => {
-  if (!isDivisionBox.value) return true
-  return divisionBoxConfig.value?.ui?.showResults !== false
-})
-
 const inputPlaceholder = computed(() => {
   if (isDivisionBox.value && divisionBoxConfig.value?.ui?.inputPlaceholder) {
     return divisionBoxConfig.value.ui.inputPlaceholder
@@ -144,44 +138,41 @@ const inputPlaceholder = computed(() => {
 })
 
 // In DivisionBox mode, create a provider from the session meta
-const divisionBoxProviders = computed(() => {
+const divisionBoxProviders = computed<IProviderActivate[]>(() => {
   if (!isDivisionBox.value || !divisionBoxMeta.value) return []
-  
+
   const meta = divisionBoxMeta.value
   const iconValue = meta.icon
-  
-  // Build icon object - handle string or object formats
-  let icon: { type: string; value: string } | undefined
+
+  let icon: ITuffIcon | undefined
   if (iconValue) {
     if (typeof iconValue === 'string') {
       icon = { type: 'class', value: iconValue }
     } else if (typeof iconValue === 'object' && 'value' in iconValue) {
-      icon = iconValue as { type: string; value: string }
+      icon = {
+        type: (iconValue as ITuffIcon).type ?? 'class',
+        value: (iconValue as ITuffIcon).value
+      }
     }
   }
-  // Default icon if none provided
+
   if (!icon) {
     icon = { type: 'class', value: 'i-carbon-application' }
   }
-  
-  return [{
-    id: meta.pluginId || 'division-box',
-    name: meta.title || 'DivisionBox',
-    icon
-  }]
+
+  return [
+    {
+      id: meta.pluginId || 'division-box',
+      name: meta.title || 'DivisionBox',
+      icon
+    }
+  ]
 })
 
 // Merge activeActivations with divisionBoxProviders
-const effectiveProviders = computed(() => {
-  if (isDivisionBox.value) {
-    return divisionBoxProviders.value
-  }
-  return activeActivations.value
-})
-
-// Initial input from DivisionBox config (reserved for future use)
-const _initialInput = computed(() => {
-  return divisionBoxConfig.value?.ui?.initialInput ?? ''
+const effectiveProviders = computed<IProviderActivate[]>(() => {
+  if (isDivisionBox.value) return divisionBoxProviders.value
+  return activeActivationsList.value
 })
 
 // DivisionBox header ref
@@ -327,14 +318,18 @@ const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () 
   }, 150)
 })
 
+const deactivateProviderVoid = async (id?: string): Promise<void> => {
+  await deactivateProvider(id)
+}
+
 // Detach & Flow hooks
 const detach = useDetach({
   searchVal,
   res,
   boxOptions,
   isUIMode,
-  activeActivations,
-  deactivateProvider
+  activeActivations: activeActivationsList,
+  deactivateProvider: deactivateProviderVoid
 })
 
 // Action Panel hook

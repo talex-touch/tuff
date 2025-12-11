@@ -40,9 +40,6 @@ const inputValue = computed({
   set: (v) => emit('update:searchVal', v)
 })
 
-const divisionBoxConfig = computed(() => windowState.divisionBox?.config)
-const divisionBoxMeta = computed(() => windowState.divisionBox?.meta)
-
 // Window control state
 const pinned = ref(false)
 const opacity = ref(1.0)

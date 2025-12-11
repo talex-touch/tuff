@@ -27,7 +27,7 @@ export function useUserPlugins() {
     }
   })
 
-  async function loadUserPlugins(force = false): Promise<void> {
+  async function loadUserPlugins(): Promise<void> {
     if (loading.value) return
 
     const authenticated = await isAuthenticated()
