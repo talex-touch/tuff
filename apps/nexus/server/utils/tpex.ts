@@ -164,7 +164,10 @@ export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtracted
     if (!iconBuffer) {
       const { isIcon, extension } = isIconFile(name, manifestIconPath)
       if (isIcon && extension) {
-        iconBuffer = Buffer.from(fileBuffer)
+        // Create a proper copy of the buffer data to ensure it's independent
+        // and has byteOffset of 0 for R2 compatibility
+        iconBuffer = Buffer.alloc(fileBuffer.length)
+        fileBuffer.copy(iconBuffer)
         iconFileName = name.split('/').pop() ?? `icon${extension}`
         iconMimeType = ICON_MIME_TYPES[extension] ?? 'image/svg+xml'
       }

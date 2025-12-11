@@ -1203,7 +1203,8 @@ export class PluginModule extends BaseModule {
         clientMetadata: data.clientMetadata,
       }
 
-      installQueue.enqueue(request, reply)
+      // Wait for install to complete - reply is called inside enqueue
+      await installQueue.enqueue(request, reply)
     })
 
     touchChannel.regChannel(

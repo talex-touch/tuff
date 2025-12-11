@@ -794,10 +794,15 @@ export class SearchEngineCore
       summaryInterval: 24 * 60 * 60 * 1000 // 24 小时
     })
 
-    touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
-      // console.log('[SearchEngineCore] All modules loaded, starting provider initialization...') // Remove to reduce noise
-      instance.providersToLoad.forEach((provider) => instance.loadProvider(provider))
+    touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, async () => {
+      // Load providers sequentially to avoid database lock contention
+      // 串行加载 providers 以避免数据库锁竞争
+      searchEngineLog.debug(`Loading ${instance.providersToLoad.length} providers sequentially...`)
+      for (const provider of instance.providersToLoad) {
+        await instance.loadProvider(provider)
+      }
       instance.providersToLoad = []
+      searchEngineLog.success('All providers loaded successfully')
 
       // 启动汇总服务
       instance.usageSummaryService?.start()

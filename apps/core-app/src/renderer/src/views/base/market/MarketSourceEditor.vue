@@ -74,7 +74,10 @@ function handleAdd() {
   const config: Record<string, string> = {}
 
   if (newSource.type === 'nexusStore') {
-    config.manifestUrl = url
+    // Ensure the URL has the correct API path
+    config.manifestUrl = url.includes('/api/market/plugins')
+      ? url
+      : `${url.replace(/\/$/, '')}/api/market/plugins`
   } else if (newSource.type === 'tpexApi') {
     config.apiUrl = url.endsWith('/api/market/plugins') ? url : `${url.replace(/\/$/, '')}/api/market/plugins`
   }

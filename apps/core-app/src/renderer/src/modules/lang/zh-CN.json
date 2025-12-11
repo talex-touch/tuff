@@ -312,7 +312,13 @@
       "checking": "正在检查更新...",
       "noUpdates": "所有插件均为最新",
       "checkFailed": "检查更新失败"
-    }
+    },
+    "errorDetails": "数据源状态",
+    "clickToViewErrors": "点击查看错误详情",
+    "statusSuccess": "成功",
+    "statusFailed": "失败",
+    "plugins": "个插件",
+    "noProviderData": "暂无数据源信息"
   },
   "plugin": {
     "opening": "打开中...",

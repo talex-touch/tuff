@@ -1,15 +1,35 @@
 import type { IManifest } from '@talex-touch/utils/plugin'
 import type { PluginInstallRequest, PluginInstallResult, PluginProvider, PluginProviderContext } from '@talex-touch/utils/plugin/providers'
+import type { TpexDetailResponse } from '@talex-touch/utils/plugin/providers/tpex-provider'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  PluginProviderType,
-  TpexProvider as BaseTpexProvider,
-} from '@talex-touch/utils/plugin/providers'
+import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import compressing from 'compressing'
 import fse from 'fs-extra'
+import { getEnabledApiSources } from '../../../service/market-api.service'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile } from './utils'
+
+const DEFAULT_TPEX_API = 'https://tuff.tagzxia.com'
+
+/**
+ * Get the primary tpexApi base URL from user-configured sources
+ */
+function getPrimaryApiBase(): string {
+  try {
+    const sources = getEnabledApiSources()
+      .filter(s => s.type === 'tpexApi')
+      .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+
+    if (sources.length > 0 && sources[0]!.url) {
+      return sources[0]!.url.replace(/\/$/, '')
+    }
+  }
+  catch {
+    // Storage not ready yet, use default
+  }
+  return DEFAULT_TPEX_API
+}
 
 async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined> {
   const tempDir = path.join(os.tmpdir(), `talex-tpex-preview-${Date.now()}`)
@@ -44,13 +64,35 @@ function isTpexSlug(source: string): boolean {
 }
 
 /**
+ * Parse TPEX source string to extract slug and optional version
+ * Formats: "tpex:slug", "tpex:slug@version", "slug" (when hintType is TPEX)
+ */
+function parseTpexSource(source: string): { slug: string, version?: string } | null {
+  const tpexMatch = source.match(/^tpex:([a-z0-9][a-z0-9\-_.]{1,62}[a-z0-9])(?:@(.+))?$/i)
+  if (tpexMatch) {
+    return { slug: tpexMatch[1], version: tpexMatch[2] }
+  }
+
+  const slugMatch = source.match(/^([a-z0-9][a-z0-9\-_.]{1,62}[a-z0-9])(?:@(.+))?$/i)
+  if (slugMatch) {
+    return { slug: slugMatch[1], version: slugMatch[2] }
+  }
+
+  return null
+}
+
+/**
  * TPEX Plugin Provider for core-app
  * Handles both .tpex files and tpex:slug format from official registry
  */
 export class TpexPluginProvider implements PluginProvider {
   readonly type = PluginProviderType.TPEX
   private readonly log = createProviderLogger(this.type)
-  private readonly baseProvider = new BaseTpexProvider()
+
+  /** Get API base URL dynamically from user-configured sources */
+  private get apiBase(): string {
+    return getPrimaryApiBase()
+  }
 
   canHandle(request: PluginInstallRequest): boolean {
     // Handle .tpex file paths
@@ -68,32 +110,13 @@ export class TpexPluginProvider implements PluginProvider {
     request: PluginInstallRequest,
     context?: PluginProviderContext,
   ): Promise<PluginInstallResult> {
-    this.log.info('准备处理 TPEX 插件资源', {
+    this.log.info('Processing TPEX plugin resource', {
       meta: { source: request.source },
     })
 
-    // Handle tpex:slug format - delegate to base provider for registry fetch
+    // Handle tpex:slug format - fetch from registry using Node.js stream download
     if (!isTpexFile(request.source)) {
-      this.log.debug('检测到 TPEX 注册表格式，从官方源获取', {
-        meta: { source: request.source },
-      })
-      const result = await this.baseProvider.install(request, context)
-
-      // If we got a file path, peek the manifest locally
-      if (result.filePath && !result.manifest) {
-        const manifest = await peekTpexManifest(result.filePath)
-        if (manifest) {
-          result.manifest = manifest
-        }
-      }
-
-      this.log.success('TPEX 插件从官方源获取完成', {
-        meta: {
-          filePath: result.filePath,
-          official: result.official ? 'true' : 'false',
-        },
-      })
-      return result
+      return this.installFromRegistry(request, context)
     }
 
     // Handle .tpex file directly
@@ -101,7 +124,7 @@ export class TpexPluginProvider implements PluginProvider {
       let filePath = request.source
 
       if (isRemote(request.source)) {
-        this.log.debug('检测到远程 TPEX 资源，开始下载', {
+        this.log.debug('Detected remote TPEX resource, starting download', {
           meta: { url: request.source },
         })
         filePath = await downloadToTempFile(request.source, '.tpex', context?.downloadOptions)
@@ -110,21 +133,21 @@ export class TpexPluginProvider implements PluginProvider {
         filePath = path.resolve(request.source)
         const exists = await fse.pathExists(filePath)
         if (!exists) {
-          this.log.error('本地 TPEX 文件不存在', {
+          this.log.error('Local TPEX file not found', {
             meta: { filePath },
           })
-          throw new Error('指定的 TPEX 文件不存在')
+          throw new Error('Specified TPEX file does not exist')
         }
       }
 
       const manifest = await peekTpexManifest(filePath)
       if (!manifest) {
-        this.log.warn('无法从 TPEX 包中解析 manifest', {
+        this.log.warn('Failed to parse manifest from TPEX package', {
           meta: { filePath },
         })
       }
       else {
-        this.log.debug('成功解析 TPEX manifest', {
+        this.log.debug('Successfully parsed TPEX manifest', {
           meta: {
             name: manifest.name ?? 'unknown',
             version: manifest.version ?? 'unknown',
@@ -134,7 +157,7 @@ export class TpexPluginProvider implements PluginProvider {
 
       const official = typeof manifest?.author === 'string' && /talex-touch/i.test(manifest.author)
 
-      this.log.success('TPEX 插件准备完成', {
+      this.log.success('TPEX plugin prepared', {
         meta: {
           filePath,
           official: official ? 'true' : 'false',
@@ -155,11 +178,111 @@ export class TpexPluginProvider implements PluginProvider {
       }
     }
     catch (error) {
-      this.log.error('TPEX 插件处理失败', {
+      this.log.error('TPEX plugin processing failed', {
         meta: { source: request.source },
         error,
       })
       throw error
+    }
+  }
+
+  /**
+   * Install from TPEX registry (tpex:slug format) using Node.js stream download
+   */
+  private async installFromRegistry(
+    request: PluginInstallRequest,
+    context?: PluginProviderContext,
+  ): Promise<PluginInstallResult> {
+    const parsed = parseTpexSource(request.source)
+    if (!parsed) {
+      throw new Error(`Invalid TPEX source format: ${request.source}`)
+    }
+
+    const { slug, version } = parsed
+
+    this.log.debug('Detected TPEX registry format, fetching from source', {
+      meta: { source: request.source, slug, version: version ?? 'latest' },
+    })
+
+    // Fetch plugin details from API
+    const detailUrl = `${this.apiBase}/api/market/plugins/${slug}`
+    this.log.debug('Fetching plugin details', { meta: { url: detailUrl } })
+
+    const detailRes = await fetch(detailUrl)
+    if (!detailRes.ok) {
+      if (detailRes.status === 404) {
+        throw new Error(`Plugin not found: ${slug}`)
+      }
+      throw new Error(`Failed to fetch plugin details: ${detailRes.statusText}`)
+    }
+
+    const detail: TpexDetailResponse = await detailRes.json()
+    const plugin = detail.plugin
+
+    let targetVersion = plugin.latestVersion
+    if (version && plugin.versions) {
+      targetVersion = plugin.versions.find(v => v.version === version) ?? targetVersion
+    }
+
+    if (!targetVersion?.packageUrl) {
+      throw new Error(`No downloadable version found for plugin: ${slug}`)
+    }
+
+    // Construct full download URL
+    const downloadUrl = targetVersion.packageUrl.startsWith('http')
+      ? targetVersion.packageUrl
+      : `${this.apiBase}${targetVersion.packageUrl}`
+
+    this.log.debug('Starting plugin package download', {
+      meta: {
+        url: downloadUrl,
+        version: targetVersion.version,
+        size: targetVersion.packageSize,
+      },
+    })
+
+    // Use Node.js stream download instead of fetch + arrayBuffer
+    const filePath = await downloadToTempFile(downloadUrl, '.tpex', context?.downloadOptions)
+
+    // Peek manifest from downloaded file
+    let manifest = await peekTpexManifest(filePath)
+
+    // If peek failed but we have manifest from API, use that
+    if (!manifest && targetVersion.manifest) {
+      manifest = {
+        id: plugin.slug,
+        name: plugin.name,
+        version: targetVersion.version,
+        description: plugin.summary,
+        author: plugin.author?.name ?? 'Unknown',
+        main: (targetVersion.manifest as Record<string, unknown>).main as string ?? 'index.js',
+        icon: plugin.iconUrl ?? undefined,
+        ...targetVersion.manifest,
+      } as IManifest
+    }
+
+    this.log.success('TPEX plugin fetched from registry', {
+      meta: {
+        filePath,
+        official: plugin.isOfficial ? 'true' : 'false',
+        version: targetVersion.version,
+      },
+    })
+
+    return {
+      provider: PluginProviderType.TPEX,
+      filePath,
+      official: plugin.isOfficial,
+      manifest,
+      metadata: {
+        sourceType: 'registry',
+        slug: plugin.slug,
+        version: targetVersion.version,
+        channel: targetVersion.channel,
+        packageSize: targetVersion.packageSize,
+        signature: targetVersion.signature,
+        installs: plugin.installs,
+      },
     }
   }
 }

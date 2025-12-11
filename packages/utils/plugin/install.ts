@@ -1,6 +1,7 @@
 export type PluginInstallTaskStage
   = | 'queued'
     | 'downloading'
+    | 'verifying'
     | 'awaiting-confirmation'
     | 'installing'
     | 'completed'

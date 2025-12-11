@@ -3,8 +3,8 @@ import type { DbUtils } from '../../../db/utils'
 import * as schema from '../../../db/schema'
 import { sleep } from '@talex-touch/utils'
 
-const MAX_RETRIES = 3
-const RETRY_DELAY_MS = 100
+const MAX_RETRIES = 5
+const RETRY_DELAY_MS = 200
 
 function isSqliteBusyError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false

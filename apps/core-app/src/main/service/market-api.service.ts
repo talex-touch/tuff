@@ -1,9 +1,61 @@
+import type { MarketProviderDefinition, MarketSourcesPayload } from '@talex-touch/utils/market'
+import { DEFAULT_MARKET_PROVIDERS, MARKET_SOURCES_STORAGE_KEY } from '@talex-touch/utils/market'
 import { performMarketHttpRequest } from './market-http.service'
 import { createLogger } from '../utils/logger'
+import { getConfig } from '../modules/storage'
 
 const log = createLogger('MarketApiService')
 
-const DEFAULT_MARKET_BASE_URL = 'https://tuff.tagzxia.com'
+/**
+ * Get all configured market sources from user storage
+ */
+export function getMarketSources(): MarketProviderDefinition[] {
+  try {
+    const payload = getConfig(MARKET_SOURCES_STORAGE_KEY) as MarketSourcesPayload | null
+    if (payload?.sources && Array.isArray(payload.sources)) {
+      return payload.sources
+    }
+  }
+  catch (error) {
+    log.warn('Failed to read market sources from storage', { error })
+  }
+  return DEFAULT_MARKET_PROVIDERS
+}
+
+/**
+ * Get enabled tpexApi or nexusStore sources
+ */
+export function getEnabledApiSources(): MarketProviderDefinition[] {
+  return getMarketSources().filter(
+    source => source.enabled !== false && (source.type === 'tpexApi' || source.type === 'nexusStore'),
+  )
+}
+
+/**
+ * Get the primary market base URL from configured sources
+ * Prioritizes enabled tpexApi sources by priority, falls back to defaults
+ */
+function getDefaultMarketBaseUrl(): string {
+  // Check for environment variable override first
+  const envBase = process.env.TPEX_API_BASE || process.env.VITE_NEXUS_URL
+  if (envBase) {
+    return envBase
+  }
+
+  // Get enabled API sources sorted by priority
+  const sources = getEnabledApiSources()
+    .filter(s => s.type === 'tpexApi')
+    .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+
+  // Return the highest priority source URL
+  if (sources.length > 0 && sources[0]!.url) {
+    return sources[0]!.url.replace(/\/$/, '')
+  }
+
+  // Fallback to default
+  return 'https://tuff.tagzxia.com'
+}
+
 const DEFAULT_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 interface InstalledPluginInfo {
@@ -57,7 +109,7 @@ export async function checkPluginUpdates(
   if (!plugins.length)
     return null
 
-  const url = `${baseUrl ?? DEFAULT_MARKET_BASE_URL}/api/market/updates`
+  const url = `${baseUrl ?? getDefaultMarketBaseUrl()}/api/market/updates`
 
   try {
     const response = await performMarketHttpRequest<UpdateCheckResponse>({
@@ -83,7 +135,7 @@ export async function reportPluginUninstall(
   slug: string,
   baseUrl?: string,
 ): Promise<boolean> {
-  const url = `${baseUrl ?? DEFAULT_MARKET_BASE_URL}/api/market/uninstall`
+  const url = `${baseUrl ?? getDefaultMarketBaseUrl()}/api/market/uninstall`
 
   try {
     await performMarketHttpRequest({

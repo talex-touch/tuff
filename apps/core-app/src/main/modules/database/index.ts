@@ -135,11 +135,15 @@ export class DatabaseModule extends BaseModule {
     try {
       // Enable WAL mode for better concurrent read/write performance
       await this.client.execute('PRAGMA journal_mode = WAL')
-      // Set busy timeout to 10 seconds to handle lock contention
-      await this.client.execute('PRAGMA busy_timeout = 10000')
+      // Set busy timeout to 30 seconds to handle lock contention during heavy init
+      await this.client.execute('PRAGMA busy_timeout = 30000')
       // Optimize for performance
       await this.client.execute('PRAGMA synchronous = NORMAL')
-      console.log(chalk.green('[Database] SQLite configured: WAL mode enabled, busy_timeout=10s'))
+      // Reduce lock contention by using IMMEDIATE transactions
+      await this.client.execute('PRAGMA locking_mode = NORMAL')
+      // Enable memory-mapped I/O for better performance
+      await this.client.execute('PRAGMA mmap_size = 268435456')
+      console.log(chalk.green('[Database] SQLite configured: WAL mode enabled, busy_timeout=30s'))
     } catch (error) {
       console.warn(chalk.yellow('[Database] Failed to configure SQLite pragmas:'), error)
     }

@@ -64,7 +64,14 @@ export interface MarketPlugin {
   category?: string
   tags?: string[]
   author?: string
+  /**
+   * Icon class name (e.g., 'i-mdi-puzzle')
+   */
   icon?: string
+  /**
+   * Direct URL to icon image (e.g., '/api/images/xxx.svg')
+   */
+  iconUrl?: string
   metadata?: Record<string, unknown>
   readmeUrl?: string
   homepage?: string

@@ -40,7 +40,10 @@ export function useMarketInstall() {
         {
           content: t('market.installation.confirmReject'),
           type: 'warning',
-          onClick: async () => false
+          onClick: async () => {
+            // Return true to close the dialog (confirmed remains false)
+            return true
+          }
         }
       ]
     )
@@ -75,7 +78,9 @@ export function useMarketInstall() {
     }
 
     try {
-      if (!(await confirmUntrusted(plugin))) {
+      // If not trusted, user must confirm first
+      const userConfirmed = await confirmUntrusted(plugin)
+      if (!userConfirmed) {
         return
       }
 
@@ -83,6 +88,9 @@ export function useMarketInstall() {
       if (!downloadUrl) {
         throw new Error('MARKET_INSTALL_NO_SOURCE')
       }
+
+      // After user confirmation, mark as trusted to skip backend confirmation
+      const isTrusted = plugin.trusted === true || userConfirmed
 
       const payload: Record<string, unknown> = {
         source: downloadUrl,
@@ -94,7 +102,7 @@ export function useMarketInstall() {
           providerId: plugin.providerId,
           providerName: plugin.providerName,
           providerType: plugin.providerType,
-          trusted: plugin.trusted === true
+          trusted: isTrusted
         },
         clientMetadata: {
           pluginId: plugin.id,

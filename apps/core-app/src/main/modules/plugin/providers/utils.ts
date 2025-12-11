@@ -72,18 +72,35 @@ export async function downloadToTempFile(
           reportProgress(100)
         }
       })
-      .on('error', (error) => {
+      .on('error', async (error) => {
         reportProgress(0)
+        // Cleanup partial file on error
+        await fse.remove(filePath).catch(() => {})
         reject(error)
       })
       .pipe(writer)
 
     writer.on('finish', resolve)
-    writer.on('error', (error) => {
+    writer.on('error', async (error) => {
       reportProgress(0)
+      // Cleanup partial file on error
+      await fse.remove(filePath).catch(() => {})
       reject(error)
     })
   })
+
+  // Verify file was written and has content
+  const stat = await fse.stat(filePath).catch(() => null)
+  if (!stat || stat.size === 0) {
+    await fse.remove(filePath).catch(() => {})
+    throw new Error('Downloaded file is empty or was not created')
+  }
+
+  // Verify file size matches expected if Content-Length was provided
+  if (totalLength > 0 && stat.size !== totalLength) {
+    console.warn(`[PluginProvider] Downloaded file size mismatch: expected ${totalLength}, got ${stat.size}`)
+    // Don't throw, just warn - some servers may not report accurate Content-Length
+  }
 
   if (totalLength > 0) {
     reportProgress(100)

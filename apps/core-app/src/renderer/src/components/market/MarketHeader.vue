@@ -1,4 +1,6 @@
 <script setup lang="ts" name="MarketHeader">
+import type { MarketProviderResultMeta } from '@talex-touch/utils/market'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
@@ -14,6 +16,7 @@ defineProps<{
     failed: number
     totalPlugins: number
   }
+  providerDetails?: MarketProviderResultMeta[]
 }>()
 
 const emit = defineEmits<{
@@ -24,8 +27,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// Error details drawer state
+const showErrorDrawer = ref(false)
+
 function handleSearch(query: string): void {
   emit('search', query)
+}
+
+function openErrorDetails(): void {
+  showErrorDrawer.value = true
 }
 
 const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
@@ -59,12 +69,12 @@ const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
             <span op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
               {{ sourcesCount }} {{ t('market.sources') }}
             </span>
-            <span v-if="providerStats" class="provider-status">
+            <span v-if="providerStats" class="provider-status" :class="{ clickable: providerStats.failed > 0 }" @click="providerStats.failed > 0 && openErrorDetails()">
               <span class="status-success">
                 <i class="i-ri-check-line" />
                 {{ providerStats.success }}
               </span>
-              <span v-if="providerStats.failed > 0" class="status-failed">
+              <span v-if="providerStats.failed > 0" class="status-failed" :title="t('market.clickToViewErrors')">
                 <i class="i-ri-close-line" />
                 {{ providerStats.failed }}
               </span>
@@ -86,6 +96,47 @@ const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
       </FlatButton>
     </div>
   </div>
+
+  <!-- Error Details Drawer -->
+  <el-drawer
+    v-model="showErrorDrawer"
+    :title="t('market.errorDetails')"
+    direction="rtl"
+    size="400px"
+  >
+    <div class="error-drawer-content">
+      <div v-if="providerDetails?.length" class="provider-list">
+        <div
+          v-for="provider in providerDetails"
+          :key="provider.providerId"
+          class="provider-item"
+          :class="{ 'is-error': !provider.success }"
+        >
+          <div class="provider-header">
+            <span class="provider-name">{{ provider.providerName }}</span>
+            <span class="provider-type">{{ provider.providerType }}</span>
+          </div>
+          <div class="provider-status-row">
+            <span v-if="provider.success" class="status-badge success">
+              <i class="i-ri-check-line" />
+              {{ t('market.statusSuccess') }}
+            </span>
+            <span v-else class="status-badge error">
+              <i class="i-ri-close-line" />
+              {{ t('market.statusFailed') }}
+            </span>
+            <span class="item-count">{{ provider.itemCount }} {{ t('market.plugins') }}</span>
+          </div>
+          <div v-if="!provider.success && provider.error" class="error-message">
+            <code>{{ provider.error }}</code>
+          </div>
+        </div>
+      </div>
+      <div v-else class="empty-state">
+        {{ t('market.noProviderData') }}
+      </div>
+    </div>
+  </el-drawer>
 </template>
 
 <style scoped lang="scss">
@@ -102,6 +153,16 @@ const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
   border-radius: 999px;
   background: var(--el-fill-color-light);
   border: 1px solid var(--el-border-color-lighter);
+
+  &.clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--el-fill-color);
+      border-color: var(--el-color-danger-light-5);
+    }
+  }
 }
 
 .status-success {
@@ -131,5 +192,101 @@ const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
   to {
     transform: rotate(360deg);
   }
+}
+
+// Error drawer styles
+.error-drawer-content {
+  padding: 0.5rem;
+}
+
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.provider-item {
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+
+  &.is-error {
+    border-color: var(--el-color-danger-light-5);
+    background: var(--el-color-danger-light-9);
+  }
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.provider-name {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.provider-type {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-secondary);
+}
+
+.provider-status-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+
+  &.success {
+    color: var(--el-color-success);
+    background: var(--el-color-success-light-9);
+  }
+
+  &.error {
+    color: var(--el-color-danger);
+    background: var(--el-color-danger-light-9);
+  }
+}
+
+.item-count {
+  font-size: 0.75rem;
+  color: var(--el-text-color-secondary);
+}
+
+.error-message {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background: var(--el-fill-color-dark);
+  overflow-x: auto;
+
+  code {
+    font-size: 0.75rem;
+    color: var(--el-color-danger);
+    word-break: break-all;
+    white-space: pre-wrap;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--el-text-color-secondary);
 }
 </style>

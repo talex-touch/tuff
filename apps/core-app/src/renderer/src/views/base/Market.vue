@@ -118,6 +118,7 @@ onMounted(() => {
       :loading="loading"
       :sources-count="sourcesCount"
       :provider-stats="providerStatsComputed"
+      :provider-details="providerStats"
       @refresh="loadMarketPlugins(true)"
       @open-source-editor="toggleSourceEditorShow()"
       @search="handleSearch"
