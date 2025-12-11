@@ -295,6 +295,7 @@ async function ensurePluginSchema(db: D1Database) {
     }
   }
 
+  await addColumnIfMissing('user_id', 'user_id TEXT')
   await addColumnIfMissing('homepage', 'homepage TEXT')
   await addColumnIfMissing('owner_org_id', 'owner_org_id TEXT')
   await addColumnIfMissing('latest_version_id', 'latest_version_id TEXT')
@@ -303,6 +304,8 @@ async function ensurePluginSchema(db: D1Database) {
   await addColumnIfMissing('readme_markdown', 'readme_markdown TEXT')
   await addColumnIfMissing('icon_key', 'icon_key TEXT')
   await addColumnIfMissing('icon_url', 'icon_url TEXT')
+  await addColumnIfMissing('created_at', 'created_at TEXT')
+  await addColumnIfMissing('updated_at', 'updated_at TEXT')
 
   await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_slug ON ${PLUGINS_TABLE}(slug);`).run()
 
