@@ -1,13 +1,7 @@
 <script setup lang="ts" name="PreviewHistoryPanel">
 import dayjs from 'dayjs'
 import { computed, nextTick, ref, watch } from 'vue'
-
-export interface CalculationHistoryEntry {
-  id?: number
-  content: string
-  timestamp?: string
-  meta?: Record<string, any>
-}
+import type { CalculationHistoryEntry } from '~/modules/box/adapter/hooks/usePreviewHistory'
 
 const props = withDefaults(
   defineProps<{

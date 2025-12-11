@@ -218,7 +218,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     // 注意：_initialize() 已在新增/更新应用时调用 _syncKeywordsForApp()
     // 只在需要时异步同步，避免阻塞启动（如数据库迁移后）
-    // await this._forceSyncAllKeywords()
     this._subscribeToFSEvents()
     this._registerWatchPaths()
     this._scheduleMdlsUpdateScan()
@@ -1293,58 +1292,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     )
     return false
-  }
-
-  private async _forceSyncAllKeywords(): Promise<void> {
-    console.log(formatLog('AppProvider', 'Force syncing all app keywords...', LogStyle.process))
-
-    if (!this.dbUtils) {
-      console.error(
-        formatLog('AppProvider', 'Database not initialized, cannot sync keywords', LogStyle.error)
-      )
-      return
-    }
-
-    const allDbApps = await this.dbUtils.getFilesByType('app')
-    if (allDbApps.length === 0) {
-      console.log(formatLog('AppProvider', 'No apps in DB, skipping sync', LogStyle.info))
-      return
-    }
-
-    const appsWithExtensions = await this.fetchExtensionsForFiles(allDbApps)
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Syncing keywords for ${chalk.cyan(appsWithExtensions.length)} apps`,
-        LogStyle.process
-      )
-    )
-
-    await runAdaptiveTaskQueue(
-      appsWithExtensions,
-      async (app, index) => {
-        const appInfo = this._mapDbAppToScannedInfo(app)
-        await this._syncKeywordsForApp(appInfo)
-
-        if ((index + 1) % 50 === 0 || index === appsWithExtensions.length - 1) {
-          console.log(
-            formatLog(
-              'AppProvider',
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
-              LogStyle.info
-            )
-          )
-        }
-      },
-      {
-        estimatedTaskTimeMs: 5,
-        yieldIntervalMs: 30,
-        maxBatchSize: 25,
-        label: 'AppProvider::forceKeywordSync'
-      }
-    )
-
-    console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
   }
 
   private _scheduleMdlsUpdateScan(): void {

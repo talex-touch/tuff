@@ -104,12 +104,12 @@ function getCapabilityIcon(type: string): string {
       <div class="tools-list">
         <el-tag
           v-for="tool in agent.tools"
-          :key="tool"
+          :key="tool.toolId"
           size="small"
           class="tool-tag"
         >
           <span class="i-carbon-tool mr-1" />
-          {{ tool }}
+          {{ tool.toolId }}
         </el-tag>
       </div>
     </div>
