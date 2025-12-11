@@ -295,17 +295,29 @@ async function ensurePluginSchema(db: D1Database) {
     }
   }
 
+  // Ensure all columns exist for backward compatibility
   await addColumnIfMissing('user_id', 'user_id TEXT')
-  await addColumnIfMissing('homepage', 'homepage TEXT')
   await addColumnIfMissing('owner_org_id', 'owner_org_id TEXT')
-  await addColumnIfMissing('latest_version_id', 'latest_version_id TEXT')
+  await addColumnIfMissing('name', 'name TEXT')
+  await addColumnIfMissing('summary', 'summary TEXT')
+  await addColumnIfMissing('category', 'category TEXT')
+  await addColumnIfMissing('installs', 'installs INTEGER DEFAULT 0')
+  await addColumnIfMissing('homepage', 'homepage TEXT')
+  await addColumnIfMissing('icon', 'icon TEXT')
+  await addColumnIfMissing('image_url', 'image_url TEXT')
+  await addColumnIfMissing('last_updated', 'last_updated TEXT')
+  await addColumnIfMissing('version', 'version TEXT')
+  await addColumnIfMissing('is_official', 'is_official INTEGER DEFAULT 0')
+  await addColumnIfMissing('badges', 'badges TEXT')
+  await addColumnIfMissing('author', 'author TEXT')
   await addColumnIfMissing('slug', 'slug TEXT')
-  await addColumnIfMissing('status', 'status TEXT NOT NULL DEFAULT \'draft\'')
+  await addColumnIfMissing('status', 'status TEXT DEFAULT \'draft\'')
   await addColumnIfMissing('readme_markdown', 'readme_markdown TEXT')
   await addColumnIfMissing('icon_key', 'icon_key TEXT')
   await addColumnIfMissing('icon_url', 'icon_url TEXT')
   await addColumnIfMissing('created_at', 'created_at TEXT')
   await addColumnIfMissing('updated_at', 'updated_at TEXT')
+  await addColumnIfMissing('latest_version_id', 'latest_version_id TEXT')
 
   await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_${PLUGINS_TABLE}_slug ON ${PLUGINS_TABLE}(slug);`).run()
 
