@@ -35,6 +35,8 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
   readonly name = 'System Provider'
   readonly type = 'system' as const
   readonly supportedInputTypes = [TuffInputType.Text]
+  readonly priority = 'fast' as const
+  readonly expectedDuration = 20
 
   private permissionChecker: PermissionChecker | null = null
   private actions: SystemAction[] = []

@@ -2,6 +2,7 @@ import type {
   IGatherController,
   ISearchProvider,
   ITuffGatherOptions,
+  SearchPriorityLayer,
   TuffAggregatorCallback,
   TuffQuery,
   TuffSearchResult,
@@ -25,7 +26,8 @@ interface ExtendedSourceStat {
   providerName: string
   duration: number
   resultCount: number
-  status: 'success' | 'timeout' | 'error'
+  status: 'success' | 'timeout' | 'error' | 'aborted'
+  layer?: SearchPriorityLayer
 }
 
 /**
@@ -38,7 +40,24 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
   firstBatchGraceMs: 20,
   debouncePushMs: 8,
   taskTimeoutMs: 3000,
+  // Layered search options
+  enableLayeredSearch: true,
+  fastLayerTimeoutMs: 80,
+  deferredLayerDelayMs: 50,
+  fastLayerConcurrency: 3,
+  deferredLayerConcurrency: 2,
 }
+
+/**
+ * Utility function to create a delay promise
+ */
+const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Count total items from search results
+ */
+const countItems = (results: TuffSearchResult[]): number =>
+  results.reduce((acc, curr) => acc + curr.items.length, 0)
 
 /**
  * Creates a search controller that manages the lifecycle of a search operation.
@@ -71,18 +90,20 @@ function createGatherController(
 }
 
 /**
- * Creates the core search aggregator with a single-queue, concurrent worker pool, and smart batching.
- * This implementation optimizes for speed and responsiveness by:
- * - Using a fixed-concurrency worker pool to process all providers.
- * - Intelligently batching results to reduce UI flicker and unnecessary re-renders.
- * - Providing a grace period for the first batch to ensure a fast initial response.
+ * Creates the core search aggregator with layered search support.
  *
- * @param options - Detailed configuration for the aggregator.
+ * Features:
+ * - **Layered Search**: Splits providers into fast and deferred layers
+ * - **Fast Layer**: Returns results immediately with timeout protection
+ * - **Deferred Layer**: Runs asynchronously after fast layer completes
+ * - **Smart Batching**: Reduces UI flicker with result coalescing
+ * - **Cancellation**: Full AbortSignal support throughout
+ *
+ * @param options - Configuration for the aggregator.
  * @returns A function that executes a search with the given providers and query.
  */
 export function createGatherAggregator(options: ITuffGatherOptions = {}) {
   const config = { ...defaultTuffGatherOptions, ...options }
-  const { concurrency, coalesceGapMs, firstBatchGraceMs, debouncePushMs, taskTimeoutMs } = config
 
   /**
    * The main search execution function.
@@ -98,225 +119,514 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
   ): IGatherController {
     searchLogger.logSearchPhase('Gatherer Setup', `Initializing ${providers.length} providers`)
     searchLogger.gathererStart(providers.length, params.text)
-    console.debug(`[SearchGatherer] Starting search with ${providers.length} providers.`)
 
-    /**
-     * The core search handler.
-     * @param signal - The AbortSignal to cancel the search.
-     * @param resolve - The promise resolver to call when the search is complete.
-     */
-    async function handleGather(
-      signal: AbortSignal,
-      resolve: (value: number | PromiseLike<number>) => void,
-    ): Promise<number> {
-      const allResults: TuffSearchResult[] = []
-      const sourceStats: ExtendedSourceStat[] = []
-      const taskQueue = [...providers]
-      let pushBuffer: TuffSearchResult[] = []
+    // Use layered search if enabled, otherwise fall back to legacy mode
+    if (config.enableLayeredSearch) {
+      return createLayeredSearchController(providers, params, onUpdate, config)
+    }
+    else {
+      return createLegacySearchController(providers, params, onUpdate, config)
+    }
+  }
+}
 
-      let completedCount = 0
-      let hasFlushedFirstBatch = false
-      let coalesceTimeoutId: NodeJS.Timeout | null = null
+/**
+ * Creates a layered search controller with fast and deferred layers.
+ */
+function createLayeredSearchController(
+  providers: ISearchProvider<ProviderContext>[],
+  params: TuffQuery,
+  onUpdate: TuffAggregatorCallback,
+  config: Required<ITuffGatherOptions>,
+): IGatherController {
+  const {
+    fastLayerTimeoutMs,
+    deferredLayerDelayMs,
+    fastLayerConcurrency,
+    deferredLayerConcurrency,
+    taskTimeoutMs,
+  } = config
 
-      /**
-       * Flushes the result buffer and sends updates via the onUpdate callback.
-       * @param isFinalFlush - If true, signals that the search is complete.
-       */
-      const flushBuffer = (isFinalFlush = false): void => {
-        if (coalesceTimeoutId) {
-          clearTimeout(coalesceTimeoutId)
-          coalesceTimeoutId = null
-        }
+  return createGatherController(async (signal, resolve) => {
+    const startTime = performance.now()
+    const allResults: TuffSearchResult[] = []
+    const sourceStats: ExtendedSourceStat[] = []
 
-        if (pushBuffer.length > 0) {
-          const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
-          onUpdate({
-            newResults: pushBuffer,
-            totalCount: itemsCount,
-            isDone: false,
-            sourceStats: sourceStats as TuffSearchResult['sources'],
-          })
-          pushBuffer = []
-        }
+    // Split providers by priority
+    const fastProviders = providers.filter(p => p.priority === 'fast')
+    const deferredProviders = providers.filter(p => p.priority !== 'fast')
 
-        if (isFinalFlush) {
-          const itemsCount = allResults.reduce((acc, curr) => acc + curr.items.length, 0)
-          onUpdate({
-            newResults: [],
-            totalCount: itemsCount,
-            isDone: true,
-            sourceStats: sourceStats as TuffSearchResult['sources'],
-          })
-          resolve(itemsCount)
-        }
-      }
+    searchLogger.logSearchPhase(
+      'Layered Search',
+      `Fast: ${fastProviders.length}, Deferred: ${deferredProviders.length}`,
+    )
 
-      const debouncedFlush = debounce(flushBuffer, debouncePushMs)
+    // Set up abort handler
+    let isAborted = false
+    signal.addEventListener('abort', () => {
+      isAborted = true
+      console.debug('[SearchGatherer] Layered search cancelled.')
+      onUpdate({
+        newResults: [],
+        totalCount: countItems(allResults),
+        isDone: true,
+        cancelled: true,
+        sourceStats: sourceStats as TuffSearchResult['sources'],
+      })
+      resolve(0)
+    })
 
-      /**
-       * Handles a new result from a provider, adding it to the buffer and managing the flush logic.
-       * @param result - The search result.
-       */
-      const onNewResult = (result: TuffSearchResult): void => {
-        searchLogger.resultReceived(result.items.length)
-        allResults.push(result)
-        pushBuffer.push(result)
-        completedCount++
+    // ==================== FAST LAYER ====================
+    if (fastProviders.length > 0 && !isAborted) {
+      searchLogger.logSearchPhase('Fast Layer', `Starting with ${fastProviders.length} providers`)
 
-        if (!hasFlushedFirstBatch) {
-          hasFlushedFirstBatch = true
-          searchLogger.firstBatch(firstBatchGraceMs)
-          // For the first result, wait a short grace period before flushing.
-          coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
-        }
-        else {
-          // For subsequent results, reset the coalescing gap.
-          if (coalesceTimeoutId)
-            clearTimeout(coalesceTimeoutId)
-          coalesceTimeoutId = setTimeout(() => debouncedFlush(), coalesceGapMs)
-        }
+      const fastResults = await runFastLayer(
+        fastProviders,
+        params,
+        signal,
+        fastLayerTimeoutMs,
+        fastLayerConcurrency,
+        taskTimeoutMs,
+        sourceStats,
+      )
 
-        // If all tasks are done, perform a final flush immediately.
-        if (completedCount === providers.length) {
-          searchLogger.allProvidersComplete()
-          debouncedFlush.flush() // Use lodash debounce's flush method
-          flushBuffer(true)
-        }
-      }
+      allResults.push(...fastResults)
 
-      /**
-       * Runs the worker pool to process providers concurrently.
-       */
-      const runWorkerPool = async (): Promise<void> => {
-        // Set up abort handler to notify about cancellation
-        signal.addEventListener('abort', () => {
-          // Clean up any pending timeouts
-          if (coalesceTimeoutId) {
-            clearTimeout(coalesceTimeoutId)
-            coalesceTimeoutId = null
-          }
-          debouncedFlush.cancel()
-
-          // Notify about cancellation
-          console.debug('[SearchGatherer] Search was cancelled. Notifying callback.')
-          onUpdate({
-            newResults: [],
-            totalCount: allResults.reduce((acc, curr) => acc + curr.items.length, 0),
-            isDone: true,
-            cancelled: true,
-            sourceStats: sourceStats as TuffSearchResult['sources'],
-          })
-          resolve(0) // Resolve with 0 to indicate cancellation
-        })
-
-        searchLogger.logSearchPhase('Worker Pool', `Starting ${concurrency} workers`)
-
-        const workers = new Array(concurrency)
-          .fill(0)
-          .map(async (_, i) => {
-            // Stagger the start of each worker to avoid resource contention.
-            await new Promise(resolve => setTimeout(resolve, i * 10))
-            searchLogger.workerStart(i)
-            while (taskQueue.length > 0) {
-              const provider = taskQueue.shift()
-              if (!provider)
-                continue
-
-              searchLogger.workerProcessing(i, provider.id)
-              const startTime = performance.now()
-              let status: 'success' | 'timeout' | 'error' = 'success'
-              let resultCount = 0
-
-              try {
-                if (signal.aborted)
-                  return
-
-                searchLogger.providerCall(provider.id)
-                const searchPromise = provider.onSearch(params, signal)
-                const searchResult = await withTimeout(searchPromise, taskTimeoutMs)
-
-                resultCount = searchResult.items.length
-                searchLogger.providerResult(provider.id, resultCount)
-                onNewResult(searchResult)
-              }
-              catch (error) {
-                status = 'error'
-                if (error instanceof Error && error.name === 'TimeoutError') {
-                  status = 'timeout'
-                  searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-                }
-                else {
-                  searchLogger.providerError(
-                    provider.id,
-                    error instanceof Error ? error.message : 'Unknown error',
-                  )
-                }
-                console.error(`[SearchGatherer] Provider [${provider.id}] failed:`, error)
-              }
-              finally {
-                const duration = performance.now() - startTime
-                // Do not log or record stats for aborted tasks.
-                if (!signal.aborted) {
-                  logProviderCompletion(provider, duration, resultCount, status)
-                  sourceStats.push({
-                    providerId: provider.id,
-                    providerName: provider.name || provider.constructor.name,
-                    duration,
-                    resultCount,
-                    status,
-                  })
-                }
-              }
-            }
-            searchLogger.workerComplete(i)
-          })
-        await Promise.all(workers)
-      }
-
-      /**
-       * Logs the completion details of a provider with styled output.
-       * @param provider - The provider that finished.
-       * @param duration - The execution duration in milliseconds.
-       * @param resultCount - The number of results returned.
-       * @param status - The final status of the provider.
-       */
-      const logProviderCompletion = (
-        provider: ISearchProvider<ProviderContext>,
-        duration: number,
-        resultCount: number,
-        status: 'success' | 'timeout' | 'error',
-      ): void => {
-        let durationStr: string
-        if (duration < 50) {
-          durationStr = chalk.gray(`${duration.toFixed(1)}ms`)
-        }
-        else if (duration < 200) {
-          durationStr = chalk.bgYellow.black(`${duration.toFixed(1)}ms`)
-        }
-        else {
-          durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
-        }
-        const logMethod
-          = status === 'success' ? console.debug : status === 'timeout' ? console.warn : console.warn
-        logMethod(
-          `[SearchGatherer] Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`,
+      // Immediately push fast layer results
+      if (!isAborted) {
+        const fastDuration = performance.now() - startTime
+        searchLogger.logSearchPhase(
+          'Fast Layer Complete',
+          `${countItems(fastResults)} items in ${fastDuration.toFixed(1)}ms`,
         )
-      }
 
-      const run = async (): Promise<number> => {
-        await runWorkerPool()
-        console.debug('[SearchGatherer] All search tasks completed.')
-        flushBuffer(true)
-        return allResults.reduce((acc, curr) => acc + curr.items.length, 0)
+        onUpdate({
+          newResults: fastResults,
+          totalCount: countItems(allResults),
+          isDone: deferredProviders.length === 0,
+          sourceStats: sourceStats as TuffSearchResult['sources'],
+          layer: 'fast',
+        })
       }
-
-      return run()
     }
 
-    return createGatherController((signal, resolve) => {
-      return handleGather(signal, resolve)
+    // Check if aborted before deferred layer
+    if (isAborted) {
+      return 0
+    }
+
+    // ==================== DEFERRED LAYER ====================
+    if (deferredProviders.length > 0 && !isAborted) {
+      // Delay to let UI render fast layer results
+      await delay(deferredLayerDelayMs)
+
+      if (isAborted) {
+        return countItems(allResults)
+      }
+
+      searchLogger.logSearchPhase('Deferred Layer', `Starting with ${deferredProviders.length} providers`)
+
+      await runDeferredLayer(
+        deferredProviders,
+        params,
+        signal,
+        deferredLayerConcurrency,
+        taskTimeoutMs,
+        (result, stat) => {
+          if (isAborted)
+            return
+
+          allResults.push(result)
+          sourceStats.push(stat)
+
+          onUpdate({
+            newResults: [result],
+            totalCount: countItems(allResults),
+            isDone: false,
+            sourceStats: sourceStats as TuffSearchResult['sources'],
+            layer: 'deferred',
+          })
+        },
+      )
+
+      // Final update after deferred layer completes
+      if (!isAborted) {
+        const totalDuration = performance.now() - startTime
+        searchLogger.logSearchPhase(
+          'Search Complete',
+          `${countItems(allResults)} items in ${totalDuration.toFixed(1)}ms`,
+        )
+
+        onUpdate({
+          newResults: [],
+          totalCount: countItems(allResults),
+          isDone: true,
+          sourceStats: sourceStats as TuffSearchResult['sources'],
+          layer: 'deferred',
+        })
+      }
+    }
+    else if (!isAborted && deferredProviders.length === 0) {
+      // No deferred providers, search is already complete
+      searchLogger.logSearchPhase('Search Complete', 'No deferred providers')
+    }
+
+    resolve(countItems(allResults))
+    return countItems(allResults)
+  })
+}
+
+/**
+ * Runs fast layer providers with overall timeout protection.
+ * Returns as soon as timeout expires or all providers complete.
+ */
+async function runFastLayer(
+  providers: ISearchProvider<ProviderContext>[],
+  params: TuffQuery,
+  signal: AbortSignal,
+  timeoutMs: number,
+  concurrency: number,
+  taskTimeoutMs: number,
+  sourceStats: ExtendedSourceStat[],
+): Promise<TuffSearchResult[]> {
+  const results: TuffSearchResult[] = []
+  const queue = [...providers]
+  let completed = 0
+  const total = providers.length
+
+  // Create a race between provider execution and overall timeout
+  const providerPromise = new Promise<void>(async (resolveAll) => {
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (queue.length > 0 && !signal.aborted) {
+        const provider = queue.shift()
+        if (!provider)
+          continue
+
+        const startTime = performance.now()
+        let status: ExtendedSourceStat['status'] = 'success'
+        let resultCount = 0
+
+        try {
+          searchLogger.providerCall(provider.id)
+          const searchPromise = provider.onSearch(params, signal)
+          const result = await withTimeout(searchPromise, taskTimeoutMs)
+
+          resultCount = result.items.length
+          results.push(result)
+          searchLogger.providerResult(provider.id, resultCount)
+        }
+        catch (error) {
+          if (signal.aborted) {
+            status = 'aborted'
+          }
+          else if (error instanceof Error && error.name === 'TimeoutError') {
+            status = 'timeout'
+            searchLogger.providerTimeout(provider.id, taskTimeoutMs)
+          }
+          else {
+            status = 'error'
+            searchLogger.providerError(
+              provider.id,
+              error instanceof Error ? error.message : 'Unknown error',
+            )
+          }
+        }
+        finally {
+          const duration = performance.now() - startTime
+          if (!signal.aborted) {
+            sourceStats.push({
+              providerId: provider.id,
+              providerName: provider.name || provider.id,
+              duration,
+              resultCount,
+              status,
+              layer: 'fast',
+            })
+            logProviderCompletion(provider, duration, resultCount, status, 'fast')
+          }
+          completed++
+        }
+      }
     })
+
+    await Promise.all(workers)
+    resolveAll()
+  })
+
+  const timeoutPromise = new Promise<void>((resolveTimeout) => {
+    setTimeout(() => {
+      if (completed < total) {
+        console.debug(
+          `[SearchGatherer] Fast layer timeout after ${timeoutMs}ms. Completed: ${completed}/${total}`,
+        )
+      }
+      resolveTimeout()
+    }, timeoutMs)
+  })
+
+  // Race: either all providers complete or timeout expires
+  await Promise.race([providerPromise, timeoutPromise])
+
+  return results
+}
+
+/**
+ * Runs deferred layer providers, pushing results incrementally.
+ */
+async function runDeferredLayer(
+  providers: ISearchProvider<ProviderContext>[],
+  params: TuffQuery,
+  signal: AbortSignal,
+  concurrency: number,
+  taskTimeoutMs: number,
+  onResult: (result: TuffSearchResult, stat: ExtendedSourceStat) => void,
+): Promise<void> {
+  const queue = [...providers]
+
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length > 0 && !signal.aborted) {
+      const provider = queue.shift()
+      if (!provider)
+        continue
+
+      const startTime = performance.now()
+      let status: ExtendedSourceStat['status'] = 'success'
+      let resultCount = 0
+
+      try {
+        searchLogger.providerCall(provider.id)
+        const searchPromise = provider.onSearch(params, signal)
+        const result = await withTimeout(searchPromise, taskTimeoutMs)
+
+        resultCount = result.items.length
+        searchLogger.providerResult(provider.id, resultCount)
+
+        const stat: ExtendedSourceStat = {
+          providerId: provider.id,
+          providerName: provider.name || provider.id,
+          duration: performance.now() - startTime,
+          resultCount,
+          status: 'success',
+          layer: 'deferred',
+        }
+
+        onResult(result, stat)
+      }
+      catch (error) {
+        if (signal.aborted) {
+          status = 'aborted'
+        }
+        else if (error instanceof Error && error.name === 'TimeoutError') {
+          status = 'timeout'
+          searchLogger.providerTimeout(provider.id, taskTimeoutMs)
+        }
+        else {
+          status = 'error'
+          searchLogger.providerError(
+            provider.id,
+            error instanceof Error ? error.message : 'Unknown error',
+          )
+          console.warn(`[SearchGatherer] Deferred provider [${provider.id}] failed:`, error)
+        }
+      }
+      finally {
+        const duration = performance.now() - startTime
+        if (!signal.aborted) {
+          logProviderCompletion(provider, duration, resultCount, status, 'deferred')
+        }
+      }
+    }
+  })
+
+  await Promise.all(workers)
+}
+
+/**
+ * Logs the completion details of a provider with styled output.
+ */
+function logProviderCompletion(
+  provider: ISearchProvider<ProviderContext>,
+  duration: number,
+  resultCount: number,
+  status: ExtendedSourceStat['status'],
+  layer: SearchPriorityLayer,
+): void {
+  let durationStr: string
+  if (duration < 50) {
+    durationStr = chalk.gray(`${duration.toFixed(1)}ms`)
   }
+  else if (duration < 200) {
+    durationStr = chalk.bgYellow.black(`${duration.toFixed(1)}ms`)
+  }
+  else {
+    durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
+  }
+
+  const layerTag = layer === 'fast' ? chalk.cyan('[F]') : chalk.magenta('[D]')
+  const logMethod = status === 'success' ? console.debug : console.warn
+
+  logMethod(
+    `[SearchGatherer] ${layerTag} Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`,
+  )
+}
+
+/**
+ * Legacy search controller (non-layered mode).
+ * Keeps the original behavior for backward compatibility.
+ */
+function createLegacySearchController(
+  providers: ISearchProvider<ProviderContext>[],
+  params: TuffQuery,
+  onUpdate: TuffAggregatorCallback,
+  config: Required<ITuffGatherOptions>,
+): IGatherController {
+  const { concurrency, coalesceGapMs, firstBatchGraceMs, debouncePushMs, taskTimeoutMs } = config
+
+  return createGatherController(async (signal, resolve) => {
+    const allResults: TuffSearchResult[] = []
+    const sourceStats: ExtendedSourceStat[] = []
+    const taskQueue = [...providers]
+    let pushBuffer: TuffSearchResult[] = []
+
+    let completedCount = 0
+    let hasFlushedFirstBatch = false
+    let coalesceTimeoutId: NodeJS.Timeout | null = null
+
+    const flushBuffer = (isFinalFlush = false): void => {
+      if (coalesceTimeoutId) {
+        clearTimeout(coalesceTimeoutId)
+        coalesceTimeoutId = null
+      }
+
+      if (pushBuffer.length > 0) {
+        onUpdate({
+          newResults: pushBuffer,
+          totalCount: countItems(allResults),
+          isDone: false,
+          sourceStats: sourceStats as TuffSearchResult['sources'],
+        })
+        pushBuffer = []
+      }
+
+      if (isFinalFlush) {
+        onUpdate({
+          newResults: [],
+          totalCount: countItems(allResults),
+          isDone: true,
+          sourceStats: sourceStats as TuffSearchResult['sources'],
+        })
+        resolve(countItems(allResults))
+      }
+    }
+
+    const debouncedFlush = debounce(flushBuffer, debouncePushMs)
+
+    const onNewResult = (result: TuffSearchResult): void => {
+      searchLogger.resultReceived(result.items.length)
+      allResults.push(result)
+      pushBuffer.push(result)
+      completedCount++
+
+      if (!hasFlushedFirstBatch) {
+        hasFlushedFirstBatch = true
+        searchLogger.firstBatch(firstBatchGraceMs)
+        coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
+      }
+      else {
+        if (coalesceTimeoutId)
+          clearTimeout(coalesceTimeoutId)
+        coalesceTimeoutId = setTimeout(() => debouncedFlush(), coalesceGapMs)
+      }
+
+      if (completedCount === providers.length) {
+        searchLogger.allProvidersComplete()
+        debouncedFlush.flush()
+        flushBuffer(true)
+      }
+    }
+
+    // Set up abort handler
+    signal.addEventListener('abort', () => {
+      if (coalesceTimeoutId) {
+        clearTimeout(coalesceTimeoutId)
+        coalesceTimeoutId = null
+      }
+      debouncedFlush.cancel()
+
+      console.debug('[SearchGatherer] Legacy search cancelled.')
+      onUpdate({
+        newResults: [],
+        totalCount: countItems(allResults),
+        isDone: true,
+        cancelled: true,
+        sourceStats: sourceStats as TuffSearchResult['sources'],
+      })
+      resolve(0)
+    })
+
+    searchLogger.logSearchPhase('Legacy Worker Pool', `Starting ${concurrency} workers`)
+
+    const workers = new Array(concurrency).fill(0).map(async (_, i) => {
+      await new Promise(r => setTimeout(r, i * 10))
+      searchLogger.workerStart(i)
+
+      while (taskQueue.length > 0) {
+        const provider = taskQueue.shift()
+        if (!provider)
+          continue
+
+        searchLogger.workerProcessing(i, provider.id)
+        const startTime = performance.now()
+        let status: ExtendedSourceStat['status'] = 'success'
+        let resultCount = 0
+
+        try {
+          if (signal.aborted)
+            return
+
+          searchLogger.providerCall(provider.id)
+          const searchPromise = provider.onSearch(params, signal)
+          const searchResult = await withTimeout(searchPromise, taskTimeoutMs)
+
+          resultCount = searchResult.items.length
+          searchLogger.providerResult(provider.id, resultCount)
+          onNewResult(searchResult)
+        }
+        catch (error) {
+          if (error instanceof Error && error.name === 'TimeoutError') {
+            status = 'timeout'
+            searchLogger.providerTimeout(provider.id, taskTimeoutMs)
+          }
+          else {
+            status = 'error'
+            searchLogger.providerError(
+              provider.id,
+              error instanceof Error ? error.message : 'Unknown error',
+            )
+          }
+          console.error(`[SearchGatherer] Provider [${provider.id}] failed:`, error)
+        }
+        finally {
+          const duration = performance.now() - startTime
+          if (!signal.aborted) {
+            sourceStats.push({
+              providerId: provider.id,
+              providerName: provider.name || provider.id,
+              duration,
+              resultCount,
+              status,
+            })
+          }
+        }
+      }
+      searchLogger.workerComplete(i)
+    })
+
+    await Promise.all(workers)
+    console.debug('[SearchGatherer] All legacy search tasks completed.')
+    flushBuffer(true)
+    return countItems(allResults)
+  })
 }
 
 export const gatherAggregator = createGatherAggregator()

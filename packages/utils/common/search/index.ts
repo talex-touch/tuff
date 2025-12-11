@@ -1,4 +1,5 @@
 import type { ISearchProvider, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
+import type { SearchPriorityLayer } from './gather'
 
 export * from './gather'
 
@@ -28,6 +29,13 @@ export interface TuffUpdate {
    * Statistics about the performance of each search provider.
    */
   sourceStats?: TuffSearchResult['sources']
+  /**
+   * Indicates which layer this update came from.
+   * - 'fast': Results from fast layer providers
+   * - 'deferred': Results from deferred layer providers
+   * Useful for UI to handle different layers appropriately.
+   */
+  layer?: SearchPriorityLayer
 }
 
 /**

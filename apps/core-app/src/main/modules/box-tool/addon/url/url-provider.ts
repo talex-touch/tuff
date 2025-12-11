@@ -23,6 +23,8 @@ class URLProvider implements ISearchProvider<ProviderContext> {
   readonly icon = '🔗'
   readonly description = 'Open URLs with installed browsers'
   readonly supportedInputTypes = [TuffInputType.Text]
+  readonly priority = 'deferred' as const
+  readonly expectedDuration = 100
 
   private readonly URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i
 

@@ -1,5 +1,6 @@
 import type {
   IProviderActivate,
+  SearchPriorityLayer,
   TuffItem,
   TuffQuery,
   TuffQueryInput,
@@ -10,7 +11,7 @@ import type { IUseSearch } from '../types'
 import type { IClipboardOptions } from './types'
 import { TuffInputType } from '@talex-touch/utils'
 import { useDebounceFn } from '@vueuse/core'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
@@ -28,7 +29,8 @@ export function useSearch(
 
   const { items: boxItems } = useBoxItems()
 
-  const searchResults = ref<Array<TuffItem>>([])
+  // Use shallowRef for better performance - avoid deep reactivity on large arrays
+  const searchResults = shallowRef<Array<TuffItem>>([])
 
   const res = computed<Array<TuffItem>>(() => {
     const itemsMap = new Map<string, TuffItem>()
@@ -50,9 +52,48 @@ export function useSearch(
   const currentSearchId = ref<string | null>(null)
 
   const BASE_DEBOUNCE = 35
+  const MAX_DEBOUNCE = 150
   const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
+  
+  // Track previous input for dynamic debounce calculation
+  let prevSearchVal = ''
+  let lastInputTime = 0
+  
+  /**
+   * Calculate dynamic debounce time based on input pattern
+   */
+  function calculateDebounceMs(input: string): number {
+    const now = Date.now()
+    const timeSinceLastInput = now - lastInputTime
+    lastInputTime = now
+    
+    // If provider is activated, use longer debounce
+    if (activeActivations.value && activeActivations.value.length > 0) {
+      return 100
+    }
+    
+    // Fast consecutive typing detection (< 100ms between keystrokes)
+    if (timeSinceLastInput < 100 && input.startsWith(prevSearchVal) && input.length === prevSearchVal.length + 1) {
+      // User is typing fast, increase debounce to avoid excessive searches
+      return Math.min(BASE_DEBOUNCE * 2, MAX_DEBOUNCE)
+    }
+    
+    // Paste detection (multiple characters added at once)
+    if (input.length - prevSearchVal.length > 3) {
+      return BASE_DEBOUNCE // Execute quickly for paste
+    }
+    
+    // Delete operation
+    if (input.length < prevSearchVal.length) {
+      return Math.round(BASE_DEBOUNCE * 1.5) // Slightly delay on delete
+    }
+    
+    prevSearchVal = input
+    return BASE_DEBOUNCE
+  }
+  
   const debounceMs = computed(() => {
-    return activeActivations.value && activeActivations.value.length > 0 ? 100 : BASE_DEBOUNCE
+    return calculateDebounceMs(searchVal.value)
   })
 
   let searchSequence = 0
@@ -526,11 +567,19 @@ export function useSearch(
   // Listener for incremental search result updates.
   touchChannel.regChannel('core-box:search-update', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
-      // console.log('[useSearch] Received subsequent item batch:', data.items.length)
-      // Subsequent batches are already sorted and should be appended.
-      searchResults.value.push(...data.items)
-    } else {
-      // console.log('[useSearch] Discarded update for old search:', data.searchId)
+      const layer: SearchPriorityLayer | undefined = data.layer
+      
+      // For deferred layer results, append to existing results
+      // For fast layer, results are already set in initial response
+      if (data.items && data.items.length > 0) {
+        // Use spread to trigger shallowRef reactivity
+        searchResults.value = [...searchResults.value, ...data.items]
+        
+        // Log layer info for debugging performance
+        if (layer) {
+          console.debug(`[useSearch] ${layer} layer: +${data.items.length} items`)
+        }
+      }
     }
   })
 
