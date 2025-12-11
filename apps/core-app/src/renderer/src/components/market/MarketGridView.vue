@@ -12,6 +12,7 @@ import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
+import { hasUpgradeAvailable } from '~/composables/market/useVersionCompare'
 import MarketItemCard from './MarketItemCard.vue'
 
 const props = defineProps<{
@@ -23,6 +24,8 @@ const props = defineProps<{
   loading: boolean
   /** Set of installed plugin names */
   installedNames?: Set<string>
+  /** Map of installed plugin names to their versions */
+  installedVersions?: Map<string, string>
 }>()
 
 // Get install task tracker
@@ -153,6 +156,8 @@ watch(
         :index="index"
         :data-index="index"
         :is-installed="installedNames?.has(item.name) ?? false"
+        :installed-version="installedVersions?.get(item.name)"
+        :has-upgrade="hasUpgradeAvailable(installedVersions?.get(item.name), item.version)"
         :install-task="getInstallTask(item.id)"
         class="market-grid-item"
         @install="emit('install', item)"

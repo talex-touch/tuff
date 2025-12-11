@@ -1,15 +1,19 @@
 import { computed, type ComputedRef } from 'vue'
 import type { MarketPluginListItem } from './useMarketData'
+import type { PluginVersionStatus } from './usePluginVersionStatus'
 
 interface DetailMetaItem {
   icon: string
   label: string
   value: string
+  /** Highlight style for special states like upgrade available */
+  highlight?: 'upgrade' | 'installed'
 }
 
 export function useMarketDetail(
   plugin: ComputedRef<MarketPluginListItem | null>,
-  t: (key: string) => string
+  t: (key: string) => string,
+  versionStatus?: ComputedRef<PluginVersionStatus>
 ) {
   const formatTimestamp = (timestamp: any): string => {
     if (!timestamp) return ''
@@ -35,12 +39,26 @@ export function useMarketDetail(
         label: t('market.detailDialog.author'),
         value: p.author
       })
-    if (p.version)
+    if (p.version) {
+      const status = versionStatus?.value
+      // Show upgrade info: "v1.0.0 → v1.1.0" or just "v1.0.0"
+      let versionValue = `v${p.version}`
+      let highlight: DetailMetaItem['highlight']
+
+      if (status?.hasUpgrade && status.installedVersion) {
+        versionValue = `v${status.installedVersion} → v${p.version}`
+        highlight = 'upgrade'
+      } else if (status?.isInstalled && !status.hasUpgrade) {
+        highlight = 'installed'
+      }
+
       meta.push({
-        icon: 'i-ri-price-tag-3-line',
+        icon: status?.hasUpgrade ? 'i-ri-arrow-up-circle-line' : 'i-ri-price-tag-3-line',
         label: t('market.detailDialog.version'),
-        value: `v${p.version}`
+        value: versionValue,
+        highlight
       })
+    }
 
     const time = formatTimestamp(p.timestamp)
     if (time)

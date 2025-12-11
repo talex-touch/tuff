@@ -9,8 +9,8 @@ import { useMarketCategories } from '~/composables/market/useMarketCategories'
 import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
+import { usePluginVersionStatus } from '~/composables/market/usePluginVersionStatus'
 import { marketSourcesStorage } from '~/modules/storage/market-sources'
-import { usePluginStore } from '~/stores/plugin'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 
 const router = useRouter()
@@ -24,9 +24,8 @@ const { tags: _tags, tagInd: _tagInd, selectedTag, updateCategoryTags } = useMar
 // Installation management
 const { handleInstall } = useMarketInstall()
 
-// Installed plugins (for checking if a market plugin is already installed)
-const pluginStore = usePluginStore()
-const installedPluginNames = computed(() => new Set([...pluginStore.plugins.keys()]))
+// Plugin version status (for checking installed plugins and upgrade availability)
+const { installedPluginNames, installedPluginVersions } = usePluginVersionStatus()
 
 // UI state
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
@@ -94,7 +93,10 @@ function handleSearch(query: string): void {
 
 async function onInstall(plugin: MarketPluginListItem): Promise<void> {
   const channel = await getRendererChannel()
-  await handleInstall(plugin, channel)
+  // Check if this is an upgrade
+  const installedVersion = installedPluginVersions.value.get(plugin.name)
+  const isUpgrade = Boolean(installedVersion && plugin.version)
+  await handleInstall(plugin, channel, isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined)
 }
 
 function openPluginDetail(plugin: MarketPluginListItem): void {
@@ -132,6 +134,7 @@ onMounted(() => {
       :view-type="viewType"
       :loading="loading"
       :installed-names="installedPluginNames"
+      :installed-versions="installedPluginVersions"
       @install="onInstall"
       @open-detail="openPluginDetail"
     />

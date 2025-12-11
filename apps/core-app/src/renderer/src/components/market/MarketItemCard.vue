@@ -33,6 +33,10 @@ interface MarketItemCardProps {
   installTask?: PluginInstallProgressEvent
   /** Whether plugin is already installed locally */
   isInstalled?: boolean
+  /** Installed version (if installed) */
+  installedVersion?: string
+  /** Whether a newer version is available in market */
+  hasUpgrade?: boolean
 }
 
 defineProps<MarketItemCardProps>()
@@ -92,6 +96,9 @@ function handleInstall(): void {
         <MarketInstallButton
           :plugin-name="item.name"
           :is-installed="isInstalled"
+          :has-upgrade="hasUpgrade"
+          :installed-version="installedVersion"
+          :market-version="item.version"
           :install-task="installTask"
           @install="handleInstall"
         />

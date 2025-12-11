@@ -25,6 +25,12 @@ interface Props {
   pluginName?: string
   /** Whether the plugin is already installed locally */
   isInstalled?: boolean
+  /** Whether a newer version is available */
+  hasUpgrade?: boolean
+  /** Currently installed version */
+  installedVersion?: string
+  /** Market version available */
+  marketVersion?: string
   /** Current installation task progress (if any) */
   installTask?: PluginInstallProgressEvent | null
   /** Whether to show in mini mode (smaller button) */
@@ -34,6 +40,9 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   pluginName: '',
   isInstalled: false,
+  hasUpgrade: false,
+  installedVersion: '',
+  marketVersion: '',
   installTask: null,
   mini: true
 })
@@ -98,7 +107,12 @@ const showSpinner = computed(() =>
 
 /** Button icon based on current state */
 const buttonIcon = computed(() => {
-  // Already installed - show double checkmark
+  // Has upgrade available - show upload/upgrade icon
+  if (props.isInstalled && props.hasUpgrade && !installStage.value) {
+    return 'i-ri-arrow-up-circle-line'
+  }
+
+  // Already installed and up to date - show double checkmark
   if (props.isInstalled && !installStage.value) {
     return 'i-ri-check-double-line'
   }
@@ -123,7 +137,12 @@ const buttonIcon = computed(() => {
 
 /** Button label text based on current state */
 const buttonLabel = computed(() => {
-  // Already installed
+  // Has upgrade available
+  if (props.isInstalled && props.hasUpgrade && !installStage.value) {
+    return t('market.upgrade')
+  }
+
+  // Already installed and up to date
   if (props.isInstalled && !installStage.value) {
     return t('market.installed')
   }
@@ -151,7 +170,13 @@ const buttonLabel = computed(() => {
 })
 
 /** Whether install button should be disabled */
-const isDisabled = computed(() => isActiveStage.value || props.isInstalled)
+const isDisabled = computed(() => {
+  // Disabled during active installation
+  if (isActiveStage.value) return true
+  // Disabled if installed AND no upgrade available
+  if (props.isInstalled && !props.hasUpgrade) return true
+  return false
+})
 
 /**
  * Handles install button click
@@ -166,9 +191,10 @@ function handleClick(event: MouseEvent): void {
 
 <template>
   <FlatButton
-    :primary="!isInstalled"
+    :primary="!isInstalled || hasUpgrade"
     :mini="mini"
     :disabled="isDisabled"
+    :class="{ 'upgrade-available': hasUpgrade && isInstalled && !isActiveStage }"
     @click="handleClick"
   >
     <div class="install-button-content">
