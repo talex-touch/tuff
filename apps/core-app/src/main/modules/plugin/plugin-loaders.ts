@@ -119,11 +119,11 @@ abstract class BasePluginLoader {
       permissionReasons: pluginInfo.permissionReasons,
     })
 
-    // Store permission info on plugin for later reference
+    // Store permission info on plugin for later reference (use copies to avoid circular refs)
     this.touchPlugin.declaredPermissions = {
-      required: parsedPermissions.required,
-      optional: parsedPermissions.optional,
-      reasons: parsedPermissions.reasons,
+      required: [...parsedPermissions.required],
+      optional: [...parsedPermissions.optional],
+      reasons: { ...parsedPermissions.reasons },
     }
 
     // Generate permission status (granted permissions will be loaded by PermissionModule)
@@ -144,8 +144,9 @@ abstract class BasePluginLoader {
         code: permissionIssue.code,
         suggestion: permissionIssue.suggestion,
         meta: {
-          required: parsedPermissions.required,
-          optional: parsedPermissions.optional,
+          // Use spread to create copies and avoid circular references
+          required: [...parsedPermissions.required],
+          optional: [...parsedPermissions.optional],
           enforcePermissions: permissionStatus.enforcePermissions,
         },
         timestamp: Date.now(),

@@ -150,6 +150,12 @@ export class TouchPlugin implements ITouchPlugin {
       dev: this.dev,
       status: this.status,
       platforms: this.platforms,
+      sdkapi: this.sdkapi,
+      declaredPermissions: this.declaredPermissions ? {
+        required: [...this.declaredPermissions.required],
+        optional: [...this.declaredPermissions.optional],
+        reasons: { ...this.declaredPermissions.reasons },
+      } : undefined,
       features: this.features.map((feature) => {
         // 防御性检查：确保 feature 有 toJSONObject 方法
         if (typeof feature.toJSONObject === 'function') {

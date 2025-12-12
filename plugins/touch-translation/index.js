@@ -8,6 +8,7 @@ const {
   URLSearchParams,
   TuffItemBuilder,
   storage,
+  permission,
 } = globalThis
 
 const crypto = require('node:crypto')
@@ -597,8 +598,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
   const detectedLang = detectLanguage(textToTranslate)
   const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
 
-  const { storage } = globalThis
-  const providersConfig = storage.getFile('providers_config')
+  const providersConfig = await storage.getFile('providers_config')
 
   if (!providersConfig || Object.keys(providersConfig).length === 0) {
     logger.warn('No providers config found. Falling back to Google Translate.')
@@ -750,13 +750,32 @@ const pluginLifecycle = {
    * @param {AbortSignal} signal
    * @returns {Promise<void>}
    */
-  async onFeatureTriggered(featureId, query, feature, signal) {
+  async onFeatureTriggered(featureId, query, _feature, signal) {
     try {
       // 兼容新版本：query 可能是字符串或 TuffQuery 对象
       const queryText = typeof query === 'string' ? query : query?.text
+
       if (featureId === 'touch-translate' && queryText && queryText.trim()) {
+        // 检查网络权限
+        if (permission) {
+          const hasNetwork = await permission.check('network.internet')
+          if (!hasNetwork) {
+            const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
+            if (!granted) {
+              const errorItem = new TuffItemBuilder('permission-denied')
+                .setTitle('需要网络权限')
+                .setSubtitle('请在插件设置中授予网络权限以使用翻译功能')
+                .setIcon({ type: 'file', value: 'assets/logo.svg' })
+                .build()
+              feature.pushItems([errorItem])
+              return
+            }
+          }
+        }
+
         // 兼容新版本：使用 listFiles 代替 getAllItems
-        logger.debug('[touch-translation] Storage files:', storage.listFiles())
+        const files = await storage.listFiles()
+        logger.debug('[touch-translation] Storage files:', files)
         await translateAndPushResults(queryText.trim(), featureId, signal)
       }
     }

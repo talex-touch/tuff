@@ -116,13 +116,13 @@ export function generatePermissionIssue(
     }
   }
 
-  // Missing required permissions
+  // Missing required permissions (warning, not error - plugin can still run)
   if (status.enforcePermissions && status.missingRequired.length > 0) {
     return {
-      type: 'error',
+      type: 'warning',
       message: `Missing required permissions: ${status.missingRequired.join(', ')}`,
       code: 'PERMISSION_MISSING',
-      suggestion: 'Grant required permissions in Settings > Permission Center.',
+      suggestion: 'Grant permissions in Plugin Details > Permissions tab.',
     }
   }
 

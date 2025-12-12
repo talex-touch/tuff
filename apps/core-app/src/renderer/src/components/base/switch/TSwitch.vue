@@ -1,16 +1,17 @@
 <script name="TSwitch" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import { watch } from 'vue'
 
 const props = defineProps(['modelValue', 'disabled'])
 const emits = defineEmits(['update:modelValue', 'change'])
 
 const model = useModelWrapper(props, emits)
 
-watch(
-  () => model,
-  () => emits('change', model),
-)
+function toggle() {
+  if (props.disabled) return
+  const newVal = !model.value
+  model.value = newVal
+  emits('change', newVal)
+}
 </script>
 
 <template>
@@ -18,7 +19,7 @@ watch(
     role="radio"
     :class="{ select: model, disabled }"
     class="TSwitch-Container"
-    @click="model = !model"
+    @click="toggle"
   />
 </template>
 

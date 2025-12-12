@@ -3,6 +3,7 @@ import { isCoreBox } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import TouchMenu from '~/components/menu/TouchMenu.vue'
 import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
+import { usePermissionStartup } from '~/composables/usePermissionStartup'
 import { appSetting } from '~/modules/channel/storage/index'
 import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
 import { useLanguage } from '~/modules/lang'
@@ -21,6 +22,9 @@ const beginner = ref(false)
 
 captureAppContext()
 capturePlatformWarningContext()
+
+// Initialize permission startup listener
+usePermissionStartup()
 
 /**
  * Initialize renderer-only services once the lifecycle is ready.

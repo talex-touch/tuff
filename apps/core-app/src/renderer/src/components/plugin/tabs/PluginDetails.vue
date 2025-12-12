@@ -138,6 +138,16 @@ function formatMs(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`
 }
 
+// Format SDK version (YYMMDD -> YYYY-MM-DD)
+function formatSdkVersion(sdkapi: number): string {
+  const str = String(sdkapi)
+  if (str.length !== 6) return str
+  const year = `20${str.slice(0, 2)}`
+  const month = str.slice(2, 4)
+  const day = str.slice(4, 6)
+  return `${year}-${month}-${day}`
+}
+
 // Shorten path for display
 function shortenPath(fullPath: string): string {
   if (!fullPath) return ''
@@ -179,6 +189,17 @@ watch(() => plugin.value.name, () => {
       <TuffBlockLine :title="t('plugin.details.version')">
         <template #description>
           <span class="text-[var(--el-color-success)] font-semibold">v{{ plugin.version }}</span>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine title="SDK API">
+        <template #description>
+          <span v-if="plugin.sdkapi" class="font-mono text-xs">
+            {{ plugin.sdkapi }}
+            <span class="text-[var(--el-text-color-secondary)] ml-1">
+              ({{ formatSdkVersion(plugin.sdkapi) }})
+            </span>
+          </span>
+          <span v-else class="text-[var(--el-color-warning)]">未声明</span>
         </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('plugin.details.mode')">
