@@ -84,7 +84,62 @@
 
 ---
 
-### 3. View Mode 与开发模式增强
+### 3. 🆕 插件权限中心 (Permission Center) 🟡 进行中
+**来源**: `plan-prd/03-features/plugin/permission-center-prd.md`
+**工期**: 12-15 天
+
+- [x] **Phase 1**: 基础框架 (3-4天) ✅ (2025-12-12)
+  - [x] 权限类型定义 (`packages/utils/permission/types.ts`)
+  - [x] PermissionRegistry 实现 (`packages/utils/permission/registry.ts`)
+  - [x] PermissionStore 实现 (JSON 文件)
+  - [x] PermissionModule 主进程模块
+  - [x] i18n 国际化消息 (17 种权限 + UI 文案)
+
+- [x] **Phase 2**: 运行时拦截 (2-3天) ✅ (2025-12-12)
+  - [x] PermissionGuard 实现
+  - [x] Channel 层集成拦截器 (withPermission wrapper)
+  - [x] API-权限映射表 (20+ API 映射)
+
+- [x] **Phase 3**: UI 集成 (3-4天) ✅ (2025-12-12)
+  - [x] 运行时权限请求弹窗 (PermissionRequestDialog.vue)
+  - [x] 权限列表组件 (PermissionList.vue)
+  - [x] 权限状态卡片 (PermissionStatusCard.vue)
+  - [x] 权限中心设置页面 (SettingPermission.vue)
+  - [x] 审计日志查看 (PermissionStore + SettingPermission.vue)
+
+- [x] **Phase 4**: SDK & Hooks (2天) ✅ (2025-12-12)
+  - [x] usePermission hooks
+  - [x] usePermissionStatus hooks
+  - [x] usePermissionRegistry hooks
+  - [x] 插件加载器权限解析
+
+- [ ] **Phase 5**: 测试与优化 (2天)
+
+**已实现文件**:
+- `packages/utils/permission/types.ts` - 权限类型定义
+- `packages/utils/permission/registry.ts` - 17 种权限注册
+- `packages/utils/permission/index.ts` - 核心函数
+- `apps/core-app/src/main/modules/permission/index.ts` - PermissionModule
+- `apps/core-app/src/main/modules/permission/permission-store.ts` - JSON 存储
+- `apps/core-app/src/main/modules/permission/permission-guard.ts` - 运行时拦截
+- `apps/core-app/src/main/modules/permission/channel-guard.ts` - Channel wrapper
+- `packages/utils/renderer/hooks/use-permission.ts` - Vue hooks
+- `components/permission/PermissionRequestDialog.vue` - 权限请求弹窗
+- `components/permission/PermissionList.vue` - 权限列表组件
+- `components/permission/PermissionStatusCard.vue` - 权限状态卡片
+- `views/base/settings/SettingPermission.vue` - 权限中心设置页
+- `composables/usePluginPermission.ts` - UI 层 composable
+
+**验收标准**:
+- ✅ 插件加载时解析 permissions 和 sdkapi
+- ✅ 未声明 sdkapi 的插件报 issue 警告
+- ✅ 低版本 sdkapi 的插件跳过权限校验但提示用户
+- ✅ 运行时拦截框架 (withPermission wrapper)
+- [ ] 权限检查耗时 < 5ms (需测试验证)
+
+---
+
+### 4. View Mode 与开发模式增强
 **来源**: `plan-prd/03-features/view/view-mode-prd.md`
 **工期**: 10-15 天
 
@@ -400,10 +455,10 @@
 | 优先级 | 任务数 | 已完成 | 剩余 | 状态 |
 |--------|--------|--------|------|------|
 | P0 紧急 | 1 | 1 | 0 | 模块日志系统 Phase 1 完成 |
-| P1 重要 | 4 | 3 | 1 | 托盘+计算+NPM完成 |
+| P1 重要 | 5 | 3 | 2 | 托盘+计算+NPM完成, 新增权限中心 |
 | P2 增强 | 6 | 5 | 1 | Widget+Flow+Division+推荐+多文件类型完成 |
 | P3 长期 | 5 | 4 | 1 | Intelligence + 下载中心 + Agents + Everything PRD |
-| **总计** | **16** | **13** | **3** | **81% 完成** |
+| **总计** | **17** | **13** | **4** | **76% 完成** |
 
 ---
 
@@ -411,7 +466,7 @@
 
 ### Q1 2026 (1-3月)
 1. 模块日志系统 (P0) - 8-11天
-2. 插件市场多源 (P1) - NPM/GitHub Provider 待实现
+2. 🆕 **插件权限中心 (P1)** - 12-15天 - 安全优先
 3. View Mode 增强 (P1) - 10-15天
 4. Intelligence Agents Phase 1 (P3) - 5天
 
@@ -442,9 +497,13 @@
 - ~~Widget 多文件类型支持 (P2)~~ - 2025-12-11 ✨ NEW
 - ~~Flow Transfer 系统分享通知 (P2)~~ - 2025-12-11 ✨ NEW
 - ~~Everything SDK 集成方案 (P3)~~ - 2025-12-11 ✨ NEW
+- ~~插件 sdkapi 版本字段 (P1)~~ - 2025-12-12 ✨ NEW - 权限系统前置
+- ~~插件权限中心 Phase 1+4 (P1)~~ - 2025-12-12 ✨ NEW - 基础框架 + Hooks
+- ~~插件权限中心 Phase 2 (P1)~~ - 2025-12-12 ✨ NEW - 运行时拦截
+- ~~插件权限中心 Phase 3 (P1)~~ - 2025-12-12 ✨ NEW - UI 集成
 
 ---
 
-**文档版本**: v1.6
-**更新时间**: 2025-12-11
+**文档版本**: v1.11
+**更新时间**: 2025-12-12
 **维护者**: Development Team

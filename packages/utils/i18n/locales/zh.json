@@ -22,7 +22,70 @@
     "manifestInvalid": "清单文件无效",
     "dependencyMissing": "缺少依赖",
     "versionMismatch": "版本不匹配",
-    "permissionDenied": "权限被拒绝"
+    "permissionDenied": "权限被拒绝",
+    "sdkVersionMissing": "插件未声明 SDK 版本",
+    "sdkVersionOutdated": "插件 SDK 版本过旧",
+    "permissionMissing": "缺少必需权限"
+  },
+  "permission": {
+    "category": {
+      "fs": "文件系统",
+      "clipboard": "剪贴板",
+      "network": "网络",
+      "system": "系统",
+      "ai": "AI 能力",
+      "storage": "存储",
+      "window": "窗口"
+    },
+    "risk": {
+      "low": "低风险",
+      "medium": "中风险",
+      "high": "高风险"
+    },
+    "fs": {
+      "read": { "name": "读取文件", "desc": "读取用户文件系统中的文件" },
+      "write": { "name": "写入文件", "desc": "创建、修改或删除用户文件" },
+      "execute": { "name": "执行文件", "desc": "运行可执行文件或脚本" }
+    },
+    "clipboard": {
+      "read": { "name": "读取剪贴板", "desc": "访问剪贴板中的内容" },
+      "write": { "name": "写入剪贴板", "desc": "将内容复制到剪贴板" }
+    },
+    "network": {
+      "local": { "name": "本地网络", "desc": "访问本地网络资源" },
+      "internet": { "name": "互联网访问", "desc": "发送和接收互联网请求" },
+      "download": { "name": "下载文件", "desc": "从互联网下载文件到本地" }
+    },
+    "system": {
+      "shell": { "name": "执行命令", "desc": "运行系统命令或脚本" },
+      "notification": { "name": "系统通知", "desc": "发送系统通知" },
+      "tray": { "name": "托盘交互", "desc": "访问系统托盘功能" }
+    },
+    "ai": {
+      "basic": { "name": "基础 AI", "desc": "使用基础 AI 能力" },
+      "advanced": { "name": "高级 AI", "desc": "使用高级 AI 模型" },
+      "agents": { "name": "智能体", "desc": "调用智能体系统" }
+    },
+    "storage": {
+      "plugin": { "name": "插件存储", "desc": "使用插件私有存储空间" },
+      "shared": { "name": "共享存储", "desc": "访问跨插件共享存储" }
+    },
+    "window": {
+      "create": { "name": "创建窗口", "desc": "创建新窗口或视图" },
+      "capture": { "name": "屏幕截图", "desc": "捕获屏幕内容" }
+    },
+    "grant": "授予",
+    "revoke": "撤销",
+    "granted": "已授予",
+    "denied": "已拒绝",
+    "required": "必需",
+    "optional": "可选",
+    "allowOnce": "仅本次",
+    "allowAlways": "始终允许",
+    "requestTitle": "权限请求",
+    "requestDesc": "{plugin} 请求 {permission} 权限",
+    "enforcementDisabled": "权限校验已禁用",
+    "legacyPluginWarning": "此插件使用旧版 SDK，权限校验已跳过"
   },
   "widget": {
     "compileFailed": "Widget 编译失败",
