@@ -26,7 +26,9 @@ const url = computed(() => {
 
   if (props.icon.type === 'url') {
     const urlPath = props.icon.value
-    if (urlPath.startsWith('/')) {
+    // Only use tfile:// for local file paths (absolute paths starting with /)
+    // but NOT for API paths like /api/... which should be HTTP URLs
+    if (urlPath.startsWith('/') && !urlPath.startsWith('/api/')) {
       return `tfile://${urlPath}`
     }
   }

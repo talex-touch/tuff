@@ -4,6 +4,8 @@ import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import type { MarketPluginListItem } from './useMarketData'
 
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
+
 export interface InstallOptions {
   /** Whether this is an upgrade (force update existing plugin) */
   isUpgrade?: boolean
@@ -90,15 +92,22 @@ export function useMarketInstall() {
   }
 
   function resolveDownloadUrl(plugin: MarketPluginListItem): string | undefined {
+    let url: string | undefined
+
     if (typeof plugin.downloadUrl === 'string' && plugin.downloadUrl.length > 0) {
-      return plugin.downloadUrl
+      url = plugin.downloadUrl
+    } else if (plugin.install?.type === 'url' && plugin.install.url) {
+      url = plugin.install.url
     }
 
-    if (plugin.install?.type === 'url' && plugin.install.url) {
-      return plugin.install.url
+    if (!url) return undefined
+
+    // If the URL is a relative path starting with /api/, prepend NEXUS_URL
+    if (url.startsWith('/api/')) {
+      return `${NEXUS_URL}${url}`
     }
 
-    return undefined
+    return url
   }
 
   async function handleInstall(
