@@ -21,12 +21,12 @@ export function useMarketInstall() {
   const { t } = useI18n()
   const installManager = useInstallManager()
 
-  function getInstallTask(pluginId?: string) {
-    return installManager.getTaskByPluginId(pluginId)
+  function getInstallTask(pluginId?: string, providerId?: string) {
+    return installManager.getTaskByPluginId(pluginId, providerId)
   }
 
-  function isPluginInstalling(pluginId?: string): boolean {
-    return installManager.isActiveStage(getInstallTask(pluginId)?.stage)
+  function isPluginInstalling(pluginId?: string, providerId?: string): boolean {
+    return installManager.isActiveStage(getInstallTask(pluginId, providerId)?.stage)
   }
 
   async function confirmUntrusted(plugin: MarketPluginListItem): Promise<boolean> {
@@ -115,7 +115,7 @@ export function useMarketInstall() {
     channel: ITouchClientChannel | undefined,
     options?: InstallOptions
   ): Promise<void> {
-    if (isPluginInstalling(plugin.id)) return
+    if (isPluginInstalling(plugin.id, plugin.providerId)) return
 
     if (!channel) {
       await forTouchTip(

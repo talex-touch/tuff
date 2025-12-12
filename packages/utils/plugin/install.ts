@@ -21,6 +21,8 @@ export interface PluginInstallProgressEvent {
   /** 插件唯一标识或名称（由客户端提供）。 */
   pluginId?: string
   pluginName?: string
+  /** 来源提供者 ID，用于区分不同市场源的同名插件。 */
+  providerId?: string
   /** 队列中的剩余任务数量（包含当前任务）。 */
   remaining?: number
   /** 当前任务在队列中的位置（0 表示正在处理）。 */

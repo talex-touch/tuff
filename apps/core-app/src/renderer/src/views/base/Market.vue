@@ -100,7 +100,7 @@ async function onInstall(plugin: MarketPluginListItem): Promise<void> {
 }
 
 function openPluginDetail(plugin: MarketPluginListItem): void {
-  router.push(`/market/${plugin.id}`)
+  router.push({ path: `/market/${plugin.id}`, query: { provider: plugin.providerId } })
 }
 
 watch(
