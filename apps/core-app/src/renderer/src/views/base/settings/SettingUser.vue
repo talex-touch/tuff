@@ -13,7 +13,7 @@ const { t } = useI18n()
 const { isLoggedIn, currentUser, loginWithBrowser, logout, authLoadingState } = useAuth()
 
 const isDev = import.meta.env.DEV
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
 
 const useLocalServer = computed({
   get: () => appSetting?.dev?.authServer === 'local',
@@ -114,7 +114,7 @@ function openDeviceManagement() {
       v-if="isDev && !isLoggedIn"
       v-model="useLocalServer"
       :title="t('settingUser.devAuthServer', '本地服务器')"
-      :description="useLocalServer ? 'localhost:3200' : 'tuff.quotawish.com'"
+      :description="useLocalServer ? 'localhost:3200' : 'tuff.tagzxia.com'"
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
     />

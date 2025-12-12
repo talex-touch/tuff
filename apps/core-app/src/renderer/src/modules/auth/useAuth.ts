@@ -20,7 +20,7 @@ let isInitialized = false
 let activeConsumers = 0
 
 // Nexus URL for browser auth
-const NEXUS_URL_PRODUCTION = 'https://tuff.quotawish.com'
+const NEXUS_URL_PRODUCTION = 'https://tuff.tagzxia.com'
 const NEXUS_URL_LOCAL = 'http://localhost:3200'
 
 function getNexusUrl(): string {

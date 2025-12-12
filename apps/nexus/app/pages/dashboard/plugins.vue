@@ -105,6 +105,7 @@ defineI18nRoute(false)
 
 const { t, locale } = useI18n()
 const { user } = useUser()
+const toast = useToast()
 
 const { plugins, pending: pluginsPending, refresh: refreshPlugins } = useDashboardPluginsData()
 
@@ -541,6 +542,10 @@ async function handleCreatePluginSubmit(data: PluginFormData) {
     if (data.iconFile)
       formData.append('icon', data.iconFile)
 
+    // Add package file so backend can extract icon from it
+    if (data.packageFile)
+      formData.append('package', data.packageFile)
+
     if (isAdmin.value && data.isOfficial)
       formData.append('isOfficial', 'true')
     else if (isAdmin.value)
@@ -574,10 +579,13 @@ async function handleCreatePluginSubmit(data: PluginFormData) {
     }
 
     await refreshPlugins()
+    toast.success(t('dashboard.sections.plugins.createSuccess', 'Plugin created successfully'))
     closeCreateDrawer()
   }
   catch (error: unknown) {
-    createDrawerError.value = error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
+    const errorMessage = error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
+    createDrawerError.value = errorMessage
+    toast.error(t('dashboard.sections.plugins.errors.createFailed', 'Failed to create plugin'), errorMessage)
   }
   finally {
     createDrawerLoading.value = false

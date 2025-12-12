@@ -90,6 +90,7 @@ watchEffect(() => {
 
 <template>
   <VitePwaManifest />
+  <ToastContainer />
   <template v-if="isProtectedRoute">
     <ClerkLoading>
       <div class="grid h-screen w-screen place-content-center text-sm text-gray-500">

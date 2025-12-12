@@ -16,7 +16,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
 
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
 
 const enabled = ref(false)
 const anonymous = ref(true)

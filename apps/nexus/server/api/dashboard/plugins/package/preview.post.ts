@@ -17,8 +17,17 @@ export default defineEventHandler(async (event) => {
   const buffer = Buffer.from(await packageFile.arrayBuffer())
   const metadata = await extractTpexMetadata(buffer)
 
+  // Generate icon preview data URL if icon was extracted
+  let iconDataUrl: string | null = null
+  if (metadata.iconBuffer && metadata.iconMimeType) {
+    const base64 = metadata.iconBuffer.toString('base64')
+    iconDataUrl = `data:${metadata.iconMimeType};base64,${base64}`
+  }
+
   return {
     manifest: metadata.manifest ?? null,
     readmeMarkdown: metadata.readmeMarkdown ?? null,
+    iconDataUrl,
+    hasIcon: !!metadata.iconBuffer,
   }
 })
