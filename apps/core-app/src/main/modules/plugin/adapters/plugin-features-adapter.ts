@@ -70,6 +70,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     TuffInputType.Files,
     TuffInputType.Html
   ]
+  public readonly priority = 'fast' as const
+  public readonly expectedDuration = 30
 
   public async handleActiveFeatureInput(query: TuffQuery): Promise<boolean> {
     const activationState = searchEngineCore.getActivationState()
