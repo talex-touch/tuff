@@ -388,16 +388,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         const matchesCommand = queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
         const matchesClipboardCommand = clipboardTextContent && feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
 
-        if (matchesCommand || matchesClipboardCommand || featureAcceptsInputs) {
-          // Command matched - show without highlighting (full match)
-          matchedItems.push({
-            item: this.createTuffItem(plugin, feature),
-            matchScore: 1000 + (feature.priority ?? 0)
-          })
-          continue
-        }
+        // Try fuzzy/token matching with highlight support (pinyin, English, etc.)
+        // We always try this to get highlight info, even for command matches
+        let matchResult: MatchRange[] | undefined
+        let matchScore = 0
 
-        // Then try fuzzy/token matching with highlight support (pinyin, English, etc.)
         if (queryText) {
           const result = matchFeature({
             title: feature.name,
@@ -408,11 +403,26 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           })
 
           if (result.matched) {
-            matchedItems.push({
-              item: this.createTuffItem(plugin, feature, result.matchRanges),
-              matchScore: result.score + (feature.priority ?? 0)
-            })
+            matchResult = result.matchRanges
+            matchScore = result.score
           }
+        }
+
+        if (matchesCommand || matchesClipboardCommand || featureAcceptsInputs) {
+          // Command matched - use command priority, but still include highlight info
+          matchedItems.push({
+            item: this.createTuffItem(plugin, feature, matchResult),
+            matchScore: 1000 + (feature.priority ?? 0)
+          })
+          continue
+        }
+
+        // For non-command matches, use fuzzy match result
+        if (matchResult && matchScore > 0) {
+          matchedItems.push({
+            item: this.createTuffItem(plugin, feature, matchResult),
+            matchScore: matchScore + (feature.priority ?? 0)
+          })
         }
       }
     }
