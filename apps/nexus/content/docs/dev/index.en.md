@@ -6,6 +6,7 @@
 1. **[Developer Overview](./overview.en.md)** — understand the plugin model and architecture.
 2. **[Quickstart](./quickstart.en.md)** — scaffold your first plugin in minutes.
 3. **[Manifest Reference](./manifest.en.md)** — configure capabilities and permissions.
+4. **[Legacy Plugin Migration](./migration.en.md)** — upgrade legacy plugins to the new SDK model.
 
 ## Deep Dive
 - **[API Reference](./api/)** — typed interfaces for storage, channels, and UI.

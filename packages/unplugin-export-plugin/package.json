@@ -1,0 +1,104 @@
+{
+  "name": "@talex-touch/unplugin-export-plugin",
+  "type": "module",
+  "version": "1.2.15",
+  "description": "Export unplugin for talex-touch",
+  "license": "MIT",
+  "homepage": "https://github.com/talex-touch/unplugin-export-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/unplugin-export-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/talex-touch/unplugin-export-plugin/issues"
+  },
+  "keywords": [
+    "unplugin",
+    "vite",
+    "webpack",
+    "rollup",
+    "tuff",
+    "talex-tuff"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
+    },
+    "./webpack": {
+      "types": "./dist/webpack.d.ts",
+      "import": "./dist/webpack.js"
+    },
+    "./rollup": {
+      "types": "./dist/rollup.d.ts",
+      "import": "./dist/rollup.js"
+    },
+    "./esbuild": {
+      "types": "./dist/esbuild.d.ts",
+      "import": "./dist/esbuild.js"
+    },
+    "./nuxt": {
+      "types": "./dist/nuxt.d.ts",
+      "import": "./dist/nuxt.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./*": "./*"
+  },
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "tuff": "dist/bin/tuff.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "tuff:builder": "tuff builder",
+    "dev": "npm -C playground run dev",
+    "lint": "eslint .",
+    "play": "npm run dev",
+    "prepublishOnly": "npm run build",
+    "release": "bumpp && npm publish --access public",
+    "start": "esno src/index.ts",
+    "test": "vitest"
+  },
+  "peerDependencies": {
+    "chalk": "^5.6.0",
+    "cli-progress": "^3.12.0",
+    "compressing": "^1.10.3",
+    "debug": "^4.3.5",
+    "fs-extra": "^11.3.1",
+    "pathe": "^1.1.2",
+    "unplugin": "^1.16.1"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^0.39.8",
+    "@types/cli-progress": "^3.11.6",
+    "@types/debug": "^4.1.12",
+    "@types/fs-extra": "^11.0.4",
+    "@types/glob": "^8.1.0",
+    "@types/node": "^18.19.130",
+    "bumpp": "^9.11.1",
+    "eslint": "^8.57.1",
+    "esno": "^0.16.3",
+    "find-up": "^7.0.0",
+    "glob": "^10.5.0",
+    "nodemon": "^2.0.22",
+    "rimraf": "^5.0.10",
+    "tsup": "^6.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^4.5.14",
+    "vitest": "^0.31.4"
+  },
+  "dependencies": {
+    "@talex-touch/utils": "workspace:*"
+  }
+}

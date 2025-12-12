@@ -26,7 +26,7 @@ export type ChannelCallback = (data: StandardChannelData) => any
 /**
  * Main process channel interface for IPC communication.
  * @deprecated Use ITuffTransportMain from `@talex-touch/utils/transport` instead. Will be removed in v3.0.0.
- * @see {@link https://github.com/AidenYuanDev/tuff/blob/main/packages/utils/transport/types.ts | TuffTransport Types}
+ * @see {@link https://github.com/talex-touch/tuff/blob/main/packages/utils/transport/types.ts | TuffTransport Types}
  */
 export interface ITouchChannel {
 
