@@ -1,8 +1,10 @@
 import { clerkClient } from '@clerk/nuxt/server'
+import { Buffer } from 'node:buffer'
 import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../utils/auth'
 import { createPlugin } from '../../utils/pluginsStore'
-import { uploadImage } from '../../utils/imageStorage'
+import { uploadImage, uploadImageFromBuffer } from '../../utils/imageStorage'
+import { extractTpexMetadata } from '../../utils/tpex'
 
 const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
@@ -62,9 +64,11 @@ export default defineEventHandler(async (event) => {
     : []
 
   const iconFile = formData.get('icon')
+  const packageFile = formData.get('package')
   let iconKey: string | null = null
   let iconUrl: string | null = null
 
+  // Priority 1: User-uploaded icon file
   if (isFile(iconFile) && iconFile.size > 0) {
     try {
       const iconResult = await uploadImage(event, iconFile)
@@ -75,6 +79,38 @@ export default defineEventHandler(async (event) => {
       console.error('[plugins.post] Failed to upload icon:', err)
       throw createError({ statusCode: 500, statusMessage: 'Failed to upload plugin icon.' })
     }
+  }
+
+  // Priority 2: Extract icon from package file if no icon was uploaded
+  if (!iconKey && isFile(packageFile) && packageFile.size > 0) {
+    try {
+      const buffer = Buffer.from(await packageFile.arrayBuffer())
+      const metadata = await extractTpexMetadata(buffer)
+
+      if (metadata.iconBuffer && metadata.iconFileName && metadata.iconMimeType) {
+        const iconResult = await uploadImageFromBuffer(
+          event,
+          metadata.iconBuffer,
+          metadata.iconFileName,
+          metadata.iconMimeType,
+        )
+        iconKey = iconResult.key
+        iconUrl = iconResult.url
+        console.log('[plugins.post] Extracted and uploaded icon from package:', metadata.iconFileName)
+      }
+    }
+    catch (err) {
+      console.error('[plugins.post] Failed to extract icon from package:', err)
+      // Don't throw - icon extraction from package is a fallback
+    }
+  }
+
+  // Icon is required
+  if (!iconKey) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Plugin icon is required. Please upload an icon or ensure your package contains an icon file (icon.svg, icon.png, etc.).',
+    })
   }
 
   const deriveAuthorName = () => {

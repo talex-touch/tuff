@@ -61,6 +61,8 @@ const packageLoading = ref(false)
 const packageError = ref<string | null>(null)
 const manifestPreview = ref<TpexExtractedManifest | null>(null)
 const readmePreview = ref('')
+const iconPreviewUrl = ref<string | null>(null)
+const packageHasIcon = ref(false)
 
 const PACKAGE_PREVIEW_ENDPOINT = '/api/dashboard/plugins/package/preview'
 
@@ -86,6 +88,8 @@ watch(() => props.isOpen, (isOpen) => {
     packageError.value = null
     manifestPreview.value = null
     readmePreview.value = ''
+    iconPreviewUrl.value = null
+    packageHasIcon.value = false
     inputMode.value = 'upload'
   }
 })
@@ -129,6 +133,8 @@ const pluginCategoryOptions = computed(() =>
 interface PackagePreviewResult {
   manifest: TpexExtractedManifest | null
   readmeMarkdown: string | null
+  iconDataUrl: string | null
+  hasIcon: boolean
 }
 
 async function requestPackagePreview(file: File): Promise<PackagePreviewResult> {
@@ -199,6 +205,8 @@ async function handlePackageInput(event: Event) {
     const preview = await requestPackagePreview(file)
     manifestPreview.value = preview.manifest
     readmePreview.value = preview.readmeMarkdown ?? ''
+    iconPreviewUrl.value = preview.iconDataUrl
+    packageHasIcon.value = preview.hasIcon
     applyManifestToForm(preview.manifest, preview.readmeMarkdown ?? '')
   }
   catch (error: unknown) {
@@ -214,6 +222,16 @@ function handleIconInput(event: Event) {
   const file = target?.files?.[0] ?? null
   formData.value.iconFile = file
 }
+
+// Computed for icon preview display - priority: user uploaded > package extracted
+const displayIconUrl = computed(() => {
+  if (formData.value.iconFile) {
+    return URL.createObjectURL(formData.value.iconFile)
+  }
+  return iconPreviewUrl.value
+})
+
+const hasIconPreview = computed(() => !!displayIconUrl.value)
 
 const canSubmit = computed(() => {
   const { slug, name, summary, readme, category } = formData.value
@@ -441,10 +459,17 @@ function onSubmit() {
               <div class="flex flex-col gap-2">
                 <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
                   {{ t('dashboard.sections.plugins.form.icon') }}
+                  <span v-if="packageHasIcon && !formData.iconFile" class="ml-1 text-emerald-500">(from package)</span>
                 </label>
                 <div class="flex items-center gap-3">
                   <div class="flex size-12 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                    <span v-if="!formData.iconFile" class="text-lg font-medium text-black/40 dark:text-white/40">
+                    <img
+                      v-if="hasIconPreview"
+                      :src="displayIconUrl!"
+                      alt="Plugin icon preview"
+                      class="size-full object-contain"
+                    >
+                    <span v-else class="text-lg font-medium text-black/40 dark:text-white/40">
                       {{ formData.name ? formData.name.charAt(0).toUpperCase() : '?' }}
                     </span>
                   </div>
@@ -456,7 +481,15 @@ function onSubmit() {
                       @change="handleIconInput"
                     >
                     <div class="rounded border border-black/10 px-3 py-2 text-xs text-black/60 dark:border-white/10 dark:text-white/60">
-                      {{ formData.iconFile ? formData.iconFile.name : t('dashboard.sections.plugins.form.iconHelp') }}
+                      <template v-if="formData.iconFile">
+                        {{ formData.iconFile.name }}
+                      </template>
+                      <template v-else-if="packageHasIcon">
+                        {{ t('dashboard.sections.plugins.form.iconFromPackage', 'Icon from package (click to override)') }}
+                      </template>
+                      <template v-else>
+                        {{ t('dashboard.sections.plugins.form.iconHelp') }}
+                      </template>
                     </div>
                   </div>
                 </div>

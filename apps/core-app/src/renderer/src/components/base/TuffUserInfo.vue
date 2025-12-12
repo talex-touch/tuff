@@ -4,7 +4,7 @@ import { touchChannel } from '~/modules/channel/channel-core'
 
 const { currentUser, isLoggedIn } = useAuth()
 
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.quotawish.com'
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
 
 function openUserProfile() {
   const profileUrl = `${NEXUS_URL}/dashboard/account`
