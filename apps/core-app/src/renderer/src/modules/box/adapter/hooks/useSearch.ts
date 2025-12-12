@@ -363,47 +363,16 @@ export function useSearch(
       ? JSON.parse(JSON.stringify(searchResult.value))
       : null
 
-    // Auto-detect clipboard when triggering plugin feature
-    // Only if clipboard hasn't been cleared by user (ESC key)
-    if (isPluginFeature && serializedSearchResult?.query && clipboardOptions?.last) {
-      try {
-        const clipboardData = touchChannel.sendSync('clipboard:get-latest')
-
-        if (clipboardData && clipboardData.type) {
-          const inputs: unknown[] = serializedSearchResult.query.inputs || []
-
-          // Convert clipboard data to TuffQueryInput format
-          if (clipboardData.type === 'image') {
-            inputs.push({
-              type: TuffInputType.Image,
-              content: clipboardData.content,
-              thumbnail: clipboardData.thumbnail,
-              metadata: clipboardData.meta ?? undefined
-            })
-          } else if (clipboardData.type === 'files') {
-            inputs.push({
-              type: TuffInputType.Files,
-              content: clipboardData.content, // Already JSON serialized
-              metadata: clipboardData.meta ?? undefined
-            })
-          } else if (clipboardData.type === 'text' && clipboardData.rawContent) {
-            // Has HTML content
-            inputs.push({
-              type: TuffInputType.Html,
-              content: clipboardData.content,
-              rawContent: clipboardData.rawContent,
-              metadata: clipboardData.meta ?? undefined
-            })
-          }
-
-          if (inputs.length > 0) {
-            serializedSearchResult.query.inputs = inputs
-          }
-        }
-      } catch (error) {
-        console.debug('[useSearch] Failed to auto-detect clipboard:', error)
-        // Continue execution even if clipboard detection fails
-      }
+    // IMPORTANT: Always use current clipboard state from UI (clipboardOptions.last)
+    // This ensures consistency between what's shown in TagSection and what's passed to plugins
+    // Don't re-fetch from main process - use buildQueryInputs() as the single source of truth
+    if (isPluginFeature && serializedSearchResult?.query) {
+      // Get current clipboard inputs from UI state
+      const currentInputs = buildQueryInputs()
+      
+      // Replace the cached inputs with current state
+      // This ensures cleared clipboard (ESC) is respected
+      serializedSearchResult.query.inputs = currentInputs
     }
 
     loading.value = true
