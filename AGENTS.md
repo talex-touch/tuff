@@ -108,6 +108,15 @@ abstract class BaseModule {
 - 通过 CoreBox 搜索界面触发功能
 - 支持开发模式热重载（`dev.enable: true`）
 - 隔离存储（每插件 10MB 限制）
+- **SDK 版本控制**：`sdkapi` 字段（格式 YYMMDD，当前版本 251212）
+
+**SDK 版本 (sdkapi)**:
+- 格式：`YYMMDD`（如 251212 = 2025-12-12）
+- 用途：权限校验版本门控
+- 未声明或 < 251212：跳过权限校验，提示用户
+- >= 251212：启用完整权限校验
+- 工具函数：`checkSdkCompatibility()`, `CURRENT_SDK_VERSION`
+- 位置：`packages/utils/plugin/sdk-version.ts`
 
 **Clipboard 支持**:
 - 插件可声明接受的输入类型：`acceptedInputTypes: ["text", "image", "files", "html"]`

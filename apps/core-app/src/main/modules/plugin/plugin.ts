@@ -87,6 +87,21 @@ export class TouchPlugin implements ITouchPlugin {
   features: PluginFeature[]
   issues: PluginIssue[]
   _uniqueChannelKey: string
+  /**
+   * SDK API version declared by the plugin.
+   * Used for compatibility checking and permission enforcement.
+   */
+  sdkapi?: number
+
+  /**
+   * Declared permissions from manifest.
+   * Used for permission checking and UI display.
+   */
+  declaredPermissions?: {
+    required: string[]
+    optional: string[]
+    reasons: Record<string, string>
+  }
 
   pluginPath: string
 

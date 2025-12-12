@@ -68,6 +68,16 @@ export interface IPluginDev {
   source?: boolean
 }
 
+/**
+ * SDK API version for plugin compatibility checking.
+ * Format: YYMMDD (e.g., 251212 = 2025-12-12)
+ *
+ * Plugins with sdkapi < CURRENT_SDK_VERSION will:
+ * - Skip permission enforcement
+ * - Show compatibility warning to users
+ */
+export type SdkApiVersion = number
+
 export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
   pluginPath: string
@@ -75,6 +85,21 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   features: IPluginFeature[]
   issues: PluginIssue[]
   divisionBoxConfig?: import('../types/division-box').ManifestDivisionBoxConfig
+  /**
+   * SDK API version declared by the plugin.
+   * Used for compatibility checking and permission enforcement.
+   * Format: YYMMDD (e.g., 251212)
+   */
+  sdkapi?: SdkApiVersion
+  /**
+   * Declared permissions from manifest.
+   * Used for permission checking and UI display.
+   */
+  declaredPermissions?: {
+    required: string[]
+    optional: string[]
+    reasons: Record<string, string>
+  }
 
   addFeature: (feature: IPluginFeature) => boolean
   delFeature: (featureId: string) => boolean
@@ -392,6 +417,12 @@ export interface IManifest {
    */
   version: string
   /**
+   * SDK API version for compatibility checking.
+   * Format: YYMMDD (e.g., 251212 = 2025-12-12)
+   * Plugins without this field or with version < 251212 will bypass permission enforcement.
+   */
+  sdkapi?: SdkApiVersion
+  /**
    * Short description of the plugin's functionality.
    */
   description: string
@@ -504,4 +535,5 @@ export type { IPluginLogger, LogDataType, LogItem, LogLevel } from './log/types'
 export * from './providers'
 export * from './risk'
 export * from './sdk/index'
+export * from './sdk-version'
 export * from './widget'

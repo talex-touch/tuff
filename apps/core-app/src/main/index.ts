@@ -20,6 +20,7 @@ import { flowBusModule } from './modules/flow-bus'
 import { fileProtocolModule } from './modules/file-protocol'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
+import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { sentryModule } from './modules/sentry'
 import { storageModule } from './modules/storage'
@@ -55,6 +56,9 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
+// Permission module instance
+const permissionModule = new PermissionModule()
+
 const modulesToLoad = [
   databaseModule,
   storageModule,
@@ -63,6 +67,7 @@ const modulesToLoad = [
   extensionLoaderModule,
   commonChannelModule,
   permissionCheckerModule,
+  permissionModule, // Plugin permission management - before plugin module
   sentryModule,
   buildVerificationModule,
   updateServiceModule,

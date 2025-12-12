@@ -49,6 +49,92 @@ export const PluginKeys = {
   DEPENDENCY_MISSING: 'plugin.dependencyMissing',
   VERSION_MISMATCH: 'plugin.versionMismatch',
   PERMISSION_DENIED: 'plugin.permissionDenied',
+  SDK_VERSION_MISSING: 'plugin.sdkVersionMissing',
+  SDK_VERSION_OUTDATED: 'plugin.sdkVersionOutdated',
+  PERMISSION_MISSING: 'plugin.permissionMissing',
+} as const
+
+/**
+ * Permission related message keys
+ */
+export const PermissionKeys = {
+  // Categories
+  CATEGORY_FS: 'permission.category.fs',
+  CATEGORY_CLIPBOARD: 'permission.category.clipboard',
+  CATEGORY_NETWORK: 'permission.category.network',
+  CATEGORY_SYSTEM: 'permission.category.system',
+  CATEGORY_AI: 'permission.category.ai',
+  CATEGORY_STORAGE: 'permission.category.storage',
+  CATEGORY_WINDOW: 'permission.category.window',
+
+  // Risk levels
+  RISK_LOW: 'permission.risk.low',
+  RISK_MEDIUM: 'permission.risk.medium',
+  RISK_HIGH: 'permission.risk.high',
+
+  // Filesystem permissions
+  FS_READ_NAME: 'permission.fs.read.name',
+  FS_READ_DESC: 'permission.fs.read.desc',
+  FS_WRITE_NAME: 'permission.fs.write.name',
+  FS_WRITE_DESC: 'permission.fs.write.desc',
+  FS_EXECUTE_NAME: 'permission.fs.execute.name',
+  FS_EXECUTE_DESC: 'permission.fs.execute.desc',
+
+  // Clipboard permissions
+  CLIPBOARD_READ_NAME: 'permission.clipboard.read.name',
+  CLIPBOARD_READ_DESC: 'permission.clipboard.read.desc',
+  CLIPBOARD_WRITE_NAME: 'permission.clipboard.write.name',
+  CLIPBOARD_WRITE_DESC: 'permission.clipboard.write.desc',
+
+  // Network permissions
+  NETWORK_LOCAL_NAME: 'permission.network.local.name',
+  NETWORK_LOCAL_DESC: 'permission.network.local.desc',
+  NETWORK_INTERNET_NAME: 'permission.network.internet.name',
+  NETWORK_INTERNET_DESC: 'permission.network.internet.desc',
+  NETWORK_DOWNLOAD_NAME: 'permission.network.download.name',
+  NETWORK_DOWNLOAD_DESC: 'permission.network.download.desc',
+
+  // System permissions
+  SYSTEM_SHELL_NAME: 'permission.system.shell.name',
+  SYSTEM_SHELL_DESC: 'permission.system.shell.desc',
+  SYSTEM_NOTIFICATION_NAME: 'permission.system.notification.name',
+  SYSTEM_NOTIFICATION_DESC: 'permission.system.notification.desc',
+  SYSTEM_TRAY_NAME: 'permission.system.tray.name',
+  SYSTEM_TRAY_DESC: 'permission.system.tray.desc',
+
+  // AI permissions
+  AI_BASIC_NAME: 'permission.ai.basic.name',
+  AI_BASIC_DESC: 'permission.ai.basic.desc',
+  AI_ADVANCED_NAME: 'permission.ai.advanced.name',
+  AI_ADVANCED_DESC: 'permission.ai.advanced.desc',
+  AI_AGENTS_NAME: 'permission.ai.agents.name',
+  AI_AGENTS_DESC: 'permission.ai.agents.desc',
+
+  // Storage permissions
+  STORAGE_PLUGIN_NAME: 'permission.storage.plugin.name',
+  STORAGE_PLUGIN_DESC: 'permission.storage.plugin.desc',
+  STORAGE_SHARED_NAME: 'permission.storage.shared.name',
+  STORAGE_SHARED_DESC: 'permission.storage.shared.desc',
+
+  // Window permissions
+  WINDOW_CREATE_NAME: 'permission.window.create.name',
+  WINDOW_CREATE_DESC: 'permission.window.create.desc',
+  WINDOW_CAPTURE_NAME: 'permission.window.capture.name',
+  WINDOW_CAPTURE_DESC: 'permission.window.capture.desc',
+
+  // UI messages
+  GRANT: 'permission.grant',
+  REVOKE: 'permission.revoke',
+  GRANTED: 'permission.granted',
+  DENIED: 'permission.denied',
+  REQUIRED: 'permission.required',
+  OPTIONAL: 'permission.optional',
+  ALLOW_ONCE: 'permission.allowOnce',
+  ALLOW_ALWAYS: 'permission.allowAlways',
+  REQUEST_TITLE: 'permission.requestTitle',
+  REQUEST_DESC: 'permission.requestDesc',
+  ENFORCEMENT_DISABLED: 'permission.enforcementDisabled',
+  LEGACY_PLUGIN_WARNING: 'permission.legacyPluginWarning',
 } as const
 
 /**
@@ -78,6 +164,7 @@ export const MessageKeys = {
   devServer: DevServerKeys,
   flowTransfer: FlowTransferKeys,
   plugin: PluginKeys,
+  permission: PermissionKeys,
   widget: WidgetKeys,
   system: SystemKeys,
 } as const
@@ -139,5 +226,6 @@ export function parseI18nMessage(str: string): { key: string; params?: Record<st
 export type DevServerKey = typeof DevServerKeys[keyof typeof DevServerKeys]
 export type FlowTransferKey = typeof FlowTransferKeys[keyof typeof FlowTransferKeys]
 export type PluginKey = typeof PluginKeys[keyof typeof PluginKeys]
+export type PermissionKey = typeof PermissionKeys[keyof typeof PermissionKeys]
 export type WidgetKey = typeof WidgetKeys[keyof typeof WidgetKeys]
 export type SystemKey = typeof SystemKeys[keyof typeof SystemKeys]

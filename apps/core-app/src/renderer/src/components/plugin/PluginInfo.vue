@@ -18,6 +18,7 @@ import PluginFeatures from './tabs/PluginFeatures.vue'
 import PluginIssues from './tabs/PluginIssues.vue'
 import PluginLogs from './tabs/PluginLogs.vue'
 import PluginOverview from './tabs/PluginOverview.vue'
+import PluginPermissions from './tabs/PluginPermissions.vue'
 import PluginStorage from './tabs/PluginStorage.vue'
 
 // Props
@@ -279,6 +280,9 @@ async function handleUninstallPlugin(): Promise<void> {
         </TvTabItem>
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
+        </TvTabItem>
+        <TvTabItem icon="shield-keyhole-line" name="Permissions" :label="t('plugin.tabs.permissions')">
+          <PluginPermissions :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
           <PluginStorage :plugin="plugin" />

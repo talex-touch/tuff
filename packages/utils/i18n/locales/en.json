@@ -22,7 +22,70 @@
     "manifestInvalid": "Invalid Manifest",
     "dependencyMissing": "Missing Dependency",
     "versionMismatch": "Version Mismatch",
-    "permissionDenied": "Permission Denied"
+    "permissionDenied": "Permission Denied",
+    "sdkVersionMissing": "Plugin SDK version not declared",
+    "sdkVersionOutdated": "Plugin SDK version outdated",
+    "permissionMissing": "Required permission missing"
+  },
+  "permission": {
+    "category": {
+      "fs": "Filesystem",
+      "clipboard": "Clipboard",
+      "network": "Network",
+      "system": "System",
+      "ai": "AI",
+      "storage": "Storage",
+      "window": "Window"
+    },
+    "risk": {
+      "low": "Low Risk",
+      "medium": "Medium Risk",
+      "high": "High Risk"
+    },
+    "fs": {
+      "read": { "name": "Read Files", "desc": "Read files from your filesystem" },
+      "write": { "name": "Write Files", "desc": "Create, modify, or delete files" },
+      "execute": { "name": "Execute Files", "desc": "Run executable files or scripts" }
+    },
+    "clipboard": {
+      "read": { "name": "Read Clipboard", "desc": "Access clipboard contents" },
+      "write": { "name": "Write Clipboard", "desc": "Copy content to clipboard" }
+    },
+    "network": {
+      "local": { "name": "Local Network", "desc": "Access local network resources" },
+      "internet": { "name": "Internet Access", "desc": "Send and receive internet requests" },
+      "download": { "name": "Download Files", "desc": "Download files from the internet" }
+    },
+    "system": {
+      "shell": { "name": "Execute Commands", "desc": "Run system commands or scripts" },
+      "notification": { "name": "Notifications", "desc": "Send system notifications" },
+      "tray": { "name": "System Tray", "desc": "Access system tray features" }
+    },
+    "ai": {
+      "basic": { "name": "Basic AI", "desc": "Use basic AI capabilities" },
+      "advanced": { "name": "Advanced AI", "desc": "Use advanced AI models" },
+      "agents": { "name": "AI Agents", "desc": "Invoke the agents system" }
+    },
+    "storage": {
+      "plugin": { "name": "Plugin Storage", "desc": "Use plugin private storage" },
+      "shared": { "name": "Shared Storage", "desc": "Access cross-plugin shared storage" }
+    },
+    "window": {
+      "create": { "name": "Create Windows", "desc": "Create new windows or views" },
+      "capture": { "name": "Screen Capture", "desc": "Capture screen content" }
+    },
+    "grant": "Grant",
+    "revoke": "Revoke",
+    "granted": "Granted",
+    "denied": "Denied",
+    "required": "Required",
+    "optional": "Optional",
+    "allowOnce": "Allow Once",
+    "allowAlways": "Always Allow",
+    "requestTitle": "Permission Request",
+    "requestDesc": "{plugin} requests {permission} permission",
+    "enforcementDisabled": "Permission enforcement disabled",
+    "legacyPluginWarning": "This plugin uses legacy SDK, permission checks skipped"
   },
   "widget": {
     "compileFailed": "Widget Compile Failed",

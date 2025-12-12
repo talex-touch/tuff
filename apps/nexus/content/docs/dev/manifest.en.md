@@ -7,12 +7,23 @@
 | `name` | string or map | ✓ | Display name, supports locales |
 | `description` | string |  | Short summary |
 | `version` | string | ✓ | SemVer |
+| `sdkapi` | number | **Recommended** | SDK API version, format YYMMDD (e.g., 251212) |
 | `entry` | string | ✓ | Path to init entry |
 | `preload` | string |  | Renderer preload file |
 | `dev.enable` | boolean |  | Enable hot reload |
 | `permissions` | string[] |  | `clipboard`, `storage`, `network`, ... |
 | `acceptedInputTypes` | string[] |  | `text`, `image`, `files`, `html` |
 | `features` | object[] |  | CoreBox commands, widgets, workflow nodes |
+
+## SDK API Version (sdkapi)
+
+The `sdkapi` field declares the SDK API version the plugin is compatible with. Format is `YYMMDD` (year-month-day).
+
+- **Current version**: `251212` (2025-12-12)
+- **Not declared or below 251212**: Permission checks are bypassed, but users will see a warning about legacy SDK
+- **Equal to or above 251212**: Full permission enforcement enabled
+
+New plugins should always declare the latest `sdkapi` version for complete permission protection.
 
 ## Example
 ```json
@@ -24,6 +35,7 @@
   },
   "description": "Capture and sync todos",
   "version": "1.3.0",
+  "sdkapi": 251212,
   "entry": "init/index.ts",
   "features": [
     {

@@ -1,4 +1,7 @@
-import type { IPluginDev, IPluginFeature } from '@talex-touch/utils/plugin'
+import type { IPluginDev, IPluginFeature, SdkApiVersion } from '@talex-touch/utils/plugin'
+import { checkSdkCompatibility, CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
+import type { ManifestPermissions, ManifestPermissionReasons } from '@talex-touch/utils/permission'
+import { parseManifestPermissions, generatePermissionIssue, getPluginPermissionStatus } from '@talex-touch/utils/permission'
 import type { TuffIconType } from '@talex-touch/utils/types/icon'
 import path from 'node:path'
 import axios from 'axios'
@@ -24,6 +27,19 @@ interface PluginManifest {
   platforms?: Record<string, boolean>
   features?: IPluginFeature[]
   divisionBox?: ManifestDivisionBoxConfig
+  /**
+   * SDK API version for compatibility checking.
+   * Format: YYMMDD (e.g., 251212)
+   */
+  sdkapi?: SdkApiVersion
+  /**
+   * Permission declarations
+   */
+  permissions?: ManifestPermissions | string[]
+  /**
+   * Permission reasons for user display
+   */
+  permissionReasons?: ManifestPermissionReasons
 }
 
 /**
@@ -77,6 +93,64 @@ abstract class BasePluginLoader {
     this.touchPlugin.desc = pluginInfo.description || 'No description.'
     this.touchPlugin.dev = pluginInfo.dev || { enable: false, address: '', source: false }
     this.touchPlugin.platforms = pluginInfo.platforms || {}
+
+    // SDK version compatibility check
+    this.touchPlugin.sdkapi = pluginInfo.sdkapi
+    const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
+    if (sdkCompat.warning) {
+      this.touchPlugin.issues.push({
+        type: sdkCompat.compatible ? 'warning' : 'error',
+        message: sdkCompat.warning,
+        source: 'manifest.json',
+        code: pluginInfo.sdkapi === undefined ? 'SDK_VERSION_MISSING' : 'SDK_VERSION_OUTDATED',
+        suggestion: sdkCompat.suggestion,
+        meta: {
+          declaredVersion: pluginInfo.sdkapi,
+          currentVersion: CURRENT_SDK_VERSION,
+          enforcePermissions: sdkCompat.enforcePermissions,
+        },
+        timestamp: Date.now(),
+      })
+    }
+
+    // Parse permissions from manifest
+    const parsedPermissions = parseManifestPermissions({
+      permissions: pluginInfo.permissions,
+      permissionReasons: pluginInfo.permissionReasons,
+    })
+
+    // Store permission info on plugin for later reference
+    this.touchPlugin.declaredPermissions = {
+      required: parsedPermissions.required,
+      optional: parsedPermissions.optional,
+      reasons: parsedPermissions.reasons,
+    }
+
+    // Generate permission status (granted permissions will be loaded by PermissionModule)
+    const permissionStatus = getPluginPermissionStatus(
+      this.pluginName,
+      pluginInfo.sdkapi,
+      { required: parsedPermissions.required, optional: parsedPermissions.optional },
+      [] // No grants loaded yet at this stage
+    )
+
+    // Add permission-related issue if needed
+    const permissionIssue = generatePermissionIssue(permissionStatus)
+    if (permissionIssue) {
+      this.touchPlugin.issues.push({
+        type: permissionIssue.type,
+        message: permissionIssue.message,
+        source: 'manifest.json',
+        code: permissionIssue.code,
+        suggestion: permissionIssue.suggestion,
+        meta: {
+          required: parsedPermissions.required,
+          optional: parsedPermissions.optional,
+          enforcePermissions: permissionStatus.enforcePermissions,
+        },
+        timestamp: Date.now(),
+      })
+    }
 
     // Parse and store DivisionBox configuration from manifest
     if (pluginInfo.divisionBox) {
