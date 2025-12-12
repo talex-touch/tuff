@@ -181,6 +181,50 @@ export class PermissionModule extends BaseModule {
     return this.guard.enforce(pluginId, apiName, sdkapi)
   }
 
+  /**
+   * Get missing permissions for a plugin (for startup confirmation)
+   */
+  getMissingPermissions(
+    pluginId: string,
+    sdkapi: number | undefined,
+    declared: { required: string[]; optional: string[] }
+  ): { required: string[]; optional: string[] } {
+    const status = this.store.getPluginPermissionStatus(pluginId, sdkapi, declared)
+    return {
+      required: status.missingRequired,
+      optional: declared.optional.filter(p => !status.granted.includes(p)),
+    }
+  }
+
+  /**
+   * Grant all permissions for a plugin
+   */
+  async grantAll(
+    pluginId: string,
+    permissions: string[],
+    grantedBy: 'user' | 'auto' | 'trust' = 'user'
+  ): Promise<void> {
+    for (const permissionId of permissions) {
+      await this.store.grant(pluginId, permissionId, grantedBy)
+    }
+    this.broadcastUpdate(pluginId)
+  }
+
+  /**
+   * Check if plugin needs permission confirmation (for startup)
+   */
+  needsPermissionConfirmation(
+    pluginId: string,
+    sdkapi: number | undefined,
+    declared: { required: string[]; optional: string[] }
+  ): boolean {
+    const status = this.store.getPluginPermissionStatus(pluginId, sdkapi, declared)
+    // Only ask for confirmation if:
+    // 1. Plugin enforces permissions (sdkapi >= 251212)
+    // 2. Has missing required permissions
+    return status.enforcePermissions && status.missingRequired.length > 0
+  }
+
   onDestroy(): MaybePromise<void> {
     // Save any pending changes
     this.store.save()

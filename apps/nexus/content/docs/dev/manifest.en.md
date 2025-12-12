@@ -11,7 +11,8 @@
 | `entry` | string | ✓ | Path to init entry |
 | `preload` | string |  | Renderer preload file |
 | `dev.enable` | boolean |  | Enable hot reload |
-| `permissions` | string[] |  | `clipboard`, `storage`, `network`, ... |
+| `permissions` | object |  | Permission declarations, see below |
+| `permissionReasons` | object |  | Reasons for permissions |
 | `acceptedInputTypes` | string[] |  | `text`, `image`, `files`, `html` |
 | `features` | object[] |  | CoreBox commands, widgets, workflow nodes |
 
@@ -24,6 +25,46 @@ The `sdkapi` field declares the SDK API version the plugin is compatible with. F
 - **Equal to or above 251212**: Full permission enforcement enabled
 
 New plugins should always declare the latest `sdkapi` version for complete permission protection.
+
+## Permissions
+
+The permission system controls plugin access to sensitive APIs. See [Permission API docs](/docs/dev/api/permission) for details.
+
+### Declaration Format
+
+```json
+"permissions": {
+  "required": ["clipboard.read", "network.internet"],
+  "optional": ["storage.shared"]
+},
+"permissionReasons": {
+  "clipboard.read": "Read text from clipboard for translation",
+  "network.internet": "Connect to translation API"
+}
+```
+
+### Available Permissions
+
+| Permission ID | Risk | Description |
+|--------------|------|-------------|
+| `fs.read` | Medium | Read files |
+| `fs.write` | High | Write files |
+| `fs.execute` | High | Execute files |
+| `clipboard.read` | Medium | Read clipboard |
+| `clipboard.write` | Low | Write clipboard (auto-granted) |
+| `network.local` | Low | Local network |
+| `network.internet` | Medium | Internet access |
+| `network.download` | Medium | Download files |
+| `system.shell` | High | Execute commands |
+| `system.notification` | Low | System notifications |
+| `system.tray` | Medium | System tray |
+| `ai.basic` | Low | Basic AI |
+| `ai.advanced` | Medium | Advanced AI |
+| `ai.agents` | High | AI Agents |
+| `storage.plugin` | Low | Plugin storage (auto-granted) |
+| `storage.shared` | Medium | Shared storage |
+| `window.create` | Low | Create windows (auto-granted) |
+| `window.capture` | High | Screen capture |
 
 ## Example
 ```json
@@ -46,7 +87,13 @@ New plugins should always declare the latest `sdkapi` version for complete permi
       "queryMode": "text"
     }
   ],
-  "permissions": ["storage", "clipboard"],
+  "permissions": {
+    "required": ["clipboard.read"],
+    "optional": ["storage.shared"]
+  },
+  "permissionReasons": {
+    "clipboard.read": "Read todo content from clipboard"
+  },
   "acceptedInputTypes": ["text", "files"]
 }
 ```

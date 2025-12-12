@@ -3,6 +3,7 @@
   "name": "touch-translation",
   "version": "1.0.0-Alpha",
   "author": "TalexTouch Team",
+  "sdkapi": 251212,
   "icon": {
     "type": "file",
     "value": "assets/logo.svg"
@@ -12,7 +13,16 @@
   "dev": {
     "enable": true,
     "address": "http://localhost:3333/",
-    "source": true
+    "source": false
+  },
+  "permissions": {
+    "required": ["clipboard.read", "network.internet"],
+    "optional": ["clipboard.write"]
+  },
+  "permissionReasons": {
+    "clipboard.read": "读取剪贴板中的待翻译文本",
+    "network.internet": "连接翻译服务 API（如 Google、DeepL、百度等）",
+    "clipboard.write": "将翻译结果复制到剪贴板"
   },
   "features": [
     {

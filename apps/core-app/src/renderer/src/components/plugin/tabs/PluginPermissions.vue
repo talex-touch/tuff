@@ -7,9 +7,12 @@
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElButton, ElTag, ElEmpty, ElIcon, ElAlert } from 'element-plus'
-import { Check, Warning, Refresh, InfoFilled } from '@element-plus/icons-vue'
-import { PermissionList } from '~/components/permission'
+import { ElTag, ElEmpty } from 'element-plus'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface Props {
@@ -85,6 +88,37 @@ const permissionList = computed(() => {
   })
 })
 
+// Category definitions
+const categoryInfo: Record<string, { name: string; icon: string }> = {
+  fs: { name: '文件系统', icon: 'i-carbon-folder' },
+  clipboard: { name: '剪贴板', icon: 'i-carbon-copy' },
+  network: { name: '网络', icon: 'i-carbon-network-3' },
+  system: { name: '系统', icon: 'i-carbon-terminal' },
+  ai: { name: 'AI 能力', icon: 'i-carbon-bot' },
+  storage: { name: '存储', icon: 'i-carbon-data-base' },
+  window: { name: '窗口', icon: 'i-carbon-application' },
+}
+
+// Group permissions by category
+const permissionCategories = computed(() => {
+  const list = permissionList.value
+  const groups: Record<string, typeof list> = {}
+
+  for (const perm of list) {
+    if (!groups[perm.category]) {
+      groups[perm.category] = []
+    }
+    groups[perm.category].push(perm)
+  }
+
+  return Object.entries(groups).map(([id, permissions]) => ({
+    id,
+    name: categoryInfo[id]?.name || id,
+    icon: categoryInfo[id]?.icon || 'i-carbon-folder',
+    permissions,
+  }))
+})
+
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
   const highRisk = ['fs.write', 'fs.execute', 'system.shell', 'ai.agents', 'window.capture']
   const mediumRisk = ['fs.read', 'clipboard.read', 'network.internet', 'network.download', 'system.tray', 'ai.advanced', 'storage.shared']
@@ -93,15 +127,61 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
   return 'low'
 }
 
+function getPermissionIcon(permissionId: string): string {
+  const icons: Record<string, string> = {
+    'fs.read': 'i-carbon-document',
+    'fs.write': 'i-carbon-edit',
+    'fs.execute': 'i-carbon-play',
+    'clipboard.read': 'i-carbon-copy',
+    'clipboard.write': 'i-carbon-paste',
+    'network.local': 'i-carbon-wifi',
+    'network.internet': 'i-carbon-globe',
+    'network.download': 'i-carbon-download',
+    'system.shell': 'i-carbon-terminal',
+    'system.notification': 'i-carbon-notification',
+    'system.tray': 'i-carbon-overflow-menu-vertical',
+    'ai.basic': 'i-carbon-bot',
+    'ai.advanced': 'i-carbon-machine-learning',
+    'ai.agents': 'i-carbon-user-multiple',
+    'storage.plugin': 'i-carbon-data-base',
+    'storage.shared': 'i-carbon-share',
+    'window.create': 'i-carbon-application',
+    'window.capture': 'i-carbon-screen',
+  }
+  return icons[permissionId] || 'i-carbon-checkmark'
+}
+
+function getRiskTagType(risk: 'low' | 'medium' | 'high'): '' | 'success' | 'warning' | 'danger' {
+  switch (risk) {
+    case 'low': return 'success'
+    case 'medium': return 'warning'
+    case 'high': return 'danger'
+    default: return ''
+  }
+}
+
+function getRiskLabel(risk: 'low' | 'medium' | 'high'): string {
+  switch (risk) {
+    case 'low': return '低'
+    case 'medium': return '中'
+    case 'high': return '高'
+    default: return risk
+  }
+}
+
 // Load permission status
 async function loadStatus() {
   loading.value = true
   try {
+    // Create plain copies of arrays to avoid structured clone issues
+    const required = [...(props.plugin.declaredPermissions?.required || [])]
+    const optional = [...(props.plugin.declaredPermissions?.optional || [])]
+
     const result = await touchChannel.send('permission:get-status', {
       pluginId: props.plugin.name,
       sdkapi: props.plugin.sdkapi,
-      required: props.plugin.declaredPermissions?.required || [],
-      optional: props.plugin.declaredPermissions?.optional || [],
+      required,
+      optional,
     })
     status.value = result
   } catch (e) {
@@ -166,7 +246,7 @@ onMounted(loadStatus)
 </script>
 
 <template>
-  <div class="plugin-permissions">
+  <div class="PluginPermissions w-full space-y-4">
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="i-ri-loader-4-line animate-spin text-2xl" />
@@ -182,107 +262,102 @@ onMounted(loadStatus)
 
     <!-- Permission Content -->
     <template v-else>
-      <!-- Status Header -->
-      <div class="status-header">
-        <div class="status-info">
-          <ElIcon v-if="status?.missingRequired.length === 0" class="status-icon success"><Check /></ElIcon>
-          <ElIcon v-else class="status-icon danger"><Warning /></ElIcon>
-          <span class="status-text">
-            {{ status?.missingRequired.length === 0 ? '所有权限已授予' : `缺少 ${status?.missingRequired.length} 个必需权限` }}
-          </span>
-        </div>
+      <!-- Status Overview -->
+      <TuffGroupBlock
+        name="权限状态"
+        :description="status?.missingRequired.length === 0 ? '所有必需权限已授予' : `缺少 ${status?.missingRequired.length} 个必需权限`"
+        :default-icon="status?.missingRequired.length === 0 ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
+        :active-icon="status?.missingRequired.length === 0 ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
+        memory-name="plugin-permissions-status"
+      >
+        <TuffBlockLine title="必需权限">
+          <template #description>
+            <ElTag type="danger" effect="light" size="small">{{ status?.required.length || 0 }}</ElTag>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine title="可选权限">
+          <template #description>
+            <ElTag type="info" effect="light" size="small">{{ status?.optional.length || 0 }}</ElTag>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine title="已授予">
+          <template #description>
+            <ElTag type="success" effect="light" size="small">{{ status?.granted.length || 0 }}</ElTag>
+          </template>
+        </TuffBlockLine>
 
-        <div class="status-stats">
-          <ElTag type="danger" effect="light" size="small">
-            必需: {{ status?.required.length || 0 }}
-          </ElTag>
-          <ElTag type="info" effect="light" size="small">
-            可选: {{ status?.optional.length || 0 }}
-          </ElTag>
-          <ElTag type="success" effect="light" size="small">
-            已授予: {{ status?.granted.length || 0 }}
-          </ElTag>
-        </div>
-
-        <div class="status-actions">
-          <ElButton :icon="Refresh" size="small" @click="loadStatus">刷新</ElButton>
-        </div>
-      </div>
+        <!-- Actions -->
+        <TuffBlockSlot
+          title="权限操作"
+          description="刷新或批量管理权限"
+          default-icon="i-carbon-settings"
+          active-icon="i-carbon-settings"
+        >
+          <div class="flex items-center gap-2">
+            <FlatButton @click="loadStatus">
+              <i class="i-ri-refresh-line" />
+              <span>刷新</span>
+            </FlatButton>
+            <FlatButton v-if="status?.missingRequired.length" @click="handleGrantAll">
+              <i class="i-ri-check-double-line" />
+              <span>授予全部</span>
+            </FlatButton>
+            <FlatButton v-if="status?.granted.length" class="danger" @click="handleRevokeAll">
+              <i class="i-ri-close-line" />
+              <span>撤销全部</span>
+            </FlatButton>
+          </div>
+        </TuffBlockSlot>
+      </TuffGroupBlock>
 
       <!-- SDK Warning -->
-      <ElAlert
+      <TuffGroupBlock
         v-if="status?.warning && !status?.enforcePermissions"
-        type="warning"
-        :closable="false"
-        class="sdk-warning"
+        name="SDK 版本警告"
+        description="此插件使用旧版 SDK，权限校验已跳过"
+        default-icon="i-carbon-warning"
+        active-icon="i-carbon-warning"
+        memory-name="plugin-permissions-sdk-warning"
       >
-        <template #title>
-          <div class="warning-title">
-            <ElIcon><InfoFilled /></ElIcon>
-            <span>旧版 SDK</span>
-          </div>
-        </template>
-        此插件使用旧版 SDK，权限校验已跳过。建议插件开发者升级到 sdkapi >= 251212。
-      </ElAlert>
+        <TuffBlockLine title="建议">
+          <template #description>
+            <span class="text-[var(--el-color-warning)]">升级到 sdkapi >= 251212 以启用权限校验</span>
+          </template>
+        </TuffBlockLine>
+      </TuffGroupBlock>
 
-      <!-- Missing Required Alert -->
-      <ElAlert
-        v-if="status?.missingRequired.length"
-        type="error"
-        :closable="false"
-        class="missing-alert"
+      <!-- Permission List by Category -->
+      <TuffGroupBlock
+        v-for="category in permissionCategories"
+        :key="category.id"
+        :name="category.name"
+        :description="`${category.permissions.length} 个权限`"
+        :default-icon="category.icon"
+        :active-icon="category.icon"
+        :memory-name="`plugin-permissions-${category.id}`"
       >
-        <template #title>
-          <div class="flex items-center gap-2">
-            <ElIcon><Warning /></ElIcon>
-            <span>缺少必需权限</span>
-          </div>
-        </template>
-        <div class="missing-content">
-          <div class="missing-list">
-            <ElTag
-              v-for="perm in status.missingRequired"
-              :key="perm"
-              type="danger"
-              effect="plain"
-              size="small"
-            >
-              {{ permissionTranslations[perm]?.name || perm }}
-            </ElTag>
-          </div>
-          <ElButton type="primary" size="small" @click="handleGrantAll">
-            授予全部
-          </ElButton>
-        </div>
-      </ElAlert>
-
-      <!-- Actions -->
-      <div class="permission-actions">
-        <ElButton
-          v-if="status?.granted.length"
-          type="danger"
-          plain
-          size="small"
-          @click="handleRevokeAll"
+        <TuffBlockSwitch
+          v-for="perm in category.permissions"
+          :key="perm.id"
+          :model-value="perm.granted"
+          :title="perm.name"
+          :description="perm.desc"
+          :default-icon="getPermissionIcon(perm.id)"
+          :active-icon="getPermissionIcon(perm.id)"
+          @change="(val) => handleToggle(perm.id, val)"
         >
-          撤销全部权限
-        </ElButton>
-      </div>
-
-      <!-- Permission List -->
-      <PermissionList
-        :permissions="permissionList"
-        :readonly="!status?.enforcePermissions"
-        :show-empty="false"
-        @toggle="handleToggle"
-      />
+          <template #tags>
+            <ElTag v-if="perm.required" type="danger" effect="light" size="small">必需</ElTag>
+            <ElTag :type="getRiskTagType(perm.risk)" effect="light" size="small">{{ getRiskLabel(perm.risk) }}</ElTag>
+          </template>
+        </TuffBlockSwitch>
+      </TuffGroupBlock>
     </template>
   </div>
 </template>
 
 <style scoped lang="scss">
-.plugin-permissions {
-  padding: 16px;
+.PluginPermissions {
   height: 100%;
   overflow-y: auto;
 }
@@ -297,70 +372,7 @@ onMounted(loadStatus)
   color: var(--el-text-color-secondary);
 }
 
-.status-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.status-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  .status-icon {
-    &.success {
-      color: var(--el-color-success);
-    }
-    &.danger {
-      color: var(--el-color-danger);
-    }
-  }
-
-  .status-text {
-    font-weight: 500;
-  }
-}
-
-.status-stats {
-  display: flex;
-  gap: 8px;
-}
-
-.status-actions {
-  margin-left: auto;
-}
-
-.sdk-warning,
-.missing-alert {
-  margin-bottom: 16px;
-
-  .warning-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-}
-
-.missing-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.missing-list {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.permission-actions {
-  margin-bottom: 16px;
+.danger {
+  color: var(--el-color-danger) !important;
 }
 </style>

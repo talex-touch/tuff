@@ -1,0 +1,215 @@
+# Permission 权限系统
+
+插件权限系统用于控制插件对敏感资源和 API 的访问。从 SDK API `251212` 版本开始，所有权限声明都会被强制校验。
+
+## 快速开始
+
+### 1. 在 manifest.json 中声明权限
+
+```json
+{
+  "id": "com.example.plugin",
+  "name": "My Plugin",
+  "version": "1.0.0",
+  "sdkapi": 251212,
+  "permissions": {
+    "required": ["clipboard.read", "network.internet"],
+    "optional": ["storage.shared"]
+  },
+  "permissionReasons": {
+    "clipboard.read": "需要读取剪贴板以获取待翻译文本",
+    "network.internet": "需要访问翻译 API 服务"
+  }
+}
+```
+
+### 2. 权限分类
+
+| 类别 | 权限 ID | 风险等级 | 说明 |
+|------|---------|----------|------|
+| **文件系统** | `fs.read` | 中 | 读取用户文件 |
+| | `fs.write` | 高 | 写入/修改文件 |
+| | `fs.execute` | 高 | 执行文件或脚本 |
+| **剪贴板** | `clipboard.read` | 中 | 读取剪贴板内容 |
+| | `clipboard.write` | 低 | 写入剪贴板内容 |
+| **网络** | `network.local` | 低 | 访问本地网络 |
+| | `network.internet` | 中 | 访问互联网 |
+| | `network.download` | 中 | 下载文件到本地 |
+| **系统** | `system.shell` | 高 | 执行系统命令 |
+| | `system.notification` | 低 | 发送系统通知 |
+| | `system.tray` | 中 | 操作系统托盘 |
+| **AI** | `ai.basic` | 低 | 基础 AI 能力 |
+| | `ai.advanced` | 中 | 高级 AI 模型 |
+| | `ai.agents` | 高 | 智能体系统 |
+| **存储** | `storage.plugin` | 低 | 插件私有存储（自动授予） |
+| | `storage.shared` | 中 | 跨插件共享存储 |
+| **窗口** | `window.create` | 低 | 创建窗口（自动授予） |
+| | `window.capture` | 高 | 屏幕截图 |
+
+### 3. 风险等级说明
+
+- **低风险 (low)**: 自动授予或一次确认即可
+- **中风险 (medium)**: 需要用户明确授权
+- **高风险 (high)**: 需要用户二次确认，显示警告
+
+### 4. 默认自动授予的权限
+
+以下权限会自动授予，无需用户确认：
+
+- `storage.plugin` - 插件私有存储
+- `clipboard.write` - 写入剪贴板
+- `window.create` - 创建窗口
+
+## SDK 版本与权限校验
+
+### sdkapi 字段
+
+`sdkapi` 字段决定是否启用权限校验：
+
+| sdkapi 值 | 权限校验 | 说明 |
+|-----------|----------|------|
+| 未声明 | 跳过 | 显示旧版 SDK 警告 |
+| < 251212 | 跳过 | 显示旧版 SDK 警告 |
+| >= 251212 | 启用 | 完整权限校验 |
+
+### 迁移指南
+
+如果您的插件未声明 `sdkapi` 或版本较低：
+
+```json
+{
+  "sdkapi": 251212,
+  "permissions": {
+    "required": ["clipboard.read"],
+    "optional": []
+  }
+}
+```
+
+## API 参考
+
+### 在 Prelude (index.js) 中检查权限
+
+```javascript
+const { permission } = globalThis
+
+// 检查是否有权限
+const hasPermission = await permission.check('clipboard.read')
+
+// 请求权限（会触发用户确认弹窗）
+const granted = await permission.request('clipboard.read', '需要读取剪贴板内容')
+
+if (granted) {
+  // 使用 clipboard API
+  const text = clipboard.readText()
+}
+```
+
+### 在 Surface (Vue) 中使用
+
+```typescript
+import { usePermission } from '@talex-touch/utils/plugin/sdk'
+
+const { check, request, status } = usePermission()
+
+// 检查权限
+const hasClipboard = await check('clipboard.read')
+
+// 请求权限
+const granted = await request('network.internet', '需要访问翻译服务')
+
+// 获取所有权限状态
+const allStatus = await status()
+```
+
+## 最佳实践
+
+### 1. 最小权限原则
+
+只声明实际需要的权限：
+
+```json
+// ✅ 好的做法
+"permissions": {
+  "required": ["clipboard.read"],
+  "optional": []
+}
+
+// ❌ 避免
+"permissions": {
+  "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
+}
+```
+
+### 2. 提供权限说明
+
+```json
+"permissionReasons": {
+  "clipboard.read": "读取剪贴板中的待翻译文本",
+  "network.internet": "连接 Google 翻译 API"
+}
+```
+
+### 3. 优雅降级
+
+```javascript
+async function translateText(text) {
+  const hasNetwork = await permission.check('network.internet')
+  
+  if (!hasNetwork) {
+    // 请求权限或提示用户
+    const granted = await permission.request('network.internet')
+    if (!granted) {
+      return { error: '需要网络权限才能翻译' }
+    }
+  }
+  
+  // 正常翻译逻辑
+  return await http.post('...')
+}
+```
+
+### 4. 区分必需和可选权限
+
+```json
+"permissions": {
+  "required": ["clipboard.read"],  // 核心功能必需
+  "optional": ["network.internet"] // 增强功能可选
+}
+```
+
+## 用户界面
+
+用户可以在以下位置管理插件权限：
+
+1. **插件详情页 > 权限 Tab**: 查看和管理单个插件的权限
+2. **运行时弹窗**: 插件首次请求权限时显示
+
+## 常见问题
+
+### Q: 为什么我的插件显示"旧版 SDK"警告？
+
+A: 您的 `manifest.json` 中未声明 `sdkapi` 字段或版本低于 `251212`。添加：
+
+```json
+"sdkapi": 251212
+```
+
+### Q: 如何处理用户拒绝权限？
+
+A: 提供降级方案或清晰的错误提示：
+
+```javascript
+const granted = await permission.request('clipboard.read')
+if (!granted) {
+  // 显示提示，引导用户手动输入或授权
+  feature.pushItems([{
+    title: '需要剪贴板权限',
+    subtitle: '请在插件设置中授予权限'
+  }])
+}
+```
+
+### Q: 权限数据存储在哪里？
+
+A: 权限授予数据存储在 `<appData>/config/permission/permissions.json`。

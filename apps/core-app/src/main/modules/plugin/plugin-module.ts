@@ -41,6 +41,7 @@ import { PluginInstaller } from './plugin-installer'
 import { createPluginLoader } from './plugin-loaders'
 
 import { LocalPluginProvider } from './providers/local-provider'
+import { getPermissionModule } from '../permission'
 
 const pluginLog = createLogger('PluginModule')
 const devWatcherLog = pluginLog.child('DevWatcher')
@@ -390,7 +391,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
     }
   }
 
-  const enablePlugin = async (pluginName: string): Promise<boolean> => {
+  const enablePlugin = async (pluginName: string, skipPermissionCheck = false): Promise<boolean> => {
     const plugin = plugins.get(pluginName)
     if (!plugin)
       return false
@@ -401,6 +402,49 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
       })
       await reloadPlugin(pluginName)
       return enabledPlugins.has(pluginName)
+    }
+
+    // Check permissions on first enable (if plugin declares permissions)
+    if (!skipPermissionCheck && plugin.declaredPermissions) {
+      const permModule = getPermissionModule()
+      if (permModule) {
+        const declared = {
+          required: plugin.declaredPermissions.required || [],
+          optional: plugin.declaredPermissions.optional || [],
+        }
+
+        // Check if permission confirmation is needed
+        if (permModule.needsPermissionConfirmation(pluginName, plugin.sdkapi, declared)) {
+          const missing = permModule.getMissingPermissions(pluginName, plugin.sdkapi, declared)
+
+          // Send permission request to renderer
+          pluginLog.info(`Plugin ${pluginName} needs permission confirmation: ${missing.required.length} required, ${missing.optional.length} optional`)
+
+          // Broadcast permission request event for UI to handle
+          const { BrowserWindow } = await import('electron')
+          const windows = BrowserWindow.getAllWindows()
+          for (const win of windows) {
+            $app.channel?.sendTo(
+              win,
+              ChannelType.MAIN,
+              'permission:startup-request',
+              {
+                pluginId: pluginName,
+                pluginName: plugin.name,
+                sdkapi: plugin.sdkapi,
+                required: missing.required,
+                optional: missing.optional,
+                reasons: plugin.declaredPermissions.reasons || {},
+              }
+            )
+          }
+
+          // Continue enabling - don't block, user can grant permissions later
+          pluginLog.info('Plugin enabled with missing permissions, user can grant later', {
+            meta: { plugin: pluginName },
+          })
+        }
+      }
     }
 
     const success = await plugin.enable()

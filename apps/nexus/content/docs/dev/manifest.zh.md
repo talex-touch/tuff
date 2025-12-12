@@ -11,7 +11,8 @@
 | `entry` | string | 是 | init 入口文件路径 |
 | `preload` | string | 否 | 渲染层预加载脚本 |
 | `dev.enable` | boolean | 否 | 开发模式热重载 |
-| `permissions` | string[] | 否 | `clipboard`、`storage`、`network` 等 |
+| `permissions` | object | 否 | 权限声明，见下方详情 |
+| `permissionReasons` | object | 否 | 权限用途说明 |
 | `acceptedInputTypes` | string[] | 否 | `text`、`image`、`files`、`html` |
 | `features` | object[] | 否 | CoreBox 指令、Widget、Workflow 节点 |
 
@@ -24,6 +25,46 @@
 - **等于或高于 251212**: 启用完整权限校验
 
 建议新插件始终声明最新的 `sdkapi` 版本以获得完整的权限保护。
+
+## 权限声明 (permissions)
+
+权限系统控制插件对敏感 API 的访问。详见 [Permission API 文档](/docs/dev/api/permission)。
+
+### 声明格式
+
+```json
+"permissions": {
+  "required": ["clipboard.read", "network.internet"],
+  "optional": ["storage.shared"]
+},
+"permissionReasons": {
+  "clipboard.read": "读取剪贴板中的待翻译文本",
+  "network.internet": "连接翻译服务 API"
+}
+```
+
+### 可用权限
+
+| 权限 ID | 风险 | 说明 |
+|---------|------|------|
+| `fs.read` | 中 | 读取文件 |
+| `fs.write` | 高 | 写入文件 |
+| `fs.execute` | 高 | 执行文件 |
+| `clipboard.read` | 中 | 读取剪贴板 |
+| `clipboard.write` | 低 | 写入剪贴板（自动授予） |
+| `network.local` | 低 | 本地网络 |
+| `network.internet` | 中 | 互联网访问 |
+| `network.download` | 中 | 下载文件 |
+| `system.shell` | 高 | 执行命令 |
+| `system.notification` | 低 | 系统通知 |
+| `system.tray` | 中 | 托盘交互 |
+| `ai.basic` | 低 | 基础 AI |
+| `ai.advanced` | 中 | 高级 AI |
+| `ai.agents` | 高 | 智能体 |
+| `storage.plugin` | 低 | 插件存储（自动授予） |
+| `storage.shared` | 中 | 共享存储 |
+| `window.create` | 低 | 创建窗口（自动授予） |
+| `window.capture` | 高 | 屏幕截图 |
 
 ## 示例
 ```json
@@ -46,7 +87,13 @@
       "queryMode": "text"
     }
   ],
-  "permissions": ["storage", "clipboard"],
+  "permissions": {
+    "required": ["clipboard.read"],
+    "optional": ["storage.shared"]
+  },
+  "permissionReasons": {
+    "clipboard.read": "读取剪贴板中的待办内容"
+  },
   "acceptedInputTypes": ["text", "files"]
 }
 ```
