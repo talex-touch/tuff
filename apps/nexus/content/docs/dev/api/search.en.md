@@ -1,0 +1,256 @@
+---
+title: Search Matching API
+description: API documentation for the CoreBox search matching system, including pinyin matching, fuzzy search, and highlighting
+---
+
+# Search Matching API
+
+The CoreBox search system provides powerful matching capabilities:
+
+- **Chinese Pinyin Matching**: Search `fanyi` to match `翻译`
+- **Initial Abbreviations**: Search `fy` to match `翻译`
+- **Fuzzy Matching**: Typo-tolerant search, e.g., `helol` matches `hello`
+- **Highlighting**: Highlight matched portions in search results
+
+## Search Tokens
+
+Plugin Features automatically generate search tokens upon registration, including:
+
+- Original name (lowercase)
+- Full pinyin
+- Pinyin initials
+- Keywords
+- Command values
+
+### Custom Keywords
+
+Add `keywords` to Features in `manifest.json` to enhance search matching:
+
+```json
+{
+  "features": [
+    {
+      "id": "translate",
+      "name": "翻译",
+      "desc": "Translate selected text",
+      "keywords": ["translate", "translation", "fanyi", "fy"]
+    }
+  ]
+}
+```
+
+## Match Types & Priority
+
+The search engine matches in the following priority order:
+
+| Priority | Match Type | Score Range | Description |
+|----------|------------|-------------|-------------|
+| 1 | Exact | 1000 | Title exactly matches query |
+| 2 | Prefix | 800-900 | Title starts with query |
+| 3 | Token | 600-950 | Pinyin/initials/keyword match |
+| 4 | Contains | 600-700 | Title contains query |
+| 5 | Description | 400 | Query found in description |
+| 6 | Fuzzy | 0-500 | Typo-tolerant match |
+
+## Highlighting
+
+Search results include a `matchResult` field for UI highlighting:
+
+```typescript
+interface MatchRange {
+  start: number  // Start position
+  end: number    // End position (exclusive)
+}
+
+// In TuffItem.meta.extension
+interface FeatureExtension {
+  matchResult?: MatchRange[]
+  searchTokens?: string[]
+}
+```
+
+### Using Highlighting in Renderer
+
+The BoxItem component automatically handles `matchResult` highlighting:
+
+```vue
+<h5
+  class="text-sm font-semibold truncate"
+  v-html="getHighlightedHTML(
+    render.basic?.title || '',
+    props.item.meta?.extension?.matchResult
+  )"
+/>
+```
+
+The `getHighlightedHTML` function wraps matched regions in `<span>` tags:
+
+```typescript
+function getHighlightedHTML(
+  text: string,
+  matchedIndices?: MatchRange[],
+  opts?: {
+    className?: string   // Highlight CSS class
+    base?: 0 | 1        // Index base
+    inclusiveEnd?: boolean
+  }
+): string
+```
+
+## Using Search Matching in Plugins
+
+### Using matchFeature Function
+
+The `matchFeature` function from `@talex-touch/utils/search` enables custom search:
+
+```typescript
+import { matchFeature } from '@talex-touch/utils/search'
+
+const result = matchFeature({
+  title: '翻译',
+  desc: 'Translate selected text',
+  searchTokens: ['翻译', 'fanyi', 'fy', 'translate'],
+  query: 'fanyi',
+  enableFuzzy: true
+})
+
+if (result.matched) {
+  console.log('Match type:', result.matchType)
+  console.log('Match score:', result.score)
+  console.log('Highlight ranges:', result.matchRanges)
+}
+```
+
+### FeatureMatchResult Interface
+
+```typescript
+interface FeatureMatchResult {
+  /** Whether matched */
+  matched: boolean
+  /** Match score (0-1000) */
+  score: number
+  /** Match type */
+  matchType: 'exact' | 'token' | 'prefix' | 'contains' | 'fuzzy' | 'none'
+  /** Highlight ranges */
+  matchRanges: MatchRange[]
+  /** Matched token (for debugging) */
+  matchedToken?: string
+}
+```
+
+## Fuzzy Matching API
+
+### fuzzyMatch Function
+
+For typo-tolerant search:
+
+```typescript
+import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
+
+const result = fuzzyMatch('hello', 'helol', 2)
+
+if (result.matched) {
+  console.log('Score:', result.score)
+  console.log('Matched indices:', result.matchedIndices)
+  
+  // Convert to highlight ranges
+  const ranges = indicesToRanges(result.matchedIndices)
+}
+```
+
+### FuzzyMatchResult Interface
+
+```typescript
+interface FuzzyMatchResult {
+  /** Whether matched */
+  matched: boolean
+  /** Match score (0-1) */
+  score: number
+  /** Array of matched character indices */
+  matchedIndices: number[]
+}
+```
+
+## Command Matching
+
+The Feature `commands` field is used for precise trigger matching:
+
+```json
+{
+  "features": [
+    {
+      "id": "search-web",
+      "name": "Search Web",
+      "commands": [
+        { "type": "over" },
+        { "type": "match", "value": ["g ", "google "] },
+        { "type": "contain", "value": "search" },
+        { "type": "regex", "value": "^s\\s+" }
+      ]
+    }
+  ]
+}
+```
+
+Command types:
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `over` | Always match | Shows in empty search results |
+| `match` | Prefix match | `g hello` matches `g ` |
+| `contain` | Contains match | `I want to search` matches `search` |
+| `regex` | Regex match | `s hello` matches `^s\\s+` |
+
+## Clipboard State Sync
+
+Search queries include current clipboard state:
+
+```typescript
+interface TuffQuery {
+  text: string
+  inputs?: TuffQueryInput[]
+}
+
+interface TuffQueryInput {
+  type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
+  content: string
+  thumbnail?: string
+  rawContent?: string
+  metadata?: Record<string, unknown>
+}
+```
+
+### Declaring Accepted Input Types
+
+Declare `acceptedInputTypes` in Features to receive clipboard content:
+
+```json
+{
+  "features": [
+    {
+      "id": "image-ocr",
+      "name": "Image OCR",
+      "acceptedInputTypes": ["image"]
+    }
+  ]
+}
+```
+
+Supported input types:
+- `text` - Plain text
+- `image` - Image (Base64)
+- `files` - File path list
+- `html` - HTML rich text
+
+## Best Practices
+
+1. **Provide multilingual keywords**: Include both English and Chinese in `keywords`
+2. **Use meaningful Feature names**: Names automatically generate pinyin tokens
+3. **Declare acceptedInputTypes**: Explicitly state what input types your Feature can handle
+4. **Use appropriate command types**: `over` for general features, `match` for specific prefix triggers
+
+## Related Links
+
+- [Feature API](/docs/dev/api/feature)
+- [Box API](/docs/dev/api/box)
+- [Manifest Configuration](/docs/dev/manifest)

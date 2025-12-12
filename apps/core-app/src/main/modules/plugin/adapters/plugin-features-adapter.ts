@@ -13,6 +13,7 @@ import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch
 import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
 import { TuffFactory, TuffInputType } from '@talex-touch/utils'
+import { matchFeature, type MatchRange } from '@talex-touch/utils/search'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import searchEngineCore from '../../box-tool/search-engine/search-core'
 import { pluginModule } from '../plugin-module'
@@ -246,7 +247,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     return plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
   }
 
-  private createTuffItem(plugin: ITouchPlugin, feature: IPluginFeature): TuffItem {
+  private createTuffItem(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature,
+    matchResult?: MatchRange[]
+  ): TuffItem {
     const searchTokens = feature.searchTokens ?? buildFeatureSearchTokens(feature)
     feature.searchTokens = searchTokens
 
@@ -294,7 +299,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
               ? String(cmd.value)
               : cmd.value
           })),
-          searchTokens
+          searchTokens,
+          // Match result for UI highlighting
+          matchResult
         }
       }
     }
@@ -328,7 +335,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     }
 
     const queryText = query.text.trim()
-    const matchedItems: TuffItem[] = []
+    const matchedItems: Array<{ item: TuffItem; matchScore: number }> = []
     const plugins = pluginModule.pluginManager!.plugins.values()
 
     const queryInputTypes = query.inputs?.map((i) => i.type) || []
@@ -351,6 +358,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       const features = plugin.getFeatures()
       for (const feature of features as IPluginFeature[]) {
+        // Ensure search tokens are built
+        if (!feature.searchTokens) {
+          feature.searchTokens = buildFeatureSearchTokens(feature)
+        }
+
         // Check if feature accepts the input types
         if (hasNonTextInput) {
           if (!feature.acceptedInputTypes) {
@@ -366,26 +378,49 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           }
         }
 
-        // Match against input text OR clipboard content (either one matches = show feature)
-        const matchesQueryText = queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
-        const matchesClipboard = clipboardTextContent && feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
-        const isMatch = matchesQueryText || matchesClipboard
-
         // If feature accepts the input types and has inputs, show it even if command doesn't match
         const hasInputs = queryInputTypes.length > 0
         const featureAcceptsInputs = hasInputs && feature.acceptedInputTypes?.some((t) =>
           queryInputTypes.includes(t as TuffInputType)
         )
 
-        if (isMatch || featureAcceptsInputs) {
-          matchedItems.push(this.createTuffItem(plugin, feature))
+        // First try command matching (exact commands like 'over', 'match', 'contain')
+        const matchesCommand = queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
+        const matchesClipboardCommand = clipboardTextContent && feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
+
+        if (matchesCommand || matchesClipboardCommand || featureAcceptsInputs) {
+          // Command matched - show without highlighting (full match)
+          matchedItems.push({
+            item: this.createTuffItem(plugin, feature),
+            matchScore: 1000 + (feature.priority ?? 0)
+          })
+          continue
+        }
+
+        // Then try fuzzy/token matching with highlight support (pinyin, English, etc.)
+        if (queryText) {
+          const result = matchFeature({
+            title: feature.name,
+            desc: feature.desc,
+            searchTokens: feature.searchTokens,
+            query: queryText,
+            enableFuzzy: true
+          })
+
+          if (result.matched) {
+            matchedItems.push({
+              item: this.createTuffItem(plugin, feature, result.matchRanges),
+              matchScore: result.score + (feature.priority ?? 0)
+            })
+          }
         }
       }
     }
 
-    const sortedItems = matchedItems.sort(
-      (a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0)
-    )
+    // Sort by match score (highest first), then by priority
+    const sortedItems = matchedItems
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .map((m) => m.item)
 
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }
