@@ -52,12 +52,19 @@ export class IpcManager {
   }
 
   public register(): void {
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:hide', () =>
-      coreBoxManager.trigger(false)
-    )
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:show', () =>
-      coreBoxManager.trigger(true)
-    )
+    // Register for both MAIN and PLUGIN channel types to support calls from:
+    // - Renderer process (MAIN)
+    // - Plugin WebContentsView (PLUGIN)
+    const registerCoreBoxVisibility = (type: ChannelType): void => {
+      this.touchApp.channel.regChannel(type, 'core-box:hide', () =>
+        coreBoxManager.trigger(false)
+      )
+      this.touchApp.channel.regChannel(type, 'core-box:show', () =>
+        coreBoxManager.trigger(true)
+      )
+    }
+    registerCoreBoxVisibility(ChannelType.MAIN)
+    registerCoreBoxVisibility(ChannelType.PLUGIN)
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:focus-window', ({ reply }) => {
       const window = getCoreBoxWindow()
       if (window && !window.window.isDestroyed()) {

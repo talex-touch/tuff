@@ -432,10 +432,10 @@ export function useKeyboard(
     else if (event.key === 'd' || event.key === 'D') {
       /**
        * Command/Ctrl+D: Detach current item to DivisionBox
-       * 
+       *
        * This allows users to "pop out" the currently focused item into
        * an independent DivisionBox window for persistent access.
-       * 
+       *
        * With Shift: Opens Flow selector to transfer data to another plugin
        */
       if ((event.metaKey || event.ctrlKey) && !event.altKey) {
@@ -447,13 +447,13 @@ export function useKeyboard(
 
         if (event.shiftKey) {
           // Command+Shift+D: Flow transfer to another plugin
-          window.dispatchEvent(new CustomEvent(COREBOX_FLOW_EVENT, { 
-            detail: { item: currentItem, query: searchVal.value } 
+          window.dispatchEvent(new CustomEvent(COREBOX_FLOW_EVENT, {
+            detail: { item: currentItem, query: searchVal.value }
           }))
         } else {
           // Command+D: Detach to DivisionBox
-          window.dispatchEvent(new CustomEvent(COREBOX_DETACH_EVENT, { 
-            detail: { item: currentItem, query: searchVal.value } 
+          window.dispatchEvent(new CustomEvent(COREBOX_DETACH_EVENT, {
+            detail: { item: currentItem, query: searchVal.value }
           }))
         }
         event.preventDefault()
@@ -472,8 +472,8 @@ export function useKeyboard(
         }
 
         console.log('[useKeyboard] ⌘K dispatching event for item:', currentItem.id)
-        window.dispatchEvent(new CustomEvent(COREBOX_PIN_EVENT, { 
-          detail: { item: currentItem } 
+        window.dispatchEvent(new CustomEvent(COREBOX_PIN_EVENT, {
+          detail: { item: currentItem }
         }))
         event.preventDefault()
         return
@@ -487,15 +487,15 @@ export function useKeyboard(
        * 3. Clear input query
        * 4. Handle mode transitions
        * 5. Hide CoreBox window
-       * 
+       *
        * Note: handleExit is async but we use void operator (fire-and-forget)
        * because keyboard event handlers cannot be async. The async operations
        * will continue in the background without blocking the UI.
-       * 
+       *
        * Fix: Prioritize clearing clipboard/attachments before deactivating providers
        * to prevent attachUIView from closing while clipboard data remains attached.
        */
-      
+
       // Step 1: Clear clipboard/file attachments FIRST (highest priority)
       if (clipboardOptions.last || boxOptions.file?.paths?.length > 0) {
         if (clipboardOptions.last) {
@@ -569,7 +569,7 @@ export function useKeyboard(
    * Use capture phase (true) to ensure keyboard events are handled
    * before input element's event handlers. This fixes the issue where
    * keyboard events don't reach the global handler when input has focus.
-   * 
+   *
    * Event propagation phases:
    * 1. Capture phase (document → input) - WE LISTEN HERE
    * 2. Target phase (input itself)
