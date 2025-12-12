@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import type { ReleaseChannelId, ReleaseEntryDefinition } from '~/data/updates'
+import type { ReleaseChannelId } from '~/data/updates'
 import { computed, ref, watch } from 'vue'
-import { releaseChannels, releaseEntries } from '~/data/updates'
+import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
+import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
+import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
 
 definePageMeta({
   layout: 'home',
@@ -11,11 +13,21 @@ definePageMeta({
   },
 })
 
-const { t, tm, locale } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
+const { releases, loading, fetchReleases } = useReleases()
 const channelIds = releaseChannels.map(channel => channel.id)
+
+// Detect user's platform
+const userPlatform = ref(detectPlatform())
+const userArch = ref(detectArch())
+
+onMounted(() => {
+  userPlatform.value = detectPlatform()
+  userArch.value = detectArch()
+})
 
 function isSameQuery(
   a: Record<string, unknown>,
@@ -44,7 +56,7 @@ watch(
   },
 )
 
-watch(selectedChannel, (channel) => {
+watch(selectedChannel, async (channel) => {
   historyExpanded.value = false
   const nextQuery = channel === 'release' ? { ...route.query } : { ...route.query, channel }
 
@@ -53,6 +65,22 @@ watch(selectedChannel, (channel) => {
 
   if (!isSameQuery(nextQuery, route.query))
     router.replace({ query: nextQuery })
+
+  // Fetch releases for the selected channel
+  await fetchReleases({
+    channel: mapLocalChannelToApi(channel) as ReleaseChannel,
+    status: 'published',
+    includeAssets: true,
+  })
+})
+
+// Initial fetch
+onMounted(async () => {
+  await fetchReleases({
+    channel: mapLocalChannelToApi(selectedChannel.value) as ReleaseChannel,
+    status: 'published',
+    includeAssets: true,
+  })
 })
 
 const channelOptions = computed(() =>
@@ -66,17 +94,32 @@ const channelOptions = computed(() =>
   })),
 )
 
-const filteredEntries = computed(() => {
-  return releaseEntries
-    .filter(entry => entry.channel === selectedChannel.value)
+// Use API releases data
+const filteredReleases = computed(() => {
+  return releases.value
+    .filter(r => mapApiChannelToLocal(r.channel) === selectedChannel.value)
     .slice()
-    .sort((a, b) => new Date(b.releasedAt).getTime() - new Date(a.releasedAt).getTime())
+    .sort((a, b) => new Date(b.publishedAt ?? b.createdAt).getTime() - new Date(a.publishedAt ?? a.createdAt).getTime())
 })
 
-const latestEntry = computed<ReleaseEntryDefinition | null>(() => filteredEntries.value[0] ?? null)
-const historyEntries = computed(() => filteredEntries.value.slice(1))
+const latestRelease = computed<AppRelease | null>(() => filteredReleases.value[0] ?? null)
+const historyReleases = computed(() => filteredReleases.value.slice(1))
 
-const hasHistory = computed(() => historyEntries.value.length > 0)
+const hasHistory = computed(() => historyReleases.value.length > 0)
+
+// Get download asset for user's platform
+const primaryDownload = computed(() => {
+  if (!latestRelease.value?.assets)
+    return null
+  return findAssetForPlatform(latestRelease.value.assets, userPlatform.value, userArch.value)
+})
+
+// Get all downloads for the latest release
+const allDownloads = computed(() => {
+  if (!latestRelease.value?.assets)
+    return []
+  return latestRelease.value.assets
+})
 
 watch(historyExpanded, (expanded) => {
   const nextQuery = expanded
@@ -106,18 +149,13 @@ function formatReleaseDate(dateString: string) {
   return dateFormatter.value.format(parsed)
 }
 
-function entrySummary(key: string) {
-  return t(`updates.entries.${key}.summary`)
-}
-
-function entryHighlights(key: string) {
-  const highlights = tm(`updates.entries.${key}.highlights`)
-  return Array.isArray(highlights) ? (highlights as string[]) : []
-}
-
 function channelLabel(id: ReleaseChannelId) {
   const channel = channelOptions.value.find(option => option.id === id)
   return channel ? channel.label : id
+}
+
+function getDownloadLabel(asset: { platform: string, arch: string }) {
+  return `${getPlatformLabel(asset.platform as any)} (${getArchLabel(asset.arch as any)})`
 }
 </script>
 
@@ -180,7 +218,15 @@ function channelLabel(id: ReleaseChannelId) {
     </div>
 
     <div
-      v-if="latestEntry"
+      v-if="loading"
+      class="mx-auto max-w-4xl w-full flex flex-col items-center gap-4 border border-primary/15 rounded-[32px] bg-dark/5 px-8 py-16 text-center text-black/70 dark:border-light/15 dark:bg-light/10 dark:text-light/70"
+    >
+      <span class="i-carbon-circle-dash animate-spin text-3xl" aria-hidden="true" />
+      <p>{{ t('updates.loading') || 'Loading releases...' }}</p>
+    </div>
+
+    <div
+      v-else-if="latestRelease"
       class="grid mx-auto max-w-5xl w-full gap-6 border border-primary/10 rounded-[36px] bg-white/80 p-10 shadow-[0_40px_130px_rgba(17,35,85,0.15)] lg:grid-cols-[1.15fr_0.85fr] dark:border-light/15 dark:bg-dark/40 sm:p-8 dark:text-light/90 dark:shadow-[0_40px_120px_rgba(5,9,25,0.55)]"
     >
       <article class="flex flex-col gap-6">
@@ -190,53 +236,62 @@ function channelLabel(id: ReleaseChannelId) {
               {{ t('updates.latest.heading') }}
             </span>
             <span class="text-xs text-black/50 font-medium tracking-[0.24em] uppercase dark:text-light/60">
-              {{ channelLabel(latestEntry.channel) }}
+              {{ channelLabel(mapApiChannelToLocal(latestRelease.channel)) }}
+            </span>
+            <span
+              v-if="latestRelease.isCritical"
+              class="inline-flex items-center gap-1 border border-red-500/30 rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] text-red-600 font-semibold tracking-[0.2em] uppercase dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-400"
+            >
+              <span class="i-carbon-warning-filled text-xs" aria-hidden="true" />
+              Critical
             </span>
           </div>
           <h2 class="text-3xl text-black font-semibold dark:text-light">
-            {{ latestEntry.version }}
+            {{ latestRelease.name || latestRelease.tag }}
           </h2>
           <p class="text-sm text-black/50 font-medium tracking-[0.24em] uppercase dark:text-light/60">
-            {{ t('updates.latest.releaseDate', { date: formatReleaseDate(latestEntry.releasedAt) }) }}
+            {{ t('updates.latest.releaseDate', { date: formatReleaseDate(latestRelease.publishedAt || latestRelease.createdAt) }) }}
           </p>
         </header>
-        <p class="text-base text-black/80 dark:text-light/80">
-          {{ entrySummary(latestEntry.key) }}
-        </p>
-        <div class="space-y-3">
-          <h3 class="text-sm text-black/50 font-semibold tracking-[0.3em] uppercase dark:text-light/60">
-            {{ t('updates.latest.highlightsHeading') }}
-          </h3>
-          <ul class="space-y-3">
-            <li
-              v-for="highlight in entryHighlights(latestEntry.key)"
-              :key="highlight"
-              class="flex items-start gap-3 border border-primary/10 rounded-2xl bg-dark/5 p-3 text-sm text-black/80 dark:border-light/10 dark:bg-light/10 dark:text-light/80"
-            >
-              <span class="i-carbon-dot-mark text-base text-black/60 dark:text-light/60" aria-hidden="true" />
-              <span>{{ highlight }}</span>
-            </li>
-          </ul>
-        </div>
+
+        <div v-if="latestRelease.notes" class="prose prose-sm max-w-none text-black/80 dark:text-light/80" v-html="latestRelease.notesHtml || latestRelease.notes" />
+
         <div class="flex flex-wrap items-center gap-3">
-          <NuxtLink
-            :to="latestEntry.notesPath"
-            class="inline-flex items-center gap-2 rounded-full bg-dark px-5 py-2.5 text-sm text-white font-semibold shadow-[0_18px_40px_rgba(12,32,98,0.35)] transition dark:bg-light hover:bg-dark/90 dark:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 hover:-translate-y-0.5 dark:hover:bg-light/90"
-          >
-            <span class="i-carbon-document-view text-base" aria-hidden="true" />
-            {{ t('updates.latest.notesCta') }}
-          </NuxtLink>
           <a
-            v-for="download in latestEntry.downloads"
-            :key="download.id"
-            :href="download.href"
+            v-if="primaryDownload"
+            :href="primaryDownload.downloadUrl"
             target="_blank"
             rel="noopener"
-            class="inline-flex items-center gap-2 border border-primary/20 rounded-full px-5 py-2.5 text-sm text-black font-semibold transition dark:border-light/25 hover:border-primary/50 hover:bg-dark/5 dark:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 hover:-translate-y-0.5 dark:hover:border-light/60 dark:hover:bg-light/10"
+            class="inline-flex items-center gap-2 rounded-full bg-dark px-5 py-2.5 text-sm text-white font-semibold shadow-[0_18px_40px_rgba(12,32,98,0.35)] transition dark:bg-light hover:bg-dark/90 dark:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 hover:-translate-y-0.5 dark:hover:bg-light/90"
           >
             <span class="i-carbon-download text-base" aria-hidden="true" />
-            {{ t(download.labelKey) }}
+            {{ t('updates.downloads.downloadFor') || 'Download for' }} {{ getDownloadLabel(primaryDownload) }}
+            <span v-if="primaryDownload.size" class="text-xs opacity-70">({{ formatFileSize(primaryDownload.size) }})</span>
           </a>
+
+          <div v-if="allDownloads.length > 1" class="relative group">
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 border border-primary/20 rounded-full px-4 py-2.5 text-sm text-black font-semibold transition dark:border-light/25 hover:border-primary/50 hover:bg-dark/5 dark:text-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:border-light/60 dark:hover:bg-light/10"
+            >
+              <span class="i-carbon-overflow-menu-horizontal text-base" aria-hidden="true" />
+              {{ t('updates.downloads.otherPlatforms') || 'Other platforms' }}
+            </button>
+            <div class="absolute left-0 top-full z-10 mt-2 hidden min-w-48 flex-col border border-primary/15 rounded-2xl bg-white p-2 shadow-lg group-hover:flex dark:border-light/20 dark:bg-dark">
+              <a
+                v-for="asset in allDownloads"
+                :key="asset.id"
+                :href="asset.downloadUrl"
+                target="_blank"
+                rel="noopener"
+                class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm text-black/80 transition hover:bg-dark/5 dark:text-light/80 dark:hover:bg-light/10"
+              >
+                <span class="i-carbon-download text-base" aria-hidden="true" />
+                <span>{{ getDownloadLabel(asset) }}</span>
+                <span v-if="asset.size" class="ml-auto text-xs text-black/50 dark:text-light/50">{{ formatFileSize(asset.size) }}</span>
+              </a>
+            </div>
+          </div>
         </div>
       </article>
 
@@ -265,7 +320,7 @@ function channelLabel(id: ReleaseChannelId) {
     </div>
 
     <div
-      v-if="filteredEntries.length"
+      v-if="filteredReleases.length"
       class="mx-auto max-w-5xl w-full flex flex-col gap-4"
     >
       <div class="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -304,7 +359,7 @@ function channelLabel(id: ReleaseChannelId) {
                     {{ t('updates.table.columns.date') }}
                   </th>
                   <th scope="col" class="px-6 py-4">
-                    {{ t('updates.table.columns.summary') }}
+                    {{ t('updates.table.columns.summary') || 'Summary' }}
                   </th>
                   <th scope="col" class="px-6 py-4 text-right">
                     {{ t('updates.table.columns.actions') }}
@@ -313,51 +368,43 @@ function channelLabel(id: ReleaseChannelId) {
               </thead>
               <tbody class="divide-y divide-primary/10 dark:divide-light/10">
                 <tr
-                  v-for="entry in filteredEntries"
-                  :key="entry.version"
+                  v-for="release in filteredReleases"
+                  :key="release.tag"
                   class="transition hover:bg-dark/5 dark:hover:bg-light/10"
                 >
                   <td class="px-6 py-4 text-black font-semibold dark:text-light">
-                    {{ entry.version }}
+                    {{ release.name || release.tag }}
                     <span
-                      v-if="entry === latestEntry"
+                      v-if="release === latestRelease"
                       class="ml-2 inline-flex items-center rounded-full bg-dark/10 px-2 py-0.5 text-[11px] text-black/70 font-semibold tracking-[0.3em] uppercase dark:bg-light/10 dark:text-light/70"
                     >
                       {{ t('updates.table.latestBadge') }}
                     </span>
+                    <span
+                      v-if="release.isCritical"
+                      class="ml-2 inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] text-red-600 font-semibold tracking-[0.2em] uppercase dark:bg-red-400/10 dark:text-red-400"
+                    >
+                      Critical
+                    </span>
                   </td>
                   <td class="px-6 py-4 text-sm text-black/70 dark:text-light/70">
-                    {{ formatReleaseDate(entry.releasedAt) }}
+                    {{ formatReleaseDate(release.publishedAt || release.createdAt) }}
                   </td>
-                  <td class="px-6 py-4 text-sm text-black/70 dark:text-light/70">
-                    <ul class="list-disc pl-4 space-y-1">
-                      <li
-                        v-for="highlight in entryHighlights(entry.key).slice(0, 2)"
-                        :key="highlight"
-                      >
-                        {{ highlight }}
-                      </li>
-                    </ul>
+                  <td class="px-6 py-4 text-sm text-black/70 dark:text-light/70 max-w-xs truncate">
+                    {{ release.notes?.substring(0, 100) }}{{ release.notes?.length > 100 ? '...' : '' }}
                   </td>
                   <td class="px-6 py-4 text-right">
                     <div class="inline-flex flex-col items-end gap-2">
-                      <NuxtLink
-                        :to="entry.notesPath"
-                        class="inline-flex items-center gap-1.5 text-xs text-black/70 font-semibold tracking-[0.28em] uppercase transition dark:text-light/70 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:text-light"
-                      >
-                        <span class="i-carbon-document-blank text-sm" aria-hidden="true" />
-                        {{ t('updates.table.viewNotes') }}
-                      </NuxtLink>
                       <a
-                        v-for="download in entry.downloads"
-                        :key="download.id"
-                        :href="download.href"
+                        v-for="asset in (release.assets || []).slice(0, 2)"
+                        :key="asset.id"
+                        :href="asset.downloadUrl"
                         target="_blank"
                         rel="noopener"
-                        class="inline-flex items-center gap-1.5 text-xs text-black/50 font-semibold tracking-[0.28em] uppercase transition dark:text-light/60 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:text-light"
+                        class="inline-flex items-center gap-1.5 text-xs text-black/70 font-semibold tracking-[0.28em] uppercase transition dark:text-light/70 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:text-light"
                       >
-                        <span class="i-carbon-launch text-sm" aria-hidden="true" />
-                        {{ t(download.labelKey) }}
+                        <span class="i-carbon-download text-sm" aria-hidden="true" />
+                        {{ getDownloadLabel(asset) }}
                       </a>
                     </div>
                   </td>
