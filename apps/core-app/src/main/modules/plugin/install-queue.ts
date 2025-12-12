@@ -325,6 +325,7 @@ export class PluginInstallQueue {
       official: task.officialActual ?? task.officialHint,
       pluginId: extractClientString(task.clientMetadata, 'pluginId'),
       pluginName: extractClientString(task.clientMetadata, 'pluginName'),
+      providerId: extractClientString(task.clientMetadata, 'providerId'),
       source: task.request.source,
       position,
       remaining,

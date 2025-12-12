@@ -32,8 +32,12 @@ const { handleInstall, getInstallTask } = useMarketInstall()
 const { usePluginStatus } = usePluginVersionStatus()
 
 const pluginId = computed(() => route.params.id as string)
+const providerId = computed(() => route.query.provider as string | undefined)
 const activePlugin = computed<MarketPluginListItem | null>(() => {
-  return officialPlugins.value.find((p) => p.id === pluginId.value) || null
+  // Match by both id and providerId to distinguish plugins from different sources
+  return officialPlugins.value.find((p) =>
+    p.id === pluginId.value && (!providerId.value || p.providerId === providerId.value)
+  ) || null
 })
 
 const notFound = computed(() => !activePlugin.value && officialPlugins.value.length > 0)
@@ -47,7 +51,7 @@ const { readmeContent, readmeLoading, readmeError } = useMarketReadme(readmeUrl,
 
 /** Current installation task for this plugin */
 const installTask = computed(() =>
-  activePlugin.value ? getInstallTask(activePlugin.value.id) : undefined
+  activePlugin.value ? getInstallTask(activePlugin.value.id, activePlugin.value.providerId) : undefined
 )
 
 let rendererChannel: ITouchClientChannel | undefined

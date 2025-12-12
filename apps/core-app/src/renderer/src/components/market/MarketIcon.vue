@@ -92,7 +92,7 @@ const tuffIcon = computed<ITuffIcon>(() => {
       fontSize: size ? `${size}px` : undefined
     }"
   >
-    <TuffIcon :icon="tuffIcon" />
+    <TuffIcon colorful :icon="tuffIcon" />
   </div>
 </template>
 

@@ -31,6 +31,14 @@ const pluginIndex = reactive(new Map<string, string>())
 const sourceIndex = reactive(new Map<string, string>())
 const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+/**
+ * Generate a composite key for uniquely identifying a plugin across different sources.
+ * Format: `providerId::pluginId` or just `pluginId` if no providerId.
+ */
+export function getPluginCompositeKey(pluginId: string, providerId?: string): string {
+  return providerId ? `${providerId}::${pluginId}` : pluginId
+}
+
 let initialized = false
 
 function getTranslator(): (key: string, params?: Record<string, unknown>) => string {
@@ -80,7 +88,13 @@ function updateTask(event: PluginInstallProgressEvent): void {
   tasks.set(event.taskId, next)
 
   if (event.pluginId) {
-    pluginIndex.set(event.pluginId, event.taskId)
+    // Index by both composite key (providerId::pluginId) and plain pluginId for backward compatibility
+    const compositeKey = getPluginCompositeKey(event.pluginId, event.providerId)
+    pluginIndex.set(compositeKey, event.taskId)
+    // Also index by plain pluginId as fallback
+    if (!pluginIndex.has(event.pluginId)) {
+      pluginIndex.set(event.pluginId, event.taskId)
+    }
   }
 
   if (event.source) {
@@ -173,10 +187,12 @@ const activeTaskCount = computed(() => {
   return count
 })
 
-function getTaskByPluginId(pluginId?: string) {
+function getTaskByPluginId(pluginId?: string, providerId?: string) {
   if (!pluginId)
     return undefined
-  const taskId = pluginIndex.get(pluginId)
+  // Try composite key first, then fall back to plain pluginId
+  const compositeKey = getPluginCompositeKey(pluginId, providerId)
+  const taskId = pluginIndex.get(compositeKey) ?? pluginIndex.get(pluginId)
   return taskId ? tasks.get(taskId) : undefined
 }
 

@@ -151,14 +151,14 @@ watch(
     >
       <MarketItemCard
         v-for="(item, index) in plugins"
-        :key="item.id || item.name || index"
+        :key="`${item.providerId}::${item.id}` || item.name || index"
         :item="item"
         :index="index"
         :data-index="index"
         :is-installed="installedNames?.has(item.name) ?? false"
         :installed-version="installedVersions?.get(item.name)"
         :has-upgrade="hasUpgradeAvailable(installedVersions?.get(item.name), item.version)"
-        :install-task="getInstallTask(item.id)"
+        :install-task="getInstallTask(item.id, item.providerId)"
         class="market-grid-item"
         @install="emit('install', item)"
         @open="emit('open-detail', item)"
