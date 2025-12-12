@@ -21,6 +21,7 @@ const SUBMISSION_COOLDOWN_MS = 5 * 60 * 1000
 let schemaInitialized = false
 let hasLoggedPluginsDb = false
 let hasLoggedPluginsFallback = false
+let hasLoggedShaFallback = false
 
 export type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
 export type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
@@ -360,6 +361,35 @@ function parseJsonObject<T>(value: string | null): T | null {
   catch {
     return null
   }
+}
+
+async function sha256Hex(data: Uint8Array): Promise<string> {
+  if (typeof createHash === 'function') {
+    try {
+      return createHash('sha256').update(data).digest('hex')
+    }
+    catch {
+      // fall through to WebCrypto
+    }
+  }
+
+  const subtle = globalThis.crypto?.subtle
+  if (!subtle) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'SHA-256 is not supported in this runtime.',
+    })
+  }
+
+  if (!hasLoggedShaFallback) {
+    console.warn('[pluginsStore] node crypto unavailable, falling back to WebCrypto SHA-256.')
+    hasLoggedShaFallback = true
+  }
+
+  const digest = await subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(digest))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 function mapPluginRow(row: D1PluginRow): DashboardPlugin {
@@ -1388,7 +1418,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
 
   const packageArrayBuffer = await input.packageFile.arrayBuffer()
   const packageBuffer = Buffer.from(packageArrayBuffer)
-  const signature = createHash('sha256').update(packageBuffer).digest('hex')
+  const signature = await sha256Hex(packageBuffer)
 
   const metadata = await extractTpexMetadata(packageBuffer)
 

@@ -28,16 +28,16 @@ export default defineConfig({
       // 只保留必要的workspace包，其他依赖尽可能外部化以减小包体
       externalizeDepsPlugin({
         exclude: [
-          '@talex-touch/utils', // workspace 包必须打包
-        ],
-      }),
+          '@talex-touch/utils' // workspace 包必须打包
+        ]
+      })
     ],
     resolve: {
       alias: {
         // 强制 @libsql/isomorphic-ws 使用 web 版本而不是 node 版本
         // 这样就不会引入 ws 模块，避免原生依赖问题
-        '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs',
-      },
+        '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs'
+      }
     },
     define: {
       // 这些环境变量现在不再需要，因为我们完全避免了 ws
@@ -48,37 +48,36 @@ export default defineConfig({
       sourcemap: enableSourcemap,
       commonjsOptions: {
         // libsql chooses native binding at runtime via dynamic require
-        ignoreDynamicRequires: true,
+        ignoreDynamicRequires: true
       },
       rollupOptions: {
         input: {
-          'index': 'src/main/index.ts',
-          'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
+          index: 'src/main/index.ts',
+          'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts'
         },
         output: {
           entryFileNames: (chunkInfo) => {
             if (chunkInfo.name === 'ocr-worker') {
               return 'ocr-worker.js'
-            }
-            else if (chunkInfo.name === 'index') {
+            } else if (chunkInfo.name === 'index') {
               return 'index.js'
             }
             return '[name]-[hash].js'
-          },
-        },
-      },
-    },
+          }
+        }
+      }
+    }
   },
 
   preload: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@talex-touch/utils'], // workspace 包必须打包
-      }),
+        exclude: ['@talex-touch/utils'] // workspace 包必须打包
+      })
     ],
     build: {
-      sourcemap: enableSourcemap,
-    },
+      sourcemap: enableSourcemap
+    }
   },
 
   renderer: {
@@ -86,20 +85,20 @@ export default defineConfig({
       alias: [
         {
           find: /^~\//,
-          replacement: `${rendererPath}/`,
+          replacement: `${rendererPath}/`
         },
         {
           find: /^assets\//,
-          replacement: `${path.join(rendererPath, 'assets')}/`,
-        },
-      ],
+          replacement: `${path.join(rendererPath, 'assets')}/`
+        }
+      ]
     },
     define: {
       __VUE_OPTIONS_API__: true,
-      __VUE_PROD_DEVTOOLS__: false,
+      __VUE_PROD_DEVTOOLS__: false
     },
     optimizeDeps: {
-      exclude: ['electron', 'fs', 'child_process', 'original-fs'],
+      exclude: ['electron', 'fs', 'child_process', 'original-fs']
     },
     build: {
       sourcemap: enableSourcemap,
@@ -108,9 +107,9 @@ export default defineConfig({
         output: {
           assetFileNames: 'assets/[name]-[hash][extname]',
           chunkFileNames: 'assets/[name]-[hash].js',
-          entryFileNames: 'assets/[name]-[hash].js',
-        },
-      },
+          entryFileNames: 'assets/[name]-[hash].js'
+        }
+      }
     },
     plugins: [
       generatorInformation(),
@@ -120,19 +119,19 @@ export default defineConfig({
       AutoImport({
         resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
         imports: ['vue', 'vue-router'],
-        dts: true,
+        dts: true
       }),
       Components({
-        resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
+        resolvers: [ElementPlusResolver({ importStyle: 'sass' })]
       }),
       VueSetupExtend(),
       VueI18nPlugin({
-        runtimeOnly: false,
+        runtimeOnly: false
       }),
       sentryVitePlugin({
         org: 'quotawish',
-        project: 'tuff',
-      }),
-    ],
-  },
+        project: 'tuff'
+      })
+    ]
+  }
 })
