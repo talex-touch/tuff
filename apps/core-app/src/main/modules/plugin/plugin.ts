@@ -510,6 +510,7 @@ export class TouchPlugin implements ITouchPlugin {
       } else {
         // Prod mode: load from local file
         const featureIndex = path.resolve(this.pluginPath, 'index.js')
+        console.log(`[Plugin ${this.name}] Loading index.js from: ${featureIndex}`)
         if (fse.existsSync(featureIndex)) {
           this.pluginLifecycle = loadPluginFeatureContext(
             this,
@@ -1090,6 +1091,16 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
+    // 新版 API: 统一使用 plugin.* 前缀
+    const pluginAPI = {
+      ...pluginInfo,
+      storage,
+      feature: createFeatureSDK(boxItems, channelBridge),
+      search: searchManager,
+      box: createBoxSDK(boxChannel),
+      divisionBox: createDivisionBoxSDK(channelBridge),
+    }
+
     return {
       dialog,
       logger: this.logger,
@@ -1122,7 +1133,7 @@ export class TouchPlugin implements ITouchPlugin {
       },
       search: searchManager,
       features: featuresManager,
-      plugin: pluginInfo,
+      plugin: pluginAPI,
       plugins: pluginsAPI,
       $box: {
         hide() {
