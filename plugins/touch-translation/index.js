@@ -1,13 +1,10 @@
 const {
+  plugin,
   clipboard,
   http,
   logger,
-  search,
-  feature,
-  box,
   URLSearchParams,
   TuffItemBuilder,
-  storage,
   permission,
 } = globalThis
 
@@ -592,13 +589,13 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
  * @param {AbortSignal} signal
  */
 async function translateAndPushResults(textToTranslate, featureId, signal) {
-  search.updateQuery(textToTranslate)
-  feature.clearItems()
+  plugin.search.updateQuery(textToTranslate)
+  plugin.feature.clearItems()
 
   const detectedLang = detectLanguage(textToTranslate)
   const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
 
-  const providersConfig = await storage.getFile('providers_config')
+  const providersConfig = await plugin.storage.getFile('providers_config')
 
   if (!providersConfig || Object.keys(providersConfig).length === 0) {
     logger.warn('No providers config found. Falling back to Google Translate.')
@@ -606,7 +603,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
     const result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
     const searchItem = createTranslationSearchItem(textToTranslate, result, featureId)
     logger.debug(`[touch-translation] pushItems fallback meta ${JSON.stringify(searchItem.meta)}`)
-    feature.pushItems([searchItem])
+    plugin.feature.pushItems([searchItem])
     return
   }
 
@@ -621,7 +618,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
       .setSubtitle('Please enable at least one provider in the plugin settings.')
       .setIcon({ type: 'file', value: 'assets/logo.svg' })
       .build()
-    feature.pushItems([infoItem])
+    plugin.feature.pushItems([infoItem])
     return
   }
 
@@ -730,7 +727,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
   )
 
   if (searchItems.length > 0) {
-    feature.pushItems(searchItems)
+    plugin.feature.pushItems(searchItems)
   }
   else {
     const errorItem = new TuffItemBuilder('translation-error')
@@ -738,7 +735,7 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
       .setSubtitle('Check logs for more details.')
       .setIcon({ type: 'file', value: 'assets/logo.svg' })
       .build()
-    feature.pushItems([errorItem])
+    plugin.feature.pushItems([errorItem])
   }
 }
 
@@ -767,14 +764,14 @@ const pluginLifecycle = {
                 .setSubtitle('请在插件设置中授予网络权限以使用翻译功能')
                 .setIcon({ type: 'file', value: 'assets/logo.svg' })
                 .build()
-              feature.pushItems([errorItem])
+              plugin.feature.pushItems([errorItem])
               return
             }
           }
         }
 
         // 兼容新版本：使用 listFiles 代替 getAllItems
-        const files = await storage.listFiles()
+        const files = await plugin.storage.listFiles()
         logger.debug('[touch-translation] Storage files:', files)
         await translateAndPushResults(queryText.trim(), featureId, signal)
       }
@@ -797,7 +794,7 @@ const pluginLifecycle = {
 
         const isFeatureExecution = Boolean(item.meta?.featureId)
         if (!isFeatureExecution) {
-          box.hide()
+          plugin.box.hide()
         }
       }
       else {

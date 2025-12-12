@@ -415,10 +415,7 @@ class TouchChannel implements ITouchChannel {
     arg: any
   ): Promise<any> {
     if (!win) {
-      console.warn(
-        `[Channel] Skip sending "${eventName}" to plugin "${pluginName}" because UI view is not ready.`
-      )
-
+      // UI view not ready yet, silently skip
       return Promise.resolve()
     }
 
