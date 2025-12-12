@@ -3,9 +3,12 @@ import { computed } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import type { ITuffIcon } from '@talex-touch/utils'
 
+const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
+
 interface MarketIconProps {
   item?: {
     icon?: string
+    iconUrl?: string
     metadata?: Record<string, unknown>
   }
   size?: number
@@ -13,6 +16,36 @@ interface MarketIconProps {
 }
 
 const props = defineProps<MarketIconProps>()
+
+// Check if there's a direct icon URL (from Nexus API)
+const iconUrl = computed(() => {
+  if (!props.item) return null
+
+  // Check metadata for icon_url first
+  const metadata = props.item.metadata as Record<string, unknown> | undefined
+  if (metadata) {
+    const metaIconUrl = typeof metadata.icon_url === 'string' ? metadata.icon_url.trim() : ''
+    if (metaIconUrl) {
+      // If it's a relative URL starting with /api/, prepend NEXUS_URL
+      if (metaIconUrl.startsWith('/api/')) {
+        return `${NEXUS_URL}${metaIconUrl}`
+      }
+      return metaIconUrl
+    }
+  }
+
+  // Check iconUrl prop
+  const fromProp = typeof props.item.iconUrl === 'string' ? props.item.iconUrl.trim() : ''
+  if (fromProp) {
+    // If it's a relative URL starting with /api/, prepend NEXUS_URL
+    if (fromProp.startsWith('/api/')) {
+      return `${NEXUS_URL}${fromProp}`
+    }
+    return fromProp
+  }
+
+  return null
+})
 
 const iconClass = computed(() => {
   if (!props.item) return ''
@@ -33,6 +66,15 @@ const iconClass = computed(() => {
 })
 
 const tuffIcon = computed<ITuffIcon>(() => {
+  // Priority: iconUrl > iconClass > default
+  if (iconUrl.value) {
+    return {
+      type: 'url',
+      value: iconUrl.value,
+      status: 'normal'
+    }
+  }
+
   const icon = iconClass.value || 'i-ri-puzzle-line'
   return {
     type: 'class',
