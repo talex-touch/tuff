@@ -35,6 +35,14 @@ export const releaseChannels: ReleaseChannelDefinition[] = [
     metaKey: 'updates.channels.release.meta',
   },
   {
+    id: 'beta',
+    icon: 'i-carbon-chemistry',
+    badgeKey: 'updates.channels.beta.badge',
+    labelKey: 'updates.channels.beta.label',
+    descriptionKey: 'updates.channels.beta.description',
+    metaKey: 'updates.channels.beta.meta',
+  },
+  {
     id: 'snapshot',
     icon: 'i-carbon-flash-filled',
     badgeKey: 'updates.channels.snapshot.badge',
@@ -43,6 +51,24 @@ export const releaseChannels: ReleaseChannelDefinition[] = [
     metaKey: 'updates.channels.snapshot.meta',
   },
 ]
+
+export function mapApiChannelToLocal(channel: string): ReleaseChannelId {
+  const map: Record<string, ReleaseChannelId> = {
+    RELEASE: 'release',
+    BETA: 'beta',
+    SNAPSHOT: 'snapshot',
+  }
+  return map[channel] || 'release'
+}
+
+export function mapLocalChannelToApi(channel: ReleaseChannelId): string {
+  const map: Record<ReleaseChannelId, string> = {
+    release: 'RELEASE',
+    beta: 'BETA',
+    snapshot: 'SNAPSHOT',
+  }
+  return map[channel] || 'RELEASE'
+}
 
 export const releaseEntries: ReleaseEntryDefinition[] = [
   {
