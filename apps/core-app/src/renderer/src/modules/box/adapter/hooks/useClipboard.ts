@@ -7,6 +7,8 @@ import { BoxMode } from '..'
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
+// Maximum age for clipboard content to be auto-pasted (5 minutes)
+const MAX_CLIPBOARD_AGE_FOR_AUTOPASTE = 5 * 60 * 1000
 const autoPastedTimestamps = new Set<number>()
 
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
@@ -46,17 +48,23 @@ export function useClipboard(
     if (limit === -1) return false
 
     const copiedTime = new Date(clipboardOptions.last.timestamp).getTime()
-    const lastHidden = boxOptions.lastHidden ?? 0
+    const now = Date.now()
+    const clipboardAge = now - copiedTime
 
-    // Only auto-paste if copied AFTER CoreBox was last hidden
-    if (copiedTime <= lastHidden) return false
+    // Check freshness: content must be within the time limit since copy
+    // - If limit > 0: use user-configured seconds
+    // - If limit === 0: use MAX_CLIPBOARD_AGE_FOR_AUTOPASTE as safety limit
+    const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_FOR_AUTOPASTE : limit * 1000
+    if (clipboardAge > effectiveLimit) return false
 
-    // If limit is 0, always auto-paste (for new clipboard content)
-    if (limit === 0) return true
+    const lastHidden = boxOptions.lastHidden
 
-    // Check if within time limit from copy time
-    const elapsed = Date.now() - copiedTime
-    return elapsed <= limit * 1000
+    // If CoreBox was hidden before (lastHidden > 0), only auto-paste if copied AFTER hiding
+    // This prevents re-pasting the same content when CoreBox is reopened
+    // When lastHidden <= 0 (first launch), skip this check and rely on clipboardAge alone
+    if (lastHidden > 0 && copiedTime <= lastHidden) return false
+
+    return true
   }
 
   function markAsAutoPasted(timestamp: number, clear = true): void {

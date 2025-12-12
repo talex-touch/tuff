@@ -170,9 +170,12 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   try {
     await fs.access(plistPath, fs.constants.F_OK)
   }
-  catch {
+  catch (err) {
     // If Info.plist doesn't exist, this is not a valid/complete app bundle.
-    throw new Error(`Info.plist not found at ${plistPath}`)
+    // Preserve the original error code so retrier can detect ENOENT
+    const error = new Error(`Info.plist not found at ${plistPath}`) as Error & { code?: string }
+    error.code = (err as NodeJS.ErrnoException).code
+    throw error
   }
 
   const stats = await fs.stat(appPath)
