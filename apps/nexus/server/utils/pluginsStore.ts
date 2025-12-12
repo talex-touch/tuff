@@ -975,7 +975,7 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
         created_at,
         updated_at,
         latest_version_id
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?19, NULL, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, NULL);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?19, '', ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, NULL);
     `).bind(
       plugin.id,
       plugin.userId,
