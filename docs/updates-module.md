@@ -164,19 +164,60 @@
 └── 历史版本归档
 ```
 
-**API 设计** (Nexus Server):
+**API 设计** (Nexus Server) - **已实现**:
+
+| 方法 | 路由 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/api/releases` | 获取版本列表 | Public |
+| GET | `/api/releases/latest` | 获取最新发布版本 | Public |
+| GET | `/api/releases/:tag` | 获取单个版本详情 | Public |
+| POST | `/api/releases` | 创建新版本 | Admin |
+| PATCH | `/api/releases/:tag` | 更新版本信息 | Admin |
+| DELETE | `/api/releases/:tag` | 删除版本 | Admin |
+| POST | `/api/releases/:tag/publish` | 发布版本 | Admin |
+| POST | `/api/releases/:tag/assets` | 上传版本资产（upload 模式） | Admin |
+| POST | `/api/releases/:tag/link-github` | 链接 GitHub 资产（github 模式） | Admin |
+| GET | `/api/releases/:tag/assets` | 获取版本资产列表 | Public |
+| GET | `/api/releases/:tag/download/:platform/:arch` | 下载资产 | Public |
+
+**查询参数**:
 ```typescript
-// 获取最新版本
-GET /api/updates/latest?channel=release&platform=darwin
+// GET /api/releases
+{
+  channel?: 'RELEASE' | 'BETA' | 'SNAPSHOT'  // 筛选渠道
+  status?: 'draft' | 'published' | 'archived' // 筛选状态
+  assets?: 'true' | 'false'                   // 是否包含资产列表
+  limit?: number                              // 限制返回数量
+}
 
-// 获取版本列表
-GET /api/updates/releases?channel=release&page=1&limit=10
+// GET /api/releases/latest
+{
+  channel?: 'RELEASE' | 'BETA' | 'SNAPSHOT'  // 默认 RELEASE
+  platform?: 'darwin' | 'win32' | 'linux'    // 筛选平台资产
+}
+```
 
-// 获取单个版本详情
-GET /api/updates/releases/:tag
+**资产双模式**:
 
-// 下载资产
-GET /api/updates/assets/:assetId/download
+| 模式 | sourceType | 说明 | 使用场景 |
+|------|------------|------|----------|
+| **GitHub 外链** | `github` | 直接指向 GitHub Release 资产 URL | 主要模式，利用 GitHub CDN |
+| **上传存储** | `upload` | 上传到 R2/S3 自有存储 | 备用/私有版本 |
+
+```typescript
+// POST /api/releases/:tag/link-github (链接 GitHub 资产)
+{
+  platform: 'darwin' | 'win32' | 'linux'
+  arch: 'x64' | 'arm64' | 'universal'
+  filename: string           // 如 "Tuff-2.5.0-arm64.dmg"
+  downloadUrl: string        // GitHub 资产下载 URL
+  size: number               // 文件大小（字节）
+  sha256?: string            // 可选，校验码
+  contentType?: string       // 默认 application/octet-stream
+}
+
+// POST /api/releases/:tag/assets (上传资产)
+// FormData: platform, arch, file
 ```
 
 ### 3.2 Intelligence（智能中心）
@@ -365,13 +406,23 @@ unplugin-export-plugin/
 - [x] 清理 `unplugin-export-plugin` 冗余文件
   - 删除: `.git`, `.github`, `.vscode`, `playground`, `test`, `pnpm-lock.yaml` 等
 
+- [x] 集成 `unplugin-export-plugin` 到 monorepo
+  - 修改依赖为 `workspace:*`
+  - 清理无效 scripts
+
+- [x] 实现 Nexus Server Releases API
+  - 创建 `server/utils/releasesStore.ts`（D1 + 内存双模式）
+  - 创建 API 路由（CRUD + 发布 + 下载）
+  - 支持渠道/平台/架构筛选
+  - 支持下载计数
+
 ### 6.2 待办
 
-- [ ] 实现 Nexus Server 更新 API
-- [ ] 实现静默更新安装逻辑
-- [ ] 官网 Updates 页面
+- [ ] 实现静默更新安装逻辑（客户端）
+- [ ] 官网 Updates 页面（前端）
 - [ ] 官网 Intelligence 页面
-- [ ] 发布 CLI 工具
+- [ ] 发布 CLI 工具（`tuff publish`）
+- [ ] R2/S3 文件存储集成
 
 ---
 

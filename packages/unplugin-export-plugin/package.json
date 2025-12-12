@@ -62,13 +62,10 @@
   "scripts": {
     "build": "tsup",
     "tuff:builder": "tuff builder",
-    "dev": "npm -C playground run dev",
     "lint": "eslint .",
-    "play": "npm run dev",
     "prepublishOnly": "npm run build",
     "release": "bumpp && npm publish --access public",
-    "start": "esno src/index.ts",
-    "test": "vitest"
+    "start": "esno src/index.ts"
   },
   "peerDependencies": {
     "chalk": "^5.6.0",
