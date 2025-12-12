@@ -1,4 +1,4 @@
-export type ReleaseChannelId = 'release' | 'snapshot'
+export type ReleaseChannelId = 'release' | 'snapshot' | 'beta'
 
 export interface ReleaseChannelDefinition {
   id: ReleaseChannelId
