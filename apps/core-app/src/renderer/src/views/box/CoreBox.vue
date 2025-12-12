@@ -449,52 +449,55 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   </div>
 
   <div class="CoreBoxRes flex" @contextmenu="previewHistory.handleContextMenu">
-    <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
-      <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-        <Transition :name="appSetting.animation?.resultTransition !== false ? 'result-switch' : ''" mode="out-in">
-          <BoxGrid
-            v-if="isGridMode"
-            :key="'grid-' + resultBatchKey"
-            :items="res"
-            :layout="boxOptions.layout"
-            :focus="boxOptions.focus"
-            @select="handleGridSelect"
-          />
-          <div v-else :key="'list-' + resultBatchKey" class="item-list">
-            <CoreBoxRender
-              v-for="(item, index) in res"
-              :key="item.id || index"
-              :ref="(el) => setItemRef(el, index)"
-              :active="boxOptions.focus === index"
-              :item="item"
-              :index="index"
-              :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && newItemIds.has(item.id) }"
-              :style="{
-                '--stagger-delay': getStaggerDelay(index, res.length) + 's'
-              }"
-              @trigger="handleItemTrigger(index, item)"
+    <!-- Hide result area when plugin UI view is attached -->
+    <template v-if="!isUIMode">
+      <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
+        <TouchScroll ref="scrollbar" no-padding class="scroll-area">
+          <Transition :name="appSetting.animation?.resultTransition !== false ? 'result-switch' : ''" mode="out-in">
+            <BoxGrid
+              v-if="isGridMode"
+              :key="'grid-' + resultBatchKey"
+              :items="res"
+              :layout="boxOptions.layout"
+              :focus="boxOptions.focus"
+              @select="handleGridSelect"
             />
-          </div>
-        </Transition>
-      </TouchScroll>
-      <CoreBoxFooter
-        :display="!!res.length"
-        :item="activeItem ?? null"
-        :active-activations="activeActivations"
-        :result-count="res.length"
-        :is-recommendation="!searchVal && !activeActivations?.length"
-        class="CoreBoxFooter-Sticky"
+            <div v-else :key="'list-' + resultBatchKey" class="item-list">
+              <CoreBoxRender
+                v-for="(item, index) in res"
+                :key="item.id || index"
+                :ref="(el) => setItemRef(el, index)"
+                :active="boxOptions.focus === index"
+                :item="item"
+                :index="index"
+                :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && newItemIds.has(item.id) }"
+                :style="{
+                  '--stagger-delay': getStaggerDelay(index, res.length) + 's'
+                }"
+                @trigger="handleItemTrigger(index, item)"
+              />
+            </div>
+          </Transition>
+        </TouchScroll>
+        <CoreBoxFooter
+          :display="!!res.length"
+          :item="activeItem ?? null"
+          :active-activations="activeActivations"
+          :result-count="res.length"
+          :is-recommendation="!searchVal && !activeActivations?.length"
+          class="CoreBoxFooter-Sticky"
+        />
+      </div>
+      <TuffItemAddon :type="addon" :item="activeItem" />
+      <PreviewHistoryPanel
+        ref="historyPanelRef"
+        :visible="previewHistory.visible"
+        :loading="previewHistory.loading"
+        :items="previewHistory.items"
+        :active-index="previewHistory.activeIndex"
+        @apply="previewHistory.apply"
       />
-    </div>
-    <TuffItemAddon :type="addon" :item="activeItem" />
-    <PreviewHistoryPanel
-      ref="historyPanelRef"
-      :visible="previewHistory.visible"
-      :loading="previewHistory.loading"
-      :items="previewHistory.items"
-      :active-index="previewHistory.activeIndex"
-      @apply="previewHistory.apply"
-    />
+    </template>
   </div>
 
   <!-- Flow Selector Panel -->
