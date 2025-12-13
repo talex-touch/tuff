@@ -1,0 +1,10 @@
+packages:
+  - packages/**
+  - playground
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - es5-ext
+  - esbuild
+  - fsevents
+  - vue-demi

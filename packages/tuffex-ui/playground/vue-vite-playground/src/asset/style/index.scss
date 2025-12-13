@@ -1,0 +1,19 @@
+@import url('./reset.scss');
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0;
+
+  // 移除旧的 margin 样式
+  > * {
+    margin: 0;
+  }
+
+  // 确保按钮在小屏幕上也能正常显示
+  @media (max-width: 768px) {
+    gap: 8px;
+  }
+}

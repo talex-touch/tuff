@@ -251,6 +251,24 @@ export class WindowManager {
       }
     })
 
+    window.window.on('resize', () => {
+      if (!this.uiView || this.current !== window || window.window.isDestroyed()) {
+        return
+      }
+
+      try {
+        const bounds = window.window.getBounds()
+        this.uiView.setBounds({
+          x: 0,
+          y: 60,
+          width: bounds.width,
+          height: Math.max(0, bounds.height - 60)
+        })
+      } catch (error) {
+        coreBoxWindowLog.warn('Failed to update UI view bounds on resize', { error })
+      }
+    })
+
     coreBoxWindowLog.debug('NewBox created, WebContents loaded')
 
     this.windows.push(window)
@@ -261,13 +279,13 @@ export class WindowManager {
   /**
    * 根据当前屏幕和鼠标位置更新窗口位置。
    */
-  public updatePosition(window: TouchWindow, curScreen?: Electron.Display): void {
-    if (!curScreen) {
-      curScreen = this.getCurScreen()
-    }
-    if (!curScreen || !curScreen.bounds) {
+  private calculateCoreBoxBounds(
+    curScreen: Electron.Display,
+    size: { width: number; height: number }
+  ): Electron.Rectangle | null {
+    if (!curScreen?.bounds) {
       coreBoxWindowLog.error('Invalid screen object', { meta: { screenId: curScreen?.id } })
-      return
+      return null
     }
 
     const rect = curScreen.workArea ?? curScreen.bounds
@@ -285,16 +303,19 @@ export class WindowManager {
           y: rect.y
         }
       })
-      return
+      return null
     }
 
-    const [rawWindowWidth, rawWindowHeight] = window.window.getSize()
-    const windowWidth = Number.isFinite(rawWindowWidth) && rawWindowWidth > 0 ? rawWindowWidth : 900
-    const windowHeight = Number.isFinite(rawWindowHeight) && rawWindowHeight > 0 ? rawWindowHeight : 60
+    const rawWidth = size.width
+    const rawHeight = size.height
+    const windowWidth = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 900
+    const windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 60
 
     const baseLeft = rect.x + (rect.width - windowWidth) / 2
     const baseTop = rect.y + (rect.height - windowHeight) / 2
-    const offsetTop = rect.height * 0.08
+
+    const collapsedExtraOffset = windowHeight <= 72 ? 32 : 0
+    const offsetTop = rect.height * 0.08 + collapsedExtraOffset
 
     let left = Math.round(baseLeft)
     let top = Math.round(baseTop - offsetTop)
@@ -317,8 +338,28 @@ export class WindowManager {
       top = Math.min(Math.max(top, minTop), maxTop)
     }
 
+    return {
+      x: left,
+      y: top,
+      width: windowWidth,
+      height: windowHeight,
+    }
+  }
+
+  public updatePosition(window: TouchWindow, curScreen?: Electron.Display): void {
+    if (!curScreen) {
+      curScreen = this.getCurScreen()
+    }
+
+    const [rawWindowWidth, rawWindowHeight] = window.window.getSize()
+    const bounds = this.calculateCoreBoxBounds(curScreen, {
+      width: rawWindowWidth,
+      height: rawWindowHeight
+    })
+    if (!bounds) return
+
     try {
-      window.window.setPosition(left, top)
+      window.window.setPosition(bounds.x, bounds.y)
     } catch (error) {
       coreBoxWindowLog.error('Failed to set window position', { error })
     }
@@ -376,19 +417,19 @@ export class WindowManager {
     const currentWindow = this.current
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, height)
-      currentWindow.window.setSize(900, height)
-      if (currentWindow.window.isVisible()) {
-        this.updatePosition(currentWindow, this.getDisplayForWindow(currentWindow))
-      }
 
-      if (this.uiView) {
-        const bounds = currentWindow.window.getBounds()
-        this.uiView.setBounds({
-          x: 0,
-          y: 60,
-          width: bounds.width,
-          height: bounds.height - 60
-        })
+      const display = this.getDisplayForWindow(currentWindow)
+      const bounds = this.calculateCoreBoxBounds(display, { width: 900, height })
+      const animate = currentWindow.window.isVisible()
+
+      try {
+        if (bounds) {
+          currentWindow.window.setBounds(bounds, animate)
+        } else {
+          currentWindow.window.setSize(900, height, animate)
+        }
+      } catch (error) {
+        coreBoxWindowLog.error('Failed to update window bounds', { error })
       }
     } else {
       coreBoxWindowLog.error('No current window available for expansion')
@@ -407,9 +448,18 @@ export class WindowManager {
     const currentWindow = this.current
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, 60)
-      currentWindow.window.setSize(900, 60, false)
-      if (currentWindow.window.isVisible()) {
-        this.updatePosition(currentWindow, this.getDisplayForWindow(currentWindow))
+      const display = this.getDisplayForWindow(currentWindow)
+      const bounds = this.calculateCoreBoxBounds(display, { width: 900, height: 60 })
+      const animate = currentWindow.window.isVisible()
+
+      try {
+        if (bounds) {
+          currentWindow.window.setBounds(bounds, animate)
+        } else {
+          currentWindow.window.setSize(900, 60, animate)
+        }
+      } catch (error) {
+        coreBoxWindowLog.error('Failed to update window bounds', { error })
       }
     } else {
       coreBoxWindowLog.error('No current window available for shrinking')
