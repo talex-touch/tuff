@@ -1,0 +1,117 @@
+// TUFF UI SCSS Mixins
+
+// Flexbox shortcuts
+@mixin flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@mixin flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+@mixin flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+// Transitions
+@mixin transition($properties: all) {
+  transition: $properties var(--tx-transition-duration) var(--tx-transition-function);
+}
+
+@mixin transition-fast($properties: all) {
+  transition: $properties var(--tx-transition-duration-fast) var(--tx-transition-function);
+}
+
+// Disabled state
+@mixin disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+// Focus ring
+@mixin focus-ring {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--tx-color-primary-light-7);
+}
+
+// Glass effect (glassmorphism)
+@mixin glass($blur: 12px, $opacity: 0.8) {
+  background: rgba(255, 255, 255, $opacity);
+  backdrop-filter: blur($blur) saturate(180%);
+  -webkit-backdrop-filter: blur($blur) saturate(180%);
+}
+
+// Elevation (shadows)
+@mixin elevation($level: 1) {
+  @if $level == 1 {
+    box-shadow: var(--tx-box-shadow-lighter);
+  } @else if $level == 2 {
+    box-shadow: var(--tx-box-shadow-light);
+  } @else if $level == 3 {
+    box-shadow: var(--tx-box-shadow);
+  } @else if $level == 4 {
+    box-shadow: var(--tx-box-shadow-dark);
+  }
+}
+
+// Text ellipsis
+@mixin ellipsis($lines: 1) {
+  @if $lines == 1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  } @else {
+    display: -webkit-box;
+    -webkit-line-clamp: $lines;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+// Scrollbar styling
+@mixin custom-scrollbar($width: 6px, $track-color: transparent, $thumb-color: var(--tx-fill-color)) {
+  &::-webkit-scrollbar {
+    width: $width;
+    height: $width;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: $track-color;
+    border-radius: $width;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $thumb-color;
+    border-radius: $width;
+
+    &:hover {
+      background: var(--tx-text-color-secondary);
+    }
+  }
+}
+
+// Button base
+@mixin button-base {
+  @include flex-center;
+  @include transition;
+  
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--tx-border-radius-base);
+  font-size: var(--tx-font-size-base);
+  
+  &:focus-visible {
+    @include focus-ring;
+  }
+  
+  &:disabled,
+  &.is-disabled {
+    @include disabled;
+  }
+}

@@ -264,7 +264,7 @@ const triggerRebuild = async () => {
 
 .estimated-time {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--el-text-color-secondary);
   font-weight: 500;
 }
 
@@ -283,20 +283,20 @@ const triggerRebuild = async () => {
 }
 
 .stat-divider {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--el-text-color-placeholder);
   font-size: 12px;
   margin: 0 2px;
 }
 
 .stat-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--el-text-color-secondary);
   font-weight: 400;
 }
 
 .stat-value {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--el-text-color-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -323,7 +323,7 @@ const triggerRebuild = async () => {
 
 .time-text {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--el-text-color-secondary);
   font-family: monospace;
   font-weight: 500;
 }

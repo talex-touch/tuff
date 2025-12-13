@@ -1,0 +1,109 @@
+// TUFF UI CSS Variables
+// These can be customized by the user
+
+:root {
+  // Primary Colors
+  --tx-color-primary: #409eff;
+  --tx-color-primary-light-3: #79bbff;
+  --tx-color-primary-light-5: #a0cfff;
+  --tx-color-primary-light-7: #c6e2ff;
+  --tx-color-primary-light-9: #ecf5ff;
+  --tx-color-primary-dark-2: #337ecc;
+
+  // Text Colors
+  --tx-text-color-primary: #303133;
+  --tx-text-color-regular: #606266;
+  --tx-text-color-secondary: #909399;
+  --tx-text-color-placeholder: #a8abb2;
+  --tx-text-color-disabled: #c0c4cc;
+
+  // Border Colors
+  --tx-border-color: #dcdfe6;
+  --tx-border-color-light: #e4e7ed;
+  --tx-border-color-lighter: #ebeef5;
+  --tx-border-color-extra-light: #f2f6fc;
+
+  // Fill Colors
+  --tx-fill-color: #f0f2f5;
+  --tx-fill-color-light: #f5f7fa;
+  --tx-fill-color-lighter: #fafafa;
+  --tx-fill-color-blank: #ffffff;
+
+  // Background Colors
+  --tx-bg-color: #ffffff;
+  --tx-bg-color-page: #f2f3f5;
+  --tx-bg-color-overlay: #ffffff;
+
+  // Box Shadow
+  --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.04),
+    0px 8px 20px rgba(0, 0, 0, 0.08);
+  --tx-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.12);
+  --tx-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.12);
+  --tx-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.08),
+    0px 12px 32px rgba(0, 0, 0, 0.12), 0px 8px 16px -8px rgba(0, 0, 0, 0.16);
+
+  // Transition
+  --tx-transition-duration: 0.3s;
+  --tx-transition-duration-fast: 0.2s;
+  --tx-transition-function: ease-in-out;
+
+  // Border Radius
+  --tx-border-radius-base: 4px;
+  --tx-border-radius-small: 2px;
+  --tx-border-radius-round: 20px;
+  --tx-border-radius-circle: 100%;
+
+  // Font
+  --tx-font-size-base: 14px;
+  --tx-font-size-small: 12px;
+  --tx-font-size-large: 16px;
+  --tx-font-weight-primary: 500;
+
+  // Z-index
+  --tx-index-normal: 1;
+  --tx-index-top: 1000;
+  --tx-index-popper: 2000;
+
+  // Disabled
+  --tx-disabled-bg-color: var(--tx-fill-color-light);
+  --tx-disabled-text-color: var(--tx-text-color-placeholder);
+  --tx-disabled-border-color: var(--tx-border-color-light);
+}
+
+// Dark theme
+[data-theme='dark'],
+.dark {
+  --tx-color-primary: #409eff;
+  --tx-color-primary-light-3: #3375b9;
+  --tx-color-primary-light-5: #2a598a;
+  --tx-color-primary-light-7: #213d5b;
+  --tx-color-primary-light-9: #18222c;
+  --tx-color-primary-dark-2: #66b1ff;
+
+  --tx-text-color-primary: #e5eaf3;
+  --tx-text-color-regular: #cfd3dc;
+  --tx-text-color-secondary: #a3a6ad;
+  --tx-text-color-placeholder: #8d9095;
+  --tx-text-color-disabled: #6c6e72;
+
+  --tx-border-color: #4c4d4f;
+  --tx-border-color-light: #414243;
+  --tx-border-color-lighter: #363637;
+  --tx-border-color-extra-light: #2b2b2c;
+
+  --tx-fill-color: #303030;
+  --tx-fill-color-light: #262727;
+  --tx-fill-color-lighter: #1d1d1d;
+  --tx-fill-color-blank: transparent;
+
+  --tx-bg-color: #141414;
+  --tx-bg-color-page: #0a0a0a;
+  --tx-bg-color-overlay: #1d1e1f;
+
+  --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.36),
+    0px 8px 20px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.72);
+  --tx-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.72),
+    0px 12px 32px rgba(0, 0, 0, 0.72), 0px 8px 16px -8px rgba(0, 0, 0, 0.72);
+}

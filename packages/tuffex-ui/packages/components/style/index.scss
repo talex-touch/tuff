@@ -1,0 +1,44 @@
+// TUFF UI Global Styles
+@import './variables.scss';
+@import './mixins.scss';
+
+// Component styles
+@import url('../src/button/src/style/index.scss');
+@import url('../src/switch/style/index.scss');
+@import url('../src/flat-button/style/index.scss');
+
+// Fake background utility (glassmorphism effect)
+.fake-background {
+  position: relative;
+  border-radius: 12px;
+
+  &:before {
+    z-index: var(--fake-index, -1);
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: var(--fake-inner-opacity, 1);
+    background: var(--fake-color, var(--tx-fill-color-lighter, var(--el-fill-color-lighter)));
+    border-radius: var(--fake-radius, inherit);
+  }
+
+  &:before {
+    opacity: var(--fake-opacity, 0.75) !important;
+  }
+}
+
+.fake-background.index-fix {
+  z-index: var(--fake-fix-index, 0);
+}
+
+// Transition utilities
+.tx-transition {
+  transition: all var(--tx-transition-duration) var(--tx-transition-function);
+}
+
+.tx-transition-fast {
+  transition: all var(--tx-transition-duration-fast) var(--tx-transition-function);
+}
