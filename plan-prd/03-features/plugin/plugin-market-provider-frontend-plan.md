@@ -176,4 +176,37 @@ export interface MarketPlugin {
 - **安装指令多样性**：当前安装器主要处理 zip/tarball；`repository` 类型可能返回 git clone，需要补齐下载实现。
 - **安全性**：自建 `repository`/`nexusStore` 源可返回恶意链接，UI 需提醒用户自负风险。
 
-搞定，上面就是前端版 Provider Registry 的 PRD，按这套干就能把假市场升级成真市场。
+---
+
+## 11. 实现状态 (2025-12-13)
+
+### ✅ 已完成
+
+| 任务 | 状态 | 说明 |
+|------|------|------|
+| 类型与默认源 | ✅ | `packages/utils/plugin/providers/` |
+| Provider Registry & Storage | ✅ | `useMarketProviders` composable |
+| TpexApiProvider | ✅ | 官方市场 API |
+| NexusStoreProvider | ✅ | Nexus 市场集成 |
+| NPM Provider | ✅ | `npm-package-provider.ts` |
+| Repository Provider | ✅ | GitHub/Gitee 支持 |
+| UI 集成 | ✅ | Market 页面 + Source Editor |
+| Clerk 登录联动 | ✅ | 浏览器登录回调 |
+
+### 📁 相关文件
+
+**主进程**:
+- `apps/core-app/src/main/service/plugin-market.service.ts` - 统一搜索服务
+
+**工具包**:
+- `packages/utils/plugin/providers/market-client.ts` - PluginMarketClient
+- `packages/utils/plugin/providers/tpex-provider.ts` - TPEX API
+- `packages/utils/plugin/providers/npm-provider.ts` - NPM Registry
+
+**渲染进程**:
+- `apps/core-app/src/renderer/src/modules/market/providers/` - Provider 实现
+- `apps/core-app/src/renderer/src/views/market/` - 市场页面
+
+### 🟡 待完成
+
+- [ ] 验收 & 文档 (0.5d) - 更新 README/内置帮助说明

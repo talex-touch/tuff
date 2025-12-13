@@ -1,5 +1,6 @@
 import { clerkClient } from '@clerk/nuxt/server'
 import { requireAuth } from '../../utils/auth'
+import { listInvites } from '../../utils/teamStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
@@ -67,6 +68,36 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // 获取团队邀请列表
+  let invitations: Array<{
+    id: string
+    code: string
+    email: string | null
+    role: string
+    status: string
+    expiresAt: string | null
+    createdAt: string
+  }> = []
+
+  if (organizationData) {
+    try {
+      const invites = await listInvites(event, organizationData.id)
+      invitations = invites
+        .filter(inv => inv.status === 'pending')
+        .map(inv => ({
+          id: inv.id,
+          code: inv.code,
+          email: inv.email,
+          role: inv.role,
+          status: inv.status,
+          expiresAt: inv.expiresAt,
+          createdAt: inv.createdAt,
+        }))
+    } catch (error) {
+      console.error('Error fetching invites:', error)
+    }
+  }
+
   // 如果有组织，使用组织数据；否则只返回当前用户数据
   const team = organizationData
     ? {
@@ -77,7 +108,7 @@ export default defineEventHandler(async (event) => {
           used: organizationData.membersCount || 1,
         },
         members: organizationData.members || [],
-        invitations: [],
+        invitations,
         organization: organizationData,
       }
     : {

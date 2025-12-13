@@ -43,6 +43,12 @@ export default defineNuxtConfig({
     experimental: {
       nativeSqlite: true,
     },
+    markdown: {
+      toc: {
+        depth: 4,
+        searchDepth: 4,
+      },
+    },
   },
 
   i18n: {

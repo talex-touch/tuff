@@ -50,6 +50,65 @@ const searchEngineLog = createLogger('SearchEngineCore')
 // import intelligenceSearchProvider from './providers/intelligence-provider' // Removed - 使用 internal-ai-plugin
 
 /**
+ * Provider filter aliases for @xxx syntax
+ */
+const PROVIDER_ALIASES: Record<string, string[]> = {
+  file: ['file-provider', 'file-index', 'files', 'fs', 'document'],
+  app: ['app-provider', 'applications', 'apps'],
+  plugin: ['plugin-features', 'plugins', 'extension', 'extensions'],
+  system: ['system-provider', 'sys'],
+  url: ['url-provider', 'link', 'links'],
+  preview: ['preview-provider'],
+}
+
+/**
+ * Parsed query with optional provider filter
+ */
+interface ParsedSearchQuery {
+  raw: string
+  text: string
+  providerFilter?: string
+}
+
+/**
+ * Parse search query for @xxx provider filter syntax
+ */
+function parseProviderFilter(input: string): ParsedSearchQuery {
+  if (!input) return { raw: input, text: input }
+  
+  const filterMatch = input.match(/^@([\w-]+)\s*(.*)$/)
+  if (filterMatch) {
+    return {
+      raw: input,
+      providerFilter: filterMatch[1].toLowerCase(),
+      text: filterMatch[2].trim()
+    }
+  }
+  
+  return { raw: input, text: input }
+}
+
+/**
+ * Check if a provider matches the filter
+ */
+function matchesProviderFilter(providerId: string, filter: string): boolean {
+  const normalizedId = providerId.toLowerCase()
+  const normalizedFilter = filter.toLowerCase()
+  
+  // Exact match
+  if (normalizedId === normalizedFilter) return true
+  
+  // Partial match
+  if (normalizedId.includes(normalizedFilter)) return true
+  
+  // Alias match
+  const aliases = PROVIDER_ALIASES[normalizedFilter]
+  if (aliases?.some(alias => normalizedId.includes(alias))) return true
+  
+  return false
+}
+
+/**
  * Generates a unique key for an activation request.
  * For the plugin adapter, it combines the provider ID with the plugin name
  * to ensure that each plugin's activation is unique.
@@ -311,6 +370,16 @@ export class SearchEngineCore
       query.text = query.text.trim()
     }
 
+    // Parse @xxx provider filter syntax
+    const parsedQuery = parseProviderFilter(query.text || '')
+    const providerFilter = parsedQuery.providerFilter
+    
+    // Update query.text with the filtered text (without the @xxx prefix)
+    if (providerFilter) {
+      query.text = parsedQuery.text
+      searchEngineLog.debug(`Provider filter detected: @${providerFilter}, query: "${query.text}"`)
+    }
+
     const sessionId = crypto.randomUUID()
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
@@ -414,6 +483,24 @@ export class SearchEngineCore
             'Provider Filtered',
             `Active providers: ${providersToSearch.map((p) => p.id).join(', ')}`
           )
+        }
+      }
+
+      // @xxx provider filter: filter providers based on @xxx syntax
+      if (providerFilter) {
+        const beforeCount = providersToSearch.length
+        providersToSearch = providersToSearch.filter((provider) => 
+          matchesProviderFilter(provider.id, providerFilter)
+        )
+        
+        searchLogger.logSearchPhase(
+          '@Provider Filter',
+          `Filter: @${providerFilter}, matched ${providersToSearch.length}/${beforeCount} providers: ${providersToSearch.map((p) => p.id).join(', ') || 'none'}`
+        )
+        
+        // If no providers match the filter, log a warning but continue with empty results
+        if (providersToSearch.length === 0) {
+          searchEngineLog.warn(`No providers match filter @${providerFilter}`)
         }
       }
 

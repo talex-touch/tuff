@@ -7,6 +7,103 @@ import { globSync } from 'glob'
 import { CompressLimit, TalexCompress } from './compress-util'
 import { generateFilesSha256, generateSignature } from './security-util'
 
+interface IndexBuildConfig {
+  entry: string
+  format?: 'cjs' | 'esm'
+  target?: string
+  external?: string[]
+  minify?: boolean
+  sourcemap?: boolean
+}
+
+/**
+ * Detect index/ folder and find entry point
+ */
+async function detectIndexFolder(): Promise<IndexBuildConfig | null> {
+  const indexDir = path.resolve('index')
+  
+  if (!fs.existsSync(indexDir)) {
+    return null
+  }
+  
+  const entryFiles = ['main.ts', 'main.js', 'index.ts', 'index.js']
+  for (const file of entryFiles) {
+    const entryPath = path.join(indexDir, file)
+    if (fs.existsSync(entryPath)) {
+      return {
+        entry: entryPath,
+        format: 'cjs',
+        target: 'node18',
+        external: ['electron'],
+        minify: true,
+        sourcemap: false
+      }
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Bundle index/ folder into a single index.js using esbuild
+ */
+async function bundleIndexFolder(
+  config: IndexBuildConfig,
+  buildDir: string,
+  manifest: { name: string; version: string },
+  chalk: any
+): Promise<boolean> {
+  try {
+    const esbuild = await import('esbuild')
+    
+    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Bundling index/ folder with esbuild...'))
+    
+    const startTime = Date.now()
+    const result = await esbuild.build({
+      entryPoints: [config.entry],
+      bundle: true,
+      format: config.format || 'cjs',
+      target: config.target || 'node18',
+      platform: 'node',
+      outfile: path.join(buildDir, 'index.js'),
+      external: config.external || ['electron'],
+      minify: config.minify ?? true,
+      sourcemap: config.sourcemap ?? false,
+      define: {
+        '__PLUGIN_NAME__': JSON.stringify(manifest.name),
+        '__PLUGIN_VERSION__': JSON.stringify(manifest.version),
+      },
+      alias: {
+        '@': path.resolve('index'),
+        '~': path.resolve('index'),
+      },
+      logLevel: 'warning',
+    })
+    
+    const duration = Date.now() - startTime
+    
+    if (result.errors.length > 0) {
+      console.error(chalk.bgRed.white(' ERROR ') + chalk.red(' Index folder bundling failed:'))
+      result.errors.forEach(err => console.error(chalk.red(`  - ${err.text}`)))
+      return false
+    }
+    
+    const outputPath = path.join(buildDir, 'index.js')
+    const stats = fs.statSync(outputPath)
+    const sizeKb = (stats.size / 1024).toFixed(1)
+    
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ') + 
+      chalk.greenBright(` Index folder bundled successfully (${sizeKb}kb) in ${duration}ms`)
+    )
+    
+    return true
+  } catch (error: any) {
+    console.error(chalk.bgRed.white(' ERROR ') + chalk.red(` Failed to bundle index folder: ${error.message}`))
+    return false
+  }
+}
+
 export async function build() {
   const { default: chalk } = await import('chalk')
   const distPath = path.resolve('dist')
@@ -45,7 +142,6 @@ export async function build() {
 
   // 2.2 复制插件文件
   const filesToCopy = [
-    { from: 'index.js', to: 'index.js' },
     { from: 'widgets', to: 'widgets' },
     { from: 'preload.js', to: 'preload.js' },
     { from: 'README.md', to: 'README.md' },
@@ -57,6 +153,27 @@ export async function build() {
     if (fs.existsSync(source)) {
       fs.copySync(source, destination)
       console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(` Copied ${file.from}`))
+    }
+  }
+
+  // 2.2.1 Handle index.js: either bundle from index/ folder or copy existing file
+  const indexConfig = await detectIndexFolder()
+  if (indexConfig) {
+    // Read manifest early for bundling
+    const manifestPath = path.resolve(process.cwd(), 'manifest.json')
+    const manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    
+    const bundleSuccess = await bundleIndexFolder(indexConfig, buildDir, manifestData, chalk)
+    if (!bundleSuccess) {
+      throw new Error('Failed to bundle index/ folder')
+    }
+  } else {
+    // Fallback: copy existing index.js
+    const indexSource = path.resolve(process.cwd(), 'index.js')
+    const indexDest = path.join(buildDir, 'index.js')
+    if (fs.existsSync(indexSource)) {
+      fs.copySync(indexSource, indexDest)
+      console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(' Copied index.js'))
     }
   }
 

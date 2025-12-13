@@ -289,6 +289,64 @@ export class IpcManager {
     registerAllowInput(ChannelType.MAIN)
     registerAllowInput(ChannelType.PLUGIN)
 
+    // Dynamic height control from frontend
+    const registerSetHeight = (type: ChannelType): void => {
+      this.touchApp.channel.regChannel(type, 'core-box:set-height', ({ data, reply }) => {
+        try {
+          const { height } = data as { height: number }
+          if (typeof height !== 'number' || height < 60 || height > 800) {
+            reply(DataCode.ERROR, { error: 'Invalid height (must be 60-800)' })
+            return
+          }
+          windowManager.setHeight(height)
+          reply(DataCode.SUCCESS, { height })
+        } catch (error: any) {
+          reply(DataCode.ERROR, { error: error.message })
+        }
+      })
+    }
+
+    registerSetHeight(ChannelType.MAIN)
+    registerSetHeight(ChannelType.PLUGIN)
+
+    // Get current window bounds
+    const registerGetBounds = (type: ChannelType): void => {
+      this.touchApp.channel.regChannel(type, 'core-box:get-bounds', ({ reply }) => {
+        try {
+          const win = windowManager.current?.window
+          if (!win || win.isDestroyed()) {
+            reply(DataCode.ERROR, { error: 'No window available' })
+            return
+          }
+          const bounds = win.getBounds()
+          reply(DataCode.SUCCESS, { bounds })
+        } catch (error: any) {
+          reply(DataCode.ERROR, { error: error.message })
+        }
+      })
+    }
+
+    registerGetBounds(ChannelType.MAIN)
+    registerGetBounds(ChannelType.PLUGIN)
+
+    // Set window position offset (relative to default position)
+    const registerSetPositionOffset = (type: ChannelType): void => {
+      this.touchApp.channel.regChannel(type, 'core-box:set-position-offset', ({ data, reply }) => {
+        try {
+          const { topPercent } = data as { topPercent?: number }
+          if (typeof topPercent === 'number') {
+            windowManager.setPositionOffset(topPercent)
+          }
+          reply(DataCode.SUCCESS, { topPercent })
+        } catch (error: any) {
+          reply(DataCode.ERROR, { error: error.message })
+        }
+      })
+    }
+
+    registerSetPositionOffset(ChannelType.MAIN)
+    registerSetPositionOffset(ChannelType.PLUGIN)
+
     this.touchApp.channel.regChannel(
       ChannelType.PLUGIN,
       'core-box:allow-clipboard',

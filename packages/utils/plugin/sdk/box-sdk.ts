@@ -184,6 +184,39 @@ export interface BoxSDK {
    * ```
    */
   allowClipboard: (types: number) => Promise<void>
+
+  /**
+   * Set CoreBox window to a specific height (60-800px)
+   *
+   * @param height - Target height in pixels (will be clamped to 60-800)
+   *
+   * @example
+   * ```typescript
+   * // Set to custom height
+   * await plugin.box.setHeight(400)
+   * ```
+   */
+  setHeight: (height: number) => Promise<void>
+
+  /**
+   * Set CoreBox vertical position as percentage from top (0.1-0.9)
+   *
+   * @param topPercent - Position from top (0.1 = 10%, 0.5 = 50%, etc.)
+   *
+   * @example
+   * ```typescript
+   * // Position at 40% from top
+   * await plugin.box.setPositionOffset(0.4)
+   * ```
+   */
+  setPositionOffset: (topPercent: number) => Promise<void>
+
+  /**
+   * Get current CoreBox window bounds
+   *
+   * @returns Window bounds { x, y, width, height }
+   */
+  getBounds: () => Promise<{ x: number; y: number; width: number; height: number }>
 }
 
 /**
@@ -295,6 +328,37 @@ export function createBoxSDK(channel: ITouchClientChannel): BoxSDK {
       }
       catch (error) {
         console.error('[Box SDK] Failed to enable clipboard monitoring:', error)
+        throw error
+      }
+    },
+
+    async setHeight(height: number): Promise<void> {
+      try {
+        await channel.send('core-box:set-height', { height })
+      }
+      catch (error) {
+        console.error('[Box SDK] Failed to set height:', error)
+        throw error
+      }
+    },
+
+    async setPositionOffset(topPercent: number): Promise<void> {
+      try {
+        await channel.send('core-box:set-position-offset', { topPercent })
+      }
+      catch (error) {
+        console.error('[Box SDK] Failed to set position offset:', error)
+        throw error
+      }
+    },
+
+    async getBounds(): Promise<{ x: number; y: number; width: number; height: number }> {
+      try {
+        const result = await channel.send('core-box:get-bounds')
+        return result.bounds
+      }
+      catch (error) {
+        console.error('[Box SDK] Failed to get bounds:', error)
         throw error
       }
     },

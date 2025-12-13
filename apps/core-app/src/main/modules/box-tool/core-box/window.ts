@@ -71,6 +71,9 @@ export class WindowManager {
   private bundledThemeCss: string | null = null
   private inputAllowed = false
   private clipboardAllowedTypes = 0
+  private boundsAnimationTimer: NodeJS.Timeout | null = null
+  private boundsAnimationToken = 0
+  private customTopPercent: number | null = null  // Custom position offset (0-1)
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -279,6 +282,88 @@ export class WindowManager {
   /**
    * 根据当前屏幕和鼠标位置更新窗口位置。
    */
+  private stopBoundsAnimation(): void {
+    if (this.boundsAnimationTimer) {
+      clearInterval(this.boundsAnimationTimer)
+      this.boundsAnimationTimer = null
+    }
+    this.boundsAnimationToken += 1
+  }
+
+  private animateWindowBounds(
+    window: TouchWindow,
+    target: Electron.Rectangle,
+    options: { minHeight?: number } = {}
+  ): void {
+    if (window.window.isDestroyed()) return
+
+    this.stopBoundsAnimation()
+    const token = this.boundsAnimationToken
+
+    const browserWindow = window.window
+    const startBounds = browserWindow.getBounds()
+
+    const lerp = (from: number, to: number, t: number): number => from + (to - from) * t
+    // Smoother easing function - ease out quart for more natural feel
+    const easeOutQuart = (t: number): number => 1 - (1 - t) ** 4
+
+    const heightDelta = Math.abs(target.height - startBounds.height)
+    const positionDelta = Math.abs(target.y - startBounds.y) + Math.abs(target.x - startBounds.x)
+    // Longer duration for smoother animation, scale with distance
+    const durationMs = Math.min(280, Math.max(120, 140 + heightDelta * 0.25 + positionDelta * 0.1))
+    const startTime = performance.now()
+
+    const timer = setInterval(() => {
+      if (token !== this.boundsAnimationToken || browserWindow.isDestroyed()) {
+        clearInterval(timer)
+        if (this.boundsAnimationTimer === timer) {
+          this.boundsAnimationTimer = null
+        }
+        return
+      }
+
+      const elapsed = performance.now() - startTime
+      const progress = Math.min(elapsed / durationMs, 1)
+      const eased = easeOutQuart(progress)
+
+      const nextBounds: Electron.Rectangle = {
+        x: Math.round(lerp(startBounds.x, target.x, eased)),
+        y: Math.round(lerp(startBounds.y, target.y, eased)),
+        width: Math.round(lerp(startBounds.width, target.width, eased)),
+        height: Math.round(lerp(startBounds.height, target.height, eased)),
+      }
+
+      try {
+        browserWindow.setBounds(nextBounds, false)
+      } catch (error) {
+        coreBoxWindowLog.warn('Failed to animate window bounds', { error })
+        clearInterval(timer)
+        if (this.boundsAnimationTimer === timer) {
+          this.boundsAnimationTimer = null
+        }
+        return
+      }
+
+      if (progress >= 1) {
+        clearInterval(timer)
+        if (this.boundsAnimationTimer === timer) {
+          this.boundsAnimationTimer = null
+        }
+        this.boundsAnimationToken += 1
+        try {
+          browserWindow.setBounds(target, false)
+          if (typeof options.minHeight === 'number') {
+            browserWindow.setMinimumSize(900, options.minHeight)
+          }
+        } catch (error) {
+          coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
+        }
+      }
+    }, 16)
+
+    this.boundsAnimationTimer = timer
+  }
+
   private calculateCoreBoxBounds(
     curScreen: Electron.Display,
     size: { width: number; height: number }
@@ -312,17 +397,29 @@ export class WindowManager {
     const windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 60
 
     const baseLeft = rect.x + (rect.width - windowWidth) / 2
-    const baseTop = rect.y + (rect.height - windowHeight) / 2
-
-    const collapsedExtraOffset = windowHeight <= 72 ? 32 : 0
-    const offsetTop = rect.height * 0.08 + collapsedExtraOffset
+    
+    // Position calculation: customTopPercent > default (35% collapsed / above-center expanded)
+    const isCollapsed = windowHeight <= 72
+    let top: number
+    
+    if (this.customTopPercent !== null) {
+      // Use custom position if set
+      top = rect.y + Math.round(rect.height * this.customTopPercent) - Math.round(windowHeight / 2)
+    } else if (isCollapsed) {
+      // 35% from top of screen for collapsed state
+      top = rect.y + Math.round(rect.height * 0.35) - Math.round(windowHeight / 2)
+    } else {
+      // Slightly above center for expanded state
+      const baseTop = rect.y + (rect.height - windowHeight) / 2
+      const offsetTop = rect.height * 0.08
+      top = Math.round(baseTop - offsetTop)
+    }
 
     let left = Math.round(baseLeft)
-    let top = Math.round(baseTop - offsetTop)
 
     if (!Number.isFinite(left) || !Number.isFinite(top)) {
       left = Math.round(baseLeft)
-      top = Math.round(baseTop)
+      top = Math.round(rect.y + (rect.height - windowHeight) / 2)
     }
 
     const margin = 12
@@ -359,6 +456,7 @@ export class WindowManager {
     if (!bounds) return
 
     try {
+      this.stopBoundsAnimation()
       window.window.setPosition(bounds.x, bounds.y)
     } catch (error) {
       coreBoxWindowLog.error('Failed to set window position', { error })
@@ -373,6 +471,7 @@ export class WindowManager {
     const window = this.current
     if (!window) return
 
+    this.stopBoundsAnimation()
     this.updatePosition(window)
     window.window.showInactive()
 
@@ -394,6 +493,7 @@ export class WindowManager {
     const window = this.current
     if (!window) return
 
+    this.stopBoundsAnimation()
     this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
       id: window.window.webContents.id,
       show: false
@@ -407,29 +507,43 @@ export class WindowManager {
   }
 
   public expand(
-    options: { length?: number; forceMax?: boolean } = {},
+    options: { length?: number; forceMax?: boolean; height?: number } = {},
     isUIMode: boolean = false
   ): void {
-    const { length = 0, forceMax = false } = options
+    const { length = 0, forceMax = false, height: customHeight } = options
     const effectiveLength = length > 0 ? length : 1
-    const height = isUIMode ? 600 : forceMax ? 550 : Math.min(effectiveLength * 48 + 65, 550)
+    
+    // Priority: customHeight > isUIMode > forceMax > calculated from length
+    let height: number
+    if (typeof customHeight === 'number' && customHeight > 0) {
+      height = Math.max(60, Math.min(customHeight, 800))
+    } else if (isUIMode) {
+      height = 600
+    } else if (forceMax) {
+      height = 550
+    } else {
+      height = Math.min(effectiveLength * 48 + 65, 550)
+    }
 
     const currentWindow = this.current
     if (currentWindow) {
-      currentWindow.window.setMinimumSize(900, height)
-
       const display = this.getDisplayForWindow(currentWindow)
       const bounds = this.calculateCoreBoxBounds(display, { width: 900, height })
-      const animate = currentWindow.window.isVisible()
+      if (!bounds) return
 
-      try {
-        if (bounds) {
-          currentWindow.window.setBounds(bounds, animate)
-        } else {
-          currentWindow.window.setSize(900, height, animate)
+      const settings = this.getAppSettingConfig()
+      const animationEnabled = settings.animation?.coreBoxResize !== false
+
+      if (currentWindow.window.isVisible() && animationEnabled) {
+        this.animateWindowBounds(currentWindow, bounds, { minHeight: height })
+      } else {
+        this.stopBoundsAnimation()
+        try {
+          currentWindow.window.setBounds(bounds, false)
+          currentWindow.window.setMinimumSize(900, height)
+        } catch (error) {
+          coreBoxWindowLog.error('Failed to update window bounds', { error })
         }
-      } catch (error) {
-        coreBoxWindowLog.error('Failed to update window bounds', { error })
       }
     } else {
       coreBoxWindowLog.error('No current window available for expansion')
@@ -447,24 +561,83 @@ export class WindowManager {
 
     const currentWindow = this.current
     if (currentWindow) {
-      currentWindow.window.setMinimumSize(900, 60)
       const display = this.getDisplayForWindow(currentWindow)
       const bounds = this.calculateCoreBoxBounds(display, { width: 900, height: 60 })
-      const animate = currentWindow.window.isVisible()
+      if (!bounds) return
 
-      try {
-        if (bounds) {
-          currentWindow.window.setBounds(bounds, animate)
-        } else {
-          currentWindow.window.setSize(900, 60, animate)
+      const settings = this.getAppSettingConfig()
+      const animationEnabled = settings.animation?.coreBoxResize !== false
+
+      if (currentWindow.window.isVisible() && animationEnabled) {
+        this.animateWindowBounds(currentWindow, bounds, { minHeight: 60 })
+      } else {
+        this.stopBoundsAnimation()
+        try {
+          currentWindow.window.setBounds(bounds, false)
+          currentWindow.window.setMinimumSize(900, 60)
+        } catch (error) {
+          coreBoxWindowLog.error('Failed to update window bounds', { error })
         }
-      } catch (error) {
-        coreBoxWindowLog.error('Failed to update window bounds', { error })
       }
     } else {
       coreBoxWindowLog.error('No current window available for shrinking')
     }
     coreBoxWindowLog.debug('Shrunk window to compact mode')
+  }
+
+  /**
+   * Set CoreBox to a specific height (called from frontend)
+   */
+  public setHeight(height: number): void {
+    const safeHeight = Math.max(60, Math.min(height, 800))
+    
+    const currentWindow = this.current
+    if (!currentWindow) {
+      coreBoxWindowLog.error('No current window available for setHeight')
+      return
+    }
+
+    const display = this.getDisplayForWindow(currentWindow)
+    const bounds = this.calculateCoreBoxBounds(display, { width: 900, height: safeHeight })
+    if (!bounds) return
+
+    if (currentWindow.window.isVisible()) {
+      this.animateWindowBounds(currentWindow, bounds, { minHeight: safeHeight })
+    } else {
+      this.stopBoundsAnimation()
+      try {
+        currentWindow.window.setBounds(bounds, false)
+        currentWindow.window.setMinimumSize(900, safeHeight)
+      } catch (error) {
+        coreBoxWindowLog.error('Failed to set window height', { error })
+      }
+    }
+
+    coreBoxWindowLog.debug(`Window height set to ${safeHeight}px`)
+  }
+
+  /**
+   * Set custom vertical position offset for CoreBox (0-1 = 0%-100% from top)
+   */
+  public setPositionOffset(topPercent: number): void {
+    const safePercent = Math.max(0.1, Math.min(0.9, topPercent))
+    this.customTopPercent = safePercent
+    
+    // Apply immediately if window is visible
+    const currentWindow = this.current
+    if (currentWindow && currentWindow.window.isVisible()) {
+      this.updatePosition(currentWindow)
+    }
+    
+    coreBoxWindowLog.debug(`Position offset set to ${Math.round(safePercent * 100)}% from top`)
+  }
+
+  /**
+   * Reset position offset to default (35% for collapsed)
+   */
+  public resetPositionOffset(): void {
+    this.customTopPercent = null
+    coreBoxWindowLog.debug('Position offset reset to default')
   }
 
   public getCurScreen(): Electron.Display {

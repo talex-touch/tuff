@@ -150,3 +150,57 @@ export function useDashboardImagesData(options: { lazy?: boolean } = {}) {
     total,
   }
 }
+
+interface SubscriptionStatus {
+  plan: 'FREE' | 'PRO' | 'PLUS' | 'TEAM' | 'ENTERPRISE'
+  expiresAt: string | null
+  activatedAt: string | null
+  isActive: boolean
+  features: {
+    aiRequests: { limit: number; used: number }
+    aiTokens: { limit: number; used: number }
+    customModels: boolean
+    prioritySupport: boolean
+    apiAccess: boolean
+  }
+}
+
+export function useSubscriptionData() {
+  const state = useAsyncData('subscription-status', () =>
+    $fetch<SubscriptionStatus>('/api/subscription/status'),
+  )
+
+  const subscription = computed(() => state.data.value)
+  const plan = computed(() => state.data.value?.plan ?? 'FREE')
+  const isActive = computed(() => state.data.value?.isActive ?? true)
+
+  return {
+    ...state,
+    subscription,
+    plan,
+    isActive,
+  }
+}
+
+interface TeamInvite {
+  id: string
+  code: string
+  email: string | null
+  role: string
+  status: string
+  expiresAt: string | null
+  createdAt: string
+}
+
+export function useTeamInvitesData() {
+  const state = useAsyncData('team-invites', () =>
+    $fetch<{ invites: TeamInvite[] }>('/api/dashboard/team/invites'),
+  )
+
+  const invites = computed(() => state.data.value?.invites ?? [])
+
+  return {
+    ...state,
+    invites,
+  }
+}
