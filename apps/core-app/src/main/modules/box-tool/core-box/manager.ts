@@ -158,31 +158,29 @@ export class CoreBoxManager {
     feature?: IPluginFeature,
     query?: TuffQueryBase | string,
   ): void {
-    this._isUIMode = true // Use private property
+    this._isUIMode = true
     this.currentFeature = feature || null
     this.expand({ length: 10 })
-    windowManager.attachUIView(url, plugin, query)
+    windowManager.attachUIView(url, plugin, query, feature)
     this.trigger(true)
   }
 
   public exitUIMode(): void {
     if (this._isUIMode) {
-      this._isUIMode = false // Use private property
+      this._isUIMode = false
       this.currentFeature = null
       windowManager.detachUIView()
       this.shrink()
 
-      // Notify CoreBox renderer to deactivate providers
       const coreBoxWindow = windowManager.current?.window
       if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
         genTouchApp().channel.sendTo(
           coreBoxWindow,
           ChannelType.MAIN,
           'core-box:ui-mode-exited',
-          {}
+          { resetInput: true }
         )
 
-        // Delay focus to CoreBox after UI mode exits
         setTimeout(() => {
           if (!coreBoxWindow.isDestroyed()) {
             coreBoxWindow.focus()
