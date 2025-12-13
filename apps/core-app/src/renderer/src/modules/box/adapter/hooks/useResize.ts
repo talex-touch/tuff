@@ -10,7 +10,6 @@ interface UseResizeOptions {
   results: ComputedRef<TuffItem[]>
   activeActivations: Ref<IProviderActivate[] | null>
   loading: Ref<boolean>
-  debounceMs?: number
 }
 
 function sendResizeCommand(mode: ResizeMode): void {
@@ -18,42 +17,70 @@ function sendResizeCommand(mode: ResizeMode): void {
 }
 
 /**
- * Hook for managing CoreBox window resize behavior
- *
- * Prevents collapse during:
- * - Active search (loading state)
- * - Active providers
- * - Results present
+ * Hook for managing CoreBox window resize behavior.
+ * Expands when results/providers exist; collapses only when idle.
  */
 export function useResize(options: UseResizeOptions): void {
-  const { results, activeActivations, loading, debounceMs = 10 } = options
+  const { results, activeActivations, loading } = options
 
-  const debouncedResize = useDebounceFn(() => {
+  /** Debounced collapse to prevent flicker during rapid state changes */
+  const debouncedCollapse = useDebounceFn(() => {
     const hasResults = results.value.length > 0
     const hasActiveProviders = !!(activeActivations.value?.length)
     const isLoading = loading.value
 
-    if (hasResults || hasActiveProviders) {
-      sendResizeCommand('max')
-      return
-    }
-
-    if (!isLoading) {
+    // Only collapse when truly idle
+    if (!hasResults && !hasActiveProviders && !isLoading) {
       sendResizeCommand('collapse')
     }
-  }, debounceMs)
+  }, 50) // Longer debounce for collapse to prevent flicker
 
+  /** Immediate expand when content is available */
+  function checkExpand(): void {
+    const hasResults = results.value.length > 0
+    const hasActiveProviders = !!(activeActivations.value?.length)
+
+    if (hasResults || hasActiveProviders) {
+      sendResizeCommand('max')
+    }
+  }
+
+  // Expand immediately when results arrive
   watch(
     () => results.value,
-    () => debouncedResize(),
+    (newResults) => {
+      if (newResults.length > 0) {
+        checkExpand()
+      } else {
+        debouncedCollapse()
+      }
+    },
     { deep: true }
   )
 
+  // Expand when loading starts (prevents collapse during search)
+  // Collapse only after loading ends AND no results
   watch(
     () => loading.value,
     (isLoading) => {
-      if (!isLoading) {
-        debouncedResize()
+      if (isLoading) {
+        // Don't collapse while loading - keep expanded
+        sendResizeCommand('max')
+      } else {
+        // After loading, check if we should collapse
+        debouncedCollapse()
+      }
+    }
+  )
+
+  // Expand when providers become active
+  watch(
+    () => activeActivations.value,
+    (activations) => {
+      if (activations && activations.length > 0) {
+        sendResizeCommand('max')
+      } else {
+        debouncedCollapse()
       }
     }
   )

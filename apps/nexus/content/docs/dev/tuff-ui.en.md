@@ -7,6 +7,8 @@ description: Modern Vue3 component library with beautiful animations
 
 TUFF UI is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
 
+> **Migration in Progress** - TUFF UI is migrating components from Tuff core app. Tech stack upgraded to Vue 3.5 / Vite 6 / TypeScript 5.8.
+
 ## Installation
 
 ```bash
@@ -38,42 +40,48 @@ app.mount('#app')
 
 ```typescript
 import { createApp } from 'vue'
-import { TxButton, TxAvatar } from '@talex-touch/tuff-ui'
+import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuff-ui'
 import '@talex-touch/tuff-ui/dist/style.css'
 
 const app = createApp(App)
-app.use(TxButton)
-app.use(TxAvatar)
+app.use(TuffButton)
+app.use(TuffSwitch)
+app.use(TuffFlatButton)
 ```
 
 ## Core Features
 
-### 🎭 Living Tactile Experience
-
-Life-like touch feedback through precision physics engine. Elastic responses and damping effects make every interaction feel natural and engaging.
-
-### 🌊 Silky Animation System
-
-60fps smooth animations based on Bézier curves and physics. Intelligent easing adapts to interaction intensity for seamless visual continuity.
-
-### 💎 Modern Visual Language
-
-Glassmorphism aesthetics with frosted glass effects, dynamic lighting, and material simulations that bring real texture to digital interfaces.
-
-### ⚡ Performance Optimized
-
-Vue3 Composition API with Tree Shaking support, reducing bundle size by 50%+. Virtualized rendering and intelligent caching ensure stability.
+| Feature | Description |
+|---------|-------------|
+| 🎭 **Living Tactile Experience** | Elastic responses and damping effects for natural interactions |
+| 🌊 **Silky Animation System** | 60fps smooth animations based on Bézier curves |
+| 💎 **Modern Visual Language** | Glassmorphism aesthetics with frosted glass effects |
+| ⚡ **Performance Optimized** | Vue3 Composition API + Tree Shaking, 50%+ smaller bundles |
+| 🔗 **Tuff Ecosystem** | Seamlessly integrated with Tuff desktop application |
 
 ## Available Components
 
-| Component | Description |
-|-----------|-------------|
-| `TxButton` | Interactive button with tactile feedback |
-| `TxAvatar` | User avatar with animations |
-| `TxCard` | Content card with glassmorphism effects |
-| `TxInput` | Text input with smooth focus transitions |
-| `TxModal` | Modal dialog with entrance animations |
-| `TxTooltip` | Tooltip with smart positioning |
+### Released
+
+| Component | Description | Source |
+|-----------|-------------|--------|
+| `TuffButton` | Interactive button with tactile feedback | `button/` |
+| `TuffFlatButton` | Flat button with hover effects and loading | `base/button/FlatButton` |
+| `TuffSwitch` | Toggle switch with smooth animations | `base/switch/TSwitch` |
+| `TuffInput` | Input with clearable and textarea support | `base/input/FlatInput` |
+| `TuffCheckbox` | Checkbox with SVG tick animation | `base/checkbox/TCheckbox` |
+| `TuffSelect` | Dropdown select with floating positioning | `base/select/TSelect` |
+| `TuffSelectItem` | Select option item | `base/select/TSelectItem` |
+| `TuffProgress` | Progress bar with indeterminate mode | `base/ProgressBar` |
+
+### Planned
+
+| Component | Description | Source |
+|-----------|-------------|--------|
+| `TuffModal` | Modal dialog with entrance animations | `base/dialog/` |
+| `TuffScroll` | Custom scrollbar with native feel | `base/TouchScroll` |
+| `TuffTabs` | Tab navigation with indicator animations | `tabs/` |
+| `TuffMenu` | Menu component | `menu/` |
 
 ## Theming
 
@@ -81,34 +89,56 @@ TUFF UI supports custom theming through CSS variables:
 
 ```css
 :root {
-  --tx-primary: #3b82f6;
-  --tx-primary-hover: #2563eb;
-  --tx-border-radius: 8px;
-  --tx-transition-duration: 200ms;
+  /* Primary colors */
+  --tx-color-primary: #409eff;
+  --tx-color-primary-light-3: #79bbff;
+  
+  /* Text colors */
+  --tx-text-color-primary: #303133;
+  --tx-text-color-secondary: #909399;
+  
+  /* Border and radius */
+  --tx-border-color: #dcdfe6;
+  --tx-border-radius-base: 4px;
+  
+  /* Transitions */
+  --tx-transition-duration: 0.3s;
 }
 ```
+
+## Tech Stack
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Vue | 3.5+ | Composition API |
+| TypeScript | 5.8+ | Type safety |
+| Vite | 6.0+ | Build tooling |
+| Sass | 1.89+ | Style preprocessing |
+| VueUse | 13.0+ | Composition utilities |
 
 ## Development
 
 ```bash
-# Start docs development server
-pnpm tuff-ui:dev
+# In monorepo root
+pnpm install
 
-# Build library
-pnpm tuff-ui:build
-
-# Build documentation
-pnpm tuff-ui:docs
+# In packages/tuff-ui directory
+pnpm docs:dev    # Start docs server at :8000
+pnpm comp:play   # Start component playground
+pnpm build       # Build library
 ```
 
 ## Design Philosophy
-
-TUFF UI follows these core principles:
 
 1. **Tactile First** - Every component should feel responsive and alive
 2. **Performance** - Animations must never compromise performance
 3. **Accessibility** - WCAG 2.1 AA compliance for all components
 4. **Composability** - Components work together seamlessly
+
+## Related Links
+
+- [GitHub Repository](https://github.com/AncientMC/talex-touch/tree/master/packages/tuff-ui)
+- [NPM Package](https://www.npmjs.com/package/@talex-touch/tuff-ui)
 
 ## Browser Support
 
