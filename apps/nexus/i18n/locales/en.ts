@@ -58,6 +58,12 @@ export default {
         description: 'Signed, fully verified builds recommended for production workspaces.',
         meta: 'Updated monthly',
       },
+      beta: {
+        badge: 'Beta',
+        label: 'Beta channel',
+        description: 'Pre-release builds with new features. Stable enough for daily use but may have minor issues.',
+        meta: 'Updated bi-weekly',
+      },
       snapshot: {
         badge: 'Preview',
         label: 'Snapshot channel',

@@ -300,8 +300,8 @@ watch(
             :to="localePath(linkTarget(child)!)"
             class="group/link flex items-center rounded-lg py-2 pl-3 pr-2 text-[13px] no-underline transition-all duration-150"
             :class="isLinkActive(linkTarget(child) || child.path || '')
-              ? 'bg-primary/12 text-primary font-medium dark:bg-primary/18'
-              : 'text-black/50 hover:text-black/70 dark:text-white/50 dark:hover:text-white/70'"
+              ? 'bg-blue-50 text-blue-600 font-medium dark:bg-blue-900/30 dark:text-blue-400 border-l-2 border-blue-500'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800/50'"
           >
             <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
           </NuxtLink>

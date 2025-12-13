@@ -58,6 +58,12 @@ export default {
         description: '签名认证的稳定构建，适合生产环境与大规模部署。',
         meta: '每月更新',
       },
+      beta: {
+        badge: '测试',
+        label: '测试通道',
+        description: '包含新功能的预发布构建，稳定性较高但可能存在小问题。',
+        meta: '双周更新',
+      },
       snapshot: {
         badge: '预览',
         label: '快照通道',
