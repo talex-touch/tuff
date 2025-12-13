@@ -1,8 +1,19 @@
 <script setup lang="ts">
-import { useUser } from '@clerk/vue'
 import DocSection from './docs/DocSection.vue'
 
-const { isSignedIn } = useUser()
+// Non-blocking auth check
+const isSignedIn = ref(false)
+onMounted(async () => {
+  try {
+    const { useUser } = await import('@clerk/vue')
+    const { isSignedIn: clerkSignedIn } = useUser()
+    isSignedIn.value = clerkSignedIn.value ?? false
+  }
+  catch {
+    // Clerk not available
+  }
+})
+
 const { data: navigationTree, pending, error } = await useAsyncData(
   'docs-navigation',
   () => queryCollectionNavigation('docs'),
