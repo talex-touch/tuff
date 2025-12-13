@@ -28,7 +28,8 @@ export function useSvgContent(
     try {
       new URL(targetUrl)
     } catch (_e) {
-      if (!targetUrl.startsWith('tfile://')) {
+      // Don't add tfile:// for API paths - these should use HTTP
+      if (!targetUrl.startsWith('tfile://') && !targetUrl.startsWith('/api/')) {
         targetUrl = `tfile://${targetUrl}`
       }
     }

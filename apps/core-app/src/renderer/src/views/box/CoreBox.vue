@@ -307,12 +307,17 @@ const previewHistory = usePreviewHistory({
 })
 
 // Handle UI mode exit event from main process (ESC pressed in plugin UI view)
-const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', () => {
+const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', (payload: any) => {
   console.debug('[CoreBox] UI mode exited from main process, deactivating providers')
   deactivateAllProviders().catch((error) => {
     console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
   })
-  // Focus input after UI mode exits
+
+  // Reset input state if requested
+  if (payload?.data?.resetInput) {
+    boxOptions.mode = BoxMode.INPUT
+  }
+
   setTimeout(() => {
     boxInputRef.value?.focus()
   }, 150)

@@ -1,4 +1,5 @@
 import type { AppSetting, TuffQuery } from '@talex-touch/utils'
+import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
 import * as fs from 'node:fs'
@@ -564,7 +565,12 @@ export class WindowManager {
     // No real-time broadcasting to prevent channel timeout issues
   }
 
-  public attachUIView(url: string, plugin?: TouchPlugin, query?: TuffQuery | string): void {
+  public attachUIView(
+    url: string,
+    plugin?: TouchPlugin,
+    query?: TuffQuery | string,
+    feature?: IPluginFeature
+  ): void {
     const startTime = performance.now()
     const metrics = { preload: 0, viewCreate: 0, total: 0 }
 
@@ -579,6 +585,17 @@ export class WindowManager {
     if (this.uiView) {
       coreBoxWindowLog.warn('UI view already attached, skipping re-attachment')
       return
+    }
+
+    // Auto-enable input monitoring for webcontent features
+    // If feature has interaction.allowInput explicitly set, use that value
+    // Otherwise, default to true for webcontent features
+    if (feature?.interaction?.type === 'webcontent') {
+      const shouldAllowInput = feature.interaction.allowInput !== false
+      if (shouldAllowInput) {
+        this.inputAllowed = true
+        coreBoxWindowLog.debug('Auto-enabled input monitoring for webcontent feature')
+      }
     }
 
     const injections = plugin?.__getInjections__()

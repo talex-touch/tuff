@@ -200,6 +200,17 @@ export interface IFeatureInteraction {
    * The relative path to the html file from the plugin root.
    */
   path?: string
+  /**
+   * Whether to show the input field in CoreBox when this feature is active.
+   * Defaults to true for webcontent type.
+   */
+  showInput?: boolean
+  /**
+   * Whether to automatically enable input monitoring for this feature.
+   * If true, plugin will receive input change events without calling allowInput().
+   * Defaults to true for webcontent features.
+   */
+  allowInput?: boolean
 }
 
 /**

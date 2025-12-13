@@ -17,6 +17,7 @@ import {
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { dialog, shell } from 'electron'
 import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
+import { pinyin } from 'pinyin-pro'
 
 const execAsync = promisify(exec)
 
@@ -28,6 +29,7 @@ interface SystemAction {
   icon?: string
   requiresAdmin?: boolean
   execute: () => Promise<void>
+  searchTokens?: string[]
 }
 
 class SystemProvider implements ISearchProvider<ProviderContext> {
@@ -44,6 +46,33 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
 
   constructor() {
     this.initializeActions()
+    this.buildSearchTokens()
+  }
+
+  private buildSearchTokens(): void {
+    for (const action of this.actions) {
+      const tokens = new Set<string>()
+      this.addTokensFromText(action.name, tokens)
+      this.addTokensFromText(action.description, tokens)
+      action.keywords.forEach((kw) => this.addTokensFromText(kw, tokens))
+      action.searchTokens = Array.from(tokens)
+    }
+  }
+
+  private addTokensFromText(text: string, tokens: Set<string>): void {
+    if (!text) return
+    const lower = text.toLowerCase().trim()
+    tokens.add(lower)
+    tokens.add(lower.replace(/\s+/g, ''))
+
+    if (/[\u4e00-\u9fff]/.test(text)) {
+      try {
+        const full = pinyin(text, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
+        if (full) tokens.add(full)
+        const first = pinyin(text, { pattern: 'first', toneType: 'none' }).replace(/\s/g, '').toLowerCase()
+        if (first) tokens.add(first)
+      } catch { /* ignore pinyin errors */ }
+    }
   }
 
   private initializeActions(): void {
@@ -347,10 +376,9 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
           base: 0,
         })
         .setMeta({
-          raw: {
-            systemActionId: action.id,
-          },
+          raw: { systemActionId: action.id },
           icon: action.icon,
+          extension: { searchTokens: action.searchTokens },
         })
         .build()
     })
