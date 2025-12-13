@@ -36,6 +36,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@libsql/client": "^0.15.15",
     "@sentry/electron": "^7.2.0",
+    "@talex-touch/tuff-ui": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "@types/yauzl": "^2.10.3",
     "@vue/compiler-sfc": "^3.5.24",
