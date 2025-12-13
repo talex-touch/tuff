@@ -378,18 +378,14 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           }
         }
 
-        // If feature accepts the input types and has inputs, show it even if command doesn't match
         const hasInputs = queryInputTypes.length > 0
         const featureAcceptsInputs = hasInputs && feature.acceptedInputTypes?.some((t) =>
           queryInputTypes.includes(t as TuffInputType)
         )
 
-        // First try command matching (exact commands like 'over', 'match', 'contain')
         const matchesCommand = queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
         const matchesClipboardCommand = clipboardTextContent && feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
 
-        // Try fuzzy/token matching with highlight support (pinyin, English, etc.)
-        // We always try this to get highlight info, even for command matches
         let matchResult: MatchRange[] | undefined
         let matchScore = 0
 
@@ -408,8 +404,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           }
         }
 
+        // Show feature if: command matches, OR feature accepts the input types (e.g., image)
         if (matchesCommand || matchesClipboardCommand || featureAcceptsInputs) {
-          // Command matched - use command priority, but still include highlight info
           matchedItems.push({
             item: this.createTuffItem(plugin, feature, matchResult),
             matchScore: 1000 + (feature.priority ?? 0)
@@ -417,7 +413,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           continue
         }
 
-        // For non-command matches, use fuzzy match result
+        // Fuzzy text match fallback
         if (matchResult && matchScore > 0) {
           matchedItems.push({
             item: this.createTuffItem(plugin, feature, matchResult),

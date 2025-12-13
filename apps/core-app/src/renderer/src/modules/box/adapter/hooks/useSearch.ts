@@ -98,13 +98,12 @@ export function useSearch(
 
   let searchSequence = 0
 
-  /**
-   * Safely serialize metadata for IPC transfer
-   */
+  const MAX_TEXT_INPUT_LENGTH = 2000
+  const MAX_HTML_INPUT_LENGTH = 5000
+
   function safeSerializeMetadata(meta: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined {
     if (!meta) return undefined
     try {
-      // Only keep primitive values that can be safely cloned
       const safe: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(meta)) {
         if (value === null || value === undefined) continue
@@ -118,9 +117,11 @@ export function useSearch(
     }
   }
 
-  /**
-   * Build TuffQueryInput array from current clipboard/file state
-   */
+  function truncateContent(content: string, maxLength: number): string {
+    if (content.length <= maxLength) return content
+    return content.slice(0, maxLength)
+  }
+
   function buildQueryInputs(): TuffQueryInput[] {
     const inputs: TuffQueryInput[] = []
 
@@ -150,14 +151,14 @@ export function useSearch(
       if (clipboardOptions.last.rawContent) {
         inputs.push({
           type: TuffInputType.Html,
-          content: clipboardOptions.last.content,
-          rawContent: clipboardOptions.last.rawContent,
+          content: truncateContent(clipboardOptions.last.content, MAX_TEXT_INPUT_LENGTH),
+          rawContent: truncateContent(clipboardOptions.last.rawContent, MAX_HTML_INPUT_LENGTH),
           metadata: safeSerializeMetadata(clipboardOptions.last.meta)
         })
       } else {
         inputs.push({
           type: TuffInputType.Text,
-          content: clipboardOptions.last.content,
+          content: truncateContent(clipboardOptions.last.content, MAX_TEXT_INPUT_LENGTH),
           metadata: safeSerializeMetadata(clipboardOptions.last.meta)
         })
       }
