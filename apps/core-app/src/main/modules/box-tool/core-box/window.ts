@@ -270,33 +270,51 @@ export class WindowManager {
       return
     }
 
-    const { bounds } = curScreen
-
+    const rect = curScreen.workArea ?? curScreen.bounds
     if (
-      typeof bounds.x !== 'number' ||
-      typeof bounds.y !== 'number' ||
-      typeof bounds.width !== 'number' ||
-      typeof bounds.height !== 'number'
+      typeof rect.x !== 'number' ||
+      typeof rect.y !== 'number' ||
+      typeof rect.width !== 'number' ||
+      typeof rect.height !== 'number'
     ) {
-      coreBoxWindowLog.error('Invalid screen bounds received', {
+      coreBoxWindowLog.error('Invalid screen rect received', {
         meta: {
-          width: bounds.width,
-          height: bounds.height,
-          x: bounds.x,
-          y: bounds.y
+          width: rect.width,
+          height: rect.height,
+          x: rect.x,
+          y: rect.y
         }
       })
       return
     }
 
-    const left = Math.round(bounds.x + bounds.width / 2 - 450)
-    const top = Math.round(bounds.y + bounds.height * 0.3)
+    const [rawWindowWidth, rawWindowHeight] = window.window.getSize()
+    const windowWidth = Number.isFinite(rawWindowWidth) && rawWindowWidth > 0 ? rawWindowWidth : 900
+    const windowHeight = Number.isFinite(rawWindowHeight) && rawWindowHeight > 0 ? rawWindowHeight : 60
 
-    if (isNaN(left) || isNaN(top)) {
-      coreBoxWindowLog.error('Invalid position calculation', {
-        meta: { left, top }
-      })
-      return
+    const baseLeft = rect.x + (rect.width - windowWidth) / 2
+    const baseTop = rect.y + (rect.height - windowHeight) / 2
+    const offsetTop = rect.height * 0.08
+
+    let left = Math.round(baseLeft)
+    let top = Math.round(baseTop - offsetTop)
+
+    if (!Number.isFinite(left) || !Number.isFinite(top)) {
+      left = Math.round(baseLeft)
+      top = Math.round(baseTop)
+    }
+
+    const margin = 12
+    const minLeft = rect.x + margin
+    const maxLeft = rect.x + rect.width - windowWidth - margin
+    if (Number.isFinite(minLeft) && Number.isFinite(maxLeft) && maxLeft >= minLeft) {
+      left = Math.min(Math.max(left, minLeft), maxLeft)
+    }
+
+    const minTop = rect.y + margin
+    const maxTop = rect.y + rect.height - windowHeight - margin
+    if (Number.isFinite(minTop) && Number.isFinite(maxTop) && maxTop >= minTop) {
+      top = Math.min(Math.max(top, minTop), maxTop)
     }
 
     try {
@@ -359,6 +377,9 @@ export class WindowManager {
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, height)
       currentWindow.window.setSize(900, height)
+      if (currentWindow.window.isVisible()) {
+        this.updatePosition(currentWindow, this.getDisplayForWindow(currentWindow))
+      }
 
       if (this.uiView) {
         const bounds = currentWindow.window.getBounds()
@@ -387,6 +408,9 @@ export class WindowManager {
     if (currentWindow) {
       currentWindow.window.setMinimumSize(900, 60)
       currentWindow.window.setSize(900, 60, false)
+      if (currentWindow.window.isVisible()) {
+        this.updatePosition(currentWindow, this.getDisplayForWindow(currentWindow))
+      }
     } else {
       coreBoxWindowLog.error('No current window available for shrinking')
     }
@@ -409,6 +433,20 @@ export class WindowManager {
 
       return screen.getPrimaryDisplay()
     }
+  }
+
+  private getDisplayForWindow(window: TouchWindow): Electron.Display {
+    try {
+      if (!window.window.isDestroyed()) {
+        return screen.getDisplayMatching(window.window.getBounds())
+      }
+    } catch (error) {
+      coreBoxWindowLog.warn('Failed to get display for window, falling back to cursor screen', {
+        error
+      })
+    }
+
+    return this.getCurScreen()
   }
 
   public getAppSettingConfig(): AppSetting {
@@ -1098,7 +1136,12 @@ export class WindowManager {
     }
 
     const currentWindow = this.current
-    if (!currentWindow) {
+    if (!currentWindow || currentWindow.window.isDestroyed()) {
+      return null
+    }
+
+    if (!currentWindow.window.isVisible()) {
+      coreBoxWindowLog.warn('Cannot extract UI view: CoreBox window is not visible')
       return null
     }
 
@@ -1106,7 +1149,7 @@ export class WindowManager {
     try {
       currentWindow.window.contentView.removeChildView(this.uiView)
     } catch (err) {
-      console.error('[WindowManager] Failed to remove UI view from CoreBox:', err)
+      coreBoxWindowLog.error('Failed to remove UI view from CoreBox', { error: err })
       return null
     }
 

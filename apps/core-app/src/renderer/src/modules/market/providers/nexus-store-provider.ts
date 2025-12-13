@@ -179,13 +179,14 @@ export class NexusStoreProvider extends BaseMarketProvider {
       }
     }
 
-    // Handle icon
+    // Handle icon - always construct full URL at source
     let icon: string | undefined
     let iconUrl: string | undefined
-    if (entry.iconUrl) {
-      iconUrl = entry.iconUrl.startsWith('http')
-        ? entry.iconUrl
-        : new URL(entry.iconUrl.replace(/^\//, ''), baseUrl).toString()
+    const rawIconUrl = entry.iconUrl || (entry.metadata as any)?.icon_url
+    if (rawIconUrl && typeof rawIconUrl === 'string') {
+      iconUrl = rawIconUrl.startsWith('http')
+        ? rawIconUrl
+        : new URL(rawIconUrl.replace(/^\//, ''), baseUrl).toString()
     } else {
       const metadata = entry.metadata ?? {}
       if (

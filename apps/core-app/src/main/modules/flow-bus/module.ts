@@ -121,6 +121,17 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         return
       }
 
+      const coreBoxWindow = getCoreBoxWindow()
+      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+        console.warn(LOG_PREFIX, 'CoreBox window not available, cannot detach')
+        return
+      }
+
+      if (!coreBoxWindow.window.isVisible()) {
+        console.warn(LOG_PREFIX, 'CoreBox window is not visible, aborting detach')
+        return
+      }
+
       // Extract the UI view from CoreBox (doesn't destroy it)
       const extracted = windowManager.extractUIView()
       if (!extracted) {
@@ -157,10 +168,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       coreBoxManager.exitUIMode()
       
       // Hide CoreBox
-      const coreBoxWindow = getCoreBoxWindow()
-      if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-        coreBoxWindow.window.hide()
-      }
+      if (!coreBoxWindow.window.isDestroyed()) coreBoxWindow.window.hide()
 
       console.log(LOG_PREFIX, '✓ Detach completed')
     } catch (error) {

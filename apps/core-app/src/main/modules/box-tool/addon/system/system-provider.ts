@@ -18,6 +18,7 @@ import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { dialog, shell } from 'electron'
 import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
 import { pinyin } from 'pinyin-pro'
+import { calculateHighlights } from '../apps/highlighting-service'
 
 const execAsync = promisify(exec)
 
@@ -363,6 +364,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     const matchedActions = this.actions.filter(action => matchedActionIds.has(action.id))
 
     const items: TuffItem[] = matchedActions.map((action) => {
+      const matchResult = calculateHighlights(action.name, searchText)
       return new TuffItemBuilder(action.id, this.type, this.id)
         .setTitle(action.name)
         .setDescription(action.description)
@@ -378,7 +380,10 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         .setMeta({
           raw: { systemActionId: action.id },
           icon: action.icon,
-          extension: { searchTokens: action.searchTokens },
+          extension: {
+            searchTokens: action.searchTokens,
+            matchResult: matchResult ?? undefined,
+          },
         })
         .build()
     })
