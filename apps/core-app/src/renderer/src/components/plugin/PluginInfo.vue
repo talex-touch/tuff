@@ -235,6 +235,7 @@ async function handleUninstallPlugin(): Promise<void> {
             }}</span>
           </div>
           <div
+            v-if="plugin.dev?.enable"
             class="action-item"
             :class="{ disabled: loadingStates.openDevTools }"
             @click="handleOpenDevTools"

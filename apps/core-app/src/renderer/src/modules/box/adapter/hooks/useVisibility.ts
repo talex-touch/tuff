@@ -6,16 +6,21 @@ import { nextTick, ref, watch } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
+import { getLatestClipboardSync } from './useClipboardChannel'
 
 interface UseVisibilityOptions {
   boxOptions: IBoxOptions
   searchVal: Ref<string>
   clipboardOptions: IClipboardOptions
+  /** Attempts auto-fill only if clipboard is fresh (within threshold) */
   handleAutoFill: () => void
   handlePaste: (options?: { overrideDismissed?: boolean; triggerSearch?: boolean }) => void
   boxInputRef: Ref<any>
   deactivateAllProviders: () => Promise<void>
 }
+
+/** Maximum clipboard age for auto-paste (5 minutes) */
+const MAX_CLIPBOARD_AGE_MS = 5 * 60 * 1000
 
 /**
  * Manages CoreBox visibility, auto-clear, and autopaste behavior
@@ -92,18 +97,44 @@ export function useVisibility(options: UseVisibilityOptions) {
   }
 
   /**
-   * Handles CoreBox show event
+   * Check if clipboard content is fresh enough for auto-paste.
+   * Only returns true if clipboard timestamp is within threshold from NOW.
+   */
+  function isClipboardFreshForAutoPaste(): boolean {
+    if (!appSetting.tools.autoPaste.enable) return false
+
+    const limit = appSetting.tools.autoPaste.time
+    if (limit === -1) return false
+
+    // Fetch latest clipboard directly to check timestamp
+    const clipboard = getLatestClipboardSync()
+    if (!clipboard?.timestamp) return false
+
+    const copiedTime = new Date(clipboard.timestamp).getTime()
+    const now = Date.now()
+    const clipboardAge = now - copiedTime
+
+    // Use configured limit (seconds) or MAX_CLIPBOARD_AGE_MS as fallback
+    const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_MS : limit * 1000
+    return clipboardAge <= effectiveLimit
+  }
+
+  /**
+   * Handles CoreBox show event.
+   * Auto-paste ONLY when triggered by shortcut AND clipboard is fresh.
    */
   function onShow(): void {
     checkAutoClear()
-    // Trigger search with clipboard content when CoreBox opens
-    handlePaste({ triggerSearch: true })
 
-    // Auto-fill clipboard content when triggered by shortcut
-    if (wasTriggeredByShortcut.value && clipboardOptions.last) {
+    // Only auto-paste when:
+    // 1. CoreBox was triggered by keyboard shortcut
+    // 2. Clipboard content is fresh (within autopaste threshold)
+    if (wasTriggeredByShortcut.value && isClipboardFreshForAutoPaste()) {
+      // Load clipboard and auto-fill
+      handlePaste({ triggerSearch: true })
       handleAutoFill()
-      wasTriggeredByShortcut.value = false
     }
+    wasTriggeredByShortcut.value = false
 
     setTimeout(() => {
       nextTick(() => boxInputRef.value?.focus())

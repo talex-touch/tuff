@@ -132,11 +132,6 @@ Please keep in mind that developers are under no obligation to solve your Issue 
  </picture>
 </a>
 
-## 🛠️ Dev Notes
-
-- 2025-12-09: 把 workspace 默认 `auto-install-peers` 配置拉齐为 `false` 并刷新 lockfile，彻底修掉 Cloudflare Pages 上的 `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`。
-- 2025-12-07: 调整插件性能 SDK 统一复用 `StorageStats` 类型、清理 CoreBox 里闲置状态并验证 mac 包装流程。
-
 ## ✉️ Contact
 
 Through email (TalexDreamSoul@Gmail) or open an issue.

@@ -7,8 +7,7 @@ import { BoxMode } from '..'
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
-// Maximum age for clipboard content to be auto-pasted (5 minutes)
-const MAX_CLIPBOARD_AGE_FOR_AUTOPASTE = 5 * 60 * 1000
+/** Tracks clipboard timestamps that have been auto-pasted to prevent duplicates */
 const autoPastedTimestamps = new Set<number>()
 
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
@@ -40,31 +39,20 @@ export function useClipboard(
   onPasteCallback?: () => void,
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
+  /**
+   * Check if clipboard can be auto-pasted.
+   * Relies on useVisibility for freshness check; this only guards duplicates.
+   */
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last?.timestamp) return false
     if (!appSetting.tools.autoPaste.enable) return false
+    if (appSetting.tools.autoPaste.time === -1) return false
 
-    const limit = appSetting.tools.autoPaste.time
-    if (limit === -1) return false
+    const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
+    if (!timestamp) return false
 
-    const copiedTime = new Date(clipboardOptions.last.timestamp).getTime()
-    const now = Date.now()
-    const clipboardAge = now - copiedTime
-
-    // Check freshness: content must be within the time limit since copy
-    // - If limit > 0: use user-configured seconds
-    // - If limit === 0: use MAX_CLIPBOARD_AGE_FOR_AUTOPASTE as safety limit
-    const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_FOR_AUTOPASTE : limit * 1000
-    if (clipboardAge > effectiveLimit) return false
-
-    const lastHidden = boxOptions.lastHidden
-
-    // If CoreBox was hidden before (lastHidden > 0), only auto-paste if copied AFTER hiding
-    // This prevents re-pasting the same content when CoreBox is reopened
-    // When lastHidden <= 0 (first launch), skip this check and rely on clipboardAge alone
-    if (lastHidden > 0 && copiedTime <= lastHidden) return false
-
-    return true
+    // Prevent re-pasting same content
+    return !autoPastedTimestamps.has(timestamp)
   }
 
   function markAsAutoPasted(timestamp: number, clear = true): void {

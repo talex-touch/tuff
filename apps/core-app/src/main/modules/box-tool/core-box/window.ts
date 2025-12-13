@@ -929,7 +929,8 @@ export class WindowManager {
       this.runUIViewDarkThemeSync()
 
       if (plugin) {
-        if (!app.isPackaged || plugin.dev.enable) {
+        // Only auto-open DevTools for plugins in dev mode (not based on app.isPackaged)
+        if (plugin.dev?.enable) {
           view.webContents.openDevTools({ mode: 'detach' })
           this.uiViewFocused = true
         }
@@ -1227,11 +1228,18 @@ export class WindowManager {
 
   /**
    * Opens DevTools for the plugin's WebContentsView if the specified plugin is currently attached.
+   * Only allowed for plugins with dev.enable = true.
    * @param pluginName - Name of the plugin to open DevTools for
    * @returns true if DevTools was opened, false otherwise
    */
   public openPluginDevTools(pluginName: string): boolean {
     if (!this.attachedPlugin || this.attachedPlugin.name !== pluginName) {
+      return false
+    }
+
+    // Block DevTools for non-dev plugins
+    if (!this.attachedPlugin.dev?.enable) {
+      coreBoxWindowLog.warn(`DevTools blocked for non-dev plugin: ${pluginName}`)
       return false
     }
 

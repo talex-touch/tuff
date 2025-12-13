@@ -1352,6 +1352,13 @@ export class PluginModule extends BaseModule {
       const pluginName = data as string
       if (!pluginName) return
 
+      // Block DevTools for non-dev plugins
+      const plugin = manager.getPluginByName(pluginName) as TouchPlugin
+      if (!plugin?.dev?.enable) {
+        console.warn(`[PluginModule] DevTools blocked for non-dev plugin: ${pluginName}`)
+        return
+      }
+
       // Try to open DevTools for DivisionBox session
       try {
         const { DivisionBoxManager } = await import('../division-box/manager')
