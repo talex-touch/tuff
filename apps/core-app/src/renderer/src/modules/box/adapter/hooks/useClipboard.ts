@@ -7,7 +7,6 @@ import { BoxMode } from '..'
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
-/** Tracks clipboard timestamps that have been auto-pasted to prevent duplicates */
 const autoPastedTimestamps = new Set<number>()
 
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
@@ -32,17 +31,12 @@ function resetAutoPasteState(): void {
   cleanupAutoPastedRecords()
 }
 
-/** Clipboard management hook for CoreBox */
 export function useClipboard(
   boxOptions: IBoxOptions,
   clipboardOptions: IClipboardOptions,
   onPasteCallback?: () => void,
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
-  /**
-   * Check if clipboard can be auto-pasted.
-   * Relies on useVisibility for freshness check; this only guards duplicates.
-   */
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last?.timestamp) return false
     if (!appSetting.tools.autoPaste.enable) return false
@@ -50,8 +44,6 @@ export function useClipboard(
 
     const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
     if (!timestamp) return false
-
-    // Prevent re-pasting same content
     return !autoPastedTimestamps.has(timestamp)
   }
 

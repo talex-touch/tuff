@@ -22,7 +22,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   readonly type = 'system' as const
   readonly name = '即时预览'
   readonly supportedInputTypes = [TuffInputType.Text]
-  readonly priority = 'deferred' as const
+  readonly priority = 'fast' as const
   readonly expectedDuration = 200
 
   constructor(private readonly registry: PreviewAbilityRegistry) {}
