@@ -292,16 +292,18 @@ watch(
           <span class="flex-1 truncate">{{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}</span>
         </template>
         <li
-          v-for="child in section.children"
+          v-for="(child, index) in section.children"
           :key="child.path ?? child.title"
+          class="docs-tree-item relative"
+          :class="{ 'docs-tree-last': index === section.children.length - 1 }"
         >
           <NuxtLink
             v-if="linkTarget(child)"
             :to="localePath(linkTarget(child)!)"
-            class="group/link flex items-center rounded-lg py-2 pl-3 pr-2 text-[13px] no-underline transition-all duration-150"
+            class="group/link relative flex items-center py-1.5 pl-4 pr-2 text-[13px] no-underline transition-all duration-150"
             :class="isLinkActive(linkTarget(child) || child.path || '')
-              ? 'bg-blue-50 text-blue-600 font-medium dark:bg-blue-900/30 dark:text-blue-400 border-l-2 border-blue-500'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-800/50'"
+              ? 'text-black font-medium dark:text-white'
+              : 'text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80'"
           >
             <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
           </NuxtLink>
@@ -310,3 +312,34 @@ watch(
     </template>
   </nav>
 </template>
+
+<style scoped>
+/* Tree-style vertical line */
+.docs-tree-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.dark .docs-tree-item::before {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Last item: line only goes to middle */
+.docs-tree-item.docs-tree-last::before {
+  bottom: 50%;
+}
+
+/* Active item highlight */
+.docs-tree-item:has(a.font-medium)::before {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark .docs-tree-item:has(a.font-medium)::before {
+  background: rgba(255, 255, 255, 0.3);
+}
+</style>

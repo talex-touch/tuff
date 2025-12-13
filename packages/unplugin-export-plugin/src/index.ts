@@ -8,10 +8,111 @@ import Debug from 'debug'
 import type { Options } from './types'
 import { build } from './core/exporter'
 
+const INDEX_FOLDER = 'index'
+let indexBuildContext: any = null
+let indexBuildPromise: Promise<string | null> | null = null
+let lastIndexBuildTime = 0
+
 const VIRTUAL_PREFIX = 'virtual:tuff-raw/'
 const VIRTUAL_PREFIX_RESOLVED = `\0${VIRTUAL_PREFIX}`
 
 const debug = Debug('unplugin-tuff:core')
+
+/**
+ * Build index/ folder to index.js using esbuild (for dev mode)
+ */
+async function buildIndexFolder(projectRoot: string, chalk: any): Promise<string | null> {
+  const indexDir = path.join(projectRoot, INDEX_FOLDER)
+  if (!await fs.pathExists(indexDir)) {
+    return null
+  }
+
+  const entryFiles = ['main.ts', 'main.js', 'index.ts', 'index.js']
+  let entryPath: string | null = null
+  for (const file of entryFiles) {
+    const fullPath = path.join(indexDir, file)
+    if (await fs.pathExists(fullPath)) {
+      entryPath = fullPath
+      break
+    }
+  }
+
+  if (!entryPath) {
+    console.warn(chalk.yellow('[Tuff DevKit] index/ folder found but no entry file (main.ts/js, index.ts/js)'))
+    return null
+  }
+
+  try {
+    const esbuild = await import('esbuild')
+    const manifestPath = path.join(projectRoot, 'manifest.json')
+    let manifest = { name: 'unknown', version: '0.0.0' }
+    if (await fs.pathExists(manifestPath)) {
+      manifest = JSON.parse(await fs.readFile(manifestPath, 'utf-8'))
+    }
+
+    const startTime = Date.now()
+    
+    // Use incremental build context for faster rebuilds
+    if (!indexBuildContext) {
+      indexBuildContext = await esbuild.context({
+        entryPoints: [entryPath],
+        bundle: true,
+        format: 'cjs',
+        target: 'node18',
+        platform: 'node',
+        write: false,
+        external: ['electron'],
+        minify: false,
+        sourcemap: 'inline',
+        define: {
+          '__PLUGIN_NAME__': JSON.stringify(manifest.name),
+          '__PLUGIN_VERSION__': JSON.stringify(manifest.version),
+        },
+        alias: {
+          '@': indexDir,
+          '~': indexDir,
+        },
+        logLevel: 'warning',
+      })
+    }
+
+    const result = await indexBuildContext.rebuild()
+    const duration = Date.now() - startTime
+    lastIndexBuildTime = Date.now()
+
+    if (result.errors.length > 0) {
+      console.error(chalk.red('[Tuff DevKit] Index folder build failed:'))
+      result.errors.forEach((err: any) => console.error(chalk.red(`  - ${err.text}`)))
+      return null
+    }
+
+    const output = result.outputFiles?.[0]?.text || ''
+    console.log(chalk.green(`[Tuff DevKit] index/ rebuilt in ${duration}ms`))
+    return output
+  } catch (error: any) {
+    console.error(chalk.red(`[Tuff DevKit] Failed to build index/: ${error.message}`))
+    return null
+  }
+}
+
+/**
+ * Debounced index folder build
+ */
+function debouncedIndexBuild(projectRoot: string, chalk: any, delay = 100): Promise<string | null> {
+  if (indexBuildPromise) {
+    return indexBuildPromise
+  }
+  
+  indexBuildPromise = new Promise((resolve) => {
+    setTimeout(async () => {
+      const result = await buildIndexFolder(projectRoot, chalk)
+      indexBuildPromise = null
+      resolve(result)
+    }, delay)
+  })
+  
+  return indexBuildPromise
+}
 
 export default createUnplugin<Options | undefined>((options, meta) => {
   const projectRoot = process.cwd()
@@ -45,6 +146,14 @@ export default createUnplugin<Options | undefined>((options, meta) => {
           // File does not exist, do nothing
         }
       }
+      
+      // Check for index/ folder - if exists, add virtual index.js
+      const indexDir = path.join(projectRoot, INDEX_FOLDER)
+      if (await fs.pathExists(indexDir) && !filesToVirtualize.includes('index.js')) {
+        filesToVirtualize.push('index.js')
+        console.log(chalk.cyan('[Tuff DevKit]'), 'Detected index/ folder, enabling real-time compilation')
+      }
+      
       debug('Virtualizing files:', filesToVirtualize)
     },
 
@@ -62,6 +171,19 @@ export default createUnplugin<Options | undefined>((options, meta) => {
       if (id.startsWith(VIRTUAL_PREFIX_RESOLVED)) {
         const originalId = id.slice(VIRTUAL_PREFIX_RESOLVED.length)
         const filePath = path.join(projectRoot, originalId)
+        
+        // Special handling for index.js when index/ folder exists
+        if (originalId === 'index.js') {
+          const indexDir = path.join(projectRoot, INDEX_FOLDER)
+          if (await fs.pathExists(indexDir)) {
+            const chalk = await getChalk()
+            const bundledCode = await buildIndexFolder(projectRoot, chalk)
+            if (bundledCode) {
+              return bundledCode
+            }
+          }
+        }
+        
         try {
           await fs.access(filePath)
           const content = await fs.readFile(filePath, 'utf-8')
@@ -82,7 +204,7 @@ export default createUnplugin<Options | undefined>((options, meta) => {
 
     vite: {
       configureServer(server: ViteDevServer) {
-        const filesToWatch = [...filesToVirtualize, 'widgets', 'README.md']
+        const filesToWatch = [...filesToVirtualize, 'widgets', 'README.md', INDEX_FOLDER]
         const watcher = server.watcher
 
         for (const file of filesToWatch) {
@@ -92,9 +214,32 @@ export default createUnplugin<Options | undefined>((options, meta) => {
           catch { /* Ignore if path doesn't exist */ }
         }
 
-        const handleFileChange = (file: string) => {
+        const handleFileChange = async (file: string) => {
           const relativePath = path.relative(projectRoot, file)
           debug(`File changed: ${relativePath}, triggering HMR.`)
+          
+          // If file is in index/ folder, rebuild and invalidate index.js
+          if (relativePath.startsWith(INDEX_FOLDER + '/') || relativePath.startsWith(INDEX_FOLDER + '\\')) {
+            const chalk = await getChalk()
+            console.log(chalk.cyan('[Tuff DevKit]'), `index/ changed: ${relativePath}`)
+            
+            // Rebuild index folder
+            await debouncedIndexBuild(projectRoot, chalk)
+            
+            // Invalidate virtual index.js module
+            const virtualIndexId = VIRTUAL_PREFIX_RESOLVED + 'index.js'
+            const indexMod = server.moduleGraph.getModuleById(virtualIndexId)
+            if (indexMod) {
+              server.moduleGraph.invalidateModule(indexMod)
+            }
+            
+            server.ws.send('tuff:update', {
+              path: 'index.js',
+              timestamp: Date.now(),
+              source: 'index-folder',
+            })
+            return
+          }
 
           const virtualId = VIRTUAL_PREFIX_RESOLVED + relativePath
           const mod = server.moduleGraph.getModuleById(virtualId)

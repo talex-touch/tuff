@@ -1,7 +1,44 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2025-12-11
+> 更新时间: 2025-12-13
+
+---
+
+## 📊 PRD 状态总览
+
+| 状态 | 数量 | 说明 |
+|------|------|------|
+| ✅ 已完成 | 8 | 可归档或精简 |
+| 🟡 进行中 | 5 | 部分实现 |
+| 📝 待实现 | 12 | 规划中 |
+| 📁 参考文档 | 6 | 指南/参考 |
+
+### ✅ 已完成 PRD (可归档)
+- `05-archive/plugin-loading-refactor.md` - 插件加载重构
+- `02-architecture/intelligence-power-generic-api-prd.md` - Intelligence API (核心完成)
+- `03-features/download-update/DOWNLOAD_CENTER_REFERENCE.md` - 下载中心
+- `03-features/plugin/widget-dynamic-loading-plan.md` - Widget 动态加载 (核心完成)
+- `03-features/plugin/permission-center-prd.md` - 权限中心 (Phase 1-4 完成)
+- `03-features/tuff-transport/*` - TuffTransport 系列 (已实现)
+
+### 🟡 进行中 PRD
+- `03-features/plugin/plugin-market-provider-frontend-plan.md` - 插件市场多源 ✅ (2025-12-13 核心完成)
+- `02-architecture/module-logging-system-prd.md` - 模块日志系统 (Phase 1 完成, SearchLogger 已集成)
+- `03-features/nexus/NEXUS-TEAM-INVITE-PRD.md` - 团队邀请 (PRD 完成，待 Nexus 后端实现)
+- `03-features/search/SEARCH-DSL-PRD.md` - 搜索 DSL ✅ (@xxx 过滤已实现 2025-12-13)
+
+### 📝 待实现 PRD
+- `03-features/view/view-mode-prd.md` - View Mode 增强
+- `03-features/view/multi-attach-view-prd.md` - 多视图并行
+- `03-features/view/attach-view-cache-prd.md` - 缓存优化
+- `03-features/division-box-prd.md` - DivisionBox 深化
+- `03-features/flow-transfer-prd.md` - Flow Transfer
+- `03-features/build/build-signature-system-prd.md` - 构建签名
+- `03-features/search/intelligent-recommendation-system-prd.md` - 智能推荐
+- `04-implementation/performance/direct-preview-calculation-prd.md` - 直接预览计算
+- `02-architecture/intelligence-agents-system-prd.md` - Intelligence Agents
+- `02-architecture/platform-capabilities-prd.md` - 平台能力体系
 
 ---
 

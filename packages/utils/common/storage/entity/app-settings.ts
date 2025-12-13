@@ -50,6 +50,8 @@ const _appSettingOriginData = {
     listItemStagger: true,
     /** 结果切换过渡动画 */
     resultTransition: true,
+    /** CoreBox 窗口展开收缩动画 */
+    coreBoxResize: true,
   },
   coreBox: {
     /** 自定义 placeholder 文本，空则使用默认 */

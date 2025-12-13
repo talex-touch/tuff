@@ -1,16 +1,15 @@
 import chalk from 'chalk'
+import { loggerManager } from '@talex-touch/utils/common/logger'
 import { storageModule } from '../../storage'
-// import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 
 /**
  * Search Engine Logger
- * Provides unified logging for search engine components with configurable output
+ * Provides unified logging for search engine components with configurable output.
+ * Integrated with LoggerManager for centralized control.
  */
 export class SearchLogger {
   private static instance: SearchLogger
   private enabled: boolean = false
-  // private readonly storageKey = 'search-engine-logs-enabled'
-  // private currentSession: string | null = null
   private searchStartTime: number = 0
   private searchSteps: Array<{ step: string, timestamp: number, duration?: number }> = []
   private unsubscribe?: () => void
@@ -18,6 +17,8 @@ export class SearchLogger {
   private constructor() {
     this.loadSettings()
     this.setupSettingsWatcher()
+    // Register with LoggerManager for centralized control
+    loggerManager.getLogger('search-engine', { enabled: this.enabled, color: 'cyan' })
   }
 
   /**
