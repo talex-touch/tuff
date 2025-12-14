@@ -87,25 +87,99 @@ export default {
 ## 配置选项
 
 ```ts
-TouchPluginExport({
+import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
+
+// 使用 defineConfig 获得类型提示
+export default defineConfig({
+  // 项目根目录
+  root: process.cwd(),
+  
   // manifest.json 路径（相对于项目根目录）
   manifest: './manifest.json',
   
   // 输出目录
   outDir: 'dist',
   
+  // 源码目录（用于资源加载）
+  sourceDir: 'src',
+  
+  // Widgets 目录
+  widgetsDir: 'widgets',
+  
+  // 公共资源目录
+  publicDir: 'public',
+  
+  // Index 脚本目录（Prelude 脚本）
+  indexDir: 'index',
+  
   // 是否生成 source map
   sourcemap: false,
   
+  // 是否压缩输出
+  minify: true,
+  
+  // 外部依赖（不打包）
+  external: ['electron'],
+  
   // 自定义资源处理
   assets: {
-    // 额外复制的文件/目录
-    copy: ['./assets/**/*'],
+    // 额外复制的文件/目录（glob 模式）
+    copy: ['./assets/**/*', './public/icons/*'],
     
-    // 排除的文件
-    exclude: ['**/*.test.ts']
-  }
+    // 排除的文件（glob 模式）
+    exclude: ['**/*.test.ts', '**/*.spec.js']
+  },
+  
+  // 版本同步选项
+  versionSync: {
+    // 启用从 package.json 同步版本到 manifest.json
+    enabled: true,
+    
+    // 自动同步（不提示）
+    auto: false
+  },
+  
+  // 最大插件体积（MB），超过此值会警告
+  maxSizeMB: 10
 })
+```
+
+### 配置项说明
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `root` | `string` | `process.cwd()` | 项目根目录 |
+| `manifest` | `string` | `'./manifest.json'` | manifest.json 路径 |
+| `outDir` | `string` | `'dist'` | 输出目录 |
+| `sourceDir` | `string` | `'src'` | 源码目录 |
+| `widgetsDir` | `string` | `'widgets'` | Widgets 目录 |
+| `publicDir` | `string` | `'public'` | 公共资源目录 |
+| `indexDir` | `string` | `'index'` | Prelude 脚本目录 |
+| `sourcemap` | `boolean` | `false` | 是否生成 source map |
+| `minify` | `boolean` | `true` | 是否压缩输出 |
+| `external` | `string[]` | `['electron']` | 外部依赖 |
+| `assets.copy` | `string[]` | `undefined` | 额外复制的文件 |
+| `assets.exclude` | `string[]` | `undefined` | 排除的文件 |
+| `versionSync.enabled` | `boolean` | `false` | 启用版本同步 |
+| `versionSync.auto` | `boolean` | `false` | 自动同步版本 |
+| `maxSizeMB` | `number` | `10` | 最大插件体积警告阈值 |
+
+### 版本同步
+
+当 `versionSync.enabled` 为 `true` 时，构建过程中会检查 `package.json` 和 `manifest.json` 的版本是否一致：
+
+- 版本不一致时会提示用户是否同步
+- 设置 `versionSync.auto: true` 可自动同步，无需手动确认
+- 也可以通过命令行参数 `--sync-version` 触发同步
+
+### 体积警告
+
+当打包后的 `.tpex` 文件超过 `maxSizeMB`（默认 10MB）时，会显示警告：
+
+```
+⚠ WARNING  Plugin size (12.34 MB) exceeds 10 MB limit!
+  → Consider optimizing assets or splitting into smaller plugins
+  → Large plugins may be rejected by the plugin store
 ```
 
 ---

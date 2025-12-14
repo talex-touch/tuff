@@ -4,8 +4,27 @@ import path from 'pathe'
 import fs from 'fs-extra'
 import cliProgress from 'cli-progress'
 import { globSync } from 'glob'
+import * as readline from 'node:readline'
 import { CompressLimit, TalexCompress } from './compress-util'
 import { generateFilesSha256, generateSignature } from './security-util'
+import type { Options } from '../types'
+
+// Default configuration
+const DEFAULT_OPTIONS: Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>> & Pick<Options, 'assets' | 'versionSync'> = {
+  root: process.cwd(),
+  manifest: './manifest.json',
+  outDir: 'dist',
+  sourceDir: 'src',
+  widgetsDir: 'widgets',
+  publicDir: 'public',
+  indexDir: 'index',
+  sourcemap: false,
+  minify: true,
+  external: ['electron'],
+  maxSizeMB: 10,
+  assets: undefined,
+  versionSync: undefined,
+}
 
 interface IndexBuildConfig {
   entry: string
@@ -17,26 +36,158 @@ interface IndexBuildConfig {
 }
 
 /**
+ * Resolve options with defaults
+ */
+function resolveOptions(options?: Options): Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>> & Pick<Options, 'assets' | 'versionSync'> {
+  return {
+    ...DEFAULT_OPTIONS,
+    ...options,
+    // Handle deprecated manifestPath
+    manifest: options?.manifest || options?.manifestPath || DEFAULT_OPTIONS.manifest,
+  }
+}
+
+/**
+ * Prompt user for confirmation
+ */
+async function promptConfirm(question: string, defaultValue = true): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+
+  return new Promise((resolve) => {
+    const hint = defaultValue ? 'Y/n' : 'y/N'
+    rl.question(`${question} (${hint}) `, (answer) => {
+      rl.close()
+      const value = answer.trim().toLowerCase()
+      if (value === '') {
+        resolve(defaultValue)
+      } else {
+        resolve(value === 'y' || value === 'yes')
+      }
+    })
+  })
+}
+
+/**
+ * Check and sync version from package.json to manifest.json
+ */
+async function checkVersionSync(
+  opts: ReturnType<typeof resolveOptions>,
+  chalk: any
+): Promise<{ synced: boolean; version?: string }> {
+  const packageJsonPath = path.join(opts.root, 'package.json')
+  const manifestPath = path.join(opts.root, opts.manifest)
+
+  if (!fs.existsSync(packageJsonPath)) {
+    return { synced: false }
+  }
+
+  if (!fs.existsSync(manifestPath)) {
+    return { synced: false }
+  }
+
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+
+  const pkgVersion = packageJson.version
+  const manifestVersion = manifest.version
+
+  if (!pkgVersion) {
+    return { synced: false }
+  }
+
+  if (pkgVersion === manifestVersion) {
+    return { synced: false }
+  }
+
+  // Versions differ
+  console.log('')
+  console.info(
+    chalk.bgYellow.black(' VERSION MISMATCH ') +
+    chalk.yellow(` package.json: ${pkgVersion} ≠ manifest.json: ${manifestVersion}`)
+  )
+
+  const versionSync = opts.versionSync
+  let shouldSync = false
+
+  if (versionSync?.enabled) {
+    if (versionSync.auto) {
+      shouldSync = true
+      console.info(chalk.cyan('  → Auto-syncing version from package.json'))
+    } else {
+      shouldSync = await promptConfirm(
+        chalk.cyan('  → Sync version from package.json to manifest.json?'),
+        true
+      )
+    }
+  } else {
+    // Not enabled, just inform
+    console.info(
+      chalk.gray('  → Use --sync-version or set versionSync.enabled to auto-sync')
+    )
+    return { synced: false }
+  }
+
+  if (shouldSync) {
+    manifest.version = pkgVersion
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
+    console.info(
+      chalk.bgGreen.black(' SYNCED ') +
+      chalk.green(` manifest.json version updated to ${pkgVersion}`)
+    )
+    return { synced: true, version: pkgVersion }
+  }
+
+  return { synced: false }
+}
+
+/**
+ * Check plugin size and warn if exceeds limit
+ */
+function checkPluginSize(tpexPath: string, maxSizeMB: number, chalk: any): void {
+  const stats = fs.statSync(tpexPath)
+  const sizeMB = stats.size / (1024 * 1024)
+
+  if (sizeMB > maxSizeMB) {
+    console.log('')
+    console.warn(
+      chalk.bgYellow.black(' WARNING ') +
+      chalk.yellow(` Plugin size (${sizeMB.toFixed(2)} MB) exceeds ${maxSizeMB} MB limit!`)
+    )
+    console.warn(chalk.yellow('  → Consider optimizing assets or splitting into smaller plugins'))
+    console.warn(chalk.yellow('  → Large plugins may be rejected by the plugin store'))
+    console.log('')
+  } else {
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ') +
+      chalk.gray(` Plugin size: ${sizeMB.toFixed(2)} MB`)
+    )
+  }
+}
+
+/**
  * Detect index/ folder and find entry point
  */
-async function detectIndexFolder(): Promise<IndexBuildConfig | null> {
-  const indexDir = path.resolve('index')
+async function detectIndexFolder(indexDir: string, opts: ReturnType<typeof resolveOptions>): Promise<IndexBuildConfig | null> {
+  const indexDirPath = path.resolve(opts.root, indexDir)
   
-  if (!fs.existsSync(indexDir)) {
+  if (!fs.existsSync(indexDirPath)) {
     return null
   }
   
   const entryFiles = ['main.ts', 'main.js', 'index.ts', 'index.js']
   for (const file of entryFiles) {
-    const entryPath = path.join(indexDir, file)
+    const entryPath = path.join(indexDirPath, file)
     if (fs.existsSync(entryPath)) {
       return {
         entry: entryPath,
         format: 'cjs',
         target: 'node18',
-        external: ['electron'],
-        minify: true,
-        sourcemap: false
+        external: opts.external,
+        minify: opts.minify,
+        sourcemap: opts.sourcemap
       }
     }
   }
@@ -104,51 +255,60 @@ async function bundleIndexFolder(
   }
 }
 
-export async function build() {
+export async function build(userOptions?: Options) {
+  const opts = resolveOptions(userOptions)
   const { default: chalk } = await import('chalk')
-  const distPath = path.resolve('dist')
-  const outDir = path.resolve('dist/out')
-  const buildDir = path.resolve('dist/build')
+  
+  const distPath = path.resolve(opts.root, opts.outDir)
+  const outDir = path.resolve(opts.root, opts.outDir, 'out')
+  const buildDir = path.resolve(opts.root, opts.outDir, 'build')
 
   console.log('\n\n\n')
 
+  // Check version sync before building
+  await checkVersionSync(opts, chalk)
+
   // 步骤1：备份 Vite 构建产物到 dist/out
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Backing up Vite build output...'))
+  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Backing up Vite build output to ${opts.outDir}/out/...`))
 
   fs.rmSync(outDir, { recursive: true, force: true })
   fs.mkdirSync(outDir, { recursive: true })
 
   // 移动 dist 下所有文件到 dist/out（排除 out 和 build 目录）
-  const distFiles = fs.readdirSync(distPath)
-  for (const file of distFiles) {
-    if (file !== 'out' && file !== 'build') {
-      const sourcePath = path.join(distPath, file)
-      const destPath = path.join(outDir, file)
-      fs.moveSync(sourcePath, destPath, { overwrite: true })
+  if (fs.existsSync(distPath)) {
+    const distFiles = fs.readdirSync(distPath)
+    for (const file of distFiles) {
+      if (file !== 'out' && file !== 'build') {
+        const sourcePath = path.join(distPath, file)
+        const destPath = path.join(outDir, file)
+        fs.moveSync(sourcePath, destPath, { overwrite: true })
+      }
     }
   }
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Vite output backed up to dist/out/'))
+  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Vite output backed up to ${opts.outDir}/out/`))
 
   // 步骤2：收集文件到 dist/build
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Collecting files to dist/build/...'))
+  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Collecting files to ${opts.outDir}/build/...`))
 
   fs.rmSync(buildDir, { recursive: true, force: true })
   fs.mkdirSync(buildDir, { recursive: true })
 
   // 2.1 复制 Vite 产物
-  fs.copySync(outDir, buildDir)
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Vite output copied to dist/build/'))
+  if (fs.existsSync(outDir)) {
+    fs.copySync(outDir, buildDir)
+    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Vite output copied to ${opts.outDir}/build/`))
+  }
 
   // 2.2 复制插件文件
   const filesToCopy = [
-    { from: 'widgets', to: 'widgets' },
+    { from: opts.widgetsDir, to: 'widgets' },
     { from: 'preload.js', to: 'preload.js' },
     { from: 'README.md', to: 'README.md' },
   ]
 
   for (const file of filesToCopy) {
-    const source = path.resolve(process.cwd(), file.from)
+    const source = path.resolve(opts.root, file.from)
     const destination = path.join(buildDir, file.to)
     if (fs.existsSync(source)) {
       fs.copySync(source, destination)
@@ -156,11 +316,32 @@ export async function build() {
     }
   }
 
-  // 2.2.1 Handle index.js: either bundle from index/ folder or copy existing file
-  const indexConfig = await detectIndexFolder()
+  // 2.2.1 Handle custom assets copy
+  if (opts.assets?.copy && opts.assets.copy.length > 0) {
+    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Copying custom assets...'))
+    for (const pattern of opts.assets.copy) {
+      const files = globSync(pattern, { 
+        cwd: opts.root, 
+        nodir: true,
+        ignore: opts.assets.exclude || []
+      })
+      for (const file of files) {
+        const source = path.resolve(opts.root, file)
+        const destination = path.join(buildDir, file)
+        fs.ensureDirSync(path.dirname(destination))
+        fs.copySync(source, destination)
+      }
+      if (files.length > 0) {
+        console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(` Copied ${files.length} files from ${pattern}`))
+      }
+    }
+  }
+
+  // 2.2.2 Handle index.js: either bundle from index/ folder or copy existing file
+  const indexConfig = await detectIndexFolder(opts.indexDir, opts)
   if (indexConfig) {
     // Read manifest early for bundling
-    const manifestPath = path.resolve(process.cwd(), 'manifest.json')
+    const manifestPath = path.resolve(opts.root, opts.manifest)
     const manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
     
     const bundleSuccess = await bundleIndexFolder(indexConfig, buildDir, manifestData, chalk)
@@ -169,7 +350,7 @@ export async function build() {
     }
   } else {
     // Fallback: copy existing index.js
-    const indexSource = path.resolve(process.cwd(), 'index.js')
+    const indexSource = path.resolve(opts.root, 'index.js')
     const indexDest = path.join(buildDir, 'index.js')
     if (fs.existsSync(indexSource)) {
       fs.copySync(indexSource, indexDest)
@@ -178,12 +359,12 @@ export async function build() {
   }
 
   // 2.3 合并 assets 目录（三方合并）
-  await mergeAssets(chalk, buildDir)
+  await mergeAssets(chalk, buildDir, opts)
 
   // 2.4 生成配置文件
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Generating manifest.json ...'))
 
-  const manifest = genInit(buildDir)
+  const manifest = genInit(buildDir, opts)
 
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Manifest.json generated successfully!'))
 
@@ -193,7 +374,10 @@ export async function build() {
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' key.talex generated successfully!'))
 
   // 步骤3：压缩生成 .tpex
-  const tpexPath = await compressPlugin(manifest, buildDir, chalk)
+  const tpexPath = await compressPlugin(manifest, buildDir, opts, chalk)
+
+  // Check plugin size
+  checkPluginSize(tpexPath, opts.maxSizeMB, chalk)
 
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Export plugin ${manifest.name}-${manifest.version}.tpex successfully!`))
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.cyan(` Output path: ${chalk.yellow(tpexPath)}`))
@@ -228,9 +412,9 @@ interface IManifest {
   }
 }
 
-async function mergeAssets(chalk: any, buildDir: string) {
-  const assetsDir = path.resolve('assets')
-  const srcAssetsDir = path.resolve('src/assets')
+async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof resolveOptions>) {
+  const assetsDir = path.resolve(opts.root, 'assets')
+  const srcAssetsDir = path.resolve(opts.root, opts.sourceDir, 'assets')
   const buildAssetsDir = path.join(buildDir, 'assets')
 
   const assetsExists = fs.existsSync(assetsDir)
@@ -262,7 +446,7 @@ async function mergeAssets(chalk: any, buildDir: string) {
       if (existing)
         existing.sources.push('assets/')
       else
-        conflicts.push({ file, sources: ['dist/build/assets/', 'assets/'] })
+        conflicts.push({ file, sources: [`${opts.outDir}/build/assets/`, 'assets/'] })
     }
   }
 
@@ -271,11 +455,11 @@ async function mergeAssets(chalk: any, buildDir: string) {
     if (buildAssets.includes(file)) {
       const existing = conflicts.find(c => c.file === file)
       if (existing) {
-        if (!existing.sources.includes('src/assets/'))
-          existing.sources.push('src/assets/')
+        if (!existing.sources.includes(`${opts.sourceDir}/assets/`))
+          existing.sources.push(`${opts.sourceDir}/assets/`)
       }
       else {
-        conflicts.push({ file, sources: ['dist/build/assets/', 'src/assets/'] })
+        conflicts.push({ file, sources: [`${opts.outDir}/build/assets/`, `${opts.sourceDir}/assets/`] })
       }
     }
   }
@@ -285,11 +469,11 @@ async function mergeAssets(chalk: any, buildDir: string) {
     if (userAssets.includes(file)) {
       const existing = conflicts.find(c => c.file === file)
       if (existing) {
-        if (!existing.sources.includes('src/assets/'))
-          existing.sources.push('src/assets/')
+        if (!existing.sources.includes(`${opts.sourceDir}/assets/`))
+          existing.sources.push(`${opts.sourceDir}/assets/`)
       }
       else {
-        conflicts.push({ file, sources: ['assets/', 'src/assets/'] })
+        conflicts.push({ file, sources: ['assets/', `${opts.sourceDir}/assets/`] })
       }
     }
   }
@@ -309,20 +493,20 @@ async function mergeAssets(chalk: any, buildDir: string) {
   // 复制 assets
   if (assetsExists) {
     fs.copySync(assetsDir, buildAssetsDir)
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Merged assets/ into dist/build/assets/'))
+    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Merged assets/ into ${opts.outDir}/build/assets/`))
   }
 
   // 复制 src/assets
   if (srcAssetsExists) {
     fs.copySync(srcAssetsDir, buildAssetsDir)
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Merged src/assets/ into dist/build/assets/'))
+    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Merged ${opts.sourceDir}/assets/ into ${opts.outDir}/build/assets/`))
   }
 
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Assets merged successfully!'))
 }
 
-function genInit(_buildDir: string): IManifest {
-  const manifestPath = path.resolve(process.cwd(), 'manifest.json')
+function genInit(_buildDir: string, opts: ReturnType<typeof resolveOptions>): IManifest {
+  const manifestPath = path.resolve(opts.root, opts.manifest)
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
 
@@ -336,7 +520,7 @@ function genInit(_buildDir: string): IManifest {
   return manifest as IManifest
 }
 
-async function compressPlugin(manifest: IManifest, buildDir: string, chalk: any): Promise<string> {
+async function compressPlugin(manifest: IManifest, buildDir: string, opts: ReturnType<typeof resolveOptions>, chalk: any): Promise<string> {
   const buildConfig = manifest.build || {
     files: [],
     secret: {
@@ -368,7 +552,7 @@ async function compressPlugin(manifest: IManifest, buildDir: string, chalk: any)
 
   buildConfig.files = [buildDir]
 
-  const buildPath = path.resolve('dist', `${manifest.name.replace(/\//g, '-')}-${manifest.version}.tpex`)
+  const buildPath = path.resolve(opts.root, opts.outDir, `${manifest.name.replace(/\//g, '-')}-${manifest.version}.tpex`)
 
   const tCompress = new TalexCompress(buildConfig.files, buildPath)
 

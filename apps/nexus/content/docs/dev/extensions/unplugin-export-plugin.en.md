@@ -87,25 +87,99 @@ In development mode:
 ## Configuration Options
 
 ```ts
-TouchPluginExport({
+import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
+
+// Use defineConfig for type hints
+export default defineConfig({
+  // Project root directory
+  root: process.cwd(),
+  
   // manifest.json path (relative to project root)
   manifest: './manifest.json',
   
   // Output directory
   outDir: 'dist',
   
+  // Source directory (for resource loading)
+  sourceDir: 'src',
+  
+  // Widgets directory
+  widgetsDir: 'widgets',
+  
+  // Public assets directory
+  publicDir: 'public',
+  
+  // Index script directory (Prelude script)
+  indexDir: 'index',
+  
   // Generate source maps
   sourcemap: false,
   
+  // Minify output
+  minify: true,
+  
+  // External dependencies (not bundled)
+  external: ['electron'],
+  
   // Custom asset handling
   assets: {
-    // Additional files/directories to copy
-    copy: ['./assets/**/*'],
+    // Additional files/directories to copy (glob patterns)
+    copy: ['./assets/**/*', './public/icons/*'],
     
-    // Excluded files
-    exclude: ['**/*.test.ts']
-  }
+    // Excluded files (glob patterns)
+    exclude: ['**/*.test.ts', '**/*.spec.js']
+  },
+  
+  // Version sync options
+  versionSync: {
+    // Enable syncing version from package.json to manifest.json
+    enabled: true,
+    
+    // Auto sync without prompting
+    auto: false
+  },
+  
+  // Maximum plugin size (MB) before warning
+  maxSizeMB: 10
 })
+```
+
+### Configuration Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `root` | `string` | `process.cwd()` | Project root directory |
+| `manifest` | `string` | `'./manifest.json'` | manifest.json path |
+| `outDir` | `string` | `'dist'` | Output directory |
+| `sourceDir` | `string` | `'src'` | Source directory |
+| `widgetsDir` | `string` | `'widgets'` | Widgets directory |
+| `publicDir` | `string` | `'public'` | Public assets directory |
+| `indexDir` | `string` | `'index'` | Prelude script directory |
+| `sourcemap` | `boolean` | `false` | Generate source maps |
+| `minify` | `boolean` | `true` | Minify output |
+| `external` | `string[]` | `['electron']` | External dependencies |
+| `assets.copy` | `string[]` | `undefined` | Additional files to copy |
+| `assets.exclude` | `string[]` | `undefined` | Files to exclude |
+| `versionSync.enabled` | `boolean` | `false` | Enable version sync |
+| `versionSync.auto` | `boolean` | `false` | Auto sync version |
+| `maxSizeMB` | `number` | `10` | Max plugin size warning threshold |
+
+### Version Sync
+
+When `versionSync.enabled` is `true`, the build process checks if `package.json` and `manifest.json` versions match:
+
+- Prompts user to sync when versions differ
+- Set `versionSync.auto: true` to auto-sync without confirmation
+- Can also trigger via `--sync-version` CLI flag
+
+### Size Warning
+
+When the packaged `.tpex` file exceeds `maxSizeMB` (default 10MB), a warning is shown:
+
+```
+⚠ WARNING  Plugin size (12.34 MB) exceeds 10 MB limit!
+  → Consider optimizing assets or splitting into smaller plugins
+  → Large plugins may be rejected by the plugin store
 ```
 
 ---

@@ -251,6 +251,52 @@ BoxItemEvents.batch.delete  // 批量删除
 BoxItemEvents.batch.clear   // 按来源清空
 ```
 
+### ClipboardEvents :badge[v0.9.0]{type="info"}
+
+```ts
+import { ClipboardEvents } from '@talex-touch/utils/transport'
+
+// 监听（流式）
+ClipboardEvents.change      // 订阅剪贴板变化
+
+// 历史记录（支持批量）
+ClipboardEvents.getHistory  // 分页查询历史
+ClipboardEvents.getLatest   // 获取最新项
+
+// 操作
+ClipboardEvents.apply       // 应用到活动应用
+ClipboardEvents.delete      // 删除历史项
+ClipboardEvents.setFavorite // 切换收藏状态
+ClipboardEvents.write       // 写入系统剪贴板
+```
+
+**示例：订阅剪贴板变化**
+
+```ts
+const controller = await transport.stream(
+  ClipboardEvents.change,
+  undefined,
+  {
+    onData: ({ item, source }) => {
+      console.log(`新 ${item.type} 来自 ${source}:`, item.content)
+    }
+  }
+)
+
+onUnmounted(() => controller.cancel())
+```
+
+**示例：查询剪贴板历史**
+
+```ts
+const { history, total } = await transport.send(ClipboardEvents.getHistory, {
+  page: 1,
+  pageSize: 20,
+  type: 'text',
+  keyword: '搜索关键词'
+})
+```
+
 ---
 
 ## 批量处理
