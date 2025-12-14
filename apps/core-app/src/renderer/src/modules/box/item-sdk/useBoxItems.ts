@@ -131,15 +131,15 @@ export function useBoxItems(): UseBoxItemsReturn {
     const index = itemsMap.get(item.id)
 
     if (index !== undefined) {
-      // 更新：使用 splice 确保 Vue 响应式
-      items.value.splice(index, 1, item)
-      // 索引不变，无需更新 Map
+      // 更新：将更新项移动到最前（最新结果置顶），触发列表 FLIP
+      items.value.splice(index, 1)
+      items.value.unshift(item)
+      rebuildIndex()
     }
     else {
-      // 新增
-      const newIndex = items.value.length
-      items.value.push(item)
-      itemsMap.set(item.id, newIndex)
+      // 新增：插入到最前（最新结果置顶），触发列表 FLIP
+      items.value.unshift(item)
+      rebuildIndex()
     }
   }
 
@@ -181,17 +181,17 @@ export function useBoxItems(): UseBoxItemsReturn {
    * 处理 batch-upsert 事件
    */
   const handleBatchUpsert = ({ data }: { data: { items: TuffItem[] } }): void => {
-    data.items.forEach((item) => {
+    // Reverse iterate to preserve incoming order while unshifting
+    // so the first item in data.items ends up before subsequent ones.
+    for (let i = data.items.length - 1; i >= 0; i--) {
+      const item = data.items[i]
       const index = itemsMap.get(item.id)
       if (index !== undefined) {
-        items.value.splice(index, 1, item)
+        items.value.splice(index, 1)
       }
-      else {
-        const newIndex = items.value.length
-        items.value.push(item)
-        itemsMap.set(item.id, newIndex)
-      }
-    })
+      items.value.unshift(item)
+    }
+    rebuildIndex()
   }
 
   /**

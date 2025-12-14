@@ -12,6 +12,69 @@ const crypto = require('node:crypto')
 
 const PLUGIN_NAME = 'touch-translation'
 
+// Track latest request per feature to avoid stale async updates
+const latestRequestSeqByFeature = new Map()
+
+const debounceTimersByFeature = new Map()
+const abortControllersByFeature = new Map()
+
+let networkPermissionState = null
+
+async function ensureNetworkPermission() {
+  if (!permission) {
+    return true
+  }
+
+  if (networkPermissionState === true) {
+    return true
+  }
+  if (networkPermissionState === false) {
+    return false
+  }
+
+  const hasNetwork = await permission.check('network.internet')
+  if (hasNetwork) {
+    networkPermissionState = true
+    return true
+  }
+
+  const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
+  networkPermissionState = Boolean(granted)
+  return networkPermissionState
+}
+
+async function startTranslationRequest(textToTranslate, featureId, signal, nextSeq) {
+  const ok = await ensureNetworkPermission()
+  if (!ok) {
+    const errorItem = new TuffItemBuilder('permission-denied')
+      .setTitle('需要网络权限')
+      .setSubtitle('请在插件设置中授予网络权限以使用翻译功能')
+      .setIcon({ type: 'file', value: 'assets/logo.svg' })
+      .build()
+    plugin.feature.pushItems([errorItem])
+    return
+  }
+
+  plugin.search.updateQuery(textToTranslate)
+  plugin.feature.clearItems()
+
+  const detectedLang = detectLanguage(textToTranslate)
+  const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
+
+  const providersConfig = await plugin.storage.getFile('providers_config')
+  const enabledProviders = providersConfig
+    ? Object.entries(providersConfig)
+      .filter(([_id, config]) => config.enabled)
+      .map(([id, config]) => ({ id, ...config }))
+    : [{ id: 'google', enabled: true }]
+
+  const providersToShow = enabledProviders.length > 0 ? enabledProviders : [{ id: 'google', enabled: true }]
+  const pendingItems = providersToShow.map((p) => createPendingTranslationItem(textToTranslate, featureId, p.id, detectedLang, targetLang))
+  plugin.feature.pushItems(pendingItems)
+
+  Promise.resolve().then(() => translateAndUpsertResults(textToTranslate, featureId, signal, nextSeq))
+}
+
 /**
  * Creates an MD5 hash of the given string.
  * @param {string} string The string to hash.
@@ -19,6 +82,168 @@ const PLUGIN_NAME = 'touch-translation'
  */
 function md5(string) {
   return crypto.createHash('md5').update(string).digest('hex')
+}
+
+/**
+ * @param {string} originalText
+ * @param {string} featureId
+ * @param {string} service
+ * @param {string} from
+ * @param {string} to
+ * @returns {import('@talex-touch/utils').TuffItem}
+ */
+function createPendingTranslationItem(originalText, featureId, service, from, to) {
+  const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
+  return new TuffItemBuilder(`translation-${originalText}-${service}`)
+    .setSource('plugin', 'plugin-features')
+    .setTitle('翻译中…')
+    .setSubtitle(`${serviceName}: ${from} → ${to}`)
+    .setIcon({ type: 'file', value: 'assets/logo.svg' })
+    .addTag('Translation', 'blue')
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      pluginType: 'translation',
+      originalText,
+      translatedText: '',
+      fromLang: from,
+      toLang: to,
+      serviceName: service,
+      pending: true,
+    })
+    .build()
+}
+
+/**
+ * Runs translation asynchronously and upserts final results.
+ * @param {string} textToTranslate
+ * @param {string} featureId
+ * @param {AbortSignal} signal
+ * @param {number} requestSeq
+ */
+async function translateAndUpsertResults(textToTranslate, featureId, signal, requestSeq) {
+  try {
+    if (signal?.aborted) {
+      return
+    }
+
+    if (latestRequestSeqByFeature.get(featureId) !== requestSeq) {
+      return
+    }
+
+    const detectedLang = detectLanguage(textToTranslate)
+    const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
+
+    const providersConfig = await plugin.storage.getFile('providers_config')
+
+    if (signal?.aborted) {
+      return
+    }
+
+    if (latestRequestSeqByFeature.get(featureId) !== requestSeq) {
+      return
+    }
+
+    const enabledProviders = providersConfig
+      ? Object.entries(providersConfig)
+        .filter(([_id, config]) => config.enabled)
+        .map(([id, config]) => ({ id, ...config }))
+      : [{ id: 'google', enabled: true }]
+
+    const providersToUse = enabledProviders.length > 0
+      ? enabledProviders
+      : [{ id: 'google', enabled: true }]
+
+    // Ensure pending items exist for all enabled providers (upsert)
+    const pendingItems = providersToUse.map((p) =>
+      createPendingTranslationItem(textToTranslate, featureId, p.id, detectedLang, targetLang)
+    )
+    plugin.feature.pushItems(pendingItems)
+
+    const runProvider = async (provider) => {
+      if (signal?.aborted) return
+      if (latestRequestSeqByFeature.get(featureId) !== requestSeq) return
+
+      let result = null
+      switch (provider.id) {
+        case 'google':
+          result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
+          break
+        case 'deepl':
+          result = await translateWithDeepL(
+            textToTranslate,
+            'auto',
+            targetLang,
+            provider.config?.apiKey,
+            signal,
+          )
+          break
+        case 'bing':
+          result = await translateWithBing(
+            textToTranslate,
+            'auto',
+            targetLang,
+            provider.config?.apiKey,
+            provider.config?.region,
+            signal,
+          )
+          break
+        case 'baidu':
+          result = await translateWithBaidu(
+            textToTranslate,
+            'auto',
+            targetLang,
+            provider.config?.appId,
+            provider.config?.appKey,
+            signal,
+          )
+          break
+        case 'tencent':
+          result = await translateWithTencent(
+            textToTranslate,
+            'auto',
+            targetLang,
+            provider.config?.secretId,
+            provider.config?.secretKey,
+            signal,
+          )
+          break
+        case 'caiyun':
+          result = await translateWithCaiyun(
+            textToTranslate,
+            'auto',
+            targetLang,
+            provider.config?.token,
+            signal,
+          )
+          break
+        case 'custom':
+          result = await translateWithCustom(textToTranslate, 'auto', targetLang, provider.config, signal)
+          break
+        case 'mymemory':
+          result = await translateWithMyMemory(textToTranslate, 'auto', targetLang, signal)
+          break
+        default:
+          return
+      }
+
+      if (signal?.aborted) return
+      if (latestRequestSeqByFeature.get(featureId) !== requestSeq) return
+
+      if (result) {
+        const item = createTranslationSearchItem(textToTranslate, result, featureId)
+        plugin.feature.pushItems([item])
+      }
+    }
+
+    // Run all providers concurrently; each completion upserts its item
+    await Promise.allSettled(providersToUse.map(runProvider))
+  }
+  catch (error) {
+    if (!signal?.aborted) {
+      logger.error('Error processing translation feature (async):', error)
+    }
+  }
 }
 
 /**
@@ -753,27 +978,38 @@ const pluginLifecycle = {
       const queryText = typeof query === 'string' ? query : query?.text
 
       if (featureId === 'touch-translate' && queryText && queryText.trim()) {
-        // 检查网络权限
-        if (permission) {
-          const hasNetwork = await permission.check('network.internet')
-          if (!hasNetwork) {
-            const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
-            if (!granted) {
-              const errorItem = new TuffItemBuilder('permission-denied')
-                .setTitle('需要网络权限')
-                .setSubtitle('请在插件设置中授予网络权限以使用翻译功能')
-                .setIcon({ type: 'file', value: 'assets/logo.svg' })
-                .build()
-              plugin.feature.pushItems([errorItem])
+        const textToTranslate = queryText.trim()
+
+        const nextSeq = (latestRequestSeqByFeature.get(featureId) || 0) + 1
+        latestRequestSeqByFeature.set(featureId, nextSeq)
+
+        if (!signal) {
+          const prevTimer = debounceTimersByFeature.get(featureId)
+          if (prevTimer) {
+            clearTimeout(prevTimer)
+          }
+
+          const prevController = abortControllersByFeature.get(featureId)
+          if (prevController) {
+            prevController.abort()
+          }
+          const controller = new AbortController()
+          abortControllersByFeature.set(featureId, controller)
+
+          const timer = setTimeout(() => {
+            if (latestRequestSeqByFeature.get(featureId) !== nextSeq) {
               return
             }
-          }
+            startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((e) => {
+              logger.error('Error starting translation request (debounced):', e)
+            })
+          }, 260)
+          debounceTimersByFeature.set(featureId, timer)
+          return true
         }
 
-        // 兼容新版本：使用 listFiles 代替 getAllItems
-        const files = await plugin.storage.listFiles()
-        logger.debug('[touch-translation] Storage files:', files)
-        await translateAndPushResults(queryText.trim(), featureId, signal)
+        await startTranslationRequest(textToTranslate, featureId, signal, nextSeq)
+        return true
       }
     }
     catch (error) {

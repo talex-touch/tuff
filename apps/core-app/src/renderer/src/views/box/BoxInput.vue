@@ -15,6 +15,7 @@ interface Props {
     }
   }
   placeholder?: string
+  disabled?: boolean
 }
 
 interface Emits {
@@ -65,6 +66,7 @@ const placeholder = computed(() => {
       id="core-box-input"
       ref="inputEl"
       v-model="inputValue"
+      :disabled="props.disabled"
       @focus="options.focus = true"
       @blur="options.focus = false"
     />

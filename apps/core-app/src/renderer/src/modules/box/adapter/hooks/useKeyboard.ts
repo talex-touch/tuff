@@ -263,7 +263,7 @@ export function useKeyboard(
    * Checks if CoreBox is currently in UI mode (plugin view attached).
    */
   function isInUIMode(): boolean {
-    return activeActivations.value?.length > 0
+    return Boolean(activeActivations.value?.some((a: any) => a?.hideResults === true))
   }
 
   /**
@@ -287,9 +287,10 @@ export function useKeyboard(
       return
     }
 
-    // Check if in UI mode - input is hidden when in UI mode
+    // Check if in UI mode - input is hidden only when webcontent view is attached AND input is not allowed
     const uiMode = isInUIMode()
-    const inputHidden = uiMode // In UI mode, input box is hidden
+    const inputAllowed = Boolean(activeActivations.value?.some((a: any) => a?.showInput === true))
+    const inputHidden = uiMode && !inputAllowed
 
     // Debug: log ⌘← events
     if (event.metaKey && event.key === 'ArrowLeft') {
@@ -326,6 +327,9 @@ export function useKeyboard(
     }
 
     if (event.key === 'Enter') {
+      if ((event as any).isComposing || (event as any).keyCode === 229) {
+        return
+      }
       select.value = boxOptions.focus
       const target = res.value[boxOptions.focus]
 
