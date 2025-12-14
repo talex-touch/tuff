@@ -11,12 +11,11 @@ const query = ref('')
 const showSettings = ref(false)
 
 onMounted(() => {
-  onCoreBoxInputChange(({ query: newQuery }) => {
-    // 兼容新版本：query 可能是字符串或 TuffQuery 对象
-    const queryText = typeof newQuery === 'string'
+  onCoreBoxInputChange(({ data }) => {
+    const newQuery = (data as any)?.query
+    query.value = typeof newQuery === 'string'
       ? newQuery
-      : (newQuery as any)?.text || ''
-    query.value = queryText
+      : newQuery?.text || ''
   })
 })
 

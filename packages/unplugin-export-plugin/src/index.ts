@@ -12,6 +12,8 @@ const INDEX_FOLDER = 'index'
 let indexBuildContext: any = null
 let indexBuildPromise: Promise<string | null> | null = null
 let lastIndexBuildTime = 0
+let lastIndexEntryPath: string | null = null
+let forceRebuildIndex = false
 
 const VIRTUAL_PREFIX = 'virtual:tuff-raw/'
 const VIRTUAL_PREFIX_RESOLVED = `\0${VIRTUAL_PREFIX}`
@@ -52,8 +54,18 @@ async function buildIndexFolder(projectRoot: string, chalk: any): Promise<string
 
     const startTime = Date.now()
     
+    // Check if entry path changed or force rebuild requested
+    const needsRebuild = lastIndexEntryPath !== entryPath || forceRebuildIndex
+    if (needsRebuild && indexBuildContext) {
+      // Dispose old context when entry changes or force rebuild
+      await indexBuildContext.dispose()
+      indexBuildContext = null
+      forceRebuildIndex = false
+    }
+    
     // Use incremental build context for faster rebuilds
     if (!indexBuildContext) {
+      lastIndexEntryPath = entryPath
       indexBuildContext = await esbuild.context({
         entryPoints: [entryPath],
         bundle: true,
@@ -222,6 +234,9 @@ export default createUnplugin<Options | undefined>((options, meta) => {
           if (relativePath.startsWith(INDEX_FOLDER + '/') || relativePath.startsWith(INDEX_FOLDER + '\\')) {
             const chalk = await getChalk()
             console.log(chalk.cyan('[Tuff DevKit]'), `index/ changed: ${relativePath}`)
+            
+            // Force rebuild context to pick up new/deleted dependencies
+            forceRebuildIndex = true
             
             // Rebuild index folder
             await debouncedIndexBuild(projectRoot, chalk)

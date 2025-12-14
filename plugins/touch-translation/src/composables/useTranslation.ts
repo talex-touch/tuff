@@ -148,7 +148,7 @@ export function useTranslation() {
     })
 
     // 等待所有翻译完成
-    const results = await Promise.allSettled(promises)
+    await Promise.allSettled(promises)
 
     currentResponse.isLoading = false
     currentResponse.isComplete = true

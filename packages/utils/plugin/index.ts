@@ -542,7 +542,7 @@ export interface IManifest {
 }
 
 export * from './install'
-export type { IPluginLogger, LogDataType, LogItem, LogLevel } from './log/types'
+export type { IPluginLogger, LogDataType, LogItem } from './log/types'
 export * from './providers'
 export * from './risk'
 export * from './sdk/index'

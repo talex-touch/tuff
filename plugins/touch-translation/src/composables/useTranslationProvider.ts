@@ -146,6 +146,7 @@ export function useTranslationProvider() {
           (provider as BingTranslateProvider).config = {
             apiKey: '',
             region: 'global',
+            apiUrl: 'https://api.cognitive.microsofttranslator.com/translate',
           }
         }
         else if (provider.id === 'custom') {
