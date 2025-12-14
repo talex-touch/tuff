@@ -842,11 +842,19 @@ class OcrService {
     ).slice(0, 5)
   }
 
+  /**
+   * Generate embedding vector for OCR text if embedding capability is configured
+   */
   private async generateEmbedding(text: string): Promise<number[] | null> {
     if (!text || text.length < 8) {
       return null
     }
+
     const capabilityOptions = getCapabilityOptions('embedding.generate')
+    if (!capabilityOptions.allowedProviderIds?.length) {
+      return null
+    }
+
     try {
       const response = await ai.embedding.generate(
         { text },

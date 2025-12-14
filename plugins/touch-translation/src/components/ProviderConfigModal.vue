@@ -25,6 +25,10 @@ const configForm = reactive({
   region: 'global',
   model: 'gpt-3.5-turbo',
   prompt: '请将以下文本翻译成中文，只返回翻译结果：',
+  appId: '',
+  secretId: '',
+  secretKey: '',
+  email: '',
 })
 
 const isTestingConnection = ref(false)
@@ -100,7 +104,7 @@ async function testConnection() {
     const tempProvider = new ProviderClass()
     tempProvider.config = { ...tempProvider.config, ...configForm }
 
-    await tempProvider.translate({ text: 'test', to: 'zh' })
+    await tempProvider.translate({ text: 'test', targetLanguage: 'zh' })
 
     testResult.value = { success: true, message: '连接成功！' }
   }
