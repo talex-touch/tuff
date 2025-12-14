@@ -4,16 +4,22 @@ import { useDebounceFn } from '@vueuse/core'
 import { onMounted, watch } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
-type ResizeMode = 'max' | 'collapse'
-
 interface UseResizeOptions {
   results: ComputedRef<TuffItem[]>
   activeActivations: Ref<IProviderActivate[] | null>
   loading: Ref<boolean>
 }
 
-function sendResizeCommand(mode: ResizeMode): void {
-  touchChannel.sendSync('core-box:expand', { mode })
+function sendExpandCommand(length: number, forceMax: boolean = false): void {
+  if (forceMax) {
+    touchChannel.sendSync('core-box:expand', { mode: 'max' })
+  } else {
+    touchChannel.sendSync('core-box:expand', { length })
+  }
+}
+
+function sendCollapseCommand(): void {
+  touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
 }
 
 export function useResize(options: UseResizeOptions): void {
@@ -28,16 +34,23 @@ export function useResize(options: UseResizeOptions): void {
 
   const debouncedCollapse = useDebounceFn(() => {
     if (checkShouldCollapse()) {
-      sendResizeCommand('collapse')
+      sendCollapseCommand()
     }
   }, 50)
 
-  function checkExpand(): void {
-    const hasResults = results.value.length > 0
+  function updateHeight(): void {
+    const resultCount = results.value.length
     const hasActiveProviders = !!(activeActivations.value?.length)
 
-    if (hasResults || hasActiveProviders) {
-      sendResizeCommand('max')
+    // When activeProvider exists, expand to max
+    if (hasActiveProviders) {
+      sendExpandCommand(resultCount, true)
+      return
+    }
+
+    if (resultCount > 0) {
+      // Always send current result count for accurate height calculation
+      sendExpandCommand(resultCount)
     }
   }
 
@@ -46,16 +59,21 @@ export function useResize(options: UseResizeOptions): void {
     // Give a brief delay for initial data to load
     setTimeout(() => {
       if (checkShouldCollapse()) {
-        sendResizeCommand('collapse')
+        sendCollapseCommand()
       }
     }, 100)
   })
 
+  // Watch results - always recalculate height on change
   watch(
     () => results.value,
     (newResults) => {
-      if (newResults.length > 0) checkExpand()
-      else debouncedCollapse()
+      if (newResults.length > 0) {
+        // Always update height when results change
+        updateHeight()
+      } else {
+        debouncedCollapse()
+      }
     },
     { deep: true }
   )
@@ -69,11 +87,16 @@ export function useResize(options: UseResizeOptions): void {
     }
   )
 
+  // When activeActivations change, expand to max
   watch(
     () => activeActivations.value,
     (activations) => {
-      if (activations && activations.length > 0) sendResizeCommand('max')
-      else debouncedCollapse()
+      if (activations && activations.length > 0) {
+        // Active provider: expand to max
+        sendExpandCommand(results.value.length, true)
+      } else {
+        debouncedCollapse()
+      }
     }
   )
 }

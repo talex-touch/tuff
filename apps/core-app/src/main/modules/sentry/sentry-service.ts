@@ -43,6 +43,27 @@ interface SearchMetrics {
   sessionId: string
 }
 
+// Nexus telemetry batch upload settings
+const NEXUS_TELEMETRY_BATCH_SIZE = 20
+const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000 // 1 minute
+const NEXUS_API_BASE = 'https://nexus.talex.me'
+
+interface NexusTelemetryEvent {
+  eventType: 'search' | 'visit' | 'error' | 'feature_use'
+  userId?: string
+  deviceFingerprint?: string
+  platform?: string
+  version?: string
+  region?: string
+  searchQuery?: string
+  searchDurationMs?: number
+  searchResultCount?: number
+  providerTimings?: Record<string, number>
+  inputTypes?: string[]
+  metadata?: Record<string, unknown>
+  isAnonymous: boolean
+}
+
 /**
  * Generate device fingerprint based on system information
  */
@@ -92,6 +113,10 @@ export class SentryServiceModule extends BaseModule {
   private searchCount = 0
   private searchMetricsBuffer: SearchMetrics[] = []
   private isInitialized = false
+  
+  // Nexus telemetry batch upload
+  private nexusTelemetryBuffer: NexusTelemetryEvent[] = []
+  private nexusFlushTimer: NodeJS.Timeout | null = null
 
   constructor() {
     super(SentryServiceModule.key)
@@ -487,6 +512,78 @@ export class SentryServiceModule extends BaseModule {
    */
   getSearchCount(): number {
     return this.searchCount
+  }
+
+  /**
+   * Queue telemetry event for batch upload to Nexus
+   */
+  queueNexusTelemetry(event: Omit<NexusTelemetryEvent, 'isAnonymous'>): void {
+    if (!this.config.enabled) return
+
+    const telemetryEvent: NexusTelemetryEvent = {
+      ...event,
+      deviceFingerprint: this.config.anonymous ? undefined : this.deviceFingerprint || undefined,
+      platform: process.platform,
+      version: getAppVersionSafe(),
+      isAnonymous: this.config.anonymous,
+    }
+
+    this.nexusTelemetryBuffer.push(telemetryEvent)
+
+    // Flush if buffer reaches batch size
+    if (this.nexusTelemetryBuffer.length >= NEXUS_TELEMETRY_BATCH_SIZE) {
+      this.flushNexusTelemetry()
+    }
+
+    // Set up periodic flush timer if not already running
+    if (!this.nexusFlushTimer) {
+      this.nexusFlushTimer = setInterval(() => {
+        this.flushNexusTelemetry()
+      }, NEXUS_TELEMETRY_FLUSH_INTERVAL)
+    }
+  }
+
+  /**
+   * Flush buffered telemetry events to Nexus
+   */
+  private async flushNexusTelemetry(): Promise<void> {
+    if (this.nexusTelemetryBuffer.length === 0) return
+
+    const events = [...this.nexusTelemetryBuffer]
+    this.nexusTelemetryBuffer = []
+
+    try {
+      // Batch upload - send all events in one request
+      const response = await fetch(`${NEXUS_API_BASE}/api/telemetry/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events }),
+      })
+
+      if (!response.ok) {
+        sentryLog.warn('Failed to upload telemetry batch', { meta: { status: response.status } })
+        // Put events back in buffer for retry (max 100)
+        this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
+      } else {
+        sentryLog.debug('Telemetry batch uploaded', { meta: { count: events.length } })
+      }
+    } catch (error) {
+      sentryLog.warn('Telemetry upload failed', { meta: { error: error instanceof Error ? error.message : String(error) } })
+      // Put events back in buffer for retry (max 100)
+      this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
+    }
+  }
+
+  /**
+   * Stop Nexus telemetry flush timer
+   */
+  stopNexusTelemetryTimer(): void {
+    if (this.nexusFlushTimer) {
+      clearInterval(this.nexusFlushTimer)
+      this.nexusFlushTimer = null
+    }
+    // Flush remaining events
+    this.flushNexusTelemetry()
   }
 }
 

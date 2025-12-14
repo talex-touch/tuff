@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useDashboardTeamData, useSubscriptionData, useTeamInvitesData } from '~/composables/useDashboardData'
 
 const { t } = useI18n()
@@ -106,6 +106,77 @@ function copyInviteLink(code: string) {
   navigator.clipboard.writeText(url)
 }
 
+// Disband team
+const showDisbandModal = ref(false)
+const disbanding = ref(false)
+const disbandConfirm = ref('')
+
+async function disbandTeam() {
+  if (disbandConfirm.value !== 'DISBAND') return
+  disbanding.value = true
+  try {
+    await $fetch('/api/dashboard/team/disband', { method: 'POST' })
+    showDisbandModal.value = false
+    disbandConfirm.value = ''
+    await refreshTeam()
+  } catch (error: any) {
+    console.error('Failed to disband team:', error)
+  } finally {
+    disbanding.value = false
+  }
+}
+
+// Team quota
+const teamQuota = ref<any>(null)
+const quotaLoading = ref(false)
+
+const memberUsageMap = ref<Record<string, { aiRequestsUsed: number; aiTokensUsed: number }>>({})
+
+const hasTeam = computed(() => !!team.value?.organization)
+const isTeamAdmin = computed(() => team.value?.organization?.role === 'admin' || team.value?.organization?.role === 'org:admin')
+
+function calcNextResetDate(weekStartDate: string): Date {
+  const base = new Date(`${weekStartDate}T00:00:00.000Z`)
+  return new Date(base.getTime() + 7 * 24 * 60 * 60 * 1000)
+}
+
+async function fetchTeamQuota() {
+  if (!team.value?.organization) return
+  quotaLoading.value = true
+  try {
+    const res = await $fetch('/api/dashboard/team/quota')
+    teamQuota.value = res.quota
+  } catch (error) {
+    console.error('Failed to fetch team quota:', error)
+  } finally {
+    quotaLoading.value = false
+  }
+}
+
+async function fetchMemberUsage() {
+  if (!team.value?.organization) return
+  try {
+    const res = await $fetch('/api/dashboard/team/member-usage') as any
+    const nextMap: Record<string, { aiRequestsUsed: number; aiTokensUsed: number }> = {}
+    for (const m of (res.members ?? [])) {
+      nextMap[m.userId] = {
+        aiRequestsUsed: m.usage?.aiRequestsUsed ?? 0,
+        aiTokensUsed: m.usage?.aiTokensUsed ?? 0,
+      }
+    }
+    memberUsageMap.value = nextMap
+  } catch (error) {
+    console.error('Failed to fetch member usage:', error)
+  }
+}
+
+watch(hasTeam, (has) => {
+  if (has) {
+    fetchTeamQuota()
+    fetchMemberUsage()
+  }
+}, { immediate: true })
+
 const teamStatusLabels = computed<Record<string, string>>(() => ({
   active: t('dashboard.sections.team.memberStatus.active'),
   automation: t('dashboard.sections.team.memberStatus.automation'),
@@ -131,8 +202,6 @@ const planIcons: Record<string, string> = {
   TEAM: 'i-carbon-group',
   ENTERPRISE: 'i-carbon-enterprise',
 }
-
-const hasTeam = computed(() => !!team.value?.organization)
 </script>
 
 <template>
@@ -144,7 +213,7 @@ const hasTeam = computed(() => !!team.value?.organization)
           <span :class="[planIcons[plan] || planIcons.FREE, 'text-xl']" />
         </div>
         <div>
-          <span class="text-xs text-black/50 dark:text-light/50">Current Plan</span>
+          <span class="text-xs text-black/50 dark:text-light/50">{{ t('dashboard.sections.team.currentPlan', 'Current Plan') }}</span>
           <div class="flex items-center gap-2">
             <span class="font-semibold text-black dark:text-light">{{ plan }}</span>
             <span v-if="subscription?.expiresAt" class="text-xs text-black/50 dark:text-light/50">
@@ -167,61 +236,29 @@ const hasTeam = computed(() => !!team.value?.organization)
           :disabled="activating || !activationCode.trim()"
           @click="activateCode"
         >
-          {{ activating ? '...' : 'Activate' }}
+          {{ activating ? '...' : t('dashboard.sections.team.activate', 'Activate') }}
         </button>
-      </div>
-    </div>
-
-    <!-- Quota Bars - Inline -->
-    <div v-if="subscription?.features" class="flex gap-6">
-      <div class="flex-1">
-        <div class="mb-1 flex items-center justify-between text-xs">
-          <span class="text-black/50 dark:text-light/50">AI Requests</span>
-          <span class="font-medium text-black dark:text-light">
-            {{ subscription.features.aiRequests.used }}/{{ subscription.features.aiRequests.limit === -1 ? '∞' : subscription.features.aiRequests.limit }}
-          </span>
-        </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-light/10">
-          <div
-            class="h-full rounded-full bg-blue-500 transition-all"
-            :style="{ width: subscription.features.aiRequests.limit === -1 ? '0%' : `${Math.min(100, (subscription.features.aiRequests.used / subscription.features.aiRequests.limit) * 100)}%` }"
-          />
-        </div>
-      </div>
-      <div class="flex-1">
-        <div class="mb-1 flex items-center justify-between text-xs">
-          <span class="text-black/50 dark:text-light/50">AI Tokens</span>
-          <span class="font-medium text-black dark:text-light">
-            {{ (subscription.features.aiTokens.used / 1000).toFixed(1) }}k/{{ subscription.features.aiTokens.limit === -1 ? '∞' : `${(subscription.features.aiTokens.limit / 1000).toFixed(0)}k` }}
-          </span>
-        </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-light/10">
-          <div
-            class="h-full rounded-full bg-purple-500 transition-all"
-            :style="{ width: subscription.features.aiTokens.limit === -1 ? '0%' : `${Math.min(100, (subscription.features.aiTokens.used / subscription.features.aiTokens.limit) * 100)}%` }"
-          />
-        </div>
       </div>
     </div>
 
     <!-- Team Section -->
     <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
       <div class="mb-4 flex items-center justify-between">
-        <h2 class="font-semibold text-black dark:text-light">Team</h2>
+        <h2 class="font-semibold text-black dark:text-light">{{ t('dashboard.sections.team.title', 'Team') }}</h2>
         <div class="flex gap-2">
           <button
             v-if="!hasTeam"
             class="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-light dark:text-dark dark:hover:bg-light/80"
             @click="showCreateTeamModal = true"
           >
-            Create Team
+            {{ t('dashboard.sections.team.createTeam', 'Create Team') }}
           </button>
           <button
             v-if="hasTeam"
             class="rounded-lg bg-black/10 px-4 py-2 text-sm font-medium text-black transition hover:bg-black/20 dark:bg-light/10 dark:text-light dark:hover:bg-light/20"
             @click="showInviteModal = true"
           >
-            Invite
+            {{ t('dashboard.sections.team.invite', 'Invite') }}
           </button>
         </div>
       </div>
@@ -233,7 +270,7 @@ const hasTeam = computed(() => !!team.value?.organization)
       <div v-else-if="!hasTeam" class="py-8 text-center">
         <span class="i-carbon-group mb-3 text-4xl text-black/20 dark:text-light/20" />
         <p class="text-sm text-black/50 dark:text-light/50">
-          Create a team to collaborate with others
+          {{ t('dashboard.sections.team.emptyState', 'Create a team to collaborate with others') }}
         </p>
       </div>
 
@@ -246,6 +283,62 @@ const hasTeam = computed(() => !!team.value?.organization)
             <p class="text-xs text-black/50 dark:text-light/50">
               {{ team?.organization?.role }} · {{ team?.slots?.used ?? 0 }}/{{ team?.slots?.total ?? 0 }} seats
             </p>
+          </div>
+          <button
+            v-if="isTeamAdmin"
+            class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
+            @click="showDisbandModal = true"
+          >
+            {{ t('dashboard.sections.team.disband', 'Disband') }}
+          </button>
+        </div>
+
+        <!-- Team Quota (Weekly Reset) -->
+        <div v-if="teamQuota" class="mb-4 rounded-xl bg-gradient-to-r from-blue-500/5 to-purple-500/5 p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <span class="text-xs font-medium text-black/60 dark:text-light/60">{{ t('dashboard.sections.team.weeklyUsage', 'Team Usage (Weekly)') }}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-black/40 dark:text-light/40">
+                Resets {{ calcNextResetDate(teamQuota.weekStartDate).toLocaleDateString() }}
+              </span>
+              <button
+                v-if="isTeamAdmin"
+                class="rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 px-3 py-1 text-xs font-medium text-white transition hover:opacity-90"
+                @click="() => {}"
+              >
+                {{ t('dashboard.sections.team.buyMore', 'Buy more') }}
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <div class="mb-1 flex items-center justify-between text-xs">
+                <span class="text-black/50 dark:text-light/50">{{ t('dashboard.sections.team.aiRequests', 'AI Requests') }}</span>
+                <span class="font-medium text-black dark:text-light">
+                  {{ teamQuota.aiRequestsUsed }}/{{ teamQuota.aiRequestsLimit }}
+                </span>
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-light/10">
+                <div
+                  class="h-full rounded-full bg-blue-500 transition-all"
+                  :style="{ width: `${Math.min(100, (teamQuota.aiRequestsUsed / teamQuota.aiRequestsLimit) * 100)}%` }"
+                />
+              </div>
+            </div>
+            <div>
+              <div class="mb-1 flex items-center justify-between text-xs">
+                <span class="text-black/50 dark:text-light/50">{{ t('dashboard.sections.team.aiTokens', 'AI Tokens') }}</span>
+                <span class="font-medium text-black dark:text-light">
+                  {{ (teamQuota.aiTokensUsed / 1000).toFixed(1) }}k/{{ (teamQuota.aiTokensLimit / 1000).toFixed(0) }}k
+                </span>
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-light/10">
+                <div
+                  class="h-full rounded-full bg-purple-500 transition-all"
+                  :style="{ width: `${Math.min(100, (teamQuota.aiTokensUsed / teamQuota.aiTokensLimit) * 100)}%` }"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -265,13 +358,20 @@ const hasTeam = computed(() => !!team.value?.organization)
                 <p class="text-xs text-black/50 dark:text-light/50">{{ member.email || member.role }}</p>
               </div>
             </div>
-            <span class="text-xs text-black/40 dark:text-light/40">{{ resolveTeamStatus(member.status) }}</span>
+            <div class="text-right">
+              <div class="text-[11px] text-black/40 dark:text-light/40">
+                {{ (memberUsageMap[member.id]?.aiRequestsUsed ?? 0) }} req · {{ ((memberUsageMap[member.id]?.aiTokensUsed ?? 0) / 1000).toFixed(1) }}k tok
+              </div>
+              <div class="text-[11px] text-black/30 dark:text-light/30">
+                {{ resolveTeamStatus(member.status) }}
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Pending Invites -->
         <div v-if="invites.length > 0" class="mt-4 border-t border-black/10 pt-4 dark:border-light/10">
-          <p class="mb-2 text-xs text-black/50 dark:text-light/50">Pending Invites</p>
+          <p class="mb-2 text-xs text-black/50 dark:text-light/50">{{ t('dashboard.sections.team.pendingInvites', 'Pending Invites') }}</p>
           <div class="space-y-2">
             <div
               v-for="invite in invites"
@@ -313,9 +413,9 @@ const hasTeam = computed(() => !!team.value?.organization)
       @click.self="showCreateTeamModal = false"
     >
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-dark">
-        <h3 class="font-semibold text-black dark:text-light">Create Team</h3>
+        <h3 class="font-semibold text-black dark:text-light">{{ t('dashboard.sections.team.modal.createTitle', 'Create Team') }}</h3>
         <p class="mt-1 text-sm text-black/50 dark:text-light/50">
-          Start collaborating with your team members
+          {{ t('dashboard.sections.team.modal.createDesc', 'Start collaborating with your team members') }}
         </p>
         <div class="mt-4">
           <input
@@ -331,14 +431,14 @@ const hasTeam = computed(() => !!team.value?.organization)
             class="rounded-lg px-4 py-2 text-sm text-black/60 transition hover:text-black dark:text-light/60 dark:hover:text-light"
             @click="showCreateTeamModal = false"
           >
-            Cancel
+            {{ t('dashboard.sections.team.modal.cancel', 'Cancel') }}
           </button>
           <button
             class="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 disabled:opacity-50 dark:bg-light dark:text-dark dark:hover:bg-light/80"
             :disabled="creatingTeam || !newTeamName.trim()"
             @click="createTeam"
           >
-            {{ creatingTeam ? 'Creating...' : 'Create' }}
+            {{ creatingTeam ? t('dashboard.sections.team.modal.creating', 'Creating...') : t('dashboard.sections.team.modal.create', 'Create') }}
           </button>
         </div>
       </div>
@@ -353,9 +453,9 @@ const hasTeam = computed(() => !!team.value?.organization)
       @click.self="showInviteModal = false"
     >
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-dark">
-        <h3 class="font-semibold text-black dark:text-light">Invite Member</h3>
+        <h3 class="font-semibold text-black dark:text-light">{{ t('dashboard.sections.team.modal.inviteTitle', 'Invite Member') }}</h3>
         <p class="mt-1 text-sm text-black/50 dark:text-light/50">
-          Add someone to your team
+          {{ t('dashboard.sections.team.modal.inviteDesc', 'Add someone to your team') }}
         </p>
         <div class="mt-4 space-y-3">
           <input
@@ -377,14 +477,57 @@ const hasTeam = computed(() => !!team.value?.organization)
             class="rounded-lg px-4 py-2 text-sm text-black/60 transition hover:text-black dark:text-light/60 dark:hover:text-light"
             @click="showInviteModal = false"
           >
-            Cancel
+            {{ t('dashboard.sections.team.modal.cancel', 'Cancel') }}
           </button>
           <button
             class="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 disabled:opacity-50 dark:bg-light dark:text-dark dark:hover:bg-light/80"
             :disabled="creating"
             @click="createInvite"
           >
-            {{ creating ? 'Creating...' : 'Create Invite' }}
+            {{ creating ? t('dashboard.sections.team.modal.creating', 'Creating...') : t('dashboard.sections.team.modal.createInvite', 'Create Invite') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Disband Team Modal -->
+  <Teleport to="body">
+    <div
+      v-if="showDisbandModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      @click.self="showDisbandModal = false"
+    >
+      <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-dark">
+        <h3 class="font-semibold text-red-500">{{ t('dashboard.sections.team.modal.disbandTitle', 'Disband Team') }}</h3>
+        <p class="mt-1 text-sm text-black/50 dark:text-light/50">
+          {{ t('dashboard.sections.team.modal.disbandDesc', 'This action cannot be undone. All members will be removed and team data will be deleted.') }}
+        </p>
+        <div class="mt-4">
+          <p class="mb-2 text-xs text-black/60 dark:text-light/60">
+            Type <code class="rounded bg-red-500/10 px-1 py-0.5 text-red-500">DISBAND</code> to confirm
+          </p>
+          <input
+            v-model="disbandConfirm"
+            type="text"
+            placeholder="DISBAND"
+            class="w-full rounded-lg border-0 bg-red-500/5 px-4 py-3 text-sm text-red-600 placeholder-red-300 outline-none dark:text-red-400 dark:placeholder-red-800"
+            @keyup.enter="disbandTeam"
+          >
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            class="rounded-lg px-4 py-2 text-sm text-black/60 transition hover:text-black dark:text-light/60 dark:hover:text-light"
+            @click="showDisbandModal = false; disbandConfirm = ''"
+          >
+            {{ t('dashboard.sections.team.modal.cancel', 'Cancel') }}
+          </button>
+          <button
+            class="rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600 disabled:opacity-50"
+            :disabled="disbanding || disbandConfirm !== 'DISBAND'"
+            @click="disbandTeam"
+          >
+            {{ disbanding ? t('dashboard.sections.team.modal.disbanding', 'Disbanding...') : t('dashboard.sections.team.modal.disbandConfirm', 'Disband Team') }}
           </button>
         </div>
       </div>

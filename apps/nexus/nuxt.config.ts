@@ -45,8 +45,8 @@ export default defineNuxtConfig({
     },
     markdown: {
       toc: {
-        depth: 4,
-        searchDepth: 4,
+        depth: 3,
+        searchDepth: 3,
       },
     },
   },

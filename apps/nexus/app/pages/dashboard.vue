@@ -28,10 +28,11 @@ const sectionPaths: Record<string, string> = {
   overview: '/dashboard/overview',
   plugins: '/dashboard/plugins',
   team: '/dashboard/team',
+  'api-keys': '/dashboard/api-keys',
   updates: '/dashboard/updates',
   images: '/dashboard/images',
-  account: '/dashboard/account',
-  devices: '/dashboard/devices',
+  codes: '/dashboard/admin/codes',
+  analytics: '/dashboard/admin/analytics',
   privacy: '/dashboard/privacy',
 }
 
@@ -52,6 +53,11 @@ const menuItems = computed(() => {
       label: t('dashboard.sections.menu.team'),
       section: 'main',
     },
+    {
+      id: 'api-keys',
+      label: t('dashboard.sections.menu.apiKeys', 'API Keys'),
+      section: 'main',
+    },
   ]
 
   if (isAdmin.value) {
@@ -65,6 +71,16 @@ const menuItems = computed(() => {
       label: t('dashboard.sections.menu.images', 'Resources'),
       section: 'main',
     })
+    items.push({
+      id: 'codes',
+      label: t('dashboard.sections.menu.codes', 'Activation Codes'),
+      section: 'main',
+    })
+    items.push({
+      id: 'analytics',
+      label: t('dashboard.sections.menu.analytics', 'Analytics'),
+      section: 'main',
+    })
   }
 
   return items.map(item => ({
@@ -76,27 +92,21 @@ const menuItems = computed(() => {
 const accountMenuItems = computed(() => {
   return [
     {
-      id: 'account',
-      label: t('dashboard.sections.menu.account', '账户设置'),
-      icon: 'i-carbon-user-avatar',
-    },
-    {
-      id: 'devices',
-      label: t('dashboard.sections.menu.devices', '设备管理'),
-      icon: 'i-carbon-devices',
-    },
-    {
       id: 'privacy',
       label: t('dashboard.sections.menu.privacy', '隐私设置'),
       icon: 'i-carbon-security',
     },
   ].map(item => ({
     ...item,
-    to: sectionPaths[item.id] ?? '/dashboard/account',
+    to: sectionPaths[item.id] ?? '/dashboard/privacy',
   }))
 })
 
 const activeSection = computed(() => {
+  if (route.path.startsWith('/dashboard/admin/codes'))
+    return 'codes'
+  if (route.path.startsWith('/dashboard/admin/analytics'))
+    return 'analytics'
   const segments = route.path.split('/').filter(Boolean)
   const section = segments[1] ?? 'overview'
   if (sectionPaths[section])
@@ -111,7 +121,7 @@ const activeSection = computed(() => {
       <section class="grid gap-8 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]">
         <aside class="sticky top-24 space-y-6">
           <nav
-            class="relative border border-primary/10 rounded-3xl bg-white/80 dark:border-light/10 dark:bg-dark/70"
+            class="relative border border-primary/10 rounded-3xl bg-white/80 p-5 dark:border-light/10 dark:bg-dark/70"
             aria-label="Dashboard sections"
           >
             <p class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/80">
@@ -142,7 +152,7 @@ const activeSection = computed(() => {
 
           <!-- Account Menu -->
           <nav
-            class="relative border border-primary/10 rounded-3xl bg-white/80 dark:border-light/10 dark:bg-dark/70"
+            class="relative border border-primary/10 rounded-3xl bg-white/80 p-5 dark:border-light/10 dark:bg-dark/70"
             aria-label="Account settings"
           >
             <p class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/80">
@@ -173,15 +183,6 @@ const activeSection = computed(() => {
               </li>
             </ul>
           </nav>
-
-          <div class="border border-black/10 rounded-3xl border-solid p-4 dark:border-white/10">
-            <p class="text-xs text-black/60 tracking-widest uppercase dark:text-light/60">
-              {{ t('dashboard.sections.menu.betaHeading') }}
-            </p>
-            <p class="mt-2 text-sm text-black/75 dark:text-light/80">
-              {{ t('dashboard.sections.menu.betaDescription') }}
-            </p>
-          </div>
         </aside>
 
         <div class="space-y-8">

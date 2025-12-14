@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
       const members = orgMembers.data.map((member) => {
         const publicUser = member.publicUserData
         return {
-          id: member.id,
+          id: publicUser?.userId || member.id,
           name: publicUser?.firstName
             ? `${publicUser.firstName} ${publicUser.lastName || ''}`.trim()
             : publicUser?.identifier || 'Unknown',

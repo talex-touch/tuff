@@ -398,21 +398,30 @@ export class WindowManager {
 
     const baseLeft = rect.x + (rect.width - windowWidth) / 2
     
-    // Position calculation: customTopPercent > default (35% collapsed / above-center expanded)
-    const isCollapsed = windowHeight <= 72
+    // Position calculation depends on animation setting
+    const settings = this.getAppSettingConfig()
+    const animationEnabled = settings.animation?.coreBoxResize !== false
+    
     let top: number
     
     if (this.customTopPercent !== null) {
       // Use custom position if set
       top = rect.y + Math.round(rect.height * this.customTopPercent) - Math.round(windowHeight / 2)
-    } else if (isCollapsed) {
-      // 35% from top of screen for collapsed state
-      top = rect.y + Math.round(rect.height * 0.35) - Math.round(windowHeight / 2)
+    } else if (!animationEnabled) {
+      // Animation disabled: fixed position at 25% from top, window expands downward
+      top = rect.y + Math.round(rect.height * 0.25)
     } else {
-      // Slightly above center for expanded state
-      const baseTop = rect.y + (rect.height - windowHeight) / 2
-      const offsetTop = rect.height * 0.08
-      top = Math.round(baseTop - offsetTop)
+      // Animation enabled: different positions for collapsed vs expanded
+      const isCollapsed = windowHeight <= 72
+      if (isCollapsed) {
+        // 35% from top of screen for collapsed state
+        top = rect.y + Math.round(rect.height * 0.35) - Math.round(windowHeight / 2)
+      } else {
+        // Slightly above center for expanded state
+        const baseTop = rect.y + (rect.height - windowHeight) / 2
+        const offsetTop = rect.height * 0.08
+        top = Math.round(baseTop - offsetTop)
+      }
     }
 
     let left = Math.round(baseLeft)
@@ -601,7 +610,10 @@ export class WindowManager {
     const bounds = this.calculateCoreBoxBounds(display, { width: 900, height: safeHeight })
     if (!bounds) return
 
-    if (currentWindow.window.isVisible()) {
+    const settings = this.getAppSettingConfig()
+    const animationEnabled = settings.animation?.coreBoxResize !== false
+
+    if (currentWindow.window.isVisible() && animationEnabled) {
       this.animateWindowBounds(currentWindow, bounds, { minHeight: safeHeight })
     } else {
       this.stopBoundsAnimation()

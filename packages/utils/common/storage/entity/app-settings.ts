@@ -50,8 +50,18 @@ const _appSettingOriginData = {
     listItemStagger: true,
     /** 结果切换过渡动画 */
     resultTransition: true,
-    /** CoreBox 窗口展开收缩动画 */
-    coreBoxResize: true,
+    /** CoreBox 窗口展开收缩动画 (Beta) */
+    coreBoxResize: false,
+  },
+  background: {
+    /** 背景图来源: 'bing' | 'custom' | 'none' */
+    source: 'bing' as 'bing' | 'custom' | 'none',
+    /** 自定义背景图路径 */
+    customPath: '',
+    /** 背景图模糊度 0-20 */
+    blur: 0,
+    /** 背景图透明度 0-100 */
+    opacity: 100,
   },
   coreBox: {
     /** 自定义 placeholder 文本，空则使用默认 */
