@@ -706,14 +706,62 @@ export class TouchPlugin implements ITouchPlugin {
 
     const boxItemManager = getBoxItemManager()
 
+    /**
+     * Process item icons - convert relative paths to absolute paths or dev server URLs
+     */
+    const processItemIcon = async (item: TuffItem): Promise<TuffItem> => {
+      const processedItem = { ...item }
+
+      // Process item.icon
+      if (processedItem.icon && processedItem.icon.type === 'file') {
+        const icon = new TuffIconImpl(
+          this.pluginPath,
+          processedItem.icon.type,
+          processedItem.icon.value,
+          this.dev
+        )
+        await icon.init()
+        processedItem.icon = {
+          type: icon.type,
+          value: icon.value,
+          status: icon.status
+        }
+      }
+
+      // Process render.basic.icon
+      if (
+        processedItem.render?.basic?.icon &&
+        typeof processedItem.render.basic.icon === 'object' &&
+        processedItem.render.basic.icon.type === 'file'
+      ) {
+        const basicIcon = processedItem.render.basic.icon
+        const icon = new TuffIconImpl(this.pluginPath, basicIcon.type, basicIcon.value, this.dev)
+        await icon.init()
+        processedItem.render = {
+          ...processedItem.render,
+          basic: {
+            ...processedItem.render.basic,
+            icon: {
+              type: icon.type,
+              value: icon.value,
+              status: icon.status
+            }
+          }
+        }
+      }
+
+      return processedItem
+    }
+
     // BoxItem SDK 工具对象
     const boxItems = {
       /**
        * 推送单个 item（创建或更新）
        * @param item - 要推送的 item
        */
-      push: (item: TuffItem) => {
-        const enriched = this.enrichItemWithSource(item)
+      push: async (item: TuffItem) => {
+        const processed = await processItemIcon(item)
+        const enriched = this.enrichItemWithSource(processed)
         boxItemManager.upsert(enriched)
       },
 
@@ -721,8 +769,9 @@ export class TouchPlugin implements ITouchPlugin {
        * 批量推送 items
        * @param items - 要推送的 items 数组
        */
-      pushItems: (items: TuffItem[]) => {
-        const enriched = items.map((item) => this.enrichItemWithSource(item))
+      pushItems: async (items: TuffItem[]) => {
+        const processed = await Promise.all(items.map(processItemIcon))
+        const enriched = processed.map((item) => this.enrichItemWithSource(item))
         boxItemManager.batchUpsert(enriched)
       },
 
@@ -774,6 +823,7 @@ export class TouchPlugin implements ITouchPlugin {
         )
 
         // 使用 TuffIconImpl 解析 items 中的 icon 相对路径为绝对路径
+        // 对于 dev 模式插件，icon 会被转换为 dev server URL
         const processedItems = await Promise.all(
           items.map(async (item) => {
             const processedItem = { ...item }
@@ -783,7 +833,8 @@ export class TouchPlugin implements ITouchPlugin {
               const icon = new TuffIconImpl(
                 this.pluginPath,
                 processedItem.icon.type,
-                processedItem.icon.value
+                processedItem.icon.value,
+                this.dev
               )
               await icon.init()
               processedItem.icon = {
@@ -800,7 +851,7 @@ export class TouchPlugin implements ITouchPlugin {
               processedItem.render.basic.icon.type === 'file'
             ) {
               const basicIcon = processedItem.render.basic.icon
-              const icon = new TuffIconImpl(this.pluginPath, basicIcon.type, basicIcon.value)
+              const icon = new TuffIconImpl(this.pluginPath, basicIcon.type, basicIcon.value, this.dev)
               await icon.init()
               processedItem.render.basic.icon = {
                 type: icon.type,

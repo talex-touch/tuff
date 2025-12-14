@@ -1,7 +1,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
 import { useDebounceFn } from '@vueuse/core'
-import { onMounted, watch } from 'vue'
+import { nextTick, onMounted, watch } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface UseResizeOptions {
@@ -9,6 +9,9 @@ interface UseResizeOptions {
   activeActivations: Ref<IProviderActivate[] | null>
   loading: Ref<boolean>
 }
+
+// Debounce time for collapse operations - longer to avoid flickering
+const COLLAPSE_DEBOUNCE_MS = 100
 
 function sendExpandCommand(length: number, forceMax: boolean = false): void {
   if (forceMax) {
@@ -22,6 +25,25 @@ function sendCollapseCommand(): void {
   touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
 }
 
+/**
+ * Calculate actual content height from DOM
+ * Returns the scroll height of the result container + header height
+ */
+function calculateActualHeight(): number {
+  const scrollArea = document.querySelector('.CoreBoxRes-Main > .scroll-area')
+  if (!scrollArea) {
+    return 0
+  }
+  
+  // Get the scroll height (includes overflow content)
+  const scrollHeight = scrollArea.scrollHeight
+  // Header is 60px, footer is ~44px
+  const headerHeight = 60
+  const footerHeight = 44
+  
+  return Math.min(scrollHeight + headerHeight + footerHeight, 600)
+}
+
 export function useResize(options: UseResizeOptions): void {
   const { results, activeActivations, loading } = options
 
@@ -29,28 +51,63 @@ export function useResize(options: UseResizeOptions): void {
     const hasResults = results.value.length > 0
     const hasActiveProviders = !!(activeActivations.value?.length)
     const isLoading = loading.value
-    return !hasResults && !hasActiveProviders && !isLoading
+    
+    // Never collapse when there's an active provider (plugin UI mode)
+    if (hasActiveProviders) {
+      return false
+    }
+    
+    return !hasResults && !isLoading
   }
 
   const debouncedCollapse = useDebounceFn(() => {
     if (checkShouldCollapse()) {
       sendCollapseCommand()
     }
-  }, 50)
+  }, COLLAPSE_DEBOUNCE_MS)
 
-  function updateHeight(): void {
-    const resultCount = results.value.length
+  // Debounced height update based on actual DOM content
+  const debouncedUpdateHeight = useDebounceFn(() => {
     const hasActiveProviders = !!(activeActivations.value?.length)
-
-    // When activeProvider exists, expand to max
+    
+    // When activeProvider exists, expand to max (plugin UI mode)
     if (hasActiveProviders) {
-      sendExpandCommand(resultCount, true)
+      sendExpandCommand(0, true)
       return
     }
 
+    const resultCount = results.value.length
     if (resultCount > 0) {
-      // Always send current result count for accurate height calculation
+      // Use actual DOM height for more accurate sizing
+      const actualHeight = calculateActualHeight()
+      if (actualHeight > 60) {
+        touchChannel.sendSync('core-box:set-height', { height: actualHeight })
+      } else {
+        // Fallback to count-based calculation
+        sendExpandCommand(resultCount)
+      }
+    } else {
+      debouncedCollapse()
+    }
+  }, 50)
+
+  function updateHeight(): void {
+    const hasActiveProviders = !!(activeActivations.value?.length)
+
+    // When activeProvider exists, expand to max immediately
+    if (hasActiveProviders) {
+      sendExpandCommand(0, true)
+      return
+    }
+
+    const resultCount = results.value.length
+    if (resultCount > 0) {
+      // First send count-based height for immediate response
       sendExpandCommand(resultCount)
+      // Then recalculate based on actual DOM after render
+      nextTick(() => {
+        debouncedUpdateHeight()
+      })
     }
   }
 
@@ -92,8 +149,8 @@ export function useResize(options: UseResizeOptions): void {
     () => activeActivations.value,
     (activations) => {
       if (activations && activations.length > 0) {
-        // Active provider: expand to max
-        sendExpandCommand(results.value.length, true)
+        // Active provider: expand to max immediately, no collapse allowed
+        sendExpandCommand(0, true)
       } else {
         debouncedCollapse()
       }

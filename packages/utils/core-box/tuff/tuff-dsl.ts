@@ -1422,6 +1422,18 @@ export interface IProviderActivate {
   icon?: TuffIcon
   time?: number
   meta?: Record<string, any>
+  /**
+   * Whether the results area should be hidden when this provider is active.
+   * - true: Hide results (webcontent mode - plugin UI view is attached)
+   * - false/undefined: Show results (push mode - plugin pushes items to list)
+   */
+  hideResults?: boolean
+  /**
+   * Whether the input box should be shown when this provider is active.
+   * - true: Show input (feature accepts input via acceptedInputTypes or allowInput)
+   * - false/undefined: Hide input in webcontent mode, show in push mode
+   */
+  showInput?: boolean
 }
 
 /**

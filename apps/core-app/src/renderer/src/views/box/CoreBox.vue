@@ -103,7 +103,23 @@ const completionDisplay = computed(() => {
 })
 
 // Check if CoreBox is in UI mode (plugin webcontent view attached)
-const isUIMode = computed(() => Boolean(activeActivations.value?.length))
+// Only hide results when hideResults is explicitly true (webcontent mode)
+// Push mode features should show results (hideResults: false or undefined)
+const isUIMode = computed(() => {
+  if (!activeActivations.value?.length) return false
+  // Check if any active provider has hideResults: true
+  return activeActivations.value.some(activation => activation.hideResults === true)
+})
+
+// Check if input should be shown when providers are active
+// Input is visible if: no active providers, or any provider has showInput: true, or hideResults is false
+const shouldShowInput = computed(() => {
+  if (!activeActivations.value?.length) return true
+  // Show input if any provider explicitly requests it, or if it's push mode (hideResults: false)
+  return activeActivations.value.some(activation => 
+    activation.showInput === true || activation.hideResults === false
+  )
+})
 const activeActivationsList = computed<IProviderActivate[]>(() => activeActivations.value ?? [])
 
 // DivisionBox mode computed properties
@@ -433,8 +449,8 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
         ref="boxInputRef"
         v-model="searchVal"
         :box-options="boxOptions"
-        :class="{ 'ui-mode-hidden': isUIMode }"
-        :disabled="isUIMode"
+        :class="{ 'ui-mode-hidden': !shouldShowInput }"
+        :disabled="!shouldShowInput"
       >
         <template #completion>
           <div class="text-sm truncate" v-html="completionDisplay" />
