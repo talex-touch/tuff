@@ -1,4 +1,5 @@
 import type { ITuffIcon, TuffIconType } from '@talex-touch/utils'
+import type { IPluginDev } from '@talex-touch/utils/plugin'
 import path from 'node:path'
 import fse from 'fs-extra'
 
@@ -14,12 +15,14 @@ export class TuffIconImpl implements ITuffIcon {
   status?: 'normal' | 'loading' | 'error'
 
   private rootPath: string
+  private devConfig?: IPluginDev
 
-  constructor(rootPath: string, type: TuffIconType, value: string) {
+  constructor(rootPath: string, type: TuffIconType, value: string, devConfig?: IPluginDev) {
     this.rootPath = rootPath
     this.type = type
     this.value = value
     this.status = 'normal'
+    this.devConfig = devConfig
   }
 
   /**
@@ -27,6 +30,7 @@ export class TuffIconImpl implements ITuffIcon {
    *
    * @description
    * For file type, checks if file exists and resolves to absolute path
+   * For dev mode plugins, converts to dev server URL
    * For other types (emoji, url, class), no processing is needed
    */
   async init(): Promise<void> {
@@ -40,6 +44,20 @@ export class TuffIconImpl implements ITuffIcon {
       this.status = 'error'
       this.value = ''
       return
+    }
+
+    // Dev mode: use dev server URL for icons
+    if (this.devConfig?.enable && this.devConfig?.address) {
+      try {
+        const devIconUrl = new URL(this.value, this.devConfig.address).toString()
+        this.type = 'url'
+        this.value = devIconUrl
+        this.status = 'normal'
+        return
+      } catch (error) {
+        console.warn(`[TuffIconImpl] Failed to construct dev icon URL: ${this.value}`, error)
+        // Fall through to local file check
+      }
     }
 
     const iconPath = path.resolve(this.rootPath, this.value)

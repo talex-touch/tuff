@@ -163,7 +163,7 @@ abstract class BasePluginLoader {
 
     // README loading is handled by specific loader implementations (LocalPluginLoader or DevPluginLoader)
 
-    const icon = new TuffIconImpl(this.pluginPath, pluginInfo.icon.type, pluginInfo.icon.value)
+    const icon = new TuffIconImpl(this.pluginPath, pluginInfo.icon.type, pluginInfo.icon.value, this.touchPlugin.dev)
     await icon.init()
     this.touchPlugin.icon = icon
     if (icon.status === 'error') {

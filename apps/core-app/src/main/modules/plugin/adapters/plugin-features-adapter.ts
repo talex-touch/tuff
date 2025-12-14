@@ -195,17 +195,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     if (feature.interaction && feature.interaction.type === 'webcontent') {
       const query = args.searchResult?.query
-      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature, query)
 
-      if (
-        plugin.issues.some(
-          (issue) => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`
-        )
-      ) {
-        return null
-      }
-
-      return {
+      // IMPORTANT: Pre-activate the provider BEFORE loading the plugin view
+      // This ensures items pushed by the plugin during onFeatureTriggered
+      // have the correct activation state for proper cleanup on exit
+      const activation: IProviderActivate = {
         id: this.id,
         name: plugin.name,
         icon: {
@@ -217,18 +211,69 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           featureId,
           pluginIcon: plugin.icon,
           feature: item
-        }
+        },
+        hideResults: true // webcontent mode - hide results area for plugin UI view
       }
+      searchEngineCore.activateProviders([activation])
+
+      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature, query)
+
+      if (
+        plugin.issues.some(
+          (issue) => issue.code === 'INVALID_VIEW_PATH' && issue.source === `feature:${feature.id}`
+        )
+      ) {
+        // Deactivate if view loading failed
+        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        return null
+      }
+
+      // Return the same activation object (already activated above)
+      return activation
     }
 
     const query = args.searchResult?.query || args.searchResult?.query?.text
+
+    // For push-mode features, pre-activate BEFORE triggering to ensure
+    // items pushed during onFeatureTriggered have correct activation state
+    if (feature.push) {
+      // Determine if input should be shown based on feature config
+      const hasAcceptedInputTypes = feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
+      const allowInput = feature.interaction?.allowInput === true
+      const shouldShowInput = hasAcceptedInputTypes || allowInput
+
+      const activation: IProviderActivate = {
+        id: this.id,
+        meta: {
+          pluginName,
+          featureId,
+          pluginIcon: plugin.icon,
+          feature: item
+        },
+        hideResults: false, // push mode - show results area for pushed items
+        showInput: shouldShowInput // show input if feature accepts input types or has allowInput
+      }
+      searchEngineCore.activateProviders([activation])
+
+      const shouldActivate = await plugin.triggerFeature(feature, query)
+
+      if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
+        // Deactivate if feature explicitly returns false
+        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        return null
+      }
+
+      return activation
+    }
+
+    // For non-push features, use original flow
     const shouldActivate = await plugin.triggerFeature(feature, query)
 
     if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
       return null
     }
 
-    if (feature.push || (typeof shouldActivate === 'boolean' && shouldActivate === true)) {
+    if (typeof shouldActivate === 'boolean' && shouldActivate === true) {
       return {
         id: this.id,
         meta: {

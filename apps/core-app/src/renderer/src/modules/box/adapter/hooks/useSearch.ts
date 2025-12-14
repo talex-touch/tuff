@@ -458,6 +458,13 @@ export function useSearch(
     const newState = await touchChannel.send('core-box:deactivate-providers')
     activeActivations.value = newState
     searchVal.value = '' // Clear search input to clear item list
+    
+    // Reset boxOptions mode from FEATURE back to INPUT
+    if (boxOptions.mode === BoxMode.FEATURE) {
+      boxOptions.mode = BoxMode.INPUT
+      boxOptions.data = {}
+    }
+    
     await handleSearch()
   }
 
