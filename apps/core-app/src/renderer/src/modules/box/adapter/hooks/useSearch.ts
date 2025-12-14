@@ -355,6 +355,26 @@ export function useSearch(
     if (isPluginFeature) {
       boxOptions.data.feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
+      
+      // Set temporary activation state immediately for faster UI response
+      // This ensures input visibility is correct before backend responds
+      const featureMeta = itemToExecute.meta as any
+      const interaction = featureMeta?.interaction
+      const acceptedInputTypes = featureMeta?.extension?.acceptedInputTypes
+      const hasAcceptedInputTypes = acceptedInputTypes && acceptedInputTypes.length > 0
+      const allowInput = interaction?.allowInput === true
+      const shouldShowInput = hasAcceptedInputTypes || allowInput
+      
+      activeActivations.value = [{
+        id: 'plugin-features',
+        meta: {
+          pluginName: featureMeta?.pluginName,
+          featureId: featureMeta?.featureId,
+          feature: itemToExecute
+        },
+        hideResults: false,
+        showInput: shouldShowInput
+      }]
     }
 
     searchResults.value = []

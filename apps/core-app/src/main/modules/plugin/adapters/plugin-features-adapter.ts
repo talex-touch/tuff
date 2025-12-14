@@ -196,6 +196,11 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     if (feature.interaction && feature.interaction.type === 'webcontent') {
       const query = args.searchResult?.query
 
+      // Determine if input should be shown while webcontent view is attached
+      const hasAcceptedInputTypes = feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
+      const allowInput = feature.interaction?.allowInput === true
+      const shouldShowInput = hasAcceptedInputTypes || allowInput
+
       // IMPORTANT: Pre-activate the provider BEFORE loading the plugin view
       // This ensures items pushed by the plugin during onFeatureTriggered
       // have the correct activation state for proper cleanup on exit
@@ -212,7 +217,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           pluginIcon: plugin.icon,
           feature: item
         },
-        hideResults: true // webcontent mode - hide results area for plugin UI view
+        hideResults: true, // webcontent mode - hide results area for plugin UI view
+        showInput: shouldShowInput
       }
       searchEngineCore.activateProviders([activation])
 
@@ -346,7 +352,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           })),
           searchTokens,
           // Match result for UI highlighting
-          matchResult
+          matchResult,
+          // Include acceptedInputTypes for frontend UI decisions
+          acceptedInputTypes: feature.acceptedInputTypes
         }
       }
     }

@@ -112,13 +112,17 @@ const isUIMode = computed(() => {
 })
 
 // Check if input should be shown when providers are active
-// Input is visible if: no active providers, or any provider has showInput: true, or hideResults is false
+// Input should only be hidden/disabled when:
+// - A webcontent UI view is attached (hideResults === true)
+// - And NO active provider explicitly allows input (showInput === true)
+// For push-mode (hideResults === false/undefined), input must remain usable.
 const shouldShowInput = computed(() => {
   if (!activeActivations.value?.length) return true
-  // Show input if any provider explicitly requests it, or if it's push mode (hideResults: false)
-  return activeActivations.value.some(activation => 
-    activation.showInput === true || activation.hideResults === false
-  )
+
+  const isWebcontentMode = activeActivations.value.some(a => a.hideResults === true)
+  if (!isWebcontentMode) return true
+
+  return activeActivations.value.some(a => a.showInput === true)
 })
 const activeActivationsList = computed<IProviderActivate[]>(() => activeActivations.value ?? [])
 

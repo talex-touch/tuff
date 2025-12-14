@@ -3,7 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { useSvgContent } from '~/modules/hooks/useSvgContent'
 
 const props = defineProps<{
-  icon: ITuffIcon
+  icon?: ITuffIcon | null
   alt?: string
   size?: number
   empty?: string
@@ -11,21 +11,25 @@ const props = defineProps<{
   colorful?: boolean
 }>()
 
-const loading = computed(() => props.icon.status === 'loading')
-const error = computed(() => props.icon.status === 'error')
+const safeIcon = computed<ITuffIcon>(() => {
+  return (props.icon ?? { type: 'emoji', value: '' }) as ITuffIcon
+})
 
-const addressable = computed(() => props.icon.type === 'url' || props.icon.type === 'file')
+const loading = computed(() => safeIcon.value.status === 'loading')
+const error = computed(() => safeIcon.value.status === 'error')
+
+const addressable = computed(() => safeIcon.value.type === 'url' || safeIcon.value.type === 'file')
 
 const url = computed(() => {
-  if (props.icon.type === 'file') {
-    const targetPath = `tfile://${props.icon.value}`
+  if (safeIcon.value.type === 'file') {
+    const targetPath = `tfile://${safeIcon.value.value}`
     // console.log('fileable', props, props.icon.value, '=', targetPath)
     // File paths are absolute (e.g., "/Users/..."), so tfile://${path} gives tfile:///Users/...
     return targetPath
   }
 
-  if (props.icon.type === 'url') {
-    const urlPath = props.icon.value
+  if (safeIcon.value.type === 'url') {
+    const urlPath = safeIcon.value.value
     // Only use tfile:// for local file paths (absolute paths starting with /)
     // but NOT for API paths like /api/... which should be HTTP URLs
     if (urlPath.startsWith('/') && !urlPath.startsWith('/api/')) {
@@ -33,7 +37,7 @@ const url = computed(() => {
     }
   }
 
-  return props.icon.value
+  return safeIcon.value.value
 })
 
 const {
@@ -67,12 +71,12 @@ watch(
     :title="alt"
     role="img"
     class="TuffIcon"
-    :data-icon-type="icon.type"
-    :data-icon-value="icon.value"
+    :data-icon-type="safeIcon.type"
+    :data-icon-value="safeIcon.value"
     :class="{ 'TuffIcon-Loading': loading }"
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
-    <span v-if="!icon?.value" class="TuffIcon-Empty">
+    <span v-if="!safeIcon?.value" class="TuffIcon-Empty">
       <slot name="empty">
         <img v-if="empty" :alt="alt" :src="empty" />
       </slot>
@@ -88,12 +92,12 @@ watch(
       </span>
     </span>
 
-    <span v-else-if="icon.type === 'emoji'" class="emoji">
-      {{ icon.value || '⚠️' }}
+    <span v-else-if="safeIcon.type === 'emoji'" class="emoji">
+      {{ safeIcon.value || '⚠️' }}
     </span>
 
-    <span v-else-if="icon.type === 'class'" class="class flex">
-      <i :class="icon.value" />
+    <span v-else-if="safeIcon.type === 'class'" class="class flex">
+      <i :class="safeIcon.value" />
     </span>
 
     <template v-else-if="addressable">
