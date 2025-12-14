@@ -251,6 +251,52 @@ BoxItemEvents.batch.delete  // Batch delete
 BoxItemEvents.batch.clear   // Clear by source
 ```
 
+### ClipboardEvents :badge[v0.9.0]{type="info"}
+
+```ts
+import { ClipboardEvents } from '@talex-touch/utils/transport'
+
+// Monitor (streaming)
+ClipboardEvents.change      // Subscribe to clipboard changes
+
+// History (with batching)
+ClipboardEvents.getHistory  // Query history with pagination
+ClipboardEvents.getLatest   // Get most recent item
+
+// Actions
+ClipboardEvents.apply       // Apply item to active app
+ClipboardEvents.delete      // Delete history item
+ClipboardEvents.setFavorite // Toggle favorite status
+ClipboardEvents.write       // Write to system clipboard
+```
+
+**Example: Subscribe to clipboard changes**
+
+```ts
+const controller = await transport.stream(
+  ClipboardEvents.change,
+  undefined,
+  {
+    onData: ({ item, source }) => {
+      console.log(`New ${item.type} from ${source}:`, item.content)
+    }
+  }
+)
+
+onUnmounted(() => controller.cancel())
+```
+
+**Example: Query clipboard history**
+
+```ts
+const { history, total } = await transport.send(ClipboardEvents.getHistory, {
+  page: 1,
+  pageSize: 20,
+  type: 'text',
+  keyword: 'search term'
+})
+```
+
 ---
 
 ## Batching

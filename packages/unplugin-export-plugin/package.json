@@ -49,6 +49,10 @@
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
     },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "import": "./dist/cli/index.js"
+    },
     "./*": "./*"
   },
   "module": "dist/index.js",

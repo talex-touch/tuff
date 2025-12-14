@@ -130,7 +130,7 @@ export default createUnplugin<Options | undefined>((options, meta) => {
   const projectRoot = process.cwd()
   let filesToVirtualize: string[] = []
 
-  let chalkPromise: Promise<typeof import('chalk').default> | undefined
+  let chalkPromise: Promise<any> | undefined
   const getChalk = () => {
     if (!chalkPromise)
       chalkPromise = import('chalk').then(m => m.default)
