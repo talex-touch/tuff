@@ -1,5 +1,12 @@
 # TalexTouch # PluginExporter
 
+> 📦 **TuffCLI**: 本包现已集成到 TuffCLI 工具链中，通过 `tuff` 命令进行插件的构建、发布和管理。
+>
+> ```bash
+> tuff build    # 构建插件
+> tuff publish  # 发布插件
+> ```
+
 [![NPM version](https://img.shields.io/npm/v/@talex-touch/unplugin-export-plugin?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-starter)
 
 Export **unplugin** for [talex-touch](https://github.com/talex-touch/talex-touch).

@@ -10,6 +10,7 @@ interface TocLink {
 }
 
 const { t } = useI18n()
+const route = useRoute()
 
 const tocState = useState<TocLink[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
@@ -176,6 +177,27 @@ watch(
 watch(activeHash, () => {
   nextTick(updateMarker)
 })
+
+// Watch route changes to refresh heading elements after DOM update
+watch(
+  () => route.fullPath,
+  () => {
+    if (!import.meta.client) return
+    // Reset state on route change
+    headingElements.value = {}
+    activeHash.value = ''
+    hasActive.value = false
+    
+    // Wait for DOM to be ready with new content
+    nextTick(() => {
+      setTimeout(() => {
+        refreshHeadingElements()
+        updateActiveFromScroll()
+        updateMarker()
+      }, 100)
+    })
+  },
+)
 </script>
 
 <template>
@@ -184,9 +206,9 @@ watch(activeHash, () => {
       {{ t('docs.outlineLabel') }}
     </div>
 
-    <nav v-if="hasOutline" ref="navRef" class="flex flex-col gap-0.5 pl-3 relative">
-      <!-- Track line -->
-      <div class="absolute top-1 bottom-1 left-0 w-px bg-black/6 dark:bg-white/8" />
+    <nav v-if="hasOutline" ref="navRef" class="outline-nav relative">
+      <!-- Main track line -->
+      <div class="absolute top-0 bottom-0 left-0 w-px bg-black/10 dark:bg-white/10" />
       
       <!-- Sliding Marker -->
       <div
@@ -197,23 +219,35 @@ watch(activeHash, () => {
           opacity: hasActive ? 1 : 0
         }"
       />
+      
+      <div
+        v-for="entry in outlineEntries"
+        :key="entry.id"
+        class="outline-item relative"
+        :class="{ 'outline-item-nested': entry.indent > 0 }"
+      >
+        <!-- Nested indent line -->
+        <div 
+          v-if="entry.indent > 0" 
+          class="absolute top-0 bottom-0 w-px bg-black/10 dark:bg-white/10"
+          :style="{ left: `${entry.indent * 12}px` }"
+        />
         <NuxtLink
-          v-for="entry in outlineEntries"
-          :key="entry.id"
           :to="`#${entry.id}`"
           replace
           class="group relative flex items-center py-1.5 text-[13px] leading-snug no-underline transition-all duration-150"
-          :style="{ paddingLeft: `${entry.indent * 10}px` }"
+          :style="{ paddingLeft: `${8 + entry.indent * 12}px` }"
           :class="[
             activeHash === entry.id
-              ? 'text-primary font-medium'
-              : 'text-black/45 hover:text-black/70 dark:text-white/45 dark:hover:text-white/70',
+              ? 'text-black font-medium dark:text-white'
+              : 'text-black/40 hover:text-black/70 dark:text-white/40 dark:hover:text-white/70',
           ]"
           :data-id="entry.id"
           @click.prevent="scrollToHeading(entry.id)"
         >
           <span class="line-clamp-2">{{ entry.text }}</span>
         </NuxtLink>
+      </div>
     </nav>
     <div v-else class="text-[12px] text-black/30 dark:text-white/30">
       {{ t('docs.noOutline') }}

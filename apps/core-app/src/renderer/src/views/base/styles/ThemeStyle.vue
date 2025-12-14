@@ -1,5 +1,5 @@
 <script name="ThemeStyle" lang="ts" setup>
-import { ref, watchEffect } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
@@ -10,6 +10,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 import { appSetting } from '~/modules/channel/storage'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
+import { touchChannel } from '~/modules/channel/channel-core'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
 
@@ -19,7 +20,36 @@ import WindowSectionVue from './WindowSection.vue'
 const { t } = useI18n()
 
 const styleValue = ref(0)
-const homeBgSource = ref(0)
+
+// Background source mapping: 0=bing, 1=custom, 2=none
+const bgSourceValue = computed({
+  get: () => {
+    const source = appSetting.background?.source ?? 'bing'
+    if (source === 'bing') return 0
+    if (source === 'custom') return 1
+    return 2
+  },
+  set: (val: number) => {
+    if (!appSetting.background) {
+      appSetting.background = { source: 'bing', customPath: '', blur: 0, opacity: 100 }
+    }
+    appSetting.background.source = val === 0 ? 'bing' : val === 1 ? 'custom' : 'none'
+  }
+})
+
+const customBgPath = computed(() => appSetting.background?.customPath ?? '')
+const bgBlur = computed({
+  get: () => appSetting.background?.blur ?? 0,
+  set: (val: number) => {
+    if (appSetting.background) appSetting.background.blur = val
+  }
+})
+const bgOpacity = computed({
+  get: () => appSetting.background?.opacity ?? 100,
+  set: (val: number) => {
+    if (appSetting.background) appSetting.background.opacity = val
+  }
+})
 
 watchEffect(() => {
   if (themeStyle.value.theme.style.auto) styleValue.value = 2
@@ -39,6 +69,40 @@ function handleThemeChange(value: string | number, event?: Event): void {
     triggerThemeTransition([event.x, event.y], value as any)
   } else {
     triggerThemeTransition([0, 0], value as any)
+  }
+}
+
+/**
+ * Open file dialog to select custom background image
+ */
+async function selectBackgroundImage() {
+  try {
+    const result = await touchChannel.send('dialog:open-file', {
+      title: t('themeStyle.selectBackgroundImage', 'Select Background Image'),
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }
+      ],
+      properties: ['openFile']
+    })
+    if (result && result.filePaths && result.filePaths.length > 0) {
+      if (!appSetting.background) {
+        appSetting.background = { source: 'custom', customPath: '', blur: 0, opacity: 100 }
+      }
+      appSetting.background.customPath = result.filePaths[0]
+      appSetting.background.source = 'custom'
+    }
+  } catch (error) {
+    console.error('Failed to select background image:', error)
+  }
+}
+
+/**
+ * Clear custom background image
+ */
+function clearBackgroundImage() {
+  if (appSetting.background) {
+    appSetting.background.customPath = ''
+    appSetting.background.source = 'bing'
   }
 }
 </script>
@@ -82,7 +146,7 @@ function handleThemeChange(value: string | number, event?: Event): void {
       </TuffBlockSelect>
 
       <TuffBlockSelect
-        v-model="homeBgSource"
+        v-model="bgSourceValue"
         :title="t('themeStyle.homepageWallpaper')"
         :description="t('themeStyle.homepageWallpaperDesc')"
       >
@@ -92,10 +156,84 @@ function handleThemeChange(value: string | number, event?: Event): void {
         <TSelectItem :model-value="0" name="bing">
           {{ t('themeStyle.bing') }}
         </TSelectItem>
-        <TSelectItem :model-value="1" name="folder">
-          {{ t('themeStyle.folder') }}
+        <TSelectItem :model-value="1" name="custom">
+          {{ t('themeStyle.customImage', 'Custom Image') }}
+        </TSelectItem>
+        <TSelectItem :model-value="2" name="none">
+          {{ t('themeStyle.noBackground', 'None') }}
         </TSelectItem>
       </TuffBlockSelect>
+
+      <!-- Custom background image upload -->
+      <div v-if="bgSourceValue === 1" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex-1">
+            <p class="text-sm font-medium text-black/80 dark:text-white/80">
+              {{ t('themeStyle.customBackgroundImage', 'Custom Background Image') }}
+            </p>
+            <p v-if="customBgPath" class="mt-1 truncate text-xs text-black/50 dark:text-white/50">
+              {{ customBgPath }}
+            </p>
+            <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
+              {{ t('themeStyle.noImageSelected', 'No image selected') }}
+            </p>
+          </div>
+          <div class="flex gap-2">
+            <button
+              class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+              @click="selectBackgroundImage"
+            >
+              {{ t('themeStyle.selectImage', 'Select') }}
+            </button>
+            <button
+              v-if="customBgPath"
+              class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
+              @click="clearBackgroundImage"
+            >
+              {{ t('themeStyle.clearImage', 'Clear') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div v-if="customBgPath" class="mt-3 overflow-hidden rounded-lg">
+          <img
+            :src="`tfile://${customBgPath}`"
+            class="h-24 w-full object-cover"
+            :style="{ filter: `blur(${bgBlur}px)`, opacity: bgOpacity / 100 }"
+          />
+        </div>
+
+        <!-- Blur and Opacity sliders -->
+        <div v-if="customBgPath" class="mt-4 space-y-3">
+          <div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.blur', 'Blur') }}</span>
+              <span class="font-medium text-black/80 dark:text-white/80">{{ bgBlur }}px</span>
+            </div>
+            <input
+              v-model.number="bgBlur"
+              type="range"
+              min="0"
+              max="20"
+              class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+            />
+          </div>
+          <div>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.opacity', 'Opacity') }}</span>
+              <span class="font-medium text-black/80 dark:text-white/80">{{ bgOpacity }}%</span>
+            </div>
+            <input
+              v-model.number="bgOpacity"
+              type="range"
+              min="10"
+              max="100"
+              class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+            />
+          </div>
+        </div>
+      </div>
     </TuffGroupBlock>
 
     <TuffGroupBlock
@@ -156,6 +294,22 @@ function handleThemeChange(value: string | number, event?: Event): void {
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="transition" :active="active" />
+        </template>
+      </TuffBlockSwitch>
+
+      <!-- CoreBox window resize animation switch (Beta) -->
+      <TuffBlockSwitch
+        v-model="appSetting.animation.coreBoxResize"
+        :title="t('themeStyle.coreBoxResize', 'CoreBox Window Animation')"
+        :description="t('themeStyle.coreBoxResizeDesc', 'Smooth expand/collapse animation for the search window')"
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="transition" :active="active" />
+        </template>
+        <template #suffix>
+          <span class="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+            Beta
+          </span>
         </template>
       </TuffBlockSwitch>
     </TuffGroupBlock>

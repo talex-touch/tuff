@@ -239,22 +239,27 @@ watch(
 </script>
 
 <template>
-  <nav class="flex flex-col gap-1">
-    <!-- Top-level section tabs -->
-    <div class="mb-4 flex gap-1 rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.08]">
-      <NuxtLink
-        v-for="sec in TOP_SECTIONS"
-        :key="sec.key"
-        :to="localePath(`/docs/${sec.key}`)"
-        class="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium no-underline transition-all duration-200"
-        :class="activeTopSection === sec.key
-          ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
-          : 'text-black/45 hover:text-black/65 dark:text-white/45 dark:hover:text-white/65'"
-      >
-        <span :class="sec.icon" class="text-sm" />
-        <span>{{ sec.label }}</span>
-      </NuxtLink>
+  <nav class="docs-nav relative flex flex-col">
+    <!-- Top-level section tabs (sticky within sidebar) -->
+    <div class="sticky top-0 z-10 -mx-1 mb-4 bg-white/95 px-1 pb-1 pt-1 backdrop-blur-sm dark:bg-black/95">
+      <div class="flex gap-1 rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.08]">
+        <NuxtLink
+          v-for="sec in TOP_SECTIONS"
+          :key="sec.key"
+          :to="localePath(`/docs/${sec.key}`)"
+          class="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium no-underline transition-all duration-200"
+          :class="activeTopSection === sec.key
+            ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
+            : 'text-black/45 hover:text-black/65 dark:text-white/45 dark:hover:text-white/65'"
+        >
+          <span :class="sec.icon" class="text-sm" />
+          <span>{{ sec.label }}</span>
+        </NuxtLink>
+      </div>
     </div>
+    
+    <!-- Scrollable content -->
+    <div class="flex flex-col gap-1">
 
     <template v-if="pending">
       <div v-for="index in 6" :key="index" class="h-8 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
@@ -310,6 +315,7 @@ watch(
         </li>
       </DocSection>
     </template>
+    </div>
   </nav>
 </template>
 
