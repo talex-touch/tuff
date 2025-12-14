@@ -767,6 +767,94 @@ export const BoxItemEvents = {
 } as const
 
 // ============================================================================
+// Clipboard Events
+// ============================================================================
+
+import type {
+  ClipboardItem,
+  ClipboardChangePayload,
+  ClipboardQueryRequest,
+  ClipboardQueryResponse,
+  ClipboardApplyRequest,
+  ClipboardDeleteRequest,
+  ClipboardSetFavoriteRequest,
+  ClipboardWriteRequest,
+} from './types/clipboard'
+
+/**
+ * Clipboard domain events for history, monitoring, and actions.
+ * @since v0.9.0
+ */
+export const ClipboardEvents = {
+  /**
+   * Subscribe to clipboard changes via MessagePort streaming.
+   * @since v0.9.0
+   */
+  change: defineEvent('clipboard')
+    .module('monitor')
+    .event('change')
+    .define<void, AsyncIterable<ClipboardChangePayload>>({
+      stream: { enabled: true, bufferSize: 10 },
+    }),
+
+  /**
+   * Query clipboard history with pagination and filters.
+   * @since v0.9.0
+   */
+  getHistory: defineEvent('clipboard')
+    .module('history')
+    .event('get')
+    .define<ClipboardQueryRequest, ClipboardQueryResponse>({
+      batch: { enabled: true, windowMs: 50, mergeStrategy: 'dedupe' },
+    }),
+
+  /**
+   * Get the most recent clipboard item.
+   * @since v0.9.0
+   */
+  getLatest: defineEvent('clipboard')
+    .module('history')
+    .event('latest')
+    .define<void, ClipboardItem | null>(),
+
+  /**
+   * Apply clipboard item to active application with auto-paste.
+   * @since v0.9.0
+   */
+  apply: defineEvent('clipboard')
+    .module('action')
+    .event('apply')
+    .define<ClipboardApplyRequest, void>(),
+
+  /**
+   * Delete a clipboard history item by ID.
+   * @since v0.9.0
+   */
+  delete: defineEvent('clipboard')
+    .module('history')
+    .event('delete')
+    .define<ClipboardDeleteRequest, void>(),
+
+  /**
+   * Toggle favorite status for a clipboard item.
+   * @since v0.9.0
+   */
+  setFavorite: defineEvent('clipboard')
+    .module('history')
+    .event('set-favorite')
+    .define<ClipboardSetFavoriteRequest, void>(),
+
+  /**
+   * Write content to system clipboard programmatically.
+   * @since v0.9.0
+   */
+  write: defineEvent('clipboard')
+    .module('action')
+    .event('write')
+    .define<ClipboardWriteRequest, void>(),
+} as const
+
+// ============================================================================
 // Unified Export
 // ============================================================================
 
@@ -779,6 +867,7 @@ export const BoxItemEvents = {
  *
  * await transport.send(TuffEvents.coreBox.ui.hide)
  * await transport.send(TuffEvents.storage.app.get, { key: 'theme' })
+ * await transport.send(TuffEvents.clipboard.getLatest)
  * ```
  */
 export const TuffEvents = {
@@ -787,4 +876,5 @@ export const TuffEvents = {
   storage: StorageEvents,
   plugin: PluginEvents,
   boxItem: BoxItemEvents,
+  clipboard: ClipboardEvents,
 } as const

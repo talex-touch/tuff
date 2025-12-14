@@ -159,21 +159,17 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     // Load settings
     this.loadSettings()
 
-    // Skip update checks in development mode
     if (!app.isPackaged) {
       updateLog.info('Development mode detected, skipping automatic update checks')
       return
     }
 
-    // Start polling as soon as the app boots
-    if (this.settings.enabled) {
+    if (this.settings.enabled && this.settings.frequency !== 'never') {
       this.startPolling()
 
-      if (this.settings.frequency !== 'never') {
-        setTimeout(() => {
-          void this.checkForUpdates(true)
-        }, 5000) // Delay 5 seconds after startup
-      }
+      setTimeout(() => {
+        void this.checkForUpdates(false)
+      }, 5000)
     }
   }
 
