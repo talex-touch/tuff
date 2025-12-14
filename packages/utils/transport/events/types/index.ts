@@ -17,3 +17,6 @@ export * from './plugin'
 
 // BoxItem domain types
 export * from './box-item'
+
+// Clipboard domain types
+export * from './clipboard'
