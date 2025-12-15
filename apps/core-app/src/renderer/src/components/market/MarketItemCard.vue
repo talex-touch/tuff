@@ -21,6 +21,7 @@ interface MarketItem {
   icon?: string
   category?: string
   official?: boolean
+  providerTrustLevel?: string
   metadata?: Record<string, unknown>
 }
 
@@ -66,7 +67,7 @@ function handleInstall(): void {
 </script>
 
 <template>
-  <div class="market-item-card" :class="{ verified: item.official }" @click="handleOpen">
+  <div class="market-item-card" :class="{ 'official-provider': item.providerTrustLevel === 'official' }" @click="handleOpen">
     <div class="market-item-content">
       <MarketIcon
         v-shared-element:plugin-market-icon
@@ -79,6 +80,7 @@ function handleInstall(): void {
           <h3 class="market-item-title" :style="{ viewTransitionName: `market-title-${item.id}` }">
             {{ item.name || 'Unnamed Plugin' }}
           </h3>
+          <i v-if="item.official" class="i-ri-verified-badge-fill official-badge" title="Official Plugin" />
         </div>
         <p
           v-if="item.description"
@@ -109,7 +111,7 @@ function handleInstall(): void {
 
 <style lang="scss" scoped>
 .market-item-card {
-  &.verified {
+  &.official-provider {
     &::before {
       content: '';
       position: absolute;
@@ -164,6 +166,12 @@ function handleInstall(): void {
   height: 100%;
 }
 
+.market-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .market-item-title {
   margin: 0;
   font-size: 0.95rem;
@@ -181,5 +189,11 @@ function handleInstall(): void {
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.official-badge {
+  flex-shrink: 0;
+  font-size: 1rem;
+  color: #4d9375;
 }
 </style>

@@ -30,6 +30,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     enabled: true,
     priority: 110,
     trustLevel: 'official',
+    isOfficial: true,
     readOnly: true,
     config: {
       apiUrl: 'https://tuff.tagzxia.com/api/market/plugins',
@@ -41,9 +42,11 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     type: 'nexusStore',
     url: 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json',
     description: '官方插件市场，提供经过审核的核心插件。',
-    enabled: true,
+    enabled: false,
     priority: 100,
     trustLevel: 'official',
+    isOfficial: true,
+    outdated: true,
     readOnly: true,
     config: {
       manifestUrl:

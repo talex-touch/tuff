@@ -107,7 +107,7 @@ onBeforeUnmount(() => {
     <MarketDetailSkeleton v-if="loading" />
 
     <div v-else-if="activePlugin" class="h-full flex flex-col gap-4 p-4">
-      <div class="detail-header">
+      <div class="detail-header" :class="{ 'official-provider': activePlugin.providerTrustLevel === 'official' }">
         <div class="flex items-center gap-3 flex-1 min-w-0">
           <MarketIcon
             v-shared-element:plugin-market-icon
@@ -119,7 +119,7 @@ onBeforeUnmount(() => {
               <h3 :style="{ viewTransitionName: `market-title-${activePlugin.id}` }">
                 {{ activePlugin.name }}
               </h3>
-              <i v-if="activePlugin.official" class="i-ri-shield-check-fill text-primary" />
+              <i v-if="activePlugin.official" class="i-ri-verified-badge-fill official-badge" title="Official Plugin" />
             </div>
             <p v-if="activePlugin.description" class="text-sm opacity-70 mt-1">
               {{ activePlugin.description }}
@@ -176,6 +176,7 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 .detail-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -184,11 +185,35 @@ onBeforeUnmount(() => {
   background: var(--el-bg-color-overlay);
   border-radius: 12px;
 
+  &.official-provider {
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      border-style: solid;
+      border-image-slice: 1;
+      border-image-source: linear-gradient(100deg, #3f5c1e 0%, #4d9375 68%);
+      border-width: 6px;
+      margin: -5px;
+      opacity: 0.5;
+      filter: blur(4px);
+      mix-blend-mode: hard-light;
+      pointer-events: none;
+    }
+  }
+
   h3 {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
   }
+}
+
+.official-badge {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  color: #4d9375;
 }
 
 .detail-content {
