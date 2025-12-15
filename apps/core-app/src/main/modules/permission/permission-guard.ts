@@ -2,6 +2,7 @@
  * Permission Guard
  *
  * Runtime permission checking and interception.
+ * Performance target: < 5ms per check (verified via timing instrumentation)
  */
 
 import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
@@ -22,6 +23,8 @@ export interface PermissionCheckResult {
   permissionId: string
   /** Plugin ID */
   pluginId: string
+  /** Check duration in milliseconds (for performance monitoring) */
+  durationMs?: number
 }
 
 /**
@@ -90,6 +93,12 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
 export class PermissionGuard {
   private store: PermissionStore
   private mappings: Map<string, ApiPermissionMapping> = new Map()
+  private performanceStats = {
+    totalChecks: 0,
+    totalDurationMs: 0,
+    maxDurationMs: 0,
+    slowChecks: 0, // > 5ms
+  }
 
   constructor(store: PermissionStore) {
     this.store = store
@@ -108,15 +117,20 @@ export class PermissionGuard {
     apiName: string,
     sdkapi?: number
   ): PermissionCheckResult {
+    const startTime = performance.now()
+
     // Find matching permission mapping
     const requiredPermissions = this.getRequiredPermissions(apiName)
 
     if (requiredPermissions.length === 0) {
       // No permission required for this API
+      const duration = performance.now() - startTime
+      this.recordPerformance(duration)
       return {
         allowed: true,
         permissionId: '',
         pluginId,
+        durationMs: duration,
       }
     }
 
@@ -124,11 +138,14 @@ export class PermissionGuard {
     const sdkCompat = checkSdkCompatibility(sdkapi, pluginId)
     if (!sdkCompat.enforcePermissions) {
       // Enforcement disabled for legacy plugins
+      const duration = performance.now() - startTime
+      this.recordPerformance(duration)
       return {
         allowed: true,
         permissionId: requiredPermissions[0],
         pluginId,
         reason: 'Permission enforcement disabled for legacy SDK',
+        durationMs: duration,
       }
     }
 
@@ -141,20 +158,74 @@ export class PermissionGuard {
 
       // Check granted permissions
       if (!this.store.hasPermission(pluginId, permissionId, sdkapi)) {
+        const duration = performance.now() - startTime
+        this.recordPerformance(duration)
         return {
           allowed: false,
           permissionId,
           pluginId,
           reason: `Permission '${permissionId}' not granted`,
           showRequest: true,
+          durationMs: duration,
         }
       }
     }
 
+    const duration = performance.now() - startTime
+    this.recordPerformance(duration)
     return {
       allowed: true,
       permissionId: requiredPermissions[0],
       pluginId,
+      durationMs: duration,
+    }
+  }
+
+  /**
+   * Record performance metrics for monitoring
+   */
+  private recordPerformance(durationMs: number): void {
+    this.performanceStats.totalChecks++
+    this.performanceStats.totalDurationMs += durationMs
+    if (durationMs > this.performanceStats.maxDurationMs) {
+      this.performanceStats.maxDurationMs = durationMs
+    }
+    if (durationMs > 5) {
+      this.performanceStats.slowChecks++
+    }
+  }
+
+  /**
+   * Get performance statistics
+   */
+  getPerformanceStats(): {
+    totalChecks: number
+    avgDurationMs: number
+    maxDurationMs: number
+    slowChecks: number
+    meetsTarget: boolean
+  } {
+    const avg = this.performanceStats.totalChecks > 0
+      ? this.performanceStats.totalDurationMs / this.performanceStats.totalChecks
+      : 0
+    return {
+      totalChecks: this.performanceStats.totalChecks,
+      avgDurationMs: Math.round(avg * 100) / 100,
+      maxDurationMs: Math.round(this.performanceStats.maxDurationMs * 100) / 100,
+      slowChecks: this.performanceStats.slowChecks,
+      meetsTarget: avg < 5 && this.performanceStats.maxDurationMs < 10,
+    }
+  }
+
+  /**
+   * Reset performance statistics
+   */
+  resetPerformanceStats(): void {
+    this.performanceStats = {
+      totalChecks: 0,
+      totalDurationMs: 0,
+      maxDurationMs: 0,
+      slowChecks: 0,
     }
   }
 

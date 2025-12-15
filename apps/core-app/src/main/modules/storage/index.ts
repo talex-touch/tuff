@@ -2,14 +2,16 @@ import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/ut
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
-import chalk from 'chalk'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
+import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
 import { StoragePollingService } from './storage-polling-service'
+
+const storageLog = createLogger('Storage')
 
 let pluginConfigPath: string
 
@@ -91,9 +93,7 @@ export class StorageModule extends BaseModule {
   onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     pluginConfigPath = path.join(file.dirPath!, 'plugins')
     fse.ensureDirSync(pluginConfigPath)
-    console.info(
-      chalk.blue(`[StorageModule] Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`),
-    )
+    storageLog.info(`Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`)
 
     this.pollingService.start()
     this.lruManager.startCleanup()
@@ -106,7 +106,7 @@ export class StorageModule extends BaseModule {
     this.lruManager.stopCleanup()
     this.cache.clear()
     this.pluginConfigs.clear()
-    console.info(chalk.green('[StorageModule] Shutdown complete'))
+    storageLog.success('Shutdown complete')
   }
 
   /**
@@ -147,8 +147,7 @@ export class StorageModule extends BaseModule {
         }
       }
       catch (error) {
-        console.error(chalk.red(`[StorageModule] Failed to parse config ${name}:`), error)
-        // 继续使用空对象
+        storageLog.error(`Failed to parse config ${name}`, { error })
       }
     }
 
@@ -194,7 +193,7 @@ export class StorageModule extends BaseModule {
       }
     }
     catch (error) {
-      console.error(chalk.red(`[StorageModule] Failed to reload config ${name}:`), error)
+      storageLog.error(`Failed to reload config ${name}`, { error })
     }
 
     this.cache.set(name, file)
@@ -256,9 +255,7 @@ export class StorageModule extends BaseModule {
 
     // Conflict detection: if client has older version, reject the save
     if (clientVersion !== undefined && clientVersion < currentVersion) {
-      console.warn(
-        chalk.yellow(`[StorageModule] Conflict detected for ${name}: client v${clientVersion} < server v${currentVersion}`),
-      )
+      storageLog.warn(`Conflict detected for ${name}: client v${clientVersion} < server v${currentVersion}`)
       return { success: false, version: currentVersion, conflict: true }
     }
 
@@ -295,7 +292,7 @@ export class StorageModule extends BaseModule {
 
     const data = this.cache.get(name)
     if (!data) {
-      console.warn(chalk.yellow(`[StorageModule] Attempted to save non-existent config: ${name}`))
+      storageLog.warn(`Attempted to save non-existent config: ${name}`)
       return
     }
 
@@ -347,7 +344,7 @@ export class StorageModule extends BaseModule {
         callback(currentData)
       }
       catch (error) {
-        console.error(chalk.red(`[StorageModule] Subscriber callback error for "${name}":`), error)
+        storageLog.error(`Subscriber callback error for "${name}"`, { error })
       }
     }
 
@@ -392,7 +389,7 @@ export class StorageModule extends BaseModule {
         callback(data)
       }
       catch (error) {
-        console.error(chalk.red(`[StorageModule] Subscriber callback error for "${name}":`), error)
+        storageLog.error(`Subscriber callback error for "${name}"`, { error })
       }
     })
   }
@@ -466,7 +463,7 @@ export class StorageModule extends BaseModule {
             fse.writeFileSync(p, JSON.stringify(data), 'utf-8')
           }
         } catch (err) {
-          console.error(chalk.red(`[StorageModule] Failed to persist ${key} synchronously:`), err)
+          storageLog.error(`Failed to persist ${key} synchronously`, { error: err })
         }
         this.cache.clearDirty(key)
       }

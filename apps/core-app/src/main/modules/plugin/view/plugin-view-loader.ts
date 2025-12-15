@@ -3,7 +3,11 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TouchPlugin } from '../plugin'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { app } from 'electron'
+import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from '../../box-tool/core-box/manager'
+
+const viewLog = createLogger('PluginViewLoader')
 
 export class PluginViewLoader {
   public static async loadPluginView(
@@ -14,22 +18,33 @@ export class PluginViewLoader {
     const interactionPath = feature.interaction?.path
 
     if (!interactionPath) {
-      console.error(`[PluginViewLoader] Feature ${feature.id} has interaction but no path.`)
+      viewLog.error(`Feature ${feature.id} has interaction but no path`)
       return null
     }
 
     let viewUrl: string
 
     if (plugin.dev.enable && plugin.dev.source && plugin.dev.address) {
+      // // Production environment: block http/https protocol for security
+      // if (app.isPackaged) {
+      //   viewLog.error(`Security: http protocol blocked in production for plugin ${plugin.name}`)
+      //   plugin.issues.push({
+      //     type: 'error',
+      //     code: 'PROTOCOL_NOT_ALLOWED',
+      //     message: 'HTTP protocol is not allowed in production environment',
+      //     suggestion: 'Disable dev.source in manifest.json for production builds',
+      //     source: `feature:${feature.id}`,
+      //     timestamp: Date.now(),
+      //   })
+      //   return null
+      // }
       // Dev mode: load from remote dev server
       viewUrl = new URL(interactionPath, plugin.dev.address).toString()
     }
     else {
       // Production mode: load from local file system
       if (interactionPath.includes('..')) {
-        console.error(
-          `[PluginViewLoader] Security Alert: Aborted loading view with invalid path: ${interactionPath}`,
-        )
+        viewLog.error(`Security Alert: Aborted loading view with invalid path: ${interactionPath}`)
         plugin.issues.push({
           type: 'error',
           code: 'INVALID_VIEW_PATH',
@@ -52,7 +67,7 @@ export class PluginViewLoader {
         const hashPath = interactionPath.startsWith('/') ? interactionPath : `/${interactionPath}`
         viewUrl = pathToFileURL(indexPath).href + '#' + hashPath
       }
-      console.log(`[PluginViewLoader] Loading view: ${viewUrl}`)
+      viewLog.debug(`Loading view: ${viewUrl}`)
     }
 
     coreBoxManager.enterUIMode(viewUrl, plugin, feature, query)
