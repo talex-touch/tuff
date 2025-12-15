@@ -1,0 +1,26 @@
+name: Utils Package CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/utils/**'
+      - '.github/workflows/package-utils-ci.yml'
+      - '.github/workflows/package-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/utils/**'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: utils
+      package-path: packages/utils
+      run-typecheck: false  # No build step for utils (TypeScript source)
+      run-lint: false       # Add if lint script exists
+      run-test: false       # Add if test script exists
+      run-build: false      # Utils is TypeScript source, no build needed

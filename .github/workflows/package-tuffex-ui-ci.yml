@@ -1,0 +1,27 @@
+name: Tuffex UI Package CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/tuffex-ui/**'
+      - '.github/workflows/package-tuffex-ui-ci.yml'
+      - '.github/workflows/package-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/tuffex-ui/**'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: tuffex-ui
+      package-path: packages/tuffex-ui
+      run-typecheck: false  # Add if typecheck script exists
+      run-lint: false       # Add if lint script exists
+      run-test: false       # Add if test script exists
+      run-build: true
+      build-command: pnpm build

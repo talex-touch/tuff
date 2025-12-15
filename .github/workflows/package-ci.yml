@@ -1,0 +1,114 @@
+name: Package CI
+
+on:
+  workflow_call:
+    inputs:
+      package-name:
+        description: 'Package name (e.g., utils, tuffex-ui, unplugin-export-plugin)'
+        required: true
+        type: string
+      package-path:
+        description: 'Package path relative to repo root (e.g., packages/utils)'
+        required: true
+        type: string
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '22.16.0'
+      pnpm-version:
+        description: 'PNPM version to use'
+        required: false
+        type: string
+        default: '9'
+      run-lint:
+        description: 'Run lint check'
+        required: false
+        type: boolean
+        default: false
+      run-test:
+        description: 'Run tests'
+        required: false
+        type: boolean
+        default: false
+      run-build:
+        description: 'Run build'
+        required: false
+        type: boolean
+        default: false
+      run-typecheck:
+        description: 'Run typecheck'
+        required: false
+        type: boolean
+        default: false
+      build-command:
+        description: 'Custom build command (default: pnpm build)'
+        required: false
+        type: string
+        default: 'pnpm build'
+      test-command:
+        description: 'Custom test command (default: pnpm test)'
+        required: false
+        type: string
+        default: 'pnpm test'
+      lint-command:
+        description: 'Custom lint command (default: pnpm lint)'
+        required: false
+        type: string
+        default: 'pnpm lint'
+      typecheck-command:
+        description: 'Custom typecheck command (default: pnpm typecheck)'
+        required: false
+        type: string
+        default: 'pnpm typecheck'
+
+jobs:
+  ci:
+    name: CI - ${{ inputs.package-name }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: ${{ inputs.pnpm-version }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Typecheck
+        if: ${{ inputs.run-typecheck }}
+        working-directory: ${{ inputs.package-path }}
+        run: ${{ inputs.typecheck-command }}
+
+      - name: Run Lint
+        if: ${{ inputs.run-lint }}
+        working-directory: ${{ inputs.package-path }}
+        run: ${{ inputs.lint-command }}
+
+      - name: Run Tests
+        if: ${{ inputs.run-test }}
+        working-directory: ${{ inputs.package-path }}
+        run: ${{ inputs.test-command }}
+
+      - name: Run Build
+        if: ${{ inputs.run-build }}
+        working-directory: ${{ inputs.package-path }}
+        run: ${{ inputs.build-command }}
+
+      - name: Upload Build Artifacts
+        if: ${{ inputs.run-build }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.package-name }}-dist
+          path: ${{ inputs.package-path }}/dist
+          retention-days: 7
