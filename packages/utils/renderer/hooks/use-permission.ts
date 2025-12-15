@@ -13,7 +13,6 @@ import type {
  * Send channel message to main process
  */
 async function sendChannel<T>(event: string, data?: unknown): Promise<T> {
-  // @ts-expect-error - $channel is injected at runtime
   return window.$channel?.send(event, data)
 }
 
@@ -21,7 +20,6 @@ async function sendChannel<T>(event: string, data?: unknown): Promise<T> {
  * Register channel listener
  */
 function onChannel(event: string, callback: (data: unknown) => void): () => void {
-  // @ts-expect-error - $channel is injected at runtime
   return window.$channel?.regChannel(event, callback) || (() => {})
 }
 

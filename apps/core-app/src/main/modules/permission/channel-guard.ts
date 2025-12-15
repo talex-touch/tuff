@@ -42,7 +42,7 @@ export function withPermission(
   options: ProtectedChannelOptions,
   callback: ChannelCallback
 ): ChannelCallback {
-  const { permissionId, allowLegacy = true, errorMessage } = options
+  const { permissionId, errorMessage } = options
 
   return (channelData: StandardChannelData) => {
     const permModule = getPermissionModule()

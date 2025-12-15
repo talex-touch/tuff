@@ -1,4 +1,4 @@
-import type { IPluginLogger, LogDataType, LogItem, LogLevel } from '../log/types'
+import type { IPluginLogger, LogDataType, LogItem, LogLevelString } from '../log/types'
 import type { PluginLoggerManager } from './logger-manager'
 import chalk from 'chalk'
 
@@ -61,13 +61,13 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
    * @param level - The severity level of the log.
    * @param args - The log message and optional data payload.
    */
-  private log(level: LogLevel, ...args: LogDataType[]): void {
+  private log(level: LogLevelString, ...args: LogDataType[]): void {
     const [message, ...data] = args
 
     const normalizedLevel = (typeof level === 'string' ? level.toUpperCase() : level) as string
-    const allowedLevels: LogLevel[] = ['INFO', 'WARN', 'ERROR', 'DEBUG']
-    const resolvedLevel = (allowedLevels.includes(normalizedLevel as LogLevel)
-      ? (normalizedLevel as LogLevel)
+    const allowedLevels: LogLevelString[] = ['INFO', 'WARN', 'ERROR', 'DEBUG']
+    const resolvedLevel = (allowedLevels.includes(normalizedLevel as LogLevelString)
+      ? (normalizedLevel as LogLevelString)
       : 'INFO')
     if (resolvedLevel === 'INFO' && normalizedLevel !== 'INFO') {
       console.warn(
@@ -75,11 +75,12 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
       )
     }
 
-    const levelColorMap: Record<LogLevel, (input: string) => string> = {
+    const levelColorMap: Record<LogLevelString, (input: string) => string> = {
       INFO: chalk.bgBlue,
       WARN: chalk.bgYellow,
       ERROR: chalk.bgRed,
       DEBUG: chalk.bgGray,
+      NONE: chalk.bgBlack,
     }
     const colorize = levelColorMap[resolvedLevel] ?? ((input: string) => input)
 

@@ -1,0 +1,28 @@
+name: Unplugin Export Plugin CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/unplugin-export-plugin/**'
+      - '.github/workflows/package-unplugin-ci.yml'
+      - '.github/workflows/package-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/unplugin-export-plugin/**'
+
+jobs:
+  ci:
+    uses: ./.github/workflows/package-ci.yml
+    with:
+      package-name: unplugin-export-plugin
+      package-path: packages/unplugin-export-plugin
+      run-typecheck: false  # Add if typecheck script exists
+      run-lint: true
+      lint-command: pnpm lint
+      run-test: false       # Add if test script exists
+      run-build: true
+      build-command: pnpm build
