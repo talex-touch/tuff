@@ -26,6 +26,14 @@ export interface MarketProviderDefinition {
     * Whether this provider should be treated as read-only (no install)
     */
   readOnly?: boolean
+  /**
+   * Whether this is an official provider
+   */
+  isOfficial?: boolean
+  /**
+   * Whether this provider is outdated and should be deprecated
+   */
+  outdated?: boolean
 }
 
 export interface MarketSourcesPayload {

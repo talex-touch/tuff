@@ -15,6 +15,7 @@ interface NexusManifestEntry {
   // Nexus API specific fields
   slug?: string
   iconUrl?: string | null
+  isOfficial?: boolean
   latestVersion?: {
     version: string
     packageUrl: string
@@ -235,7 +236,7 @@ export class NexusStoreProvider extends BaseMarketProvider {
       providerType: this.definition.type,
       providerTrustLevel: this.trustLevel,
       trusted: this.isTrusted,
-      official: this.trustLevel === 'official'
+      official: entry.isOfficial || this.trustLevel === 'official'
     }
   }
 }
