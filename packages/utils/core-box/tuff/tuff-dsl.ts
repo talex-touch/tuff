@@ -380,6 +380,7 @@ export interface TuffCustomRender {
 
 /**
  * Icon definition
+ * @deprecated
  *
  * @description
  * Unified icon type supporting only ITuffIcon object format
