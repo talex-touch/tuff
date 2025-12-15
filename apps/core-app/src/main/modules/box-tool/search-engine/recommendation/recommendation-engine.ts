@@ -10,20 +10,63 @@ import { desc, sql } from 'drizzle-orm'
 export class RecommendationEngine {
   private contextProvider: ContextProvider
   private itemRebuilder: ItemRebuilder
+  
+  private recommendationCache: {
+    items: TuffItem[]
+    timestamp: number
+    context: ContextSignal
+  } | null = null
+  
+  private readonly CACHE_DURATION_MS = 30 * 60 * 1000
+  private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
+  private refreshTimer: NodeJS.Timeout | null = null
 
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder(dbUtils)
+    
+    this.startBackgroundRefresh()
+  }
+  
+  /** Start background refresh timer */
+  private startBackgroundRefresh(): void {
+    this.refreshTimer = setInterval(async () => {
+      try {
+        await this.recommend({ forceRefresh: true })
+      } catch (error) {
+        console.error('[RecommendationEngine] Background refresh failed', error)
+      }
+    }, this.REFRESH_INTERVAL_MS)
+  }
+  
+  /** Stop background refresh timer */
+  public stopBackgroundRefresh(): void {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer)
+      this.refreshTimer = null
+    }
   }
 
-  /** 生成推荐列表 */
+  /** Generate recommendation list */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
     const startTime = performance.now()
     const context = await this.contextProvider.getCurrentContext()
 
-    // TODO: 恢复缓存逻辑
-    const forceRefresh = true
-    const cached = forceRefresh ? null : await this.getCachedRecommendations(context)
+    if (!options.forceRefresh && this.recommendationCache) {
+      const cacheAge = Date.now() - this.recommendationCache.timestamp
+      if (cacheAge < this.CACHE_DURATION_MS) {
+        console.debug('[RecommendationEngine] Cache hit, age:', (cacheAge / 1000).toFixed(1), 's')
+        return {
+          items: this.recommendationCache.items,
+          context: this.recommendationCache.context,
+          duration: performance.now() - startTime,
+          fromCache: true,
+          containerLayout: this.buildContainerLayout(options, this.recommendationCache.items)
+        }
+      }
+    }
+
+    const cached = await this.getCachedRecommendations(context)
     if (cached && !options.forceRefresh) {
       return {
         items: cached.items,
@@ -33,7 +76,6 @@ export class RecommendationEngine {
       }
     }
 
-    // Get pinned items first
     const pinnedItems = await this.getPinnedItems()
     const pinnedTuffItems = await this.itemRebuilder.rebuildItems(
       pinnedItems.map((item) => ({
@@ -42,7 +84,6 @@ export class RecommendationEngine {
         score: Number.MAX_SAFE_INTEGER
       }))
     )
-    // Mark pinned items
     for (const item of pinnedTuffItems) {
       if (!item.meta) item.meta = {}
       item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
@@ -53,8 +94,14 @@ export class RecommendationEngine {
 
     if (candidates.length === 0) {
       const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
-      // Recommend first, pinned last
       const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, options.limit || 10)
+      
+      this.recommendationCache = {
+        items: finalItems,
+        timestamp: Date.now(),
+        context
+      }
+      
       return {
         items: finalItems,
         context,
@@ -71,8 +118,14 @@ export class RecommendationEngine {
 
     if (items.length === 0 && diversified.length > 0) {
       const fallbackItems = await this.getFallbackRecommendations(limit)
-      // Recommend first, pinned last
       const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, limit)
+      
+      this.recommendationCache = {
+        items: finalItems,
+        timestamp: Date.now(),
+        context
+      }
+      
       return {
         items: finalItems,
         context,
@@ -82,11 +135,9 @@ export class RecommendationEngine {
       }
     }
 
-    // Filter out pinned items from regular results to avoid duplicates
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
     const filteredItems = items.filter((item) => !pinnedKeys.has(`${item.source.id}:${item.id}`))
 
-    // Mark recommend items (not pinned)
     for (const item of filteredItems) {
       if (!item.meta) item.meta = {}
       if (!item.meta.recommendation) {
@@ -94,11 +145,17 @@ export class RecommendationEngine {
       }
     }
 
-    // Combine: recommend items first, pinned items last (for correct ordering)
     const combinedItems = [...filteredItems, ...pinnedTuffItems].slice(0, limit)
 
     await this.cacheRecommendations(context, combinedItems)
     const duration = performance.now() - startTime
+    console.debug('[RecommendationEngine] Generated in', duration.toFixed(0), 'ms')
+
+    this.recommendationCache = {
+      items: combinedItems,
+      timestamp: Date.now(),
+      context
+    }
 
     const containerLayout = this.buildContainerLayout(options, combinedItems)
 

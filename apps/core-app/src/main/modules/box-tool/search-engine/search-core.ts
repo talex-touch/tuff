@@ -425,6 +425,19 @@ export class SearchEngineCore
           result.sessionId = sessionId
           result.containerLayout = recommendationResult.containerLayout
 
+          // If no recommendations, notify CoreBox to shrink
+          if (recommendationResult.items.length === 0) {
+            const coreBoxWindow = windowManager.current?.window
+            if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+              this.touchApp!.channel.sendTo(
+                coreBoxWindow,
+                ChannelType.MAIN,
+                'core-box:no-results',
+                { shouldShrink: true }
+              )
+            }
+          }
+
           return result
         } catch (error) {
           searchEngineLog.error('Failed to generate recommendations', { error })

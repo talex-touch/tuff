@@ -24,7 +24,9 @@ export class ItemRebuilder {
     ])
 
     const allItems = results.flat()
-    return this.mergeAndEnrichItems(allItems, scoredItems)
+    const enrichedItems = this.mergeAndEnrichItems(allItems, scoredItems)
+    
+    return enrichedItems
   }
 
   private normalizeSourceId(sourceId: string): string {
@@ -343,12 +345,46 @@ export class ItemRebuilder {
   }
 
 
+  /** Partial match fallback for items where ID format differs */
+  private findScoredByPartialMatch(item: TuffItem, scoredItems: ScoredItem[]): ScoredItem | undefined {
+    const itemId = item.id
+    const sourceId = item.source.id
+
+    if (sourceId === 'plugin-features' || sourceId.includes('plugin')) {
+      return scoredItems.find((s) => {
+        if (s.itemId.endsWith(`/${itemId}`)) return true
+        if (s.itemId === itemId) return true
+        return false
+      })
+    }
+
+    if (sourceId === 'app-provider' || sourceId === 'application') {
+      return scoredItems.find((s) => {
+        if (itemId.startsWith('/') && s.itemId.startsWith('/')) {
+          return itemId === s.itemId
+        }
+        if (s.itemId.includes(itemId) || itemId.includes(s.itemId)) {
+          return true
+        }
+        return false
+      })
+    }
+
+    return undefined
+  }
+
   private mergeAndEnrichItems(items: TuffItem[], scoredItems: ScoredItem[]): TuffItem[] {
-    const scoreMap = new Map(scoredItems.map((s) => [s.itemId, s]))
+    const scoreMap = new Map<string, ScoredItem>()
+    for (const s of scoredItems) {
+      scoreMap.set(s.itemId, s)
+      scoreMap.set(`${s.sourceId}:${s.itemId}`, s)
+    }
 
     return items
       .map((item) => {
-        const scored = scoreMap.get(item.id)
+        const scored = scoreMap.get(item.id) 
+          || scoreMap.get(`${item.source.id}:${item.id}`)
+          || this.findScoredByPartialMatch(item, scoredItems)
         if (!scored) return null
 
         const meta: any = item.meta || {}
@@ -356,8 +392,8 @@ export class ItemRebuilder {
           score: scored.score,
           source: scored.source,
           reason: this.getReasonLabel(scored),
-          isIntelligent: true, // 新增: 标识这是智能推荐
-          badge: this.generateBadge(scored) // 新增: 徽章信息
+          isIntelligent: true,
+          badge: this.generateBadge(scored)
         }
         item.meta = meta
 
