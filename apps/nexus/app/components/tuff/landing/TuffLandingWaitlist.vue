@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const router = useRouter()
 
 const pioneerBenefitKeys = ['early', 'shape', 'community'] as const
@@ -20,13 +20,8 @@ const pioneer = computed(() => ({
   privacy: t('landing.os.pioneer.privacy'),
 }))
 
-const emailPlaceholder = 'tuff@tagzxia.com'
-const emailInput = ref('')
-
-function handleSubmit(event: Event) {
-  event.preventDefault()
-  const langTag = locale.value === 'zh' ? 'zh-CN' : 'en-US'
-  router.push(`/sign-up?lang=${langTag}`)
+function goToUpdates() {
+  router.push('/updates?channel=beta')
 }
 </script>
 
@@ -55,27 +50,14 @@ function handleSubmit(event: Event) {
         <p class="text-base text-white/70 sm:text-lg">
           {{ pioneer.subheadline }}
         </p>
-        <form
-          class="flex w-full max-w-xl flex-col gap-3 sm:flex-row"
-          @submit="handleSubmit"
+        <button
+          type="button"
+          class="inline-flex items-center justify-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black shadow-md transition hover:-translate-y-0.5 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          @click="goToUpdates"
         >
-          <input
-            v-model="emailInput"
-            type="email"
-            name="email"
-            required
-            autocomplete="email"
-            :placeholder="emailPlaceholder"
-            class="w-full rounded-full border border-white/25 bg-transparent px-5 py-3 text-sm text-white placeholder:text-white/40 focus:border-white focus:outline-none focus:ring-2 focus:ring-white/30"
-          >
-          <button
-            type="submit"
-            class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black shadow-md transition hover:-translate-y-0.5 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:w-auto"
-          >
-            <span class="i-carbon-rocket text-base" />
-            {{ pioneer.cta }}
-          </button>
-        </form>
+          <span class="i-carbon-rocket text-base" />
+          {{ pioneer.cta }}
+        </button>
         <ul class="flex flex-col gap-2 text-sm text-white/60 sm:flex-row sm:items-center sm:gap-6">
           <li
             v-for="benefit in pioneer.benefits"

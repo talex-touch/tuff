@@ -439,10 +439,11 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
             )
           }
 
-          // Continue enabling - don't block, user can grant permissions later
-          pluginLog.info('Plugin enabled with missing permissions, user can grant later', {
+          // Block enabling until required permissions are granted
+          pluginLog.info(`Plugin enable blocked: missing required permissions [${missing.required.join(', ')}]`, {
             meta: { plugin: pluginName },
           })
+          return false
         }
       }
     }

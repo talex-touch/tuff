@@ -108,6 +108,22 @@ export function useChannel(): TouchChannel {
 }
 
 /**
+ * Safe version of useChannel that returns null instead of throwing
+ * when TouchChannel is not available. Useful for optional features.
+ *
+ * @example
+ * ```ts
+ * const channel = tryUseChannel()
+ * if (channel) {
+ *   const result = await channel.send('get-app-config')
+ * }
+ * ```
+ */
+export function tryUseChannel(): TouchChannel | null {
+  return resolveTouchChannel()
+}
+
+/**
  * Helper composable that creates a typed channel wrapper
  * for specific communication patterns
  *

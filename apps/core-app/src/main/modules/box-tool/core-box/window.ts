@@ -525,7 +525,7 @@ export class WindowManager {
     // Priority: customHeight > isUIMode > forceMax > calculated from length
     let height: number
     if (typeof customHeight === 'number' && customHeight > 0) {
-      height = Math.max(60, Math.min(customHeight, 650))
+      height = Math.max(60, Math.min(customHeight, 510))
     } else if (isUIMode) {
       height = 600
     } else if (forceMax) {
@@ -598,7 +598,7 @@ export class WindowManager {
    * Set CoreBox to a specific height (called from frontend)
    */
   public setHeight(height: number): void {
-    const safeHeight = Math.max(60, Math.min(height, 650))
+    const safeHeight = Math.max(60, Math.min(height, 510))
     
     const currentWindow = this.current
     if (!currentWindow) {
