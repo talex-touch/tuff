@@ -13,6 +13,15 @@ interface UseResizeOptions {
 // Debounce time for collapse operations - longer to avoid flickering
 const COLLAPSE_DEBOUNCE_MS = 100
 
+// Animation timing for height calculation
+// Item animation: 0.3s base + stagger delay (max ~0.055s per item)
+const ITEM_ANIMATION_BASE_MS = 300
+const STAGGER_DELAY_PER_ITEM_MS = 55
+const MAX_ANIMATION_WAIT_MS = 600 // Cap animation wait time
+
+// Scrollbar width estimation (varies by platform, ~8-17px typically)
+const SCROLLBAR_WIDTH_ESTIMATE = 12
+
 function sendExpandCommand(length: number, forceMax: boolean = false): void {
   if (forceMax) {
     touchChannel.sendSync('core-box:expand', { mode: 'max' })
@@ -28,6 +37,7 @@ function sendCollapseCommand(): void {
 /**
  * Calculate actual content height from DOM
  * Returns the scroll height of the result container + header height
+ * Considers scrollbar presence for accurate height calculation
  */
 function calculateActualHeight(): number {
   const scrollArea = document.querySelector('.CoreBoxRes-Main > .scroll-area')
@@ -35,13 +45,40 @@ function calculateActualHeight(): number {
     return 0
   }
   
-  // Get the scroll height (includes overflow content)
+  // Get actual scroll dimensions
   const scrollHeight = scrollArea.scrollHeight
+  const clientHeight = scrollArea.clientHeight
+  
   // Header is 60px, footer is ~44px
   const headerHeight = 60
   const footerHeight = 44
   
-  return Math.min(scrollHeight + headerHeight + footerHeight, 600)
+  // Check if vertical scrollbar will appear (content overflows)
+  // When scrollbar appears, it may cause content reflow
+  const willHaveScrollbar = scrollHeight > clientHeight
+  
+  // If scrollbar will appear, add extra height buffer to account for
+  // potential content reflow due to reduced available width
+  let extraBuffer = 0
+  if (willHaveScrollbar) {
+    // When scrollbar appears, available content width decreases
+    // This may cause text wrapping and increase content height
+    // Add a small buffer to prevent oscillation
+    extraBuffer = SCROLLBAR_WIDTH_ESTIMATE
+  }
+  
+  return Math.min(scrollHeight + headerHeight + footerHeight + extraBuffer, 600)
+}
+
+/**
+ * Calculate animation wait time based on item count
+ * Front items animate quickly, later items have staggered delays
+ */
+function calculateAnimationWaitTime(itemCount: number): number {
+  if (itemCount <= 0) return 0
+  // Total animation time = base animation + total stagger delay for all items
+  const totalStaggerDelay = Math.min(itemCount, 12) * STAGGER_DELAY_PER_ITEM_MS
+  return Math.min(ITEM_ANIMATION_BASE_MS + totalStaggerDelay, MAX_ANIMATION_WAIT_MS)
 }
 
 export function useResize(options: UseResizeOptions): void {
@@ -52,16 +89,22 @@ export function useResize(options: UseResizeOptions): void {
     const hasActiveProviders = !!(activeActivations.value?.length)
     const isLoading = loading.value
     
+    console.debug('[useResize] checkShouldCollapse', { hasResults, hasActiveProviders, isLoading })
+    
     // Never collapse when there's an active provider (plugin UI mode)
     if (hasActiveProviders) {
       return false
     }
     
-    return !hasResults && !isLoading
+    const shouldCollapse = !hasResults && !isLoading
+    console.debug('[useResize] shouldCollapse:', shouldCollapse)
+    return shouldCollapse
   }
 
   const debouncedCollapse = useDebounceFn(() => {
+    console.debug('[useResize] debouncedCollapse called')
     if (checkShouldCollapse()) {
+      console.debug('[useResize] Sending collapse command')
       sendCollapseCommand()
     }
   }, COLLAPSE_DEBOUNCE_MS)
@@ -91,6 +134,16 @@ export function useResize(options: UseResizeOptions): void {
     }
   }, 50)
 
+  // Timer for post-animation height recalculation
+  let animationHeightTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearAnimationTimer(): void {
+    if (animationHeightTimer) {
+      clearTimeout(animationHeightTimer)
+      animationHeightTimer = null
+    }
+  }
+
   function updateHeight(): void {
     const hasActiveProviders = !!(activeActivations.value?.length)
 
@@ -104,9 +157,27 @@ export function useResize(options: UseResizeOptions): void {
     if (resultCount > 0) {
       // First send count-based height for immediate response
       sendExpandCommand(resultCount)
+      
+      // Clear any pending animation timer
+      clearAnimationTimer()
+      
       // Then recalculate based on actual DOM after render
       nextTick(() => {
+        // Initial height update (may be inaccurate during animation)
         debouncedUpdateHeight()
+        
+        // Schedule final height recalculation after animations complete
+        const animationWaitTime = calculateAnimationWaitTime(resultCount)
+        if (animationWaitTime > 0) {
+          animationHeightTimer = setTimeout(() => {
+            // Final height calculation after all animations complete
+            const finalHeight = calculateActualHeight()
+            if (finalHeight > 60) {
+              touchChannel.sendSync('core-box:set-height', { height: finalHeight })
+            }
+            animationHeightTimer = null
+          }, animationWaitTime)
+        }
       })
     }
   }
@@ -125,10 +196,12 @@ export function useResize(options: UseResizeOptions): void {
   watch(
     () => results.value,
     (newResults) => {
+      console.debug('[useResize] results changed, length:', newResults.length)
       if (newResults.length > 0) {
         // Always update height when results change
         updateHeight()
       } else {
+        console.debug('[useResize] No results, calling debouncedCollapse')
         debouncedCollapse()
       }
     },

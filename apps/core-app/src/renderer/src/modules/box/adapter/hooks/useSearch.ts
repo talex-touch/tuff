@@ -167,7 +167,15 @@ export function useSearch(
     return inputs
   }
 
-  const debouncedSearch = useDebounceFn(async () => {
+  // Core search logic extracted for reuse
+  async function executeSearch(): Promise<void> {
+    const startTime = performance.now()
+    console.debug('[useSearch] executeSearch called at', startTime, { 
+      searchVal: searchVal.value, 
+      activeActivations: activeActivations.value,
+      isDivisionBox: isDivisionBoxMode()
+    })
+    
     const currentSequence = ++searchSequence
     const inputs = buildQueryInputs()
 
@@ -199,9 +207,22 @@ export function useSearch(
 
     // Empty text query (with or without inputs): show recommendations or input-aware results
     if (!searchVal.value && !activeActivations.value?.length) {
+      console.debug('[useSearch] Empty query, fetching recommendations')
       boxOptions.focus = 0
       loading.value = true
       searchResults.value = []
+
+      // Set timeout to force collapse if recommendation takes too long
+      const RECOMMENDATION_TIMEOUT_MS = 500
+      const timeoutId = setTimeout(() => {
+        if (loading.value && searchResults.value.length === 0) {
+          console.warn('[useSearch] Recommendation timeout, forcing collapse')
+          loading.value = false
+          searchResults.value = []
+          // Trigger collapse via channel
+          touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
+        }
+      }, RECOMMENDATION_TIMEOUT_MS)
 
       try {
         const query: TuffQuery = {
@@ -215,7 +236,14 @@ export function useSearch(
           source: 'renderer'
         })
 
+        const queryStartTime = performance.now()
+        console.debug('[useSearch] Sending core-box:query to main process at', queryStartTime)
         const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+        const queryEndTime = performance.now()
+        console.debug('[useSearch] Received result:', initialResult?.items?.length, 'items in', (queryEndTime - queryStartTime).toFixed(2), 'ms')
+
+        // Clear timeout if we got results in time
+        clearTimeout(timeoutId)
 
         if (currentSequence !== searchSequence) {
           return
@@ -231,7 +259,10 @@ export function useSearch(
         }
 
         loading.value = false
+        const totalTime = performance.now() - startTime
+        console.debug('[useSearch] Total recommendation time:', totalTime.toFixed(2), 'ms')
       } catch (error) {
+        clearTimeout(timeoutId)
         console.error('Recommendation search failed:', error)
         searchResults.value = []
         searchResult.value = null
@@ -306,7 +337,10 @@ export function useSearch(
       loading.value = false
     }
     // Do not set loading to false here; wait for the `search-end` event.
-  }, debounceMs)
+  }
+
+  // Debounced version of executeSearch for normal typing
+  const debouncedSearch = useDebounceFn(executeSearch, debounceMs)
 
   /**
    * Trigger debounced search
@@ -320,13 +354,8 @@ export function useSearch(
    * Used when clipboard state changes or immediate update is needed
    */
   async function handleSearchImmediate(): Promise<void> {
-    // Always trigger search - even with empty input, clipboard content should be searched
-    debouncedSearch()
-    // @ts-ignore - flush method exists on debounced function from lodash-es
-    if (debouncedSearch.flush) {
-      // @ts-ignore - flush method exists on debounced function from lodash-es
-      debouncedSearch.flush()
-    }
+    // Directly execute search without debounce
+    await executeSearch()
   }
 
   /**
@@ -595,6 +624,18 @@ export function useSearch(
 
     // Trigger initial search to show recommendations when CoreBox opens
     handleSearch()
+    
+    // Listen for CoreBox shown event to refresh recommendations
+    const handleCoreBoxShown = () => {
+      console.debug('[useSearch] CoreBox shown, triggering recommendation refresh')
+      // Only refresh if search is empty and no active providers
+      if (!searchVal.value && !activeActivations.value?.length) {
+        // Use immediate search to avoid debounce delay
+        handleSearchImmediate()
+      }
+    }
+    
+    window.addEventListener('corebox:shown', handleCoreBoxShown)
   })
 
   // Listener for when the search stream is finished.
@@ -634,6 +675,14 @@ export function useSearch(
     searchResults.value = []
     searchResult.value = null
     loading.value = false
+  })
+
+  // Listener for no results - trigger shrink
+  touchChannel.regChannel('core-box:no-results', ({ data }) => {
+    if (data?.shouldShrink) {
+      // Send collapse command to shrink CoreBox
+      touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
+    }
   })
 
   return {

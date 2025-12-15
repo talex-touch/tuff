@@ -9,7 +9,7 @@ import {
   PRELOAD_LOADING_CHANNEL,
 
 } from '@talex-touch/utils/preload'
-import { isCoreBox, isDivisionBox, isMainWindow, useInitialize } from '@talex-touch/utils/renderer'
+import { isCoreBox, isDivisionBox, isMainWindow, useInitialize, useArgMapper } from '@talex-touch/utils/renderer'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge, ipcRenderer } from 'electron'
 
@@ -682,6 +682,15 @@ const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoad
 
 domReady().then(() => {
   const info = useInitialize()
+  
+  // Debug: log window type detection
+  const argMapper = useArgMapper()
+  console.log('[preload] process.argv:', process.argv)
+  console.log('[preload] argMapper:', argMapper)
+  console.log('[preload] touchType:', argMapper.touchType)
+  console.log('[preload] isMainWindow:', isMainWindow())
+  console.log('[preload] isCoreBox:', isCoreBox())
+  
   if (isMainWindow()) {
     appendLoading()
   }

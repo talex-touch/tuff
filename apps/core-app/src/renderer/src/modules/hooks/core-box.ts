@@ -54,6 +54,8 @@ try {
   touchChannel.regChannel('core-box:trigger', ({ data }: any) => {
     const { show, id, type, sessionId, config, meta } = data!
     
+    console.debug('[core-box.ts] Received core-box:trigger', { show, id, type, startupInfoId: window.$startupInfo?.id })
+    
     if (type === 'division-box') {
       windowState.type = 'division-box'
       windowState.divisionBox = {
@@ -68,18 +70,28 @@ try {
     }
     
     if (window.$startupInfo?.id !== undefined && id !== window.$startupInfo.id) {
+      console.debug('[core-box.ts] ID mismatch, skipping', { receivedId: id, startupInfoId: window.$startupInfo.id })
       return
     }
 
-    if (show) {
+    // Always keep core-box class - CoreBox is a separate window, 
+    // visibility is controlled by the window itself, not CSS class
+    if (!document.body.classList.contains('core-box')) {
+      console.debug('[core-box.ts] Adding core-box class to body')
       document.body.classList.add('core-box')
+    }
+
+    if (show) {
       setTimeout(() => {
         const input = document.querySelector('#core-box-input') as HTMLElement
         input?.focus()
       }, 100)
-    } else {
-      document.body.classList.remove('core-box')
+      
+      // Dispatch event to trigger recommendation refresh when CoreBox is shown
+      window.dispatchEvent(new CustomEvent('corebox:shown'))
     }
+    // Note: We no longer remove core-box class on hide - the window visibility
+    // is controlled by the main process, not by CSS class
   })
 } catch { /* ignore */ }
 
