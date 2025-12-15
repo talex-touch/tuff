@@ -53,9 +53,6 @@ const signUpUrl = computed(() => `/sign-up?lang=${langTag.value}`)
   <div class="relative min-h-screen flex items-center justify-center bg-white px-4 py-16 dark:bg-gray-900">
     <div class="w-full max-w-md">
       <div class="space-y-6">
-        <div class="rounded-2xl border border-primary/15 bg-dark/5 px-4 py-3 text-sm text-black/80 dark:border-light/20 dark:bg-light/10 dark:text-light/80">
-          {{ t('auth.linuxdoWaitlistNotice') }}
-        </div>
         <SignIn
           :appearance="{ elements: { rootBox: 'shadow-lg rounded-2xl bg-white dark:bg-gray-800' } }"
           path="/sign-in"

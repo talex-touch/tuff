@@ -5,10 +5,10 @@ import { ElMessage } from 'element-plus'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import { useChannel } from '@talex-touch/utils/renderer'
+import { tryUseChannel } from '@talex-touch/utils/renderer'
 
 const { t } = useI18n()
-const channel = useChannel()
+const channel = tryUseChannel()
 
 interface EverythingStatus {
   enabled: boolean
@@ -26,7 +26,7 @@ const isTesting = ref(false)
 let statusCheckInterval: NodeJS.Timeout | null = null
 
 const checkStatus = async () => {
-  if (isChecking.value) return
+  if (isChecking.value || !channel) return
   
   isChecking.value = true
   try {
@@ -40,7 +40,7 @@ const checkStatus = async () => {
 }
 
 const toggleEverything = async () => {
-  if (!everythingStatus.value) return
+  if (!everythingStatus.value || !channel) return
   
   const newEnabled = !everythingStatus.value.enabled
   
@@ -64,7 +64,7 @@ const toggleEverything = async () => {
 }
 
 const testSearch = async () => {
-  if (isTesting.value) return
+  if (isTesting.value || !channel) return
   
   isTesting.value = true
   try {

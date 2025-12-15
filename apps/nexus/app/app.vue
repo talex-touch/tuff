@@ -75,10 +75,12 @@ watchEffect(() => {
   if (!route.path)
     return
 
-  const trimmed = route.path.replace(/^\/(en|zh)(?=\/|$)/i, '') || '/'
+  // 移除语言前缀 /en 或 /zh
+  const trimmed = route.path.replace(/^\/(en|zh)(?=\/|$)/i, '')
 
-  // 只在路径实际不同时才重定向，并且确保不会导致无限循环
-  if (trimmed !== route.path && route.path !== '/') {
+  // 只在路径实际不同且 trimmed 非空时才重定向
+  // 避免 /en 或 /zh 被错误重定向到首页
+  if (trimmed && trimmed !== route.path) {
     router.replace({
       path: trimmed,
       query: route.query,
