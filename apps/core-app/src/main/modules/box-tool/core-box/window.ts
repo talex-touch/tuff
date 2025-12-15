@@ -398,30 +398,14 @@ export class WindowManager {
 
     const baseLeft = rect.x + (rect.width - windowWidth) / 2
     
-    // Position calculation depends on animation setting
-    const settings = this.getAppSettingConfig()
-    const animationEnabled = settings.animation?.coreBoxResize !== false
-    
     let top: number
     
     if (this.customTopPercent !== null) {
       // Use custom position if set
       top = rect.y + Math.round(rect.height * this.customTopPercent) - Math.round(windowHeight / 2)
-    } else if (!animationEnabled) {
-      // Animation disabled: fixed position at 25% from top, window expands downward
-      top = rect.y + Math.round(rect.height * 0.25)
     } else {
-      // Animation enabled: different positions for collapsed vs expanded
-      const isCollapsed = windowHeight <= 72
-      if (isCollapsed) {
-        // 35% from top of screen for collapsed state
-        top = rect.y + Math.round(rect.height * 0.35) - Math.round(windowHeight / 2)
-      } else {
-        // Slightly above center for expanded state
-        const baseTop = rect.y + (rect.height - windowHeight) / 2
-        const offsetTop = rect.height * 0.08
-        top = Math.round(baseTop - offsetTop)
-      }
+      // Fixed position at 30% from top, window expands downward (no vertical movement)
+      top = rect.y + Math.round(rect.height * 0.30)
     }
 
     let left = Math.round(baseLeft)
@@ -1523,7 +1507,7 @@ export class WindowManager {
 
   /**
    * Opens DevTools for the plugin's WebContentsView if the specified plugin is currently attached.
-   * Only allowed for plugins with dev.enable = true.
+   * Allowed for dev plugins, or any plugin when the app runs in DEV mode.
    * @param pluginName - Name of the plugin to open DevTools for
    * @returns true if DevTools was opened, false otherwise
    */
@@ -1532,8 +1516,9 @@ export class WindowManager {
       return false
     }
 
-    // Block DevTools for non-dev plugins
-    if (!this.attachedPlugin.dev?.enable) {
+    const devtoolsAllowed = this.attachedPlugin.dev?.enable
+      || this.touchApp.version === TalexTouch.AppVersion.DEV
+    if (!devtoolsAllowed) {
       coreBoxWindowLog.warn(`DevTools blocked for non-dev plugin: ${pluginName}`)
       return false
     }

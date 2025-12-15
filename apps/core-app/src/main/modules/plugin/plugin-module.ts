@@ -165,9 +165,10 @@ const INTERNAL_PLUGIN_NAMES = new Set<string>()
 function createPluginModuleInternal(pluginPath: string): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
-  const reloadingPlugins: Set<string> = new Set()
-  const loadingPlugins: Set<string> = new Set()
-  const enabledPlugins: Set<string> = new Set()
+  const enabledPlugins = new Set<string>()
+  const loadingPlugins = new Set<string>()
+  const reloadingPlugins = new Set<string>()
+  const pendingPermissionPlugins = new Map<string, { pluginName: string; autoRetry: boolean }>()
   const pluginNameIndex: Map<string, string> = new Map()
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
@@ -420,12 +421,11 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
           // Send permission request to renderer
           pluginLog.info(`Plugin ${pluginName} needs permission confirmation: ${missing.required.length} required, ${missing.optional.length} optional`)
 
-          // Broadcast permission request event for UI to handle
-          const { BrowserWindow } = await import('electron')
-          const windows = BrowserWindow.getAllWindows()
-          for (const win of windows) {
+          // Send permission request ONLY to main window (not CoreBox or other windows)
+          const mainWindow = $app.window?.window
+          if (mainWindow && !mainWindow.isDestroyed()) {
             $app.channel?.sendTo(
-              win,
+              mainWindow,
               ChannelType.MAIN,
               'permission:startup-request',
               {
@@ -437,7 +437,15 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
                 reasons: plugin.declaredPermissions.reasons || {},
               }
             )
+          } else {
+            pluginLog.warn(`Main window not available for permission request: ${pluginName}`)
           }
+
+          // Store for retry after permission grant
+          pendingPermissionPlugins.set(pluginName, {
+            pluginName: plugin.name,
+            autoRetry: !skipPermissionCheck,
+          })
 
           // Block enabling until required permissions are granted
           pluginLog.info(`Plugin enable blocked: missing required permissions [${missing.required.join(', ')}]`, {
@@ -884,7 +892,9 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
           if (plugin && plugin.status === PluginStatus.DISABLED) {
             try {
               logInfo('Auto-enabling plugin', pluginTag(pluginName))
-              await plugin.enable()
+
+              // Go through manager-level enable flow to enforce permission gating.
+              await enablePlugin(pluginName)
 
               logInfo('Auto-enable complete', pluginTag(pluginName))
             }
@@ -1147,6 +1157,38 @@ export class PluginModule extends BaseModule {
 
     // Register built-in internal plugins (e.g. internal AI)
     registerBuiltInInternalPlugins(this.pluginManager)
+
+    // Listen for permission granted events to retry enabling plugins
+    touchEventBus.on(TalexEvents.PERMISSION_GRANTED, async (event: any) => {
+      const { pluginId } = event
+      if (!pluginId) return
+
+      const manager = this.pluginManager
+      if (!manager) return
+
+      // Check if this plugin is pending permission
+      const pendingPlugins = (manager as any).pendingPermissionPlugins as Map<string, { pluginName: string; autoRetry: boolean }>
+      const pending = pendingPlugins?.get(pluginId)
+      
+      if (pending && pending.autoRetry) {
+        pluginLog.info(`Permission granted for ${pluginId}, retrying enable...`)
+        
+        // Remove from pending
+        pendingPlugins.delete(pluginId)
+        
+        // Retry enabling the plugin
+        try {
+          const success = await manager.enablePlugin(pluginId)
+          if (success) {
+            pluginLog.info(`Successfully enabled ${pluginId} after permission grant`)
+          } else {
+            pluginLog.warn(`Failed to enable ${pluginId} after permission grant`)
+          }
+        } catch (error) {
+          pluginLog.error(`Error enabling ${pluginId} after permission grant`, { error })
+        }
+      }
+    })
   }
 
   onDestroy(): MaybePromise<void> {
@@ -1353,9 +1395,14 @@ export class PluginModule extends BaseModule {
       const pluginName = data as string
       if (!pluginName) return
 
-      // Block DevTools for non-dev plugins
       const plugin = manager.getPluginByName(pluginName) as TouchPlugin
-      if (!plugin?.dev?.enable) {
+      if (!plugin) {
+        console.warn(`[PluginModule] DevTools request for unknown plugin: ${pluginName}`)
+        return
+      }
+
+      const devtoolsAllowed = plugin.dev?.enable || !app.isPackaged
+      if (!devtoolsAllowed) {
         console.warn(`[PluginModule] DevTools blocked for non-dev plugin: ${pluginName}`)
         return
       }

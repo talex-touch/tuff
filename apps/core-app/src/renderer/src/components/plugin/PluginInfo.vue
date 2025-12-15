@@ -45,6 +45,8 @@ const loadingStates = ref({
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
 const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
 
+const isAppDev = computed(() => window.$startupInfo?.isDev === true)
+
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
 const tabItems = computed(() => {
@@ -235,7 +237,7 @@ async function handleUninstallPlugin(): Promise<void> {
             }}</span>
           </div>
           <div
-            v-if="plugin.dev?.enable"
+            v-if="plugin.dev?.enable || isAppDev"
             class="action-item"
             :class="{ disabled: loadingStates.openDevTools }"
             @click="handleOpenDevTools"

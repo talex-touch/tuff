@@ -156,19 +156,11 @@ export class AddonOpenerModule extends BaseModule {
       '@install-plugin',
       async ({ data: { name, buffer, forceUpdate }, reply }) => {
         const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
-        console.log(`[AddonInstaller] Starting installation for: ${name}`)
-        console.log(`[AddonInstaller] Temp file path: ${tempFilePath}`)
-        console.log(`[AddonInstaller] Force update: ${forceUpdate}`)
-        
         try {
           await fs.promises.writeFile(tempFilePath, buffer)
-          console.log(`[AddonInstaller] Temp file written, size: ${buffer.length} bytes`)
-          
           await new PluginResolver(tempFilePath).resolve(({ event, type }: any) => {
             if (type === 'error') {
               console.error(`[AddonInstaller] Installation failed for ${name}:`, event.msg)
-            } else {
-              console.log(`[AddonInstaller] Installation successful for ${name}`)
             }
 
             reply(DataCode.SUCCESS, {
@@ -195,11 +187,8 @@ export class AddonOpenerModule extends BaseModule {
       'drop:plugin',
       async ({ data: { name, buffer }, reply }) => {
         const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
-        console.log(`[AddonDropper] Processing dropped plugin: ${name}`)
-
         try {
           await fs.promises.writeFile(tempFilePath, buffer)
-          console.log(`[AddonDropper] Temp file written: ${tempFilePath}`)
 
           const pluginResolver = new PluginResolver(tempFilePath)
 
@@ -222,7 +211,6 @@ export class AddonOpenerModule extends BaseModule {
               })
             }
             else {
-              console.log('[AddonDropper] Plugin manifest resolved successfully:', event.msg?.name)
               reply(DataCode.SUCCESS, {
                 status: 'success',
                 manifest: event.msg,

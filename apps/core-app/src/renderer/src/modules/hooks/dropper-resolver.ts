@@ -15,10 +15,7 @@ export function clearBufferedFile(name: string): void {
 }
 
 async function handlePluginDrop(file: File): Promise<boolean> {
-  console.log('[DropperResolver] Handling dropped file:', file)
-
   if (file.name.endsWith('.touch-plugin')) {
-    console.warn('[DropperResolver] Deprecated plugin format: .touch-plugin')
     await blowMention('Fatal Error', 'Sorry, the plugin is deprecated, we only support .tpex now.')
     return true
   }
@@ -33,8 +30,6 @@ async function handlePluginDrop(file: File): Promise<boolean> {
     try {
       const arrayBuffer = await file.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
-
-      console.log(`[DropperResolver] Resolving .tpex plugin: ${file.name}`)
 
       // Cache the buffer before sending it to the main process
       bufferCache.set(file.name, buffer)
@@ -63,7 +58,6 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       }
       else {
         const { manifest, path } = data
-        console.log('[DropperResolver] Plugin manifest resolved:', manifest)
         await popperMention(manifest.name, () => {
           return h(PluginApplyInstall, { manifest, path, fileName: file.name })
         })
@@ -94,15 +88,10 @@ function parseFile(file: File): any {
 export function useDropperResolver(): void {
   document.addEventListener('drop', async (e) => {
     e.preventDefault()
-    console.log('[DropperResolver] Drop event detected.', e)
-
     const files = e.dataTransfer?.files
     if (!files || files.length === 0) {
-      console.log('[DropperResolver] No files dropped.')
       return
     }
-
-    console.log(`[DropperResolver] ${files.length} file(s) dropped.`)
 
     if (files.length === 1) {
       const file = files[0]
@@ -130,7 +119,6 @@ export function useDropperResolver(): void {
       },
     }
 
-    console.log('[DropperResolver] Sending drop event to main process.', option)
     touchChannel.send('drop', option)
   })
 
