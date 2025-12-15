@@ -5,7 +5,7 @@ import FlatButton from '~/components/base/button/FlatButton.vue'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { clearBufferedFile, getBufferedFile } from '~/modules/hooks/dropper-resolver'
-import { blowMention } from '~/modules/mention/dialog-mention'
+import { blowMention, forTouchTip } from '~/modules/mention/dialog-mention'
 
 interface Manifest {
   name: string
@@ -22,7 +22,7 @@ const props = defineProps<{
 const installing = ref(false)
 const close = inject('destroy') as () => void
 
-async function install(): Promise<void> {
+async function install(forceUpdate = false): Promise<void> {
   installing.value = true
 
   const buffer = getBufferedFile(props.fileName)
@@ -36,24 +36,70 @@ async function install(): Promise<void> {
   try {
     await sleep(400)
 
-    const { data } = await touchChannel.send('@install-plugin', { name: props.fileName, buffer })
+    const data = await touchChannel.send('@install-plugin', { 
+      name: props.fileName, 
+      buffer,
+      forceUpdate 
+    })
 
     await sleep(400)
     installing.value = false
     await sleep(400)
-    close()
 
-    if (data.status === 'error') {
+    if (data?.status === 'error') {
       if (data.msg === '10091') {
-        await blowMention('Install', '该插件已遭受不可逆破坏！')
+        close()
+        await blowMention('Install Error', 'The plugin package is corrupted!')
+      }
+      else if (data.msg === 'plugin already exists') {
+        // Ask user if they want to update/override
+        let shouldUpdate = false
+        await forTouchTip(
+          'Plugin Already Exists',
+          `Plugin "${props.manifest.name}" is already installed. Do you want to update it?`,
+          [
+            {
+              content: 'Update',
+              type: 'success',
+              onClick: async () => {
+                shouldUpdate = true
+                return true
+              }
+            },
+            {
+              content: 'Cancel',
+              type: 'default',
+              onClick: async () => true
+            }
+          ]
+        )
+        
+        if (shouldUpdate) {
+          // Retry with force update
+          await install(true)
+          return
+        }
+        close()
+      }
+      else if (typeof data.msg === 'string') {
+        close()
+        await blowMention('Install Error', `Installation failed: ${data.msg}`)
       }
       else {
-        await blowMention('Install', JSON.stringify(data.msg))
+        close()
+        await blowMention('Install Error', `Installation failed: ${JSON.stringify(data.msg)}`)
       }
     }
     else {
-      await blowMention('Install', '插件安装成功！')
+      close()
+      await blowMention('Install Success', `Plugin "${props.manifest.name}" installed successfully!`)
     }
+  }
+  catch (error: any) {
+    installing.value = false
+    close()
+    console.error('[PluginApplyInstall] Installation error:', error)
+    await blowMention('Install Error', `Unexpected error: ${error?.message || 'Unknown error'}`)
   }
   finally {
     clearBufferedFile(props.fileName)

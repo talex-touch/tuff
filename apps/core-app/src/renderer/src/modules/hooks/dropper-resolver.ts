@@ -1,4 +1,5 @@
 import { h } from 'vue'
+import { ElLoading } from 'element-plus'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { touchChannel } from '../channel/channel-core'
 import { blowMention, popperMention } from '../mention/dialog-mention'
@@ -23,40 +24,56 @@ async function handlePluginDrop(file: File): Promise<boolean> {
   }
 
   if (file.name.endsWith('.tpex')) {
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-
-    console.log(`[DropperResolver] Resolving .tpex plugin: ${file.name}`)
-
-    // Cache the buffer before sending it to the main process
-    bufferCache.set(file.name, buffer)
-
-    const data = touchChannel.sendSync('drop:plugin', {
-      name: file.name,
-      buffer,
-      size: file.size,
+    const loadingInstance = ElLoading.service({
+      lock: true,
+      text: 'Parsing plugin package...',
+      background: 'rgba(0, 0, 0, 0.7)',
     })
 
-    if (data.status === 'error') {
-      console.error(`[DropperResolver] Error resolving plugin: ${data.msg}`)
-      // Clear cache on error
-      clearBufferedFile(file.name)
-      if (data.msg === '10091') {
-        await blowMention('Install Error', 'The plugin has been irreversibly damaged!')
-      }
-      else if (data.msg === '10092') {
-        await blowMention('Install Error', 'Unable to identify the file!')
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      const buffer = Buffer.from(arrayBuffer)
+
+      console.log(`[DropperResolver] Resolving .tpex plugin: ${file.name}`)
+
+      // Cache the buffer before sending it to the main process
+      bufferCache.set(file.name, buffer)
+
+      const data = touchChannel.sendSync('drop:plugin', {
+        name: file.name,
+        buffer,
+        size: file.size,
+      })
+
+      loadingInstance.close()
+
+      if (data.status === 'error') {
+        console.error(`[DropperResolver] Error resolving plugin: ${data.msg}`)
+        // Clear cache on error
+        clearBufferedFile(file.name)
+        if (data.msg === '10091') {
+          await blowMention('Install Error', 'The plugin has been irreversibly damaged!')
+        }
+        else if (data.msg === '10092') {
+          await blowMention('Install Error', 'Unable to identify the file!')
+        }
+        else {
+          await blowMention('Install Error', `An unknown error occurred: ${data.msg}`)
+        }
       }
       else {
-        await blowMention('Install Error', `An unknown error occurred: ${data.msg}`)
+        const { manifest, path } = data
+        console.log('[DropperResolver] Plugin manifest resolved:', manifest)
+        await popperMention(manifest.name, () => {
+          return h(PluginApplyInstall, { manifest, path, fileName: file.name })
+        })
       }
     }
-    else {
-      const { manifest, path } = data
-      console.log('[DropperResolver] Plugin manifest resolved:', manifest)
-      await popperMention(manifest.name, () => {
-        return h(PluginApplyInstall, { manifest, path, fileName: file.name })
-      })
+    catch (error) {
+      loadingInstance.close()
+      console.error('[DropperResolver] Failed to process TPEX file:', error)
+      clearBufferedFile(file.name)
+      await blowMention('Install Error', 'Failed to read plugin file. Please try again.')
     }
     return true
   }
