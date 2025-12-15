@@ -50,6 +50,7 @@ out/
 .nuxt/
 .serverless/
 .vuepress/dist/
+.vitepress/
 apps/core-app/tuff
 apps/core-app/.electron-builder-cache/
 apps/core-app/src/renderer/src/distinformation.json

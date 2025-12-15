@@ -1,0 +1,24 @@
+import TxStatusBadge from './src/TxStatusBadge.vue'
+import { withInstall } from '../../../utils/withInstall'
+import type { StatusBadgeProps, StatusBadgeEmits, StatusTone, StatusKey } from './src/types'
+
+/**
+ * TxStatusBadge component with Vue plugin installation support.
+ *
+ * @example
+ * ```ts
+ * import { TxStatusBadge } from '@talex-touch/tuff-ui'
+ *
+ * // Use in template
+ * <TxStatusBadge text="Approved" status="success" />
+ * ```
+ *
+ * @public
+ */
+const StatusBadge = withInstall(TxStatusBadge)
+
+export { StatusBadge, TxStatusBadge }
+export type { StatusBadgeProps, StatusBadgeEmits, StatusTone, StatusKey }
+export type TxStatusBadgeInstance = InstanceType<typeof TxStatusBadge>
+
+export default StatusBadge

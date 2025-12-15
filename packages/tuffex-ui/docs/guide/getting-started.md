@@ -1,115 +1,110 @@
-# Quick Start
+# 快速开始
 
-This guide assumes you have already [installed TouchX UI](/guide/installation). Let's get you up and running with your first TouchX UI components!
+本指南假设您已经 [安装了 TuffEx UI](/guide/installation)。让我们开始使用您的第一个 TuffEx UI 组件吧！
 
-## Usage
+## 使用方式
 
-### Full Import
+### 全量引入
 ```typescript
 import { createApp } from 'vue'
-import TouchXUI from '@talex-touch/touchx-ui'
-import '@talex-touch/touchx-ui/dist/style.css'
+import TuffUI from '@talex-touch/tuff-ui'
+import '@talex-touch/tuff-ui/dist/style.css'
 
 const app = createApp(App)
-app.use(TouchXUI)
+app.use(TuffUI)
 app.mount('#app')
 ```
 
-### On-Demand Import (Recommended)
+### 按需引入（推荐）
 ```typescript
 import { createApp } from 'vue'
-import { TxButton, TxAvatar } from '@talex-touch/touchx-ui'
-import '@talex-touch/touchx-ui/dist/style.css'
+import { TxButton, TxTag } from '@talex-touch/tuff-ui'
+import '@talex-touch/tuff-ui/dist/style.css'
 
 const app = createApp(App)
 app.use(TxButton)
-app.use(TxAvatar)
+app.use(TxTag)
 app.mount('#app')
 ```
 
-## Basic Example
+## 基础示例
 
-Here's a simple example to get you started:
+这是一个简单的入门示例：
 
 ```vue
 <template>
   <div>
     <TxButton type="primary" @click="handleClick">
-      Click me!
+      点击我！
     </TxButton>
-    <TxAvatar src="https://example.com/avatar.jpg" size="large" />
+    <TxTag label="标签" color="var(--el-color-success)" />
   </div>
 </template>
 
 <script setup>
-import { TxButton, TxAvatar } from '@talex-touch/touchx-ui'
+import { TxButton, TxTag } from '@talex-touch/tuff-ui'
 
 const handleClick = () => {
-  console.log('Button clicked!')
+  console.log('按钮被点击了！')
 }
 </script>
 ```
 
 
-## Your First Component
+## 你的第一个组件
 
-Let's start with a simple button:
+让我们从一个简单的按钮开始：
 
 ```vue
 <template>
   <TxButton type="primary" @click="handleClick">
-    Hello TouchX UI! ✨
+    你好 TuffEx UI！ ✨
   </TxButton>
 </template>
 
 <script setup>
-import { TxButton } from '@talex-touch/touchx-ui'
+import { TxButton } from '@talex-touch/tuff-ui'
 
 const handleClick = () => {
-  alert('Welcome to TouchX UI!')
+  alert('欢迎使用 TuffEx UI！')
 }
 </script>
 ```
 
-## Multiple Components
+## 组合多个组件
 
-Here's how to use multiple components together:
+以下是如何同时使用多个组件：
 
 ```vue
 <template>
   <div class="user-card">
-    <TxAvatar
-      :src="user.avatar"
-      size="large"
-      :alt="user.name"
-    />
+    <TxTag label="VIP" color="var(--el-color-warning)" />
     <h3>{{ user.name }}</h3>
     <TxButton type="primary" @click="viewProfile">
-      View Profile
+      查看资料
     </TxButton>
   </div>
 </template>
 
 <script setup>
-import { TxButton, TxAvatar } from '@talex-touch/touchx-ui'
+import { TxButton, TxTag } from '@talex-touch/tuff-ui'
 
 const user = {
-  name: 'John Doe',
-  avatar: 'https://example.com/avatar.jpg'
+  name: '张三',
 }
 
 const viewProfile = () => {
-  // Handle profile view
+  // 处理查看资料
 }
 </script>
 ```
 
-## TypeScript Support
+## TypeScript 支持
 
-TouchX UI provides full TypeScript support out of the box:
+TuffEx UI 开箱即用地提供完整的 TypeScript 支持：
 
 ```typescript
-import type { TxButtonProps } from '@talex-touch/touchx-ui'
+import type { TxButtonProps } from '@talex-touch/tuff-ui'
 
 const buttonProps: TxButtonProps = {
   type: 'primary',
@@ -118,13 +113,13 @@ const buttonProps: TxButtonProps = {
 }
 ```
 
-## Component Props and Events
+## 组件属性和事件
 
-TouchX UI components are fully typed and provide excellent IntelliSense:
+TuffEx UI 组件完全类型化，提供优秀的智能提示：
 
 ```vue
 <template>
-  <!-- Props are fully typed -->
+  <!-- 属性完全类型化 -->
   <TxButton
     :type="buttonType"
     :size="buttonSize"
@@ -137,17 +132,17 @@ TouchX UI components are fully typed and provide excellent IntelliSense:
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { TxButton } from '@talex-touch/touchx-ui'
-import type { TxButtonProps } from '@talex-touch/touchx-ui'
+import { TxButton } from '@talex-touch/tuff-ui'
+import type { TxButtonProps } from '@talex-touch/tuff-ui'
 
 const buttonType = ref<TxButtonProps['type']>('primary')
 const buttonSize = ref<TxButtonProps['size']>('medium')
 const isLoading = ref(false)
-const buttonText = ref('Click me!')
+const buttonText = ref('点击我！')
 
 const handleClick = () => {
   isLoading.value = true
-  // Simulate async operation
+  // 模拟异步操作
   setTimeout(() => {
     isLoading.value = false
   }, 2000)
@@ -155,54 +150,52 @@ const handleClick = () => {
 </script>
 ```
 
-## Common Patterns
+## 常用模式
 
-### Form Components
+### 表单组件
 ```vue
 <template>
   <form @submit.prevent="handleSubmit">
     <TxInput
       v-model="form.name"
-      placeholder="Enter your name"
+      placeholder="请输入您的姓名"
       :error="errors.name"
     />
     <TxButton type="primary" html-type="submit">
-      Submit
+      提交
     </TxButton>
   </form>
 </template>
 ```
 
-### Layout Components
+### 布局组件
 ```vue
 <template>
-  <TxContainer>
-    <TxCard>
-      <TxAvatar :src="user.avatar" />
-      <h3>{{ user.name }}</h3>
-    </TxCard>
-  </TxContainer>
+  <TxGroupBlock name="用户信息" icon="i-carbon-user">
+    <TxBlockLine title="姓名" :description="user.name" />
+    <TxBlockLine title="邮箱" :description="user.email" />
+  </TxGroupBlock>
 </template>
 ```
 
-## What's Next?
+## 下一步
 
-Now that you've got the basics, here's what to explore:
+现在您已经掌握了基础知识，以下是可以探索的内容：
 
-### 🧩 **Explore Components**
-- **[Button](/components/button)** - Interactive buttons with animations
-- **[Avatar](/components/avatar)** - User profile pictures and placeholders
-- **[Card](/components/card)** - Content containers with glassmorphism
-- **[Input](/components/input)** - Form inputs with smooth focus effects
+### 🧩 **探索组件**
+- **[按钮 Button](/components/button)** - 带动画的交互按钮
+- **[标签 Tag](/components/tag)** - 多功能标签组件
+- **[输入框 Input](/components/input)** - 带平滑聚焦效果的表单输入
+- **[分组块 GroupBlock](/components/group-block)** - 可折叠的分组容器
 
-### 🎨 **Customize Your Theme**
+### 🎨 **自定义主题**
 ```vue
 <template>
   <TxButton
     type="primary"
     class="custom-button"
   >
-    Custom Styled Button
+    自定义样式按钮
   </TxButton>
 </template>
 
@@ -214,12 +207,12 @@ Now that you've got the basics, here's what to explore:
 </style>
 ```
 
-### 🚀 **Advanced Usage**
-- **[Design System](/design/)** - Understand our design principles
-- **[Theming Guide](/guide/theming)** - Deep customization
-- **[Playground](/playground/)** - Interactive component explorer
+### 🚀 **进阶用法**
+- **[设计系统](/design/)** - 了解我们的设计原则
+- **[主题定制](/guide/theming)** - 深度自定义
+- **[演练场](/playground/)** - 交互式组件探索器
 
-### 💡 **Get Help**
-- 🐛 [Report Issues](https://github.com/talex-touch/touchx-ui/issues)
-- 💬 [Join Discussions](https://github.com/talex-touch/touchx-ui/discussions)
-- 📖 [Full Documentation](https://touchx-ui.talex.cn)
+### 💡 **获取帮助**
+- 🐛 [问题反馈](https://github.com/talex-touch/touchx-ui/issues)
+- 💬 [参与讨论](https://github.com/talex-touch/touchx-ui/discussions)
+- 📖 [完整文档](https://touchx-ui.talex.cn)
