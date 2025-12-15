@@ -13,10 +13,14 @@ const props = withDefaults(
 )
 
 const isDisplayMode = computed(() => props.display)
+const isWindows = process.platform === 'win32'
 </script>
 
 <template>
-  <div class="AppLayout-Container Simple" :class="{ 'is-display': isDisplayMode }">
+  <div
+    class="AppLayout-Container Simple"
+    :class="{ 'is-display': isDisplayMode, 'is-windows': isWindows }"
+  >
     <div class="AppLayout-Header fake-background">
       <SimpleController>
         <template #nav>
@@ -89,7 +93,7 @@ const isDisplayMode = computed(() => props.display)
   &.is-display {
     --ctr-height: 26px;
     --nav-width: 68px;
-    padding: 6px;
+    padding: 0.5rem;
 
     .AppLayout-Header {
       border-bottom: none;
@@ -124,6 +128,12 @@ const isDisplayMode = computed(() => props.display)
       height: 32px;
       margin-top: 6px;
     }
+  }
+}
+
+.AppLayout-Container.Simple.is-windows {
+  .AppLayout-Aside {
+    padding-left: 8px;
   }
 }
 </style>
