@@ -151,12 +151,12 @@ function getPermissionIcon(permissionId: string): string {
   return icons[permissionId] || 'i-carbon-checkmark'
 }
 
-function getRiskTagType(risk: 'low' | 'medium' | 'high'): '' | 'success' | 'warning' | 'danger' {
+function getRiskTagType(risk: 'low' | 'medium' | 'high'): 'success' | 'warning' | 'danger' | 'info' {
   switch (risk) {
     case 'low': return 'success'
     case 'medium': return 'warning'
     case 'high': return 'danger'
-    default: return ''
+    default: return 'info'
   }
 }
 

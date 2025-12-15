@@ -179,7 +179,7 @@ function handleToggle(id: string, granted: boolean) {
               :model-value="perm.granted"
               :disabled="perm.required && perm.granted"
               size="small"
-              @change="(val: boolean) => handleToggle(perm.id, val)"
+              @change="(val) => handleToggle(perm.id, Boolean(val))"
             />
           </div>
         </div>
