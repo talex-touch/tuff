@@ -1,13 +1,13 @@
 <script setup lang="ts" name="DefaultPreview">
-import type { ITuffIcon, TuffIcon, TuffItem } from '@talex-touch/utils'
+import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
 import { computed } from 'vue'
-import PluginIcon from '~/components/plugin/PluginIcon.vue'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 const props = defineProps<{
   item: TuffItem
 }>()
 
-function transformTuffIcon(icon: TuffIcon | undefined): ITuffIcon | null {
+function transformTuffIcon(icon: ITuffIcon | undefined): ITuffIcon | null {
   if (!icon) {
     return null
   }
@@ -15,12 +15,12 @@ function transformTuffIcon(icon: TuffIcon | undefined): ITuffIcon | null {
     // Convert string to ITuffIcon format
     return {
       type: 'url',
-      value: icon,
+      value: icon
     }
   }
   return {
     type: icon.type,
-    value: icon.value,
+    value: icon.value
   }
 }
 
@@ -33,7 +33,7 @@ const pluginIcon = computed(() => {
 <template>
   <div v-if="item.render?.basic && pluginIcon" class="DefaultPreview">
     <div class="icon">
-      <PluginIcon :icon="pluginIcon" :alt="item.render.basic.title" />
+      <TuffIcon :size="128" colorful :icon="pluginIcon" :alt="item.render.basic.title" />
     </div>
   </div>
 </template>
@@ -48,8 +48,8 @@ const pluginIcon = computed(() => {
   .icon {
     margin: auto;
 
-    width: 64px;
-    height: 64px;
+    width: 128px;
+    height: 128px;
   }
 }
 </style>
