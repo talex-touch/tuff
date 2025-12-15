@@ -154,23 +154,33 @@ export class AddonOpenerModule extends BaseModule {
     touchChannel.regChannel(
       ChannelType.MAIN,
       '@install-plugin',
-      async ({ data: { name, buffer }, reply }) => {
+      async ({ data: { name, buffer, forceUpdate }, reply }) => {
         const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+        console.log(`[AddonInstaller] Starting installation for: ${name}`)
+        console.log(`[AddonInstaller] Temp file path: ${tempFilePath}`)
+        console.log(`[AddonInstaller] Force update: ${forceUpdate}`)
+        
         try {
           await fs.promises.writeFile(tempFilePath, buffer)
+          console.log(`[AddonInstaller] Temp file written, size: ${buffer.length} bytes`)
+          
           await new PluginResolver(tempFilePath).resolve(({ event, type }: any) => {
-            console.log(`[AddonInstaller] Installed file: ${name}`)
+            if (type === 'error') {
+              console.error(`[AddonInstaller] Installation failed for ${name}:`, event.msg)
+            } else {
+              console.log(`[AddonInstaller] Installation successful for ${name}`)
+            }
 
             reply(DataCode.SUCCESS, {
               status: type,
               msg: event.msg,
               event,
             })
-          }, true)
+          }, true, { installOptions: { forceUpdate: Boolean(forceUpdate), autoReEnable: true } })
         }
         catch (e: any) {
           console.error('[AddonInstaller] Error installing plugin:', e)
-          reply(DataCode.SUCCESS, { status: 'error', msg: 'INTERNAL_ERROR' })
+          reply(DataCode.SUCCESS, { status: 'error', msg: e.message || 'INTERNAL_ERROR' })
         }
         finally {
           fs.promises.unlink(tempFilePath).catch((err) => {
@@ -185,40 +195,55 @@ export class AddonOpenerModule extends BaseModule {
       'drop:plugin',
       async ({ data: { name, buffer }, reply }) => {
         const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+        console.log(`[AddonDropper] Processing dropped plugin: ${name}`)
 
         try {
           await fs.promises.writeFile(tempFilePath, buffer)
+          console.log(`[AddonDropper] Temp file written: ${tempFilePath}`)
 
           const pluginResolver = new PluginResolver(tempFilePath)
 
           await pluginResolver.resolve(({ event, type }: any) => {
             if (type === 'error') {
-              console.log('[AddonDropper] Failed to resolve plugin from buffer: ', event)
+              console.error('[AddonDropper] Failed to resolve plugin from buffer:', event)
               if (
                 event.msg === ResolverStatus.MANIFEST_NOT_FOUND
                 || event.msg === ResolverStatus.INVALID_MANIFEST
               ) {
-                reply(DataCode.SUCCESS, { status: 'error', msg: '10091' }) // Invalid plugin file
+                reply(DataCode.SUCCESS, { status: 'error', msg: '10091' })
               }
               else {
-                reply(DataCode.SUCCESS, { status: 'error', msg: '10092' }) // Generic error
+                reply(DataCode.SUCCESS, { status: 'error', msg: '10092' })
               }
+              
+              // Clean up temp file on error
+              fs.promises.unlink(tempFilePath).catch((err) => {
+                console.error(`[AddonDropper] Failed to delete temp file: ${tempFilePath}`, err)
+              })
             }
             else {
+              console.log('[AddonDropper] Plugin manifest resolved successfully:', event.msg?.name)
               reply(DataCode.SUCCESS, {
                 status: 'success',
                 manifest: event.msg,
+                path: tempFilePath,
                 msg: '10090',
               })
+              
+              // Clean up temp file after 30 seconds (user has time to click install)
+              setTimeout(() => {
+                fs.promises.unlink(tempFilePath).catch((err) => {
+                  console.error(`[AddonDropper] Failed to delete temp file: ${tempFilePath}`, err)
+                })
+              }, 30000)
             }
           })
         }
         catch (e) {
           console.error('[AddonDropper] Error processing dropped plugin:', e)
           reply(DataCode.SUCCESS, { status: 'error', msg: 'INTERNAL_ERROR' })
-        }
-        finally {
-          // Clean up the temporary file
+          
+          // Clean up temp file on error
           fs.promises.unlink(tempFilePath).catch((err) => {
             console.error(`[AddonDropper] Failed to delete temp file: ${tempFilePath}`, err)
           })
