@@ -611,12 +611,11 @@ div.CoreBoxRes {
     width: 100%;
     display: flex;
     flex-direction: column;
-
-    padding-bottom: 44px;
   }
 }
 
 .CoreBoxFooter-Sticky {
+  z-index: 10;
   position: absolute;
   left: 0;
   right: 0;
@@ -630,7 +629,7 @@ div.CoreBoxRes {
 }
 
 .CoreBoxRes-Main > .scroll-area .item-list > .CoreBoxRender:last-child {
-  margin-bottom: 40px;
+  margin-bottom: 44px;
 }
 
 // Result switch animation (list <-> grid, or new results)

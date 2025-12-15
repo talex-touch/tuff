@@ -123,14 +123,16 @@ defineExpose({
       </div>
     </template>
     <template v-else>
-      <ElScrollbar
-        ref="elScrollRef"
-        v-bind="$attrs"
-        class="el-scroll-wrapper w-full"
-        @scroll="handleScroll"
-      >
-        <slot />
-      </ElScrollbar>
+      <div class="el-scroll-container">
+        <ElScrollbar
+          ref="elScrollRef"
+          v-bind="$attrs"
+          class="el-scroll-wrapper w-full"
+          @scroll="handleScroll"
+        >
+          <slot />
+        </ElScrollbar>
+      </div>
     </template>
   </div>
 </template>
@@ -155,6 +157,11 @@ defineExpose({
   width: 100%;
   height: 100%;
   overflow: scroll;
+}
+
+.el-scroll-container {
+  width: 100%;
+  height: 100%;
 }
 
 .el-scroll-wrapper {
