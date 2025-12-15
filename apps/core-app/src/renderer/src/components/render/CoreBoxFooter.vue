@@ -132,9 +132,9 @@ const keyHints = computed(() => {
 
   // 辅助操作（Meta+K）- 操作面板
   if (secondaryVisible.value) {
-    hints.push({ 
-      key: aiHotkey, 
-      label: secondaryLabel.value, 
+    hints.push({
+      key: aiHotkey,
+      label: secondaryLabel.value,
       visible: true
     })
   }
@@ -285,5 +285,7 @@ const keyHints = computed(() => {
 
   --fake-inner-opacity: 0.95;
   --fake-radius: 0;
+
+  backdrop-filter: blur(18px) saturate(180%);
 }
 </style>
