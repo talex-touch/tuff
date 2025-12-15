@@ -5,7 +5,7 @@
  */
 
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus, PermissionGrantedEvent } from '../../core/eventbus/touch-event'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { BrowserWindow } from 'electron'
 import { BaseModule } from '../abstract-base-module'
@@ -98,6 +98,22 @@ export class PermissionModule extends BaseModule {
         await this.store.grant(data.pluginId, permissionId, data.grantedBy || 'user')
       }
       this.broadcastUpdate(data.pluginId)
+      
+      // Notify plugin module to retry enabling the plugin
+      touchEventBus.emit(TalexEvents.PERMISSION_GRANTED, new PermissionGrantedEvent(data.pluginId))
+      
+      return { success: true }
+    })
+
+    // Grant session-only permissions (memory only, not persisted)
+    channel.regChannel(ChannelType.MAIN, 'permission:grant-session', async ({ data }) => {
+      if (!data?.pluginId || !data?.permissionIds) return { success: false }
+      this.store.grantSessionMultiple(data.pluginId, data.permissionIds)
+      this.broadcastUpdate(data.pluginId)
+      
+      // Notify plugin module to retry enabling the plugin
+      touchEventBus.emit(TalexEvents.PERMISSION_GRANTED, new PermissionGrantedEvent(data.pluginId))
+      
       return { success: true }
     })
 

@@ -52,6 +52,9 @@ export class PermissionStore {
   private data: PermissionData
   private dirty = false
 
+  /** Session-level permissions (memory only, cleared on app restart) */
+  private sessionGrants: Record<string, Set<string>> = {}
+
   constructor(dirPath: string) {
     this.filePath = path.join(dirPath, 'permissions.json')
     this.data = this.load()
@@ -165,6 +168,37 @@ export class PermissionStore {
   }
 
   /**
+   * Grant session-level permission (memory only, not persisted)
+   */
+  grantSession(pluginId: string, permissionId: string): void {
+    if (!this.sessionGrants[pluginId]) {
+      this.sessionGrants[pluginId] = new Set()
+    }
+    this.sessionGrants[pluginId].add(permissionId)
+    this.addAuditLog('grant', pluginId, permissionId, 'user', 'Session-only grant')
+  }
+
+  /**
+   * Grant multiple session-level permissions
+   */
+  grantSessionMultiple(pluginId: string, permissionIds: string[]): void {
+    if (!this.sessionGrants[pluginId]) {
+      this.sessionGrants[pluginId] = new Set()
+    }
+    for (const permissionId of permissionIds) {
+      this.sessionGrants[pluginId].add(permissionId)
+      this.addAuditLog('grant', pluginId, permissionId, 'user', 'Session-only grant')
+    }
+  }
+
+  /**
+   * Check if plugin has session-level permission
+   */
+  hasSessionPermission(pluginId: string, permissionId: string): boolean {
+    return this.sessionGrants[pluginId]?.has(permissionId) ?? false
+  }
+
+  /**
    * Check if plugin has permission
    */
   hasPermission(pluginId: string, permissionId: string, sdkapi?: number): boolean {
@@ -177,6 +211,11 @@ export class PermissionStore {
 
     // Check default permissions
     if (DEFAULT_PERMISSIONS.includes(permissionId)) {
+      return true
+    }
+
+    // Check session grants first
+    if (this.hasSessionPermission(pluginId, permissionId)) {
       return true
     }
 

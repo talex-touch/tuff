@@ -58,6 +58,9 @@ export enum TalexEvents {
 
   // Search Engine Events
   PROVIDER_DEACTIVATED = 'search-engine/provider-deactivated',
+
+  // Permission Events
+  PERMISSION_GRANTED = 'permission/granted',
 }
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
@@ -405,6 +408,16 @@ export class ProviderDeactivatedEvent implements ITouchEvent<TalexEvents> {
     this.providerId = providerId
     this.isPluginFeature = isPluginFeature
     this.allProvidersDeactivated = allProvidersDeactivated
+  }
+}
+
+// Permission Event Classes
+export class PermissionGrantedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.PERMISSION_GRANTED
+  pluginId: string
+
+  constructor(pluginId: string) {
+    this.pluginId = pluginId
   }
 }
 

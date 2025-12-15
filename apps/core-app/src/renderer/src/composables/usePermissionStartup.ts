@@ -72,10 +72,7 @@ export function usePermissionStartup() {
         resolve(choice)
       }
 
-      timeoutId = setTimeout(() => {
-        console.log(`[PermissionStartup] Auto-rejected due to timeout for ${request.pluginId}`)
-        finish('deny')
-      }, PERMISSION_TIMEOUT_MS)
+      timeoutId = setTimeout(() => finish('deny'), PERMISSION_TIMEOUT_MS)
 
       ElMessageBox({
         title: '权限请求',
@@ -133,7 +130,6 @@ export function usePermissionStartup() {
           permissionIds: request.required,
           grantedBy: 'user',
         })
-        console.log(`[PermissionStartup] Permanently granted permissions for ${request.pluginId}`)
         break
 
       case 'session':
@@ -141,12 +137,10 @@ export function usePermissionStartup() {
           pluginId: request.pluginId,
           permissionIds: request.required,
         })
-        console.log(`[PermissionStartup] Session-granted permissions for ${request.pluginId}`)
         break
 
       case 'deny':
       default:
-        console.log(`[PermissionStartup] Denied permissions for ${request.pluginId}`)
         break
     }
   }
@@ -156,7 +150,6 @@ export function usePermissionStartup() {
 
     unregister = touchChannel.regChannel('permission:startup-request', (message) => {
       const request = (message as any).data as PermissionStartupRequest
-      console.log('[PermissionStartup] Received permission request:', request)
       handlePermissionRequest(request)
     })
   }
