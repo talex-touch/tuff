@@ -7,7 +7,7 @@
 <script setup lang="ts" name="SettingPermission">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElEmpty, ElInput, ElSelect, ElOption, ElButton, ElCollapse, ElCollapseItem, ElTag, ElIcon } from 'element-plus'
-import { Search, Clock, Delete, Refresh, Check, Close, Warning, InfoFilled } from '@element-plus/icons-vue'
+import { Search, Clock, Delete, Refresh, Check, Warning, InfoFilled } from '@element-plus/icons-vue'
 
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -307,7 +307,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <TuffGroupBlock title="权限中心" desc="管理插件的权限授权">
+  <TuffGroupBlock name="权限中心" description="管理插件的权限授权">
     <TuffBlockSlot>
       <!-- Stats -->
       <div class="permission-stats">
@@ -422,7 +422,7 @@ onMounted(() => {
   </TuffGroupBlock>
 
   <!-- Audit Logs Section -->
-  <TuffGroupBlock title="审计日志" desc="查看权限操作历史记录">
+  <TuffGroupBlock name="审计日志" description="查看权限操作历史记录">
     <TuffBlockSlot>
       <div class="audit-header">
         <ElButton
