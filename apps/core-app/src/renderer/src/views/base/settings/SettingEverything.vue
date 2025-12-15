@@ -2,8 +2,10 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { TuffGroupBlock, TuffBlockSlot, FlatButton } from '@core-box/tuff'
-import { useChannel } from '@renderer/modules/hooks/useChannel'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
+import { useChannel } from '@talex-touch/utils/renderer'
 
 const { t } = useI18n()
 const channel = useChannel()
