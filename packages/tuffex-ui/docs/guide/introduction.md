@@ -1,80 +1,80 @@
-# Introduction
+# 介绍
 
-Welcome to **TouchX UI** - a revolutionary Vue3 component library that brings digital interfaces to life through beautiful touchable animations and immersive user experiences.
+欢迎使用 **TuffEx UI** - 一个为数字界面注入生命力的 Vue3 组件库，通过优雅的触感动画和沉浸式用户体验，让每一次交互都充满活力。
 
-## What is TouchX UI?
+## 什么是 TuffEx UI？
 
-TouchX UI is more than just a component library. It's a complete design system that focuses on creating **lifelike interactions** and **smooth animations** that make every touch feel natural and responsive. Built with modern web technologies, it delivers enterprise-grade performance while maintaining the delightful user experience that sets your applications apart.
+TuffEx UI 不仅仅是一个组件库，它是一个完整的设计系统，专注于创造 **逼真的交互** 和 **流畅的动画**，让每次触摸都感觉自然且响应迅速。基于现代 Web 技术构建，在保持令人愉悦的用户体验的同时，提供企业级的性能表现。
 
-## Why TouchX UI?
+## 为什么选择 TuffEx UI？
 
-### 🎭 **Vivid Touch Experience**
-Every component is designed with tactile feedback in mind. Our precision physics engine simulates real-world interactions, making digital interfaces feel tangible and alive.
+### 🎭 **逼真的触感体验**
+每个组件都考虑了触觉反馈。我们的精密物理引擎模拟真实世界的交互，让数字界面触手可及、栩栩如生。
 
-### 🌊 **Smooth Animation System**
-Experience buttery-smooth 60fps animations powered by advanced Bézier curves and physics-based motion. Every transition is carefully crafted to maintain visual continuity and user engagement.
+### 🌊 **流畅的动画系统**
+体验由高级贝塞尔曲线和物理动画驱动的丝滑 60fps 动画。每个过渡都经过精心设计，以保持视觉连续性和用户参与度。
 
-### ✨ **Modern Visual Language**
-Embrace the future of UI design with our glassmorphism aesthetics, dynamic lighting effects, and material simulation that brings depth and realism to flat digital surfaces.
+### ✨ **现代视觉语言**
+拥抱 UI 设计的未来，采用玻璃拟态美学、动态光效和材质模拟，为平面数字界面带来深度和真实感。
 
-### ⚡ **Performance First**
-Built on Vue3's Composition API with full Tree Shaking support, TouchX UI reduces bundle size by 50%+ while delivering lightning-fast performance across all devices.
+### ⚡ **性能优先**
+基于 Vue3 Composition API 构建，完全支持 Tree Shaking，TuffEx UI 可将包体积减少 50% 以上，同时在所有设备上提供闪电般的性能。
 
-### 🎨 **Enterprise Design System**
-Complete Design Tokens system with seamless theme switching, accessibility compliance, and consistent visual hierarchy that scales from startups to enterprise applications.
+### 🎨 **企业级设计系统**
+完整的设计令牌系统，支持无缝主题切换、无障碍合规性和一致的视觉层次，从初创公司到企业应用都能适用。
 
-### 🚀 **Cross-Platform Ready**
-Responsive design that adapts beautifully to any screen size, with PWA and SSR support for modern web applications.
+### 🚀 **跨平台就绪**
+响应式设计，完美适配任何屏幕尺寸，支持 PWA 和 SSR，满足现代 Web 应用需求。
 
-## Design Philosophy
+## 设计理念
 
-TouchX UI is built on three core principles:
+TuffEx UI 基于三个核心原则构建：
 
-### **Life-like Interactions**
-We believe that digital interfaces should feel as natural as physical objects. Every animation, transition, and interaction is designed to mimic real-world physics and behaviors.
+### **逼真交互**
+我们相信数字界面应该像物理对象一样自然。每个动画、过渡和交互都设计为模拟真实世界的物理和行为。
 
-### **Emotional Connection**
-Great design creates emotional connections. Our components are crafted to evoke positive emotions and create memorable experiences that users love to interact with.
+### **情感连接**
+优秀的设计能创造情感连接。我们的组件旨在唤起积极情绪，创造用户乐于互动的难忘体验。
 
-### **Accessibility First**
-Beautiful design should be accessible to everyone. TouchX UI follows WCAG guidelines and includes comprehensive accessibility features without compromising on visual appeal.
+### **无障碍优先**
+美丽的设计应该对每个人都是可访问的。TuffEx UI 遵循 WCAG 指南，在不影响视觉吸引力的前提下，包含全面的无障碍功能。
 
-## Technology Stack
+## 技术栈
 
-TouchX UI is built with cutting-edge technologies:
+TuffEx UI 采用前沿技术构建：
 
-- **Vue 3.4+** with Composition API and `<script setup>`
-- **TypeScript 5.x** for complete type safety
-- **Vite 5.x** for lightning-fast development
-- **Vitest** for modern testing
-- **CSS Variables** for dynamic theming
-- **Tree Shaking** for optimal bundle size
+- **Vue 3.4+** 配合 Composition API 和 `<script setup>`
+- **TypeScript 5.x** 提供完整的类型安全
+- **Vite 5.x** 实现极速开发体验
+- **Vitest** 用于现代化测试
+- **CSS 变量** 支持动态主题
+- **Tree Shaking** 优化包体积
 
-## Browser Support
+## 浏览器支持
 
-TouchX UI supports all modern browsers:
+TuffEx UI 支持所有现代浏览器：
 
 - **Chrome** >= 87
 - **Firefox** >= 78  
 - **Safari** >= 14
 - **Edge** >= 88
 
-## Community & Support
+## 社区与支持
 
-Join our growing community of developers and designers:
+加入我们不断壮大的开发者和设计师社区：
 
-- 🌟 **[GitHub](https://github.com/talex-touch/touchx-ui)** - Star us and contribute
-- 💬 **[Discussions](https://github.com/talex-touch/touchx-ui/discussions)** - Ask questions and share ideas
-- 🐛 **[Issues](https://github.com/talex-touch/touchx-ui/issues)** - Report bugs and request features
-- 📧 **[Contact](mailto:support@talex.cn)** - Get in touch with our team
+- 🌟 **[GitHub](https://github.com/talex-touch/touchx-ui)** - 为我们点星并贡献代码
+- 💬 **[讨论区](https://github.com/talex-touch/touchx-ui/discussions)** - 提问和分享想法
+- 🐛 **[问题反馈](https://github.com/talex-touch/touchx-ui/issues)** - 报告 Bug 和功能请求
+- 📧 **[联系我们](mailto:support@talex.cn)** - 与我们团队取得联系
 
-## What's Next?
+## 下一步
 
-Ready to get started? Here's your journey:
+准备好开始了吗？这是你的旅程：
 
-1. **[Quick Start](/guide/getting-started)** - Install and set up TouchX UI
-2. **[Components](/components/)** - Explore our component library
-3. **[Design System](/design/)** - Understand our design principles
-4. **[Playground](/playground/)** - Try components interactively
+1. **[快速开始](/guide/getting-started)** - 安装和设置 TuffEx UI
+2. **[组件](/components/)** - 探索我们的组件库
+3. **[设计系统](/design/)** - 了解我们的设计原则
+4. **[演练场](/playground/)** - 交互式体验组件
 
-Let's build something beautiful together! ✨
+让我们一起创造美好！ ✨

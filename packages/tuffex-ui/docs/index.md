@@ -1,43 +1,43 @@
 ---
 layout: home
-title: TouchX UI
-titleTemplate: Beautiful Touchable Animations
+title: TuffEx UI
+titleTemplate: 优雅的触感动画组件库
 
 hero:
-  name: TouchX UI
-  text: Beautiful Touchable Animations
-  tagline: A lifelike Vue3 component library that brings vitality to every interaction
+  name: TuffEx UI
+  text: 优雅的触感动画
+  tagline: 为每一次交互注入生命力的 Vue3 组件库
   image:
     src: https://i.imgur.com/pd3YUxf.png
-    alt: TouchX UI Logo
+    alt: TuffEx UI Logo
   actions:
     - theme: brand
-      text: Get Started
+      text: 快速开始
       link: /guide/introduction
     - theme: alt
-      text: Components
+      text: 组件
       link: /components/
     - theme: alt
       text: GitHub
       link: https://github.com/talex-touch/touchx-ui
 
 features:
-  - icon: 🎭
-    title: Vivid Touch Experience
-    details: Achieve lifelike touch feedback through precision physics engine, making every interaction natural and vivid.
-  - icon: 🌊
-    title: Smooth Animation System
-    details: 60fps fluid experience based on Bézier curves and physics animations, ensuring visual continuity.
-  - icon: ✨
-    title: Modern Visual Language
-    details: Glassmorphism aesthetics combined with dynamic lighting and material simulation, bringing real texture to digital interfaces.
-  - icon: ⚡
-    title: Performance Optimized
-    details: Vue3 Composition API with Tree Shaking support, reducing bundle size by 50%+.
   - icon: 🎨
-    title: Enterprise Design System
-    details: Complete Design Tokens system supporting seamless theme switching, following accessibility standards.
+    title: 精美设计
+    details: 精心设计的组件，带有流畅的动画和触感反馈
   - icon: 🚀
-    title: Cross-Platform Ready
-    details: Responsive design for all devices, PWA and SSR friendly, one codebase for all platforms.
+    title: 高性能
+    details: 基于 Vue3 Composition API，享受极致的开发体验
+  - icon: 📦
+    title: 按需引入
+    details: 支持 Tree Shaking，只打包你使用的组件
+  - icon: 🌙
+    title: 暗色模式
+    details: 内置暗色模式支持，一键切换主题
+  - icon: 💪
+    title: TypeScript
+    details: 完整的 TypeScript 类型定义，智能提示更友好
+  - icon: 🔧
+    title: 主题定制
+    details: 灵活的 CSS 变量系统，轻松打造专属风格
 ---
