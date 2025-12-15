@@ -8,9 +8,12 @@ import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/ut
 import { TalexEvents, touchEventBus, PermissionGrantedEvent } from '../../core/eventbus/touch-event'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { BrowserWindow } from 'electron'
+import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { PermissionStore } from './permission-store'
 import { PermissionGuard } from './permission-guard'
+
+const permLog = createLogger('Permission')
 
 export { PermissionGuard } from './permission-guard'
 export type { PermissionCheckResult, ApiPermissionMapping } from './permission-guard'
@@ -53,7 +56,7 @@ export class PermissionModule extends BaseModule {
     // Set global reference
     setPermissionModule(this)
 
-    console.info('[PermissionModule] Initialized')
+    permLog.success('Permission module initialized')
   }
 
   private registerChannels(): void {
@@ -157,6 +160,17 @@ export class PermissionModule extends BaseModule {
       this.store.clearAuditLogs()
       return { success: true }
     })
+
+    // Get performance statistics (Phase 5 verification)
+    channel.regChannel(ChannelType.MAIN, 'permission:get-performance', async () => {
+      return this.guard.getPerformanceStats()
+    })
+
+    // Reset performance statistics
+    channel.regChannel(ChannelType.MAIN, 'permission:reset-performance', async () => {
+      this.guard.resetPerformanceStats()
+      return { success: true }
+    })
   }
 
   /**
@@ -241,10 +255,22 @@ export class PermissionModule extends BaseModule {
     return status.enforcePermissions && status.missingRequired.length > 0
   }
 
+  /**
+   * Get performance statistics for permission checks
+   */
+  getPerformanceStats() {
+    return this.guard.getPerformanceStats()
+  }
+
   onDestroy(): MaybePromise<void> {
+    // Log final performance stats
+    const stats = this.guard.getPerformanceStats()
+    if (stats.totalChecks > 0) {
+      permLog.info(`Performance: ${stats.totalChecks} checks, avg ${stats.avgDurationMs}ms, max ${stats.maxDurationMs}ms, target met: ${stats.meetsTarget}`)
+    }
     // Save any pending changes
     this.store.save()
-    console.info('[PermissionModule] Destroyed')
+    permLog.info('Permission module destroyed')
   }
 }
 

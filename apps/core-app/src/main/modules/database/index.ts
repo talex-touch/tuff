@@ -20,7 +20,10 @@ import { app, BrowserWindow, dialog } from 'electron'
 import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
+import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
+
+const dbLog = createLogger('Database')
 
 export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
@@ -55,21 +58,14 @@ export class DatabaseModule extends BaseModule {
       const appPath = app.getAppPath()
       const migrationsPath = path.resolve(appPath, 'resources', 'db', 'migrations')
 
-      console.log(chalk.cyan(`[Database] Resolving migrations folder...`))
-      console.log(chalk.cyan(`[Database] app.getAppPath(): ${appPath}`))
-      console.log(chalk.cyan(`[Database] __dirname: ${__dirname}`))
-      console.log(chalk.cyan(`[Database] process.resourcesPath: ${process.resourcesPath || 'N/A'}`))
-      console.log(chalk.cyan(`[Database] Primary path: ${migrationsPath}`))
-      console.log(chalk.cyan(`[Database] Primary path exists: ${fse.existsSync(migrationsPath)}`))
+      dbLog.debug('Resolving migrations folder', { meta: { appPath, __dirname, resourcesPath: process.resourcesPath || 'N/A' } })
+      dbLog.debug(`Primary path: ${migrationsPath}, exists: ${fse.existsSync(migrationsPath)}`)
 
       // First check the expected path
       if (fse.existsSync(migrationsPath)) {
         const metaJournalPath = path.resolve(migrationsPath, 'meta', '_journal.json')
-        console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
-        console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
-
         if (fse.existsSync(metaJournalPath)) {
-          console.log(chalk.green(`[Database] Using primary migrations path: ${migrationsPath}`))
+          dbLog.info(`Using primary migrations path: ${migrationsPath}`)
           return migrationsPath
         }
       }
@@ -96,26 +92,19 @@ export class DatabaseModule extends BaseModule {
           : []),
       ]
 
-      console.log(chalk.cyan(`[Database] Trying ${alternativePaths.length} alternative paths...`))
+      dbLog.debug(`Trying ${alternativePaths.length} alternative paths`)
       for (let i = 0; i < alternativePaths.length; i++) {
         const altPath = alternativePaths[i]
-        console.log(chalk.cyan(`[Database] Alternative ${i + 1}: ${altPath}`))
-        console.log(chalk.cyan(`[Database] Alternative ${i + 1} exists: ${fse.existsSync(altPath)}`))
-
         if (fse.existsSync(altPath)) {
           const metaJournalPath = path.resolve(altPath, 'meta', '_journal.json')
-          console.log(chalk.cyan(`[Database] Checking meta journal: ${metaJournalPath}`))
-          console.log(chalk.cyan(`[Database] Meta journal exists: ${fse.existsSync(metaJournalPath)}`))
-
           if (fse.existsSync(metaJournalPath)) {
-            console.log(chalk.yellow(`[Database] Using alternative migrations path: ${altPath}`))
+            dbLog.info(`Using alternative migrations path: ${altPath}`)
             return altPath
           }
         }
       }
 
-      // Return the expected path even if it doesn't exist (will be caught by validation)
-      console.log(chalk.red(`[Database] No valid migrations path found, returning primary path: ${migrationsPath}`))
+      dbLog.error(`No valid migrations path found, returning primary: ${migrationsPath}`)
       return migrationsPath
     }
     else {
@@ -133,48 +122,24 @@ export class DatabaseModule extends BaseModule {
 
     // Configure SQLite for better concurrency
     try {
-      // Enable WAL mode for better concurrent read/write performance
       await this.client.execute('PRAGMA journal_mode = WAL')
-      // Set busy timeout to 30 seconds to handle lock contention during heavy init
       await this.client.execute('PRAGMA busy_timeout = 30000')
-      // Optimize for performance
       await this.client.execute('PRAGMA synchronous = NORMAL')
-      // Reduce lock contention by using IMMEDIATE transactions
       await this.client.execute('PRAGMA locking_mode = NORMAL')
-      // Enable memory-mapped I/O for better performance
       await this.client.execute('PRAGMA mmap_size = 268435456')
-      console.log(chalk.green('[Database] SQLite configured: WAL mode enabled, busy_timeout=30s'))
+      dbLog.success('SQLite configured: WAL mode enabled, busy_timeout=30s')
     } catch (error) {
-      console.warn(chalk.yellow('[Database] Failed to configure SQLite pragmas:'), error)
+      dbLog.warn('Failed to configure SQLite pragmas', { error })
     }
 
     const migrationsFolder = this.resolveMigrationsFolder()
     const migrationsFolderResolved = path.resolve(migrationsFolder)
 
-    console.log(chalk.cyan(`[Database] Resolved migrations folder: ${migrationsFolderResolved}`))
+    dbLog.debug(`Resolved migrations folder: ${migrationsFolderResolved}`)
 
     if (!fse.existsSync(migrationsFolderResolved)) {
       const error = new Error(`Migrations folder not found: ${migrationsFolderResolved}`)
-      console.error(chalk.red('[Database] Migration folder not found:'), migrationsFolderResolved)
-      console.error(chalk.red('[Database] App path:'), app.getAppPath())
-      console.error(chalk.red('[Database] __dirname:'), __dirname)
-      console.error(chalk.red('[Database] process.resourcesPath:'), process.resourcesPath)
-
-      // List actual directory contents to help debug
-      try {
-        const appPath = app.getAppPath()
-        console.error(chalk.red('[Database] App path contents:'), fse.existsSync(appPath) ? fse.readdirSync(appPath) : 'N/A')
-        if (fse.existsSync(appPath)) {
-          const resourcesInApp = path.join(appPath, 'resources')
-          console.error(chalk.red('[Database] resources in app exists:'), fse.existsSync(resourcesInApp))
-          if (fse.existsSync(resourcesInApp)) {
-            console.error(chalk.red('[Database] resources contents:'), fse.readdirSync(resourcesInApp))
-          }
-        }
-      }
-      catch (e) {
-        console.error(chalk.red('[Database] Error listing directory:'), e)
-      }
+      dbLog.error('Migration folder not found', { meta: { path: migrationsFolderResolved, appPath: app.getAppPath() } })
 
       // Collect all tried paths for error message
       const allTriedPaths = [
@@ -203,12 +168,7 @@ export class DatabaseModule extends BaseModule {
     const metaJournalPath = path.resolve(migrationsFolderResolved, 'meta', '_journal.json')
     if (!fse.existsSync(metaJournalPath)) {
       const error = new Error(`Migration journal not found: ${metaJournalPath}`)
-      console.error(chalk.red('[Database] Migration journal not found:'), metaJournalPath)
-      console.error(
-        chalk.red('[Database] Migrations folder exists:'),
-        fse.existsSync(migrationsFolderResolved),
-      )
-      console.error(chalk.red('[Database] Migrations folder contents:'), fse.existsSync(migrationsFolderResolved) ? fse.readdirSync(migrationsFolderResolved) : 'N/A')
+      dbLog.error('Migration journal not found', { meta: { path: metaJournalPath } })
 
       const folderContents = fse.existsSync(migrationsFolderResolved)
         ? fse.readdirSync(migrationsFolderResolved).join(', ')
@@ -220,8 +180,8 @@ export class DatabaseModule extends BaseModule {
       throw error
     }
 
-    console.log(chalk.cyan(`[Database] Preparing SQLite database at ${chalk.bold(dbPath)}`))
-    console.log(chalk.cyan(`[Database] Applying migrations from ${chalk.bold(migrationsFolderResolved)}`))
+    dbLog.info(`Preparing SQLite database at ${dbPath}`)
+    dbLog.info(`Applying migrations from ${migrationsFolderResolved}`)
 
     await this.ensureKeywordMappingsProviderColumn()
 
@@ -260,23 +220,18 @@ export class DatabaseModule extends BaseModule {
 
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
-      console.log(chalk.green(`[Database] Migrations completed successfully in ${duration} ms.`))
+      dbLog.success(`Migrations completed successfully in ${duration}ms`)
     }
     catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error ?? '')
       const duplicateColumn = message.includes('duplicate column name: provider_id')
 
       if (duplicateColumn) {
-        console.warn(
-          chalk.yellow(
-            '[Database] Migration skipped: column `provider_id` already exists. Continuing without applying duplicate migration.',
-          ),
-        )
-        console.error(error)
+        dbLog.warn('Migration skipped: column `provider_id` already exists')
         return
       }
 
-      console.error(chalk.red('[Database] Migration failed:'), error)
+      dbLog.error('Migration failed', { error })
 
       const errorMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error')
       const errorInstance = error instanceof Error ? error : new Error(errorMessage)
@@ -301,13 +256,13 @@ export class DatabaseModule extends BaseModule {
         return
       }
 
-      console.log(chalk.yellow('[Database] Adding missing column `keyword_mappings.provider_id`'))
+      dbLog.info('Adding missing column `keyword_mappings.provider_id`')
       await this.client.execute(
         'ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT \'\' NOT NULL',
       )
     }
     catch (error) {
-      console.warn('[Database] Failed to set up `provider_id` column pre-migration:', error)
+      dbLog.warn('Failed to set up `provider_id` column pre-migration', { error })
     }
   }
 
@@ -321,7 +276,7 @@ export class DatabaseModule extends BaseModule {
       )
       
       if (checkTimeStats.rows.length === 0) {
-        console.log(chalk.yellow('[Database] Creating missing table `item_time_stats`'))
+        dbLog.info('Creating missing table `item_time_stats`')
         await this.client.execute(`
           CREATE TABLE item_time_stats (
             source_id text NOT NULL,
@@ -343,7 +298,7 @@ export class DatabaseModule extends BaseModule {
       )
       
       if (checkCache.rows.length === 0) {
-        console.log(chalk.yellow('[Database] Creating missing table `recommendation_cache`'))
+        dbLog.info('Creating missing table `recommendation_cache`')
         await this.client.execute(`
           CREATE TABLE recommendation_cache (
             cache_key text PRIMARY KEY NOT NULL,
@@ -358,14 +313,14 @@ export class DatabaseModule extends BaseModule {
       }
     }
     catch (error) {
-      console.warn('[Database] Failed to ensure recommendation tables:', error)
+      dbLog.warn('Failed to ensure recommendation tables', { error })
     }
   }
 
   onDestroy(): MaybePromise<void> {
     this.client?.close()
     this.db = null
-    console.log('[Database] DatabaseManager destroyed')
+    dbLog.info('DatabaseManager destroyed')
   }
 
   public getDb(): LibSQLDatabase<typeof schema> {

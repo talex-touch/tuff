@@ -15,7 +15,10 @@ import {
 import chalk from 'chalk'
 
 import { debounce } from 'lodash'
+import { createLogger } from '../../../utils/logger'
 import { searchLogger } from './search-logger'
+
+const gatherLog = createLogger('SearchGatherer')
 
 /**
  * @interface ExtendedSourceStat
@@ -81,7 +84,7 @@ function createGatherController(
     promise,
     abort: () => {
       if (!controller.signal.aborted) {
-        console.debug('Aborting search.')
+        gatherLog.debug('Aborting search')
         controller.abort()
       }
     },
@@ -165,7 +168,7 @@ function createLayeredSearchController(
     let isAborted = false
     signal.addEventListener('abort', () => {
       isAborted = true
-      console.debug('[SearchGatherer] Layered search cancelled.')
+      gatherLog.debug('Layered search cancelled')
       onUpdate({
         newResults: [],
         totalCount: countItems(allResults),
@@ -356,9 +359,7 @@ async function runFastLayer(
   const timeoutPromise = new Promise<void>((resolveTimeout) => {
     setTimeout(() => {
       if (completed < total) {
-        console.debug(
-          `[SearchGatherer] Fast layer timeout after ${timeoutMs}ms. Completed: ${completed}/${total}`,
-        )
+        gatherLog.debug(`Fast layer timeout after ${timeoutMs}ms`, { meta: { completed, total } })
       }
       resolveTimeout()
     }, timeoutMs)
@@ -426,7 +427,7 @@ async function runDeferredLayer(
             provider.id,
             error instanceof Error ? error.message : 'Unknown error',
           )
-          console.warn(`[SearchGatherer] Deferred provider [${provider.id}] failed:`, error)
+          gatherLog.warn(`Deferred provider [${provider.id}] failed`, { error })
         }
       }
       finally {
@@ -463,11 +464,12 @@ function logProviderCompletion(
   }
 
   const layerTag = layer === 'fast' ? chalk.cyan('[F]') : chalk.magenta('[D]')
-  const logMethod = status === 'success' ? console.debug : console.warn
-
-  logMethod(
-    `[SearchGatherer] ${layerTag} Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`,
-  )
+  const message = `${layerTag} Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
+  if (status === 'success') {
+    gatherLog.debug(message)
+  } else {
+    gatherLog.warn(message)
+  }
 }
 
 /**
@@ -553,7 +555,7 @@ function createLegacySearchController(
       }
       debouncedFlush.cancel()
 
-      console.debug('[SearchGatherer] Legacy search cancelled.')
+      gatherLog.debug('Legacy search cancelled')
       onUpdate({
         newResults: [],
         totalCount: countItems(allResults),
@@ -604,7 +606,7 @@ function createLegacySearchController(
               error instanceof Error ? error.message : 'Unknown error',
             )
           }
-          console.error(`[SearchGatherer] Provider [${provider.id}] failed:`, error)
+          gatherLog.error(`Provider [${provider.id}] failed`, { error })
         }
         finally {
           const duration = performance.now() - startTime
@@ -623,7 +625,7 @@ function createLegacySearchController(
     })
 
     await Promise.all(workers)
-    console.debug('[SearchGatherer] All legacy search tasks completed.')
+    gatherLog.debug('All legacy search tasks completed')
     flushBuffer(true)
     return countItems(allResults)
   })
