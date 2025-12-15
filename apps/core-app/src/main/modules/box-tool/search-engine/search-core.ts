@@ -30,6 +30,7 @@ import { getSentryService } from '../../sentry'
 import { storageModule } from '../../storage'
 import { appProvider } from '../addon/apps/app-provider'
 import { fileProvider } from '../addon/files/file-provider'
+import { everythingProvider } from '../addon/files/everything-provider'
 import { previewProvider } from '../addon/preview'
 import { systemProvider } from '../addon/system/system-provider'
 import { urlProvider } from '../addon/url/url-provider'
@@ -53,7 +54,7 @@ const searchEngineLog = createLogger('SearchEngineCore')
  * Provider filter aliases for @xxx syntax
  */
 const PROVIDER_ALIASES: Record<string, string[]> = {
-  file: ['file-provider', 'file-index', 'files', 'fs', 'document'],
+  file: ['file-provider', 'file-index', 'files', 'fs', 'document', 'everything-provider', 'everything'],
   app: ['app-provider', 'applications', 'apps'],
   plugin: ['plugin-features', 'plugins', 'extension', 'extensions'],
   system: ['system-provider', 'sys'],
@@ -162,7 +163,14 @@ export class SearchEngineCore
     this.registerProvider(appProvider)
     //  this.registerProvider(new ClipboardProvider())
     // TODO refractory - this provider costs a lot of time
+    
+    // Windows: Use Everything for fast file search, fallback to file-provider for indexing
+    // macOS/Linux: Use file-provider with full indexing
+    if (process.platform === 'win32') {
+      this.registerProvider(everythingProvider)
+    }
     this.registerProvider(fileProvider)
+    
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(systemProvider)
     this.registerProvider(previewProvider)

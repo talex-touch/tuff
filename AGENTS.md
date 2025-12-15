@@ -90,6 +90,49 @@ abstract class BaseModule {
 - 视图：`src/views/`
 - 状态管理：Pinia stores + composables (`src/modules/hooks/`)
 
+### 文件搜索系统
+
+**平台差异化策略**:
+- **Windows**: Everything Provider (ultra-fast, real-time)
+- **macOS/Linux**: File Provider (indexed search)
+
+**Everything Provider** (`apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`):
+- 集成 Everything CLI (`es.exe`) 进行文件搜索
+- 搜索响应时间: 20-50ms
+- 优先级: `fast` (与应用搜索同批返回)
+- 要求: Everything 已安装并运行，es.exe 在 PATH 或默认位置
+- 支持高级语法: 通配符、布尔运算符、文件过滤器
+- 自动降级: Everything 不可用时静默跳过
+
+**File Provider** (`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`):
+- macOS/Linux: 完整文件索引和搜索
+- Windows: 仅提供元数据和打开功能（搜索由 Everything 处理）
+- 索引路径: Documents, Downloads, Desktop, Music, Pictures, Videos
+- 搜索技术: 精确关键词匹配 + FTS (Full-Text Search)
+- 支持内容索引: 代码文件、文档、配置文件等
+
+**搜索流程**:
+1. 用户输入查询 → 2. 解析 `@file` 过滤器（可选） → 3. Windows 调用 Everything，其他平台调用 File Provider → 4. 结果评分和排序 → 5. 合并展示
+
+**安装 Everything** (Windows):
+1. 下载 Everything: https://www.voidtools.com/
+2. 下载 Everything CLI (es.exe)
+3. 将 es.exe 放置在 Everything installation directory 或 PATH 中
+4. 详细文档: `docs/everything-integration.md`
+
+**设置管理**:
+- 设置文件: `everything-settings.json` (存储在 config 目录)
+- 设置 UI: Settings → Everything Search (仅 Windows)
+- IPC 通道: `everything:status`, `everything:toggle`, `everything:test`
+- 默认状态: 启用 (如果 Everything 可用)
+
+**功能特性**:
+- 状态监控: 实时显示 Everything 可用性和版本
+- 一键切换: 启用/禁用 Everything 搜索
+- 测试功能: 验证 Everything 是否正常工作
+- 安装指导: 提供下载链接和安装说明
+- 自动降级: Everything 不可用时静默跳过，不影响其他搜索
+
 ### 插件系统
 
 **插件三层架构命名**:

@@ -1,0 +1,301 @@
+<script setup lang="ts" name="SettingEverything">
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
+import { TuffGroupBlock, TuffBlockSlot, FlatButton } from '@core-box/tuff'
+import { useChannel } from '@renderer/modules/hooks/useChannel'
+
+const { t } = useI18n()
+const channel = useChannel()
+
+interface EverythingStatus {
+  enabled: boolean
+  available: boolean
+  version: string | null
+  esPath: string | null
+  error: string | null
+  lastChecked: number | null
+}
+
+const everythingStatus = ref<EverythingStatus | null>(null)
+const isChecking = ref(false)
+const isTesting = ref(false)
+
+let statusCheckInterval: NodeJS.Timeout | null = null
+
+const checkStatus = async () => {
+  if (isChecking.value) return
+  
+  isChecking.value = true
+  try {
+    const status = await channel.send('everything:status')
+    everythingStatus.value = status
+  } catch (error) {
+    console.error('[SettingEverything] Failed to get status:', error)
+  } finally {
+    isChecking.value = false
+  }
+}
+
+const toggleEverything = async () => {
+  if (!everythingStatus.value) return
+  
+  const newEnabled = !everythingStatus.value.enabled
+  
+  try {
+    await channel.send('everything:toggle', { enabled: newEnabled })
+    everythingStatus.value.enabled = newEnabled
+    
+    ElMessage.success(
+      newEnabled 
+        ? t('settings.settingEverything.enabledSuccess')
+        : t('settings.settingEverything.disabledSuccess')
+    )
+  } catch (error: any) {
+    console.error('[SettingEverything] Failed to toggle:', error)
+    ElMessage.error(
+      t('settings.settingEverything.toggleFailed', {
+        error: error?.message || String(error)
+      })
+    )
+  }
+}
+
+const testSearch = async () => {
+  if (isTesting.value) return
+  
+  isTesting.value = true
+  try {
+    const result = await channel.send('everything:test')
+    
+    if (result.success) {
+      ElMessage.success(
+        t('settings.settingEverything.testSuccess', {
+          count: result.resultCount,
+          duration: result.duration
+        })
+      )
+    } else {
+      ElMessage.error(
+        t('settings.settingEverything.testFailed', {
+          error: result.error || 'Unknown error'
+        })
+      )
+    }
+  } catch (error: any) {
+    console.error('[SettingEverything] Test search failed:', error)
+    ElMessage.error(
+      t('settings.settingEverything.testFailed', {
+        error: error?.message || String(error)
+      })
+    )
+  } finally {
+    isTesting.value = false
+  }
+}
+
+const openEverythingDownload = () => {
+  window.open('https://www.voidtools.com/', '_blank')
+}
+
+const openCLIDownload = () => {
+  window.open('https://www.voidtools.com/support/everything/command_line_interface/', '_blank')
+}
+
+const statusText = computed(() => {
+  if (!everythingStatus.value) return t('settings.settingEverything.statusChecking')
+  if (!everythingStatus.value.available) return t('settings.settingEverything.statusUnavailable')
+  if (!everythingStatus.value.enabled) return t('settings.settingEverything.statusDisabled')
+  return t('settings.settingEverything.statusEnabled')
+})
+
+const statusColor = computed(() => {
+  if (!everythingStatus.value) return 'text-gray-500'
+  if (!everythingStatus.value.available) return 'text-red-500'
+  if (!everythingStatus.value.enabled) return 'text-yellow-500'
+  return 'text-green-500'
+})
+
+const showInstallGuide = computed(() => {
+  return everythingStatus.value && !everythingStatus.value.available
+})
+
+const showToggle = computed(() => {
+  return everythingStatus.value && everythingStatus.value.available
+})
+
+const lastCheckedText = computed(() => {
+  if (!everythingStatus.value?.lastChecked) return t('settings.settingEverything.neverChecked')
+  
+  const now = Date.now()
+  const diff = now - everythingStatus.value.lastChecked
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  
+  if (minutes < 1) return t('settings.settingEverything.justNow')
+  if (minutes === 1) return t('settings.settingEverything.oneMinuteAgo')
+  if (minutes < 60) return t('settings.settingEverything.minutesAgo', { minutes })
+  
+  const hours = Math.floor(minutes / 60)
+  if (hours === 1) return t('settings.settingEverything.oneHourAgo')
+  return t('settings.settingEverything.hoursAgo', { hours })
+})
+
+onMounted(async () => {
+  await checkStatus()
+  
+  statusCheckInterval = setInterval(() => {
+    checkStatus()
+  }, 30000)
+})
+
+onUnmounted(() => {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval)
+    statusCheckInterval = null
+  }
+})
+</script>
+
+<template>
+  <TuffGroupBlock
+    :name="t('settings.settingEverything.groupTitle')"
+    :description="t('settings.settingEverything.groupDesc')"
+    default-icon="i-carbon-search-advanced"
+    active-icon="i-carbon-search-advanced"
+    memory-name="setting-everything"
+  >
+    <TuffBlockSlot
+      :title="t('settings.settingEverything.statusTitle')"
+      :description="statusText"
+      :active="everythingStatus?.enabled && everythingStatus?.available"
+      default-icon="i-carbon-ai-status"
+      active-icon="i-carbon-ai-status-complete"
+    >
+      <div :class="['status-badge', statusColor]">
+        {{ statusText }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus?.available"
+      :title="t('settings.settingEverything.versionTitle')"
+      :description="everythingStatus.esPath || t('settings.settingEverything.pathUnknown')"
+      default-icon="i-carbon-information"
+      active-icon="i-carbon-information"
+    >
+      <div class="version-info">
+        {{ everythingStatus.version || t('settings.settingEverything.versionUnknown') }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="showToggle"
+      :title="t('settings.settingEverything.enableTitle')"
+      :description="t('settings.settingEverything.enableDesc')"
+      default-icon="i-carbon-power"
+      active-icon="i-carbon-power"
+    >
+      <FlatButton 
+        :primary="!everythingStatus?.enabled"
+        @click="toggleEverything"
+      >
+        {{ everythingStatus?.enabled 
+          ? t('settings.settingEverything.disable') 
+          : t('settings.settingEverything.enable') 
+        }}
+      </FlatButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="showToggle && everythingStatus?.enabled"
+      :title="t('settings.settingEverything.testTitle')"
+      :description="t('settings.settingEverything.testDesc')"
+      default-icon="i-carbon-test-tool"
+      active-icon="i-carbon-test-tool"
+    >
+      <FlatButton @click="testSearch" :disabled="isTesting">
+        {{ isTesting 
+          ? t('settings.settingEverything.testing') 
+          : t('settings.settingEverything.testNow') 
+        }}
+      </FlatButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="showInstallGuide"
+      :title="t('settings.settingEverything.installTitle')"
+      :description="t('settings.settingEverything.installDesc')"
+      default-icon="i-carbon-download"
+      active-icon="i-carbon-download"
+    >
+      <div class="install-buttons">
+        <FlatButton primary @click="openEverythingDownload">
+          {{ t('settings.settingEverything.downloadEverything') }}
+        </FlatButton>
+        <FlatButton @click="openCLIDownload">
+          {{ t('settings.settingEverything.downloadCLI') }}
+        </FlatButton>
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus?.error"
+      :title="t('settings.settingEverything.errorTitle')"
+      :description="everythingStatus.error"
+      default-icon="i-carbon-warning-alt"
+      active-icon="i-carbon-warning-alt"
+    >
+      <div class="error-message">
+        {{ everythingStatus.error }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.lastCheckedTitle')"
+      :description="lastCheckedText"
+      default-icon="i-carbon-time"
+      active-icon="i-carbon-time"
+    >
+      <FlatButton @click="checkStatus" :disabled="isChecking">
+        {{ isChecking 
+          ? t('settings.settingEverything.checking') 
+          : t('settings.settingEverything.checkNow') 
+        }}
+      </FlatButton>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
+</template>
+
+<style scoped lang="scss">
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.version-info {
+  font-size: 12px;
+  color: var(--tuff-text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.install-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.error-message {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  word-break: break-word;
+}
+</style>
