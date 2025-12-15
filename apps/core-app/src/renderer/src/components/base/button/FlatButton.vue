@@ -8,7 +8,8 @@ const props = defineProps<{
 function handleKeyActivate(event: KeyboardEvent): void {
   if (props.disabled) {
     return
-  }(event.currentTarget as HTMLElement | null)?.click()
+  }
+  ;(event.currentTarget as HTMLElement | null)?.click()
 }
 </script>
 

@@ -294,8 +294,8 @@ export class IpcManager {
       this.touchApp.channel.regChannel(type, 'core-box:set-height', ({ data, reply }) => {
         try {
           const { height } = data as { height: number }
-          if (typeof height !== 'number' || height < 60 || height > 800) {
-            reply(DataCode.ERROR, { error: 'Invalid height (must be 60-800)' })
+          if (typeof height !== 'number' || height < 60 || height > 650) {
+            reply(DataCode.ERROR, { error: 'Invalid height (must be 60-650)' })
             return
           }
           windowManager.setHeight(height)

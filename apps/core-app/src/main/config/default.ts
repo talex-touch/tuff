@@ -10,10 +10,10 @@ export const FILE_SCHEMA = 'tfile'
 
 export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: AppName,
-  minWidth: 1280,
-  minHeight: 780,
-  height: 780,
-  width: 1280,
+  minWidth: 1100,
+  minHeight: 680,
+  height: 680,
+  width: 1100,
   autoHideMenuBar: true,
   show: false,
   transparent: true,
@@ -64,10 +64,10 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
 export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: `${AppName} Division`,
   frame: false,
-  minWidth: 900,
+  minWidth: 720,
   minHeight: 400,
-  width: 900,
-  height: 600,
+  width: 720,
+  height: 500,
   movable: true,
   resizable: true,
   skipTaskbar: false,

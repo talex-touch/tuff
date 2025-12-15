@@ -353,7 +353,7 @@ export class WindowManager {
         try {
           browserWindow.setBounds(target, false)
           if (typeof options.minHeight === 'number') {
-            browserWindow.setMinimumSize(900, options.minHeight)
+            browserWindow.setMinimumSize(720, options.minHeight)
           }
         } catch (error) {
           coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
@@ -525,7 +525,7 @@ export class WindowManager {
     // Priority: customHeight > isUIMode > forceMax > calculated from length
     let height: number
     if (typeof customHeight === 'number' && customHeight > 0) {
-      height = Math.max(60, Math.min(customHeight, 800))
+      height = Math.max(60, Math.min(customHeight, 650))
     } else if (isUIMode) {
       height = 600
     } else if (forceMax) {
@@ -537,7 +537,7 @@ export class WindowManager {
     const currentWindow = this.current
     if (currentWindow) {
       const display = this.getDisplayForWindow(currentWindow)
-      const bounds = this.calculateCoreBoxBounds(display, { width: 900, height })
+      const bounds = this.calculateCoreBoxBounds(display, { width: 720, height })
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
@@ -549,7 +549,7 @@ export class WindowManager {
         this.stopBoundsAnimation()
         try {
           currentWindow.window.setBounds(bounds, false)
-          currentWindow.window.setMinimumSize(900, height)
+          currentWindow.window.setMinimumSize(720, height)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
         }
@@ -571,7 +571,7 @@ export class WindowManager {
     const currentWindow = this.current
     if (currentWindow) {
       const display = this.getDisplayForWindow(currentWindow)
-      const bounds = this.calculateCoreBoxBounds(display, { width: 900, height: 60 })
+      const bounds = this.calculateCoreBoxBounds(display, { width: 720, height: 60 })
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
@@ -583,7 +583,7 @@ export class WindowManager {
         this.stopBoundsAnimation()
         try {
           currentWindow.window.setBounds(bounds, false)
-          currentWindow.window.setMinimumSize(900, 60)
+          currentWindow.window.setMinimumSize(720, 60)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
         }
@@ -598,7 +598,7 @@ export class WindowManager {
    * Set CoreBox to a specific height (called from frontend)
    */
   public setHeight(height: number): void {
-    const safeHeight = Math.max(60, Math.min(height, 800))
+    const safeHeight = Math.max(60, Math.min(height, 650))
     
     const currentWindow = this.current
     if (!currentWindow) {
@@ -607,7 +607,7 @@ export class WindowManager {
     }
 
     const display = this.getDisplayForWindow(currentWindow)
-    const bounds = this.calculateCoreBoxBounds(display, { width: 900, height: safeHeight })
+    const bounds = this.calculateCoreBoxBounds(display, { width: 720, height: safeHeight })
     if (!bounds) return
 
     const settings = this.getAppSettingConfig()
@@ -619,7 +619,7 @@ export class WindowManager {
       this.stopBoundsAnimation()
       try {
         currentWindow.window.setBounds(bounds, false)
-        currentWindow.window.setMinimumSize(900, safeHeight)
+        currentWindow.window.setMinimumSize(720, safeHeight)
       } catch (error) {
         coreBoxWindowLog.error('Failed to set window height', { error })
       }
