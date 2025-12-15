@@ -47,7 +47,7 @@ const routeLabel = computed(() => route?.name ?? route?.path ?? '')
 
     padding: 4px 2px;
     font-size: 12px;
-    pointer-events: none;
+    pointer-events: auto;
     -webkit-app-region: no-drag;
   }
 
