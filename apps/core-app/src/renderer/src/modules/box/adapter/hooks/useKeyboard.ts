@@ -259,6 +259,14 @@ export function useKeyboard(
 ) {
   const keyTransport = createCoreBoxKeyTransport(touchChannel)
 
+  function getFooterInset(): number {
+    const footer = document.querySelector('.CoreBoxFooter-Sticky') as HTMLElement | null
+    if (!footer) return 0
+    const rect = footer.getBoundingClientRect()
+    if (!Number.isFinite(rect.height) || rect.height <= 0) return 0
+    return rect.height
+  }
+
   /**
    * Checks if CoreBox is currently in UI mode (plugin view attached).
    */
@@ -556,14 +564,17 @@ export function useKeyboard(
         const containerHeight = scrollInfo.clientHeight
         const scrollTop = scrollInfo.scrollTop
 
+        const footerInset = getFooterInset()
+        const effectiveHeight = Math.max(1, containerHeight - footerInset)
+
         const itemTop = activeEl.offsetTop
         const itemHeight = activeEl.offsetHeight
 
         if (itemTop < scrollTop) {
           sb.scrollTo(0, itemTop)
         }
-        else if (itemTop + itemHeight > scrollTop + containerHeight) {
-          sb.scrollTo(0, itemTop + itemHeight - containerHeight)
+        else if (itemTop + itemHeight > scrollTop + effectiveHeight) {
+          sb.scrollTo(0, itemTop + itemHeight - effectiveHeight)
         }
       }
     })
