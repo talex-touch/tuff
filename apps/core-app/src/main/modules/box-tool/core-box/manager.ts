@@ -91,6 +91,10 @@ export class CoreBoxManager {
     return this._show
   }
 
+  public get isCollapsed(): boolean {
+    return this._isCollapsed
+  }
+
   public get isUIMode(): boolean {
     // Public getter for _isUIMode
     return this._isUIMode
@@ -136,6 +140,10 @@ export class CoreBoxManager {
       windowManager.show(options?.triggeredByShortcut ?? false)
     }
     else {
+      if (!this._isUIMode) {
+        this._isCollapsed = true
+        this._expandState = {}
+      }
       windowManager.hide()
     }
   }
