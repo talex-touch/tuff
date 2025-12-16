@@ -470,6 +470,7 @@ export class SearchEngineCore
 
     return new Promise((resolve) => {
       let isFirstUpdate = true
+      let didResolveInitial = false
       let providersToSearch = this.getActiveProviders()
 
       // Smart routing: filter providers based on query.inputs types
@@ -542,6 +543,68 @@ export class SearchEngineCore
       const gatherController = gatherAggregator(providersToSearch, query, async (update) => {
         searchLogger.searchUpdate(update.isDone, update.newResults.length)
         if (update.isDone) {
+          if (!didResolveInitial) {
+            didResolveInitial = true
+
+            if (isFirstUpdate) {
+              isFirstUpdate = false
+              const initialItems = update.newResults.flatMap((res) => res.items)
+
+              await this._injectUsageStats(initialItems)
+              await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
+
+              sortingStartTime.value = performance.now()
+              const { sortedItems } = this.sorter.sort(initialItems, query, gatherController.signal)
+              const sortingDuration = performance.now() - sortingStartTime.value
+
+              this._updateActivationState(update.newResults)
+
+              const totalDuration = Date.now() - startTime
+              const initialResult = new TuffSearchResultBuilder(query)
+                .setItems(sortedItems)
+                .setDuration(totalDuration)
+                .setSources(update.sourceStats || [])
+                .build()
+              initialResult.sessionId = sessionId
+              initialResult.activate = this.getActivationState() ?? undefined
+
+              this._recordSearchMetrics({
+                sessionId,
+                query,
+                totalDuration,
+                sortingDuration,
+                sourceStats: update.sourceStats || [],
+                resultCount: sortedItems.length
+              })
+
+              this._recordSearchResults(sessionId, sortedItems).catch((error) => {
+                searchEngineLog.error('Failed to record search results', { error })
+              })
+
+              if (this.latestSessionId !== sessionId) {
+                const staleResult = new TuffSearchResultBuilder(query)
+                  .setItems([])
+                  .setDuration(0)
+                  .setSources([])
+                  .build()
+                staleResult.sessionId = sessionId
+                resolve(staleResult)
+              } else {
+                resolve(initialResult)
+              }
+            } else {
+              const totalDuration = Date.now() - startTime
+              const resolvedResult = new TuffSearchResultBuilder(query)
+                .setItems([])
+                .setDuration(totalDuration)
+                .setSources(update.sourceStats || [])
+                .build()
+              resolvedResult.sessionId = sessionId
+              resolvedResult.activate = this.getActivationState() ?? undefined
+              resolve(resolvedResult)
+            }
+          }
+
           // Handle final state and notify frontend
           const totalResults = update.newResults.reduce((acc, res) => acc + res.items.length, 0)
           searchLogger.searchSessionEnd(sessionId, totalResults)
@@ -620,6 +683,7 @@ export class SearchEngineCore
           }
 
           resolve(initialResult)
+          didResolveInitial = true
         } else if (update.newResults.length > 0) {
           // This is a subsequent update
           const subsequentItems = update.newResults.flatMap((res) => res.items)

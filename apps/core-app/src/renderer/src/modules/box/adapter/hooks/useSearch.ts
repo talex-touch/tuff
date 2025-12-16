@@ -50,6 +50,8 @@ export function useSearch(
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
+  const pendingSearchEndById = new Map<string, any>()
+
   const BASE_DEBOUNCE = 35
   const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
 
@@ -163,6 +165,14 @@ export function useSearch(
     searchResults.value = initialResult.items
     boxOptions.layout = initialResult.containerLayout
 
+    if (currentSearchId.value) {
+      const pending = pendingSearchEndById.get(currentSearchId.value)
+      if (pending) {
+        pendingSearchEndById.delete(currentSearchId.value)
+        applySearchEnd(pending)
+      }
+    }
+
     if (initialResult.activate?.length) {
       activeActivations.value = initialResult.activate
     } else if (initialResult.items.length === 0) {
@@ -271,6 +281,14 @@ export function useSearch(
 
       currentSearchId.value = initialResult.sessionId || null
       searchResult.value = initialResult
+
+      if (currentSearchId.value) {
+        const pending = pendingSearchEndById.get(currentSearchId.value)
+        if (pending) {
+          pendingSearchEndById.delete(currentSearchId.value)
+          applySearchEnd(pending)
+        }
+      }
 
       searchResults.value = initialResult.items
 
@@ -523,22 +541,34 @@ export function useSearch(
   })
 
   touchChannel.regChannel('core-box:search-end', ({ data }) => {
-    if (data.searchId === currentSearchId.value) {
-      if (data.cancelled) {
-        resetSearchState()
-        activeActivations.value = null
-        return
-      }
+    if (!data?.searchId) return
 
-      if (searchResult.value) {
-        searchResult.value.activate = data.activate
-        searchResult.value.sources = data.sources
-      }
-      activeActivations.value = data.activate || null
-      loading.value = false
-      recommendationPending.value = false
+    if (!currentSearchId.value) {
+      pendingSearchEndById.set(data.searchId, data)
+      return
+    }
+
+    if (data.searchId === currentSearchId.value) {
+      applySearchEnd(data)
+      return
     }
   })
+
+  const applySearchEnd = (data: any): void => {
+    if (data.cancelled) {
+      resetSearchState()
+      activeActivations.value = null
+      return
+    }
+
+    if (searchResult.value) {
+      searchResult.value.activate = data.activate
+      searchResult.value.sources = data.sources
+    }
+    activeActivations.value = data.activate || null
+    loading.value = false
+    recommendationPending.value = false
+  }
 
   touchChannel.regChannel('core-box:clear-items', () => {
     resetSearchState()
