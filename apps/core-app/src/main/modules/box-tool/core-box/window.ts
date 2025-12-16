@@ -19,6 +19,7 @@ import { TalexTouch } from '../../../types'
 import { pluginModule } from '../../plugin/plugin-module'
 import { getConfig } from '../../storage'
 import { createLogger } from '../../../utils/logger'
+import { viewCacheManager } from './view-cache'
 import { coreBoxManager } from './manager'
 import type { CoreBoxInputChange } from './input-transport'
 import { getBoxItemManager } from '../item-sdk'
@@ -66,6 +67,7 @@ export class WindowManager {
   private uiView: WebContentsView | null = null
   private uiViewFocused = false
   private attachedPlugin: TouchPlugin | null = null
+  private attachedFeature: IPluginFeature | null = null
   private nativeThemeHandler: (() => void) | null = null
   private currentThemeIsDark = false
   private bundledThemeCss: string | null = null
@@ -672,6 +674,18 @@ export class WindowManager {
     return getConfig(StorageList.APP_SETTING) as AppSetting
   }
 
+  private syncViewCacheConfig(): void {
+    const settings = this.getAppSettingConfig() as any
+    const cfg = settings?.viewCache
+    if (cfg && typeof cfg === 'object') {
+      const patch: { maxCachedViews?: number; hotCacheDurationMs?: number } = {}
+      if (typeof cfg.maxCachedViews === 'number') patch.maxCachedViews = cfg.maxCachedViews
+      if (typeof cfg.hotCacheDurationMs === 'number') patch.hotCacheDurationMs = cfg.hotCacheDurationMs
+      viewCacheManager.updateConfig(patch)
+      viewCacheManager.cleanupStale()
+    }
+  }
+
   private loadThemeStyleConfig(): ThemeStyleConfig {
     const config = getConfig('theme-style.ini') as ThemeStyleConfig | undefined
     if (config && typeof config === 'object') {
@@ -842,6 +856,54 @@ export class WindowManager {
     if (this.uiView) {
       coreBoxWindowLog.warn('UI view already attached, skipping re-attachment')
       return
+    }
+
+    this.syncViewCacheConfig()
+
+    if (plugin) {
+      const cached = viewCacheManager.get(plugin, feature)
+      if (cached) {
+        if (feature?.interaction?.type === 'webcontent') {
+          this.inputAllowed = feature.interaction.allowInput !== false
+        }
+        this.uiView = cached.view
+        this.attachedPlugin = cached.plugin
+        this.attachedFeature = cached.feature ?? null
+        this.uiViewFocused = true
+
+        currentWindow.window.contentView.addChildView(this.uiView)
+        const bounds = currentWindow.window.getBounds()
+        this.uiView.setBounds({
+          x: 0,
+          y: 60,
+          width: bounds.width,
+          height: Math.max(0, bounds.height - 60)
+        })
+
+        if (!this.uiView.webContents.isDestroyed()) {
+          this.applyThemeToUIView(this.uiView)
+          this.runUIViewDarkThemeSync()
+          this.uiView.webContents.focus()
+
+          if (query) {
+            const normalizedQuery: TuffQuery = typeof query === 'string' ? { text: query } : { ...query }
+            void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
+              input: normalizedQuery.text ?? '',
+              query: normalizedQuery,
+              source: 'cached',
+            }).catch(() => {})
+          }
+
+          void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:ui-resume', {
+            source: 'cache',
+            featureId: feature?.id,
+            url: cached.url,
+          }).catch(() => {})
+        }
+
+        coreBoxWindowLog.info(`AttachUIView cache hit: ${plugin.name}`)
+        return
+      }
     }
 
     // Auto-enable input monitoring for webcontent features
@@ -1163,6 +1225,7 @@ export class WindowManager {
     const view = (this.uiView = new WebContentsView({ webPreferences }))
     metrics.viewCreate = performance.now() - viewCreateStart
     this.attachedPlugin = plugin ?? null
+    this.attachedFeature = feature ?? null
 
     this.uiViewFocused = true
     currentWindow.window.contentView.addChildView(this.uiView)
@@ -1234,6 +1297,10 @@ export class WindowManager {
     coreBoxWindowLog.debug(`AttachUIView - resolved URL ${finalUrl}`)
     this.uiView.webContents.loadURL(finalUrl)
 
+    if (plugin) {
+      viewCacheManager.set(plugin, view, finalUrl, feature)
+    }
+
     metrics.total = performance.now() - startTime
     coreBoxWindowLog.info(`AttachUIView metrics: preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`)
 
@@ -1270,6 +1337,22 @@ export class WindowManager {
           query: normalizedQuery,
           source: 'initial',
         })
+
+        void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:ui-resume', {
+          source: 'attach',
+          featureId: feature?.id,
+          url: finalUrl,
+        }).catch(() => {})
+      })
+    }
+
+    if (!query && plugin) {
+      this.uiView.webContents.once('dom-ready', () => {
+        void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:ui-resume', {
+          source: 'attach',
+          featureId: feature?.id,
+          url: finalUrl,
+        }).catch(() => {})
       })
     }
   }
@@ -1304,16 +1387,35 @@ export class WindowManager {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
         this.uiView.webContents.closeDevTools()
-        currentWindow.window.contentView.removeChildView(this.uiView)
-        // Focus main webContents so renderer input can receive focus
+        try {
+          currentWindow.window.contentView.removeChildView(this.uiView)
+        } catch (err) {
+          coreBoxWindowLog.warn('Failed to remove child view', { error: err })
+        }
         currentWindow.window.webContents.focus()
       } else {
         coreBoxWindowLog.warn('Cannot remove child view: current window is null or destroyed')
       }
-      // The WebContents are automatically destroyed when the WebContentsView is removed.
-      // Explicitly destroying them here is unnecessary and causes a type error.
+
+      const settings = this.getAppSettingConfig() as any
+      const cacheEnabled = (settings?.viewCache?.maxCachedViews ?? 0) > 0
+
+      if (!cacheEnabled || !this.attachedPlugin) {
+        try {
+          if (!this.uiView.webContents.isDestroyed()) {
+            this.uiView.webContents.close()
+          }
+        } catch (err) {
+          coreBoxWindowLog.warn('Failed to close UI view', { error: err })
+        }
+        if (this.attachedPlugin) {
+          viewCacheManager.release(this.attachedPlugin, this.attachedFeature ?? undefined)
+        }
+      }
+
       this.uiView = null
       this.attachedPlugin = null
+      this.attachedFeature = null
     }
   }
 

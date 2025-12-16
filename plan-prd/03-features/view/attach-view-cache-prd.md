@@ -108,3 +108,9 @@ function computeViewScore(stats: ViewStats): number {
 - 引入机器学习模型动态调整权重，适配不同用户习惯。
 - 打通云端，同步常用视图画像到多设备。
 - 支持插件上报自定义指标（如推理耗时）参与评分。
+
+## 12. 实现落地（已完成）
+
+- 入口：`apps/core-app/src/main/modules/box-tool/core-box/window.ts`（`attachUIView` / `detachUIView`）。
+- 缓存管理：`apps/core-app/src/main/modules/box-tool/core-box/view-cache.ts`（LRU + stale cleanup）。
+- 配置：`packages/utils/common/storage/entity/app-settings.ts` → `appSetting.viewCache`。

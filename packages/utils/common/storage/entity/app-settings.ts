@@ -46,12 +46,13 @@ const _appSettingOriginData = {
     showReason: true,
   },
   animation: {
-    /** CoreBox 列表项入场动画 */
     listItemStagger: true,
-    /** 结果切换过渡动画 */
     resultTransition: true,
-    /** CoreBox 窗口展开收缩动画 (Beta) */
     coreBoxResize: false,
+  },
+  viewCache: {
+    maxCachedViews: 4,
+    hotCacheDurationMs: 120000,
   },
   background: {
     /** 背景图来源: 'bing' | 'custom' | 'none' */

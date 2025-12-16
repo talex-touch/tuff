@@ -55,7 +55,7 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
     try {
       const response = await touchChannel.send('clipboard:query', { category: 'preview', limit: 20 })
       console.log('[usePreviewHistory] Query response:', response)
-      items.value = response?.data ?? []
+      items.value = Array.isArray(response) ? response : (response?.data ?? [])
       console.log('[usePreviewHistory] Loaded items:', items.value.length)
       ensureSelection()
     } catch (error) {
@@ -106,6 +106,10 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   }
 
   function handleKeydown(event: KeyboardEvent): void {
+    // Debug: log ⌘← events
+    if (event.metaKey && event.key === 'ArrowLeft') {
+      console.log('[usePreviewHistory] handleKeydown ⌘←, visible:', visible.value, 'hasClass:', document.body.classList.contains('core-box'))
+    }
     if (!visible.value || !document.body.classList.contains('core-box')) return
     const key = event.key
     if (key === 'Escape') {
@@ -150,6 +154,16 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
       toast.success('结果已复制')
     } catch { toast.error('复制失败') }
   })
+  
+  const unregNewItem = touchChannel.regChannel('clipboard:new-item', ({ data }) => {
+    if (!data?.meta?.category) return
+    if (data.meta.category === 'preview') {
+      console.log('[usePreviewHistory] New preview item detected, refreshing if visible')
+      if (visible.value) {
+        void load()
+      }
+    }
+  })
 
   // Window event listeners for show/hide history (from keyboard shortcuts and PreviewResultCard)
   function handleShowHistoryEvent(): void {
@@ -172,6 +186,7 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
     unregShow()
     unregHide()
     unregCopy()
+    unregNewItem()
     window.removeEventListener('mousedown', handleMouseDown)
     window.removeEventListener('keydown', handleKeydown, true)
     window.removeEventListener('corebox:show-calculation-history', handleShowHistoryEvent)

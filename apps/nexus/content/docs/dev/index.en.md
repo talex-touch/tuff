@@ -13,6 +13,9 @@
 - **[Extensions](./extensions/)** — advanced patterns for complex integrations.
 - **[Code Snippets](./snippets.en.md)** — copy-paste examples for common tasks.
 
+## Runtime Behavior
+- **[CoreBox Window & UI View Cache](./corebox-and-views.en.md)** — resize logic, recommendation flow, and WebContentsView caching.
+
 ## Developer Tools
 - **[TUFF CLI](./tuff-cli.en.md)** — command-line tool for creating and managing plugin projects.
 - **[TUFF UI](./tuff-ui.en.md)** — Vue3 component library with unified design language.

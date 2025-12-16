@@ -13,6 +13,9 @@
 - **[扩展开发](./extensions/)** — 复杂集成的高级模式。
 - **[代码片段](./snippets.zh.md)** — 常见任务的复制粘贴示例。
 
+## 运行时行为
+- **[CoreBox 窗口与 UI View 缓存](./corebox-and-views.zh.md)** — 伸缩逻辑、推荐请求与 WebContentsView 缓存。
+
 ## 开发工具
 - **[TUFF CLI](./tuff-cli.zh.md)** — 命令行工具，快速创建和管理插件项目。
 - **[TUFF UI](./tuff-ui.zh.md)** — Vue3 组件库，统一设计语言和交互体验。
