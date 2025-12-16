@@ -1,6 +1,5 @@
 import type {
   IProviderActivate,
-  SearchPriorityLayer,
   TuffItem,
   TuffQuery,
   TuffQueryInput,
@@ -29,7 +28,6 @@ export function useSearch(
 
   const { items: boxItems } = useBoxItems()
 
-  // Use shallowRef for better performance - avoid deep reactivity on large arrays
   const searchResults = shallowRef<Array<TuffItem>>([])
 
   const res = computed<Array<TuffItem>>(() => {
@@ -53,49 +51,7 @@ export function useSearch(
   const currentSearchId = ref<string | null>(null)
 
   const BASE_DEBOUNCE = 35
-  const MAX_DEBOUNCE = 150
   const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
-  
-  // Track previous input for dynamic debounce calculation
-  let prevSearchVal = ''
-  let lastInputTime = 0
-  
-  /**
-   * Calculate dynamic debounce time based on input pattern
-   */
-  function calculateDebounceMs(input: string): number {
-    const now = Date.now()
-    const timeSinceLastInput = now - lastInputTime
-    lastInputTime = now
-    
-    // If provider is activated, use longer debounce
-    if (activeActivations.value && activeActivations.value.length > 0) {
-      return 100
-    }
-    
-    // Fast consecutive typing detection (< 100ms between keystrokes)
-    if (timeSinceLastInput < 100 && input.startsWith(prevSearchVal) && input.length === prevSearchVal.length + 1) {
-      // User is typing fast, increase debounce to avoid excessive searches
-      return Math.min(BASE_DEBOUNCE * 2, MAX_DEBOUNCE)
-    }
-    
-    // Paste detection (multiple characters added at once)
-    if (input.length - prevSearchVal.length > 3) {
-      return BASE_DEBOUNCE // Execute quickly for paste
-    }
-    
-    // Delete operation
-    if (input.length < prevSearchVal.length) {
-      return Math.round(BASE_DEBOUNCE * 1.5) // Slightly delay on delete
-    }
-    
-    prevSearchVal = input
-    return BASE_DEBOUNCE
-  }
-  
-  const debounceMs = computed(() => {
-    return calculateDebounceMs(searchVal.value)
-  })
 
   let searchSequence = 0
 
@@ -172,60 +128,84 @@ export function useSearch(
     return inputs
   }
 
-  // Core search logic extracted for reuse
-  async function executeSearch(): Promise<void> {
-    const startTime = performance.now()
-    console.debug('[useSearch] executeSearch called at', startTime, { 
-      searchVal: searchVal.value, 
-      activeActivations: activeActivations.value,
-      isDivisionBox: isDivisionBoxMode()
+  const collapseCoreBox = (): void => {
+    touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
+  }
+
+  const resetSearchState = (): void => {
+    searchResults.value = []
+    searchResult.value = null
+    currentSearchId.value = null
+    boxOptions.layout = undefined
+    loading.value = false
+    recommendationPending.value = false
+  }
+
+  const broadcastDivisionBoxInput = (query: TuffQuery): void => {
+    inputTransport.broadcast({
+      input: query.text,
+      query,
+      source: 'renderer'
     })
-    
+
+    if (windowState.divisionBox?.sessionId) {
+      touchChannel.send('division-box:input-change', {
+        sessionId: windowState.divisionBox.sessionId,
+        input: searchVal.value,
+        query
+      })
+    }
+  }
+
+  const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
+    currentSearchId.value = initialResult.sessionId || null
+    searchResult.value = initialResult
+    searchResults.value = initialResult.items
+    boxOptions.layout = initialResult.containerLayout
+
+    if (initialResult.activate?.length) {
+      activeActivations.value = initialResult.activate
+    } else if (initialResult.items.length === 0) {
+      collapseCoreBox()
+    }
+  }
+
+  async function executeSearch(): Promise<void> {
     const currentSequence = ++searchSequence
     const inputs = buildQueryInputs()
 
-    if (recommendationPending.value) {
-      recommendationPending.value = false
-    }
+    recommendationPending.value = false
 
-    // In DivisionBox mode, only broadcast input changes - no search
     if (isDivisionBoxMode()) {
-      const query: TuffQuery = {
-        text: searchVal.value,
-        inputs
-      }
-      
-      // Broadcast input to plugin UI via IPC
-      inputTransport.broadcast({
-        input: query.text,
-        query,
-        source: 'renderer'
-      })
-      
-      // Also send via main channel to plugin
-      if (windowState.divisionBox?.sessionId) {
-        touchChannel.send('division-box:input-change', {
-          sessionId: windowState.divisionBox.sessionId,
-          input: searchVal.value,
-          query
-        })
-      }
-      
+      const query: TuffQuery = { text: searchVal.value, inputs }
+      broadcastDivisionBoxInput(query)
       return
     }
 
-    // Empty query: fetch recommendations
     if (!searchVal.value && !activeActivations.value?.length) {
       boxOptions.focus = 0
+      const hasInputs = inputs.length > 0
+
+      searchResults.value = []
+      searchResult.value = null
+      currentSearchId.value = null
+      boxOptions.layout = undefined
+
+      if (!hasInputs && appSetting.recommendation?.enabled === false) {
+        resetSearchState()
+        collapseCoreBox()
+        return
+      }
+
       loading.value = true
       recommendationPending.value = true
+      collapseCoreBox()
 
       const RECOMMENDATION_TIMEOUT_MS = 400
       const timeoutId = setTimeout(() => {
         if (recommendationPending.value && searchResults.value.length === 0) {
-          recommendationPending.value = false
-          loading.value = false
-          touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
+          resetSearchState()
+          collapseCoreBox()
         }
       }, RECOMMENDATION_TIMEOUT_MS)
 
@@ -241,32 +221,18 @@ export function useSearch(
           return
         }
 
-        currentSearchId.value = initialResult.sessionId || null
-        searchResult.value = initialResult
-        searchResults.value = initialResult.items
-        boxOptions.layout = initialResult.containerLayout
-
-        if (initialResult.activate?.length) {
-          activeActivations.value = initialResult.activate
-        }
-
+        applyRecommendationResult(initialResult)
         loading.value = false
         recommendationPending.value = false
       } catch (error) {
         clearTimeout(timeoutId)
         console.error('Recommendation search failed:', error)
-        searchResults.value = []
-        searchResult.value = null
-        currentSearchId.value = null
-        boxOptions.layout = undefined
-        loading.value = false
-        recommendationPending.value = false
+        resetSearchState()
       }
       return
     }
 
     if (!searchVal.value) {
-      // Empty query with active providers: still notify plugins/UI about clear
       const query: TuffQuery = {
         text: '',
         inputs
@@ -278,7 +244,6 @@ export function useSearch(
         source: 'renderer'
       })
 
-      // Keep current search state; no new search request
       return
     }
 
@@ -298,25 +263,19 @@ export function useSearch(
         source: 'renderer'
       })
 
-      // The initial call now returns the high-priority results directly.
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
 
-      // Validate sequence: only process if this is still the latest search
       if (currentSequence !== searchSequence) {
-        return // Discard outdated results
+        return
       }
 
-      // Store the session ID to track this specific search stream.
       currentSearchId.value = initialResult.sessionId || null
       searchResult.value = initialResult
 
-      // Immediately display the high-priority items.
       searchResults.value = initialResult.items
 
-      // 搜索结果使用 list 模式（清除 grid 布局）
       boxOptions.layout = undefined
 
-      // The initial activation state is set here.
       if (initialResult.activate && initialResult.activate.length > 0) {
         activeActivations.value = initialResult.activate
       }
@@ -328,32 +287,18 @@ export function useSearch(
       boxOptions.layout = undefined
       loading.value = false
     }
-    // Do not set loading to false here; wait for the `search-end` event.
   }
 
-  // Debounced version of executeSearch for normal typing
-  const debouncedSearch = useDebounceFn(executeSearch, debounceMs)
+  const debouncedSearch = useDebounceFn(executeSearch, BASE_DEBOUNCE)
 
-  /**
-   * Trigger debounced search
-   */
   async function handleSearch(): Promise<void> {
     debouncedSearch()
   }
 
-  /**
-   * Force immediate search without debounce
-   * Used when clipboard state changes or immediate update is needed
-   */
   async function handleSearchImmediate(): Promise<void> {
-    // Directly execute search without debounce
     await executeSearch()
   }
 
-  /**
-   * Execute a search result item
-   * @param item - Item to execute, defaults to currently focused item
-   */
   async function handleExecute(item?: TuffItem): Promise<void> {
     const itemToExecute = item || activeItem.value
     if (!itemToExecute) {
@@ -377,9 +322,7 @@ export function useSearch(
     if (isPluginFeature) {
       boxOptions.data.feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
-      
-      // Set temporary activation state immediately for faster UI response
-      // This ensures input visibility is correct before backend responds
+
       const featureMeta = itemToExecute.meta as any
       const interaction = featureMeta?.interaction
       const acceptedInputTypes = featureMeta?.extension?.acceptedInputTypes
@@ -406,15 +349,8 @@ export function useSearch(
       ? JSON.parse(JSON.stringify(searchResult.value))
       : null
 
-    // IMPORTANT: Always use current clipboard state from UI (clipboardOptions.last)
-    // This ensures consistency between what's shown in TagSection and what's passed to plugins
-    // Don't re-fetch from main process - use buildQueryInputs() as the single source of truth
     if (isPluginFeature && serializedSearchResult?.query) {
-      // Get current clipboard inputs from UI state
       const currentInputs = buildQueryInputs()
-      
-      // Replace the cached inputs with current state
-      // This ensures cleared clipboard (ESC) is respected
       serializedSearchResult.query.inputs = currentInputs
     }
 
@@ -435,12 +371,10 @@ export function useSearch(
 
       activeActivations.value = newActivationState
 
-      // 进入 provider 时清空 query，让插件从空白状态开始
       if (newActivationState && newActivationState.length > 0) {
         searchVal.value = ''
       }
 
-      // Clear clipboard after execute if time === 0
       if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
         clipboardOptions.last = null
         clipboardOptions.detectedAt = null
@@ -458,17 +392,11 @@ export function useSearch(
     select.value = -1
   }
 
-  /**
-   * Deactivate provider(s) and trigger new search
-   * @param providerId - Specific provider ID to deactivate, or deactivate all if undefined
-   * @returns True if successfully deactivated
-   */
   async function deactivateProvider(providerId?: string): Promise<boolean> {
     if (!providerId) {
-      // Deactivate all if no ID is provided
       const newState = await touchChannel.send('core-box:deactivate-providers')
       activeActivations.value = newState
-      searchVal.value = '' // Clear search input to clear item list
+      searchVal.value = ''
       await handleSearch()
       return true
     }
@@ -476,7 +404,6 @@ export function useSearch(
     const newState = await touchChannel.send('core-box:deactivate-provider', { id: providerId })
     activeActivations.value = newState
 
-    // If all providers are deactivated, clear search input
     if (!newState || newState.length === 0) {
       searchVal.value = ''
     }
@@ -485,22 +412,11 @@ export function useSearch(
     return true
   }
 
-  /**
-   * Deactivate all active providers
-   * This MUST be async to ensure backend provider deactivation completes
-   * before updating the UI state. Calling this synchronously could cause
-   * race conditions where the UI believes providers are deactivated but
-   * they're still active in the backend.
-   *
-   * @async
-   * @returns Promise that resolves when all providers are deactivated
-   */
   async function deactivateAllProviders(): Promise<void> {
     const newState = await touchChannel.send('core-box:deactivate-providers')
     activeActivations.value = newState
-    searchVal.value = '' // Clear search input to clear item list
-    
-    // Reset boxOptions mode from FEATURE back to INPUT
+    searchVal.value = ''
+
     if (boxOptions.mode === BoxMode.FEATURE) {
       boxOptions.mode = BoxMode.INPUT
       boxOptions.data = {}
@@ -509,20 +425,6 @@ export function useSearch(
     await handleSearch()
   }
 
-  /**
-   * Handle exit operations in strict sequential order.
-   * This is an ASYNC function to ensure provider deactivation completes
-   * before proceeding, preventing race conditions.
-   *
-   * Exit sequence:
-   * 1. Deactivate active providers (if any) and return
-   * 2. Handle mode transitions (FEATURE → INPUT)
-   * 3. Clear search input (if any)
-   * 4. Hide CoreBox window (final step)
-   *
-   * @async
-   * @returns Promise that resolves when exit handling is complete
-   */
   async function handleExit(): Promise<void> {
     if (activeActivations.value && activeActivations.value.length > 0) {
       await deactivateAllProviders()
@@ -577,26 +479,21 @@ export function useSearch(
     }
   })
 
-  // 2. Watch for searchVal or mode changes to trigger the search
-  watch([searchVal], handleSearch)
+  watch(searchVal, (val) => {
+    if (!val) {
+      ;(debouncedSearch as any).cancel?.()
+      void handleSearchImmediate()
+      return
+    }
+    handleSearch()
+  })
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 
-  // Listener for incremental search result updates.
   touchChannel.regChannel('core-box:search-update', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
-      const layer: SearchPriorityLayer | undefined = data.layer
-      
-      // For deferred layer results, append to existing results
-      // For fast layer, results are already set in initial response
       if (data.items && data.items.length > 0) {
-        // Use spread to trigger shallowRef reactivity
         searchResults.value = [...searchResults.value, ...data.items]
-        
-        // Log layer info for debugging performance
-        if (layer) {
-          console.debug(`[useSearch] ${layer} layer: +${data.items.length} items`)
-        }
       }
     }
   })
@@ -614,15 +511,10 @@ export function useSearch(
       }
     })
 
-    // Trigger initial search to show recommendations when CoreBox opens
     handleSearch()
     
-    // Listen for CoreBox shown event to refresh recommendations
     const handleCoreBoxShown = () => {
-      console.debug('[useSearch] CoreBox shown, triggering recommendation refresh')
-      // Only refresh if search is empty and no active providers
       if (!searchVal.value && !activeActivations.value?.length) {
-        // Use immediate search to avoid debounce delay
         handleSearchImmediate()
       }
     }
@@ -630,17 +522,11 @@ export function useSearch(
     window.addEventListener('corebox:shown', handleCoreBoxShown)
   })
 
-  // Listener for when the search stream is finished.
   touchChannel.regChannel('core-box:search-end', ({ data }) => {
     if (data.searchId === currentSearchId.value) {
       if (data.cancelled) {
-        console.log('[useSearch] Search was cancelled')
-        searchResults.value = []
-        searchResult.value = null
+        resetSearchState()
         activeActivations.value = null
-        currentSearchId.value = null
-        loading.value = false
-        recommendationPending.value = false
         return
       }
 
@@ -654,36 +540,20 @@ export function useSearch(
     }
   })
 
-  // ⚠️ 已废弃：push-items 监听器
-  // 现在所有插件推送都通过 BoxItemSDK 统一管理
-  // Plugin SDK 的 boxItems.push() 使用 boxItemManager.upsert()
-  // 渲染层的 useBoxItems 会自动处理这些 items
-  /*
-  touchChannel.regChannel('core-box:push-items', ({ data }) => {
-    ... 旧逻辑已移除 ...
-  })
-  */
-
-  // Listener for a plugin requesting to clear all items.
   touchChannel.regChannel('core-box:clear-items', () => {
-    searchResults.value = []
-    searchResult.value = null
-    loading.value = false
-    recommendationPending.value = false
+    resetSearchState()
   })
 
-  // Listener for no results - trigger shrink
   touchChannel.regChannel('core-box:no-results', ({ data }) => {
     if (data?.shouldShrink) {
-      // Send collapse command to shrink CoreBox
-      touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
+      collapseCoreBox()
     }
   })
 
   return {
     searchVal,
     select,
-    res, // computed - 合并 searchResults 和 boxItems
+    res,
     loading,
     activeItem,
     activeActivations,

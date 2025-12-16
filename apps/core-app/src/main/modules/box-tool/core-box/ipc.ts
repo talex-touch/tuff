@@ -79,6 +79,10 @@ export class IpcManager {
           return
         }
 
+        if (!coreBoxManager.showCoreBox) {
+          return
+        }
+
         if (data.mode === 'max') {
           coreBoxManager.expand({ forceMax: true })
           return
@@ -91,6 +95,9 @@ export class IpcManager {
       }
 
       if (typeof data === 'number' && data > 0) {
+        if (!coreBoxManager.showCoreBox) {
+          return
+        }
         coreBoxManager.expand({ length: data })
       } else {
         coreBoxManager.shrink()
@@ -298,6 +305,12 @@ export class IpcManager {
             reply(DataCode.ERROR, { error: 'Invalid height (must be 60-650)' })
             return
           }
+
+          if (coreBoxManager.isCollapsed && height > 60) {
+            reply(DataCode.SUCCESS, { height: 60, ignored: true })
+            return
+          }
+
           windowManager.setHeight(height)
           reply(DataCode.SUCCESS, { height })
         } catch (error: any) {

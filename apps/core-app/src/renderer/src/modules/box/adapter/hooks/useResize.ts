@@ -17,6 +17,7 @@ const ITEM_ANIMATION_BASE_MS = 300
 const STAGGER_DELAY_PER_ITEM_MS = 55
 const MAX_ANIMATION_WAIT_MS = 500
 const SCROLLBAR_WIDTH_ESTIMATE = 12
+const HEIGHT_SAFETY_PADDING = 10
 
 function sendExpandCommand(length: number, forceMax: boolean = false): void {
   if (forceMax) {
@@ -45,7 +46,7 @@ function calculateActualHeight(): number {
   const footerHeight = 44
   const extraBuffer = scrollHeight > clientHeight ? SCROLLBAR_WIDTH_ESTIMATE : 0
   
-  return Math.min(scrollHeight + headerHeight + footerHeight + extraBuffer, 600)
+  return Math.min(scrollHeight + headerHeight + footerHeight + extraBuffer + HEIGHT_SAFETY_PADDING, 600)
 }
 
 function calculateAnimationWaitTime(itemCount: number): number {
@@ -65,6 +66,7 @@ export function useResize(options: UseResizeOptions): void {
       clearTimeout(animationHeightTimer)
       animationHeightTimer = null
     }
+    cancelPendingHeightUpdate()
   }
 
   function checkShouldCollapse(): boolean {
@@ -86,6 +88,10 @@ export function useResize(options: UseResizeOptions): void {
     touchChannel.sendSync('core-box:set-height', { height })
   }, HEIGHT_UPDATE_DEBOUNCE_MS)
 
+  const cancelPendingHeightUpdate = (): void => {
+    ;(debouncedSetHeight as any).cancel?.()
+  }
+
   function updateHeight(): void {
     if (activeActivations.value?.length) {
       sendExpandCommand(0, true)
@@ -97,10 +103,8 @@ export function useResize(options: UseResizeOptions): void {
 
     clearAnimationTimer()
 
-    // Fast path: expand by count immediately so window does not stay short.
     sendExpandCommand(resultCount)
 
-    // Single unified height update after animation completes
     const animationWaitTime = calculateAnimationWaitTime(resultCount)
     animationHeightTimer = setTimeout(() => {
       nextTick(() => {
@@ -125,7 +129,6 @@ export function useResize(options: UseResizeOptions): void {
     () => results.value,
     (newResults, oldResults) => {
       if (newResults.length > 0) {
-        // Skip update if only order changed but same items
         if (oldResults && newResults.length === oldResults.length) {
           const newIds = new Set(newResults.map(r => r.id))
           const oldIds = new Set(oldResults.map(r => r.id))
@@ -134,6 +137,7 @@ export function useResize(options: UseResizeOptions): void {
         updateHeight()
       } else {
         clearAnimationTimer()
+        cancelPendingHeightUpdate()
         sendCollapseCommand()
       }
     },
@@ -146,6 +150,7 @@ export function useResize(options: UseResizeOptions): void {
       if (!isLoading) {
         if (results.value.length === 0) {
           clearAnimationTimer()
+          cancelPendingHeightUpdate()
           sendCollapseCommand()
         } else {
           debouncedCollapse()
@@ -160,6 +165,7 @@ export function useResize(options: UseResizeOptions): void {
       if (activations?.length) {
         sendExpandCommand(0, true)
       } else {
+        cancelPendingHeightUpdate()
         debouncedCollapse()
       }
     }
