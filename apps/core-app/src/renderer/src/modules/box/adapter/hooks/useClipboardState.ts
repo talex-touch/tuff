@@ -12,6 +12,8 @@ import { TuffInputType } from '@talex-touch/utils'
 import { computed, type ComputedRef } from 'vue'
 import { BoxMode } from '..'
 
+const MIN_TEXT_ATTACHMENT_LENGTH = 80
+
 /**
  * Options for clipboard state hook
  */
@@ -148,24 +150,27 @@ export function useClipboardState(options: UseClipboardStateOptions): ClipboardS
       return inputs
     }
 
-    // Priority 4: Text/HTML clipboard
+    // Priority 4: Text/HTML clipboard (only if >= 80 chars)
     const last = clipboardOptions.last
     if (last && (last.type === 'text' || (last.type as string) === 'html')) {
-      if (last.rawContent) {
-        inputs.push({
-          type: TuffInputType.Html,
-          content: last.content,
-          rawContent: last.rawContent,
-          metadata: safeSerializeMetadata(last.meta)
-        })
-      } else {
-        inputs.push({
-          type: TuffInputType.Text,
-          content: last.content,
-          metadata: safeSerializeMetadata(last.meta)
-        })
+      const content = last.content ?? ''
+      if (content.length >= MIN_TEXT_ATTACHMENT_LENGTH) {
+        if (last.rawContent) {
+          inputs.push({
+            type: TuffInputType.Html,
+            content,
+            rawContent: last.rawContent,
+            metadata: safeSerializeMetadata(last.meta)
+          })
+        } else {
+          inputs.push({
+            type: TuffInputType.Text,
+            content,
+            metadata: safeSerializeMetadata(last.meta)
+          })
+        }
+        return inputs
       }
-      return inputs
     }
 
     return inputs

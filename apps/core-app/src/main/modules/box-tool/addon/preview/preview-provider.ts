@@ -69,8 +69,11 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
     const payload = this.extractPayload(item)
     if (payload?.primaryValue) {
       clipboard.writeText(payload.primaryValue)
-      // Record to history only when user explicitly executes (presses Enter)
-      void this.recordHistory(payload, searchResult?.query ?? { text: '', inputs: [] })
+      try {
+        await this.recordHistory(payload, searchResult?.query ?? { text: '', inputs: [] })
+      } catch (error) {
+        console.error('[PreviewProvider] Failed to record history:', error)
+      }
     }
     return null
   }
@@ -142,6 +145,10 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
         payload,
       },
     })
-    console.log('[PreviewProvider] Save result:', result?.id)
+    if (result?.id) {
+      console.log('[PreviewProvider] Preview history saved successfully:', result.id)
+    } else {
+      console.warn('[PreviewProvider] Preview history save returned null - database may not be initialized')
+    }
   }
 }

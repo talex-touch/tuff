@@ -48,6 +48,7 @@ export function useSearch(
 
   const searchResult = ref<TuffSearchResult | null>(null)
   const loading = ref(false)
+  const recommendationPending = ref(false)
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
 
@@ -100,6 +101,7 @@ export function useSearch(
 
   const MAX_TEXT_INPUT_LENGTH = 2000
   const MAX_HTML_INPUT_LENGTH = 5000
+  const MIN_TEXT_ATTACHMENT_LENGTH = 80
 
   function safeSerializeMetadata(meta: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined {
     if (!meta) return undefined
@@ -148,19 +150,22 @@ export function useSearch(
       clipboardOptions?.last?.type === 'text' ||
       clipboardOptions?.last?.type === 'html'
     ) {
-      if (clipboardOptions.last.rawContent) {
-        inputs.push({
-          type: TuffInputType.Html,
-          content: truncateContent(clipboardOptions.last.content, MAX_TEXT_INPUT_LENGTH),
-          rawContent: truncateContent(clipboardOptions.last.rawContent, MAX_HTML_INPUT_LENGTH),
-          metadata: safeSerializeMetadata(clipboardOptions.last.meta)
-        })
-      } else {
-        inputs.push({
-          type: TuffInputType.Text,
-          content: truncateContent(clipboardOptions.last.content, MAX_TEXT_INPUT_LENGTH),
-          metadata: safeSerializeMetadata(clipboardOptions.last.meta)
-        })
+      const content = clipboardOptions.last.content ?? ''
+      if (content.length >= MIN_TEXT_ATTACHMENT_LENGTH) {
+        if (clipboardOptions.last.rawContent) {
+          inputs.push({
+            type: TuffInputType.Html,
+            content: truncateContent(content, MAX_TEXT_INPUT_LENGTH),
+            rawContent: truncateContent(clipboardOptions.last.rawContent, MAX_HTML_INPUT_LENGTH),
+            metadata: safeSerializeMetadata(clipboardOptions.last.meta)
+          })
+        } else {
+          inputs.push({
+            type: TuffInputType.Text,
+            content: truncateContent(content, MAX_TEXT_INPUT_LENGTH),
+            metadata: safeSerializeMetadata(clipboardOptions.last.meta)
+          })
+        }
       }
     }
 
@@ -178,6 +183,10 @@ export function useSearch(
     
     const currentSequence = ++searchSequence
     const inputs = buildQueryInputs()
+
+    if (recommendationPending.value) {
+      recommendationPending.value = false
+    }
 
     // In DivisionBox mode, only broadcast input changes - no search
     if (isDivisionBoxMode()) {
@@ -205,47 +214,30 @@ export function useSearch(
       return
     }
 
-    // Empty text query (with or without inputs): show recommendations or input-aware results
+    // Empty query: fetch recommendations
     if (!searchVal.value && !activeActivations.value?.length) {
-      console.debug('[useSearch] Empty query, fetching recommendations')
       boxOptions.focus = 0
       loading.value = true
-      searchResults.value = []
+      recommendationPending.value = true
 
-      // Set timeout to force collapse if recommendation takes too long
-      const RECOMMENDATION_TIMEOUT_MS = 500
+      const RECOMMENDATION_TIMEOUT_MS = 400
       const timeoutId = setTimeout(() => {
-        if (loading.value && searchResults.value.length === 0) {
-          console.warn('[useSearch] Recommendation timeout, forcing collapse')
+        if (recommendationPending.value && searchResults.value.length === 0) {
+          recommendationPending.value = false
           loading.value = false
-          searchResults.value = []
-          // Trigger collapse via channel
           touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
         }
       }, RECOMMENDATION_TIMEOUT_MS)
 
       try {
-        const query: TuffQuery = {
-          text: '',
-          inputs
-        }
+        const query: TuffQuery = { text: '', inputs }
+        inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
 
-        inputTransport.broadcast({
-          input: query.text,
-          query,
-          source: 'renderer'
-        })
-
-        const queryStartTime = performance.now()
-        console.debug('[useSearch] Sending core-box:query to main process at', queryStartTime)
         const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
-        const queryEndTime = performance.now()
-        console.debug('[useSearch] Received result:', initialResult?.items?.length, 'items in', (queryEndTime - queryStartTime).toFixed(2), 'ms')
-
-        // Clear timeout if we got results in time
         clearTimeout(timeoutId)
 
         if (currentSequence !== searchSequence) {
+          recommendationPending.value = false
           return
         }
 
@@ -254,13 +246,12 @@ export function useSearch(
         searchResults.value = initialResult.items
         boxOptions.layout = initialResult.containerLayout
 
-        if (initialResult.activate && initialResult.activate.length > 0) {
+        if (initialResult.activate?.length) {
           activeActivations.value = initialResult.activate
         }
 
         loading.value = false
-        const totalTime = performance.now() - startTime
-        console.debug('[useSearch] Total recommendation time:', totalTime.toFixed(2), 'ms')
+        recommendationPending.value = false
       } catch (error) {
         clearTimeout(timeoutId)
         console.error('Recommendation search failed:', error)
@@ -269,6 +260,7 @@ export function useSearch(
         currentSearchId.value = null
         boxOptions.layout = undefined
         loading.value = false
+        recommendationPending.value = false
       }
       return
     }
@@ -378,7 +370,8 @@ export function useSearch(
       isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
 
     if (!isPluginFeature && !keepCoreBoxOpen) {
-      touchChannel.sendSync('core-box:hide')
+      searchVal.value = ''
+      touchChannel.send('core-box:hide')
     }
 
     if (isPluginFeature) {
@@ -443,8 +436,7 @@ export function useSearch(
       activeActivations.value = newActivationState
 
       // 进入 provider 时清空 query，让插件从空白状态开始
-      // 启动应用后也清空输入框
-      if ((newActivationState && newActivationState.length > 0) || !isPluginFeature) {
+      if (newActivationState && newActivationState.length > 0) {
         searchVal.value = ''
       }
 
@@ -567,7 +559,7 @@ export function useSearch(
     }
   }
 
-  useResize({ results: res, activeActivations, loading })
+  useResize({ results: res, activeActivations, loading, recommendationPending })
 
   watch(
     () => res.value,
@@ -648,6 +640,7 @@ export function useSearch(
         activeActivations.value = null
         currentSearchId.value = null
         loading.value = false
+        recommendationPending.value = false
         return
       }
 
@@ -657,6 +650,7 @@ export function useSearch(
       }
       activeActivations.value = data.activate || null
       loading.value = false
+      recommendationPending.value = false
     }
   })
 
@@ -675,6 +669,7 @@ export function useSearch(
     searchResults.value = []
     searchResult.value = null
     loading.value = false
+    recommendationPending.value = false
   })
 
   // Listener for no results - trigger shrink

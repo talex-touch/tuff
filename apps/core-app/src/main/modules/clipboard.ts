@@ -1133,6 +1133,8 @@ export class ClipboardModule extends BaseModule {
         const { source, category, metaFilter, limit: requestedLimit } = data ?? {}
         const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
 
+        clipboardLog.debug('[clipboard:query] Request', { meta: { source, category, metaFilter, limit } })
+
         // 如果没有任何筛选条件，返回最近的记录
         if (!source && !category && !metaFilter) {
           const rows = await this.db
@@ -1158,10 +1160,12 @@ export class ClipboardModule extends BaseModule {
         }
 
         if (category) {
+          const categoryValue = JSON.stringify(category)
+          clipboardLog.debug('[clipboard:query] Searching for category', { meta: { category, categoryValue } })
           conditions.push(
             and(
               eq(clipboardHistoryMeta.key, 'category'),
-              eq(clipboardHistoryMeta.value, JSON.stringify(category))
+              eq(clipboardHistoryMeta.value, categoryValue)
             )!
           )
         }
@@ -1193,11 +1197,16 @@ export class ClipboardModule extends BaseModule {
           .orderBy(desc(clipboardHistoryMeta.createdAt))
           .limit(limit)
 
+        clipboardLog.debug('[clipboard:query] Found meta rows', { meta: { count: idRows.length } })
+
         const ids = idRows.map((row) => row.clipboardId).filter((id): id is number => !!id)
         if (ids.length === 0) {
+          clipboardLog.debug('[clipboard:query] No matching IDs found')
           reply(DataCode.SUCCESS, [])
           return
         }
+
+        clipboardLog.debug('[clipboard:query] Fetching clipboard entries', { meta: { count: ids.length, sampleIds: ids.slice(0, 5).join(',') } })
 
         const rows = await this.db
           .select()
@@ -1206,6 +1215,7 @@ export class ClipboardModule extends BaseModule {
           .orderBy(desc(clipboardHistory.timestamp))
 
         const history = await this.hydrateWithMeta(rows)
+        clipboardLog.debug('[clipboard:query] Returning results', { meta: { count: history.length } })
         reply(DataCode.SUCCESS, history)
       })
     }

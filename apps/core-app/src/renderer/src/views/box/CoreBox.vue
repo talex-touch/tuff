@@ -514,15 +514,17 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
         />
       </div>
       <TuffItemAddon :type="addon" :item="activeItem" />
-      <PreviewHistoryPanel
-        ref="historyPanelRef"
-        :visible="previewHistory.visible"
-        :loading="previewHistory.loading"
-        :items="previewHistory.items"
-        :active-index="previewHistory.activeIndex"
-        @apply="previewHistory.apply"
-      />
     </template>
+    
+    <!-- Preview History Panel - Always mounted to listen to events -->
+    <PreviewHistoryPanel
+      ref="historyPanelRef"
+      :visible="previewHistory.visible"
+      :loading="previewHistory.loading"
+      :items="previewHistory.items"
+      :active-index="previewHistory.activeIndex"
+      @apply="previewHistory.apply"
+    />
   </div>
 
   <!-- Flow Selector Panel -->
