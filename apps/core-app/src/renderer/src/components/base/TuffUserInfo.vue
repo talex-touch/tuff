@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 import { useAuth } from '~/modules/auth/useAuth'
 import { touchChannel } from '~/modules/channel/channel-core'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
 const { currentUser, isLoggedIn } = useAuth()
 
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
+const NEXUS_URL = getTuffBaseUrl()
 
 function openUserProfile() {
   const profileUrl = `${NEXUS_URL}/dashboard/account`

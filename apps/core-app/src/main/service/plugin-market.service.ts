@@ -11,6 +11,7 @@ import type {
   MarketSearchResult,
 } from '@talex-touch/utils/plugin/providers'
 import { PluginMarketClient } from '@talex-touch/utils/plugin/providers'
+import { getTpexApiBase } from '@talex-touch/utils/env'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('PluginMarketService')
@@ -18,22 +19,12 @@ const log = createLogger('PluginMarketService')
 // Singleton market client
 let marketClient: PluginMarketClient | null = null
 
-// Default market base URL (can be overridden by environment variable)
-const DEFAULT_TPEX_API_BASE = 'https://tuff.tagzxia.com'
-
-function getTpexApiBase(): string {
-  // Check for environment variable override (useful for local development)
-  const envBase = process.env.TPEX_API_BASE || process.env.VITE_NEXUS_URL
-  if (envBase) {
-    return envBase
-  }
-
-  // In development, optionally use localhost
+function resolveTpexApiBase(): string {
   if (process.env.NODE_ENV === 'development' && process.env.USE_LOCAL_NEXUS === 'true') {
     return 'http://localhost:3200'
   }
 
-  return DEFAULT_TPEX_API_BASE
+  return getTpexApiBase()
 }
 
 /**
@@ -41,7 +32,7 @@ function getTpexApiBase(): string {
  */
 export function getMarketClient(): PluginMarketClient {
   if (!marketClient) {
-    const tpexApiBase = getTpexApiBase()
+    const tpexApiBase = resolveTpexApiBase()
     marketClient = new PluginMarketClient({
       tpexApiBase,
       npmRegistry: 'https://registry.npmjs.org',

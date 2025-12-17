@@ -1,8 +1,9 @@
 import type { MarketPlugin } from '@talex-touch/utils/market'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { ref, computed } from 'vue'
 import { getAuthToken, isAuthenticated } from '~/modules/market/auth-token-service'
 
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
+const NEXUS_URL = getTuffBaseUrl()
 
 export interface UserPluginStats {
   total: number

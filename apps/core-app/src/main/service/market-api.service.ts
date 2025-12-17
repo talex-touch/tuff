@@ -1,5 +1,6 @@
 import type { MarketProviderDefinition, MarketSourcesPayload } from '@talex-touch/utils/market'
 import { DEFAULT_MARKET_PROVIDERS, MARKET_SOURCES_STORAGE_KEY } from '@talex-touch/utils/market'
+import { getTpexApiBase } from '@talex-touch/utils/env'
 import { performMarketHttpRequest } from './market-http.service'
 import { createLogger } from '../utils/logger'
 import { getConfig } from '../modules/storage'
@@ -36,11 +37,8 @@ export function getEnabledApiSources(): MarketProviderDefinition[] {
  * Prioritizes enabled tpexApi sources by priority, falls back to defaults
  */
 function getDefaultMarketBaseUrl(): string {
-  // Check for environment variable override first
-  const envBase = process.env.TPEX_API_BASE || process.env.VITE_NEXUS_URL
-  if (envBase) {
-    return envBase
-  }
+  const envBase = getTpexApiBase()
+  if (envBase) return envBase
 
   // Get enabled API sources sorted by priority
   const sources = getEnabledApiSources()
@@ -52,7 +50,6 @@ function getDefaultMarketBaseUrl(): string {
     return sources[0]!.url.replace(/\/$/, '')
   }
 
-  // Fallback to default
   return 'https://tuff.tagzxia.com'
 }
 

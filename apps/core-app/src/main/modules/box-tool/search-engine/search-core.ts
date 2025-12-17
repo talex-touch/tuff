@@ -924,6 +924,22 @@ export class SearchEngineCore
         resultCount,
         sessionId
       })
+
+      // Also queue Nexus telemetry for dashboard
+      try {
+        sentryService.queueNexusTelemetry({
+          eventType: 'search',
+          searchQuery: (query.text || '').slice(0, 200),
+          searchDurationMs: Math.round(totalDuration),
+          searchResultCount: resultCount,
+          providerTimings,
+          inputTypes,
+          metadata: {
+            sessionId,
+            sortingDuration: Math.round(sortingDuration),
+          },
+        })
+      } catch {}
     } catch (error) {
       // Silently fail to not disrupt search flow
       searchEngineLog.debug('Failed to record search metrics for Sentry', { error })

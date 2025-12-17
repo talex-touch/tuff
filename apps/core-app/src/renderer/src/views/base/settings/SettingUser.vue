@@ -8,12 +8,13 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
 const { t } = useI18n()
 const { isLoggedIn, currentUser, loginWithBrowser, logout, authLoadingState } = useAuth()
 
 const isDev = import.meta.env.DEV
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
+const NEXUS_URL = getTuffBaseUrl()
 
 const useLocalServer = computed({
   get: () => appSetting?.dev?.authServer === 'local',

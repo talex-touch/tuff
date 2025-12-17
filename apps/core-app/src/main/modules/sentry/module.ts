@@ -1,7 +1,7 @@
 /**
  * Sentry Module Export
  */
-
-import { SentryServiceModule } from './sentry-service'
+import { SentryServiceModule, setSentryServiceInstance } from './sentry-service'
 
 export const sentryModule = new SentryServiceModule()
+setSentryServiceInstance(sentryModule)

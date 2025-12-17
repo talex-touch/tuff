@@ -13,14 +13,13 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { appSetting } from '../channel/storage/index'
 import { touchChannel } from '../channel/channel-core'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
 let eventListenerCleanup: (() => void) | null = null
 let authCallbackCleanup: (() => void) | null = null
 let isInitialized = false
 let activeConsumers = 0
 
-// Nexus URL for browser auth
-const NEXUS_URL_PRODUCTION = 'https://tuff.tagzxia.com'
 const NEXUS_URL_LOCAL = 'http://localhost:3200'
 
 function getNexusUrl(): string {
@@ -28,7 +27,7 @@ function getNexusUrl(): string {
   if (import.meta.env.DEV && appSetting?.dev?.authServer === 'local') {
     return NEXUS_URL_LOCAL
   }
-  return import.meta.env.VITE_NEXUS_URL || NEXUS_URL_PRODUCTION
+  return getTuffBaseUrl()
 }
 
 // Pending browser login state

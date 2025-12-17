@@ -13,15 +13,18 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
 const { t } = useI18n()
 
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
+const NEXUS_URL = getTuffBaseUrl()
 
 const enabled = ref(false)
 const anonymous = ref(true)
 const loading = ref(false)
 const searchCount = ref(0)
+const telemetryStats = ref<any>(null)
+const isDev = import.meta.env.DEV
 
 async function loadConfig() {
   try {
@@ -36,8 +39,13 @@ async function loadConfig() {
       const count = await touchChannel.send('sentry:get-search-count')
       searchCount.value = count || 0
     }
-    catch {
-      // Ignore if unavailable
+    catch {}
+
+    if (isDev) {
+      try {
+        telemetryStats.value = await touchChannel.send('sentry:get-telemetry-stats')
+      }
+      catch {}
     }
   }
   catch (error) {
@@ -81,8 +89,15 @@ function openPrivacySettings() {
   touchChannel.send('open-external', { url: privacyUrl })
 }
 
-function openSentryDashboard() {
-  touchChannel.send('open-external', { url: 'https://sentry.io' })
+function openNexusDashboard() {
+  const dashboardUrl = `${NEXUS_URL}/dashboard/analytics`
+  touchChannel.send('open-external', { url: dashboardUrl })
+}
+
+function formatTimestamp(ts: number | null) {
+  if (!ts) return 'Never'
+  const date = new Date(ts)
+  return date.toLocaleString()
 }
 
 onMounted(() => {
@@ -92,8 +107,8 @@ onMounted(() => {
 
 <template>
   <TuffGroupBlock
-    :name="t('settingSentry.title', 'Sentry 数据分析')"
-    :description="t('settingSentry.groupDesc', '帮助改进应用体验')"
+    :name="t('settingSentry.title', 'Nexus 数据分析')"
+    :description="t('settingSentry.groupDesc', '帮助改进应用体验和产品决策')"
     default-icon="i-carbon-chart-bar"
     active-icon="i-carbon-chart-column"
     memory-name="setting-sentry"
@@ -103,7 +118,7 @@ onMounted(() => {
         {{
           t(
             'settingSentry.descriptionText',
-            '启用数据分析可以帮助我们改进应用性能和用户体验。所有数据都经过匿名化处理，不会包含敏感信息。',
+            '启用数据分析可以帮助我们改进应用性能和用户体验。数据会上传到 Nexus 分析平台和 Sentry 错误监控平台，所有数据都经过匿名化处理，不会包含敏感信息。',
           )
         }}
       </p>
@@ -149,6 +164,32 @@ onMounted(() => {
       </p>
     </section>
 
+    <section v-if="isDev && enabled && telemetryStats" class="DevStatsPanel">
+      <h4>开发者统计信息</h4>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <span class="stat-label">Buffer 大小</span>
+          <span class="stat-value">{{ telemetryStats.bufferSize }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">总上传次数</span>
+          <span class="stat-value">{{ telemetryStats.totalUploads }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">失败次数</span>
+          <span class="stat-value">{{ telemetryStats.failedUploads }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">最近上传</span>
+          <span class="stat-value">{{ formatTimestamp(telemetryStats.lastUploadTime) }}</span>
+        </div>
+        <div class="stat-item full-width">
+          <span class="stat-label">API 地址</span>
+          <span class="stat-value mono">{{ telemetryStats.apiBase }}</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Privacy Management -->
     <TuffBlockSlot
       :title="t('settingSentry.privacyManagement', '隐私数据管理')"
@@ -162,13 +203,17 @@ onMounted(() => {
       </FlatButton>
     </TuffBlockSlot>
 
-    <!-- Learn More -->
-    <section class="SentryLinks">
-      <a class="sentry-link" @click="openSentryDashboard">
-        <span class="i-carbon-information text-sm" />
-        {{ t('settingSentry.learnMore', '了解 Sentry 如何处理数据') }}
-      </a>
-    </section>
+    <TuffBlockSlot
+      :title="t('settingSentry.viewDashboard', '查看数据分析面板')"
+      :description="t('settingSentry.dashboardDesc', '在 Nexus 查看详细的使用统计和趋势')"
+      default-icon="i-carbon-dashboard"
+      active-icon="i-carbon-dashboard"
+      @click="openNexusDashboard"
+    >
+      <FlatButton mini>
+        <span class="i-carbon-launch text-sm" />
+      </FlatButton>
+    </TuffBlockSlot>
   </TuffGroupBlock>
 </template>
 
@@ -207,32 +252,57 @@ onMounted(() => {
   }
 }
 
-.SentryLinks {
-  margin-top: 12px;
-  padding: 8px 12px;
+.DevStatsPanel {
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--el-border-color);
   background: var(--el-fill-color-lighter);
-  border-radius: 10px;
-  display: inline-flex;
-}
+  margin-bottom: 12px;
 
-.sentry-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--el-color-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 4px 0;
-
-  &:hover {
-    opacity: 0.85;
-    transform: translateX(2px);
-  }
-
-  span {
+  h4 {
+    margin: 0 0 12px 0;
     font-size: 14px;
+    font-weight: 600;
+    color: var(--el-text-color-primary);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    background: var(--el-bg-color);
+    border-radius: 8px;
+    border: 1px solid var(--el-border-color-lighter);
+
+    &.full-width {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    font-weight: 500;
+  }
+
+  .stat-value {
+    font-size: 14px;
+    color: var(--el-text-color-primary);
+    font-weight: 600;
+
+    &.mono {
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
   }
 }
+
 </style>
