@@ -30,9 +30,13 @@ import 'vue-sonner/style.css'
 import 'uno.css'
 import 'virtual:unocss-devtools'
 
+import { setRuntimeEnv } from '@talex-touch/utils/env'
+
 window.$nodeApi = baseNodeApi
 window.$shortconApi = shortconApi
 window.$storage = storageManager
+
+setRuntimeEnv(import.meta.env as any)
 
 preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')

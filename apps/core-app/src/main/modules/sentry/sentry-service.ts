@@ -9,6 +9,7 @@ import crypto from 'node:crypto'
 import os from 'node:os'
 import * as Sentry from '@sentry/electron/main'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { getTelemetryApiBase } from '@talex-touch/utils/env'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -46,7 +47,7 @@ interface SearchMetrics {
 // Nexus telemetry batch upload settings
 const NEXUS_TELEMETRY_BATCH_SIZE = 20
 const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000 // 1 minute
-const NEXUS_API_BASE = 'https://nexus.talex.me'
+const NEXUS_API_BASE = getTelemetryApiBase()
 
 interface NexusTelemetryEvent {
   eventType: 'search' | 'visit' | 'error' | 'feature_use'
@@ -114,9 +115,11 @@ export class SentryServiceModule extends BaseModule {
   private searchMetricsBuffer: SearchMetrics[] = []
   private isInitialized = false
   
-  // Nexus telemetry batch upload
   private nexusTelemetryBuffer: NexusTelemetryEvent[] = []
   private nexusFlushTimer: NodeJS.Timeout | null = null
+  private lastNexusUploadTime: number | null = null
+  private totalNexusUploads = 0
+  private failedNexusUploads = 0
 
   constructor() {
     super(SentryServiceModule.key)
@@ -139,8 +142,20 @@ export class SentryServiceModule extends BaseModule {
       sentryLog.info('Sentry is disabled by configuration')
     }
 
-    // Set up IPC channel for user context updates from renderer
+    
     this.setupIPCChannels()
+
+    try {
+      storageModule.subscribe('sentry-config.json', (data) => {
+        const cfg = data as Partial<SentryConfig>
+        this.saveConfig(cfg)
+      })
+    }
+    catch (error) {
+      sentryLog.warn('Failed to subscribe sentry-config changes', {
+        meta: { error: error instanceof Error ? error.message : String(error) }
+      })
+    }
   }
 
   /**
@@ -164,19 +179,23 @@ export class SentryServiceModule extends BaseModule {
       return this.getConfig()
     })
 
-    // Expose search count getter
     channel.regChannel(ChannelType.MAIN, 'sentry:get-search-count', () => {
       return this.getSearchCount()
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'sentry:get-telemetry-stats', () => {
+      return this.getTelemetryStats()
     })
   }
 
   async onDestroy(): Promise<void> {
-    // Note: Sentry Electron main process doesn't have flush/close methods
-    // Events are automatically sent
+    
     if (this.isInitialized) {
-      // Wait a bit to ensure events are sent
+      
       await new Promise(resolve => setTimeout(resolve, 500))
     }
+    
+    this.stopNexusTelemetryTimer()
   }
 
   /**
@@ -514,11 +533,37 @@ export class SentryServiceModule extends BaseModule {
     return this.searchCount
   }
 
+  getTelemetryStats(): {
+    searchCount: number
+    bufferSize: number
+    lastUploadTime: number | null
+    totalUploads: number
+    failedUploads: number
+    apiBase: string
+    isEnabled: boolean
+    isAnonymous: boolean
+  } {
+    return {
+      searchCount: this.searchCount,
+      bufferSize: this.nexusTelemetryBuffer.length,
+      lastUploadTime: this.lastNexusUploadTime,
+      totalUploads: this.totalNexusUploads,
+      failedUploads: this.failedNexusUploads,
+      apiBase: NEXUS_API_BASE,
+      isEnabled: this.config.enabled,
+      isAnonymous: this.config.anonymous,
+    }
+  }
+
   /**
    * Queue telemetry event for batch upload to Nexus
    */
   queueNexusTelemetry(event: Omit<NexusTelemetryEvent, 'isAnonymous'>): void {
     if (!this.config.enabled) return
+
+    if (event.eventType === 'search') {
+      this.searchCount++
+    }
 
     const telemetryEvent: NexusTelemetryEvent = {
       ...event,
@@ -530,7 +575,6 @@ export class SentryServiceModule extends BaseModule {
 
     this.nexusTelemetryBuffer.push(telemetryEvent)
 
-    // Flush if buffer reaches batch size
     if (this.nexusTelemetryBuffer.length >= NEXUS_TELEMETRY_BATCH_SIZE) {
       this.flushNexusTelemetry()
     }
@@ -553,7 +597,6 @@ export class SentryServiceModule extends BaseModule {
     this.nexusTelemetryBuffer = []
 
     try {
-      // Batch upload - send all events in one request
       const response = await fetch(`${NEXUS_API_BASE}/api/telemetry/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -561,15 +604,17 @@ export class SentryServiceModule extends BaseModule {
       })
 
       if (!response.ok) {
+        this.failedNexusUploads++
         sentryLog.warn('Failed to upload telemetry batch', { meta: { status: response.status } })
-        // Put events back in buffer for retry (max 100)
         this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
       } else {
+        this.totalNexusUploads++
+        this.lastNexusUploadTime = Date.now()
         sentryLog.debug('Telemetry batch uploaded', { meta: { count: events.length } })
       }
     } catch (error) {
+      this.failedNexusUploads++
       sentryLog.warn('Telemetry upload failed', { meta: { error: error instanceof Error ? error.message : String(error) } })
-      // Put events back in buffer for retry (max 100)
       this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
     }
   }
@@ -597,4 +642,8 @@ export function getSentryService(): SentryServiceModule {
     sentryServiceInstance = new SentryServiceModule()
   }
   return sentryServiceInstance
+}
+
+export function setSentryServiceInstance(instance: SentryServiceModule): void {
+  sentryServiceInstance = instance
 }

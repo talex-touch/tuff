@@ -3,7 +3,6 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { TouchPlugin } from '../plugin'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { app } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxManager } from '../../box-tool/core-box/manager'
 

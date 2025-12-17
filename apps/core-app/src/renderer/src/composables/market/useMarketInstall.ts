@@ -1,10 +1,11 @@
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { useI18n } from 'vue-i18n'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import type { MarketPluginListItem } from './useMarketData'
 
-const NEXUS_URL = import.meta.env.VITE_NEXUS_URL || 'https://tuff.tagzxia.com'
+const NEXUS_URL = getTuffBaseUrl()
 
 export interface InstallOptions {
   /** Whether this is an upgrade (force update existing plugin) */
