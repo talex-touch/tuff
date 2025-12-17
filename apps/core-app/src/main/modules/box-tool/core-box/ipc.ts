@@ -79,7 +79,8 @@ export class IpcManager {
           return
         }
 
-        if (!coreBoxManager.showCoreBox) {
+        const currentWindow = windowManager.current?.window
+        if (!currentWindow || currentWindow.isDestroyed() || !currentWindow.isVisible()) {
           return
         }
 
@@ -95,7 +96,8 @@ export class IpcManager {
       }
 
       if (typeof data === 'number' && data > 0) {
-        if (!coreBoxManager.showCoreBox) {
+        const currentWindow = windowManager.current?.window
+        if (!currentWindow || currentWindow.isDestroyed() || !currentWindow.isVisible()) {
           return
         }
         coreBoxManager.expand({ length: data })
