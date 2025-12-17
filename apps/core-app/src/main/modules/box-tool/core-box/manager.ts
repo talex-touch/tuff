@@ -3,6 +3,7 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ProviderDeactivatedEvent } from '../../../core/eventbus/touch-event'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
+import { TuffSearchResultBuilder } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { genTouchApp } from '../../../core'
@@ -214,13 +215,17 @@ export class CoreBoxManager {
     windowManager.expand(this._expandState, this.isUIMode)
   }
 
-  public async search(query: TuffQuery): Promise<TuffSearchResult | null> {
+  public async search(query: TuffQuery): Promise<TuffSearchResult> {
     try {
       return await this.searchEngine.search(query)
     }
     catch (error) {
       console.error('[CoreBoxManager] Search failed:', error)
-      return null
+      return new TuffSearchResultBuilder(query)
+        .setItems([])
+        .setDuration(0)
+        .setSources([])
+        .build()
     }
   }
 }

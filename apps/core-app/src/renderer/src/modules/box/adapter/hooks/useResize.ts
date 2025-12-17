@@ -138,7 +138,7 @@ export function useResize(options: UseResizeOptions): void {
       } else {
         clearAnimationTimer()
         cancelPendingHeightUpdate()
-        sendCollapseCommand()
+        debouncedCollapse()
       }
     },
     { deep: true }

@@ -108,7 +108,13 @@ const completionDisplay = computed(() => {
 const isUIMode = computed(() => {
   if (!activeActivations.value?.length) return false
   // Check if any active provider has hideResults: true
-  return activeActivations.value.some(activation => activation.hideResults === true)
+  const result = activeActivations.value.some(activation => activation.hideResults === true)
+  console.debug('[CoreBox] isUIMode computed:', {
+    activeActivationsCount: activeActivations.value.length,
+    activations: activeActivations.value.map(a => ({ id: a.id, hideResults: a.hideResults })),
+    isUIMode: result
+  })
+  return result
 })
 
 // Check if input should be shown when providers are active
@@ -515,7 +521,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
       </div>
       <TuffItemAddon :type="addon" :item="activeItem" />
     </template>
-    
+
     <!-- Preview History Panel - Always mounted to listen to events -->
     <PreviewHistoryPanel
       ref="historyPanelRef"

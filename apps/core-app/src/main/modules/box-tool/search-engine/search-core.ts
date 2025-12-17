@@ -472,6 +472,45 @@ export class SearchEngineCore
       let isFirstUpdate = true
       let didResolveInitial = false
       let providersToSearch = this.getActiveProviders()
+      let gatherController: IGatherController | null = null
+
+      const finalizeWithError = (error: unknown): void => {
+        searchEngineLog.error('Search gather pipeline failed', {
+          error,
+          meta: { sessionId, query: query.text }
+        })
+
+        try {
+          gatherController?.abort()
+        } catch {
+          // ignore
+        }
+
+        const totalDuration = Date.now() - startTime
+        const failedResult = new TuffSearchResultBuilder(query)
+          .setItems([])
+          .setDuration(totalDuration)
+          .setSources([])
+          .build()
+        failedResult.sessionId = sessionId
+        failedResult.activate = this.getActivationState() ?? undefined
+
+        if (!didResolveInitial) {
+          didResolveInitial = true
+          resolve(failedResult)
+        }
+
+        this.currentGatherController = null
+        const coreBoxWindow = windowManager.current?.window
+        if (coreBoxWindow) {
+          const finalActivationState = this.getActivationState() ?? undefined
+          this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
+            searchId: sessionId,
+            activate: finalActivationState,
+            sources: []
+          })
+        }
+      }
 
       // Smart routing: filter providers based on query.inputs types
       if (query.inputs && query.inputs.length > 0) {
@@ -540,160 +579,164 @@ export class SearchEngineCore
 
       searchLogger.logSearchPhase('Initialization', 'Setting up search aggregator')
 
-      const gatherController = gatherAggregator(providersToSearch, query, async (update) => {
-        searchLogger.searchUpdate(update.isDone, update.newResults.length)
-        if (update.isDone) {
-          if (!didResolveInitial) {
-            didResolveInitial = true
+      gatherController = gatherAggregator(providersToSearch, query, async (update) => {
+        try {
+          searchLogger.searchUpdate(update.isDone, update.newResults.length)
+          if (update.isDone) {
+            if (!didResolveInitial) {
+              didResolveInitial = true
 
-            if (isFirstUpdate) {
-              isFirstUpdate = false
-              const initialItems = update.newResults.flatMap((res) => res.items)
+              if (isFirstUpdate) {
+                isFirstUpdate = false
+                const initialItems = update.newResults.flatMap((res) => res.items)
 
-              await this._injectUsageStats(initialItems)
-              await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
+                await this._injectUsageStats(initialItems)
+                await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
 
-              sortingStartTime.value = performance.now()
-              const { sortedItems } = this.sorter.sort(initialItems, query, gatherController.signal)
-              const sortingDuration = performance.now() - sortingStartTime.value
+                sortingStartTime.value = performance.now()
+                const { sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal)
+                const sortingDuration = performance.now() - sortingStartTime.value
 
-              this._updateActivationState(update.newResults)
+                this._updateActivationState(update.newResults)
 
-              const totalDuration = Date.now() - startTime
-              const initialResult = new TuffSearchResultBuilder(query)
-                .setItems(sortedItems)
-                .setDuration(totalDuration)
-                .setSources(update.sourceStats || [])
-                .build()
-              initialResult.sessionId = sessionId
-              initialResult.activate = this.getActivationState() ?? undefined
-
-              this._recordSearchMetrics({
-                sessionId,
-                query,
-                totalDuration,
-                sortingDuration,
-                sourceStats: update.sourceStats || [],
-                resultCount: sortedItems.length
-              })
-
-              this._recordSearchResults(sessionId, sortedItems).catch((error) => {
-                searchEngineLog.error('Failed to record search results', { error })
-              })
-
-              if (this.latestSessionId !== sessionId) {
-                const staleResult = new TuffSearchResultBuilder(query)
-                  .setItems([])
-                  .setDuration(0)
-                  .setSources([])
+                const totalDuration = Date.now() - startTime
+                const initialResult = new TuffSearchResultBuilder(query)
+                  .setItems(sortedItems)
+                  .setDuration(totalDuration)
+                  .setSources(update.sourceStats || [])
                   .build()
-                staleResult.sessionId = sessionId
-                resolve(staleResult)
+                initialResult.sessionId = sessionId
+                initialResult.activate = this.getActivationState() ?? undefined
+
+                this._recordSearchMetrics({
+                  sessionId,
+                  query,
+                  totalDuration,
+                  sortingDuration,
+                  sourceStats: update.sourceStats || [],
+                  resultCount: sortedItems.length
+                })
+
+                this._recordSearchResults(sessionId, sortedItems).catch((error) => {
+                  searchEngineLog.error('Failed to record search results', { error })
+                })
+
+                if (this.latestSessionId !== sessionId) {
+                  const staleResult = new TuffSearchResultBuilder(query)
+                    .setItems([])
+                    .setDuration(0)
+                    .setSources([])
+                    .build()
+                  staleResult.sessionId = sessionId
+                  resolve(staleResult)
+                } else {
+                  resolve(initialResult)
+                }
               } else {
-                resolve(initialResult)
+                const totalDuration = Date.now() - startTime
+                const resolvedResult = new TuffSearchResultBuilder(query)
+                  .setItems([])
+                  .setDuration(totalDuration)
+                  .setSources(update.sourceStats || [])
+                  .build()
+                resolvedResult.sessionId = sessionId
+                resolvedResult.activate = this.getActivationState() ?? undefined
+                resolve(resolvedResult)
               }
-            } else {
-              const totalDuration = Date.now() - startTime
-              const resolvedResult = new TuffSearchResultBuilder(query)
-                .setItems([])
-                .setDuration(totalDuration)
-                .setSources(update.sourceStats || [])
-                .build()
-              resolvedResult.sessionId = sessionId
-              resolvedResult.activate = this.getActivationState() ?? undefined
-              resolve(resolvedResult)
             }
-          }
 
-          // Handle final state and notify frontend
-          const totalResults = update.newResults.reduce((acc, res) => acc + res.items.length, 0)
-          searchLogger.searchSessionEnd(sessionId, totalResults)
-          this.currentGatherController = null
-          this._updateActivationState(update.newResults)
-          const coreBoxWindow = windowManager.current?.window
-          if (coreBoxWindow) {
-            const finalActivationState = this.getActivationState() ?? undefined
-            this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
-              searchId: sessionId,
-              activate: finalActivationState,
-              sources: update.sourceStats
-            })
-          }
-          searchLogger.logSearchPhase(
-            'Search End',
-            `Final activation state: ${JSON.stringify(this.getActivationState())}`
-          )
-          return
-        }
-
-        if (isFirstUpdate) {
-          isFirstUpdate = false
-          const initialItems = update.newResults.flatMap((res) => res.items)
-
-          // 批量获取使用统计并注入到 items 中
-          await this._injectUsageStats(initialItems)
-
-          // 注入查询完成权重
-          await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
-
-          sortingStartTime.value = performance.now()
-          const { sortedItems } = this.sorter.sort(initialItems, query, gatherController.signal)
-          const sortingDuration = performance.now() - sortingStartTime.value
-
-          this._updateActivationState(update.newResults)
-
-          const totalDuration = Date.now() - startTime
-          const initialResult = new TuffSearchResultBuilder(query)
-            .setItems(sortedItems)
-            .setDuration(totalDuration)
-            .setSources(update.sourceStats || [])
-            .build()
-          initialResult.sessionId = sessionId
-          initialResult.activate = this.getActivationState() ?? undefined
-
-          // Record search metrics for Sentry
-          this._recordSearchMetrics({
-            sessionId,
-            query,
-            totalDuration,
-            sortingDuration,
-            sourceStats: update.sourceStats || [],
-            resultCount: sortedItems.length
-          })
-
-          // 异步记录搜索结果统计（不阻塞返回）
-          this._recordSearchResults(sessionId, sortedItems).catch((error) => {
-            searchEngineLog.error('Failed to record search results', { error })
-          })
-
-          // 在返回前检查是否仍是最新搜索
-          if (this.latestSessionId !== sessionId) {
-            searchEngineLog.debug(
-              `Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`
+            // Handle final state and notify frontend
+            const totalResults = update.newResults.reduce((acc, res) => acc + res.items.length, 0)
+            searchLogger.searchSessionEnd(sessionId, totalResults)
+            this.currentGatherController = null
+            this._updateActivationState(update.newResults)
+            const coreBoxWindow = windowManager.current?.window
+            if (coreBoxWindow) {
+              const finalActivationState = this.getActivationState() ?? undefined
+              this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
+                searchId: sessionId,
+                activate: finalActivationState,
+                sources: update.sourceStats
+              })
+            }
+            searchLogger.logSearchPhase(
+              'Search End',
+              `Final activation state: ${JSON.stringify(this.getActivationState())}`
             )
-            // 返回空结果，前端会忽略旧的 sessionId
-            const staleResult = new TuffSearchResultBuilder(query)
-              .setItems([])
-              .setDuration(0)
-              .setSources([])
-              .build()
-            staleResult.sessionId = sessionId
-            resolve(staleResult)
             return
           }
 
-          resolve(initialResult)
-          didResolveInitial = true
-        } else if (update.newResults.length > 0) {
-          // This is a subsequent update
-          const subsequentItems = update.newResults.flatMap((res) => res.items)
+          if (isFirstUpdate) {
+            isFirstUpdate = false
+            const initialItems = update.newResults.flatMap((res) => res.items)
 
-          // 批量获取使用统计并注入到 items 中
-          await this._injectUsageStats(subsequentItems)
+            // 批量获取使用统计并注入到 items 中
+            await this._injectUsageStats(initialItems)
 
-          const { sortedItems } = this.sorter.sort(subsequentItems, query, gatherController.signal)
-          this._updateActivationState(update.newResults)
-          sendUpdateToFrontend(sortedItems)
+            // 注入查询完成权重
+            await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
+
+            sortingStartTime.value = performance.now()
+            const { sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal)
+            const sortingDuration = performance.now() - sortingStartTime.value
+
+            this._updateActivationState(update.newResults)
+
+            const totalDuration = Date.now() - startTime
+            const initialResult = new TuffSearchResultBuilder(query)
+              .setItems(sortedItems)
+              .setDuration(totalDuration)
+              .setSources(update.sourceStats || [])
+              .build()
+            initialResult.sessionId = sessionId
+            initialResult.activate = this.getActivationState() ?? undefined
+
+            // Record search metrics for Sentry
+            this._recordSearchMetrics({
+              sessionId,
+              query,
+              totalDuration,
+              sortingDuration,
+              sourceStats: update.sourceStats || [],
+              resultCount: sortedItems.length
+            })
+
+            // 异步记录搜索结果统计（不阻塞返回）
+            this._recordSearchResults(sessionId, sortedItems).catch((error) => {
+              searchEngineLog.error('Failed to record search results', { error })
+            })
+
+            // 在返回前检查是否仍是最新搜索
+            if (this.latestSessionId !== sessionId) {
+              searchEngineLog.debug(
+                `Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`
+              )
+              // 返回空结果，前端会忽略旧的 sessionId
+              const staleResult = new TuffSearchResultBuilder(query)
+                .setItems([])
+                .setDuration(0)
+                .setSources([])
+                .build()
+              staleResult.sessionId = sessionId
+              resolve(staleResult)
+              return
+            }
+
+            resolve(initialResult)
+            didResolveInitial = true
+          } else if (update.newResults.length > 0) {
+            // This is a subsequent update
+            const subsequentItems = update.newResults.flatMap((res) => res.items)
+
+            // 批量获取使用统计并注入到 items 中
+            await this._injectUsageStats(subsequentItems)
+
+            const { sortedItems } = this.sorter.sort(subsequentItems, query, gatherController!.signal)
+            this._updateActivationState(update.newResults)
+            sendUpdateToFrontend(sortedItems)
+          }
+        } catch (error) {
+          finalizeWithError(error)
         }
       })
 
@@ -981,10 +1024,9 @@ export class SearchEngineCore
     })
 
     // Register IPC handlers
+    // NOTE: 'core-box:query' is registered in core-box/ipc.ts via coreBoxManager.search()
+    // Do NOT register it here to avoid duplicate handlers causing race conditions
     const channel = this.touchApp!.channel
-    channel.regChannel(ChannelType.MAIN, 'core-box:query', async ({ data }) => {
-      return instance.search(data.query)
-    })
 
     channel.regChannel(
       ChannelType.MAIN,

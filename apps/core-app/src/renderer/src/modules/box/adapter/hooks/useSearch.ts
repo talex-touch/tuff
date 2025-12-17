@@ -41,7 +41,13 @@ export function useSearch(
       itemsMap.set(item.id, item)
     })
 
-    return Array.from(itemsMap.values())
+    const result = Array.from(itemsMap.values())
+    console.debug('[useSearch] res computed:', {
+      boxItemsCount: boxItems.value.length,
+      searchResultsCount: searchResults.value.length,
+      totalCount: result.length
+    })
+    return result
   })
 
   const searchResult = ref<TuffSearchResult | null>(null)
@@ -138,6 +144,7 @@ export function useSearch(
     searchResults.value = []
     searchResult.value = null
     currentSearchId.value = null
+    activeActivations.value = null
     boxOptions.layout = undefined
     loading.value = false
     recommendationPending.value = false
@@ -165,6 +172,8 @@ export function useSearch(
     searchResults.value = initialResult.items
     boxOptions.layout = initialResult.containerLayout
 
+    activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
+
     if (currentSearchId.value) {
       const pending = pendingSearchEndById.get(currentSearchId.value)
       if (pending) {
@@ -173,9 +182,7 @@ export function useSearch(
       }
     }
 
-    if (initialResult.activate?.length) {
-      activeActivations.value = initialResult.activate
-    } else if (initialResult.items.length === 0) {
+    if (!activeActivations.value && initialResult.items.length === 0) {
       collapseCoreBox()
     }
   }
@@ -275,12 +282,23 @@ export function useSearch(
 
       const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
 
+      console.debug('[useSearch] Search result received:', {
+        sessionId: initialResult.sessionId,
+        itemCount: initialResult.items?.length || 0,
+        hasActivate: !!initialResult.activate,
+        activateLength: initialResult.activate?.length || 0,
+        query: query.text
+      })
+
       if (currentSequence !== searchSequence) {
+        console.debug('[useSearch] Discarding stale search result (sequence mismatch)')
         return
       }
 
       currentSearchId.value = initialResult.sessionId || null
       searchResult.value = initialResult
+
+      activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
 
       if (currentSearchId.value) {
         const pending = pendingSearchEndById.get(currentSearchId.value)
@@ -291,12 +309,10 @@ export function useSearch(
       }
 
       searchResults.value = initialResult.items
+      console.debug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
 
       boxOptions.layout = undefined
 
-      if (initialResult.activate && initialResult.activate.length > 0) {
-        activeActivations.value = initialResult.activate
-      }
     } catch (error) {
       console.error('Search initiation failed:', error)
       searchResults.value = []
@@ -347,7 +363,7 @@ export function useSearch(
       const hasAcceptedInputTypes = acceptedInputTypes && acceptedInputTypes.length > 0
       const allowInput = interaction?.allowInput === true
       const shouldShowInput = hasAcceptedInputTypes || allowInput
-      
+
       activeActivations.value = [{
         id: 'plugin-features',
         meta: {
@@ -439,7 +455,7 @@ export function useSearch(
       boxOptions.mode = BoxMode.INPUT
       boxOptions.data = {}
     }
-    
+
     await handleSearch()
   }
 
@@ -524,19 +540,17 @@ export function useSearch(
 
   onMounted(() => {
     touchChannel.send('core-box:get-activated-providers').then((providers) => {
-      if (providers) {
-        activeActivations.value = providers
-      }
+      activeActivations.value = providers ?? null
     })
 
     handleSearch()
-    
+
     const handleCoreBoxShown = () => {
       if (!searchVal.value && !activeActivations.value?.length) {
         handleSearchImmediate()
       }
     }
-    
+
     window.addEventListener('corebox:shown', handleCoreBoxShown)
   })
 
