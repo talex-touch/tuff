@@ -110,6 +110,28 @@ export class ViewCacheManager {
     }
   }
 
+  public releasePlugin(pluginName: string): void {
+    const prefix = `${pluginName}:`
+    const keys = Array.from(this.cache.keys()).filter(key => key.startsWith(prefix))
+    if (keys.length === 0) return
+
+    for (const key of keys) {
+      const cached = this.cache.get(key)
+      if (!cached) continue
+
+      if (!cached.view.webContents.isDestroyed()) {
+        try {
+          cached.view.webContents.close()
+        } catch (e) {
+          log.warn(`Failed to close view during releasePlugin: ${key}`)
+        }
+      }
+
+      this.cache.delete(key)
+      log.debug(`Released view during releasePlugin: ${key}`)
+    }
+  }
+
   public clear(): void {
     for (const [key, cached] of this.cache) {
       if (!cached.view.webContents.isDestroyed()) {

@@ -38,6 +38,7 @@ import { TuffIconImpl } from '../../core/tuff-icon'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
+import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
 import {
   loadPluginFeatureContext,
@@ -594,6 +595,14 @@ export class TouchPlugin implements ITouchPlugin {
     this.logger.debug('disable() called. Checking if UI mode needs to be exited.')
     CoreBoxManager.getInstance().exitUIMode()
     this.logger.debug('exitUIMode() called during disable().')
+
+    try {
+      viewCacheManager.releasePlugin(this.name)
+    } catch (error: any) {
+      this.logger.warn('Failed to evict cached UI views during disable()', {
+        error: error?.message ?? String(error),
+      })
+    }
 
     genTouchChannel().revokeKey(this._uniqueChannelKey)
 
