@@ -1,0 +1,569 @@
+# 智能系统架构
+
+智能系统提供统一的 AI 能力框架，支持多提供商、能力路由和提示词管理。
+
+## 系统概览
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Intelligence SDK                         │
+│            (跨所有提供商的统一 AI 能力 API)                    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      能力注册表                               │
+│  • 30+ 注册能力（聊天、视觉、代码等）                          │
+│  • 能力元数据和类型定义                                       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      策略管理器                               │
+│  • 提供商选择策略                                            │
+│  • 模型偏好匹配                                              │
+│  • 回退提供商链                                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     提供商管理器                              │
+│  • OpenAI, Anthropic, DeepSeek, SiliconFlow, Local, Custom │
+│  • 提供商生命周期管理                                         │
+│  • 动态提供商注册                                            │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     提供商适配器                              │
+│  • 统一接口实现                                              │
+│  • 提供商特定 API 调用                                        │
+│  • 响应标准化                                                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 核心组件
+
+### 1. 能力注册表
+
+**位置**: `apps/core-app/src/main/modules/ai/intelligence-capability-registry.ts`
+
+管理系统中所有可用的 AI 能力。
+
+```typescript
+class AiCapabilityRegistry {
+  register(capability: AiCapabilityDescriptor): void
+  get(capabilityId: string): AiCapabilityDescriptor | undefined
+  getByType(type: IntelligenceCapabilityType): AiCapabilityDescriptor[]
+  getAll(): AiCapabilityDescriptor[]
+}
+```
+
+**已注册能力**:
+- **文本**: chat, translate, summarize, rewrite, grammar-check
+- **代码**: code-generate, code-explain, code-review, code-refactor, code-debug
+- **分析**: intent-detect, sentiment-analyze, content-extract, keywords-extract, classification
+- **视觉**: vision-ocr, image-caption, image-analyze, image-generate
+- **嵌入**: embedding.generate
+- **RAG**: rag-query, semantic-search, rerank
+- **智能体**: agent 执行
+
+### 2. 提供商管理器
+
+**位置**: `apps/core-app/src/main/modules/ai/runtime/provider-manager.ts`
+
+管理 AI 提供商实例及其生命周期。
+
+```typescript
+class IntelligenceProviderManager {
+  registerFactory(type: IntelligenceProviderType, factory): void
+  registerFromConfig(config: IntelligenceProviderConfig): IntelligenceProviderAdapter
+  getEnabled(): IntelligenceProviderAdapter[]
+  get(providerId: string): IntelligenceProviderAdapter | undefined
+  createProviderInstance(config: IntelligenceProviderConfig): IntelligenceProviderAdapter
+}
+```
+
+**支持的提供商**:
+- **OpenAI**: GPT-4, GPT-3.5, DALL-E, Whisper, TTS
+- **Anthropic**: Claude 3 (Opus, Sonnet, Haiku)
+- **DeepSeek**: DeepSeek-V2, DeepSeek-Coder
+- **SiliconFlow**: 多模型聚合平台
+- **Local**: Ollama, LM Studio, 本地模型
+- **Custom**: 用户自定义 API 端点
+
+### 3. 策略管理器
+
+**位置**: `apps/core-app/src/main/modules/ai/intelligence-strategy-manager.ts`
+
+为每次能力调用选择最优提供商。
+
+**选择逻辑**:
+1. **显式提供商偏好**: 如果指定了 `preferredProviderId`，使用它
+2. **模型偏好匹配**: 查找支持首选模型的提供商
+3. **基于优先级选择**: 选择优先级最高的已启用提供商
+4. **回退链**: 返回有序的回退提供商列表
+
+```typescript
+interface StrategySelectionResult {
+  selectedProvider: IntelligenceProviderConfig
+  fallbackProviders: IntelligenceProviderConfig[]
+  reasoning?: string
+}
+```
+
+### 4. Intelligence SDK
+
+**位置**: `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+
+所有 AI 能力调用的主入口点。
+
+```typescript
+class AiSDK {
+  async invoke<T>(
+    capabilityId: string,
+    payload: any,
+    options?: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<T>>
+  
+  updateConfig(config: Partial<IntelligenceSDKConfig>): void
+  async testProvider(config: IntelligenceProviderConfig): Promise<TestResult>
+}
+```
+
+**核心特性**:
+- 统一调用接口
+- 自动提供商选择
+- 回退处理
+- 响应缓存
+- 审计日志
+- 配额管理
+
+## 配置系统
+
+### 存储结构
+
+**位置**: `<user-data>/config/intelligence.json`
+
+```json
+{
+  "providers": [
+    {
+      "id": "openai-default",
+      "type": "openai",
+      "name": "OpenAI",
+      "enabled": true,
+      "priority": 1,
+      "apiKey": "sk-...",
+      "baseUrl": "https://api.openai.com/v1",
+      "defaultModel": "gpt-4",
+      "models": ["gpt-4", "gpt-3.5-turbo"],
+      "timeout": 30000
+    }
+  ],
+  "capabilities": {
+    "text.chat": {
+      "providers": [
+        {
+          "providerId": "openai-default",
+          "enabled": true,
+          "priority": 1,
+          "models": ["gpt-4"]
+        }
+      ],
+      "promptTemplate": "你是一个有帮助的助手。"
+    }
+  },
+  "globalConfig": {
+    "defaultStrategy": "adaptive-default",
+    "enableAudit": true,
+    "enableCache": false,
+    "cacheExpiration": 3600000
+  }
+}
+```
+
+### 能力路由
+
+每个能力可以配置：
+- **提供商绑定**: 哪些提供商可以处理此能力
+- **模型偏好**: 每个提供商的首选模型
+- **优先级**: 提供商选择顺序
+- **提示词模板**: 能力的自定义系统提示词
+
+### 配置加载
+
+**位置**: `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+
+```typescript
+export function ensureAiConfigLoaded(force?: boolean): void
+export function getCapabilityOptions(capabilityId: string): {
+  allowedProviderIds?: string[]
+  modelPreference?: string[]
+  promptTemplate?: string
+}
+export function getCapabilityPrompt(capabilityId: string): string | undefined
+```
+
+配置加载时机：
+1. 模块初始化时
+2. 通过 `intelligence:reload-config` 通道显式重新加载时
+3. 每次调用时从存储实时读取
+
+## 调用流程
+
+### 1. 能力调用
+
+```typescript
+// 用户代码
+const result = await intelligence.text.chat({
+  messages: [{ role: 'user', content: 'Hello' }]
+})
+```
+
+### 2. SDK 处理
+
+```typescript
+// intelligence-sdk.ts
+async invoke(capabilityId, payload, options) {
+  // 1. 验证能力存在
+  const capability = aiCapabilityRegistry.get(capabilityId)
+  
+  // 2. 加载能力路由配置
+  const routing = config.capabilities[capabilityId]
+  
+  // 3. 合并运行时选项和配置
+  const runtimeOptions = mergeOptions(options, routing)
+  
+  // 4. 检查缓存（如果启用）
+  if (enableCache && !stream) {
+    const cached = getFromCache(cacheKey)
+    if (cached) return cached
+  }
+  
+  // 5. 获取支持此能力的已启用提供商
+  const availableProviders = filterProviders(capability, runtimeOptions)
+  
+  // 6. 通过策略选择提供商
+  const { selectedProvider, fallbackProviders } = 
+    await strategyManager.select({
+      capabilityId,
+      options: runtimeOptions,
+      availableProviders
+    })
+  
+  // 7. 调用提供商
+  const provider = providerManager.get(selectedProvider.id)
+  const result = await provider[capability.type](payload, runtimeOptions)
+  
+  // 8. 缓存结果（如果启用）
+  if (enableCache) setToCache(cacheKey, result)
+  
+  // 9. 审计日志（如果启用）
+  if (enableAudit) await logAudit(...)
+  
+  return result
+}
+```
+
+### 3. 提供商执行
+
+```typescript
+// providers/openai-provider.ts
+async chat(payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions) {
+  const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${this.config.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: payload.model || this.config.defaultModel,
+      messages: payload.messages,
+      temperature: payload.temperature,
+      max_tokens: payload.maxTokens
+    }),
+    signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
+  })
+  
+  const data = await response.json()
+  
+  return {
+    result: data.choices[0].message.content,
+    usage: {
+      promptTokens: data.usage.prompt_tokens,
+      completionTokens: data.usage.completion_tokens,
+      totalTokens: data.usage.total_tokens
+    },
+    model: data.model,
+    latency: Date.now() - startTime,
+    traceId: generateTraceId(),
+    provider: this.config.id
+  }
+}
+```
+
+## 提示词管理
+
+### 提示词模板
+
+**位置**: `<user-data>/prompts/`
+
+提示词以 JSON 文件形式存储，包含元数据：
+
+```json
+{
+  "id": "summarize-article",
+  "name": "文章摘要",
+  "category": "text",
+  "description": "提取文章关键要点进行摘要",
+  "content": "你是一个擅长总结文章的专家...",
+  "variables": ["article", "maxLength"],
+  "builtin": false,
+  "createdAt": 1703001234567,
+  "updatedAt": 1703001234567
+}
+```
+
+### 提示词管理器
+
+**位置**: `apps/core-app/src/renderer/src/modules/intelligence/prompt-manager.ts`
+
+```typescript
+class PromptManager {
+  loadPrompts(): void
+  addCustomPrompt(prompt: Partial<PromptTemplate>): string
+  updatePrompt(id: string, updates: Partial<PromptTemplate>): boolean
+  deleteCustomPrompt(id: string): boolean
+  getPrompt(id: string): PromptTemplate | undefined
+  exportCustomPrompts(): PromptTemplate[]
+  importPrompts(prompts: PromptTemplate[]): number
+}
+```
+
+### 能力-提示词绑定
+
+提示词可以在配置中绑定到能力：
+
+```json
+{
+  "capabilities": {
+    "text.summarize": {
+      "promptTemplate": "{{prompt:summarize-article}}"
+    }
+  }
+}
+```
+
+## 测试系统
+
+### 能力测试器
+
+**位置**: `apps/core-app/src/main/modules/ai/capability-testers/`
+
+每个能力都有专用测试器：
+
+```typescript
+interface CapabilityTester {
+  generateTestPayload(options?: any): Promise<any>
+  formatTestResult(result: IntelligenceInvokeResult): CapabilityTestResult
+}
+```
+
+**示例**: 文本聊天测试器
+
+```typescript
+class TextChatTester implements CapabilityTester {
+  async generateTestPayload({ userInput }) {
+    return {
+      messages: [
+        { role: 'user', content: userInput || '你好！请用问候语回复。' }
+      ],
+      maxTokens: 100
+    }
+  }
+  
+  formatTestResult(result) {
+    return {
+      success: true,
+      message: result.result,
+      latency: result.latency,
+      model: result.model,
+      provider: result.provider
+    }
+  }
+}
+```
+
+### 测试执行
+
+```typescript
+// 主进程
+channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
+  const { capabilityId, providerId, userInput } = data
+  
+  // 获取测试器
+  const tester = capabilityTesterRegistry.get(capabilityId)
+  
+  // 生成测试载荷
+  const payload = await tester.generateTestPayload({ providerId, userInput })
+  
+  // 执行测试
+  const result = await ai.invoke(capabilityId, payload, {
+    allowedProviderIds: providerId ? [providerId] : undefined
+  })
+  
+  // 格式化结果
+  const formattedResult = tester.formatTestResult(result)
+  
+  reply(DataCode.SUCCESS, { ok: true, result: formattedResult })
+})
+```
+
+## 审计与监控
+
+### 审计日志
+
+**位置**: `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+
+跟踪所有 AI 调用以进行监控和调试：
+
+```typescript
+interface IntelligenceAuditLogEntry {
+  traceId: string
+  timestamp: number
+  capabilityId: string
+  provider: string
+  model: string
+  usage: TokenUsage
+  latency: number
+  success: boolean
+  error?: string
+  caller?: string
+  userId?: string
+}
+```
+
+### 配额管理器
+
+**位置**: `apps/core-app/src/main/modules/ai/intelligence-quota-manager.ts`
+
+管理使用配额和速率限制：
+
+```typescript
+class IntelligenceQuotaManager {
+  async checkQuota(caller: string): Promise<QuotaCheckResult>
+  async recordUsage(caller: string, usage: TokenUsage): Promise<void>
+  async getUsageStats(caller: string): Promise<UsageStats>
+}
+```
+
+## IPC 通道
+
+### 主进程通道
+
+- `intelligence:invoke` - 调用能力
+- `intelligence:test-capability` - 测试能力
+- `intelligence:test-provider` - 测试提供商连接
+- `intelligence:fetch-models` - 获取可用模型
+- `intelligence:reload-config` - 重新加载配置
+
+### 渲染进程钩子
+
+```typescript
+// useIntelligence composable
+const { text, vision, code, analysis, embedding, rag, agent } = useIntelligence()
+
+// 直接调用
+await text.chat({ messages: [...] })
+
+// 带选项
+await text.chat({ messages: [...] }, {
+  preferredProviderId: 'openai-default',
+  modelPreference: ['gpt-4'],
+  timeout: 30000
+})
+```
+
+## 最佳实践
+
+### 1. 能力配置
+
+- **始终为生产能力指定提供商绑定**
+- **根据能力类型设置适当的超时**（视觉：60秒，文本：30秒）
+- **使用模型偏好**确保一致的质量
+- **启用审计日志**用于调试和监控
+
+### 2. 错误处理
+
+- **始终处理 AI 调用的错误**
+- **为关键功能实现回退逻辑**
+- **显示用户友好的错误消息**
+- **记录带上下文的错误**以便调试
+
+### 3. 性能优化
+
+- **为重复查询启用缓存**
+- **对长篇内容生成使用流式传输**
+- **设置适当的 token 限制**以控制成本
+- **对用户输入实现请求防抖**
+
+### 4. 安全性
+
+- **永远不要在客户端代码中暴露 API 密钥**
+- **在发送到 AI 之前验证所有用户输入**
+- **实现速率限制**以防止滥用
+- **对敏感能力使用权限系统**
+
+## 扩展点
+
+### 自定义提供商
+
+创建自定义提供商适配器：
+
+```typescript
+class CustomProvider implements IntelligenceProviderAdapter {
+  async chat(payload, options) {
+    // 自定义实现
+  }
+  
+  async translate(payload, options) {
+    // 自定义实现
+  }
+  
+  // ... 其他能力
+}
+
+// 注册工厂
+providerManager.registerFactory('custom', (config) => {
+  return new CustomProvider(config)
+})
+```
+
+### 自定义能力
+
+注册新能力：
+
+```typescript
+aiCapabilityRegistry.register({
+  id: 'custom.capability',
+  type: 'custom-type',
+  name: '自定义能力',
+  description: '我的自定义 AI 能力',
+  supportedProviders: [IntelligenceProviderType.CUSTOM]
+})
+```
+
+### 自定义策略
+
+实现自定义提供商选择策略：
+
+```typescript
+class CustomStrategy implements StrategyManager {
+  async select(request: StrategySelectionRequest): Promise<StrategySelectionResult> {
+    // 自定义选择逻辑
+  }
+}
+
+strategyManager.setDefaultStrategy('custom-strategy')
+```

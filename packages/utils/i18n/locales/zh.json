@@ -98,5 +98,128 @@
     "timeout": "请求超时",
     "unknownError": "未知错误",
     "operationCancelled": "操作已取消"
+  },
+  "intelligence": {
+    "search": {
+      "placeholder": "搜索提供商...",
+      "clear": "清除"
+    },
+    "config": {
+      "api": {
+        "apiKeyRequired": "API Key 是必需的",
+        "baseUrlInvalid": "无效的 base URL 格式"
+      }
+    },
+    "usage": {
+      "requests": "请求数",
+      "tokens": "Token 数",
+      "cost": "花销",
+      "successRate": "成功率",
+      "success": "成功",
+      "failure": "失败",
+      "promptTokens": "提示 Token",
+      "completionTokens": "完成 Token",
+      "today": "今天",
+      "thisMonth": "本月"
+    },
+    "audit": {
+      "records": "条记录",
+      "noLogs": "暂无审计日志"
+    },
+    "agents": {
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "empty": "暂无可用智能体",
+      "active": "活跃",
+      "inactive": "未激活",
+      "description": "描述",
+      "capabilities": "能力",
+      "task_success": "任务执行成功",
+      "task_failed": "任务执行失败"
+    },
+    "landing": {
+      "prompts": {
+        "title": "提示词管理",
+        "desc": "管理各种任务的 AI 提示词",
+        "editTitle": "编辑提示词",
+        "editDesc": "创建和管理自定义提示词",
+        "editButton": "打开编辑器",
+        "folderTitle": "提示词文件夹",
+        "folderDesc": "直接访问提示词文件",
+        "folderButton": "打开文件夹",
+        "statsTitle": "{count} 个提示词",
+        "statsDesc": "约 {words} 字",
+        "newPromptButton": "新建提示词",
+        "folderOpenSuccess": "提示词文件夹已打开",
+        "folderOpenFailed": "打开提示词文件夹失败",
+        "createPromptHint": "在编辑器中创建新提示词"
+      },
+      "capabilities": {
+        "title": "能力配置",
+        "desc": "配置 AI 能力和路由",
+        "manageTitle": "管理能力",
+        "manageDesc": "配置提供商绑定和模型",
+        "manageButton": "配置",
+        "auditTitle": "审计日志",
+        "auditDesc": "查看能力调用历史",
+        "auditButton": "查看日志",
+        "statsTitle": "{count} 次调用",
+        "statsDesc": "{total} 个能力，{bound} 个已绑定，平均 {freq} 次/天",
+        "statsButton": "查看指标"
+      }
+    }
+  },
+  "settings": {
+    "intelligence": {
+      "selectProvider": "选择默认模型",
+      "selectProviderPlaceholder": "选择提供商",
+      "selectProviderHint": "选择提供商以查看可用模型",
+      "testCapability": "测试能力",
+      "testing": "测试中...",
+      "testSuccess": "测试成功",
+      "testFailed": "测试失败",
+      "selectModel": "选择模型",
+      "defaultModel": "默认模型",
+      "latency": "延迟",
+      "capabilitySearchPlaceholder": "搜索能力...",
+      "capabilityListEmpty": "未找到能力",
+      "capabilitySummary": "{count} 个可用能力",
+      "providers": "提供商",
+      "addChannel": "添加通道",
+      "emptyProviders": "未配置提供商。点击添加通道开始。",
+      "promptFilterAll": "所有提示词",
+      "builtin": "内置",
+      "custom": "自定义",
+      "promptMetaDescription": "暂无描述",
+      "promptNewDefaultName": "新提示词 {index}",
+      "promptDescriptionPlaceholder": "输入提示词描述...",
+      "promptCreateSuccess": "提示词创建成功",
+      "promptDuplicateSuffix": "（副本）",
+      "promptDuplicateSuccess": "提示词复制成功",
+      "promptSaveSuccess": "提示词保存成功",
+      "promptSaveFailed": "提示词保存失败",
+      "promptDeleteConfirm": "确定要删除此提示词吗？",
+      "promptDeleteSuccess": "提示词删除成功",
+      "promptDeleteFailed": "提示词删除失败",
+      "promptCopySuccess": "提示词已复制到剪贴板",
+      "promptImportSuccess": "成功导入 {count} 个提示词",
+      "promptImportFailed": "提示词导入失败",
+      "promptExportEmpty": "没有可导出的自定义提示词",
+      "promptExportSuccess": "成功导出 {count} 个提示词",
+      "promptTimestampUnknown": "未知",
+      "promptSearchPlaceholder": "搜索提示词...",
+      "promptListEmpty": "未找到提示词",
+      "promptStatsLabel": "{builtin} 个内置，{custom} 个自定义",
+      "promptPageTitle": "提示词管理",
+      "promptPageDesc": "创建和管理各种任务的 AI 提示词",
+      "landing": {
+        "prompts": {
+          "folderOpenSuccess": "提示词文件夹已打开",
+          "folderOpenFailed": "打开提示词文件夹失败",
+          "statsDesc": "约 {words} 字",
+          "newPromptButton": "新建提示词"
+        }
+      }
+    }
   }
 }

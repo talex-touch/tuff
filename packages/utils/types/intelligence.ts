@@ -2025,3 +2025,24 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
     ],
   },
 }
+
+export interface TestResult {
+  success: boolean
+  message: string
+  latency?: number
+  timestamp: number
+}
+
+export interface CapabilityTestResult {
+  success: boolean
+  message?: string
+  latency?: number
+  provider?: string
+  model?: string
+  textPreview?: string
+  timestamp: number
+}
+
+export interface CapabilityBinding extends AiCapabilityProviderBinding {
+  provider?: IntelligenceProviderConfig
+}

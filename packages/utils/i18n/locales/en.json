@@ -98,5 +98,128 @@
     "timeout": "Request Timeout",
     "unknownError": "Unknown Error",
     "operationCancelled": "Operation Cancelled"
+  },
+  "intelligence": {
+    "search": {
+      "placeholder": "Search providers...",
+      "clear": "Clear"
+    },
+    "config": {
+      "api": {
+        "apiKeyRequired": "API Key is required",
+        "baseUrlInvalid": "Invalid base URL format"
+      }
+    },
+    "usage": {
+      "requests": "Requests",
+      "tokens": "Tokens",
+      "cost": "Cost",
+      "successRate": "Success Rate",
+      "success": "Success",
+      "failure": "Failure",
+      "promptTokens": "Prompt Tokens",
+      "completionTokens": "Completion Tokens",
+      "today": "Today",
+      "thisMonth": "This Month"
+    },
+    "audit": {
+      "records": "records",
+      "noLogs": "No audit logs"
+    },
+    "agents": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "empty": "No agents available",
+      "active": "Active",
+      "inactive": "Inactive",
+      "description": "Description",
+      "capabilities": "Capabilities",
+      "task_success": "Task completed successfully",
+      "task_failed": "Task execution failed"
+    },
+    "landing": {
+      "prompts": {
+        "title": "Prompt Management",
+        "desc": "Manage AI prompts for various tasks",
+        "editTitle": "Edit Prompts",
+        "editDesc": "Create and manage custom prompts",
+        "editButton": "Open Editor",
+        "folderTitle": "Prompts Folder",
+        "folderDesc": "Access prompt files directly",
+        "folderButton": "Open Folder",
+        "statsTitle": "{count} Prompts",
+        "statsDesc": "Approximately {words} words",
+        "newPromptButton": "New Prompt",
+        "folderOpenSuccess": "Prompts folder opened",
+        "folderOpenFailed": "Failed to open prompts folder",
+        "createPromptHint": "Create new prompt in the editor"
+      },
+      "capabilities": {
+        "title": "Capabilities",
+        "desc": "Configure AI capabilities and routing",
+        "manageTitle": "Manage Capabilities",
+        "manageDesc": "Configure provider bindings and models",
+        "manageButton": "Configure",
+        "auditTitle": "Audit Logs",
+        "auditDesc": "View capability invocation history",
+        "auditButton": "View Logs",
+        "statsTitle": "{count} Invocations",
+        "statsDesc": "{total} capabilities, {bound} bound, avg {freq}/day",
+        "statsButton": "View Metrics"
+      }
+    }
+  },
+  "settings": {
+    "intelligence": {
+      "selectProvider": "Select Provider",
+      "selectProviderPlaceholder": "Choose a provider",
+      "selectProviderHint": "Select a provider to view available models",
+      "testCapability": "Test Capability",
+      "testing": "Testing...",
+      "testSuccess": "Test Successful",
+      "testFailed": "Test Failed",
+      "selectModel": "Select Model",
+      "defaultModel": "Default Model",
+      "latency": "Latency",
+      "capabilitySearchPlaceholder": "Search capabilities...",
+      "capabilityListEmpty": "No capabilities found",
+      "capabilitySummary": "{count} capabilities available",
+      "providers": "Provider",
+      "addChannel": "Add Channel",
+      "emptyProviders": "No providers configured. Click 'Add Channel' to get started.",
+      "promptFilterAll": "All Prompts",
+      "builtin": "Built-in",
+      "custom": "Custom",
+      "promptMetaDescription": "No description available",
+      "promptNewDefaultName": "New Prompt {index}",
+      "promptDescriptionPlaceholder": "Enter prompt description...",
+      "promptCreateSuccess": "Prompt created successfully",
+      "promptDuplicateSuffix": "(Copy)",
+      "promptDuplicateSuccess": "Prompt duplicated successfully",
+      "promptSaveSuccess": "Prompt saved successfully",
+      "promptSaveFailed": "Failed to save prompt",
+      "promptDeleteConfirm": "Are you sure you want to delete this prompt?",
+      "promptDeleteSuccess": "Prompt deleted successfully",
+      "promptDeleteFailed": "Failed to delete prompt",
+      "promptCopySuccess": "Prompt copied to clipboard",
+      "promptImportSuccess": "{count} prompts imported successfully",
+      "promptImportFailed": "Failed to import prompts",
+      "promptExportEmpty": "No custom prompts to export",
+      "promptExportSuccess": "{count} prompts exported successfully",
+      "promptTimestampUnknown": "Unknown",
+      "promptSearchPlaceholder": "Search prompts...",
+      "promptListEmpty": "No prompts found",
+      "promptStatsLabel": "{builtin} built-in, {custom} custom",
+      "promptPageTitle": "Prompt Management",
+      "promptPageDesc": "Create and manage AI prompts for various tasks",
+      "landing": {
+        "prompts": {
+          "folderOpenSuccess": "Prompts folder opened",
+          "folderOpenFailed": "Failed to open prompts folder",
+          "statsDesc": "Approximately {words} words",
+          "newPromptButton": "New Prompt"
+        }
+      }
+    }
   }
 }
