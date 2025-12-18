@@ -66,6 +66,7 @@ export class WindowManager {
   private _touchApp: TouchApp | null = null
   private uiView: WebContentsView | null = null
   private uiViewFocused = false
+  private uiViewThemeCssKey = new WeakMap<WebContentsView, string>()
   private attachedPlugin: TouchPlugin | null = null
   private attachedFeature: IPluginFeature | null = null
   private nativeThemeHandler: (() => void) | null = null
@@ -396,7 +397,13 @@ export class WindowManager {
     const rawWidth = size.width
     const rawHeight = size.height
     const windowWidth = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 900
-    const windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 60
+    let windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 60
+
+    const margin = 12
+    const maxAllowedHeight = rect.height - margin * 2
+    if (Number.isFinite(maxAllowedHeight) && maxAllowedHeight > 0) {
+      windowHeight = Math.min(windowHeight, Math.max(60, maxAllowedHeight))
+    }
 
     const baseLeft = rect.x + (rect.width - windowWidth) / 2
     
@@ -407,7 +414,7 @@ export class WindowManager {
       top = rect.y + Math.round(rect.height * this.customTopPercent) - Math.round(windowHeight / 2)
     } else {
       // Fixed position at 30% from top, window expands downward (no vertical movement)
-      top = rect.y + Math.round(rect.height * 0.30)
+      top = rect.y + Math.round(rect.height * 0.25)
     }
 
     let left = Math.round(baseLeft)
@@ -417,17 +424,20 @@ export class WindowManager {
       top = Math.round(rect.y + (rect.height - windowHeight) / 2)
     }
 
-    const margin = 12
     const minLeft = rect.x + margin
     const maxLeft = rect.x + rect.width - windowWidth - margin
     if (Number.isFinite(minLeft) && Number.isFinite(maxLeft) && maxLeft >= minLeft) {
       left = Math.min(Math.max(left, minLeft), maxLeft)
+    } else if (Number.isFinite(minLeft)) {
+      left = minLeft
     }
 
     const minTop = rect.y + margin
     const maxTop = rect.y + rect.height - windowHeight - margin
     if (Number.isFinite(minTop) && Number.isFinite(maxTop) && maxTop >= minTop) {
       top = Math.min(Math.max(top, minTop), maxTop)
+    } else if (Number.isFinite(minTop)) {
+      top = minTop
     }
 
     return {
@@ -468,7 +478,13 @@ export class WindowManager {
 
     this.stopBoundsAnimation()
     this.updatePosition(window)
-    window.window.showInactive()
+
+    const shouldFocus = triggeredByShortcut || coreBoxManager.isUIMode || !!this.uiView
+    if (shouldFocus) {
+      window.window.show()
+    } else {
+      window.window.showInactive()
+    }
 
     this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
       id: window.window.webContents.id,
@@ -481,7 +497,14 @@ export class WindowManager {
         .catch(() => {})
     }
 
-    setTimeout(() => window.window.focus(), 100)
+    setTimeout(() => {
+      if (window.window.isDestroyed()) return
+      window.window.focus()
+      if (coreBoxManager.isUIMode && this.uiView && !this.uiView.webContents.isDestroyed()) {
+        this.uiView.webContents.focus()
+        this.uiViewFocused = true
+      }
+    }, 100)
   }
 
   public hide(): void {
@@ -515,9 +538,9 @@ export class WindowManager {
     } else if (isUIMode) {
       height = 600
     } else if (forceMax) {
-      height = 550
+      height = 600
     } else {
-      height = Math.min(effectiveLength * 48 + 65, 550)
+      height = Math.min(effectiveLength * 48 + 65, 600)
     }
 
     const currentWindow = this.current
@@ -744,9 +767,20 @@ export class WindowManager {
     const css = this.loadInternalThemeCss()
 
     if (!view.webContents.isDestroyed()) {
-      void view.webContents.insertCSS(css).catch((error) => {
-        coreBoxWindowLog.error('Failed to inject theme variables into UI view', { error })
-      })
+      const previousKey = this.uiViewThemeCssKey.get(view)
+      if (previousKey) {
+        void view.webContents.removeInsertedCSS(previousKey).catch(() => {})
+        this.uiViewThemeCssKey.delete(view)
+      }
+
+      void view.webContents
+        .insertCSS(css)
+        .then((key) => {
+          this.uiViewThemeCssKey.set(view, key)
+        })
+        .catch((error) => {
+          coreBoxWindowLog.error('Failed to inject theme variables into UI view', { error })
+        })
     }
 
     const { followSystem, dark } = this.resolveDarkPreference(themeStyle)
@@ -791,36 +825,6 @@ export class WindowManager {
 
     void view.webContents.executeJavaScript(script).catch((error) => {
       coreBoxWindowLog.error('Failed to update UI view theme class', { error })
-    })
-  }
-
-  private runUIViewDarkThemeSync(): void {
-    if (!this.uiView || this.uiView.webContents.isDestroyed()) {
-      return
-    }
-
-    const themeLabel = this.currentThemeIsDark
-      ? chalk.bgHex('#0b1120').white.bold(' DARK ')
-      : chalk.bgHex('#f1f5f9').black.bold(' LIGHT ')
-    coreBoxWindowLog.info(`${chalk.blue('Sync UI theme')} ${themeLabel}`)
-
-    const script = `
-      (() => {
-        const root = document.documentElement;
-        if (!root) { return; }
-        const isDark = ${JSON.stringify(this.currentThemeIsDark)};
-        if (isDark) {
-          root.classList.remove('dark');
-          root.classList.add('dark');
-        } else {
-          root.classList.add('dark');
-          root.classList.remove('dark');
-        }
-      })();
-    `
-
-    void this.uiView.webContents.executeJavaScript(script).catch((error) => {
-      coreBoxWindowLog.error('Failed to synchronize UI view theme', { error })
     })
   }
 
@@ -881,7 +885,6 @@ export class WindowManager {
 
         if (!this.uiView.webContents.isDestroyed()) {
           this.applyThemeToUIView(this.uiView)
-          this.runUIViewDarkThemeSync()
           this.uiView.webContents.focus()
 
           if (query) {
@@ -1262,7 +1265,6 @@ export class WindowManager {
 
     this.uiView.webContents.addListener('dom-ready', () => {
       this.applyThemeToUIView(view)
-      this.runUIViewDarkThemeSync()
 
       if (plugin) {
         // Only auto-open DevTools for plugins in dev mode (not based on app.isPackaged)

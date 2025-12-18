@@ -75,6 +75,9 @@ export class IpcManager {
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
       if (typeof data === 'object' && data) {
         if (data.mode === 'collapse') {
+          if (coreBoxManager.isUIMode) {
+            return
+          }
           coreBoxManager.shrink()
           return
         }
