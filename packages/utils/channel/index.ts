@@ -198,7 +198,7 @@ export interface RawChannelSyncData {
    * Timeout in milliseconds.
    * @defaultValue 10000
    */
-  timeout: 10000
+  timeout: number
 
   /**
    * Unique request ID for correlation.

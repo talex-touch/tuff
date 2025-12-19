@@ -10,7 +10,7 @@ import {
   DataCode,
 } from '../channel'
 
-const CHANNEL_DEFAULT_TIMEOUT = 10_000
+const CHANNEL_DEFAULT_TIMEOUT = 60_000
 
 let cachedIpcRenderer: IpcRenderer | null = null
 
