@@ -1,9 +1,11 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TalexTouch } from '../types'
+import { execFile } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { shell } from 'electron'
+import { BrowserWindow, powerMonitor, shell } from 'electron'
 import packageJson from '../../../package.json'
 import { genTouchChannel } from '../core/channel-core'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -12,6 +14,13 @@ import { getStartupAnalytics } from '../modules/analytics'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { buildVerificationModule } from '../modules/build-verification'
 import { activeAppService } from '../modules/system/active-app'
+
+const execFileAsync = promisify(execFile)
+
+type BatteryStatusPayload = {
+  onBattery: boolean
+  percent: number | null
+}
 
 function closeApp(app: TalexTouch.TouchApp): void {
   app.window.close()
@@ -46,6 +55,8 @@ export class CommonChannelModule extends BaseModule {
   static key: symbol = Symbol.for('CommonChannel')
   name: ModuleKey = CommonChannelModule.key
 
+  private batteryPollTimer?: NodeJS.Timeout
+
   constructor() {
     super(CommonChannelModule.key, {
       create: false,
@@ -55,6 +66,38 @@ export class CommonChannelModule extends BaseModule {
 
   async onInit({ app }: ModuleInitContext<TalexEvents>): Promise<void> {
     const channel = genTouchChannel(app as TalexTouch.TouchApp)
+
+    const broadcastBatteryStatus = async (): Promise<void> => {
+      const onBattery = safeIsOnBatteryPower()
+      const percent = await safeGetBatteryPercent()
+      const payload: BatteryStatusPayload = { onBattery, percent }
+
+      const windows = BrowserWindow.getAllWindows()
+      for (const win of windows) {
+        try {
+          ;(channel as any).broadcastTo?.(win, ChannelType.MAIN, 'power:battery-status', payload)
+        } catch {
+          // Ignore broadcast errors
+        }
+      }
+    }
+
+    // Start battery status broadcast (best-effort)
+    try {
+      // Emit once on startup
+      void broadcastBatteryStatus()
+
+      // Subscribe to power source changes for immediate updates
+      powerMonitor.on('on-ac', () => void broadcastBatteryStatus())
+      powerMonitor.on('on-battery', () => void broadcastBatteryStatus())
+
+      // Poll percent every 60s (macOS)
+      this.batteryPollTimer = setInterval(() => {
+        void broadcastBatteryStatus()
+      }, 60_000)
+    } catch (error) {
+      console.warn('[CommonChannel] Failed to initialize battery status broadcaster:', error)
+    }
 
     channel.regChannel(ChannelType.MAIN, 'close', () => closeApp(app as TalexTouch.TouchApp))
     channel.regChannel(ChannelType.MAIN, 'hide', () =>
@@ -207,6 +250,36 @@ export class CommonChannelModule extends BaseModule {
 
   onDestroy(): MaybePromise<void> {
     console.log('[CommonChannel] CommonChannelModule destroyed')
+
+    if (this.batteryPollTimer) {
+      clearInterval(this.batteryPollTimer)
+      this.batteryPollTimer = undefined
+    }
+  }
+}
+
+function safeIsOnBatteryPower(): boolean {
+  try {
+    return powerMonitor.isOnBatteryPower()
+  } catch {
+    return false
+  }
+}
+
+async function safeGetBatteryPercent(): Promise<number | null> {
+  if (process.platform !== 'darwin') {
+    return null
+  }
+
+  try {
+    const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
+    const match = /\b(\d{1,3})%\b/.exec(stdout)
+    if (!match) return null
+    const value = Number.parseInt(match[1], 10)
+    if (Number.isNaN(value)) return null
+    return Math.max(0, Math.min(100, value))
+  } catch {
+    return null
   }
 }
 

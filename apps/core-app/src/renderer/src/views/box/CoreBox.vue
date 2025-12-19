@@ -31,6 +31,11 @@ import PrefixPart from './PrefixPart.vue'
 import TagSection from './tag/TagSection.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 
+type BatteryStatusPayload = {
+  onBattery?: boolean
+  percent?: number | null
+}
+
 declare global {
   interface Window {
     __coreboxHistoryVisible?: boolean
@@ -69,6 +74,30 @@ const {
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
 
+const batteryStatus = reactive<{ onBattery: boolean, percent: number | null }>({
+  onBattery: false,
+  percent: null,
+})
+
+const lowBatteryMode = computed(() => {
+  const autoDisable = appSetting.animation?.autoDisableOnLowBattery !== false
+  const threshold = typeof appSetting.animation?.lowBatteryThreshold === 'number'
+    ? appSetting.animation.lowBatteryThreshold
+    : 20
+
+  if (!autoDisable) return false
+  if (!batteryStatus.onBattery) return false
+  if (batteryStatus.percent === null) return false
+  return batteryStatus.percent <= threshold
+})
+
+const resultTransitionName = computed(() => {
+  const enabled = appSetting.animation?.resultTransition !== false
+  return enabled && !lowBatteryMode.value ? 'result-switch' : ''
+})
+
+let unregBatteryStatus: (() => void) | undefined
+
 function handleClipboardChange() {
   // Force immediate search when clipboard changes (paste or clear)
   handleSearchImmediate()
@@ -81,6 +110,38 @@ const {
   resetAutoPasteState,
   cleanup: cleanupClipboard
 } = useClipboard(boxOptions, clipboardOptions, handleClipboardChange, searchVal)
+
+onMounted(() => {
+  unregBatteryStatus = touchChannel.regChannel('power:battery-status', ({ data }) => {
+    const payload = data as BatteryStatusPayload | undefined
+    if (!payload) return
+
+    if (typeof payload.onBattery === 'boolean') {
+      batteryStatus.onBattery = payload.onBattery
+    }
+
+    if (payload.percent === null || typeof payload.percent === 'number') {
+      batteryStatus.percent = payload.percent ?? null
+    }
+  })
+})
+
+watch(
+  () => lowBatteryMode.value,
+  (enabled) => {
+    if (enabled) {
+      document.documentElement.setAttribute('data-low-battery-motion', '1')
+    }
+    else {
+      document.documentElement.removeAttribute('data-low-battery-motion')
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  unregBatteryStatus?.()
+})
 
 const completionDisplay = computed(() => {
   if (
@@ -484,7 +545,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
     <template v-if="!isUIMode">
       <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
         <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-          <Transition :name="appSetting.animation?.resultTransition !== false ? 'result-switch' : ''" mode="out-in">
+          <Transition :name="resultTransitionName" mode="out-in">
             <BoxGrid
               v-if="isGridMode"
               :key="'grid-' + resultBatchKey"
@@ -501,7 +562,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
                 :active="boxOptions.focus === index"
                 :item="item"
                 :index="index"
-                :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && newItemIds.has(item.id) }"
+                :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && !lowBatteryMode && newItemIds.has(item.id) }"
                 :style="{
                   '--stagger-delay': getStaggerDelay(index, res.length) + 's'
                 }"

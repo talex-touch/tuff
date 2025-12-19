@@ -49,6 +49,8 @@ const _appSettingOriginData = {
     listItemStagger: true,
     resultTransition: true,
     coreBoxResize: false,
+    autoDisableOnLowBattery: true,
+    lowBatteryThreshold: 20,
   },
   viewCache: {
     maxCachedViews: 4,
