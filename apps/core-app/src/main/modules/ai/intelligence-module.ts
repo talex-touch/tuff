@@ -458,6 +458,51 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     })
 
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:chat-langchain', async ({ data, reply }) => {
+      try {
+        if (!data || typeof data !== 'object' || !Array.isArray((data as any).messages)) {
+          throw new Error('Invalid chat payload')
+        }
+
+        const {
+          messages,
+          providerId,
+          model,
+          promptTemplate,
+          promptVariables,
+          metadata,
+        } = data as {
+          messages: any[]
+          providerId?: string
+          model?: string
+          promptTemplate?: string
+          promptVariables?: Record<string, any>
+          metadata?: Record<string, any>
+        }
+
+        ensureAiConfigLoaded()
+
+        const result = await ai.invoke('text.chat', { messages }, {
+          preferredProviderId: providerId,
+          modelPreference: model ? [model] : undefined,
+          metadata: {
+            ...metadata,
+            promptTemplate,
+            promptVariables,
+          },
+        })
+
+        reply(DataCode.SUCCESS, { ok: true, result })
+      }
+      catch (error) {
+        intelligenceLog.error('LangChain chat failed:', { error })
+        reply(DataCode.ERROR, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    })
+
     // 测试 Provider
     this.channel.regChannel(ChannelType.MAIN, 'intelligence:test-provider', async ({ data, reply }) => {
       try {
@@ -537,10 +582,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
             throw new Error('Invalid capability test payload')
           }
 
-          const { capabilityId, providerId, userInput, ...rest } = data as {
+          const { capabilityId, providerId, userInput, model, promptTemplate, promptVariables, ...rest } = data as {
             capabilityId: string
             providerId?: string
             userInput?: string
+            model?: string
+            promptTemplate?: string
+            promptVariables?: Record<string, any>
             [key: string]: any
           }
 
@@ -565,8 +613,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
           // 执行测试
           const result = await ai.invoke(capabilityId, payload, {
-            modelPreference: options.modelPreference,
+            modelPreference: model ? [model] : options.modelPreference,
             allowedProviderIds,
+            metadata: {
+              promptTemplate,
+              promptVariables,
+              caller: 'system',
+            },
           })
 
           // 格式化结果

@@ -200,7 +200,7 @@ function onReorderProviders(bindings: AiCapabilityProviderBinding[]): void {
 
 async function handleCapabilityTest(
   capabilityId: string,
-  params?: { providerId?: string; userInput?: string }
+  params?: { providerId?: string; userInput?: string; model?: string; promptTemplate?: string; promptVariables?: Record<string, any> }
 ): Promise<void> {
   if (capabilityTesting[capabilityId]) return
   capabilityTesting[capabilityId] = true
@@ -210,7 +210,10 @@ async function handleCapabilityTest(
     const response = await aiClient.testCapability({
       capabilityId,
       providerId: params?.providerId,
-      userInput: params?.userInput
+      userInput: params?.userInput,
+      model: params?.model,
+      promptTemplate: params?.promptTemplate,
+      promptVariables: params?.promptVariables,
     })
 
     // 使用格式化后的结果

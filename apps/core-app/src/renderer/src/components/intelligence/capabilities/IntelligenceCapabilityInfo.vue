@@ -30,7 +30,7 @@ const emits = defineEmits<{
   toggleProvider: [providerId: string, enabled: boolean]
   updateModels: [providerId: string, value: string[]]
   updatePrompt: [prompt: string]
-  test: [options?: { providerId?: string, model?: string }]
+  test: [options?: { providerId?: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }]
   reorderProviders: [bindings: AiCapabilityProviderBinding[]]
 }>()
 
@@ -256,7 +256,7 @@ function openPromptDrawer(): void {
   showPromptDrawer.value = true
 }
 
-function handleTest(options?: { providerId?: string, model?: string }): void {
+function handleTest(options?: { providerId?: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }): void {
   if (props.isTesting)
     return
   emits('test', options)
@@ -373,6 +373,7 @@ onBeforeUnmount(() => {
       >
         <template #default>
           <TestSection
+            :capability-id="capability.id"
             :provider-name="testProviderName"
             :model-name="testModelName"
             :is-testing="isTesting"

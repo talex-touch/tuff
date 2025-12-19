@@ -46,6 +46,7 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
+  IntelligenceMessage,
 } from '../../types/intelligence'
 import { ref } from 'vue'
 import { useChannel } from './use-channel'
@@ -92,6 +93,14 @@ interface IntelligenceComposable {
   // Text methods
   text: {
     chat: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
+    chatLangChain: (params: {
+      messages: IntelligenceMessage[]
+      providerId?: string
+      model?: string
+      promptTemplate?: string
+      promptVariables?: Record<string, any>
+      metadata?: Record<string, any>
+    }) => Promise<IntelligenceInvokeResult<string>>
     translate: (payload: IntelligenceTranslatePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
     summarize: (payload: IntelligenceSummarizePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
     rewrite: (payload: IntelligenceRewritePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
@@ -258,6 +267,11 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
             payload,
             options,
           }),
+        ),
+
+      chatLangChain: (params) =>
+        withLoadingState(() =>
+          sendChannelRequest<IntelligenceInvokeResult<string>>('intelligence:chat-langchain', params),
         ),
 
       translate: (payload: IntelligenceTranslatePayload, options?: IntelligenceInvokeOptions) =>

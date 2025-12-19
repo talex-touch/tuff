@@ -1769,6 +1769,21 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
     rateLimit: {},
   },
   {
+    id: 'tuff-nexus-default',
+    type: IntelligenceProviderType.CUSTOM,
+    name: 'Tuff Nexus',
+    enabled: false,
+    priority: 1,
+    baseUrl: 'https://tuff.tagzxia.com/v1',
+    models: ['gpt-4o', 'gpt-4o-mini'],
+    defaultModel: 'gpt-4o-mini',
+    timeout: 30000,
+    rateLimit: {},
+    metadata: {
+      origin: 'tuff-nexus',
+    },
+  },
+  {
     id: 'local-default',
     type: IntelligenceProviderType.LOCAL,
     name: 'Local Model',
@@ -1792,7 +1807,7 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
   'text.chat': {
     id: 'text.chat',
     label: '对话 / Chat',
-    description: '默认用于系统对话、翻译、总结等文本任务的模型集合',
+    description: '通用对话、问答、助理类能力',
     providers: [
       { providerId: 'openai-default', priority: 1, enabled: true },
       { providerId: 'anthropic-default', priority: 2, enabled: true },
@@ -2024,13 +2039,6 @@ export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
       },
     ],
   },
-}
-
-export interface TestResult {
-  success: boolean
-  message: string
-  latency?: number
-  timestamp: number
 }
 
 export interface CapabilityTestResult {

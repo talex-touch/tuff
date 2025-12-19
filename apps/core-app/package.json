@@ -34,8 +34,10 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@langchain/core": "^0.3.0",
     "@libsql/client": "^0.15.15",
     "@sentry/electron": "^7.2.0",
+    "@talex-touch/tuff-intelligence": "workspace:^",
     "@talex-touch/tuff-ui": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "@types/yauzl": "^2.10.3",

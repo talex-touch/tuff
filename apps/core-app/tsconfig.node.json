@@ -12,6 +12,8 @@
       "@/*": ["src/main/*"],
       "@core-box/*": ["packages/utils/core-box/*"],
       "@talex-touch/utils": ["packages/utils"],
+      "@talex-touch/tuff-intelligence": ["packages/tuff-intelligence/src/index.ts"],
+      "@talex-touch/tuff-intelligence/*": ["packages/tuff-intelligence/src/*"],
       "@/common/*": ["packages/utils/common/*"],
       "@/typings/*": ["packages/typings/*"]
     },
@@ -32,5 +34,5 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "generator-information.ts", "../../packages/utils/**/*"]
+  "include": ["electron.vite.config.*", "src/main/**/*", "src/preload/**/*", "generator-information.ts", "../../packages/utils/**/*", "../../packages/tuff-intelligence/**/*"]
 }

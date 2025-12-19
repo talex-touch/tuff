@@ -7,7 +7,7 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { storageModule } from '../storage'
 import { ai } from './intelligence-sdk'
 
-const SUPPORTED_PROVIDER_TYPES = new Set(['openai', 'anthropic', 'deepseek', 'siliconflow', 'local'])
+const SUPPORTED_PROVIDER_TYPES = new Set(['openai', 'anthropic', 'deepseek', 'siliconflow', 'local', 'custom'])
 
 function normalizeStrategyId(value?: string) {
   if (!value)

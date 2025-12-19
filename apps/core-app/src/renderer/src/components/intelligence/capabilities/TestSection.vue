@@ -4,8 +4,10 @@ import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intell
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import IntelligencePromptSelector from '~/components/intelligence/config/IntelligencePromptSelector.vue'
 
 const props = defineProps<{
+  capabilityId: string
   providerName: string
   modelName: string
   isTesting: boolean
@@ -15,7 +17,7 @@ const props = defineProps<{
 }>()
 
 const emits = defineEmits<{
-  test: [options?: { providerId?: string, model?: string }]
+  test: [options?: { providerId?: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }]
 }>()
 
 const { t } = useI18n()
@@ -23,6 +25,9 @@ const { t } = useI18n()
 // Provider and model selection
 const selectedProviderId = ref<string>('')
 const selectedModel = ref<string>('')
+const promptTemplate = ref<string>('')
+const promptVariablesText = ref<string>('')
+const userInput = ref<string>('')
 
 const availableProviders = computed(() => {
   return props.enabledBindings || []
@@ -39,10 +44,9 @@ const canTest = computed(() => {
 })
 
 const testButtonText = computed(() => {
-  if (props.isTesting) {
-    return t('settings.intelligence.testing')
-  }
-  return t('settings.intelligence.testCapability')
+  return props.isTesting
+    ? t('settings.intelligence.testing')
+    : t('settings.intelligence.testCapability')
 })
 
 const resultIcon = computed(() => {
@@ -59,9 +63,26 @@ const resultClass = computed(() => {
 
 function handleTest(): void {
   if (!canTest.value) return
+
+  let promptVariables: Record<string, any> | undefined
+  const raw = promptVariablesText.value.trim()
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        promptVariables = parsed
+    }
+    catch {
+      promptVariables = undefined
+    }
+  }
+
   emits('test', {
     providerId: selectedProviderId.value,
     model: selectedModel.value || undefined,
+    promptTemplate: promptTemplate.value || undefined,
+    promptVariables,
+    userInput: userInput.value.trim() || undefined,
   })
 }
 
@@ -76,6 +97,33 @@ if (availableProviders.value.length > 0) {
 
 <template>
   <div class="test-section">
+    <div class="test-section__field">
+      <label class="test-section__label">{{ t('settings.intelligence.capabilityPromptSectionTitle') }}</label>
+      <IntelligencePromptSelector v-model="promptTemplate" />
+    </div>
+
+    <div class="test-section__field">
+      <label class="test-section__label">User Message</label>
+      <textarea
+        v-model="userInput"
+        class="test-section__textarea"
+        :disabled="disabled || isTesting"
+        placeholder="Hello"
+        rows="3"
+      />
+    </div>
+
+    <div class="test-section__field">
+      <label class="test-section__label">Prompt Variables (JSON)</label>
+      <textarea
+        v-model="promptVariablesText"
+        class="test-section__textarea"
+        :disabled="disabled || isTesting"
+        placeholder='{"name":"Talex"}'
+        rows="3"
+      />
+    </div>
+
     <div class="test-section__config">
       <div class="test-section__field">
         <label class="test-section__label">{{ t('settings.intelligence.selectProvider') }}</label>
@@ -136,9 +184,13 @@ if (availableProviders.value.length > 0) {
       <p v-if="testResult.message" class="test-result__message">
         {{ testResult.message }}
       </p>
+      <p v-if="testResult.provider || testResult.model" class="test-result__meta">
+        {{ (testResult.provider || '-') }} / {{ (testResult.model || '-') }}
+      </p>
       <p v-if="testResult.latency" class="test-result__latency">
         {{ t('settings.intelligence.latency') }}: {{ testResult.latency }}ms
       </p>
+      <pre v-if="testResult.textPreview" class="test-result__preview">{{ testResult.textPreview }}</pre>
     </div>
   </div>
 </template>
@@ -193,6 +245,33 @@ if (availableProviders.value.length > 0) {
   }
 }
 
+ .test-section__textarea {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--el-border-color);
+  border-radius: 0.5rem;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  resize: vertical;
+  font-family: var(--el-font-family);
+
+  &:hover:not(:disabled) {
+    border-color: var(--el-color-primary-light-5);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--el-color-primary);
+    box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+ }
+
 .test-section__actions {
   display: flex;
   gap: 0.75rem;
@@ -246,11 +325,29 @@ if (availableProviders.value.length > 0) {
   line-height: 1.6;
 }
 
+.test-result__meta {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.8125rem;
+  color: var(--el-text-color-secondary);
+}
+
 .test-result__latency {
   margin: 0;
   font-size: 0.8125rem;
   color: var(--el-text-color-secondary);
   font-family: monospace;
+}
+
+.test-result__preview {
+  margin: 0.75rem 0 0 0;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--el-text-color-primary);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @keyframes slideIn {
