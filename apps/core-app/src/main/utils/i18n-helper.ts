@@ -7,7 +7,7 @@ import { app, ipcMain } from 'electron'
 import enUS from '../../renderer/src/modules/lang/en-US.json'
 import zhCN from '../../renderer/src/modules/lang/zh-CN.json'
 
-type TranslationMessages = typeof zhCN
+type TranslationMessages = Record<string, any>
 type TranslationKey = string
 
 /**
