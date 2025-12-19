@@ -164,20 +164,6 @@ const modelTransferDescription = computed(() => {
   return t('settings.intelligence.capabilityBindingModelsDesc')
 })
 
-const testProviderName = computed(() => {
-  const firstBinding = enabledBindings.value[0]
-  if (!firstBinding)
-    return t('settings.intelligence.noProvider')
-  return firstBinding.provider?.name || firstBinding.providerId
-})
-
-const testModelName = computed(() => {
-  const firstBinding = enabledBindings.value[0]
-  if (!firstBinding || !firstBinding.models?.length)
-    return t('settings.intelligence.defaultModel')
-  return firstBinding.models[0]
-})
-
 watch(
   () => props.capability.promptTemplate,
   (value) => {
@@ -374,8 +360,6 @@ onBeforeUnmount(() => {
         <template #default>
           <TestSection
             :capability-id="capability.id"
-            :provider-name="testProviderName"
-            :model-name="testModelName"
             :is-testing="isTesting"
             :disabled="activeBindingCount === 0"
             :test-result="testResult"
