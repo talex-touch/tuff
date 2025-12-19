@@ -17,6 +17,7 @@ export * from './flow'
 export { createFeaturesManager, useFeatures } from './features'
 
 export * from './hooks/index'
+export * from './intelligence'
 export * from './performance'
 export * from './service/index'
 export * from './storage'

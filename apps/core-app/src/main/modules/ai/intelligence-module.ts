@@ -6,6 +6,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchChannel } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
+import { withPermission } from '../permission/channel-guard'
 import { capabilityTesterRegistry } from './capability-testers'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
 import { debugPrintConfig, ensureAiConfigLoaded, getCapabilityOptions, setupConfigUpdateListener } from './intelligence-config'
@@ -429,7 +430,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     intelligenceLog.info('Registering IPC channels')
 
     // 调用 AI 能力
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:invoke', async ({ data, reply }) => {
+    const invokeHandler = async ({ data, reply }: any) => {
       try {
         if (!data || typeof data !== 'object' || typeof (data as any).capabilityId !== 'string') {
           throw new Error('Invalid invoke payload')
@@ -456,9 +457,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           error: error instanceof Error ? error.message : String(error),
         })
       }
-    })
+    }
 
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:chat-langchain', async ({ data, reply }) => {
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:invoke', invokeHandler)
+    this.channel.regChannel(
+      ChannelType.PLUGIN,
+      'intelligence:invoke',
+      withPermission({ permissionId: 'ai.basic' }, invokeHandler),
+    )
+
+    const chatHandler = async ({ data, reply }: any) => {
       try {
         if (!data || typeof data !== 'object' || !Array.isArray((data as any).messages)) {
           throw new Error('Invalid chat payload')
@@ -501,7 +509,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           error: error instanceof Error ? error.message : String(error),
         })
       }
-    })
+    }
+
+    this.channel.regChannel(ChannelType.MAIN, 'intelligence:chat-langchain', chatHandler)
+    this.channel.regChannel(
+      ChannelType.PLUGIN,
+      'intelligence:chat-langchain',
+      withPermission({ permissionId: 'ai.basic' }, chatHandler),
+    )
 
     // 测试 Provider
     this.channel.regChannel(ChannelType.MAIN, 'intelligence:test-provider', async ({ data, reply }) => {

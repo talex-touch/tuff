@@ -1,5 +1,6 @@
 <script lang="ts" name="IntelligencePromptsPage" setup>
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
+import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -9,13 +10,21 @@ import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import CapabilityTestInput from '~/components/intelligence/capabilities/CapabilityTestInput.vue'
+import CapabilityTestResult from '~/components/intelligence/capabilities/CapabilityTestResult.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { getPromptManager } from '~/modules/hooks/usePromptManager'
+import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
+import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
 
 type FilterMode = 'all' | 'builtin' | 'custom'
 
 const { t } = useI18n()
 const promptManager = getPromptManager()
+const aiClient = createIntelligenceClient(touchChannel as any)
+
+const { providers, capabilities } = useIntelligenceManager()
 
 const searchQuery = ref('')
 const filterMode = ref<FilterMode>('all')
@@ -30,6 +39,75 @@ const promptDraft = reactive({
 const autoSaveStatus = ref<'idle' | 'pending' | 'saving' | 'saved'>('idle')
 let isApplyingDraft = false
 let autoSaveTimer: number | null = null
+
+const testCapabilityId = ref<string>('text.chat')
+const promptTestResult = ref<UiCapabilityTestResult | null>(null)
+const promptTesting = ref(false)
+
+const capabilityList = computed<AISDKCapabilityConfig[]>(() =>
+  Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id)),
+)
+
+watch(
+  capabilityList,
+  (list) => {
+    if (!list.length)
+      return
+    if (!list.some((cap) => cap.id === testCapabilityId.value)) {
+      testCapabilityId.value = list[0].id
+    }
+  },
+  { immediate: true },
+)
+
+const providerMap = computed(
+  () => new Map(providers.value.map((provider) => [provider.id, provider])),
+)
+
+const testEnabledBindings = computed(() => {
+  const capability = (capabilities.value || {})[testCapabilityId.value]
+  if (!capability?.providers)
+    return []
+  return capability.providers
+    .filter((binding) => binding.enabled !== false)
+    .map((binding) => ({
+      ...binding,
+      provider: providerMap.value.get(binding.providerId),
+    }))
+})
+
+async function handlePromptTest(options: { providerId: string, model?: string, promptVariables?: Record<string, any>, userInput?: string, promptTemplate?: string }): Promise<void> {
+  if (promptTesting.value)
+    return
+  promptTesting.value = true
+  promptTestResult.value = null
+
+  try {
+    const response = await aiClient.testCapability({
+      capabilityId: testCapabilityId.value,
+      providerId: options.providerId,
+      userInput: options.userInput,
+      model: options.model,
+      promptTemplate: promptDraft.content,
+      promptVariables: options.promptVariables,
+    })
+
+    promptTestResult.value = {
+      ...(response as any),
+      timestamp: Date.now(),
+    }
+  }
+  catch (error) {
+    promptTestResult.value = {
+      success: false,
+      message: error instanceof Error ? error.message : '能力测试失败',
+      timestamp: Date.now(),
+    }
+  }
+  finally {
+    promptTesting.value = false
+  }
+}
 
 const filterOptions = computed(() => [
   { value: 'all', label: t('settings.intelligence.promptFilterAll') },
@@ -563,6 +641,49 @@ onBeforeUnmount(() => {
           </TuffGroupBlock>
 
           <TuffGroupBlock
+            :name="t('settings.intelligence.capabilityTestTitle')"
+            :description="t('settings.intelligence.capabilityTestDesc')"
+            default-icon="i-carbon-flash"
+            active-icon="i-carbon-flash"
+            memory-name="prompt-test"
+            :default-expand="false"
+          >
+            <div class="prompt-test__body">
+              <TuffBlockSlot
+                :title="t('settings.intelligence.capabilitySelectTitle')"
+                :description="testCapabilityId"
+                default-icon="i-carbon-function-math"
+                active-icon="i-carbon-function-math"
+              >
+                <select v-model="testCapabilityId" class="prompt-inline-input">
+                  <option
+                    v-for="cap in capabilityList"
+                    :key="cap.id"
+                    :value="cap.id"
+                  >
+                    {{ cap.id }}
+                  </option>
+                </select>
+              </TuffBlockSlot>
+
+              <CapabilityTestInput
+                :capability-id="testCapabilityId"
+                :is-testing="promptTesting"
+                :disabled="testEnabledBindings.length === 0"
+                :enabled-bindings="testEnabledBindings"
+                :prompt-template="promptDraft.content"
+                :show-prompt-selector="false"
+                @test="handlePromptTest"
+              />
+
+              <CapabilityTestResult
+                v-if="promptTestResult"
+                :result="promptTestResult"
+              />
+            </div>
+          </TuffGroupBlock>
+
+          <TuffGroupBlock
             :name="t('settings.intelligence.promptActionsTitle')"
             :description="t('settings.intelligence.promptActionsDesc')"
             default-icon="i-carbon-settings"
@@ -744,6 +865,12 @@ onBeforeUnmount(() => {
   margin-top: 0.35rem;
   font-size: 0.9rem;
   color: var(--el-text-color-secondary);
+}
+
+.prompt-test__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .prompt-readonly-hint {
