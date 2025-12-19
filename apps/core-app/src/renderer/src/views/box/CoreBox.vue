@@ -26,15 +26,11 @@ import { usePreviewHistory } from '../../modules/box/adapter/hooks/usePreviewHis
 import { useActionPanel } from '../../modules/box/adapter/hooks/useActionPanel'
 import { useDetach } from '../../modules/box/adapter/hooks/useDetach'
 import { windowState, isDivisionBoxMode } from '~/modules/hooks/core-box'
+import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import BoxInput from './BoxInput.vue'
 import PrefixPart from './PrefixPart.vue'
 import TagSection from './tag/TagSection.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
-
-type BatteryStatusPayload = {
-  onBattery?: boolean
-  percent?: number | null
-}
 
 declare global {
   interface Window {
@@ -74,29 +70,12 @@ const {
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
 
-const batteryStatus = reactive<{ onBattery: boolean, percent: number | null }>({
-  onBattery: false,
-  percent: null,
-})
-
-const lowBatteryMode = computed(() => {
-  const autoDisable = appSetting.animation?.autoDisableOnLowBattery !== false
-  const threshold = typeof appSetting.animation?.lowBatteryThreshold === 'number'
-    ? appSetting.animation.lowBatteryThreshold
-    : 20
-
-  if (!autoDisable) return false
-  if (!batteryStatus.onBattery) return false
-  if (batteryStatus.percent === null) return false
-  return batteryStatus.percent <= threshold
-})
+const { lowBatteryMode } = useBatteryOptimizer()
 
 const resultTransitionName = computed(() => {
   const enabled = appSetting.animation?.resultTransition !== false
   return enabled && !lowBatteryMode.value ? 'result-switch' : ''
 })
-
-let unregBatteryStatus: (() => void) | undefined
 
 function handleClipboardChange() {
   // Force immediate search when clipboard changes (paste or clear)
@@ -110,38 +89,6 @@ const {
   resetAutoPasteState,
   cleanup: cleanupClipboard
 } = useClipboard(boxOptions, clipboardOptions, handleClipboardChange, searchVal)
-
-onMounted(() => {
-  unregBatteryStatus = touchChannel.regChannel('power:battery-status', ({ data }) => {
-    const payload = data as BatteryStatusPayload | undefined
-    if (!payload) return
-
-    if (typeof payload.onBattery === 'boolean') {
-      batteryStatus.onBattery = payload.onBattery
-    }
-
-    if (payload.percent === null || typeof payload.percent === 'number') {
-      batteryStatus.percent = payload.percent ?? null
-    }
-  })
-})
-
-watch(
-  () => lowBatteryMode.value,
-  (enabled) => {
-    if (enabled) {
-      document.documentElement.setAttribute('data-low-battery-motion', '1')
-    }
-    else {
-      document.documentElement.removeAttribute('data-low-battery-motion')
-    }
-  },
-  { immediate: true },
-)
-
-onBeforeUnmount(() => {
-  unregBatteryStatus?.()
-})
 
 const completionDisplay = computed(() => {
   if (

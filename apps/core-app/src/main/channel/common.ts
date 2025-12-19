@@ -1,6 +1,7 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TalexTouch } from '../types'
 import { execFile } from 'node:child_process'
+import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -82,19 +83,39 @@ export class CommonChannelModule extends BaseModule {
       }
     }
 
+    // Smart polling management
+    const startPolling = () => {
+      if (this.batteryPollTimer) return
+      // Poll every 2 minutes when on battery to save resources
+      this.batteryPollTimer = setInterval(() => void broadcastBatteryStatus(), 120_000)
+    }
+
+    const stopPolling = () => {
+      if (this.batteryPollTimer) {
+        clearInterval(this.batteryPollTimer)
+        this.batteryPollTimer = undefined
+      }
+    }
+
     // Start battery status broadcast (best-effort)
     try {
       // Emit once on startup
       void broadcastBatteryStatus()
 
-      // Subscribe to power source changes for immediate updates
-      powerMonitor.on('on-ac', () => void broadcastBatteryStatus())
-      powerMonitor.on('on-battery', () => void broadcastBatteryStatus())
+      if (safeIsOnBatteryPower()) {
+        startPolling()
+      }
 
-      // Poll percent every 60s (macOS)
-      this.batteryPollTimer = setInterval(() => {
+      // Subscribe to power source changes for immediate updates
+      powerMonitor.on('on-ac', () => {
+        stopPolling()
         void broadcastBatteryStatus()
-      }, 60_000)
+      })
+      
+      powerMonitor.on('on-battery', () => {
+        startPolling()
+        void broadcastBatteryStatus()
+      })
     } catch (error) {
       console.warn('[CommonChannel] Failed to initialize battery status broadcaster:', error)
     }
@@ -267,17 +288,50 @@ function safeIsOnBatteryPower(): boolean {
 }
 
 async function safeGetBatteryPercent(): Promise<number | null> {
-  if (process.platform !== 'darwin') {
-    return null
-  }
-
   try {
-    const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
-    const match = /\b(\d{1,3})%\b/.exec(stdout)
-    if (!match) return null
-    const value = Number.parseInt(match[1], 10)
-    if (Number.isNaN(value)) return null
-    return Math.max(0, Math.min(100, value))
+    if (process.platform === 'darwin') {
+      const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
+      const match = /\b(\d{1,3})%\b/.exec(stdout)
+      if (!match) return null
+      const value = Number.parseInt(match[1], 10)
+      if (Number.isNaN(value)) return null
+      return Math.max(0, Math.min(100, value))
+    }
+    
+    if (process.platform === 'win32') {
+      const { stdout } = await execFileAsync('powershell', [
+        '-NoProfile',
+        '-Command',
+        'Get-CimInstance -ClassName Win32_Battery | Select-Object -ExpandProperty EstimatedChargeRemaining | Select-Object -First 1'
+      ])
+      const value = Number.parseInt(stdout.trim(), 10)
+      if (Number.isNaN(value)) return null
+      return Math.max(0, Math.min(100, value))
+    }
+
+    if (process.platform === 'linux') {
+      try {
+        const powerSupplyPath = '/sys/class/power_supply'
+        // Check if directory exists
+        await fs.access(powerSupplyPath).catch(() => {
+          throw new Error('No power supply class')
+        })
+
+        const files = await fs.readdir(powerSupplyPath)
+        // Find first battery (BAT0, BAT1, etc.)
+        const bat = files.find((f) => f.startsWith('BAT'))
+        if (bat) {
+          const capacityPath = path.join(powerSupplyPath, bat, 'capacity')
+          const content = await fs.readFile(capacityPath, 'utf8')
+          const val = Number.parseInt(content.trim(), 10)
+          if (!Number.isNaN(val)) return Math.max(0, Math.min(100, val))
+        }
+      } catch {
+        // Fallback or ignore
+      }
+    }
+
+    return null
   } catch {
     return null
   }

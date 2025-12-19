@@ -1,0 +1,91 @@
+import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
+import { touchChannel } from '~/modules/channel/channel-core'
+import { appSetting } from '~/modules/channel/storage'
+
+type BatteryStatusPayload = {
+  onBattery?: boolean
+  percent?: number | null
+}
+
+const batteryStatus = reactive<{ onBattery: boolean; percent: number | null }>({
+  onBattery: false,
+  percent: null
+})
+
+let listenerReferenceCount = 0
+let unregisterChannel: (() => void) | undefined
+
+function setupListener() {
+  if (listenerReferenceCount === 0) {
+    unregisterChannel = touchChannel.regChannel('power:battery-status', ({ data }) => {
+      const payload = data as BatteryStatusPayload | undefined
+      if (!payload) return
+
+      if (typeof payload.onBattery === 'boolean') {
+        batteryStatus.onBattery = payload.onBattery
+      }
+
+      if (payload.percent === null || typeof payload.percent === 'number') {
+        batteryStatus.percent = payload.percent ?? null
+      }
+    })
+  }
+  listenerReferenceCount++
+}
+
+function teardownListener() {
+  listenerReferenceCount--
+  if (listenerReferenceCount <= 0) {
+    listenerReferenceCount = 0
+    unregisterChannel?.()
+    unregisterChannel = undefined
+  }
+}
+
+export function useBatteryOptimizer() {
+  onMounted(setupListener)
+  onBeforeUnmount(teardownListener)
+
+  const lowBatteryMode = computed(() => {
+    const autoDisable = appSetting.animation?.autoDisableOnLowBattery !== false
+    const threshold =
+      typeof appSetting.animation?.lowBatteryThreshold === 'number'
+        ? appSetting.animation.lowBatteryThreshold
+        : 20
+
+    if (!autoDisable) return false
+    // If not on battery, we are plugged in (or unknown), so performance should be fine
+    if (!batteryStatus.onBattery) return false
+    // If we don't know the percent, assume it's fine unless we want to be conservative
+    if (batteryStatus.percent === null) return false
+
+    return batteryStatus.percent <= threshold
+  })
+
+  return {
+    batteryStatus,
+    lowBatteryMode
+  }
+}
+
+/**
+ * Should be called once in the application root (App.vue)
+ * Handles global CSS attribute toggling for low battery mode
+ */
+export function useGlobalBatteryOptimizer() {
+  const { lowBatteryMode } = useBatteryOptimizer()
+
+  watch(
+    lowBatteryMode,
+    (enabled) => {
+      if (enabled) {
+        document.documentElement.setAttribute('data-low-battery-motion', '1')
+      } else {
+        document.documentElement.removeAttribute('data-low-battery-motion')
+      }
+    },
+    { immediate: true }
+  )
+
+  return { lowBatteryMode }
+}

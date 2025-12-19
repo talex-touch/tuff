@@ -183,6 +183,9 @@ importers:
       '@sentry/electron':
         specifier: ^7.2.0
         version: 7.2.0
+      '@talex-touch/tuff-intelligence':
+        specifier: workspace:^
+        version: link:../../packages/tuff-intelligence
       '@talex-touch/tuff-ui':
         specifier: workspace:^
         version: link:../../packages/tuffex-ui
@@ -658,6 +661,9 @@ importers:
 
   packages/tuff-intelligence:
     dependencies:
+      '@langchain/core':
+        specifier: ^0.3.0
+        version: 0.3.79(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))
       '@langchain/langgraph':
         specifier: ^0.2.25
         version: 0.2.74(@langchain/core@0.3.79(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0)))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(zod-to-json-schema@3.25.0(zod@3.25.76))
