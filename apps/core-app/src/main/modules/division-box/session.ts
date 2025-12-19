@@ -397,7 +397,7 @@ export class DivisionBoxSession {
   const { ipcRenderer } = require('electron');
   const ChannelType = ${JSON.stringify(ChannelType)};
   const DataCode = ${JSON.stringify(DataCode)};
-  const CHANNEL_DEFAULT_TIMEOUT = 10000;
+  const CHANNEL_DEFAULT_TIMEOUT = 60000;
 
   class TouchChannel {
     channelMap = new Map();

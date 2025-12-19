@@ -10,7 +10,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 
 // Use preload-exposed ipcRenderer via electron-toolkit
 const ipcRenderer = window.electron.ipcRenderer
-const CHANNEL_DEFAULT_TIMEOUT = 10_000
+const CHANNEL_DEFAULT_TIMEOUT = 60_000
 
 class TouchChannel implements ITouchClientChannel {
   channelMap: Map<string, ((data: StandardChannelData) => any)[]> = new Map()

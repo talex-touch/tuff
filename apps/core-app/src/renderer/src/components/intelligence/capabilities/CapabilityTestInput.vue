@@ -90,23 +90,23 @@ if (availableProviders.value.length > 0) {
       </div>
 
       <div class="input-field">
-        <label class="input-label">User Message</label>
+        <label class="input-label">{{ t('settings.intelligence.userMessageLabel') }}</label>
         <textarea
           v-model="userInput"
           class="input-textarea"
           :disabled="disabled || isTesting"
-          placeholder="Hello, how are you?"
+          :placeholder="t('settings.intelligence.userMessagePlaceholder')"
           rows="3"
         />
       </div>
 
       <div class="input-field">
-        <label class="input-label">Prompt Variables (JSON)</label>
+        <label class="input-label">{{ t('settings.intelligence.promptVariablesLabel') }}</label>
         <textarea
           v-model="promptVariablesText"
           class="input-textarea"
           :disabled="disabled || isTesting"
-          placeholder='{"name":"Talex"}'
+          :placeholder="t('settings.intelligence.promptVariablesPlaceholder')"
           rows="2"
         />
       </div>
@@ -180,7 +180,7 @@ if (availableProviders.value.length > 0) {
 
 .config-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 1rem;
 }
 
@@ -188,6 +188,7 @@ if (availableProviders.value.length > 0) {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .input-label {
@@ -198,6 +199,7 @@ if (availableProviders.value.length > 0) {
 
 .input-select,
 .input-textarea {
+  width: 100%;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--el-border-color);
   border-radius: 0.5rem;
@@ -206,6 +208,11 @@ if (availableProviders.value.length > 0) {
   font-size: 0.875rem;
   transition: all 0.2s;
   font-family: var(--el-font-family);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 
   &:hover:not(:disabled) {
     border-color: var(--el-color-primary-light-5);
@@ -226,6 +233,7 @@ if (availableProviders.value.length > 0) {
 .input-textarea {
   resize: vertical;
   min-height: 60px;
+  white-space: pre-wrap;
 }
 
 .action-section {

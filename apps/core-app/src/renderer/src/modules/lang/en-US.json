@@ -937,9 +937,11 @@
       "enableProviderDesc": "Enable {name} as an AI provider",
       "test": "Test",
       "testing": "Testing...",
+      "selectProvider": "Select provider",
+      "testCapability": "Run test",
       "testSuccess": "Test Successful",
       "testFailed": "Test Failed",
-      "testSuccessMessage": "Provider is configured correctly and responding",
+      "testSuccessMessage": "Provider configuration is correct and responding",
       "testErrorMessage": "Connection failed, please check your configuration",
       "latency": "Latency",
       "apiConfig": "API Configuration",
@@ -984,7 +986,11 @@
       "enableCache": "Enable Response Cache",
       "enableCacheDesc": "Cache AI responses to reduce costs and latency",
       "cacheExpiration": "Cache Expiration",
-      "cacheExpirationDesc": "How long to keep cached responses"
+      "cacheExpirationDesc": "How long to keep cached responses",
+      "userMessageLabel": "User message",
+      "userMessagePlaceholder": "Hello, can you summarize this...",
+      "promptVariablesLabel": "Prompt variables (JSON)",
+      "promptVariablesPlaceholder": "{\"name\":\"Talex\"}"
     },
     "settingFileIndex": {
       "groupTitle": "File Index",

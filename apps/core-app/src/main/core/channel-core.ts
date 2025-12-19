@@ -13,7 +13,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { ipcMain } from 'electron'
 import { WindowManager } from '../modules/box-tool/core-box/window'
 
-const CHANNEL_DEFAULT_TIMEOUT = 10_000
+const CHANNEL_DEFAULT_TIMEOUT = 60_000
 
 class TouchChannel implements ITouchChannel {
   channelMap: Map<ChannelType, Map<string, ChannelCallback[]>> = new Map()
