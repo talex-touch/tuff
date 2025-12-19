@@ -51,6 +51,25 @@ const bgOpacity = computed({
   }
 })
 
+const lowBatteryThreshold = computed({
+  get: () => {
+    const v = appSetting.animation?.lowBatteryThreshold
+    return typeof v === 'number' ? v : 20
+  },
+  set: (val: number) => {
+    if (!appSetting.animation) {
+      appSetting.animation = {
+        listItemStagger: true,
+        resultTransition: true,
+        coreBoxResize: false,
+        autoDisableOnLowBattery: true,
+        lowBatteryThreshold: 20,
+      }
+    }
+    appSetting.animation.lowBatteryThreshold = val
+  },
+})
+
 watchEffect(() => {
   if (themeStyle.value.theme.style.auto) styleValue.value = 2
   else if (themeStyle.value.theme.style.dark) styleValue.value = 1
@@ -312,6 +331,30 @@ function clearBackgroundImage() {
           </span>
         </template>
       </TuffBlockSwitch>
+
+      <TuffBlockSwitch
+        v-model="appSetting.animation.autoDisableOnLowBattery"
+        title="Low Battery Mode"
+        description="Automatically disable animations when battery is low"
+      />
+
+      <div
+        v-if="appSetting.animation.autoDisableOnLowBattery !== false"
+        class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5"
+      >
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-black/60 dark:text-white/60">Low battery threshold</span>
+          <span class="font-medium text-black/80 dark:text-white/80">{{ lowBatteryThreshold }}%</span>
+        </div>
+        <input
+          v-model.number="lowBatteryThreshold"
+          type="range"
+          min="5"
+          max="50"
+          step="1"
+          class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
+        />
+      </div>
     </TuffGroupBlock>
 
     <TuffBlockSwitch
