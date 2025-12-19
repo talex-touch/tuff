@@ -9,6 +9,7 @@ import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
 import { useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
 import { capturePlatformWarningContext } from '~/modules/mention/platform-warning'
+import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import AppLayout from '~/views/layout/AppLayout.vue'
 import AppEntrance from './AppEntrance.vue'
@@ -25,6 +26,9 @@ capturePlatformWarningContext()
 
 // Initialize permission startup listener
 usePermissionStartup()
+
+// Initialize global battery optimizer
+useGlobalBatteryOptimizer()
 
 /**
  * Initialize renderer-only services once the lifecycle is ready.

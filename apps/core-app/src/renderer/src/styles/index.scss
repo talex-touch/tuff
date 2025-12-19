@@ -388,3 +388,20 @@ html.fullscreen .Blur-Container {
   transform: translate(-50%, -50%);
   background-color: var(--el-fill-color);
 }
+
+/* Low Battery Mode - Reduce Motion */
+html[data-low-battery-motion='1'] {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  // Disable view transitions
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
