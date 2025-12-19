@@ -48,7 +48,9 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
+  IntelligenceMessage,
 } from '@talex-touch/utils'
+import { PromptTemplate } from '@langchain/core/prompts'
 import chalk from 'chalk'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
 import { type IntelligenceAuditLogEntry, intelligenceAuditLogger } from './intelligence-audit-logger'
@@ -59,6 +61,32 @@ const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const logInfo = (...args: any[]) => console.log(INTELLIGENCE_TAG, ...args)
 const logWarn = (...args: any[]) => console.warn(INTELLIGENCE_TAG, ...args)
 const logError = (...args: any[]) => console.error(INTELLIGENCE_TAG, ...args)
+
+function extractMustacheVariables(template: string): string[] {
+  const vars = new Set<string>()
+  const regex = /{{\s*([a-zA-Z0-9_\.]+)\s*}}/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(template))) {
+    if (match[1])
+      vars.add(match[1])
+  }
+  return Array.from(vars)
+}
+
+async function renderPromptTemplate(template: string, variables?: Record<string, any>): Promise<string> {
+  const inputVariables = extractMustacheVariables(template)
+  if (inputVariables.length === 0) {
+    return template
+  }
+
+  const prompt = new PromptTemplate({
+    template,
+    inputVariables,
+    templateFormat: 'mustache' as any,
+  })
+
+  return await prompt.format(variables ?? {})
+}
 
 let providerManager: IntelligenceProviderManagerAdapter | null = null
 
@@ -215,11 +243,39 @@ export class AiSDK {
     let result: IntelligenceInvokeResult<T>
     const startTime = Date.now()
 
+    const promptTemplate = (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
+    const promptVariables = options.metadata?.promptVariables as Record<string, any> | undefined
+    const applyPromptTemplate = (messages: IntelligenceMessage[], template?: string) => {
+      if (!template)
+        return messages
+      const systemMsg: IntelligenceMessage = { role: 'system', content: template }
+      const rest = messages ?? []
+      return [systemMsg, ...rest]
+    }
+
     try {
+
       switch (capability.type) {
         // Core text capabilities
         case 'chat':
-          result = await provider.chat(payload as IntelligenceChatPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          {
+            const chatPayload = payload as IntelligenceChatPayload
+            let renderedTemplate = promptTemplate
+            if (promptTemplate) {
+              try {
+                renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
+              }
+              catch (error) {
+                logWarn('Failed to render prompt template, falling back to raw template', error)
+              }
+            }
+            const promptAppliedMessages = applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
+            const nextPayload: IntelligenceChatPayload = {
+              ...chatPayload,
+              messages: promptAppliedMessages,
+            }
+            result = await provider.chat(nextPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          }
           break
         case 'embedding':
           result = await provider.embedding(payload as IntelligenceEmbeddingPayload, runtimeOptions) as IntelligenceInvokeResult<T>
@@ -322,6 +378,8 @@ export class AiSDK {
           success: true,
           caller: runtimeOptions.metadata?.caller,
           userId: runtimeOptions.metadata?.userId,
+          promptHash: promptTemplate ? intelligenceAuditLogger.generatePromptHash(promptTemplate) : undefined,
+          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined,
         })
       }
 
@@ -344,6 +402,8 @@ export class AiSDK {
           error: error instanceof Error ? error.message : String(error),
           caller: runtimeOptions.metadata?.caller,
           userId: runtimeOptions.metadata?.userId,
+          promptHash: promptTemplate ? intelligenceAuditLogger.generatePromptHash(promptTemplate) : undefined,
+          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined,
         })
       }
 

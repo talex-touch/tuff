@@ -105,3 +105,8 @@ Thanks to [@antfu](https://github.com/antfu)'s [template](https://github.com/ant
 ## Contact
 
 You could contact us through `TalexDreamSoul@Gmail.com`
+
+## Intelligence Integration
+
+- 如果插件需要调用智能能力，可在打包时携带 `@talex-touch/tuff-intelligence` 配置文件或默认渠道（如 Tuff Nexus `https://tuff.tagzxia.com/v1`），由主应用加载。
+- 建议在插件内使用 utils 类型定义保持与核心一致，避免重复定义模型/能力/提示词结构。

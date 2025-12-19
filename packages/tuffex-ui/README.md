@@ -217,6 +217,11 @@ TUFF UI is designed to work seamlessly with the Tuff desktop application. Compon
 2. **Plugin Development** - Enable plugin developers to use consistent UI
 3. **Community** - Allow external projects to adopt Tuff's design language
 
+## 🤖 Intelligence & AI
+
+- Pair TUFF UI with `@talex-touch/tuff-intelligence` to build AI-driven flows (capabilities, prompts, provider routing).
+- Frontend can call the unified intelligence client while reusing TUFF UI components for configuration, testing, and auditing views.
+
 ## 🤝 Contributing
 
 We welcome all contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
