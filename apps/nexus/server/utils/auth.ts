@@ -11,7 +11,13 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
   if (!authFn)
     throw createError({ statusCode: 500, statusMessage: 'Clerk auth context is unavailable.' })
 
-  const auth = await authFn()
+  let auth: any
+  try {
+    auth = await authFn()
+  } catch (error: any) {
+    throw createError({ statusCode: 500, statusMessage: error?.message || 'Clerk auth failed.' })
+  }
+
   const userId = auth?.userId
 
   if (!userId)
@@ -23,8 +29,26 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
 export async function requireAdmin(event: H3Event) {
   const { userId } = await requireAuth(event)
 
-  const client = clerkClient(event)
-  const user = await client.users.getUser(userId)
+  let client: any
+  try {
+    client = clerkClient(event)
+  } catch (error: any) {
+    throw createError({ statusCode: 500, statusMessage: error?.message || 'Clerk client initialization failed.' })
+  }
+
+  let user: any
+  try {
+    user = await client.users.getUser(userId)
+  } catch (error: any) {
+    const status = typeof error?.status === 'number' ? error.status : undefined
+    const statusCode = status === 404 ? 401 : status
+
+    throw createError({
+      statusCode: statusCode && statusCode >= 400 && statusCode < 600 ? statusCode : 500,
+      statusMessage: error?.message || 'Failed to fetch user info.',
+    })
+  }
+
   const role = user.publicMetadata?.role
 
   if (role !== 'admin')
