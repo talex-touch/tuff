@@ -533,8 +533,29 @@ jobs:
 
       - name: Cleanup Artifacts for Windows
         if: matrix.os == 'windows-latest'
-        shell: bash
-        run: npx rimraf "apps/core-app/dist/!(*.exe)"
+        shell: powershell
+        run: |
+          $distPath = "apps/core-app/dist"
+          if (-not (Test-Path $distPath)) {
+            Write-Host "Dist path not found: $distPath"
+            exit 0
+          }
+
+          Write-Host "Cleaning Windows artifacts (keeping .exe files only)..."
+
+          # Remove all non-.exe files
+          Get-ChildItem -Path $distPath -Recurse -File -Force |
+            Where-Object { $_.Extension -ne ".exe" } |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+
+          # Remove empty directories (bottom-up)
+          Get-ChildItem -Path $distPath -Recurse -Directory -Force |
+            Sort-Object FullName -Descending |
+            ForEach-Object {
+              if (-not (Get-ChildItem -Path $_.FullName -Force -ErrorAction SilentlyContinue)) {
+                Remove-Item -Path $_.FullName -Force -ErrorAction SilentlyContinue
+              }
+            }
 
       - name: Cleanup Artifacts for MacOS
         if: matrix.os == 'macos-latest'
