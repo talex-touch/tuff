@@ -14,12 +14,18 @@
     "jsx": "preserve",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@tuffex-ui/*": ["./*"]
+    }
   },
   "include": [
     "packages/**/*.ts",
+    "packages/**/*.d.ts",
     "packages/**/*.vue",
     "docs/**/*.ts",
+    "docs/**/*.d.ts",
     "docs/**/*.vue"
   ],
   "exclude": [
