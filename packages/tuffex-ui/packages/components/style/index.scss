@@ -3,9 +3,9 @@
 @import './mixins.scss';
 
 // Component styles
-@import url('../src/button/src/style/index.scss');
-@import url('../src/switch/style/index.scss');
-@import url('../src/flat-button/style/index.scss');
+@import '../src/button/src/style/index.scss';
+@import '../src/switch/style/index.scss';
+@import '../src/flat-button/style/index.scss';
 
 // Fake background utility (glassmorphism effect)
 .fake-background {

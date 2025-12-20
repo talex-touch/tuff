@@ -33,7 +33,7 @@ export function createComponent(componentsPath: string, compName: string) {
     }
   })
   const mainStylePath ='./packages/components/style/index.scss'
-  const importStyleContent = `@import url('../src/${compName}/src/style/index.scss');`
+  const importStyleContent = `@import '../src/${compName}/src/style/index.scss';`
   fs.writeFile(mainStylePath, importStyleContent,{ encoding: 'utf8', flag: 'a' }, err => {
     if (err) {
       console.log('全局样式引入局部样式失败')

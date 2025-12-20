@@ -50,7 +50,8 @@ out/
 .nuxt/
 .serverless/
 .vuepress/dist/
-.vitepress/
+.vitepress/cache/
+.vitepress/dist/
 apps/core-app/tuff
 apps/core-app/.electron-builder-cache/
 apps/core-app/src/renderer/src/distinformation.json
@@ -122,3 +123,8 @@ apps/nexus/.data/
 # Project-specific (core-app)
 # ========================
 apps/core-app/signature.json
+
+# ========================
+# Project-specific (tuffex-ui)
+# ========================
+packages/tuffex-ui/docs/.vitepress/cache/
