@@ -207,7 +207,7 @@ async function forClose(): Promise<void> {
   </teleport>
 </template>
 
-<style lang="scss">
+<style lang="scss" scoped>
 @keyframes tx-bottom-dialog-enter {
   0% {
     opacity: 0;
