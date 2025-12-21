@@ -1,10 +1,11 @@
-.tx-button.tx-button {
+.tx-button {
   &:hover {
     background-color: var(--tx-button-bg-color-hover);
   }
   .tx-spinner {
     color: currentColor;
   }
+  --fake-index: -1;
   display: inline-flex;
   gap: 0.5rem;
   align-items: center;
