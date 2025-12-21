@@ -1,2 +1,70 @@
-// TxSwitch component styles (imported via component SFC)
-// This file is for external style imports if needed
+.tuff-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+  border-radius: 10px;
+  background-color: var(--tx-fill-color, #f0f2f5);
+  transition: all 0.25s ease-in-out;
+
+  &__thumb {
+    position: absolute;
+    height: 70%;
+    aspect-ratio: 1 / 1;
+    top: 15%;
+    left: 10%;
+    border-radius: 6px;
+    background-color: var(--tx-text-color-secondary, #909399);
+    transition: all 0.25s ease-in-out;
+  }
+
+  &.is-active {
+    background-color: var(--tx-color-primary, #409eff);
+
+    .tuff-switch__thumb {
+      left: 50%;
+      filter: brightness(2);
+    }
+  }
+
+  &.is-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  &:hover:not(.is-disabled) {
+    box-shadow: 0 0 16px 1px var(--tx-color-primary-light-3, #79bbff);
+  }
+
+  &:active:not(.is-disabled) .tuff-switch__thumb {
+    transform: scale(0.85);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary-light-5, #a0cfff);
+    outline-offset: 2px;
+  }
+
+  &--small {
+    width: 36px;
+    height: 20px;
+    border-radius: 8px;
+
+    .tuff-switch__thumb {
+      border-radius: 5px;
+    }
+  }
+
+  &--large {
+    width: 52px;
+    height: 28px;
+    border-radius: 12px;
+
+    .tuff-switch__thumb {
+      border-radius: 6px;
+    }
+  }
+}

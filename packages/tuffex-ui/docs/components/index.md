@@ -18,11 +18,11 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 
 ## 布局组件
 
-- **[TxGroupBlock 分组块](./group-block.md)** - 可折叠分组容器
-- **[TxBlockLine 块行](./group-block.md#blockline-块行)** - 简单行项目显示
-- **[TxBlockSlot 块插槽](./group-block.md#blockslot-块插槽)** - 带自定义插槽的块
-- **[TxBlockSwitch 块开关](./group-block.md#blockswitch-块开关)** - 带集成开关的块
+- **[TxGroupBlock 分组块](./group-block.md)** - 分组容器与块项（BlockLine/BlockSlot/BlockSwitch）
+- **[TxScroll 滚动](./scroll.md)** - 滚动容器（BetterScroll / 原生）
 - **[TxGridLayout 网格布局](./grid-layout.md)** - 响应式网格与交互 hover
+- **[TxLayoutSkeleton 布局骨架](./layout-skeleton.md)** - 通用布局骨架占位
+- **[TxCardItem 卡片项](./card-item.md)** - 左侧头像/图标，右侧标题与描述，支持右侧操作区
 
 ## 反馈组件
 
@@ -32,6 +32,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxLoadingOverlay 加载遮罩](./loading-overlay.md)** - 遮罩加载（容器/全屏）
 - **[TxSkeleton 骨架屏](./skeleton.md)** - 加载占位骨架
 - **[TxToast 提示](./toast.md)** - 轻量通知提示
+- **[TxStatCard 指标卡片](./stat-card.md)** - 指标展示卡片
 
 ## 覆盖层组件
 

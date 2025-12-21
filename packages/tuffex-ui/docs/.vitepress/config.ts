@@ -86,6 +86,8 @@ export default defineConfig({
             { text: '分组块 GroupBlock', link: '/components/group-block' },
             { text: '滚动 Scroll', link: '/components/scroll' },
             { text: '网格布局 GridLayout', link: '/components/grid-layout' },
+            { text: '布局骨架 LayoutSkeleton', link: '/components/layout-skeleton' },
+            { text: '卡片项 CardItem', link: '/components/card-item' },
           ],
         },
         {
@@ -97,6 +99,7 @@ export default defineConfig({
             { text: '加载遮罩 LoadingOverlay', link: '/components/loading-overlay' },
             { text: '骨架屏 Skeleton', link: '/components/skeleton' },
             { text: '提示 Toast', link: '/components/toast' },
+            { text: '指标卡片 StatCard', link: '/components/stat-card' },
           ],
         },
         {
