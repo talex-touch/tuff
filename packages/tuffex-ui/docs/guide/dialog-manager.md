@@ -10,10 +10,10 @@
 
 ## API
 
-从 `@talex-touch/tuff-ui/utils` 引入：
+从 `@tuffex-ui/packages/utils` 引入：
 
 ```ts
-import { getDialogManager } from '@talex-touch/tuff-ui/utils'
+import { getDialogManager } from '@tuffex-ui/packages/utils'
 ```
 
 ### `getDialogManager()`
@@ -46,7 +46,7 @@ import { getDialogManager } from '@talex-touch/tuff-ui/utils'
 ### 1) DOM Container 模式（最简单）
 
 ```ts
-import { getDialogManager } from '@talex-touch/tuff-ui/utils'
+import { getDialogManager } from '@tuffex-ui/packages/utils'
 
 const manager = getDialogManager()
 
@@ -69,7 +69,7 @@ manager.unregister(root.id)
 ### 2) setVisible 模式（更适合与组件状态联动）
 
 ```ts
-import { getDialogManager } from '@talex-touch/tuff-ui/utils'
+import { getDialogManager } from '@tuffex-ui/packages/utils'
 
 const manager = getDialogManager()
 

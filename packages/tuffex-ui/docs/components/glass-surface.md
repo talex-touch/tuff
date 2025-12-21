@@ -18,10 +18,6 @@
     <div style="padding: 16px;">Glass</div>
   </TxGlassSurface>
 </template>
-
-<script setup lang="ts">
-import { TxGlassSurface } from '@talex-touch/tuff-ui'
-</script>
 ```
 </template>
 </DemoBlock>

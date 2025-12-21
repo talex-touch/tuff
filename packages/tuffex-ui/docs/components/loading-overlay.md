@@ -24,13 +24,6 @@ const loading = ref(false)
 
 <template #code>
 ```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-import { TxLoadingOverlay, TxButton } from '@talex-touch/tuff-ui'
-
-const loading = ref(false)
-</script>
-
 <template>
   <TxButton @click="loading = !loading">Toggle</TxButton>
   <TxLoadingOverlay :loading="loading" text="Loading...">
@@ -51,13 +44,6 @@ const loading = ref(false)
 
 <template #code>
 ```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-import { TxButton, TxLoadingOverlay } from '@talex-touch/tuff-ui'
-
-const loading = ref(false)
-</script>
-
 <template>
   <TxButton @click="loading = !loading">Toggle</TxButton>
   <TxLoadingOverlay fullscreen :loading="loading" text="Loading..." />
