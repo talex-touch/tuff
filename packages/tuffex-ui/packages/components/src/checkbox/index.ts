@@ -6,4 +6,5 @@ TuffCheckbox.install = (app: App) => {
 }
 
 export { TuffCheckbox }
+export { TuffCheckbox as TxCheckbox }
 export default TuffCheckbox

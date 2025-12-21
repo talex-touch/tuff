@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 defineOptions({
-  name: 'TuffCheckbox',
+  name: 'TxCheckbox',
 })
 
 const props = withDefaults(
@@ -43,7 +43,7 @@ function toggle() {
     :aria-disabled="disabled"
     :tabindex="disabled ? -1 : 0"
     :class="[
-      'tuff-checkbox',
+      'tx-checkbox',
       {
         'is-checked': isChecked,
         'is-disabled': disabled,
@@ -53,7 +53,7 @@ function toggle() {
     @keydown.enter.prevent="toggle"
     @keydown.space.prevent="toggle"
   >
-    <span class="tx-checkbox__inner">
+    <span class="tx-checkbox__box" aria-hidden="true">
       <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <polyline
           fill="none"
@@ -72,31 +72,34 @@ function toggle() {
 </template>
 
 <style lang="scss" scoped>
-.tuff-checkbox {
+.tx-checkbox {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
   user-select: none;
+  gap: 8px;
+  outline: none;
 
-  &__inner {
+  &__box {
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
     border: 1px solid var(--tx-border-color, #dcdfe6);
     background-color: var(--tx-bg-color, #fff);
-    transition: all 0.25s;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease,
+      box-shadow 0.18s ease;
 
     svg {
       width: 100%;
       height: 100%;
     }
 
-    .tuff-checkbox__tick {
-      stroke: var(--tx-fill-color-light, #f5f7fa);
+    .tx-checkbox__tick {
+      stroke: var(--tx-fill-color-blank, #fff);
       stroke-dasharray: 306.27;
       stroke-dashoffset: 306.27;
       transition: stroke-dashoffset 0.3s ease;
@@ -104,17 +107,16 @@ function toggle() {
   }
 
   &__label {
-    margin-left: 8px;
     font-size: 14px;
     color: var(--tx-text-color-regular, #606266);
   }
 
   &.is-checked {
-    .tuff-checkbox__inner {
+    .tx-checkbox__box {
       background-color: var(--tx-color-primary, #409eff);
       border-color: var(--tx-color-primary, #409eff);
 
-      .tuff-checkbox__tick {
+      .tx-checkbox__tick {
         stroke-dashoffset: 0;
       }
     }
@@ -122,26 +124,40 @@ function toggle() {
 
   &.is-disabled {
     cursor: not-allowed;
-    opacity: 0.6;
 
-    .tuff-checkbox__inner {
+    .tx-checkbox__box {
       background-color: var(--tx-disabled-bg-color, #f5f7fa);
+      border-color: var(--tx-disabled-border-color, var(--tx-border-color-light, #e4e7ed));
     }
 
-    .tuff-checkbox__label {
+    .tx-checkbox__label {
       color: var(--tx-disabled-text-color, #c0c4cc);
     }
   }
 
+  &.is-disabled.is-checked {
+    .tx-checkbox__box {
+      background-color: var(--tx-text-color-disabled, #c0c4cc);
+      border-color: var(--tx-text-color-disabled, #c0c4cc);
+    }
+  }
+
   &:hover:not(.is-disabled) {
-    .tuff-checkbox__inner {
+    .tx-checkbox__box {
       border-color: var(--tx-color-primary, #409eff);
+      box-shadow: 0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+    }
+  }
+
+  &:active:not(.is-disabled) {
+    .tx-checkbox__box {
+      transform: scale(0.96);
     }
   }
 
   &:focus-visible {
-    .tuff-checkbox__inner {
-      box-shadow: 0 0 0 2px var(--tx-color-primary-light-7, #c6e2ff);
+    .tx-checkbox__box {
+      box-shadow: 0 0 0 3px var(--tx-color-primary-light-7, #c6e2ff);
     }
   }
 }
