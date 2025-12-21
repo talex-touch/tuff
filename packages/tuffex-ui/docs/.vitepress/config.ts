@@ -55,6 +55,8 @@ export default defineConfig({
             { text: '主题定制', link: '/guide/theming' },
             { text: '暗色模式', link: '/guide/dark-mode' },
             { text: '国际化', link: '/guide/i18n' },
+            { text: 'Dialog Manager', link: '/guide/dialog-manager' },
+            { text: 'Icons', link: '/guide/icons' },
           ],
         },
       ],
@@ -75,6 +77,7 @@ export default defineConfig({
             { text: '开关 Switch', link: '/components/switch' },
             { text: '复选框 Checkbox', link: '/components/checkbox' },
             { text: '选择器 Select', link: '/components/select' },
+            { text: '滑块 Slider', link: '/components/slider' },
           ],
         },
         {
@@ -82,6 +85,7 @@ export default defineConfig({
           items: [
             { text: '分组块 GroupBlock', link: '/components/group-block' },
             { text: '滚动 Scroll', link: '/components/scroll' },
+            { text: '网格布局 GridLayout', link: '/components/grid-layout' },
           ],
         },
         {
@@ -89,6 +93,10 @@ export default defineConfig({
           items: [
             { text: '进度条 ProgressBar', link: '/components/progress-bar' },
             { text: '进度 Progress', link: '/components/progress' },
+            { text: '加载 Spinner', link: '/components/spinner' },
+            { text: '加载遮罩 LoadingOverlay', link: '/components/loading-overlay' },
+            { text: '骨架屏 Skeleton', link: '/components/skeleton' },
+            { text: '提示 Toast', link: '/components/toast' },
           ],
         },
         {
@@ -96,6 +104,13 @@ export default defineConfig({
           items: [
             { text: '抽屉 Drawer', link: '/components/drawer' },
             { text: '对话框 Dialog', link: '/components/dialog' },
+          ],
+        },
+        {
+          text: '视觉效果',
+          items: [
+            { text: '玻璃拟态 GlassSurface', link: '/components/glass-surface' },
+            { text: '渐变边框 GradientBorder', link: '/components/gradient-border' },
           ],
         },
       ],

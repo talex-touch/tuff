@@ -1,0 +1,45 @@
+# GradientBorder 渐变边框
+
+用于给内容容器提供动态渐变边框效果。
+
+## 基础用法
+
+<DemoBlock title="GradientBorder">
+<template #preview>
+<div style="width: 360px;">
+  <TxGradientBorder :padding="16" :border-radius="16">
+    <div style="background: var(--tx-bg-color); border-radius: 12px; padding: 16px;">
+      Content
+    </div>
+  </TxGradientBorder>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxGradientBorder :padding="16" :border-radius="16">
+    <div style="background: var(--tx-bg-color); border-radius: 12px; padding: 16px;">
+      Content
+    </div>
+  </TxGradientBorder>
+</template>
+
+<script setup lang="ts">
+import { TxGradientBorder } from '@talex-touch/tuff-ui'
+</script>
+```
+</template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `as` | `string` | `'div'` | 根元素标签 |
+| `borderWidth` | `string \| number` | `'2px'` | 边框宽度 |
+| `borderRadius` | `string \| number` | `'12px'` | 圆角 |
+| `padding` | `string \| number` | `'12px'` | 内边距 |
+| `animationDuration` | `number` | `4` | 动画周期（秒） |

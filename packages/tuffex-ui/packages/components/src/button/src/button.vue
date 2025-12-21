@@ -2,10 +2,14 @@
 import { computed, nextTick, ref } from 'vue'
 import { useVibrate } from '../../../../utils/vibrate'
 import type { ButtonEmits, ButtonProps } from './types'
+import Spinner from '../../spinner';
+import VWave from 'v-wave'
 
 defineOptions({
   name: 'TxButton',
 })
+
+const { vWave } = VWave.createLocalWaveDirective()
 
 const props = withDefaults(defineProps<ButtonProps>(), {
   variant: undefined,
@@ -95,13 +99,14 @@ if (props.autofocus) {
 <template>
   <button
     ref="buttonRef"
-    class="tx-button"
+    class="tx-button fake-background"
     :class="classList"
     :type="nativeType"
     :disabled="disabled || loading"
     @click="handleClick"
+    v-wave
   >
-    <span v-if="loading" class="tx-button__spinner i-carbon-renew" />
+    <Spinner v-if="loading" class="tx-button__spinner" />
     <slot />
   </button>
 </template>

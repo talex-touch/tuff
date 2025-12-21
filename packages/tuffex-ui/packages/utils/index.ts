@@ -1,2 +1,4 @@
 export * from './withInstall'
 export * from './vibrate'
+export * from './dialog-manager'
+export * from './toast'

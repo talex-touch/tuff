@@ -14,6 +14,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxSwitch 开关](./switch.md)** - 开关切换组件
 - **[TxCheckbox 复选框](./checkbox.md)** - 复选框组件
 - **[TxSelect 选择器](./select.md)** - 下拉选择组件
+- **[TxSlider 滑块](./slider.md)** - 区间取值滑块
 
 ## 布局组件
 
@@ -21,17 +22,27 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxBlockLine 块行](./group-block.md#blockline-块行)** - 简单行项目显示
 - **[TxBlockSlot 块插槽](./group-block.md#blockslot-块插槽)** - 带自定义插槽的块
 - **[TxBlockSwitch 块开关](./group-block.md#blockswitch-块开关)** - 带集成开关的块
+- **[TxGridLayout 网格布局](./grid-layout.md)** - 响应式网格与交互 hover
 
 ## 反馈组件
 
 - **[TxProgress 进度](./progress.md)** - 进度展示组件
 - **[TxProgressBar 进度条](./progress-bar.md)** - 多功能进度条，支持多种状态
+- **[TxSpinner 加载](./spinner.md)** - 旋转加载指示器
+- **[TxLoadingOverlay 加载遮罩](./loading-overlay.md)** - 遮罩加载（容器/全屏）
+- **[TxSkeleton 骨架屏](./skeleton.md)** - 加载占位骨架
+- **[TxToast 提示](./toast.md)** - 轻量通知提示
 
 ## 覆盖层组件
 
 - **[TxDrawer 抽屉](./drawer.md)** - 滑出面板组件
 - **[TxBottomDialog 底部对话框](./dialog.md)** - 底部定位对话框
 - **[TxBlowDialog 爆炸对话框](./dialog.md#blowdialog-爆炸对话框)** - 带爆炸动画的居中对话框
+
+## 视觉效果
+
+- **[TxGlassSurface 玻璃拟态](./glass-surface.md)** - 玻璃拟态容器
+- **[TxGradientBorder 渐变边框](./gradient-border.md)** - 动态渐变边框
 
 ## 快速开始
 
