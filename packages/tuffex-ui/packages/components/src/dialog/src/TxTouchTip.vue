@@ -169,7 +169,7 @@ onUnmounted(() => {
   </teleport>
 </template>
 
-<style lang="scss">
+<style lang="scss" scoped>
 @keyframes tx-touch-tip-enter {
   0% {
     opacity: 0;
