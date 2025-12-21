@@ -1,27 +1,52 @@
 <script setup lang="ts">
-import { autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
+import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { TooltipProps } from './types'
 
 defineOptions({ name: 'TxTooltip' })
 
 const props = withDefaults(defineProps<TooltipProps>(), {
+  modelValue: undefined,
   content: '',
   disabled: false,
+  trigger: 'hover',
   placement: 'top',
   offset: 8,
   openDelay: 200,
   closeDelay: 120,
   maxWidth: 280,
+  showArrow: false,
+  interactive: false,
+  closeOnClickOutside: true,
 })
 
-const open = ref(false)
+const emit = defineEmits<{
+  (e: 'update:modelValue', v: boolean): void
+  (e: 'open'): void
+  (e: 'close'): void
+}>()
+
+const internalOpen = ref(false)
+const open = computed({
+  get: () => (typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value),
+  set: (v: boolean) => {
+    if (props.disabled)
+      return
+    internalOpen.value = v
+    emit('update:modelValue', v)
+    emit(v ? 'open' : 'close')
+  },
+})
+
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
+const arrowRef = ref<HTMLElement | null>(null)
 
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 
-const { floatingStyles, update } = useFloating(referenceRef, floatingRef, {
+const lastOpenedAt = ref(0)
+
+const { floatingStyles, middlewareData, placement, update } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
   middleware: [
@@ -36,6 +61,7 @@ const { floatingStyles, update } = useFloating(referenceRef, floatingRef, {
         })
       },
     }),
+    arrow({ element: arrowRef, padding: 6 }),
   ],
 })
 
@@ -53,6 +79,7 @@ function scheduleOpen() {
   if (props.disabled) return
   clearTimers()
   openTimer = window.setTimeout(async () => {
+    lastOpenedAt.value = performance.now()
     open.value = true
     await nextTick()
     await update()
@@ -67,19 +94,79 @@ function scheduleClose() {
 }
 
 function onEnter() {
+  if (props.trigger !== 'hover')
+    return
   scheduleOpen()
 }
 
 function onLeave() {
+  if (props.trigger !== 'hover')
+    return
+  scheduleClose()
+}
+
+function onFloatingEnter(): void {
+  if (!props.interactive)
+    return
+  if (props.trigger !== 'hover')
+    return
+  clearTimers()
+}
+
+function onFloatingLeave(): void {
+  if (!props.interactive)
+    return
+  if (props.trigger !== 'hover')
+    return
   scheduleClose()
 }
 
 function onFocusIn() {
+  if (props.trigger !== 'focus')
+    return
   scheduleOpen()
 }
 
 function onFocusOut() {
+  if (props.trigger !== 'focus')
+    return
   scheduleClose()
+}
+
+function onClickToggle(): void {
+  if (props.trigger !== 'click')
+    return
+  clearTimers()
+  if (!open.value)
+    lastOpenedAt.value = performance.now()
+  open.value = !open.value
+}
+
+function isEventInside(e: Event, el: HTMLElement | null): boolean {
+  if (!el)
+    return false
+  const anyE = e as any
+  const path: EventTarget[] | undefined = typeof anyE.composedPath === 'function' ? anyE.composedPath() : undefined
+  if (path && path.length)
+    return path.includes(el)
+  const t = (e.target ?? null) as Node | null
+  return !!t && el.contains(t)
+}
+
+function handleOutside(e: Event): void {
+  if (!props.closeOnClickOutside)
+    return
+  if (props.trigger !== 'click')
+    return
+  if (!open.value)
+    return
+  if (performance.now() - lastOpenedAt.value < 60)
+    return
+
+  const inRef = isEventInside(e, referenceRef.value)
+  const inFloat = isEventInside(e, floatingRef.value)
+  if (!inRef && !inFloat)
+    open.value = false
 }
 
 function onEsc(e: KeyboardEvent) {
@@ -107,14 +194,39 @@ watch(
 )
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', onEsc)
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleOutside, true)
   document.removeEventListener('keydown', onEsc)
   clearTimers()
   cleanupAutoUpdate.value?.()
   cleanupAutoUpdate.value = null
+})
+
+const arrowStyle = computed<Record<string, string>>(() => {
+  if (!props.showArrow)
+    return {}
+  const data = (middlewareData.value as any)?.arrow
+  const x = data?.x
+  const y = data?.y
+  const side = String(placement.value || 'top').split('-')[0]
+  const base: Record<string, string> = {
+    left: x != null ? `${x}px` : '',
+    top: y != null ? `${y}px` : '',
+  }
+
+  const staticSide = {
+    top: 'bottom',
+    right: 'left',
+    bottom: 'top',
+    left: 'right',
+  }[side] as string
+
+  base[staticSide] = '-5px'
+  return base
 })
 </script>
 
@@ -126,6 +238,7 @@ onBeforeUnmount(() => {
     @mouseleave="onLeave"
     @focusin="onFocusIn"
     @focusout="onFocusOut"
+    @click.capture="onClickToggle"
   >
     <slot />
   </span>
@@ -138,9 +251,10 @@ onBeforeUnmount(() => {
         class="tx-tooltip"
         role="tooltip"
         :style="floatingStyles"
-        @mouseenter="onEnter"
-        @mouseleave="onLeave"
+        @mouseenter="onFloatingEnter"
+        @mouseleave="onFloatingLeave"
       >
+        <div v-if="props.showArrow" ref="arrowRef" class="tx-tooltip__arrow" :style="arrowStyle" aria-hidden="true" />
         <slot name="content">
           {{ content }}
         </slot>
@@ -167,6 +281,16 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   font-size: 12px;
   line-height: 1.2;
+}
+
+.tx-tooltip__arrow {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 86%, transparent);
+  border: 1px solid var(--tx-border-color-light, #e4e7ed);
+  box-sizing: border-box;
 }
 
 .tx-tooltip-enter-active,

@@ -54,52 +54,45 @@ const tipOpen = ref(false)
 
 ### 按钮类型
 
-```vue
-<script setup>
+```ts
 const btns = [
   { content: '信息', type: 'info', onClick: () => true },
   { content: '警告', type: 'warning', onClick: () => true },
   { content: '错误', type: 'error', onClick: () => true },
   { content: '成功', type: 'success', onClick: () => true },
 ]
-</script>
 ```
 
 ### 自动点击计时器
 
 按钮可以设置自动倒计时点击。
 
-```vue
-<script setup>
+```ts
 const btns = [
-  { 
-    content: '自动确认', 
-    type: 'success', 
-    time: 5, // 5 秒后自动点击
-    onClick: () => true 
-  }
+  {
+    content: '自动确认',
+    type: 'success',
+    time: 5,
+    onClick: () => true,
+  },
 ]
-</script>
 ```
 
 ### 加载状态
 
 处理异步操作时显示加载状态。
 
-```vue
-<script setup>
+```ts
 const btns = [
-  { 
-    content: '提交', 
+  {
+    content: '提交',
     type: 'success',
     onClick: async () => {
-      // 按钮显示加载状态
       await saveData()
-      return true // 关闭对话框
-    }
-  }
+      return true
+    },
+  },
 ]
-</script>
 ```
 
 ---
@@ -211,37 +204,31 @@ const btns = [
 
 在对话框内渲染自定义组件。
 
-```vue
-<script setup>
+```ts
 import CustomContent from './CustomContent.vue'
 
 function showCustomDialog() {
-  // ... 设置代码
   return h(TxBlowDialog, {
     comp: CustomContent,
-    close: () => { /* 清理 */ }
+    close: () => {},
   })
 }
-</script>
 ```
 
 ### 渲染函数
 
 使用渲染函数创建动态内容。
 
-```vue
-<script setup>
+```ts
 function showRenderDialog() {
-  // ... 设置代码
   return h(TxBlowDialog, {
     render: () => h('div', [
       h('h2', '动态内容'),
-      h('p', '使用渲染函数创建')
+      h('p', '使用渲染函数创建'),
     ]),
-    close: () => { /* 清理 */ }
+    close: () => {},
   })
 }
-</script>
 ```
 
 ---

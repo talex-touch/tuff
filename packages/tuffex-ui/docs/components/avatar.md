@@ -141,12 +141,6 @@ Avatar 头像组件用于展示用户头像、品牌标识或其他圆形图像�
     @click="handleAvatarClick"
   />
 </template>
-
-<script setup>
-const handleAvatarClick = () => {
-  console.log('头像被点击了')
-}
-</script>
 ```
 
 ## API 参考

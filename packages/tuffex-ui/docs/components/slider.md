@@ -7,6 +7,8 @@ import { ref } from 'vue'
 
 const value = ref(30)
 const value2 = ref(60)
+const value3 = ref(42)
+const value4 = ref(30)
 </script>
 
 ## 基础用法
@@ -24,6 +26,48 @@ const value2 = ref(60)
 <template>
   <TxSlider v-model="value" :min="0" :max="100" :step="1" />
   <div>Value: {{ value }}</div>
+</template>
+```
+</template>
+</DemoBlock>
+
+## 禁用
+
+<DemoBlock title="Slider (disabled)">
+<template #preview>
+<div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+  <TxSlider v-model="value3" disabled show-value />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxSlider v-model="value" disabled show-value />
+</template>
+```
+</template>
+</DemoBlock>
+
+## 格式化显示
+
+<DemoBlock title="Slider (formatValue)">
+<template #preview>
+<div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+  <TxSlider
+    v-model="value4"
+    :min="0"
+    :max="100"
+    show-value
+    :format-value="(v) => `${v}%`"
+  />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxSlider v-model="value" show-value :format-value="(v) => `${v}%`" />
 </template>
 ```
 </template>

@@ -31,6 +31,8 @@ const nativeScrollRef = ref<HTMLElement | null>(null)
 
 let bs: BetterScroll | null = null
 let ro: ResizeObserver | null = null
+let wheelCleanup: (() => void) | null = null
+let refreshTimer: number | null = null
 
 function emitScroll(scrollTop: number, scrollLeft: number) {
   emit('scroll', { scrollTop, scrollLeft })
@@ -41,7 +43,6 @@ async function initBetterScroll() {
 
   const { default: BScroll } = await import('@better-scroll/core')
   const { ScrollBar } = await import('@better-scroll/scroll-bar')
-
   BScroll.use(ScrollBar)
 
   bs = new BScroll(wrapperRef.value, {
@@ -58,9 +59,37 @@ async function initBetterScroll() {
   bs.on('scroll', (pos: { x: number; y: number }) => {
     emitScroll(Math.abs(pos.y), Math.abs(pos.x))
   })
+
+  refreshTimer && window.clearTimeout(refreshTimer)
+  refreshTimer = window.setTimeout(() => {
+    bs?.refresh?.()
+  }, 60)
+
+  const el = wrapperRef.value
+  const onWheel = (e: WheelEvent) => {
+    if (!bs)
+      return
+    if (props.native)
+      return
+    if (typeof e.deltaY !== 'number' || e.deltaY === 0)
+      return
+    e.preventDefault()
+    const currY = typeof bs.y === 'number' ? bs.y : 0
+    const maxY = typeof (bs as any).maxScrollY === 'number' ? (bs as any).maxScrollY : -Infinity
+    const nextY = Math.max(maxY, Math.min(0, currY - e.deltaY))
+    bs.scrollTo(bs.x || 0, nextY, 0)
+  }
+
+  el.addEventListener('wheel', onWheel, { passive: false })
+  wheelCleanup = () => el.removeEventListener('wheel', onWheel)
 }
 
 function destroyBetterScroll() {
+  wheelCleanup?.()
+  wheelCleanup = null
+
+  refreshTimer && window.clearTimeout(refreshTimer)
+  refreshTimer = null
   if (bs) {
     bs.destroy()
     bs = null
@@ -195,6 +224,7 @@ watch(
 
 <style lang="scss" scoped>
 .tx-scroll {
+  display: block;
   width: 100%;
   height: 100%;
 }
@@ -206,6 +236,8 @@ watch(
 }
 
 .tx-scroll__wrapper {
+  position: relative;
+  z-index: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
@@ -213,5 +245,30 @@ watch(
 
 .tx-scroll__content {
   padding: 8px 12px;
+  min-height: 100%;
+}
+
+.tx-scroll__wrapper :deep(.bscroll-vertical-scrollbar) {
+  position: absolute !important;
+  top: 4px;
+  bottom: 4px;
+  right: 2px;
+  width: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tx-scroll__wrapper :deep(.bscroll-horizontal-scrollbar) {
+  position: absolute !important;
+  left: 4px;
+  right: 4px;
+  bottom: 2px;
+  height: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tx-scroll__wrapper :deep(.bscroll-indicator) {
+  pointer-events: auto;
 }
 </style>

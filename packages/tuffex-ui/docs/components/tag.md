@@ -23,10 +23,6 @@
   <TxTag label="警告" color="var(--tx-color-warning)" />
   <TxTag label="危险" color="var(--tx-color-danger)" />
 </template>
-
-<script setup>
-import { TxTag } from '@talex-touch/tuff-ui'
-</script>
 ```
 :::
 
@@ -93,17 +89,6 @@ import { TxTag } from '@talex-touch/tuff-ui'
     @close="handleClose(tag)" 
   />
 </template>
-
-<script setup>
-import { ref } from 'vue'
-import { TxTag } from '@talex-touch/tuff-ui'
-
-const tags = ref(['Vue', 'React', 'Angular'])
-
-function handleClose(tag) {
-  tags.value = tags.value.filter(t => t !== tag)
-}
-</script>
 ```
 :::
 

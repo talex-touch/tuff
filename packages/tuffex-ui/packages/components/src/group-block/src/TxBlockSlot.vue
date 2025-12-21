@@ -39,7 +39,7 @@ function handleClick(event: MouseEvent): void {
 
 <template>
   <div
-    class="tx-block-slot"
+    class="tx-block-slot fake-background index-fix"
     :class="{ 'tx-block-slot--disabled': disabled }"
     @click="handleClick"
   >
@@ -47,7 +47,12 @@ function handleClick(event: MouseEvent): void {
       <i v-if="icon" :class="icon" class="tx-block-slot__icon" aria-hidden="true" />
       <div class="tx-block-slot__label">
         <slot name="label">
-          <h3 class="tx-block-slot__title">{{ title }}</h3>
+          <div class="tx-block-slot__title-row">
+            <h5 class="tx-block-slot__title">{{ title }}</h5>
+            <div v-if="$slots.tags" class="tx-block-slot__tags">
+              <slot name="tags" />
+            </div>
+          </div>
           <p class="tx-block-slot__description">{{ description }}</p>
         </slot>
       </div>
@@ -71,11 +76,14 @@ function handleClick(event: MouseEvent): void {
   user-select: none;
   border-radius: 4px;
   box-sizing: border-box;
-  background: var(--tx-fill-color-light, #f5f7fa);
+  --fake-color: var(--tx-fill-color, #ebeef5);
+  --fake-radius: 4px;
+  --fake-opacity: 0.45;
+  background: transparent;
   transition: background-color 0.25s ease;
 
   &:hover {
-    background: var(--tx-fill-color, #f0f2f5);
+    --fake-color: var(--tx-fill-color, #ebeef5);
   }
 
   &--disabled {
@@ -105,7 +113,7 @@ function handleClick(event: MouseEvent): void {
   &__title {
     margin: 0;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--tx-text-color-primary, #303133);
   }
 
@@ -117,9 +125,32 @@ function handleClick(event: MouseEvent): void {
     color: var(--tx-text-color-secondary, #909399);
   }
 
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  &__tags {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+    max-width: 100%;
+    align-self: flex-start;
+    height: auto;
+  }
+
   &__slot {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    margin-left: auto;
+    flex-shrink: 0;
+    gap: 8px;
   }
 }
 </style>

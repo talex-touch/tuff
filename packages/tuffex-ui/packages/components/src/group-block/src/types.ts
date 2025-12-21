@@ -32,6 +32,30 @@ export interface GroupBlockProps {
    * @default false
    */
   shrink?: boolean
+
+  /**
+   * Whether the block can be toggled.
+   * @default true
+   */
+  collapsible?: boolean
+
+  /**
+   * External collapsed state.
+   * When provided, initial expanded state follows this unless user has interacted.
+   * @default false
+   */
+  collapsed?: boolean
+
+  /**
+   * Initial expanded state.
+   * @default true
+   */
+  defaultExpand?: boolean
+
+  /**
+   * Persist expanded state in localStorage.
+   */
+  memoryName?: string
 }
 
 /**
@@ -49,7 +73,7 @@ export interface GroupBlockEmits {
   /**
    * Emitted when the header is clicked.
    */
-  (e: 'toggle'): void
+  (e: 'toggle', expanded?: boolean): void
 }
 
 /**

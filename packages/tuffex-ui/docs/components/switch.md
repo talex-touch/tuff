@@ -2,11 +2,22 @@
 
 开关用于两种状态之间的切换，具有流畅的动画效果。
 
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const value1 = ref(false)
+const value2 = ref(true)
+const value3 = ref(false)
+const value4 = ref(true)
+const value5 = ref(true)
+const value6 = ref(true)
+</script>
+
 ## 基础用法
 
 基础的开关用法。
 
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
   <TuffSwitch v-model="value1" />
 </div>
 
@@ -16,11 +27,6 @@
 <template>
   <TuffSwitch v-model="checked" />
 </template>
-
-<script setup>
-import { ref } from 'vue'
-const checked = ref(false)
-</script>
 ```
 
 :::
@@ -29,7 +35,7 @@ const checked = ref(false)
 
 开关不可用状态。
 
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
   <TuffSwitch v-model="value2" disabled />
   <TuffSwitch v-model="value3" disabled />
 </div>
@@ -48,7 +54,7 @@ const checked = ref(false)
 
 提供三种尺寸的开关。
 
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
   <TuffSwitch v-model="value4" size="small" />
   <TuffSwitch v-model="value5" />
   <TuffSwitch v-model="value6" size="large" />
@@ -83,21 +89,3 @@ const checked = ref(false)
 | change | 状态改变时触发 | `(value: boolean) => void` |
 | update:modelValue | 值更新时触发 | `(value: boolean) => void` |
 
-<script setup>
-import { ref } from 'vue'
-const value1 = ref(false)
-const value2 = ref(true)
-const value3 = ref(false)
-const value4 = ref(true)
-const value5 = ref(true)
-const value6 = ref(true)
-</script>
-
-<style scoped>
-.group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-</style>

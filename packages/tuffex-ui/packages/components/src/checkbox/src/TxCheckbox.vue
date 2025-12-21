@@ -115,9 +115,11 @@ function toggle() {
     .tx-checkbox__box {
       background-color: var(--tx-color-primary, #409eff);
       border-color: var(--tx-color-primary, #409eff);
+      animation: tx-checkbox-pop 0.18s ease-out;
 
       .tx-checkbox__tick {
         stroke-dashoffset: 0;
+        animation: tx-checkbox-tick 0.32s ease-out;
       }
     }
   }
@@ -159,6 +161,29 @@ function toggle() {
     .tx-checkbox__box {
       box-shadow: 0 0 0 3px var(--tx-color-primary-light-7, #c6e2ff);
     }
+  }
+}
+
+@keyframes tx-checkbox-pop {
+  0% {
+    transform: scale(0.96);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes tx-checkbox-tick {
+  0% {
+    stroke-dashoffset: 306.27;
+    opacity: 0.1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 </style>

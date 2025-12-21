@@ -2,6 +2,20 @@
 
 Input 输入框组件用于接收用户输入，支持多种类型和状态，具有流畅的动画效果和现代化的设计风格。
 
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const value = ref('')
+const text = ref('')
+const password = ref('')
+const content = ref('')
+const readonlyValue = ref('readonly')
+const disabledValue = ref('disabled')
+const clearableValue = ref('hello')
+const withPrefix = ref('')
+const withSuffix = ref('')
+</script>
+
 ## 基础用法
 
 <div class="demo-container">
@@ -15,11 +29,6 @@ Input 输入框组件用于接收用户输入，支持多种类型和状态，�
 <template>
   <TuffInput v-model="value" placeholder="请输入内容" />
 </template>
-
-<script setup>
-import { ref } from 'vue'
-const value = ref('')
-</script>
 ```
 :::
 
@@ -44,13 +53,6 @@ const value = ref('')
   <TuffInput v-model="password" type="password" placeholder="密码输入" />
   <TuffInput v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
 </template>
-
-<script setup>
-import { ref } from 'vue'
-const text = ref('')
-const password = ref('')
-const content = ref('')
-</script>
 ```
 :::
 
@@ -69,12 +71,6 @@ const content = ref('')
   <TuffInput v-model="readonlyValue" readonly placeholder="只读" />
   <TuffInput v-model="disabledValue" disabled placeholder="禁用" />
 </template>
-
-<script setup>
-import { ref } from 'vue'
-const readonlyValue = ref('readonly')
-const disabledValue = ref('disabled')
-</script>
 ```
 :::
 
@@ -91,11 +87,6 @@ const disabledValue = ref('disabled')
 <template>
   <TuffInput v-model="clearableValue" clearable placeholder="可清空" />
 </template>
-
-<script setup>
-import { ref } from 'vue'
-const clearableValue = ref('hello')
-</script>
 ```
 :::
 
@@ -132,12 +123,6 @@ const clearableValue = ref('hello')
     </template>
   </TuffInput>
 </template>
-
-<script setup>
-import { ref } from 'vue'
-const withPrefix = ref('')
-const withSuffix = ref('')
-</script>
 ```
 :::
 
@@ -171,17 +156,3 @@ const withSuffix = ref('')
 |------|------|
 | prefix | 前缀内容 |
 | suffix | 后缀内容 |
-
-<script setup>
-import { ref } from 'vue'
-
-const value = ref('')
-const text = ref('')
-const password = ref('')
-const content = ref('')
-const readonlyValue = ref('readonly')
-const disabledValue = ref('disabled')
-const clearableValue = ref('hello')
-const withPrefix = ref('')
-const withSuffix = ref('')
-</script>

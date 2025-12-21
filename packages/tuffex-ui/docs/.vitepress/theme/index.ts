@@ -52,6 +52,15 @@ import {
   TxEmpty,
   TxAgentsList,
   TxAgentItem,
+  TxStagger,
+  TxSortableList,
+  TxMarkdownView,
+  TxChatList,
+  TxChatMessage,
+  TxChatComposer,
+  TxTypingIndicator,
+  TxImageUploader,
+  TxImageGallery,
 } from '../../../packages/components/src'
 
 // 导入 Demo 容器组件
@@ -120,6 +129,15 @@ export default {
     app.component('TxEmpty', TxEmpty)
     app.component('TxAgentsList', TxAgentsList)
     app.component('TxAgentItem', TxAgentItem)
+    app.component('TxStagger', TxStagger)
+    app.component('TxSortableList', TxSortableList)
+    app.component('TxMarkdownView', TxMarkdownView)
+    app.component('TxChatList', TxChatList)
+    app.component('TxChatMessage', TxChatMessage)
+    app.component('TxChatComposer', TxChatComposer)
+    app.component('TxTypingIndicator', TxTypingIndicator)
+    app.component('TxImageUploader', TxImageUploader)
+    app.component('TxImageGallery', TxImageGallery)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)
