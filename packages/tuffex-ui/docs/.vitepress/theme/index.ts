@@ -32,6 +32,8 @@ import {
   TxSpinner,
   TxLoadingOverlay,
   TxSkeleton,
+  TxCardSkeleton,
+  TxListItemSkeleton,
   TxToastHost,
   TxGlassSurface,
   TxGradientBorder,
@@ -48,6 +50,8 @@ import {
   TxDropdownItem,
   TxContextMenu,
   TxEmpty,
+  TxAgentsList,
+  TxAgentItem,
 } from '../../../packages/components/src'
 
 // 导入 Demo 容器组件
@@ -94,6 +98,8 @@ export default {
     app.component('TxSpinner', TxSpinner)
     app.component('TxLoadingOverlay', TxLoadingOverlay)
     app.component('TxSkeleton', TxSkeleton)
+    app.component('TxCardSkeleton', TxCardSkeleton)
+    app.component('TxListItemSkeleton', TxListItemSkeleton)
     app.component('TxToastHost', TxToastHost)
     app.component('TxGlassSurface', TxGlassSurface)
     app.component('TxGradientBorder', TxGradientBorder)
@@ -112,6 +118,8 @@ export default {
     app.component('TxDropdownItem', TxDropdownItem)
     app.component('TxContextMenu', TxContextMenu)
     app.component('TxEmpty', TxEmpty)
+    app.component('TxAgentsList', TxAgentsList)
+    app.component('TxAgentItem', TxAgentItem)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)

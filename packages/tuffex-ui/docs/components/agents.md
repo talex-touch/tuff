@@ -1,0 +1,118 @@
+# Agents 智能体列表
+
+用于展示智能体列表（分组、选中、loading、badge）。这是一个纯展示组件，不包含执行/请求等业务逻辑。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const selectedId = ref<string | null>('chat')
+const loading = ref(false)
+
+const agents = [
+  {
+    id: 'chat',
+    name: 'Chat Agent',
+    description: 'General conversation assistant',
+    iconClass: 'i-carbon-chat',
+    badgeText: 6,
+  },
+  {
+    id: 'code',
+    name: 'Code Agent',
+    description: 'Code generation & refactor',
+    iconClass: 'i-carbon-code',
+    badgeText: 12,
+  },
+  {
+    id: 'search',
+    name: 'Search Agent',
+    description: 'Web search & citations',
+    iconClass: 'i-carbon-search',
+  },
+  {
+    id: 'disabled',
+    name: 'Disabled Agent',
+    description: 'Not available',
+    iconClass: 'i-carbon-bot',
+    disabled: true,
+  },
+]
+</script>
+
+## 基础用法
+
+<DemoBlock title="AgentsList">
+<template #preview>
+<div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
+  <div style="display: flex; gap: 8px;">
+    <TxButton @click="loading = !loading">Toggle loading</TxButton>
+  </div>
+
+  <div style="height: 360px;">
+    <TxAgentsList
+      :agents="agents"
+      :loading="loading"
+      :selected-id="selectedId"
+      @select="(id) => (selectedId = id)"
+    />
+  </div>
+</div>
+</template>
+
+<template #code>
+```vue
+&lt;script setup lang="ts"&gt;
+import { ref } from 'vue'
+
+const selectedId = ref<string | null>('chat')
+const loading = ref(false)
+const agents = [
+  { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
+  { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
+  { id: 'disabled', name: 'Disabled Agent', disabled: true },
+]
+&lt;/script&gt;
+
+<template>
+  <TxAgentsList
+    :agents="agents"
+    :loading="loading"
+    :selected-id="selectedId"
+    @select="(id) => (selectedId = id)"
+  />
+</template>
+```
+</template>
+</DemoBlock>
+
+## API
+
+### TxAgentsList
+
+#### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `agents` | `AgentItemProps[]` | - | 数据源 |
+| `selectedId` | `string \| null` | `null` | 当前选中 |
+| `loading` | `boolean` | `false` | 是否显示 loading |
+
+#### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | `(id: string)` | 点击条目触发 |
+
+### TxAgentItem
+
+#### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `id` | `string` | - | 唯一标识 |
+| `name` | `string` | - | 标题 |
+| `description` | `string` | `''` | 描述 |
+| `iconClass` | `string` | `'i-carbon-bot'` | 图标 class |
+| `selected` | `boolean` | `false` | 是否选中 |
+| `disabled` | `boolean` | `false` | 是否禁用 |
+| `badgeText` | `string \| number` | `''` | badge 文本 |
