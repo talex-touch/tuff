@@ -47,6 +47,46 @@ const loading = ref(true)
 </template>
 </DemoBlock>
 
+## 常见布局骨架
+
+<DemoBlock title="List item skeleton">
+<template #preview>
+<div style="width: 360px;">
+  <TxListItemSkeleton />
+  <TxListItemSkeleton />
+  <TxListItemSkeleton />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxListItemSkeleton />
+  <TxListItemSkeleton />
+  <TxListItemSkeleton />
+</template>
+```
+</template>
+</DemoBlock>
+
+<DemoBlock title="Card skeleton">
+<template #preview>
+<div style="width: 360px;">
+  <TxCardSkeleton />
+  <TxCardSkeleton />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxCardSkeleton />
+  <TxCardSkeleton />
+</template>
+```
+</template>
+</DemoBlock>
+
 ## API
 
 ### Props

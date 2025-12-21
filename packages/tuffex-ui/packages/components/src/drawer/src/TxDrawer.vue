@@ -182,7 +182,15 @@ onUnmounted(() => {
     .tx-drawer__mask {
       opacity: 1;
     }
+  }
 
+  &--visible#{&}--right {
+    .tx-drawer__panel {
+      transform: translateX(0);
+    }
+  }
+
+  &--visible#{&}--left {
     .tx-drawer__panel {
       transform: translateX(0);
     }
