@@ -11,4 +11,5 @@ TuffSelectItem.install = (app: App) => {
 }
 
 export { TuffSelect, TuffSelectItem }
+export { TuffSelect as TxSelect, TuffSelectItem as TxSelectItem }
 export default TuffSelect

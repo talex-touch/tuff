@@ -49,6 +49,8 @@
   "dependencies": {
     "@better-scroll/core": "^2.5.1",
     "@better-scroll/scroll-bar": "^2.5.1",
+    "@floating-ui/dom": "^1.6.13",
+    "@floating-ui/vue": "^1.1.9",
     "@vueuse/core": "^13.0.0",
     "v-wave": "^3.0.4"
   },

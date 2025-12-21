@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { computed, ref, onMounted, onBeforeUnmount, nextTick, provide } from 'vue'
+import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TuffSelect',
@@ -10,11 +11,15 @@ const props = withDefaults(
     modelValue?: string | number
     placeholder?: string
     disabled?: boolean
+    dropdownMaxHeight?: number
+    dropdownOffset?: number
   }>(),
   {
     modelValue: '',
     placeholder: '请选择',
     disabled: false,
+    dropdownMaxHeight: 280,
+    dropdownOffset: 6,
   }
 )
 
@@ -25,8 +30,32 @@ const emit = defineEmits<{
 
 const isOpen = ref(false)
 const selectRef = ref<HTMLElement | null>(null)
-const dropdownRef = ref<HTMLElement | null>(null)
 const selectedLabel = ref('')
+
+const dropdownRef = ref<HTMLElement | null>(null)
+const cleanupAutoUpdate = ref<(() => void) | null>(null)
+
+const optionLabelMap = ref(new Map<string | number, string>())
+
+const { floatingStyles, update } = useFloating(selectRef, dropdownRef, {
+  placement: 'bottom-start',
+  strategy: 'fixed',
+  middleware: [
+    offset(() => props.dropdownOffset),
+    flip({ padding: 8 }),
+    shift({ padding: 8 }),
+    size({
+      padding: 8,
+      apply({ rects, availableHeight, elements }) {
+        Object.assign(elements.floating.style, {
+          width: `${rects.reference.width}px`,
+          maxHeight: `${Math.min(availableHeight, props.dropdownMaxHeight)}px`,
+          overflowY: 'auto',
+        })
+      },
+    }),
+  ],
+})
 
 const currentValue = computed({
   get: () => props.modelValue,
@@ -51,23 +80,81 @@ function handleSelect(value: string | number, label: string) {
   close()
 }
 
-function handleClickOutside(event: MouseEvent) {
-  if (!selectRef.value?.contains(event.target as Node)) {
-    close()
+function registerOption(value: string | number, label: string) {
+  optionLabelMap.value.set(value, label)
+  if (currentValue.value === value && !selectedLabel.value) {
+    selectedLabel.value = label
   }
+}
+
+function handleClickOutside(event: MouseEvent) {
+  if (!isOpen.value) return
+
+  const target = event.target as Node | null
+  const inReference = !!selectRef.value && !!target && selectRef.value.contains(target)
+  const inFloating = !!dropdownRef.value && !!target && dropdownRef.value.contains(target)
+  if (!inReference && !inFloating) close()
+}
+
+function handleEsc(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  if (!isOpen.value) return
+  close()
+}
+
+async function updatePosition() {
+  await update()
 }
 
 provide('tuffSelect', {
   currentValue,
   handleSelect,
+  registerOption,
 })
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('keydown', handleEsc)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('keydown', handleEsc)
+})
+
+watch(
+  () => props.modelValue,
+  (val) => {
+    currentValue.value = val as any
+    const label = optionLabelMap.value.get(val as any)
+    if (label) selectedLabel.value = label
+  },
+  { immediate: true }
+)
+
+watch(
+  isOpen,
+  async (open) => {
+    if (!open) {
+      cleanupAutoUpdate.value?.()
+      cleanupAutoUpdate.value = null
+      return
+    }
+
+    await nextTick()
+    await updatePosition()
+
+    if (selectRef.value && dropdownRef.value) {
+      cleanupAutoUpdate.value?.()
+      cleanupAutoUpdate.value = autoUpdate(selectRef.value, dropdownRef.value, () => updatePosition())
+    }
+  },
+  { flush: 'post' }
+)
+
+onBeforeUnmount(() => {
+  cleanupAutoUpdate.value?.()
+  cleanupAutoUpdate.value = null
 })
 </script>
 
@@ -82,22 +169,29 @@ onBeforeUnmount(() => {
       },
     ]"
   >
-    <div class="tx-select__trigger" @click="toggle">
-      <span :class="['tx-select__value', { 'is-placeholder': !selectedLabel }]">
+    <div class="tuff-select__trigger" @click="toggle">
+      <span :class="['tuff-select__value', { 'is-placeholder': !selectedLabel }]">
         {{ selectedLabel || placeholder }}
       </span>
-      <span class="tx-select__arrow">
+      <span class="tuff-select__arrow">
         <svg viewBox="0 0 24 24" width="16" height="16">
           <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z"/>
         </svg>
       </span>
     </div>
-    
-    <Transition name="tx-select-dropdown">
-      <div v-show="isOpen" ref="dropdownRef" class="tx-select__dropdown">
-        <slot />
-      </div>
-    </Transition>
+
+    <Teleport to="body">
+      <Transition name="tuff-select-dropdown">
+        <div
+          v-show="isOpen"
+          ref="dropdownRef"
+          class="tuff-select__dropdown"
+          :style="floatingStyles"
+        >
+          <slot />
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -145,9 +239,6 @@ onBeforeUnmount(() => {
   }
 
   &__dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
     z-index: 1000;
     width: 100%;
     padding: 4px 0;
@@ -155,6 +246,9 @@ onBeforeUnmount(() => {
     border: 1px solid var(--tx-border-color-light, #e4e7ed);
     border-radius: 4px;
     box-shadow: var(--tx-box-shadow-light, 0 2px 12px rgba(0, 0, 0, 0.1));
+
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
   }
 
   &.is-open {

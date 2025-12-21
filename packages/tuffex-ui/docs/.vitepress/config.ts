@@ -88,6 +88,7 @@ export default defineConfig({
             { text: '网格布局 GridLayout', link: '/components/grid-layout' },
             { text: '布局骨架 LayoutSkeleton', link: '/components/layout-skeleton' },
             { text: '卡片项 CardItem', link: '/components/card-item' },
+            { text: '标签页 Tabs', link: '/components/tabs' },
           ],
         },
         {
