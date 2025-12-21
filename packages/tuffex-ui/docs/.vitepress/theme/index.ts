@@ -42,6 +42,12 @@ import {
   TxTabs,
   TxTabItem,
   TxTabHeader,
+  TxTooltip,
+  TxPopover,
+  TxDropdownMenu,
+  TxDropdownItem,
+  TxContextMenu,
+  TxEmpty,
 } from '../../../packages/components/src'
 
 // 导入 Demo 容器组件
@@ -99,6 +105,13 @@ export default {
     app.component('TxTabs', TxTabs)
     app.component('TxTabItem', TxTabItem)
     app.component('TxTabHeader', TxTabHeader)
+
+    app.component('TxTooltip', TxTooltip)
+    app.component('TxPopover', TxPopover)
+    app.component('TxDropdownMenu', TxDropdownMenu)
+    app.component('TxDropdownItem', TxDropdownItem)
+    app.component('TxContextMenu', TxContextMenu)
+    app.component('TxEmpty', TxEmpty)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)

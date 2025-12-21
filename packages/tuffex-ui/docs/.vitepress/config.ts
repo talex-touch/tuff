@@ -66,18 +66,22 @@ export default defineConfig({
           text: '基础组件',
           items: [
             { text: '按钮 Button', link: '/components/button' },
-            { text: '标签 Tag', link: '/components/tag' },
-            { text: '状态徽标 StatusBadge', link: '/components/status-badge' },
+            { text: '图标 Icon', link: '/components/icon' },
+            { text: '开关 Switch', link: '/components/switch' },
+            { text: '选择器 Select', link: '/components/select' },
+            { text: '滑块 Slider', link: '/components/slider' },
+            { text: '文字提示 Tooltip', link: '/components/tooltip' },
+            { text: '弹出层 Popover', link: '/components/popover' },
+            { text: '下拉菜单 DropdownMenu', link: '/components/dropdown-menu' },
+            { text: '右键菜单 ContextMenu', link: '/components/context-menu' },
+            { text: '空状态 Empty', link: '/components/empty' },
           ],
         },
         {
           text: '表单组件',
           items: [
             { text: '输入框 Input', link: '/components/input' },
-            { text: '开关 Switch', link: '/components/switch' },
             { text: '复选框 Checkbox', link: '/components/checkbox' },
-            { text: '选择器 Select', link: '/components/select' },
-            { text: '滑块 Slider', link: '/components/slider' },
           ],
         },
         {

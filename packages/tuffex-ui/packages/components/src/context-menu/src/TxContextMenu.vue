@@ -24,7 +24,10 @@ const open = computed({
   get: () => !!props.modelValue,
   set: (v) => {
     emit('update:modelValue', v)
-    emit(v ? 'open' : 'close', { x: props.x, y: props.y } as any)
+    if (v)
+      emit('open', { x: props.x, y: props.y })
+    else
+      emit('close')
   },
 })
 
