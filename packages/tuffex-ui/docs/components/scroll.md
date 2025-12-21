@@ -4,21 +4,11 @@
 
 ## 基础用法
 
+<DemoBlock title="Scroll">
+<template #preview>
 <div class="demo-container" style="height: 220px;">
-  <TouchScroll>
-    <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-      <div v-for="i in 24" :key="i" class="demo-scroll-item">
-        Row {{ i }}
-      </div>
-    </div>
-  </TouchScroll>
-</div>
-
-::: details 查看代码
-```vue
-<template>
-  <div style="height: 220px;">
-    <TouchScroll>
+  <div style="height: 100%;">
+    <TouchScroll style="height: 100%;">
       <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
         <div v-for="i in 24" :key="i" class="demo-scroll-item">
           Row {{ i }}
@@ -26,45 +16,37 @@
       </div>
     </TouchScroll>
   </div>
+</div>
 </template>
 
-<script setup>
-import { TouchScroll } from '@talex-touch/tuff-ui'
-</script>
-
-<style scoped>
-.demo-scroll-item {
-  height: 32px;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
-  border-radius: 10px;
-  background: var(--tx-fill-color, #f5f7fa);
-}
-</style>
+<template #code>
+```vue
+<template>
+  <div style="height: 220px;">
+    <div style="height: 100%;">
+      <TouchScroll style="height: 100%;">
+        <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
+          <div v-for="i in 24" :key="i" class="demo-scroll-item">
+            Row {{ i }}
+          </div>
+        </div>
+      </TouchScroll>
+    </div>
+  </div>
+</template>
 ```
-:::
+</template>
+</DemoBlock>
 
 ## 使用原生滚动
 
 当你不需要 BetterScroll 行为时，可以切换为原生滚动（仍保持统一容器结构）。
 
+<DemoBlock title="Scroll (native)">
+<template #preview>
 <div class="demo-container" style="height: 220px;">
-  <TxScroll native>
-    <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-      <div v-for="i in 24" :key="i" class="demo-scroll-item">
-        Native Row {{ i }}
-      </div>
-    </div>
-  </TxScroll>
-</div>
-
-::: details 查看代码
-```vue
-<template>
-  <div style="height: 220px;">
-    <TxScroll native>
+  <div style="height: 100%;">
+    <TxScroll native style="height: 100%;">
       <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
         <div v-for="i in 24" :key="i" class="demo-scroll-item">
           Native Row {{ i }}
@@ -72,13 +54,27 @@ import { TouchScroll } from '@talex-touch/tuff-ui'
       </div>
     </TxScroll>
   </div>
+</div>
 </template>
 
-<script setup>
-import { TxScroll } from '@talex-touch/tuff-ui'
-</script>
+<template #code>
+```vue
+<template>
+  <div style="height: 220px;">
+    <div style="height: 100%;">
+      <TxScroll native style="height: 100%;">
+        <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
+          <div v-for="i in 24" :key="i" class="demo-scroll-item">
+            Native Row {{ i }}
+          </div>
+        </div>
+      </TxScroll>
+    </div>
+  </div>
+</template>
 ```
-:::
+</template>
+</DemoBlock>
 
 ## API
 

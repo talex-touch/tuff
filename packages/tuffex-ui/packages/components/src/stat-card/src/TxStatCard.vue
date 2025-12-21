@@ -18,7 +18,7 @@ const displayValue = computed(() => {
 
 <template>
   <div
-    class="tx-stat-card"
+    class="tx-stat-card fake-background"
     :class="{ 'tx-stat-card--clickable': clickable }"
     role="group"
     aria-label="Stat card"
@@ -50,7 +50,10 @@ const displayValue = computed(() => {
   box-sizing: border-box;
   overflow: hidden;
 
-  background: color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent);
+  --fake-color: var(--tx-bg-color, #fff);
+  --fake-opacity: 0.7;
+
+  background: transparent;
   border: 1px solid var(--tx-border-color-lighter, #eee);
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
@@ -71,8 +74,18 @@ const displayValue = computed(() => {
 }
 
 .tx-stat-card--clickable:hover {
-  transform: translateY(-1px);
+  cursor: pointer;
+  --fake-opacity: 0.75;
   border-color: var(--tx-border-color, #dcdfe6);
+}
+
+.tx-stat-card--clickable:hover .tx-stat-card__decoration {
+  transform: scale(1.25);
+  filter: blur(30px) brightness(150%) saturate(200%);
+}
+
+.tx-stat-card--clickable:hover .tx-stat-card__icon {
+  transform: scale(1.25) rotate(10deg) translate(-10%, -10%);
 }
 
 .tx-stat-card__content {
@@ -99,6 +112,7 @@ const displayValue = computed(() => {
   z-index: 1;
   font-size: 28px;
   color: var(--tx-text-color-secondary, #909399);
+  transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 .tx-stat-card__decoration {
@@ -106,6 +120,9 @@ const displayValue = computed(() => {
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  transform: scale(1.5);
+  filter: blur(20px) brightness(120%) saturate(180%);
+  transition: transform 0.35s cubic-bezier(0.33, 1, 0.68, 1), filter 0.35s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
 .tx-stat-card__decoration-icon {

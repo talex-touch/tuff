@@ -32,13 +32,15 @@ const emit = defineEmits<BlockLineEmits>()
  * @param event - The mouse event
  */
 function handleClick(event: MouseEvent): void {
+  if (!props.link)
+    return
   emit('click', event)
 }
 </script>
 
 <template>
   <div
-    class="tx-block-line"
+    class="tx-block-line fake-background index-fix"
     :class="{ 'tx-block-line--link': link }"
     role="button"
     :tabindex="link ? 0 : undefined"
@@ -49,6 +51,9 @@ function handleClick(event: MouseEvent): void {
     <div v-if="!link" class="tx-block-line__description">
       <slot name="description">{{ description }}</slot>
     </div>
+    <div v-else class="tx-block-line__link-slot">
+      <slot name="description" />
+    </div>
   </div>
 </template>
 
@@ -56,49 +61,61 @@ function handleClick(event: MouseEvent): void {
 .tx-block-line {
   position: relative;
   display: flex;
-  padding: 6px 18px 2px 18px;
-  height: 24px;
-  background: var(--tx-fill-color-light, #f5f7fa);
+  gap: 12px;
+  align-items: flex-start;
+  padding: 2px 18px 2px 50px;
+  min-height: 24px;
+  border-radius: 12px;
+  --fake-color: var(--tx-fill-color, #ebeef5);
+  --fake-opacity: 0.45;
+  background: transparent;
 
   &__title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &__description {
-    position: absolute;
-    left: 120px;
-    opacity: 0.5;
+    width: 120px;
     font-size: 13px;
+    font-weight: 600;
     color: var(--tx-text-color-secondary, #909399);
   }
 
-  &--link {
-    display: flex;
+  &__description {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre-line;
+    color: var(--tx-text-color-secondary, #909399);
+  }
+
+  &__link-slot {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tx-color-primary, #409eff);
+    display: inline-flex;
     align-items: center;
-    padding: 1px 12px;
-    font-size: 12px;
-    color: var(--tx-color-primary-dark-2, #337ecc);
+    gap: 6px;
+  }
+
+  &--link {
     cursor: pointer;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    cursor: pointer;
+    --fake-color: var(--tx-fill-color, #ebeef5);
+    --fake-opacity: 0.4;
 
     .tx-block-line__title {
-      position: relative;
-      padding: 2px 6px;
-      left: 32px;
-      font-size: 13px;
-      width: max-content;
-      border-radius: 4px;
-      transition: background-color 0.2s ease;
-    }
-
-    &:hover .tx-block-line__title {
-      background-color: var(--tx-fill-color, #ebeef5);
+      width: auto;
+      min-width: 120px;
+      opacity: 0.7;
+      color: var(--tx-text-color-primary, #303133);
     }
 
     &:focus-visible {
       outline: 2px solid var(--tx-color-primary);
       outline-offset: -2px;
+    }
+
+    &:hover {
+      text-decoration: underline;
     }
   }
 }

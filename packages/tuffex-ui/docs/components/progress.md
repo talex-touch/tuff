@@ -2,11 +2,15 @@
 
 进度条组件，用于展示操作进度，支持多种状态。
 
+<script setup lang="ts">
+const format = (percentage: number) => `进度 ${percentage}%`
+</script>
+
 ## 基础用法
 
 基础的进度条用法。
 
-<div class="group">
+<div style="display: flex; flex-direction: column; gap: 16px;">
   <TuffProgress :percentage="50" />
   <TuffProgress :percentage="75" />
   <TuffProgress :percentage="100" />
@@ -28,7 +32,7 @@
 
 进度条可以展示不同状态。
 
-<div class="group">
+<div style="display: flex; flex-direction: column; gap: 16px;">
   <TuffProgress :percentage="100" status="success" />
   <TuffProgress :percentage="70" status="warning" />
   <TuffProgress :percentage="50" status="error" />
@@ -50,7 +54,7 @@
 
 当进度未知时，可以使用不确定模式。
 
-<div class="group">
+<div style="display: flex; flex-direction: column; gap: 16px;">
   <TuffProgress indeterminate />
 </div>
 
@@ -68,7 +72,7 @@
 
 可以自定义进度条高度。
 
-<div class="group">
+<div style="display: flex; flex-direction: column; gap: 16px;">
   <TuffProgress :percentage="60" :stroke-width="10" />
   <TuffProgress :percentage="60" :stroke-width="18" />
 </div>
@@ -88,7 +92,7 @@
 
 可以自定义进度条文本。
 
-<div class="group">
+<div style="display: flex; flex-direction: column; gap: 16px;">
   <TuffProgress :percentage="60" :format="format" />
   <TuffProgress :percentage="100" :show-text="false" />
 </div>
@@ -100,10 +104,6 @@
   <TuffProgress :percentage="60" :format="format" />
   <TuffProgress :percentage="100" :show-text="false" />
 </template>
-
-<script setup>
-const format = (percentage) => `进度 ${percentage}%`
-</script>
 ```
 
 :::
@@ -121,15 +121,3 @@ const format = (percentage) => `进度 ${percentage}%`
 | indeterminate | 是否为不确定进度 | `boolean` | `false` |
 | format | 自定义文本格式 | `(percentage: number) => string` | - |
 
-<script setup>
-import { ref } from 'vue'
-const format = (percentage) => `进度 ${percentage}%`
-</script>
-
-<style scoped>
-.group {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-</style>

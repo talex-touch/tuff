@@ -33,13 +33,6 @@ const visible4 = ref(false)
     <p>抽屉内容</p>
   </TxDrawer>
 </template>
-
-<script setup>
-import { ref } from 'vue'
-import { TxDrawer, TxButton } from '@talex-touch/tuff-ui'
-
-const visible = ref(false)
-</script>
 ```
 :::
 
@@ -165,16 +158,6 @@ const visible = ref(false)
     <p>内容</p>
   </TxDrawer>
 </template>
-
-<script setup>
-function handleOpen() {
-  console.log('抽屉已打开')
-}
-
-function handleClose() {
-  console.log('抽屉已关闭')
-}
-</script>
 ```
 :::
 

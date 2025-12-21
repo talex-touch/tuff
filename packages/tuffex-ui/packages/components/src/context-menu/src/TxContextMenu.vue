@@ -141,7 +141,8 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 .tx-context-menu__trigger {
-  display: inline-block;
+  display: block;
+  width: 100%;
 }
 
 .tx-context-menu {

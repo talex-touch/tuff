@@ -23,10 +23,6 @@
   <TxStatusBadge text="信息" status="info" />
   <TxStatusBadge text="静默" status="muted" />
 </template>
-
-<script setup>
-import { TxStatusBadge } from '@talex-touch/tuff-ui'
-</script>
 ```
 :::
 
@@ -177,16 +173,6 @@ import { TxStatusBadge } from '@talex-touch/tuff-ui'
     </div>
   </div>
 </template>
-
-<script setup>
-import { TxStatusBadge } from '@talex-touch/tuff-ui'
-
-const permissions = [
-  { name: '相机', status: 'granted', statusText: '已允许' },
-  { name: '麦克风', status: 'denied', statusText: '已阻止' },
-  { name: '位置', status: 'notDetermined', statusText: '待询问' },
-]
-</script>
 ```
 :::
 

@@ -62,10 +62,6 @@ watch(
 
 <template>
   <div class="tx-slider" :class="{ 'is-disabled': disabled }">
-    <div class="tx-slider__track" aria-hidden="true">
-      <div class="tx-slider__range" :style="{ width: `${percent}%` }" />
-    </div>
-
     <input
       ref="inputRef"
       class="tx-slider__input"
@@ -79,6 +75,10 @@ watch(
       @change="onChange"
     />
 
+    <div class="tx-slider__track" aria-hidden="true">
+      <div class="tx-slider__range" :style="{ width: `${percent}%` }" />
+    </div>
+
     <div v-if="showValue" class="tx-slider__value">{{ displayValue }}</div>
   </div>
 </template>
@@ -88,11 +88,22 @@ watch(
   --tx-slider-height: 16px;
   --tx-slider-track-height: 4px;
   --tx-slider-thumb-size: 14px;
+  --tx-slider-thumb-shadow: 0 0 0 6px color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent);
 
   display: inline-flex;
   align-items: center;
   gap: 10px;
   width: 100%;
+
+  &:hover {
+    --tx-slider-track-height: 8px;
+    --tx-slider-thumb-size: 18px;
+  }
+
+  &:active {
+    --tx-slider-track-height: 10px;
+    --tx-slider-thumb-size: 20px;
+  }
 
   &__track {
     position: relative;
@@ -100,6 +111,7 @@ watch(
     height: var(--tx-slider-height);
     display: flex;
     align-items: center;
+    pointer-events: none;
   }
 
   &__track::before {
@@ -125,12 +137,39 @@ watch(
   }
 
   &__input {
-    position: absolute;
-    inset: 0;
+    flex: 1;
     width: 100%;
-    height: 100%;
-    opacity: 0;
+    height: var(--tx-slider-height);
+    margin: 0;
     cursor: pointer;
+    background: transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    outline: none;
+    position: relative;
+    z-index: 1;
+
+    &::-webkit-slider-runnable-track {
+      height: var(--tx-slider-height);
+      background: transparent;
+    }
+
+    &::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: var(--tx-slider-thumb-size);
+      height: var(--tx-slider-thumb-size);
+      border-radius: 999px;
+      background: var(--tx-color-primary, #409eff);
+      border: 2px solid color-mix(in srgb, var(--tx-bg-color, #fff) 85%, transparent);
+      box-shadow: var(--tx-slider-thumb-shadow);
+      margin-top: calc((var(--tx-slider-height) - var(--tx-slider-thumb-size)) / 2);
+      transition: width 0.18s ease, height 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    &:active::-webkit-slider-thumb {
+      box-shadow: 0 0 0 10px color-mix(in srgb, var(--tx-color-primary, #409eff) 25%, transparent);
+    }
   }
 
   &__value {

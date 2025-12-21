@@ -86,12 +86,6 @@ Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适
     <p>点击整个卡片区域都会触发事件</p>
   </TxCard>
 </template>
-
-<script setup>
-const handleCardClick = () => {
-  console.log('卡片被点击了')
-}
-</script>
 ```
 
 ## 加载状态
@@ -105,17 +99,6 @@ const handleCardClick = () => {
     <p>请稍候，正在获取最新数据</p>
   </TxCard>
 </template>
-
-<script setup>
-import { ref } from 'vue'
-
-const isLoading = ref(true)
-
-// 模拟数据加载
-setTimeout(() => {
-  isLoading.value = false
-}, 2000)
-</script>
 ```
 
 ## 卡片尺寸
@@ -289,14 +272,5 @@ setTimeout(() => {
     </TxCard>
   </div>
 </template>
-
-<style scoped>
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-}
-</style>
-```
 
 TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。

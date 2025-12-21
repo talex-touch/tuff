@@ -15,10 +15,6 @@
 <template>
   <TxProgressBar :percentage="50" />
 </template>
-
-<script setup>
-import { TxProgressBar } from '@talex-touch/tuff-ui'
-</script>
 ```
 :::
 
@@ -58,20 +54,6 @@ import { TxProgressBar } from '@talex-touch/tuff-ui'
 <template>
   <TxProgressBar :percentage="progress" show-text />
 </template>
-
-<script setup>
-import { ref } from 'vue'
-
-const progress = ref(0)
-
-// 模拟进度
-const interval = setInterval(() => {
-  progress.value += 10
-  if (progress.value >= 100) {
-    clearInterval(interval)
-  }
-}, 500)
-</script>
 ```
 :::
 
@@ -166,39 +148,6 @@ const interval = setInterval(() => {
     />
   </div>
 </template>
-
-<script setup>
-import { ref, computed } from 'vue'
-import { TxProgressBar } from '@talex-touch/tuff-ui'
-
-const uploading = ref(false)
-const progress = ref(0)
-const uploadError = ref(false)
-
-const statusMessage = computed(() => {
-  if (uploadError.value) return '上传失败'
-  if (progress.value === 100) return '完成！'
-  if (progress.value === 0) return '准备中...'
-  return `${progress.value}%`
-})
-
-async function handleFileSelect(event) {
-  const file = event.target.files[0]
-  if (!file) return
-  
-  uploading.value = true
-  progress.value = 0
-  uploadError.value = false
-  
-  try {
-    await uploadFile(file, (p) => {
-      progress.value = p
-    })
-  } catch (e) {
-    uploadError.value = true
-  }
-}
-</script>
 ```
 
 ## 下载进度示例

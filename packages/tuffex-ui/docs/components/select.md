@@ -15,7 +15,7 @@ const value4 = ref('option18')
 
 <DemoBlock title="Select">
 <template #preview>
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
   <TuffSelect v-model="value1" placeholder="请选择">
     <TuffSelectItem value="option1" label="选项 1" />
     <TuffSelectItem value="option2" label="选项 2" />
@@ -41,7 +41,7 @@ const value4 = ref('option18')
 
 <DemoBlock title="Select (disabled)">
 <template #preview>
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
   <TuffSelect v-model="value2" placeholder="禁用状态" disabled>
     <TuffSelectItem value="option1" label="选项 1" />
   </TuffSelect>
@@ -63,7 +63,7 @@ const value4 = ref('option18')
 
 <DemoBlock title="Select (disabled option)">
 <template #preview>
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
   <TuffSelect v-model="value3" placeholder="请选择">
     <TuffSelectItem value="option1" label="可选项 1" />
     <TuffSelectItem value="option2" label="禁用选项" disabled />
@@ -89,7 +89,7 @@ const value4 = ref('option18')
 
 <DemoBlock title="Select (scrollable dropdown)">
 <template #preview>
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
   <TuffSelect v-model="value4" placeholder="请选择" :dropdown-max-height="220">
     <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
   </TuffSelect>
@@ -133,13 +133,3 @@ const value4 = ref('option18')
 | value | 选项值 | `string \| number` | - |
 | label | 选项标签 | `string` | - |
 | disabled | 是否禁用 | `boolean` | `false` |
-
-<style scoped>
-.group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  max-width: 300px;
-}
-</style>

@@ -30,6 +30,9 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxLayoutSkeleton 布局骨架](./layout-skeleton.md)** - 通用布局骨架占位
 - **[TxCardItem 卡片项](./card-item.md)** - 左侧头像/图标，右侧标题与描述，支持右侧操作区
 - **[TxTabs 标签页](./tabs.md)** - 左侧导航 Tabs（Windows 风格）
+- **[TxAgentsList 智能体列表](./agents.md)** - 常见智能体列表/分组
+- **[TxStagger 依次进入](./stagger.md)** - 列表依次进入/离开动画
+- **[TxSortableList 拖拽排序](./sortable-list.md)** - 可拖拽排序列表
 
 ## 反馈组件
 
@@ -40,6 +43,12 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxSkeleton 骨架屏](./skeleton.md)** - 加载占位骨架
 - **[TxToast 提示](./toast.md)** - 轻量通知提示
 - **[TxStatCard 指标卡片](./stat-card.md)** - 指标展示卡片
+- **[TxMarkdownView Markdown 渲染](./markdown-view.md)** - Markdown 渲染（默认 sanitize）
+- **[TxChatList 消息列表](./chat.md)** - AI 消息列表/气泡
+- **[TxChatComposer 消息输入](./chat-composer.md)** - 消息输入/发送
+- **[TxTypingIndicator 打字中](./typing-indicator.md)** - AI 回复中提示
+- **[TxImageUploader 图片上传](./image-uploader.md)** - 图片选择/预览/删除
+- **[TxImageGallery 图片预览](./image-gallery.md)** - 网格 + Modal 预览
 
 ## 覆盖层组件
 
@@ -64,8 +73,4 @@ npm install @talex-touch/tuff-ui
   <TxTag label="新" color="var(--tx-color-success)" />
   <TxStatusBadge text="活跃" status="success" />
 </template>
-
-<script setup>
-import { TxButton, TxTag, TxStatusBadge } from '@talex-touch/tuff-ui'
-</script>
 ```

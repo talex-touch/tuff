@@ -33,6 +33,7 @@ const open = computed({
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
+const lastOpenedAt = ref(0)
 
 const { floatingStyles, update } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),
@@ -58,6 +59,8 @@ const { floatingStyles, update } = useFloating(referenceRef, floatingRef, {
 
 function toggle() {
   if (props.disabled) return
+  if (!open.value)
+    lastOpenedAt.value = performance.now()
   open.value = !open.value
 }
 
@@ -65,14 +68,28 @@ function close() {
   open.value = false
 }
 
-function handleOutside(e: MouseEvent) {
+function isEventInside(e: Event, el: HTMLElement | null): boolean {
+  if (!el)
+    return false
+  const anyE = e as any
+  const path: EventTarget[] | undefined = typeof anyE.composedPath === 'function' ? anyE.composedPath() : undefined
+  if (path && path.length)
+    return path.includes(el)
+  const t = (e.target ?? null) as Node | null
+  return !!t && el.contains(t)
+}
+
+function handleOutside(e: Event) {
   if (!props.closeOnClickOutside) return
   if (!open.value) return
 
-  const t = e.target as Node | null
-  const inRef = !!referenceRef.value && !!t && referenceRef.value.contains(t)
-  const inFloat = !!floatingRef.value && !!t && floatingRef.value.contains(t)
-  if (!inRef && !inFloat) close()
+  if (performance.now() - lastOpenedAt.value < 60)
+    return
+
+  const inRef = isEventInside(e, referenceRef.value)
+  const inFloat = isEventInside(e, floatingRef.value)
+  if (!inRef && !inFloat)
+    close()
 }
 
 function handleEsc(e: KeyboardEvent) {
@@ -90,6 +107,8 @@ watch(
       cleanupAutoUpdate.value = null
       return
     }
+
+    lastOpenedAt.value = performance.now()
     await nextTick()
     await update()
     if (referenceRef.value && floatingRef.value) {
@@ -101,12 +120,12 @@ watch(
 )
 
 onMounted(() => {
-  document.addEventListener('click', handleOutside)
+  document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', handleEsc)
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', handleOutside)
+  document.removeEventListener('pointerdown', handleOutside, true)
   document.removeEventListener('keydown', handleEsc)
   cleanupAutoUpdate.value?.()
   cleanupAutoUpdate.value = null
@@ -114,9 +133,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <span ref="referenceRef" class="tx-popover__reference" @click="toggle">
+  <div ref="referenceRef" class="tx-popover__reference" @click.capture="toggle">
     <slot name="reference" />
-  </span>
+  </div>
 
   <Teleport to="body">
     <Transition name="tx-popover">
@@ -131,6 +150,7 @@ onBeforeUnmount(() => {
 .tx-popover__reference {
   display: inline-flex;
   align-items: center;
+  width: fit-content;
 }
 
 .tx-popover {

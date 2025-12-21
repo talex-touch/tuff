@@ -6,19 +6,21 @@
 
 <DemoBlock title="ContextMenu">
 <template #preview>
-<TxContextMenu>
-  <template #trigger>
-    <div style="width: 100%; padding: 24px; border: 1px dashed var(--tx-border-color); border-radius: 12px; user-select: none;">
-      Right click here
-    </div>
-  </template>
+<div style="width: 520px;">
+  <TxContextMenu>
+    <template #trigger>
+      <div style="width: 100%; padding: 24px; border: 1px dashed var(--tx-border-color); border-radius: 12px; user-select: none;">
+        Right click here
+      </div>
+    </template>
 
-  <template #menu>
-    <TxDropdownItem @select="() => {}">Copy</TxDropdownItem>
-    <TxDropdownItem @select="() => {}">Paste</TxDropdownItem>
-    <TxDropdownItem danger @select="() => {}">Delete</TxDropdownItem>
-  </template>
-</TxContextMenu>
+    <template #menu>
+      <TxDropdownItem @select="() => {}">Copy</TxDropdownItem>
+      <TxDropdownItem @select="() => {}">Paste</TxDropdownItem>
+      <TxDropdownItem danger @select="() => {}">Delete</TxDropdownItem>
+    </template>
+  </TxContextMenu>
+</div>
 </template>
 
 <template #code>

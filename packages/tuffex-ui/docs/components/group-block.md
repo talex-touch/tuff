@@ -2,21 +2,47 @@
 
 用于组织相关内容的可折叠分组容器，带有平滑动画效果。
 
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const notifications = ref(true)
+const language = ref<'en' | 'zh'>('en')
+
+const enabled = ref(false)
+const dummy = ref(false)
+</script>
+
 ## 基础用法
 
-```vue
-<template>
-  <TxGroupBlock 
-    name="通用设置" 
-    icon="i-carbon-settings" 
+<DemoBlock title="GroupBlock">
+<template #preview>
+<div style="width: 560px;">
+  <TxGroupBlock
+    name="通用设置"
+    icon="i-carbon-settings"
     description="配置基本选项"
   >
-    <TxBlockSwitch 
-      v-model="notifications" 
-      title="通知" 
-      description="启用推送通知" 
-      icon="i-carbon-notification" 
+    <TxBlockSwitch
+      v-model="notifications"
+      title="通知"
+      description="启用推送通知"
+      icon="i-carbon-notification"
     />
+    <TxBlockSlot title="语言" description="选择显示语言" icon="i-carbon-translate">
+      <select v-model="language" style="padding: 6px 10px; border-radius: 10px; border: 1px solid var(--tx-border-color); background: var(--tx-fill-color-blank);">
+        <option value="en">English</option>
+        <option value="zh">中文</option>
+      </select>
+    </TxBlockSlot>
+  </TxGroupBlock>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxGroupBlock name="通用设置" icon="i-carbon-settings" description="配置基本选项">
+    <TxBlockSwitch v-model="notifications" title="通知" description="启用推送通知" icon="i-carbon-notification" />
     <TxBlockSlot title="语言" description="选择显示语言" icon="i-carbon-translate">
       <select v-model="language">
         <option value="en">English</option>
@@ -25,20 +51,25 @@
     </TxBlockSlot>
   </TxGroupBlock>
 </template>
-
-<script setup>
-import { ref } from 'vue'
-import { TxGroupBlock, TxBlockSwitch, TxBlockSlot } from '@talex-touch/tuff-ui'
-
-const notifications = ref(true)
-const language = ref('en')
-</script>
 ```
+</template>
+</DemoBlock>
 
 ## 初始折叠
 
 使用 `shrink` 属性使分组初始为折叠状态。
 
+
+<DemoBlock title="GroupBlock (shrink)">
+<template #preview>
+<div style="width: 560px;">
+  <TxGroupBlock name="高级设置" icon="i-carbon-tool-kit" shrink>
+    <div style="padding: 12px;">高级内容</div>
+  </TxGroupBlock>
+</div>
+</template>
+
+<template #code>
 ```vue
 <template>
   <TxGroupBlock name="高级设置" icon="i-carbon-tool-kit" shrink>
@@ -46,11 +77,24 @@ const language = ref('en')
   </TxGroupBlock>
 </template>
 ```
+</template>
+</DemoBlock>
 
 ## 展开填充
 
 使用 `expandFill` 在展开时更改图标样式。
 
+
+<DemoBlock title="GroupBlock (expandFill)">
+<template #preview>
+<div style="width: 560px;">
+  <TxGroupBlock name="功能" icon="i-carbon-star" expand-fill>
+    <div style="padding: 12px;">内容</div>
+  </TxGroupBlock>
+</div>
+</template>
+
+<template #code>
 ```vue
 <template>
   <TxGroupBlock name="功能" icon="i-carbon-star" expand-fill>
@@ -58,6 +102,8 @@ const language = ref('en')
   </TxGroupBlock>
 </template>
 ```
+</template>
+</DemoBlock>
 
 ---
 
@@ -72,10 +118,6 @@ const language = ref('en')
   <TxBlockLine title="版本" description="1.0.0" />
   <TxBlockLine title="构建日期" description="2024.01.15" />
 </template>
-
-<script setup>
-import { TxBlockLine } from '@talex-touch/tuff-ui'
-</script>
 ```
 
 ## 链接样式
@@ -110,13 +152,6 @@ import { TxBlockLine } from '@talex-touch/tuff-ui'
     </select>
   </TxBlockSlot>
 </template>
-
-<script setup>
-import { ref } from 'vue'
-import { TxBlockSlot } from '@talex-touch/tuff-ui'
-
-const theme = ref('auto')
-</script>
 ```
 
 ## 自定义标签
@@ -141,23 +176,26 @@ const theme = ref('auto')
 
 ## 基础用法
 
-```vue
-<template>
-  <TxBlockSwitch 
-    v-model="enabled" 
-    title="深色模式" 
-    description="启用深色主题" 
-    icon="i-carbon-moon" 
+<DemoBlock title="BlockSwitch">
+<template #preview>
+<div style="width: 560px;">
+  <TxBlockSwitch
+    v-model="enabled"
+    title="深色模式"
+    description="启用深色主题"
+    icon="i-carbon-moon"
   />
+</div>
 </template>
 
-<script setup>
-import { ref } from 'vue'
-import { TxBlockSwitch } from '@talex-touch/tuff-ui'
-
-const enabled = ref(false)
-</script>
+<template #code>
+```vue
+<template>
+  <TxBlockSwitch v-model="enabled" title="深色模式" description="启用深色主题" icon="i-carbon-moon" />
+</template>
 ```
+</template>
+</DemoBlock>
 
 ## 禁用状态
 
@@ -177,18 +215,29 @@ const enabled = ref(false)
 
 显示为导航项而非开关。
 
+
+<DemoBlock title="BlockSwitch (guidance)">
+<template #preview>
+<div style="width: 560px;">
+  <TxBlockSwitch
+    v-model="dummy"
+    title="隐私设置"
+    description="管理您的隐私选项"
+    icon="i-carbon-security"
+    guidance
+    @click="() => {}"
+  />
+</div>
+</template>
+
+<template #code>
 ```vue
 <template>
-  <TxBlockSwitch 
-    v-model="dummy" 
-    title="隐私设置" 
-    description="管理您的隐私选项" 
-    icon="i-carbon-security" 
-    guidance 
-    @click="navigateToPrivacy" 
-  />
+  <TxBlockSwitch v-model="dummy" title="隐私设置" description="管理您的隐私选项" icon="i-carbon-security" guidance />
 </template>
 ```
+</template>
+</DemoBlock>
 
 ---
 

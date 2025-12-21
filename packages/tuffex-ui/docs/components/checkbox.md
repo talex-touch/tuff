@@ -16,7 +16,7 @@ const checked5 = ref(false)
 
 <DemoBlock title="Checkbox">
 <template #preview>
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
   <TxCheckbox v-model="checked1" label="选项 1" />
   <TxCheckbox v-model="checked2" label="选项 2" />
 </div>
@@ -35,7 +35,7 @@ const checked5 = ref(false)
 
 <DemoBlock title="Checkbox (disabled)">
 <template #preview>
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
   <TxCheckbox v-model="checked3" label="禁用" disabled />
   <TxCheckbox v-model="checked4" label="禁用且选中" disabled />
 </div>
@@ -54,7 +54,7 @@ const checked5 = ref(false)
 
 <DemoBlock title="Checkbox (slot)">
 <template #preview>
-<div class="group">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
   <TxCheckbox v-model="checked5">
     <span style="color: var(--tx-color-primary);">自定义标签</span>
   </TxCheckbox>
@@ -95,11 +95,3 @@ const checked5 = ref(false)
 |--------|------|
 | default | 自定义标签内容 |
 
-<style scoped>
-.group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-</style>
