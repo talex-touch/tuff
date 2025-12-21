@@ -13,6 +13,13 @@ export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
 export type StatusKey = 'granted' | 'denied' | 'notDetermined' | 'unsupported' | string
 
 /**
+ * OS/platform identifiers.
+ *
+ * @public
+ */
+export type TxOsType = 'macos' | 'windows' | 'linux'
+
+/**
  * Props interface for the TxStatusBadge component.
  *
  * @public
@@ -54,6 +61,18 @@ export interface StatusBadgeProps {
    * @default 'md'
    */
   size?: 'sm' | 'md'
+
+  /**
+   * Optional OS/platform marker.
+   * When provided, an OS icon will be rendered before the status icon.
+   */
+  os?: TxOsType
+
+  /**
+   * Render OS icon only (hide tone icon).
+   * @default false
+   */
+  osOnly?: boolean
 }
 
 /**

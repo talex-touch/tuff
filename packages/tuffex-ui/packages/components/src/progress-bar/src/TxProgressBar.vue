@@ -119,7 +119,7 @@ const percentageText = computed(() => {
   width: var(--tx-progress-width, 100%);
   height: var(--tx-progress-height, 5px);
   border-radius: 8px;
-  background-color: var(--tx-progress-color, var(--el-color-primary, #409eff));
+  background-color: var(--tx-progress-color, var(--tx-color-primary, #409eff));
   transition: all 0.25s ease;
 
   &__text {
@@ -138,13 +138,13 @@ const percentageText = computed(() => {
   &--error {
     height: 30px;
     border-radius: 0;
-    background-color: var(--tx-progress-color, var(--el-color-danger, #f56c6c));
+    background-color: var(--tx-progress-color, var(--tx-color-danger, #f56c6c));
   }
 
   &--success {
     height: 8px;
     border-radius: 0;
-    background-color: var(--tx-progress-color, var(--el-color-success, #67c23a));
+    background-color: var(--tx-progress-color, var(--tx-color-success, #67c23a));
   }
 
   &--determinate {

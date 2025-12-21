@@ -26,7 +26,10 @@
     "packages/**/*.vue",
     "docs/**/*.ts",
     "docs/**/*.d.ts",
-    "docs/**/*.vue"
+    "docs/**/*.vue",
+    "docs/.vitepress/**/*.ts",
+    "docs/.vitepress/**/*.d.ts",
+    "docs/.vitepress/**/*.vue"
   ],
   "exclude": [
     "dist",

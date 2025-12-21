@@ -100,11 +100,11 @@ function toggle(): void {
   user-select: none;
   border-radius: 12px;
   box-sizing: border-box;
-  background: var(--el-fill-color-dark, #f5f7fa);
+  background: var(--tx-fill-color-light, #f5f7fa);
   transition: background-color 0.25s ease;
 
   &:hover {
-    background: var(--el-fill-color, #f0f2f5);
+    background: var(--tx-fill-color, #f0f2f5);
   }
 
   &--disabled {
@@ -126,7 +126,7 @@ function toggle(): void {
 
   &__icon {
     font-size: 24px;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__label {
@@ -137,7 +137,7 @@ function toggle(): void {
     margin: 0;
     font-size: 14px;
     font-weight: 500;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__description {
@@ -145,7 +145,7 @@ function toggle(): void {
     font-size: 12px;
     font-weight: 400;
     opacity: 0.5;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
   }
 
   &__control {
@@ -160,12 +160,12 @@ function toggle(): void {
     padding: 0;
     border: none;
     border-radius: 12px;
-    background: var(--el-fill-color, #dcdfe6);
+    background: var(--tx-border-color, #dcdfe6);
     cursor: pointer;
     transition: all 0.25s ease;
 
     &:hover {
-      box-shadow: 0 0 16px 1px var(--el-color-primary-light-3);
+      box-shadow: 0 0 16px 1px var(--tx-color-primary-light-3, #79bbff);
     }
 
     &:active .tx-block-switch__thumb {
@@ -173,7 +173,7 @@ function toggle(): void {
     }
 
     &--active {
-      background: var(--el-color-primary, #409eff);
+      background: var(--tx-color-primary, #409eff);
 
       .tx-block-switch__thumb {
         left: calc(100% - 20px);
@@ -193,7 +193,7 @@ function toggle(): void {
     width: 18px;
     height: 18px;
     border-radius: 5px;
-    background: var(--el-text-color-secondary, #909399);
+    background: var(--tx-text-color-secondary, #909399);
     transition: all 0.25s ease;
   }
 
@@ -204,7 +204,7 @@ function toggle(): void {
     width: 32px;
     height: 32px;
     font-size: 20px;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
   }
 }
 </style>

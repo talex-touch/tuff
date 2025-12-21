@@ -81,6 +81,7 @@ export default defineConfig({
           text: '布局组件',
           items: [
             { text: '分组块 GroupBlock', link: '/components/group-block' },
+            { text: '滚动 Scroll', link: '/components/scroll' },
           ],
         },
         {

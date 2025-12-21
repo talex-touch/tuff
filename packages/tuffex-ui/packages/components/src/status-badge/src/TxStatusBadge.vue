@@ -34,11 +34,11 @@ const emit = defineEmits<StatusBadgeEmits>()
  * Mapping of status tones to their visual properties.
  */
 const toneMap: Record<StatusTone, ToneMeta> = {
-  success: { color: 'var(--el-color-success)', icon: 'i-carbon-checkmark-filled' },
-  warning: { color: 'var(--el-color-warning)', icon: 'i-carbon-warning' },
-  danger: { color: 'var(--el-color-error)', icon: 'i-carbon-close-outline' },
-  info: { color: 'var(--el-color-primary)', icon: 'i-carbon-information' },
-  muted: { color: 'var(--el-text-color-secondary)', icon: 'i-carbon-minimize' },
+  success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark-filled' },
+  warning: { color: 'var(--tx-color-warning)', icon: 'i-carbon-warning' },
+  danger: { color: 'var(--tx-color-danger)', icon: 'i-carbon-close-outline' },
+  info: { color: 'var(--tx-color-primary)', icon: 'i-carbon-information' },
+  muted: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-minimize' },
 }
 
 /**
@@ -85,6 +85,19 @@ const styleVars = computed(() => {
  */
 const iconClass = computed(() => props.icon || toneMeta.value.icon)
 
+const osIconClass = computed(() => {
+  switch (props.os) {
+    case 'macos':
+      return 'i-carbon-logo-apple'
+    case 'windows':
+      return 'i-carbon-logo-windows'
+    case 'linux':
+      return 'i-carbon-logo-tux'
+    default:
+      return ''
+  }
+})
+
 /**
  * Handles click events on the badge.
  * @param event - The mouse event
@@ -102,7 +115,13 @@ function handleClick(event: MouseEvent): void {
     role="status"
     @click="handleClick"
   >
-    <i v-if="iconClass" :class="iconClass" class="tx-status-badge__icon" aria-hidden="true" />
+    <i v-if="osIconClass" :class="osIconClass" class="tx-status-badge__icon" aria-hidden="true" />
+    <i
+      v-if="!osOnly && iconClass"
+      :class="iconClass"
+      class="tx-status-badge__icon"
+      aria-hidden="true"
+    />
     <span class="tx-status-badge__text">{{ text }}</span>
   </div>
 </template>
@@ -116,7 +135,7 @@ function handleClick(event: MouseEvent): void {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--tx-status-color, var(--el-text-color-primary));
+  color: var(--tx-status-color, var(--tx-text-color-primary));
   background: var(--tx-status-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tx-status-border, color-mix(in srgb, currentColor 32%, transparent));
   transition: background-color 0.25s ease;

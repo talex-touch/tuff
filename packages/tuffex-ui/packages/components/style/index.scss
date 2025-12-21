@@ -1,11 +1,11 @@
 // TUFF UI Global Styles
-@import './variables.scss';
-@import './mixins.scss';
+@use './variables.scss';
+@use './mixins.scss';
 
 // Component styles
-@import '../src/button/src/style/index.scss';
-@import '../src/switch/style/index.scss';
-@import '../src/flat-button/style/index.scss';
+@use '../src/button/src/style/index.scss' as *;
+@use '../src/switch/style/index.scss' as *;
+@use '../src/flat-button/style/index.scss' as *;
 
 // Fake background utility (glassmorphism effect)
 .fake-background {
@@ -21,7 +21,7 @@
     width: 100%;
     height: 100%;
     opacity: var(--fake-inner-opacity, 1);
-    background: var(--fake-color, var(--tx-fill-color-lighter, var(--el-fill-color-lighter)));
+    background: var(--fake-color, var(--tx-fill-color-lighter, #fafafa));
     border-radius: var(--fake-radius, inherit);
   }
 

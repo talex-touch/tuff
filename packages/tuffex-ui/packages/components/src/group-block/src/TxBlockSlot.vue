@@ -71,11 +71,11 @@ function handleClick(event: MouseEvent): void {
   user-select: none;
   border-radius: 4px;
   box-sizing: border-box;
-  background: var(--el-fill-color-dark, #f5f7fa);
+  background: var(--tx-fill-color-light, #f5f7fa);
   transition: background-color 0.25s ease;
 
   &:hover {
-    background: var(--el-fill-color, #f0f2f5);
+    background: var(--tx-fill-color, #f0f2f5);
   }
 
   &--disabled {
@@ -95,7 +95,7 @@ function handleClick(event: MouseEvent): void {
 
   &__icon {
     font-size: 24px;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__label {
@@ -106,7 +106,7 @@ function handleClick(event: MouseEvent): void {
     margin: 0;
     font-size: 14px;
     font-weight: 500;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__description {
@@ -114,7 +114,7 @@ function handleClick(event: MouseEvent): void {
     font-size: 12px;
     font-weight: 400;
     opacity: 0.5;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
   }
 
   &__slot {

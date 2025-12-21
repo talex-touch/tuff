@@ -42,7 +42,7 @@ npm install @talex-touch/tuff-ui
 ```vue
 <template>
   <TxButton type="primary">你好 TuffEx UI</TxButton>
-  <TxTag label="新" color="var(--el-color-success)" />
+  <TxTag label="新" color="var(--tx-color-success)" />
   <TxStatusBadge text="活跃" status="success" />
 </template>
 

@@ -2,57 +2,55 @@
 
 用于显示重要信息和获取用户确认的对话框组件。
 
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const bottomOpen = ref(false)
+const blowOpen = ref(false)
+const popperOpen = ref(false)
+const tipOpen = ref(false)
+</script>
+
 ## BottomDialog 底部对话框
 
 底部定位的对话框，带有可自定义的按钮和动画效果。
 
 ### 基础用法
 
-```vue
-<template>
-  <TxButton @click="showDialog">显示对话框</TxButton>
+<DemoBlock title="BottomDialog">
+<template #preview>
+<TxButton @click="bottomOpen = true">显示对话框</TxButton>
+
+<TxBottomDialog
+  v-if="bottomOpen"
+  title="确认操作"
+  message="您确定要继续吗？"
+  :btns="[
+    { content: '取消', type: 'info', onClick: () => true },
+    { content: '确认', type: 'success', onClick: async () => true },
+  ]"
+  :close="() => (bottomOpen = false)"
+/>
 </template>
 
-<script setup>
-import { TxBottomDialog, TxButton } from '@talex-touch/tuff-ui'
-import { createApp, h } from 'vue'
-
-function showDialog() {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  
-  const app = createApp({
-    render() {
-      return h(TxBottomDialog, {
-        title: '确认操作',
-        message: '您确定要继续吗？',
-        btns: [
-          { 
-            content: '取消', 
-            type: 'info', 
-            onClick: () => true 
-          },
-          { 
-            content: '确认', 
-            type: 'success', 
-            onClick: async () => {
-              await performAction()
-              return true
-            }
-          }
-        ],
-        close: () => {
-          app.unmount()
-          container.remove()
-        }
-      })
-    }
-  })
-  
-  app.mount(container)
-}
-</script>
+<template #code>
+```vue
+<template>
+  <TxButton @click="bottomOpen = true">显示对话框</TxButton>
+  <TxBottomDialog
+    v-if="bottomOpen"
+    title="确认操作"
+    message="您确定要继续吗？"
+    :btns="[
+      { content: '取消', type: 'info', onClick: () => true },
+      { content: '确认', type: 'success', onClick: async () => true },
+    ]"
+    :close="() => (bottomOpen = false)"
+  />
+</template>
 ```
+</template>
+</DemoBlock>
 
 ### 按钮类型
 
@@ -112,36 +110,102 @@ const btns = [
 
 ### 基础用法
 
-```vue
-<template>
-  <TxButton @click="showBlowDialog">显示爆炸对话框</TxButton>
+<DemoBlock title="BlowDialog">
+<template #preview>
+<TxButton @click="blowOpen = true">显示爆炸对话框</TxButton>
+
+<TxBlowDialog
+  v-if="blowOpen"
+  title="欢迎"
+  message="<strong>你好！</strong> 欢迎使用我们的应用。"
+  :close="() => (blowOpen = false)"
+/>
 </template>
 
-<script setup>
-import { TxBlowDialog } from '@talex-touch/tuff-ui'
-import { createApp, h } from 'vue'
-
-function showBlowDialog() {
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  
-  const app = createApp({
-    render() {
-      return h(TxBlowDialog, {
-        title: '欢迎',
-        message: '<strong>你好！</strong> 欢迎使用我们的应用。',
-        close: () => {
-          app.unmount()
-          container.remove()
-        }
-      })
-    }
-  })
-  
-  app.mount(container)
-}
-</script>
+<template #code>
+```vue
+<template>
+  <TxButton @click="blowOpen = true">显示爆炸对话框</TxButton>
+  <TxBlowDialog
+    v-if="blowOpen"
+    title="欢迎"
+    message="<strong>你好！</strong> 欢迎使用我们的应用。"
+    :close="() => (blowOpen = false)"
+  />
+</template>
 ```
+</template>
+</DemoBlock>
+
+---
+
+## PopperDialog 弹出对话框
+
+<DemoBlock title="PopperDialog">
+<template #preview>
+<TxButton @click="popperOpen = true">显示弹出对话框</TxButton>
+
+<TxPopperDialog
+  v-if="popperOpen"
+  title="Tip"
+  message="这是一段提示内容。"
+  :close="() => (popperOpen = false)"
+/>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxButton @click="popperOpen = true">显示弹出对话框</TxButton>
+  <TxPopperDialog
+    v-if="popperOpen"
+    title="Tip"
+    message="这是一段提示内容。"
+    :close="() => (popperOpen = false)"
+  />
+</template>
+```
+</template>
+</DemoBlock>
+
+---
+
+## TouchTip 触控提示
+
+<DemoBlock title="TouchTip">
+<template #preview>
+<TxButton @click="tipOpen = true">显示 TouchTip</TxButton>
+
+<TxTouchTip
+  v-if="tipOpen"
+  title="提示"
+  message="请选择一个操作。"
+  :buttons="[
+    { content: '取消', type: 'info', onClick: () => true },
+    { content: '确定', type: 'success', onClick: async () => true },
+  ]"
+  :close="() => (tipOpen = false)"
+/>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxButton @click="tipOpen = true">显示 TouchTip</TxButton>
+  <TxTouchTip
+    v-if="tipOpen"
+    title="提示"
+    message="请选择一个操作。"
+    :buttons="[
+      { content: '取消', type: 'info', onClick: () => true },
+      { content: '确定', type: 'success', onClick: async () => true },
+    ]"
+    :close="() => (tipOpen = false)"
+  />
+</template>
+```
+</template>
+</DemoBlock>
 
 ### 自定义组件
 
@@ -218,9 +282,28 @@ interface DialogButton {
 | `comp` | `Component` | `undefined` | 自定义组件 |
 | `render` | `() => VNode` | `undefined` | 渲染函数 |
 
+### TxPopperDialog 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | 对话框标题 |
+| `message` | `string` | `''` | 消息内容 (支持 HTML) |
+| `close` | `() => void` | *必填* | 关闭回调 |
+| `comp` | `Component` | `undefined` | 自定义组件 |
+| `render` | `() => VNode` | `undefined` | 渲染函数 |
+
+### TxTouchTip 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | 标题 |
+| `message` | `string` | `''` | 文本内容 |
+| `buttons` | `TouchTipButton[]` | `[]` | 按钮配置 |
+| `close` | `() => void` | *必填* | 关闭回调 |
+
 ### 无障碍支持
 
-两个对话框组件都支持：
+这些对话框组件都支持：
 - **ESC 键** 关闭
 - 对话框内 **焦点捕获**
 - 关闭时 **焦点恢复**

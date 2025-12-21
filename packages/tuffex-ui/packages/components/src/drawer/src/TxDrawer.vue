@@ -219,7 +219,7 @@ onUnmounted(() => {
     max-width: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--el-bg-color, #fff);
+    background: var(--tx-bg-color, #fff);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
     transition: transform var(--tx-drawer-transition);
     z-index: 1;
@@ -230,7 +230,7 @@ onUnmounted(() => {
     align-items: center;
     justify-content: space-between;
     padding: 16px 20px;
-    border-bottom: 1px solid var(--el-border-color-light, #eee);
+    border-bottom: 1px solid var(--tx-border-color-light, #eee);
     flex-shrink: 0;
   }
 
@@ -238,7 +238,7 @@ onUnmounted(() => {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__close {
@@ -251,13 +251,13 @@ onUnmounted(() => {
     border: none;
     background: transparent;
     border-radius: 6px;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
     cursor: pointer;
     transition: all 0.2s ease;
 
     &:hover {
-      background: var(--el-fill-color-light, #f5f7fa);
-      color: var(--el-text-color-primary, #303133);
+      background: var(--tx-fill-color-light, #f5f7fa);
+      color: var(--tx-text-color-primary, #303133);
     }
   }
 
@@ -269,7 +269,7 @@ onUnmounted(() => {
 
   &__footer {
     padding: 16px 20px;
-    border-top: 1px solid var(--el-border-color-light, #eee);
+    border-top: 1px solid var(--tx-border-color-light, #eee);
     flex-shrink: 0;
   }
 }

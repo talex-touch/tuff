@@ -1,515 +1,104 @@
-// Button 基础样式
-.tx-button {
+.tx-button.tx-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  box-sizing: border-box;
-  outline: none;
-  cursor: pointer;
-  user-select: none;
-  vertical-align: middle;
-  text-decoration: none;
-  white-space: nowrap;
-  text-indent: 0;
-  font-weight: 500;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
   font-size: 14px;
+  font-weight: 600;
   line-height: 1;
-  min-width: 120px;
-  min-height: 32px;
-  padding: 12px 20px;
-  border-radius: 6px;
-  border: 1px solid #dcdfe6;
-  border-bottom: 2px solid #dcdfe6;
-  background-color: transparent;
-  color: #606266;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0 16px;
+  height: 36px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--tx-fill-color-darker, #ebeef5);
+  color: var(--tx-text-color-primary, #303133);
 
-  // 悬停效果
-  &:hover {
-    color: #409eff;
-    border-color: #c6e2ff;
-    border-bottom-color: #409eff;
-    background-color: rgba(64, 158, 255, 0.05);
-    transform: translateY(-1px);
+  &.block {
+    width: 100%;
   }
 
-  // 激活效果
-  &:active {
-    transform: translateY(0);
-    transition-duration: 0.05s;
-  }
-
-  // 聚焦效果
-  &:focus {
-    outline: 2px solid #409eff;
-    outline-offset: 2px;
-  }
-
-  // 禁用状态
-  &:disabled,
-  &--disabled {
-    cursor: not-allowed;
+  &.disabled {
     opacity: 0.5;
-    transform: none !important;
-
-    &:hover {
-      color: #606266;
-      border-color: #dcdfe6;
-      border-bottom-color: #dcdfe6;
-      background-color: transparent;
-      transform: none;
-    }
+    cursor: not-allowed;
   }
 
-  // 加载状态
-  &--loading {
-    cursor: default;
-    pointer-events: none;
-  }
-
-  // 按钮内容间距
-  .tx-button__icon + .tx-button__text,
-  .tx-button__loading-icon + .tx-button__text {
-    margin-left: 6px;
-  }
-
-  // 加载图标
-  .tx-button__loading-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  &.loading {
+    cursor: progress;
   }
 
   .tx-button__spinner {
-    width: 14px;
-    height: 14px;
+    font-size: 16px;
     animation: tx-button-spin 1s linear infinite;
   }
 
-  .tx-button__spinner-path {
-    animation: tx-button-dash 1.5s ease-in-out infinite;
-  }
+  &.variant-primary {
+    background: var(--tx-color-primary, #409eff);
+    color: #fff;
+    border-color: var(--tx-color-primary, #409eff);
 
-  // 图标
-  .tx-button__icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-  }
-
-  // Primary 类型
-  &--primary {
-    color: #3a8ee6;
-    background-color: transparent;
-    border-color: #409eff;
-    border-bottom-color: #409eff;
-
-    &:hover {
-      color: #606266;
-      background-color: rgba(64, 158, 255, 0.1);
-      border-color: #409eff;
-      border-bottom-color: #3a8ee6;
-    }
-
-    &:active {
-      background-color: rgba(64, 158, 255, 0.15);
-      border-bottom-color: #2b7cd6;
-    }
-
-    &:focus {
-      outline-color: #409eff;
-    }
-
-    &:disabled,
-    &.tx-button--disabled {
-      &:hover {
-        color: #3a8ee6;
-        background-color: transparent;
-        border-color: #409eff;
-        border-bottom-color: #409eff;
-      }
+    &:hover:not(.disabled) {
+      background: var(--tx-color-primary-light-3, #79bbff);
+      border-color: var(--tx-color-primary-light-3, #79bbff);
     }
   }
 
-  // Success 类型
-  &--success {
-    color: #5daf34;
-    background-color: transparent;
-    border-color: #67c23a;
-    border-bottom-color: #67c23a;
+  &.variant-secondary {
+    background: var(--tx-fill-color, #f5f7fa);
+    border-color: var(--tx-border-color, #dcdfe6);
 
-    &:hover {
-      color: #606266;
-      background-color: rgba(103, 194, 58, 0.1);
-      border-color: #67c23a;
-      border-bottom-color: #5daf34;
-    }
-
-    &:active {
-      background-color: rgba(103, 194, 58, 0.15);
-      border-bottom-color: #4f9c2e;
-    }
-
-    &:focus {
-      outline-color: #67c23a;
-    }
-
-    &:disabled,
-    &.tx-button--disabled {
-      &:hover {
-        color: #5daf34;
-        background-color: transparent;
-        border-color: #67c23a;
-        border-bottom-color: #67c23a;
-      }
+    &:hover:not(.disabled) {
+      border-color: var(--tx-color-primary-light-3, #79bbff);
     }
   }
 
-  // Warning 类型
-  &--warning {
-    color: #cf9236;
-    background-color: transparent;
-    border-color: #e6a23c;
-    border-bottom-color: #e6a23c;
-
-    &:hover {
-      color: #606266;
-      background-color: rgba(230, 162, 60, 0.1);
-      border-color: #e6a23c;
-      border-bottom-color: #cf9236;
-    }
-
-    &:active {
-      background-color: rgba(230, 162, 60, 0.15);
-      border-bottom-color: #b8832f;
-    }
-
-    &:focus {
-      outline-color: #e6a23c;
-    }
-
-    &:disabled,
-    &.tx-button--disabled {
-      &:hover {
-        color: #cf9236;
-        background-color: transparent;
-        border-color: #e6a23c;
-        border-bottom-color: #e6a23c;
-      }
-    }
-  }
-
-  // Danger 类型
-  &--danger {
-    color: #dd6161;
-    background-color: transparent;
-    border-color: #f56c6c;
-    border-bottom-color: #f56c6c;
-
-    &:hover {
-      color: #606266;
-      background-color: rgba(245, 108, 108, 0.1);
-      border-color: #f56c6c;
-      border-bottom-color: #dd6161;
-    }
-
-    &:active {
-      background-color: rgba(245, 108, 108, 0.15);
-      border-bottom-color: #c55656;
-    }
-
-    &:focus {
-      outline-color: #f56c6c;
-    }
-
-    &:disabled,
-    &.tx-button--disabled {
-      &:hover {
-        color: #dd6161;
-        background-color: transparent;
-        border-color: #f56c6c;
-        border-bottom-color: #f56c6c;
-      }
-    }
-  }
-
-  // Info 类型
-  &--info {
-    color: #82848a;
-    background-color: transparent;
-    border-color: #909399;
-    border-bottom-color: #909399;
-
-    &:hover {
-      color: #606266;
-      background-color: rgba(144, 147, 153, 0.1);
-      border-color: #909399;
-      border-bottom-color: #82848a;
-    }
-
-    &:active {
-      background-color: rgba(144, 147, 153, 0.15);
-      border-bottom-color: #73757b;
-    }
-
-    &:focus {
-      outline-color: #909399;
-    }
-
-    &:disabled,
-    &.tx-button--disabled {
-      &:hover {
-        color: #82848a;
-        background-color: transparent;
-        border-color: #909399;
-        border-bottom-color: #909399;
-      }
-    }
-  }
-
-  // Text 类型
-  &--text {
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: #409eff;
+  &.variant-ghost {
     background: transparent;
-    padding-left: 0;
-    padding-right: 0;
-    min-width: auto;
+    border-color: transparent;
 
-    &:hover {
-      color: #66b1ff;
-      border-bottom-color: rgba(64, 158, 255, 0.3);
-      background-color: transparent;
-      transform: none;
-    }
-
-    &:active {
-      color: #3a8ee6;
-      border-bottom-color: rgba(64, 158, 255, 0.5);
-    }
-
-    &:focus {
-      outline-color: #409eff;
-    }
-
-    &:disabled,
-    &.tx-button--disabled {
-      &:hover {
-        color: #409eff;
-        border-bottom-color: transparent;
-        background-color: transparent;
-      }
+    &:hover:not(.disabled) {
+      background: var(--tx-fill-color, #f5f7fa);
     }
   }
 
-  // 朴素按钮
-  &--plain {
-    &.tx-button--primary {
-      color: #409eff;
-      background: rgba(64, 158, 255, 0.05);
-      border-color: #b3d8ff;
-      border-bottom-color: #409eff;
+  &.variant-danger {
+    background: var(
+      --tx-color-danger-light-9,
+      color-mix(in srgb, var(--tx-color-danger, #f56c6c) 12%, transparent)
+    );
+    border-color: var(
+      --tx-color-danger-light-5,
+      color-mix(in srgb, var(--tx-color-danger, #f56c6c) 32%, transparent)
+    );
+    color: var(--tx-color-danger, #f56c6c);
 
-      &:hover {
-        background: rgba(64, 158, 255, 0.15);
-        border-color: #409eff;
-        border-bottom-color: #3a8ee6;
-        color: #3a8ee6;
-      }
-    }
-
-    &.tx-button--success {
-      color: #67c23a;
-      background: rgba(103, 194, 58, 0.05);
-      border-color: #c2e7b0;
-      border-bottom-color: #67c23a;
-
-      &:hover {
-        background: rgba(103, 194, 58, 0.15);
-        border-color: #67c23a;
-        border-bottom-color: #5daf34;
-        color: #5daf34;
-      }
-    }
-
-    &.tx-button--warning {
-      color: #e6a23c;
-      background: rgba(230, 162, 60, 0.05);
-      border-color: #f5dab1;
-      border-bottom-color: #e6a23c;
-
-      &:hover {
-        background: rgba(230, 162, 60, 0.15);
-        border-color: #e6a23c;
-        border-bottom-color: #cf9236;
-        color: #cf9236;
-      }
-    }
-
-    &.tx-button--danger {
-      color: #f56c6c;
-      background: rgba(245, 108, 108, 0.05);
-      border-color: #fbc4c4;
-      border-bottom-color: #f56c6c;
-
-      &:hover {
-        background: rgba(245, 108, 108, 0.15);
-        border-color: #f56c6c;
-        border-bottom-color: #dd6161;
-        color: #dd6161;
-      }
-    }
-
-    &.tx-button--info {
-      color: #909399;
-      background: rgba(144, 147, 153, 0.05);
-      border-color: #d3d4d6;
-      border-bottom-color: #909399;
-
-      &:hover {
-        background: rgba(144, 147, 153, 0.15);
-        border-color: #909399;
-        border-bottom-color: #82848a;
-        color: #82848a;
-      }
+    &:hover:not(.disabled) {
+      background: var(
+        --tx-color-danger-light-7,
+        color-mix(in srgb, var(--tx-color-danger, #f56c6c) 20%, transparent)
+      );
     }
   }
 
-  // 尺寸变体
-  &--large {
-    min-width: 140px;
-    min-height: 40px;
-    padding: 16px 24px;
-    font-size: 16px;
-    border-radius: 8px;
-
-    .tx-button__icon {
-      font-size: 16px;
-    }
-
-    .tx-button__spinner {
-      width: 16px;
-      height: 16px;
-    }
+  &.tx-size-sm {
+    padding: 0 12px;
+    height: 30px;
+    font-size: 13px;
   }
 
-  &--small {
-    min-width: 80px;
-    min-height: 28px;
-    padding: 8px 16px;
-    font-size: 12px;
-    border-radius: 4px;
-
-    .tx-button__icon {
-      font-size: 12px;
-    }
-
-    .tx-button__spinner {
-      width: 12px;
-      height: 12px;
-    }
-  }
-
-  &--mini {
-    min-width: 32px;
-    min-height: 32px;
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 4px;
-
-    .tx-button__icon {
-      font-size: 12px;
-    }
-
-    .tx-button__spinner {
-      width: 12px;
-      height: 12px;
-    }
-  }
-
-  // 圆角按钮
-  &--round {
-    border-radius: 20px;
-
-    &.tx-button--large {
-      border-radius: 24px;
-    }
-
-    &.tx-button--small {
-      border-radius: 16px;
-    }
-
-    &.tx-button--mini {
-      border-radius: 14px;
-    }
-  }
-
-  // 圆形按钮
-  &--circle {
-    border-radius: 50%;
-    padding: 12px;
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    // 圆形按钮保持统一的边框宽度
-    border-width: 2px;
-    border-bottom-width: 2px;
-
-    &.tx-button--large {
-      padding: 16px;
-      width: 48px;
-      height: 48px;
-      min-width: 48px;
-    }
-
-    &.tx-button--small {
-      padding: 8px;
-      width: 32px;
-      height: 32px;
-      min-width: 32px;
-    }
-
-    &.tx-button--mini {
-      padding: 6px;
-      width: 28px;
-      height: 28px;
-      min-width: 28px;
-    }
-  }
-
-  // 只有图标的按钮
-  &--icon-only {
-    .tx-button__icon + .tx-button__text,
-    .tx-button__loading-icon + .tx-button__text {
-      margin-left: 0;
-    }
+  &.tx-size-lg {
+    padding: 0 20px;
+    height: 42px;
+    font-size: 15px;
   }
 }
 
-// 动画定义
 @keyframes tx-button-spin {
-  0% {
+  from {
     transform: rotate(0deg);
   }
-  100% {
+  to {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes tx-button-dash {
-  0% {
-    stroke-dasharray: 1, 150;
-    stroke-dashoffset: 0;
-  }
-  50% {
-    stroke-dasharray: 90, 150;
-    stroke-dashoffset: -35;
-  }
-  100% {
-    stroke-dasharray: 90, 150;
-    stroke-dashoffset: -124;
   }
 }

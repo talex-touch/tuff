@@ -1,7 +1,7 @@
 // TuffEx UI 文档样式
 
 // 导入组件库样式
-@import '@tuffex-ui/packages/components/style/index.scss';
+@use '@tuffex-ui/packages/components/style/index.scss';
 
 // 自定义文档样式
 :root {
@@ -28,13 +28,5 @@
         margin-bottom: 16px;
       }
     }
-  }
-}
-
-// 覆盖一些 VitePress 默认样式以适配组件
-.vp-doc {
-  // 确保按钮等组件样式正确，不覆盖组件内部按钮样式
-  .demo-container button {
-    all: unset;
   }
 }
