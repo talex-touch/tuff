@@ -12,8 +12,13 @@
   position: relative;
   border-radius: 12px;
 
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+
   &:before {
-    z-index: var(--fake-index, -1);
+    z-index: var(--fake-index, 0);
     content: "";
     position: absolute;
     top: 0;
@@ -23,6 +28,7 @@
     opacity: var(--fake-inner-opacity, 1);
     background: var(--fake-color, var(--tx-fill-color-lighter, #fafafa));
     border-radius: var(--fake-radius, inherit);
+    pointer-events: none;
   }
 
   &:before {

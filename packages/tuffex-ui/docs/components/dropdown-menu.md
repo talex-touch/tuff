@@ -1,0 +1,63 @@
+# DropdownMenu 下拉菜单
+
+基于 Popover 的下拉菜单（Windows 风格）。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+const open = ref(false)
+</script>
+
+## 基础用法
+
+<DemoBlock title="DropdownMenu">
+<template #preview>
+<TxDropdownMenu v-model="open">
+  <template #trigger>
+    <TxButton>Menu</TxButton>
+  </template>
+
+  <TxDropdownItem @select="() => {}">Open</TxDropdownItem>
+  <TxDropdownItem @select="() => {}">Rename</TxDropdownItem>
+  <TxDropdownItem danger @select="() => {}">Delete</TxDropdownItem>
+</TxDropdownMenu>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxDropdownMenu>
+    <template #trigger>
+      <TxButton>Menu</TxButton>
+    </template>
+
+    <TxDropdownItem>Open</TxDropdownItem>
+    <TxDropdownItem danger>Delete</TxDropdownItem>
+  </TxDropdownMenu>
+</template>
+```
+</template>
+</DemoBlock>
+
+## API
+
+### TxDropdownMenu Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `boolean` | `false` | 是否打开（v-model） |
+| `placement` | `DropdownPlacement` | `'bottom-start'` | 位置 |
+| `offset` | `number` | `6` | 间距 |
+| `closeOnSelect` | `boolean` | `true` | 选择后自动关闭 |
+
+### TxDropdownItem Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `disabled` | `boolean` | `false` | 禁用 |
+| `danger` | `boolean` | `false` | 危险样式 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | - | 点击菜单项时触发 |

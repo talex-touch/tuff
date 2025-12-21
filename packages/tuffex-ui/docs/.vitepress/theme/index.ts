@@ -28,6 +28,20 @@ import {
   TuffFlatButton,
   TxScroll,
   TouchScroll,
+  TxSlider,
+  TxSpinner,
+  TxLoadingOverlay,
+  TxSkeleton,
+  TxToastHost,
+  TxGlassSurface,
+  TxGradientBorder,
+  TxGridLayout,
+  TxLayoutSkeleton,
+  TxStatCard,
+  TxCardItem,
+  TxTabs,
+  TxTabItem,
+  TxTabHeader,
 } from '../../../packages/components/src'
 
 // 导入 Demo 容器组件
@@ -36,6 +50,9 @@ import DemoBlock from './components/DemoBlock.vue'
 export default {
   extends: DefaultTheme,
   enhanceApp({ app }) {
+    if (typeof window !== 'undefined') {
+      document.documentElement.classList.add('touch-blur')
+    }
     // 注册 TuffEx UI 组件
     app.component('TxTag', TxTag)
     app.component('TxStatusBadge', TxStatusBadge)
@@ -66,6 +83,22 @@ export default {
     app.component('TxFlatButton', TuffFlatButton)
     app.component('TxScroll', TxScroll)
     app.component('TouchScroll', TouchScroll)
+
+    app.component('TxSlider', TxSlider)
+    app.component('TxSpinner', TxSpinner)
+    app.component('TxLoadingOverlay', TxLoadingOverlay)
+    app.component('TxSkeleton', TxSkeleton)
+    app.component('TxToastHost', TxToastHost)
+    app.component('TxGlassSurface', TxGlassSurface)
+    app.component('TxGradientBorder', TxGradientBorder)
+    app.component('TxGridLayout', TxGridLayout)
+    app.component('TxLayoutSkeleton', TxLayoutSkeleton)
+    app.component('TxStatCard', TxStatCard)
+    app.component('TxCardItem', TxCardItem)
+
+    app.component('TxTabs', TxTabs)
+    app.component('TxTabItem', TxTabItem)
+    app.component('TxTabHeader', TxTabHeader)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)

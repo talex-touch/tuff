@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { inject, computed } from 'vue'
+import { inject, computed, onMounted } from 'vue'
 
 defineOptions({
   name: 'TuffSelectItem',
@@ -19,7 +19,13 @@ const props = withDefaults(
 const txSelect = inject<{
   currentValue: { value: string | number }
   handleSelect: (value: string | number, label: string) => void
+  registerOption?: (value: string | number, label: string) => void
 }>('tuffSelect')
+
+onMounted(() => {
+  const label = props.label || String(props.value)
+  txSelect?.registerOption?.(props.value, label)
+})
 
 const isSelected = computed(() => {
   return txSelect?.currentValue.value === props.value
