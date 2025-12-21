@@ -22,10 +22,6 @@
     </div>
   </TxGridLayout>
 </template>
-
-<script setup lang="ts">
-import { TxGridLayout } from '@talex-touch/tuff-ui'
-</script>
 ```
 </template>
 </DemoBlock>

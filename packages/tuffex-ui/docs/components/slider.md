@@ -21,13 +21,6 @@ const value2 = ref(60)
 
 <template #code>
 ```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-import { TxSlider } from '@talex-touch/tuff-ui'
-
-const value = ref(30)
-</script>
-
 <template>
   <TxSlider v-model="value" :min="0" :max="100" :step="1" />
   <div>Value: {{ value }}</div>
@@ -47,13 +40,6 @@ const value = ref(30)
 
 <template #code>
 ```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-import { TxSlider } from '@talex-touch/tuff-ui'
-
-const value = ref(60)
-</script>
-
 <template>
   <TxSlider v-model="value" :min="0" :max="100" :step="1" show-value />
 </template>

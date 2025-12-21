@@ -5,7 +5,7 @@
 > 需要在应用根部挂载一次 `<TxToastHost />`，然后在任意位置调用 `toast()`。
 
 <script setup lang="ts">
-import { toast } from '@talex-touch/tuff-ui/utils'
+import { toast } from '@tuffex-ui/packages/utils'
 </script>
 
 ## 基础用法
@@ -34,11 +34,6 @@ import { toast } from '@talex-touch/tuff-ui/utils'
     Show toast
   </TxButton>
 </template>
-
-<script setup lang="ts">
-import { TxButton, TxToastHost } from '@talex-touch/tuff-ui'
-import { toast } from '@talex-touch/tuff-ui/utils'
-</script>
 ```
 </template>
 </DemoBlock>
@@ -58,4 +53,4 @@ toast({
 
 ### `dismissToast(id)` / `clearToasts()`
 
-从 `@talex-touch/tuff-ui/utils` 导入。
+从 `@tuffex-ui/packages/utils` 导入。

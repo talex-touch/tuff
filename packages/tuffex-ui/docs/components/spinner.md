@@ -14,10 +14,6 @@
 <template>
   <TxSpinner />
 </template>
-
-<script setup lang="ts">
-import { TxSpinner } from '@talex-touch/tuff-ui'
-</script>
 ```
 </template>
 </DemoBlock>
@@ -44,10 +40,6 @@ import { TxSpinner } from '@talex-touch/tuff-ui'
     <TxSpinner :size="32" />
   </div>
 </template>
-
-<script setup lang="ts">
-import { TxSpinner } from '@talex-touch/tuff-ui'
-</script>
 ```
 </template>
 </DemoBlock>

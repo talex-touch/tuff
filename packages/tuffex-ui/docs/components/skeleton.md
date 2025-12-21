@@ -21,13 +21,6 @@ const loading = ref(true)
 
 <template #code>
 ```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-import { TxSkeleton, TxButton } from '@talex-touch/tuff-ui'
-
-const loading = ref(true)
-</script>
-
 <template>
   <TxButton @click="loading = !loading">Toggle</TxButton>
   <TxSkeleton :loading="loading" :lines="3" />
@@ -50,10 +43,6 @@ const loading = ref(true)
 <template>
   <TxSkeleton variant="circle" :width="48" :height="48" />
 </template>
-
-<script setup lang="ts">
-import { TxSkeleton } from '@talex-touch/tuff-ui'
-</script>
 ```
 </template>
 </DemoBlock>

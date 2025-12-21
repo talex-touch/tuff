@@ -24,10 +24,6 @@
     </div>
   </TxGradientBorder>
 </template>
-
-<script setup lang="ts">
-import { TxGradientBorder } from '@talex-touch/tuff-ui'
-</script>
 ```
 </template>
 </DemoBlock>
