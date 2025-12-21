@@ -8,7 +8,7 @@
  * @example
  * ```vue
  * <TxTag label="Default" />
- * <TxTag label="Success" color="var(--el-color-success)" />
+ * <TxTag label="Success" color="var(--tx-color-success)" />
  * <TxTag label="Closable" closable @close="handleClose" />
  * ```
  *
@@ -24,7 +24,7 @@ defineOptions({
 const props = withDefaults(defineProps<TagProps>(), {
   label: '',
   icon: '',
-  color: 'var(--el-color-primary)',
+  color: 'var(--tx-color-primary)',
   background: '',
   border: '',
   size: 'sm',
@@ -45,7 +45,7 @@ const safeLabel = computed(() => {
  * Computed property that ensures the color has a fallback value.
  */
 const safeColor = computed(() => {
-  return props.color || 'var(--el-color-primary)'
+  return props.color || 'var(--tx-color-primary)'
 })
 
 /**
@@ -143,7 +143,7 @@ function handleClose(event: MouseEvent): void {
   align-items: center;
   gap: 6px;
   border-radius: 999px;
-  color: var(--tx-tag-color, var(--el-color-primary));
+  color: var(--tx-tag-color, var(--tx-color-primary));
   background: var(--tx-tag-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tx-tag-border, color-mix(in srgb, currentColor 32%, transparent));
   font-weight: 600;

@@ -30,6 +30,48 @@ import { TxStatusBadge } from '@talex-touch/tuff-ui'
 ```
 :::
 
+## 平台标识
+
+在状态徽标前面加上操作系统标识（例如 `macos only`）。
+
+<div class="demo-container">
+  <div class="demo-container__row">
+    <TxStatusBadge text="macOS only" status="info" os="macos" />
+    <TxStatusBadge text="Windows only" status="info" os="windows" />
+    <TxStatusBadge text="Linux only" status="info" os="linux" />
+  </div>
+</div>
+
+::: details 查看代码
+```vue
+<template>
+  <TxStatusBadge text="macOS only" status="info" os="macos" />
+  <TxStatusBadge text="Windows only" status="info" os="windows" />
+  <TxStatusBadge text="Linux only" status="info" os="linux" />
+</template>
+```
+:::
+
+### 仅显示平台图标
+
+<div class="demo-container">
+  <div class="demo-container__row">
+    <TxStatusBadge text="macOS" os="macos" os-only status="muted" />
+    <TxStatusBadge text="Windows" os="windows" os-only status="muted" />
+    <TxStatusBadge text="Linux" os="linux" os-only status="muted" />
+  </div>
+</div>
+
+::: details 查看代码
+```vue
+<template>
+  <TxStatusBadge text="macOS" os="macos" os-only status="muted" />
+  <TxStatusBadge text="Windows" os="windows" os-only status="muted" />
+  <TxStatusBadge text="Linux" os="linux" os-only status="muted" />
+</template>
+```
+:::
+
 ## 状态键
 
 使用预定义的状态键，自动映射到视觉色调。
@@ -159,6 +201,8 @@ const permissions = [
 | `status` | `StatusTone` | `undefined` | 视觉状态色调 |
 | `statusKey` | `StatusKey` | `''` | 预定义状态键 |
 | `size` | `'sm' \| 'md'` | `'md'` | 徽标尺寸 |
+| `os` | `'macos' \| 'windows' \| 'linux'` | - | 平台标识图标 |
+| `osOnly` | `boolean` | `false` | 仅显示平台图标（隐藏状态图标） |
 
 ### 类型
 

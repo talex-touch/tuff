@@ -10,6 +10,15 @@
   --tx-color-primary-light-9: #ecf5ff;
   --tx-color-primary-dark-2: #337ecc;
 
+  --tx-color-success: #67c23a;
+  --tx-color-warning: #e6a23c;
+  --tx-color-danger: #f56c6c;
+  --tx-color-info: #909399;
+
+  --tx-color-danger-light-5: #fbc4c4;
+  --tx-color-danger-light-7: #fcd3d3;
+  --tx-color-danger-light-9: #fef0f0;
+
   // Text Colors
   --tx-text-color-primary: #303133;
   --tx-text-color-regular: #606266;
@@ -27,6 +36,7 @@
   --tx-fill-color: #f0f2f5;
   --tx-fill-color-light: #f5f7fa;
   --tx-fill-color-lighter: #fafafa;
+  --tx-fill-color-darker: #ebeef5;
   --tx-fill-color-blank: #ffffff;
 
   // Background Colors
@@ -94,7 +104,12 @@
   --tx-fill-color: #303030;
   --tx-fill-color-light: #262727;
   --tx-fill-color-lighter: #1d1d1d;
+  --tx-fill-color-darker: #3a3a3a;
   --tx-fill-color-blank: transparent;
+
+  --tx-color-danger-light-5: #a43c3c;
+  --tx-color-danger-light-7: #7f2d2d;
+  --tx-color-danger-light-9: #4e1f1f;
 
   --tx-bg-color: #141414;
   --tx-bg-color-page: #0a0a0a;

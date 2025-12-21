@@ -47,6 +47,8 @@
     "vue": "^3.4.0"
   },
   "dependencies": {
+    "@better-scroll/core": "^2.5.1",
+    "@better-scroll/scroll-bar": "^2.5.1",
     "@vueuse/core": "^13.0.0"
   },
   "devDependencies": {

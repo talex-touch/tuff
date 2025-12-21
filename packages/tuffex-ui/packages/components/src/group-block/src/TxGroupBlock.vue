@@ -102,16 +102,16 @@ watch(
     cursor: pointer;
     user-select: none;
     box-sizing: border-box;
-    background: var(--el-fill-color-dark, #f5f7fa);
-    border-bottom: 1px solid var(--el-border-color-lighter, #eee);
+    background: var(--tx-fill-color-light, #f5f7fa);
+    border-bottom: 1px solid var(--tx-border-color-lighter, #eee);
     transition: background-color 0.25s ease;
 
     &:hover {
-      background: var(--el-fill-color, #f0f2f5);
+      background: var(--tx-fill-color, #f0f2f5);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--el-color-primary);
+      outline: 2px solid var(--tx-color-primary);
       outline-offset: -2px;
     }
   }
@@ -125,7 +125,7 @@ watch(
 
   &__icon {
     font-size: 24px;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__label {
@@ -136,7 +136,7 @@ watch(
     margin: 0;
     font-size: 16px;
     font-weight: 500;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__description {
@@ -144,18 +144,18 @@ watch(
     font-size: 12px;
     font-weight: 400;
     opacity: 0.5;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
   }
 
   &__toggle {
     margin-right: 10px;
     font-size: 16px;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
     transition: transform 0.25s ease;
   }
 
   &__body {
-    border-bottom: 1px solid var(--el-border-color, #dcdfe6);
+    border-bottom: 1px solid var(--tx-border-color, #dcdfe6);
   }
 }
 </style>

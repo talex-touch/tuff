@@ -42,6 +42,7 @@ function handleKeyActivate(event: KeyboardEvent) {
       'tuff-flat-button',
       {
         'is-primary': primary,
+        'fake-background': !primary,
         'is-mini': mini,
         'is-disabled': disabled,
         'is-loading': loading,
@@ -81,19 +82,23 @@ function handleKeyActivate(event: KeyboardEvent) {
   font-size: var(--tx-font-size-base, 14px);
   transition: all 0.25s ease-in-out;
 
-  &__content {
+  &.fake-background {
+    --fake-radius: 8px;
+  }
+
+  .tx-flat-button__content {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
   }
 
-  &__loading {
+  .tx-flat-button__loading {
     display: flex;
     align-items: center;
   }
 
-  &__spinner {
+  .tx-flat-button__spinner {
     width: 16px;
     height: 16px;
     animation: tx-spin 1s linear infinite;
@@ -106,7 +111,8 @@ function handleKeyActivate(event: KeyboardEvent) {
   }
 
   &:hover:not(.is-disabled):not(.is-loading) {
-    background-color: var(--tx-fill-color, #f0f2f5);
+    --fake-color: var(--tx-fill-color, #f0f2f5);
+    background-color: transparent;
   }
 
   &:active:not(.is-disabled):not(.is-loading) {

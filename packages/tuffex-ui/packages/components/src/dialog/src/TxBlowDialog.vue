@@ -16,24 +16,49 @@
  *
  * @component
  */
-import { ref, defineComponent, onMounted, onUnmounted, provide, type Component, type VNode } from 'vue'
-import type { BlowDialogProps } from './types'
+import {
+  ref,
+  defineComponent,
+  onMounted,
+  onUnmounted,
+  provide,
+  type Component,
+  type PropType,
+  type VNode,
+} from 'vue'
 
 defineOptions({
   name: 'TxBlowDialog',
 })
 
-const props = withDefaults(defineProps<BlowDialogProps>(), {
-  title: '',
-  message: '',
-  comp: undefined,
-  render: undefined,
+const props = defineProps({
+  close: {
+    type: Function as PropType<() => void>,
+    required: true,
+  },
+  title: {
+    type: String,
+    default: '',
+  },
+  message: {
+    type: String,
+    default: '',
+  },
+  comp: {
+    type: Object as PropType<Component>,
+    default: undefined,
+  },
+  render: {
+    type: Function as PropType<() => VNode>,
+    default: undefined,
+  },
 })
 
 const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 const dialogWrapper = ref<HTMLElement | null>(null)
 let previouslyFocusedElement: HTMLElement | null = null
+let didApplyBackgroundBlur = false
 
 /**
  * Utility function to sleep for a specified duration.
@@ -87,6 +112,9 @@ function restoreFocus(): void {
  * @param apply - Whether to apply the blur effect
  */
 function applyBackgroundBlur(apply: boolean): void {
+  const isVitePress = !!document.querySelector('.VPApp')
+  if (isVitePress) return
+
   const app = document.getElementById('app')
   if (!app) return
 
@@ -96,6 +124,7 @@ function applyBackgroundBlur(apply: boolean): void {
       transform: 'scale(1.25)',
       opacity: '.75',
     })
+    didApplyBackgroundBlur = true
   } else {
     Object.assign(app.style, {
       transform: 'scale(1)',
@@ -112,9 +141,11 @@ async function destroy(): Promise<void> {
   isClosing.value = true
   await sleep(550)
 
-  const app = document.getElementById('app')
-  if (app) {
-    app.style.cssText = ''
+  if (didApplyBackgroundBlur) {
+    const app = document.getElementById('app')
+    if (app) {
+      app.style.cssText = ''
+    }
   }
 
   props.close()
@@ -124,33 +155,35 @@ provide('destroy', destroy)
 </script>
 
 <template>
-  <div
-    ref="dialogWrapper"
-    class="tx-blow-dialog"
-    :class="{ 'tx-blow-dialog--closing': isClosing }"
-    role="dialog"
-    aria-modal="true"
-    :aria-labelledby="title ? 'tx-blow-dialog-title' : undefined"
-    @keydown.esc="destroy"
-  >
-    <div class="tx-blow-dialog__container">
-      <component :is="renderComp" v-if="renderComp" />
-      <component :is="comp" v-else-if="comp" />
-      <template v-else>
-        <p v-if="title" id="tx-blow-dialog-title" class="tx-blow-dialog__title">{{ title }}</p>
-        <div class="tx-blow-dialog__content">
-          <span v-html="message" />
-        </div>
-        <button
-          type="button"
-          class="tx-blow-dialog__confirm"
-          @click="destroy"
-        >
-          Confirm
-        </button>
-      </template>
+  <teleport to="body">
+    <div
+      ref="dialogWrapper"
+      class="tx-blow-dialog"
+      :class="{ 'tx-blow-dialog--closing': isClosing }"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="title ? 'tx-blow-dialog-title' : undefined"
+      @keydown.esc="destroy"
+    >
+      <div class="tx-blow-dialog__container">
+        <component :is="renderComp" v-if="renderComp" />
+        <component :is="comp" v-else-if="comp" />
+        <template v-else>
+          <p v-if="title" id="tx-blow-dialog-title" class="tx-blow-dialog__title">{{ title }}</p>
+          <div class="tx-blow-dialog__content">
+            <span v-html="message" />
+          </div>
+          <button
+            type="button"
+            class="tx-blow-dialog__confirm"
+            @click="destroy"
+          >
+            Confirm
+          </button>
+        </template>
+      </div>
     </div>
-  </div>
+  </teleport>
 </template>
 
 <style lang="scss">
@@ -178,7 +211,8 @@ provide('destroy', destroy)
   justify-content: center;
   align-items: center;
   inset: 0;
-  z-index: 2000;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(5px);
   transition: opacity 0.5s;
   animation: tx-blow-dialog-fade-in 0.5s;
@@ -202,7 +236,7 @@ provide('destroy', destroy)
     max-height: 80%;
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    background: var(--el-bg-color, #fff);
+    background: var(--tx-bg-color, #fff);
     box-sizing: border-box;
     transition: all 0.5s;
     animation: tx-blow-dialog-scale 0.5s;
@@ -213,7 +247,7 @@ provide('destroy', destroy)
     font-size: 1.5rem;
     font-weight: 600;
     text-align: center;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__content {
@@ -226,7 +260,7 @@ provide('destroy', destroy)
       display: block;
       width: 100%;
       text-align: center;
-      color: var(--el-text-color-secondary, #909399);
+      color: var(--tx-text-color-secondary, #909399);
     }
   }
 
@@ -243,9 +277,9 @@ provide('destroy', destroy)
     color: #fff;
     background: linear-gradient(
       to right,
-      var(--el-color-primary-light-3, #79bbff),
-      var(--el-color-primary-light-5, #a0cfff),
-      var(--el-color-primary-light-3, #79bbff)
+      var(--tx-color-primary-light-3, #79bbff),
+      var(--tx-color-primary-light-5, #a0cfff),
+      var(--tx-color-primary-light-3, #79bbff)
     );
     cursor: pointer;
     user-select: none;
@@ -260,7 +294,7 @@ provide('destroy', destroy)
     }
 
     &:focus-visible {
-      outline: 2px solid var(--el-color-primary);
+      outline: 2px solid var(--tx-color-primary);
       outline-offset: 2px;
     }
   }

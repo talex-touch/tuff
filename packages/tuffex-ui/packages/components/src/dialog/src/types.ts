@@ -138,3 +138,25 @@ export interface DialogEmits {
    */
   (e: 'close'): void
 }
+
+export interface PopperDialogProps {
+  close: () => void
+  title?: string
+  message?: string
+  comp?: Component
+  render?: () => VNode
+}
+
+export interface TouchTipButton {
+  content: string
+  type?: DialogButtonType
+  onClick: () => Promise<boolean> | boolean
+  loading?: (done: () => void) => void
+}
+
+export interface TouchTipProps {
+  title?: string
+  message?: string
+  buttons: TouchTipButton[]
+  close: () => void
+}

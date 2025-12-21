@@ -10,7 +10,7 @@ import type { TagProps, TagEmits } from './src/types'
  * import { TxTag } from '@talex-touch/tuff-ui'
  *
  * // Use in template
- * <TxTag label="Hello" color="var(--el-color-success)" />
+ * <TxTag label="Hello" color="var(--tx-color-success)" />
  * ```
  *
  * @public

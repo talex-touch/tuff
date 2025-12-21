@@ -19,7 +19,7 @@ export interface TagProps {
   /**
    * The primary color of the tag.
    * Supports CSS color values and CSS variables.
-   * @default 'var(--el-color-primary)'
+   * @default 'var(--tx-color-primary)'
    */
   color?: string
 

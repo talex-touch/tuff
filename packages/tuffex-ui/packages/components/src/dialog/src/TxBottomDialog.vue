@@ -255,7 +255,7 @@ async function forClose(): Promise<void> {
   min-height: 200px;
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  background: var(--el-bg-color, #fff);
+  background: var(--tx-bg-color, #fff);
   backdrop-filter: blur(18px) saturate(180%);
   transform: translateX(-50%);
   animation: tx-bottom-dialog-enter 0.2s ease-out;
@@ -277,14 +277,14 @@ async function forClose(): Promise<void> {
     margin: 0 0 12px;
     font-weight: 600;
     font-size: 20px;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__content {
     margin-bottom: 24px;
     text-align: center;
     font-size: 14px;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
   }
 
   &__buttons {
@@ -307,7 +307,7 @@ async function forClose(): Promise<void> {
     font-size: 14px;
     font-weight: 500;
     color: #fff;
-    background: var(--tx-btn-color, var(--el-color-info, #909399));
+    background: var(--tx-btn-color, var(--tx-color-info, #909399));
     cursor: pointer;
     user-select: none;
     transition: all 0.25s ease;
@@ -321,19 +321,19 @@ async function forClose(): Promise<void> {
     }
 
     &--info {
-      --tx-btn-color: var(--el-color-primary, #409eff);
+      --tx-btn-color: var(--tx-color-primary, #409eff);
     }
 
     &--warning {
-      --tx-btn-color: var(--el-color-warning, #e6a23c);
+      --tx-btn-color: var(--tx-color-warning, #e6a23c);
     }
 
     &--error {
-      --tx-btn-color: var(--el-color-danger, #f56c6c);
+      --tx-btn-color: var(--tx-color-danger);
     }
 
     &--success {
-      --tx-btn-color: var(--el-color-success, #67c23a);
+      --tx-btn-color: var(--tx-color-success);
     }
 
     &--loading {

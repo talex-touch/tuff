@@ -37,7 +37,7 @@ app.mount('#app')
     <TxButton type="primary" @click="handleClick">
       点击我！
     </TxButton>
-    <TxTag label="标签" color="var(--el-color-success)" />
+    <TxTag label="标签" color="var(--tx-color-success)" />
   </div>
 </template>
 
@@ -78,7 +78,7 @@ const handleClick = () => {
 ```vue
 <template>
   <div class="user-card">
-    <TxTag label="VIP" color="var(--el-color-warning)" />
+    <TxTag label="VIP" color="var(--tx-color-warning)" />
     <h3>{{ user.name }}</h3>
     <TxButton type="primary" @click="viewProfile">
       查看资料

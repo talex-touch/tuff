@@ -58,12 +58,12 @@ function handleClick(event: MouseEvent): void {
   display: flex;
   padding: 6px 18px 2px 18px;
   height: 24px;
-  background: var(--el-fill-color, #f5f7fa);
+  background: var(--tx-fill-color-light, #f5f7fa);
 
   &__title {
     font-size: 14px;
     font-weight: 500;
-    color: var(--el-text-color-primary, #303133);
+    color: var(--tx-text-color-primary, #303133);
   }
 
   &__description {
@@ -71,7 +71,7 @@ function handleClick(event: MouseEvent): void {
     left: 120px;
     opacity: 0.5;
     font-size: 13px;
-    color: var(--el-text-color-secondary, #909399);
+    color: var(--tx-text-color-secondary, #909399);
   }
 
   &--link {
@@ -79,7 +79,7 @@ function handleClick(event: MouseEvent): void {
     align-items: center;
     padding: 1px 12px;
     font-size: 12px;
-    color: var(--el-color-primary-dark-2, #337ecc);
+    color: var(--tx-color-primary-dark-2, #337ecc);
     cursor: pointer;
 
     .tx-block-line__title {
@@ -93,11 +93,11 @@ function handleClick(event: MouseEvent): void {
     }
 
     &:hover .tx-block-line__title {
-      background-color: var(--el-fill-color-dark, #ebeef5);
+      background-color: var(--tx-fill-color, #ebeef5);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--el-color-primary);
+      outline: 2px solid var(--tx-color-primary);
       outline-offset: -2px;
     }
   }

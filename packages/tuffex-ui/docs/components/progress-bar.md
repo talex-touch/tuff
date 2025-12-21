@@ -244,7 +244,7 @@ async function handleFileSelect(event) {
 ```css
 .tx-progress-bar {
   --tx-progress-height: 5px;
-  --tx-progress-color: var(--el-color-primary);
+  --tx-progress-color: var(--tx-color-primary);
   --tx-progress-width: 100%;
 }
 ```

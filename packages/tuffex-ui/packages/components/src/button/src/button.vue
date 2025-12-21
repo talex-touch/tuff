@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, nextTick, useSlots } from "vue";
-import { useVibrate } from "../../../../utils/vibrate";
-import type { ButtonProps, ButtonEmits } from "./types";
+import { computed, nextTick, ref } from 'vue'
+import { useVibrate } from '../../../../utils/vibrate'
+import type { ButtonEmits, ButtonProps } from './types'
 
 defineOptions({
-  name: "TxButton",
-});
+  name: 'TxButton',
+})
 
 const props = withDefaults(defineProps<ButtonProps>(), {
-  type: undefined,
+  variant: undefined,
   size: undefined,
+  block: false,
+  type: undefined,
   plain: false,
   round: false,
   circle: false,
@@ -17,112 +19,89 @@ const props = withDefaults(defineProps<ButtonProps>(), {
   disabled: false,
   icon: undefined,
   autofocus: false,
-  nativeType: "button",
+  nativeType: 'button',
   vibrate: true,
-  vibrateType: "light",
-});
+  vibrateType: 'light',
+})
 
-const emit = defineEmits<ButtonEmits>();
+const emit = defineEmits<ButtonEmits>()
 
-const buttonRef = ref<HTMLButtonElement>();
-const slots = useSlots();
+const buttonRef = ref<HTMLButtonElement>()
+
+const normalizedVariant = computed(() => {
+  if (props.variant) return props.variant
+  switch (props.type) {
+    case 'primary':
+      return 'primary'
+    case 'danger':
+      return 'danger'
+    case 'text':
+      return 'ghost'
+    default:
+      return 'secondary'
+  }
+})
+
+const normalizedSize = computed(() => {
+  if (!props.size) return 'md'
+  if (props.size === 'lg' || props.size === 'large') return 'lg'
+  if (props.size === 'sm' || props.size === 'small' || props.size === 'mini') return 'sm'
+  return 'md'
+})
 
 const classList = computed(() => {
-  const { type, size, plain, round, circle, loading, disabled } = props;
   return [
-    "tx-button",
+    'tx-button',
+    `variant-${normalizedVariant.value}`,
+    `tx-size-${normalizedSize.value}`,
     {
-      [`tx-button--${type}`]: type,
-      [`tx-button--${size}`]: size,
-      "tx-button--plain": plain,
-      "tx-button--round": round,
-      "tx-button--circle": circle,
-      "tx-button--loading": loading,
-      "tx-button--disabled": disabled,
-      "tx-button--icon-only": circle && props.icon && !slots.default,
+      block: props.block,
+      loading: props.loading,
+      disabled: props.disabled,
     },
-  ];
-});
+  ]
+})
 
-const handleClick = (event: MouseEvent) => {
-  if (props.disabled || props.loading) {
-    event.preventDefault();
-    return;
-  }
+function handleClick(event: MouseEvent) {
+  if (props.disabled || props.loading) return
 
-  // 触发震动反馈
   if (props.vibrate) {
-    // 根据按钮类型选择合适的震动类型
-    let vibrateType = props.vibrateType;
+    let vibrateType = props.vibrateType
     if (!vibrateType) {
-      switch (props.type) {
-        case "primary":
-          vibrateType = "medium";
-          break;
-        case "success":
-          vibrateType = "success";
-          break;
-        case "warning":
-          vibrateType = "warning";
-          break;
-        case "danger":
-          vibrateType = "error";
-          break;
+      switch (normalizedVariant.value) {
+        case 'primary':
+          vibrateType = 'medium'
+          break
+        case 'danger':
+          vibrateType = 'error'
+          break
         default:
-          vibrateType = "light";
+          vibrateType = 'light'
       }
     }
-    useVibrate(vibrateType);
+    useVibrate(vibrateType)
   }
 
-  emit("click", event);
-};
+  emit('click', event)
+}
 
-// 自动聚焦
 if (props.autofocus) {
   nextTick(() => {
-    buttonRef.value?.focus();
-  });
+    buttonRef.value?.focus()
+  })
 }
 </script>
 
 <template>
   <button
     ref="buttonRef"
+    class="tx-button"
     :class="classList"
     :type="nativeType"
     :disabled="disabled || loading"
     @click="handleClick"
   >
-    <!-- 加载图标 -->
-    <span v-if="loading" class="tx-button__loading-icon">
-      <svg class="tx-button__spinner" viewBox="0 0 24 24">
-        <circle
-          class="tx-button__spinner-path"
-          cx="12"
-          cy="12"
-          r="10"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-dasharray="31.416"
-          stroke-dashoffset="31.416"
-        />
-      </svg>
-    </span>
-
-    <!-- 图标 -->
-    <span v-else-if="icon" class="tx-button__icon">
-      <i :class="`tx-icon-${icon}`" />
-    </span>
-
-    <!-- 按钮内容 -->
-    <span v-if="$slots.default && !circle" class="tx-button__text">
-      <slot />
-    </span>
-
-    <!-- 圆形按钮只显示图标，不显示文字 -->
-    <slot v-else-if="!circle" />
+    <span v-if="loading" class="tx-button__spinner i-carbon-renew" />
+    <slot />
   </button>
 </template>

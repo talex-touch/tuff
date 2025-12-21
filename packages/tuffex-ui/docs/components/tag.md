@@ -7,10 +7,10 @@
 <div class="demo-container">
   <div class="demo-container__row">
     <TxTag label="默认" />
-    <TxTag label="主色" color="var(--el-color-primary)" />
-    <TxTag label="成功" color="var(--el-color-success)" />
-    <TxTag label="警告" color="var(--el-color-warning)" />
-    <TxTag label="危险" color="var(--el-color-danger)" />
+    <TxTag label="主色" color="var(--tx-color-primary)" />
+    <TxTag label="成功" color="var(--tx-color-success)" />
+    <TxTag label="警告" color="var(--tx-color-warning)" />
+    <TxTag label="危险" color="var(--tx-color-danger)" />
   </div>
 </div>
 
@@ -18,10 +18,10 @@
 ```vue
 <template>
   <TxTag label="默认" />
-  <TxTag label="主色" color="var(--el-color-primary)" />
-  <TxTag label="成功" color="var(--el-color-success)" />
-  <TxTag label="警告" color="var(--el-color-warning)" />
-  <TxTag label="危险" color="var(--el-color-danger)" />
+  <TxTag label="主色" color="var(--tx-color-primary)" />
+  <TxTag label="成功" color="var(--tx-color-success)" />
+  <TxTag label="警告" color="var(--tx-color-warning)" />
+  <TxTag label="危险" color="var(--tx-color-danger)" />
 </template>
 
 <script setup>
@@ -57,7 +57,7 @@ import { TxTag } from '@talex-touch/tuff-ui'
 <div class="demo-container">
   <div class="demo-container__row">
     <TxTag label="设置" icon="i-carbon-settings" />
-    <TxTag label="用户" icon="i-carbon-user" color="var(--el-color-success)" />
+    <TxTag label="用户" icon="i-carbon-user" color="var(--tx-color-success)" />
   </div>
 </div>
 
@@ -65,7 +65,7 @@ import { TxTag } from '@talex-touch/tuff-ui'
 ```vue
 <template>
   <TxTag label="设置" icon="i-carbon-settings" />
-  <TxTag label="用户" icon="i-carbon-user" color="var(--el-color-success)" />
+  <TxTag label="用户" icon="i-carbon-user" color="var(--tx-color-success)" />
 </template>
 ```
 :::
@@ -77,8 +77,8 @@ import { TxTag } from '@talex-touch/tuff-ui'
 <div class="demo-container">
   <div class="demo-container__row">
     <TxTag label="Vue" closable />
-    <TxTag label="React" closable color="var(--el-color-success)" />
-    <TxTag label="Angular" closable color="var(--el-color-danger)" />
+    <TxTag label="React" closable color="var(--tx-color-success)" />
+    <TxTag label="Angular" closable color="var(--tx-color-danger)" />
   </div>
 </div>
 
@@ -147,10 +147,10 @@ function handleClose(tag) {
 
 <div class="demo-container">
   <div class="demo-container__row">
-    <TxTag color="var(--el-color-success)">
+    <TxTag color="var(--tx-color-success)">
       <span>✓</span> 已验证
     </TxTag>
-    <TxTag color="var(--el-color-warning)">
+    <TxTag color="var(--tx-color-warning)">
       <span>⚡</span> 进行中
     </TxTag>
   </div>
@@ -159,7 +159,7 @@ function handleClose(tag) {
 ::: details 查看代码
 ```vue
 <template>
-  <TxTag color="var(--el-color-success)">
+  <TxTag color="var(--tx-color-success)">
     <span>✓</span> 已验证
   </TxTag>
 </template>
@@ -174,7 +174,7 @@ function handleClose(tag) {
 |------|------|---------|-------------|
 | `label` | `string \| null` | `''` | 显示的文本标签 |
 | `icon` | `string` | `''` | 图标类名 |
-| `color` | `string` | `'var(--el-color-primary)'` | 标签主色 |
+| `color` | `string` | `'var(--tx-color-primary)'` | 标签主色 |
 | `background` | `string` | `''` | 自定义背景色 |
 | `border` | `string` | `''` | 自定义边框色 |
 | `size` | `'sm' \| 'md'` | `'sm'` | 标签尺寸 |
