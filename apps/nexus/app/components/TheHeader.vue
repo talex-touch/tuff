@@ -29,15 +29,29 @@ const links = computed(() => [
 ])
 
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
+const fullPath = computed(() => route.fullPath || '/')
+const authRedirectTarget = computed(() => {
+  const target = fullPath.value
+  if (target.startsWith('/sign-in') || target.startsWith('/sign-up'))
+    return '/dashboard'
+  return target
+})
 
 const signInRoute = computed(() => ({
   path: '/sign-in',
   query: {
     lang: langTag.value,
+    redirect_url: authRedirectTarget.value,
   },
 }))
 
-const afterSignOutUrl = computed(() => `/sign-in?lang=${langTag.value}`)
+const afterSignOutUrl = computed(() => {
+  const params = new URLSearchParams({
+    lang: langTag.value,
+    redirect_url: authRedirectTarget.value,
+  })
+  return `/sign-in?${params.toString()}`
+})
 
 const currentPath = computed(() => route.path || '/')
 const normalizedPath = computed(() => {

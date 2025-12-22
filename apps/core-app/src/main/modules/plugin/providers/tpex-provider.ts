@@ -7,10 +7,11 @@ import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import compressing from 'compressing'
 import fse from 'fs-extra'
 import { getEnabledApiSources } from '../../../service/market-api.service'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile } from './utils'
 
-const DEFAULT_TPEX_API = 'https://tuff.tagzxia.com'
+const DEFAULT_TPEX_API = NEXUS_BASE_URL
 
 /**
  * Get the primary tpexApi base URL from user-configured sources

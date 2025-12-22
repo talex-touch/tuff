@@ -1490,6 +1490,54 @@ export class WindowManager {
   }
 
   /**
+   * Restores a previously extracted UI view back into CoreBox.
+   * This is used as a rollback path when transferring the view fails.
+   */
+  public restoreExtractedUIView(view: WebContentsView, plugin: TouchPlugin): boolean {
+    const currentWindow = this.current
+    if (!currentWindow || currentWindow.window.isDestroyed()) {
+      coreBoxWindowLog.warn('Cannot restore UI view: CoreBox window is not available')
+      return false
+    }
+
+    if (this.uiView) {
+      coreBoxWindowLog.warn('Cannot restore UI view: another UI view is already attached')
+      return false
+    }
+
+    this.uiView = view
+    this.attachedPlugin = plugin
+    this.attachedFeature = null
+    this.uiViewFocused = true
+
+    try {
+      currentWindow.window.contentView.addChildView(view)
+      const bounds = currentWindow.window.getBounds()
+      view.setBounds({
+        x: 0,
+        y: 60,
+        width: bounds.width,
+        height: Math.max(0, bounds.height - 60)
+      })
+    } catch (error) {
+      coreBoxWindowLog.error('Failed to restore extracted UI view', { error })
+      this.uiView = null
+      this.attachedPlugin = null
+      this.attachedFeature = null
+      this.uiViewFocused = false
+      return false
+    }
+
+    if (!view.webContents.isDestroyed()) {
+      this.applyThemeToUIView(view)
+      view.webContents.focus()
+    }
+
+    coreBoxWindowLog.info('UI view restored after failed transfer', { meta: { plugin: plugin.name } })
+    return true
+  }
+
+  /**
    * Check if UI view is currently active and focused
    */
   public isUIViewActive(): boolean {

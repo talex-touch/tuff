@@ -1,3 +1,5 @@
+import { NEXUS_BASE_URL } from '../env'
+
 /**
  * Supported intelligence provider types.
  */
@@ -1774,7 +1776,7 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
     name: 'Tuff Nexus',
     enabled: false,
     priority: 1,
-    baseUrl: 'https://tuff.tagzxia.com/v1',
+    baseUrl: `${NEXUS_BASE_URL}/v1`,
     models: ['gpt-4o', 'gpt-4o-mini'],
     defaultModel: 'gpt-4o-mini',
     timeout: 30000,

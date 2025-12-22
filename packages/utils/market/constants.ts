@@ -1,4 +1,5 @@
 import { StorageList } from '../common/storage/constants'
+import { NEXUS_BASE_URL } from '../env'
 import type {
   MarketProviderDefinition,
   MarketSourcesPayload,
@@ -25,7 +26,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     id: 'tuff-nexus',
     name: 'Tuff Nexus',
     type: 'tpexApi',
-    url: 'https://tuff.tagzxia.com',
+    url: NEXUS_BASE_URL,
     description: 'Tuff 官方插件市场，提供经过审核的插件。',
     enabled: true,
     priority: 110,
@@ -33,7 +34,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     isOfficial: true,
     readOnly: true,
     config: {
-      apiUrl: 'https://tuff.tagzxia.com/api/market/plugins',
+      apiUrl: `${NEXUS_BASE_URL}/api/market/plugins`,
     },
   }),
   defineProvider({

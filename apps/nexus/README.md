@@ -25,3 +25,8 @@ CLERK_SECRET_KEY=sk_test_...
 ```
 
 Additional optional variables (domain, proxy URL, webhook secret, etc.) are described in `SETUP.md`.
+
+## Recent updates
+
+- 登录入口现在会携带 `redirect_url`，用户从任意页面进入/退出账号后都会回到原来的页面而不是被强制带到首页
+- 语言偏好支持持久化（Cookie + localStorage + Clerk metadata 同步），新访客会优先使用浏览器语言，中文用户会自动进入中文文档，刷新不再回退到默认英文

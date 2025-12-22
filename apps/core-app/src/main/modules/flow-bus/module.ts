@@ -114,6 +114,8 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    * Triggers detach operation - transfers UI view from CoreBox to new DivisionBox
    */
   private async triggerDetach(): Promise<void> {
+    type ExtractedUIView = ReturnType<typeof windowManager.extractUIView>
+    let extracted: ExtractedUIView = null
     try {
       // Check if CoreBox is in UI mode
       if (!coreBoxManager.isUIMode) {
@@ -133,7 +135,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       }
 
       // Extract the UI view from CoreBox (doesn't destroy it)
-      const extracted = windowManager.extractUIView()
+      extracted = windowManager.extractUIView()
       if (!extracted) {
         console.warn(LOG_PREFIX, 'No UI view to extract from CoreBox')
         return
@@ -173,6 +175,20 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       console.log(LOG_PREFIX, '✓ Detach completed')
     } catch (error) {
       console.error(LOG_PREFIX, '✗ Failed to detach:', error)
+
+      // Rollback: put the extracted view back to CoreBox to avoid "view lost"
+      if (extracted?.view && extracted?.plugin) {
+        try {
+          const restored = windowManager.restoreExtractedUIView(extracted.view, extracted.plugin)
+          if (restored) {
+            console.warn(LOG_PREFIX, 'Rollback: UI view restored to CoreBox after detach failure')
+          } else {
+            console.warn(LOG_PREFIX, 'Rollback failed: UI view could not be restored to CoreBox')
+          }
+        } catch (restoreError) {
+          console.error(LOG_PREFIX, 'Rollback error:', restoreError)
+        }
+      }
     }
   }
 

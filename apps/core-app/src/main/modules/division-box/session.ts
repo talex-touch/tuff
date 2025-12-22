@@ -213,6 +213,14 @@ export class DivisionBoxSession {
       console.log(`[DivisionBoxSession] windowPool imported, calling acquire...`)
       this.touchWindow = await windowPool.acquire()
       console.log(`[DivisionBoxSession] Window acquired successfully`)
+
+      const ensureVisible = (): void => {
+        if (!this.touchWindow) return
+        const win = this.touchWindow.window
+        if (win.isDestroyed()) return
+        if (!win.isVisible()) win.show()
+        if (!win.isFocused()) win.focus()
+      }
       
       // Update window title
       this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
@@ -248,7 +256,10 @@ export class DivisionBoxSession {
       })
 
       // Show window
-      this.touchWindow.window.show()
+      this.touchWindow.window.once('ready-to-show', () => {
+        ensureVisible()
+      })
+      ensureVisible()
 
       await this.setState(DivisionBoxState.ATTACH)
       console.log(`[DivisionBoxSession] Window acquired from pool: ${this.sessionId}`)

@@ -77,7 +77,13 @@ watchEffect(() => {
 })
 
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
-const signInUrl = computed(() => `/sign-in?lang=${langTag.value}`)
+const signInUrl = computed(() => {
+  const params = new URLSearchParams({
+    lang: langTag.value,
+    redirect_url: redirectTarget.value,
+  })
+  return `/sign-in?${params.toString()}`
+})
 const currentPath = computed(() => route.path)
 </script>
 

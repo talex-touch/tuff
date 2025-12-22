@@ -46,8 +46,7 @@ interface SearchMetrics {
 
 // Nexus telemetry batch upload settings
 const NEXUS_TELEMETRY_BATCH_SIZE = 20
-const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000 // 1 minute
-const NEXUS_API_BASE = getTelemetryApiBase()
+const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000
 
 interface NexusTelemetryEvent {
   eventType: 'search' | 'visit' | 'error' | 'feature_use'
@@ -549,7 +548,7 @@ export class SentryServiceModule extends BaseModule {
       lastUploadTime: this.lastNexusUploadTime,
       totalUploads: this.totalNexusUploads,
       failedUploads: this.failedNexusUploads,
-      apiBase: NEXUS_API_BASE,
+      apiBase: getTelemetryApiBase(),
       isEnabled: this.config.enabled,
       isAnonymous: this.config.anonymous,
     }
@@ -597,15 +596,23 @@ export class SentryServiceModule extends BaseModule {
     this.nexusTelemetryBuffer = []
 
     try {
-      const response = await fetch(`${NEXUS_API_BASE}/api/telemetry/batch`, {
+      const apiBase = getTelemetryApiBase()
+      const url = `${apiBase}/api/telemetry/batch`
+      
+      sentryLog.debug('Uploading telemetry batch', { meta: { count: events.length, url } })
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ events }),
       })
 
       if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error')
         this.failedNexusUploads++
-        sentryLog.warn('Failed to upload telemetry batch', { meta: { status: response.status } })
+        sentryLog.error('Telemetry upload failed', { 
+          meta: { status: response.status, statusText: response.statusText, error: errorText } 
+        })
         this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
       } else {
         this.totalNexusUploads++
@@ -614,7 +621,9 @@ export class SentryServiceModule extends BaseModule {
       }
     } catch (error) {
       this.failedNexusUploads++
-      sentryLog.warn('Telemetry upload failed', { meta: { error: error instanceof Error ? error.message : String(error) } })
+      sentryLog.error('Telemetry upload exception', { 
+        meta: { error: error instanceof Error ? error.message : String(error) } 
+      })
       this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
     }
   }
