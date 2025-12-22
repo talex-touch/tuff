@@ -40,7 +40,6 @@ export class GoogleTranslateProvider implements TranslationProvider {
       }
     }
     catch (error) {
-      console.error('Google Translate error:', error)
       throw new Error(`Google 翻译失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }

@@ -49,7 +49,6 @@ export class BingTranslateProvider implements TranslationProvider {
       }
     }
     catch (error) {
-      console.error('Bing Translate error:', error)
       throw new Error(`Bing 翻译失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }

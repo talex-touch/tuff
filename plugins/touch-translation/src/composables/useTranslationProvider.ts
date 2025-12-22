@@ -8,6 +8,7 @@ import { DeepLTranslateProvider } from '../providers/deepl-translate'
 import { GoogleTranslateProvider } from '../providers/google-translate'
 import { MyMemoryTranslateProvider } from '../providers/mymemory-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
+import { TuffIntelligenceTranslateProvider } from '../providers/tuffintelligence-translate'
 
 // 全局状态
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
@@ -22,6 +23,7 @@ export function useTranslationProvider() {
       return
 
     // 创建提供者实例
+    const tuffIntelligenceProvider = new TuffIntelligenceTranslateProvider()
     const googleProvider = new GoogleTranslateProvider()
     const deeplProvider = new DeepLTranslateProvider()
     const bingProvider = new BingTranslateProvider()
@@ -30,7 +32,8 @@ export function useTranslationProvider() {
     const tencentProvider = new TencentTranslateProvider()
     const mymemoryProvider = new MyMemoryTranslateProvider()
 
-    // 注册提供者
+    // 注册提供者 (TuffIntelligence first as default)
+    providers.set(tuffIntelligenceProvider.id, tuffIntelligenceProvider)
     providers.set(googleProvider.id, googleProvider)
     providers.set(deeplProvider.id, deeplProvider)
     providers.set(bingProvider.id, bingProvider)
@@ -76,7 +79,7 @@ export function useTranslationProvider() {
       }
     }
     catch (error) {
-      console.error('Failed to load providers config:', error)
+      void error
     }
   }
 
@@ -101,7 +104,9 @@ export function useTranslationProvider() {
     if (provider) {
       provider.enabled = enabled ?? !provider.enabled
       // 异步保存，不阻塞 UI
-      saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
+      saveProvidersConfig().catch((err) => {
+        void err
+      })
     }
   }
 
@@ -111,7 +116,9 @@ export function useTranslationProvider() {
     if (provider && provider.config) {
       provider.config = { ...provider.config, ...config }
       // 异步保存，不阻塞 UI
-      saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
+      saveProvidersConfig().catch((err) => {
+        void err
+      })
     }
   }
 
@@ -119,21 +126,25 @@ export function useTranslationProvider() {
   const registerProvider = (provider: TranslationProvider) => {
     providers.set(provider.id, provider)
     // 异步保存，不阻塞 UI
-    saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
+    saveProvidersConfig().catch((err) => {
+      void err
+    })
   }
 
   // 注销提供者
   const unregisterProvider = (id: string) => {
     providers.delete(id)
     // 异步保存，不阻塞 UI
-    saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
+    saveProvidersConfig().catch((err) => {
+      void err
+    })
   }
 
   // 重置所有提供者配置
   const resetProvidersConfig = () => {
     providers.forEach((provider) => {
-      // 默认只启用 Google 翻译
-      provider.enabled = provider.id === 'google'
+      // 默认只启用 TuffIntelligence 翻译
+      provider.enabled = provider.id === 'tuffintelligence'
       if (provider.config) {
         // 重置为默认配置
         if (provider.id === 'deepl') {
@@ -181,7 +192,9 @@ export function useTranslationProvider() {
       }
     })
     // 异步保存，不阻塞 UI
-    saveProvidersConfig().catch(err => console.error('Failed to save providers config:', err))
+    saveProvidersConfig().catch((err) => {
+      void err
+    })
   }
 
   // 自动初始化

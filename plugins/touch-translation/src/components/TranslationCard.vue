@@ -22,11 +22,9 @@ async function copyResult() {
   if (props.result?.text) {
     try {
       await navigator.clipboard.writeText(props.result.text)
-      // TODO: 可以添加一个成功提示
-      console.log('翻译结果已复制到剪贴板')
     }
     catch (err) {
-      console.error('复制失败:', err)
+      void err
     }
   }
 }

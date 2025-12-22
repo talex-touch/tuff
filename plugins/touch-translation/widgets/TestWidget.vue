@@ -12,17 +12,16 @@ const count = ref(0)
 
 function increment() {
   count.value++
-  console.log('[TestWidget] Count:', count.value)
 }
 
 // Test TuffItemBuilder API access
 try {
   const builder = new TuffItemBuilder('test-widget')
-  console.log('[TestWidget] ✅ Successfully accessed @talex-touch/utils/core-box', builder)
+  void builder
   message.value = '✅ API Access Working!'
 }
 catch (error) {
-  console.error('[TestWidget] ❌ Failed to access API:', error)
+  void error
   message.value = '❌ API Access Failed'
 }
 </script>

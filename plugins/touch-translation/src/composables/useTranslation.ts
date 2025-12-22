@@ -30,7 +30,7 @@ export function useTranslation() {
       }
     }
     catch (error) {
-      console.error('Failed to load translation history:', error)
+      void error
       history.value = []
     }
   }
@@ -42,7 +42,7 @@ export function useTranslation() {
       await storage.setFile('history', history.value)
     }
     catch (error) {
-      console.error('Failed to save translation history:', error)
+      void error
     }
   }
 
@@ -71,7 +71,9 @@ export function useTranslation() {
       history.value = history.value.slice(0, MAX_HISTORY_ITEMS)
     }
     // 异步保存，不阻塞 UI
-    saveHistory().catch(err => console.error('Failed to save history:', err))
+    saveHistory().catch((err) => {
+      void err
+    })
   }
 
   // 从历史记录中删除项目
@@ -80,7 +82,9 @@ export function useTranslation() {
     if (index > -1) {
       history.value.splice(index, 1)
       // 异步保存，不阻塞 UI
-      saveHistory().catch(err => console.error('Failed to save history:', err))
+      saveHistory().catch((err) => {
+        void err
+      })
     }
   }
 
@@ -88,7 +92,9 @@ export function useTranslation() {
   const clearHistory = () => {
     history.value = []
     // 异步保存，不阻塞 UI
-    saveHistory().catch(err => console.error('Failed to save history:', err))
+    saveHistory().catch((err) => {
+      void err
+    })
   }
 
   // 翻译文本
@@ -142,7 +148,6 @@ export function useTranslation() {
       catch (error) {
         const err = error instanceof Error ? error : new Error('翻译失败')
         currentResponse.errors.set(provider.id, err)
-        console.error(`Provider ${provider.id} failed:`, err)
         return null
       }
     })

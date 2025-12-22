@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "lib": ["ES2020"],
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "paths": {
+      "@/*": ["./*"],
+      "~/*": ["./*"]
+    },
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2020"
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
