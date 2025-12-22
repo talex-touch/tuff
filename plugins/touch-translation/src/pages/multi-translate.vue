@@ -71,7 +71,7 @@ async function translate() {
     await performTranslation(textToTranslate, 'zh', 'auto')
   }
   catch (error) {
-    console.error('翻译失败:', error)
+    void error
   }
 }
 

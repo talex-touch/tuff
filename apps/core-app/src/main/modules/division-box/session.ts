@@ -222,8 +222,26 @@ export class DivisionBoxSession {
         if (!win.isFocused()) win.focus()
       }
       
-      // Update window title
+      // Update window title with unique identifier for Windows taskbar grouping
       this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
+      
+      // Windows-specific: Set unique AppUserModelId to ensure separate taskbar entries
+      if (process.platform === 'win32') {
+        try {
+          // Each DivisionBox gets unique AppUserModelId based on sessionId/pluginId
+          const appUserModelId = `TalexTouch.Tuff.DivisionBox.${this.config.pluginId || this.sessionId}`
+          this.touchWindow.window.setAppDetails({
+            appId: appUserModelId,
+            appIconPath: process.execPath,
+            appIconIndex: 0,
+            relaunchCommand: '',
+            relaunchDisplayName: this.config.title
+          })
+          console.log(`[DivisionBoxSession] Set AppUserModelId: ${appUserModelId}`)
+        } catch (error) {
+          console.warn(`[DivisionBoxSession] Failed to set AppDetails:`, error)
+        }
+      }
 
       // Notify renderer about DivisionBox trigger via unified channel
       genTouchApp().channel.sendTo(

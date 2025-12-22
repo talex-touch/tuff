@@ -45,7 +45,6 @@ export class DeepLTranslateProvider implements TranslationProvider {
       }
     }
     catch (error) {
-      console.error('DeepL Translate error:', error)
       throw new Error(`DeepL 翻译失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }

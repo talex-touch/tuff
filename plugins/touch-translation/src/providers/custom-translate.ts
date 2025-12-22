@@ -65,7 +65,6 @@ export class CustomTranslateProvider implements TranslationProvider {
       }
     }
     catch (error) {
-      console.error('Custom Translate error:', error)
       throw new Error(`自定义翻译失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
   }

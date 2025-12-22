@@ -163,5 +163,7 @@ const layout = timeline.layout
 
 .tx-timeline-item__description {
   color: var(--tx-timeline-description, #6b7280);
-  font-size: (truncated 2589 lines)
+  font-size: 14px;
+  line-height: 1.5;
+}
 </style>

@@ -10,14 +10,15 @@ const {
 } = globalThis
 
 const crypto = require('node:crypto')
+const { createIntelligenceClient } = require('@talex-touch/utils/intelligence')
 
 const PLUGIN_NAME = 'touch-translation'
 
-// Track latest request per feature to avoid stale async updates
 const latestRequestSeqByFeature = new Map()
 
 const debounceTimersByFeature = new Map()
 const abortControllersByFeature = new Map()
+const lastQueryByFeature = new Map()
 
 let networkPermissionState = null
 
@@ -119,10 +120,12 @@ function upsertFeatureItem(item) {
 function createPendingTranslationItem(originalText, featureId, service, from, to) {
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
   const originalSnippet = formatOriginalSnippet(originalText)
+  // Always show original text first in pending state
+  const subtitle = `原文: ${originalSnippet || originalText} · ${serviceName}: ${from} → ${to} (翻译中…)`
   return new TuffItemBuilder(getTranslationItemId(originalText, service))
     .setSource('plugin', 'plugin-features')
     .setTitle('翻译中…')
-    .setSubtitle(`${serviceName}: ${from} → ${to}${originalSnippet ? ` · 原文: ${originalSnippet}` : ''}`)
+    .setSubtitle(subtitle)
     .setIcon({ type: 'file', value: 'assets/logo.svg' })
     .addTag('Translation', 'blue')
     .setMeta({
@@ -159,10 +162,12 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
     function buildFailedItem(providerId, errorMessage) {
       const serviceName = providerId.charAt(0).toUpperCase() + providerId.slice(1)
       const originalSnippet = formatOriginalSnippet(textToTranslate)
+      // Always show original text first in failed state
+      const subtitle = `原文: ${originalSnippet || textToTranslate} · ${serviceName}: ${detectedLang} → ${targetLang}${errorMessage ? ` · 错误: ${errorMessage}` : ''}`
       return new TuffItemBuilder(getTranslationItemId(textToTranslate, providerId))
         .setSource('plugin', 'plugin-features')
         .setTitle(`${serviceName} 翻译失败`)
-        .setSubtitle(`${originalSnippet ? `原文: ${originalSnippet} · ` : ''}${serviceName}: ${detectedLang} → ${targetLang}${errorMessage ? ` · ${errorMessage}` : ''}`)
+        .setSubtitle(subtitle)
         .setIcon({ type: 'file', value: 'assets/logo.svg' })
         .addTag('Translation', 'red')
         .setMeta({
@@ -267,7 +272,6 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
       upsertFeatureItem(item)
     }
 
-    // Run all providers concurrently; each completion upserts its item
     await Promise.allSettled(providersToUse.map(runProvider))
   }
   catch (error) {
@@ -277,26 +281,14 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
   }
 }
 
-/**
- * @param {string} text
- * @returns {string}
- */
 function detectLanguage(text) {
   const chineseRegex = /[\u4E00-\u9FFF]/
   return chineseRegex.test(text) ? 'zh' : 'en'
 }
 
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @returns {Promise<any>}
- */
 async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
   try {
-    if (!channel || typeof channel.send !== 'function') {
-      throw new Error('Intelligence channel not available')
-    }
+    const client = createIntelligenceClient()
 
     const payload = {
       text,
@@ -307,18 +299,8 @@ async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
       payload.sourceLang = from
     }
 
-    const response = await channel.send('intelligence:invoke', {
-      capabilityId: 'text.translate',
-      payload,
-      options: {},
-      _sdkapi: plugin?.sdkapi,
-    })
-
-    if (!response?.ok) {
-      throw new Error(response?.error || 'Intelligence invoke failed')
-    }
-
-    const translatedText = response?.result?.result
+    const response = await client.invoke('text.translate', payload)
+    const translatedText = response?.result
     if (typeof translatedText !== 'string') {
       throw new Error('Invalid intelligence translate result')
     }
@@ -328,8 +310,8 @@ async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
       from,
       to,
       service: 'tuffintelligence',
-      provider: response?.result?.provider,
-      model: response?.result?.model,
+      provider: response?.provider,
+      model: response?.model,
     }
   }
   catch (error) {
@@ -872,18 +854,22 @@ async function translateWithMyMemory(text, from = 'auto', to = 'zh', signal) {
  * @returns {import('@talex-touch/utils').TuffItem}
  */
 function createTranslationSearchItem(originalText, translationResult, featureId) {
-  const { text: translatedText, from, to, service } = translationResult
+  const { text: translatedText, from, to, service, provider, model } = translationResult
 
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
   const originalSnippet = formatOriginalSnippet(originalText)
+  
+  // Ensure we always show the original text in subtitle
+  const providerInfo = provider && model ? ` (${provider}/${model})` : ''
+  const subtitle = `原文: ${originalSnippet || originalText} · ${serviceName}${providerInfo}: ${from || 'auto'} → ${to}`
 
   return new TuffItemBuilder(getTranslationItemId(originalText, service))
     .setSource('plugin', 'plugin-features')
     .setTitle(translatedText)
-    .setSubtitle(`${originalSnippet ? `原文: ${originalSnippet} · ` : ''}${serviceName}: ${from} → ${to}`)
+    .setSubtitle(subtitle)
     .setIcon({ type: 'file', value: 'assets/logo.svg' })
     .createAndAddAction('copy-translation', 'copy', '复制', translatedText)
-    .addTag('Translation', 'blue')
+    .addTag('Translation', 'green')
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
@@ -891,9 +877,12 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
       pluginType: 'translation',
       originalText,
       translatedText,
-      fromLang: from,
+      fromLang: from || 'auto',
       toLang: to,
       serviceName: service,
+      provider,
+      model,
+      pending: false,
     })
     .build()
 }
@@ -1071,6 +1060,16 @@ const pluginLifecycle = {
       if (featureId === 'touch-translate' && queryText && queryText.trim()) {
         const textToTranslate = queryText.trim()
 
+        // Check if query is the same as last query - if so, skip to avoid duplicate searches
+        const lastQuery = lastQueryByFeature.get(featureId)
+        if (lastQuery === textToTranslate) {
+          // Same query, don't trigger new search
+          return true
+        }
+
+        // Update last query
+        lastQueryByFeature.set(featureId, textToTranslate)
+
         const nextSeq = (latestRequestSeqByFeature.get(featureId) || 0) + 1
         latestRequestSeqByFeature.set(featureId, nextSeq)
 
@@ -1105,7 +1104,7 @@ const pluginLifecycle = {
           startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((e) => {
             logger.error('Error starting translation request (debounced):', e)
           })
-        }, 260)
+        }, 200)
         debounceTimersByFeature.set(featureId, timer)
 
         return true
@@ -1116,12 +1115,8 @@ const pluginLifecycle = {
     }
   },
 
-  /**
-   * @param {import('@talex-touch/utils').TuffItem} item
-   */
   async onItemAction(item) {
     if (item.meta?.defaultAction === 'copy') {
-      // Find the action with type 'copy' from the actions array
       const copyAction = item.actions.find(action => action.type === 'copy')
       if (copyAction && copyAction.payload) {
         clipboard.writeText(copyAction.payload)
