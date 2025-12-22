@@ -4,6 +4,7 @@ import { getTpexApiBase } from '@talex-touch/utils/env'
 import { performMarketHttpRequest } from './market-http.service'
 import { createLogger } from '../utils/logger'
 import { getConfig } from '../modules/storage'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 
 const log = createLogger('MarketApiService')
 
@@ -50,7 +51,7 @@ function getDefaultMarketBaseUrl(): string {
     return sources[0]!.url.replace(/\/$/, '')
   }
 
-  return 'https://tuff.tagzxia.com'
+  return NEXUS_BASE_URL
 }
 
 const DEFAULT_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours

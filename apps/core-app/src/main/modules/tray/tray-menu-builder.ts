@@ -3,6 +3,7 @@ import type { TrayState } from './tray-state-manager'
 import path from 'node:path'
 import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 
 /**
  * TrayMenuBuilder - Tray menu builder
@@ -165,7 +166,7 @@ export class TrayMenuBuilder {
         {
           label: t('tray.visitWebsite'),
           click: () => {
-            shell.openExternal('https://tuff.tagzxia.com')
+            shell.openExternal(NEXUS_BASE_URL)
           },
         },
       ],

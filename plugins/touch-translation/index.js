@@ -2,6 +2,7 @@ const {
   plugin,
   clipboard,
   http,
+  channel,
   logger,
   URLSearchParams,
   TuffItemBuilder,
@@ -66,13 +67,13 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
     ? Object.entries(providersConfig)
       .filter(([_id, config]) => config.enabled)
       .map(([id, config]) => ({ id, ...config }))
-    : [{ id: 'google', enabled: true }]
+    : [{ id: 'tuffintelligence', enabled: true }]
 
-  const providersToShow = enabledProviders.length > 0 ? enabledProviders : [{ id: 'google', enabled: true }]
+  const providersToShow = enabledProviders.length > 0 ? enabledProviders : [{ id: 'tuffintelligence', enabled: true }]
   const pendingItems = providersToShow.map((p) => createPendingTranslationItem(textToTranslate, featureId, p.id, detectedLang, targetLang))
   plugin.feature.pushItems(pendingItems)
 
-  Promise.resolve().then(() => translateAndUpsertResults(textToTranslate, featureId, signal, nextSeq))
+  Promise.resolve().then(() => translateAndUpsertResults(textToTranslate, featureId, signal, nextSeq, providersToShow, detectedLang, targetLang))
 }
 
 /**
@@ -82,6 +83,29 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
  */
 function md5(string) {
   return crypto.createHash('md5').update(string).digest('hex')
+}
+
+function formatOriginalSnippet(text, maxLen = 56) {
+  const normalized = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+  if (normalized.length <= maxLen) return normalized
+  return `${normalized.slice(0, maxLen)}…`
+}
+
+function getTranslationItemId(originalText, service) {
+  return `translation-${md5(String(originalText ?? ''))}-${service}`
+}
+
+function upsertFeatureItem(item) {
+  try {
+    plugin.feature.updateItem(item.id, item)
+    return
+  }
+  catch (error) {
+    // ignore and fallback to pushItems
+  }
+
+  plugin.feature.pushItems([item])
 }
 
 /**
@@ -94,10 +118,11 @@ function md5(string) {
  */
 function createPendingTranslationItem(originalText, featureId, service, from, to) {
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
-  return new TuffItemBuilder(`translation-${originalText}-${service}`)
+  const originalSnippet = formatOriginalSnippet(originalText)
+  return new TuffItemBuilder(getTranslationItemId(originalText, service))
     .setSource('plugin', 'plugin-features')
     .setTitle('翻译中…')
-    .setSubtitle(`${serviceName}: ${from} → ${to}`)
+    .setSubtitle(`${serviceName}: ${from} → ${to}${originalSnippet ? ` · 原文: ${originalSnippet}` : ''}`)
     .setIcon({ type: 'file', value: 'assets/logo.svg' })
     .addTag('Translation', 'blue')
     .setMeta({
@@ -121,7 +146,7 @@ function createPendingTranslationItem(originalText, featureId, service, from, to
  * @param {AbortSignal} signal
  * @param {number} requestSeq
  */
-async function translateAndUpsertResults(textToTranslate, featureId, signal, requestSeq) {
+async function translateAndUpsertResults(textToTranslate, featureId, signal, requestSeq, providersToUse, detectedLang, targetLang) {
   try {
     if (signal?.aborted) {
       return
@@ -131,34 +156,29 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
       return
     }
 
-    const detectedLang = detectLanguage(textToTranslate)
-    const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
-
-    const providersConfig = await plugin.storage.getFile('providers_config')
-
-    if (signal?.aborted) {
-      return
+    function buildFailedItem(providerId, errorMessage) {
+      const serviceName = providerId.charAt(0).toUpperCase() + providerId.slice(1)
+      const originalSnippet = formatOriginalSnippet(textToTranslate)
+      return new TuffItemBuilder(getTranslationItemId(textToTranslate, providerId))
+        .setSource('plugin', 'plugin-features')
+        .setTitle(`${serviceName} 翻译失败`)
+        .setSubtitle(`${originalSnippet ? `原文: ${originalSnippet} · ` : ''}${serviceName}: ${detectedLang} → ${targetLang}${errorMessage ? ` · ${errorMessage}` : ''}`)
+        .setIcon({ type: 'file', value: 'assets/logo.svg' })
+        .addTag('Translation', 'red')
+        .setMeta({
+          pluginName: PLUGIN_NAME,
+          featureId,
+          pluginType: 'translation',
+          originalText: textToTranslate,
+          translatedText: '',
+          fromLang: detectedLang,
+          toLang: targetLang,
+          serviceName: providerId,
+          pending: false,
+          error: errorMessage || 'translation failed',
+        })
+        .build()
     }
-
-    if (latestRequestSeqByFeature.get(featureId) !== requestSeq) {
-      return
-    }
-
-    const enabledProviders = providersConfig
-      ? Object.entries(providersConfig)
-        .filter(([_id, config]) => config.enabled)
-        .map(([id, config]) => ({ id, ...config }))
-      : [{ id: 'google', enabled: true }]
-
-    const providersToUse = enabledProviders.length > 0
-      ? enabledProviders
-      : [{ id: 'google', enabled: true }]
-
-    // Ensure pending items exist for all enabled providers (upsert)
-    const pendingItems = providersToUse.map((p) =>
-      createPendingTranslationItem(textToTranslate, featureId, p.id, detectedLang, targetLang)
-    )
-    plugin.feature.pushItems(pendingItems)
 
     const runProvider = async (provider) => {
       if (signal?.aborted) return
@@ -166,6 +186,9 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
 
       let result = null
       switch (provider.id) {
+        case 'tuffintelligence':
+          result = await translateWithTuffIntelligence(textToTranslate, detectedLang, targetLang)
+          break
         case 'google':
           result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
           break
@@ -230,10 +253,18 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
       if (signal?.aborted) return
       if (latestRequestSeqByFeature.get(featureId) !== requestSeq) return
 
-      if (result) {
-        const item = createTranslationSearchItem(textToTranslate, result, featureId)
-        plugin.feature.pushItems([item])
+      if (!result) {
+        upsertFeatureItem(buildFailedItem(provider.id, 'translation failed'))
+        return
       }
+
+      if (result.error) {
+        upsertFeatureItem(buildFailedItem(provider.id, result.error))
+        return
+      }
+
+      const item = createTranslationSearchItem(textToTranslate, result, featureId)
+      upsertFeatureItem(item)
     }
 
     // Run all providers concurrently; each completion upserts its item
@@ -253,6 +284,64 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
 function detectLanguage(text) {
   const chineseRegex = /[\u4E00-\u9FFF]/
   return chineseRegex.test(text) ? 'zh' : 'en'
+}
+
+/**
+ * @param {string} text
+ * @param {string} from
+ * @param {string} to
+ * @returns {Promise<any>}
+ */
+async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
+  try {
+    if (!channel || typeof channel.send !== 'function') {
+      throw new Error('Intelligence channel not available')
+    }
+
+    const payload = {
+      text,
+      targetLang: to,
+    }
+
+    if (from && from !== 'auto') {
+      payload.sourceLang = from
+    }
+
+    const response = await channel.send('intelligence:invoke', {
+      capabilityId: 'text.translate',
+      payload,
+      options: {},
+      _sdkapi: plugin?.sdkapi,
+    })
+
+    if (!response?.ok) {
+      throw new Error(response?.error || 'Intelligence invoke failed')
+    }
+
+    const translatedText = response?.result?.result
+    if (typeof translatedText !== 'string') {
+      throw new Error('Invalid intelligence translate result')
+    }
+
+    return {
+      text: translatedText.trim() || text,
+      from,
+      to,
+      service: 'tuffintelligence',
+      provider: response?.result?.provider,
+      model: response?.result?.model,
+    }
+  }
+  catch (error) {
+    logger.error('TuffIntelligence Translate error:', error)
+    return {
+      text: `[TuffIntelligence Failed] ${text}`,
+      from,
+      to,
+      service: 'tuffintelligence',
+      error: error.message,
+    }
+  }
 }
 
 /**
@@ -786,11 +875,12 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
   const { text: translatedText, from, to, service } = translationResult
 
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
+  const originalSnippet = formatOriginalSnippet(originalText)
 
-  return new TuffItemBuilder(`translation-${originalText}-${service}`)
+  return new TuffItemBuilder(getTranslationItemId(originalText, service))
     .setSource('plugin', 'plugin-features')
     .setTitle(translatedText)
-    .setSubtitle(`${serviceName}: ${from} → ${to}`)
+    .setSubtitle(`${originalSnippet ? `原文: ${originalSnippet} · ` : ''}${serviceName}: ${from} → ${to}`)
     .setIcon({ type: 'file', value: 'assets/logo.svg' })
     .createAndAddAction('copy-translation', 'copy', '复制', translatedText)
     .addTag('Translation', 'blue')
@@ -942,25 +1032,26 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
 
   const results = await Promise.allSettled(translationPromises)
 
-  const searchItems = results
-    .filter(result => result.status === 'fulfilled' && result.value)
-    .map(result => createTranslationSearchItem(textToTranslate, result.value, featureId))
+  for (let i = 0; i < results.length; i++) {
+    if (signal?.aborted) return
+    if (latestRequestSeqByFeature.get(featureId) !== requestSeq) return
 
-  logger.debug(
-    `[touch-translation] built search items meta ${
-      JSON.stringify(searchItems.map(item => item.meta))}`,
-  )
+    const provider = providersToUse[i]
+    const settled = results[i]
 
-  if (searchItems.length > 0) {
-    plugin.feature.pushItems(searchItems)
-  }
-  else {
-    const errorItem = new TuffItemBuilder('translation-error')
-      .setTitle('All translations failed')
-      .setSubtitle('Check logs for more details.')
-      .setIcon({ type: 'file', value: 'assets/logo.svg' })
-      .build()
-    plugin.feature.pushItems([errorItem])
+    if (!provider) continue
+
+    if (settled.status === 'fulfilled' && settled.value) {
+      const item = createTranslationSearchItem(textToTranslate, settled.value, featureId)
+      upsertFeatureItem(item)
+      continue
+    }
+
+    const errorMessage = settled.status === 'rejected'
+      ? (settled.reason?.message || String(settled.reason || 'translation failed'))
+      : (settled.value?.error || 'translation failed')
+
+    upsertFeatureItem(buildFailedItem(provider.id, errorMessage))
   }
 }
 
@@ -983,32 +1074,40 @@ const pluginLifecycle = {
         const nextSeq = (latestRequestSeqByFeature.get(featureId) || 0) + 1
         latestRequestSeqByFeature.set(featureId, nextSeq)
 
-        if (!signal) {
-          const prevTimer = debounceTimersByFeature.get(featureId)
-          if (prevTimer) {
-            clearTimeout(prevTimer)
-          }
-
-          const prevController = abortControllersByFeature.get(featureId)
-          if (prevController) {
-            prevController.abort()
-          }
-          const controller = new AbortController()
-          abortControllersByFeature.set(featureId, controller)
-
-          const timer = setTimeout(() => {
-            if (latestRequestSeqByFeature.get(featureId) !== nextSeq) {
-              return
-            }
-            startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((e) => {
-              logger.error('Error starting translation request (debounced):', e)
-            })
-          }, 260)
-          debounceTimersByFeature.set(featureId, timer)
-          return true
+        const prevTimer = debounceTimersByFeature.get(featureId)
+        if (prevTimer) {
+          clearTimeout(prevTimer)
         }
 
-        await startTranslationRequest(textToTranslate, featureId, signal, nextSeq)
+        const prevController = abortControllersByFeature.get(featureId)
+        if (prevController) {
+          prevController.abort()
+        }
+
+        const controller = new AbortController()
+        abortControllersByFeature.set(featureId, controller)
+
+        if (signal) {
+          if (signal.aborted) {
+            controller.abort()
+          } else {
+            signal.addEventListener('abort', () => controller.abort(), { once: true })
+          }
+        }
+
+        const timer = setTimeout(() => {
+          if (latestRequestSeqByFeature.get(featureId) !== nextSeq) {
+            return
+          }
+          if (controller.signal.aborted) {
+            return
+          }
+          startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((e) => {
+            logger.error('Error starting translation request (debounced):', e)
+          })
+        }, 260)
+        debounceTimersByFeature.set(featureId, timer)
+
         return true
       }
     }

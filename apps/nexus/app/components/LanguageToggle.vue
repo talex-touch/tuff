@@ -6,6 +6,7 @@ import Icon from './icon/Icon.vue'
 const { locale, setLocale, t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const { persistPreferredLocale } = useLocalePreference()
 
 const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
 const ariaLabel = computed(() =>
@@ -20,6 +21,7 @@ async function toggleLocale(targetTag: string) {
   const normalizedPath = rawPath.replace(/^\/(en|zh)(?=\/|$)/i, '') || '/'
 
   await setLocale(targetLocale)
+  persistPreferredLocale(targetLocale)
 
   const query = { ...route.query, lang: targetTag }
   await router.replace({

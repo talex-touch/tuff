@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ClerkLoaded, ClerkLoading } from '@clerk/nuxt/components'
-import { computed, onMounted, watchEffect } from 'vue'
+import { computed, onMounted, watch, watchEffect } from 'vue'
 import { appName } from '~/constants'
 
 useHead({
@@ -12,37 +12,67 @@ const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 
 const { locale, setLocale } = useI18n()
+const { syncLocaleChanges, getSavedLocale } = useUserLocale()
+const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
 
-// Initialize user locale from Clerk metadata
-const { initializeLocale, syncLocaleChanges, getSavedLocale } = useUserLocale()
+type SupportedLocale = 'en' | 'zh'
+
+const normalizeLocale = (value?: string | null): SupportedLocale | null => {
+  if (!value)
+    return null
+  const lower = value.toLowerCase()
+  if (lower.startsWith('zh'))
+    return 'zh'
+  if (lower.startsWith('en'))
+    return 'en'
+  return null
+}
 
 /**
  * Detect browser language as fallback
  */
-function detectBrowserLocale(): 'zh' | 'en' {
-  if (import.meta.server) return 'en'
-  
+function detectBrowserLocale(): SupportedLocale {
+  if (import.meta.server)
+    return 'en'
+
   const browserLang = navigator.language || navigator.languages?.[0] || 'en'
   return browserLang.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 
-onMounted(() => {
-  // Priority: Clerk metadata > Browser language > Default
-  const savedLocale = getSavedLocale()
-  
-  if (savedLocale) {
-    // User has saved preference in Clerk
-    initializeLocale()
-  } else {
-    // First-time visitor: detect browser language
-    const browserLocale = detectBrowserLocale()
-    if (browserLocale !== locale.value) {
-      setLocale(browserLocale)
-    }
+const immediatePreference = getPreferredLocale()
+if (immediatePreference && immediatePreference !== locale.value)
+  setLocale(immediatePreference)
+
+function bootstrapLocalePreference() {
+  const storedPreference = getPreferredLocale()
+  if (storedPreference && storedPreference !== locale.value) {
+    setLocale(storedPreference)
+    return
   }
-  
-  // Enable auto-sync of locale changes to Clerk
+
+  const savedLocale = normalizeLocale(getSavedLocale())
+  if (savedLocale && savedLocale !== locale.value) {
+    setLocale(savedLocale)
+    persistPreferredLocale(savedLocale)
+    return
+  }
+
+  const browserLocale = detectBrowserLocale()
+  if (browserLocale !== locale.value)
+    setLocale(browserLocale)
+  persistPreferredLocale(browserLocale)
+}
+
+onMounted(() => {
+  bootstrapLocalePreference()
   syncLocaleChanges()
+})
+
+watch(locale, (newLocale, previousLocale) => {
+  const normalized = normalizeLocale(newLocale)
+  if (!normalized || normalized === previousLocale)
+    return
+  persistPreferredLocale(normalized)
 })
 
 const langParam = computed(() => {

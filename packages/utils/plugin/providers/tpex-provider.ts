@@ -6,8 +6,9 @@ import type {
   PluginProviderContext,
 } from './types'
 import { PluginProviderType } from './types'
+import { NEXUS_BASE_URL } from '../../env'
 
-const DEFAULT_TPEX_API = 'https://tuff.tagzxia.com'
+const DEFAULT_TPEX_API = NEXUS_BASE_URL
 
 /**
  * Check if source is a .tpex file path or URL

@@ -1,3 +1,5 @@
+export const NEXUS_BASE_URL = 'https://tuff.tagzxia.com'
+
 export interface EnvLike {
   [key: string]: unknown
 }
@@ -53,13 +55,17 @@ export function normalizeBaseUrl(input: string): string {
 }
 
 export function getTuffBaseUrl(): string {
-  return normalizeBaseUrl(getEnvOrDefault('VITE_NEXUS_URL', 'https://tuff.tagzxia.com'))
+  return normalizeBaseUrl(getEnvOrDefault('VITE_NEXUS_URL', NEXUS_BASE_URL))
 }
 
 export function getTelemetryApiBase(): string {
-  return normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE', getTuffBaseUrl()))
+  const url = normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE', NEXUS_BASE_URL))
+  if (!url) {
+    throw new Error('Telemetry API base URL is not configured')
+  }
+  return url
 }
 
 export function getTpexApiBase(): string {
-  return normalizeBaseUrl(getEnvOrDefault('TPEX_API_BASE', getTuffBaseUrl()))
+  return normalizeBaseUrl(getEnvOrDefault('TPEX_API_BASE', NEXUS_BASE_URL))
 }

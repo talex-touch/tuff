@@ -11,6 +11,7 @@ import { DivisionBoxWindowOption } from '../../config/default'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 
 const LOG_PREFIX = '[DivisionBox Pool]'
+const IS_WINDOWS = process.platform === 'win32'
 
 /** Maximum number of active DivisionBox instances */
 const MAX_DIVISION_BOX_INSTANCES = 5
@@ -59,6 +60,11 @@ export class DivisionBoxWindowPool {
    * Should be called after app is ready
    */
   async initialize(): Promise<void> {
+    if (IS_WINDOWS) {
+      console.log(LOG_PREFIX, 'Skip pre-warm on Windows (pool disabled)')
+      return
+    }
+
     if (this.initializing) return
     this.initializing = true
 
@@ -78,6 +84,10 @@ export class DivisionBoxWindowPool {
    * Fill the pool to maintain POOL_SIZE ready windows
    */
   private async fillPool(): Promise<void> {
+    if (IS_WINDOWS) {
+      return
+    }
+
     // Prevent concurrent fills
     if (this.filling) return
     this.filling = true
@@ -172,6 +182,15 @@ export class DivisionBoxWindowPool {
     // Check max limit
     if (this.activeWindows.size >= MAX_DIVISION_BOX_INSTANCES) {
       throw new Error(`Maximum DivisionBox instances (${MAX_DIVISION_BOX_INSTANCES}) reached`)
+    }
+
+    if (IS_WINDOWS) {
+      console.log(LOG_PREFIX, 'Windows: creating on-demand (pool disabled)')
+      const newPooled = await this.createPooledWindow()
+      const touchWindow = newPooled.touchWindow
+      this.activeWindows.add(touchWindow.window)
+      console.log(LOG_PREFIX, `Active: ${this.activeWindows.size}/${MAX_DIVISION_BOX_INSTANCES}`)
+      return touchWindow
     }
 
     let touchWindow: TouchWindow

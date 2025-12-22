@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
 import process from 'node:process'
-import path from 'pathe'
+import consola from 'consola'
 import fs from 'fs-extra'
+import path from 'node:path'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { createHash } from 'node:crypto'
 
 interface PublishOptions {
@@ -22,7 +24,7 @@ interface AssetInfo {
   sha256: string
 }
 
-const DEFAULT_API_URL = 'https://tuff.tagzxia.com/api/releases'
+const DEFAULT_API_URL = `${NEXUS_BASE_URL}/api/releases`
 
 async function getAuthToken(): Promise<string | null> {
   const tokenPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.tuff', 'auth.json')
