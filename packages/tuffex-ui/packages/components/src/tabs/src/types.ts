@@ -6,6 +6,9 @@ export interface TabsProps {
   navMaxWidth?: number
   contentPadding?: number
   contentScrollable?: boolean
+  autoHeight?: boolean
+  autoHeightDurationMs?: number
+  autoHeightEasing?: string
 }
 
 export interface TabsEmits {

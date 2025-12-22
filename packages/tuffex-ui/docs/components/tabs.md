@@ -65,6 +65,9 @@ const active = ref('General')
 | `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |
 | `contentPadding` | `number` | `12` | 内容区 padding |
 | `contentScrollable` | `boolean` | `true` | 内容区是否可滚动 |
+| `autoHeight` | `boolean` | `false` | 内容区高度是否跟随内容并过渡（仅在 `contentScrollable=false` 时生效） |
+| `autoHeightDurationMs` | `number` | `250` | 高度过渡时长(ms) |
+| `autoHeightEasing` | `string` | `ease` | 高度过渡曲线 |
 
 ### TxTabItem Props
 

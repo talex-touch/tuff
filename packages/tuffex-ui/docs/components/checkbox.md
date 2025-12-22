@@ -31,6 +31,45 @@ const checked5 = ref(false)
 </template>
 </DemoBlock>
 
+## 文案在前（labelPlacement = start）
+
+<DemoBlock title="Checkbox (label start)">
+<template #preview>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+  <TxCheckbox v-model="checked1" label="我在前面" label-placement="start" />
+  <TxCheckbox v-model="checked2" label="我也在前面" label-placement="start" />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxCheckbox v-model="checked" label="我在前面" label-placement="start" />
+</template>
+```
+</template>
+</DemoBlock>
+
+## 无文案
+
+无 label / 无插槽时，建议传入 `aria-label`。
+
+<DemoBlock title="Checkbox (no label)">
+<template #preview>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+  <TxCheckbox v-model="checked5" aria-label="勾选" />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxCheckbox v-model="checked" aria-label="勾选" />
+</template>
+```
+</template>
+</DemoBlock>
+
 ## 禁用状态
 
 <DemoBlock title="Checkbox (disabled)">
@@ -81,6 +120,8 @@ const checked5 = ref(false)
 | modelValue / v-model | 绑定值 | `boolean` | `false` |
 | disabled | 是否禁用 | `boolean` | `false` |
 | label | 标签文本 | `string` | - |
+| labelPlacement | 标签位置（start=前置，end=后置） | `'start' \| 'end'` | `'end'` |
+| ariaLabel | 无标签时的可访问性文本 | `string` | - |
 
 ### Events
 

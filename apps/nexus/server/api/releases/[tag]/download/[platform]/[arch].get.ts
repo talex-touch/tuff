@@ -1,6 +1,8 @@
-import { createError, sendRedirect } from 'h3'
+import { Buffer } from 'node:buffer'
+import { createError, send, setResponseHeader } from 'h3'
 import { getReleaseByTag, incrementDownloadCount } from '../../../../../utils/releasesStore'
 import type { AssetArch, AssetPlatform, ReleaseAsset } from '../../../../../utils/releasesStore'
+import { requireReleaseAsset } from '../../../../../utils/releaseAssetStorage'
 
 export default defineEventHandler(async (event) => {
   const { tag, platform, arch } = event.context.params ?? {}
@@ -26,7 +28,17 @@ export default defineEventHandler(async (event) => {
   // Increment download count
   await incrementDownloadCount(event, asset.id)
 
-  // TODO: Generate signed URL from R2/S3 and redirect
-  // For now, redirect to the stored download URL
-  return sendRedirect(event, asset.downloadUrl, 302)
+  if (!asset.fileKey) {
+    throw createError({ statusCode: 404, statusMessage: 'Asset file is not available.' })
+  }
+
+  const result = await requireReleaseAsset(event, asset.fileKey)
+  const buffer = Buffer.isBuffer(result.data) ? result.data : Buffer.from(result.data)
+
+  setResponseHeader(event, 'Content-Type', asset.contentType || result.contentType)
+  setResponseHeader(event, 'Content-Length', buffer.length)
+  setResponseHeader(event, 'Cache-Control', 'public, max-age=3600')
+  setResponseHeader(event, 'Content-Disposition', `attachment; filename="${asset.filename}"`)
+
+  return send(event, buffer)
 })
