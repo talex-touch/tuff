@@ -1,9 +1,11 @@
 import type { MenuItemConstructorOptions } from 'electron'
 import type { TrayState } from './tray-state-manager'
+import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
+import { coreBoxManager } from '../box-tool/core-box/manager'
 
 /**
  * TrayMenuBuilder - Tray menu builder
@@ -18,6 +20,27 @@ import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
  * ```
  */
 export class TrayMenuBuilder {
+  private openSystemTerminal(): void {
+    try {
+      if (process.platform === 'darwin') {
+        spawn('open', ['-a', 'Terminal'], { detached: true, stdio: 'ignore' }).unref()
+        return
+      }
+
+      if (process.platform === 'win32') {
+        spawn('cmd', ['/c', 'start', 'cmd'], { detached: true, stdio: 'ignore' }).unref()
+        return
+      }
+
+      const terminalCommand = process.env.TERM || process.env.TERMINAL
+      if (terminalCommand) {
+        spawn(terminalCommand, [], { detached: true, stdio: 'ignore' }).unref()
+      }
+    }
+    catch {
+    }
+  }
+
   /**
    * Builds the complete tray menu
    * 
@@ -78,8 +101,7 @@ export class TrayMenuBuilder {
         label: t('tray.openCoreBox'),
         accelerator: process.platform === 'darwin' ? 'Cmd+E' : 'Ctrl+E',
         click: () => {
-          // TODO(P2): Integrate with CoreBox module
-          console.log('[TrayMenu] Open CoreBox requested')
+          coreBoxManager.trigger(true, { triggeredByShortcut: true })
         },
       },
       {
@@ -108,14 +130,13 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          mainWindow.webContents.send('navigate-to', '/clipboard')
+          mainWindow.webContents.send('navigate-to', '/details')
         },
       },
       {
         label: t('tray.terminal'),
         click: () => {
-          // TODO(P2): Integrate with Terminal module
-          console.log('[TrayMenu] Open Terminal requested')
+          this.openSystemTerminal()
         },
       },
       {
@@ -123,7 +144,7 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          mainWindow.webContents.send('navigate-to', '/settings')
+          mainWindow.webContents.send('navigate-to', '/setting')
         },
       },
     ]

@@ -1,6 +1,6 @@
 # Button 按钮
 
-按钮用于触发一个操作，如提交表单。该组件风格参考 core-app 的 **TuffButton(TButton)**：圆角 pill 形态，支持 `variant` / `size` / `block` / `loading` / `disabled`。
+按钮用于触发一个操作，如提交表单。该组件风格参考 core-app 的 **TuffButton(TButton)**：圆角 pill 形态，支持 `variant` / `type` / `size` / `block` / `loading` / `disabled`，并提供 `plain` / `round` / `circle` / `dashed` 等外观。
 
 ## 基础用法
 
@@ -12,6 +12,9 @@
   <TxButton variant="secondary">Secondary</TxButton>
   <TxButton variant="ghost">Ghost</TxButton>
   <TxButton variant="danger">Danger</TxButton>
+  <TxButton variant="success">Success</TxButton>
+  <TxButton variant="warning">Warning</TxButton>
+  <TxButton variant="info">Info</TxButton>
 </div>
 
 ::: details Show Code
@@ -20,10 +23,27 @@
 <template>
   <div class="group">
     <TxButton>默认按钮</TxButton>
-    <TxButton variant="primary">Primary</TxButton>
-    <TxButton variant="secondary">Secondary</TxButton>
-    <TxButton variant="ghost">Ghost</TxButton>
-    <TxButton variant="danger">Danger</TxButton>
+    <TxButton variant="primary">
+      Primary
+    </TxButton>
+    <TxButton variant="secondary">
+      Secondary
+    </TxButton>
+    <TxButton variant="ghost">
+      Ghost
+    </TxButton>
+    <TxButton variant="danger">
+      Danger
+    </TxButton>
+    <TxButton variant="success">
+      Success
+    </TxButton>
+    <TxButton variant="warning">
+      Warning
+    </TxButton>
+    <TxButton variant="info">
+      Info
+    </TxButton>
   </div>
 </template>
 ```
@@ -47,11 +67,21 @@
 ```vue
 <template>
   <div class="group">
-    <TxButton disabled>默认按钮</TxButton>
-    <TxButton variant="primary" disabled>Primary</TxButton>
-    <TxButton variant="secondary" disabled>Secondary</TxButton>
-    <TxButton variant="ghost" disabled>Ghost</TxButton>
-    <TxButton variant="danger" disabled>Danger</TxButton>
+    <TxButton disabled>
+      默认按钮
+    </TxButton>
+    <TxButton variant="primary" disabled>
+      Primary
+    </TxButton>
+    <TxButton variant="secondary" disabled>
+      Secondary
+    </TxButton>
+    <TxButton variant="ghost" disabled>
+      Ghost
+    </TxButton>
+    <TxButton variant="danger" disabled>
+      Danger
+    </TxButton>
   </div>
 </template>
 ```
@@ -62,9 +92,27 @@
 
 点击按钮后进行数据加载操作，在按钮上显示加载状态。
 
+<script setup>
+import { ref } from 'vue'
+
+const loading = ref(false)
+
+async function handleClick() {
+  loading.value = true
+
+  setTimeout(() => {
+    loading.value = false
+  }, 3000)
+}
+</script>
+
 <div class="group">
-  <TxButton variant="primary" loading>加载中</TxButton>
-  <TxButton variant="secondary" loading>加载中</TxButton>
+  <TxButton variant="primary" :loading="loading" @click="handleClick">
+    {{ loading.value ? '加载中' : '点击加载' }}
+  </TxButton>
+  <TxButton variant="secondary" :loading="loading" @click="handleClick">
+    {{ loading.value ? '加载中' : '点击加载' }}
+  </TxButton>
 </div>
 
 ::: details Show Code
@@ -72,8 +120,12 @@
 ```vue
 <template>
   <div class="group">
-    <TxButton variant="primary" loading>加载中</TxButton>
-    <TxButton variant="secondary" loading>加载中</TxButton>
+    <TxButton variant="primary" loading>
+      加载中
+    </TxButton>
+    <TxButton variant="secondary" loading>
+      加载中
+    </TxButton>
   </div>
 </template>
 ```
@@ -95,9 +147,15 @@ Button 组件提供除了默认值以外的三种尺寸，可以在不同场景�
 ```vue
 <template>
   <div class="group">
-    <TxButton size="lg">Large</TxButton>
-    <TxButton size="md">Medium</TxButton>
-    <TxButton size="sm">Small</TxButton>
+    <TxButton size="lg">
+      Large
+    </TxButton>
+    <TxButton size="md">
+      Medium
+    </TxButton>
+    <TxButton size="sm">
+      Small
+    </TxButton>
   </div>
 </template>
 ```
@@ -113,7 +171,35 @@ Button 组件提供除了默认值以外的三种尺寸，可以在不同场景�
 ::: details Show Code
 ```vue
 <template>
-  <TxButton block variant="primary">Block Button</TxButton>
+  <TxButton block variant="primary">
+    Block Button
+  </TxButton>
+</template>
+```
+:::
+
+## 其他外观
+
+<div class="group">
+  <TxButton dashed>Dashed</TxButton>
+  <TxButton plain variant="primary">Plain</TxButton>
+  <TxButton round variant="primary">Round</TxButton>
+  <TxButton circle icon="i-carbon-edit" />
+</div>
+
+::: details Show Code
+```vue
+<template>
+  <TxButton dashed>
+    Dashed
+  </TxButton>
+  <TxButton plain variant="primary">
+    Plain
+  </TxButton>
+  <TxButton round variant="primary">
+    Round
+  </TxButton>
+  <TxButton circle icon="i-carbon-edit" />
 </template>
 ```
 :::
@@ -135,11 +221,21 @@ Button 组件提供除了默认值以外的三种尺寸，可以在不同场景�
 ```vue
 <template>
   <div class="group">
-    <TxButton variant="primary" vibrate-type="light">轻微震动</TxButton>
-    <TxButton variant="primary" vibrate-type="medium">中等震动</TxButton>
-    <TxButton variant="primary" vibrate-type="heavy">重度震动</TxButton>
-    <TxButton variant="danger" vibrate-type="error">错误震动</TxButton>
-    <TxButton variant="secondary" :vibrate="false">无震动</TxButton>
+    <TxButton variant="primary" vibrate-type="light">
+      轻微震动
+    </TxButton>
+    <TxButton variant="primary" vibrate-type="medium">
+      中等震动
+    </TxButton>
+    <TxButton variant="primary" vibrate-type="heavy">
+      重度震动
+    </TxButton>
+    <TxButton variant="danger" vibrate-type="error">
+      错误震动
+    </TxButton>
+    <TxButton variant="secondary" :vibrate="false">
+      无震动
+    </TxButton>
   </div>
 </template>
 ```

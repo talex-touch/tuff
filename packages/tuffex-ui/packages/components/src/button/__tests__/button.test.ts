@@ -21,7 +21,7 @@ describe('TxButton', () => {
       }
     })
     
-    expect(wrapper.classes()).toContain('tx-button--primary')
+    expect(wrapper.classes()).toContain('variant-primary')
   })
 
   it('renders different sizes', () => {
@@ -31,7 +31,7 @@ describe('TxButton', () => {
       }
     })
     
-    expect(wrapper.classes()).toContain('tx-button--large')
+    expect(wrapper.classes()).toContain('tx-size-lg')
   })
 
   it('handles disabled state', () => {
@@ -41,7 +41,7 @@ describe('TxButton', () => {
       }
     })
     
-    expect(wrapper.classes()).toContain('tx-button--disabled')
+    expect(wrapper.classes()).toContain('disabled')
     expect(wrapper.attributes('disabled')).toBeDefined()
   })
 
@@ -52,8 +52,8 @@ describe('TxButton', () => {
       }
     })
     
-    expect(wrapper.classes()).toContain('tx-button--loading')
-    expect(wrapper.find('.tx-button__loading-icon').exists()).toBe(true)
+    expect(wrapper.classes()).toContain('loading')
+    expect(wrapper.find('.tx-button__spinner').exists()).toBe(true)
   })
 
   it('emits click event', async () => {
@@ -96,7 +96,7 @@ describe('TxButton', () => {
     })
     
     expect(wrapper.find('.tx-button__icon').exists()).toBe(true)
-    expect(wrapper.find('.tx-icon-search').exists()).toBe(true)
+    expect(wrapper.find('.search').exists()).toBe(true)
   })
 
   it('renders circle button correctly', () => {
@@ -107,7 +107,7 @@ describe('TxButton', () => {
       }
     })
     
-    expect(wrapper.classes()).toContain('tx-button--circle')
+    expect(wrapper.classes()).toContain('circle')
   })
 
   it('renders plain button correctly', () => {
@@ -118,8 +118,8 @@ describe('TxButton', () => {
       }
     })
     
-    expect(wrapper.classes()).toContain('tx-button--plain')
-    expect(wrapper.classes()).toContain('tx-button--primary')
+    expect(wrapper.classes()).toContain('plain')
+    expect(wrapper.classes()).toContain('variant-primary')
   })
 
   it('renders round button correctly', () => {
@@ -129,7 +129,7 @@ describe('TxButton', () => {
       }
     })
     
-    expect(wrapper.classes()).toContain('tx-button--round')
+    expect(wrapper.classes()).toContain('round')
   })
 
   it('sets correct native type', () => {

@@ -131,6 +131,7 @@ export default defineConfig({
         {
           text: '动效',
           items: [
+            { text: '自适应尺寸 AutoSizer', link: '/components/auto-sizer' },
             { text: '依次进入 Stagger', link: '/components/stagger' },
             { text: '拖拽排序 SortableList', link: '/components/sortable-list' },
           ],

@@ -4,6 +4,7 @@ import { createError, readFormData } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStore'
 import type { AssetArch, AssetPlatform } from '../../../utils/releasesStore'
+import { uploadReleaseAsset } from '../../../utils/releaseAssetStorage'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
@@ -36,10 +37,10 @@ export default defineEventHandler(async (event) => {
   const buffer = Buffer.from(await file.arrayBuffer())
   const sha256 = createHash('sha256').update(buffer).digest('hex')
 
-  // TODO: Upload file to R2/S3 storage
-  // For now, we'll create a placeholder
   const fileKey = `releases/${tag}/${platform}-${arch}/${file.name}`
   const downloadUrl = `/api/releases/${tag}/download/${platform}/${arch}`
+
+  await uploadReleaseAsset(event, fileKey, buffer, file.type)
 
   const asset = await createReleaseAsset(event, {
     releaseId: release.id,

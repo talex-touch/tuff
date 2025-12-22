@@ -2,6 +2,7 @@
 import { defineComponent, h, nextTick, ref, watch } from 'vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
+import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 
 const qualifiedName = ['TxTabItem', 'TxTabItemGroup', 'TxTabHeader']
 
@@ -15,11 +16,15 @@ export default defineComponent({
     navMaxWidth: { type: Number, default: 320 },
     contentPadding: { type: Number, default: 12 },
     contentScrollable: { type: Boolean, default: true },
+    autoHeight: { type: Boolean, default: false },
+    autoHeightDurationMs: { type: Number, default: 250 },
+    autoHeightEasing: { type: String, default: 'ease' },
   },
   emits: ['update:modelValue', 'change'],
   setup(props, { slots, emit }) {
     const activeNode = ref<any>()
     const slotWrapper = ref<any>()
+    const autoSizerRef = ref<any>()
 
     function getNodeName(vnode: any): string {
       return vnode?.props?.name ?? ''
@@ -29,6 +34,12 @@ export default defineComponent({
       activeNode.value = vnode
       emit('update:modelValue', getNodeName(vnode))
       emit('change', getNodeName(vnode))
+    }
+
+    function refreshAutoSizer() {
+      if (!props.autoHeight)
+        return
+      autoSizerRef.value?.refresh?.()
     }
 
     function findByName(name: string): any {
@@ -62,6 +73,7 @@ export default defineComponent({
             el.classList.remove('tx-tabs-zoom')
             setActive(vnode)
             nextTick(() => {
+              refreshAutoSizer()
               applyPointerFor(tab)
               el.classList.add('tx-tabs-zoom')
             })
@@ -138,7 +150,10 @@ export default defineComponent({
         const node = findByName(val)
         if (node) {
           activeNode.value = node
-          nextTick(() => applyPointerFor(node))
+          nextTick(() => {
+            refreshAutoSizer()
+            applyPointerFor(node)
+          })
         }
       },
       { immediate: true },
@@ -151,7 +166,10 @@ export default defineComponent({
         const node = findByName(val)
         if (node) {
           setActive(node)
-          nextTick(() => applyPointerFor(node))
+          nextTick(() => {
+            refreshAutoSizer()
+            applyPointerFor(node)
+          })
         }
       },
       { immediate: true },
@@ -168,7 +186,24 @@ export default defineComponent({
       const selectSlot = h('div', { class: 'tx-tabs__select-slot tx-tabs-zoom' }, renderContent(tabHeader))
       slotWrapper.value = selectSlot
 
-      return h('div', { class: 'tx-tabs' }, [
+      const content = props.autoHeight && !props.contentScrollable
+        ? h(
+          TxAutoSizer,
+          {
+            ref: (el: any) => (autoSizerRef.value = el),
+            width: false,
+            height: true,
+            durationMs: props.autoHeightDurationMs,
+            easing: props.autoHeightEasing,
+            outerClass: 'tx-tabs__auto-sizer overflow-hidden',
+          },
+          {
+            default: () => selectSlot,
+          },
+        )
+        : selectSlot
+
+      return h('div', { class: ['tx-tabs', { 'tx-tabs--auto-height': props.autoHeight }] }, [
         h(
           'div',
           {
@@ -186,7 +221,7 @@ export default defineComponent({
             class: 'tx-tabs__main',
             style: { padding: `${props.contentPadding}px` },
           },
-          [selectSlot],
+          [content],
         ),
       ])
     }
@@ -249,10 +284,26 @@ export default defineComponent({
   box-sizing: border-box;
 }
 
+.tx-tabs--auto-height {
+  height: auto;
+}
+
+.tx-tabs--auto-height .tx-tabs__main {
+  height: auto;
+}
+
 .tx-tabs__select-slot {
   position: relative;
   width: 100%;
   height: 100%;
+}
+
+.tx-tabs--auto-height .tx-tabs__select-slot {
+  height: auto;
+}
+
+.tx-tabs__auto-sizer {
+  width: 100%;
 }
 
 .tx-tabs__content-scroll {

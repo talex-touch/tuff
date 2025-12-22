@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, useSlots } from 'vue'
 
 defineOptions({
   name: 'TxCheckbox',
@@ -10,10 +10,13 @@ const props = withDefaults(
     modelValue?: boolean
     disabled?: boolean
     label?: string
+    labelPlacement?: 'start' | 'end'
+    ariaLabel?: string
   }>(),
   {
     modelValue: false,
     disabled: false,
+    labelPlacement: 'end',
   }
 )
 
@@ -30,6 +33,13 @@ const isChecked = computed({
   },
 })
 
+const hasLabel = computed(() => Boolean(props.label) || Boolean(useSlots().default))
+
+const effectiveAriaLabel = computed(() => {
+  if (hasLabel.value) return undefined
+  return props.ariaLabel
+})
+
 function toggle() {
   if (props.disabled) return
   isChecked.value = !isChecked.value
@@ -41,6 +51,7 @@ function toggle() {
     role="checkbox"
     :aria-checked="isChecked"
     :aria-disabled="disabled"
+    :aria-label="effectiveAriaLabel"
     :tabindex="disabled ? -1 : 0"
     :class="[
       'tx-checkbox',
@@ -53,6 +64,13 @@ function toggle() {
     @keydown.enter.prevent="toggle"
     @keydown.space.prevent="toggle"
   >
+    <span
+      v-if="(label || $slots.default) && labelPlacement === 'start'"
+      class="tx-checkbox__label"
+    >
+      <slot>{{ label }}</slot>
+    </span>
+
     <span class="tx-checkbox__box" aria-hidden="true">
       <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <polyline
@@ -65,7 +83,8 @@ function toggle() {
         />
       </svg>
     </span>
-    <span v-if="label || $slots.default" class="tx-checkbox__label">
+
+    <span v-if="(label || $slots.default) && labelPlacement === 'end'" class="tx-checkbox__label">
       <slot>{{ label }}</slot>
     </span>
   </div>

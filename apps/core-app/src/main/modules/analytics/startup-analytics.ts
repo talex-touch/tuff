@@ -13,7 +13,9 @@ import type {
   StartupMetrics,
 } from './types'
 import { randomUUID } from 'node:crypto'
+import os from 'node:os'
 import { app } from 'electron'
+import { getBooleanEnv, getTelemetryApiBase } from '@talex-touch/utils/env'
 import { createLogger } from '../../utils/logger'
 import { getConfig, saveConfig } from '../storage'
 
@@ -30,8 +32,9 @@ export class StartupAnalytics {
   private startTime: number
 
   constructor(config?: Partial<AnalyticsConfig>) {
+    const enabled = getBooleanEnv('TUFF_STARTUP_ANALYTICS_ENABLED', true)
     this.config = {
-      enabled: true,
+      enabled,
       maxHistory: 10,
       ...config,
     }
@@ -180,7 +183,19 @@ export class StartupAnalytics {
    * Report metrics to endpoint (anonymous)
    */
   async reportMetrics(endpoint?: string): Promise<void> {
-    const url = endpoint || this.config.reportEndpoint
+    if (!this.config.enabled) {
+      return
+    }
+
+    let url = endpoint || this.config.reportEndpoint
+    if (!url) {
+      try {
+        url = `${getTelemetryApiBase()}/api/telemetry/record`
+      }
+      catch {
+        url = undefined
+      }
+    }
     if (!url) {
       analyticsLog.warn('No reporting endpoint configured')
       return
@@ -197,9 +212,54 @@ export class StartupAnalytics {
         meta: { endpoint: url },
       })
 
-      // TODO: Implement actual HTTP request
-      // For now, just log that we would report
-      analyticsLog.success('Metrics report prepared (not sent in current implementation)')
+      const memory = {
+        total: os.totalmem(),
+        free: os.freemem(),
+      }
+
+      const cpus = os.cpus()
+      const cpu = {
+        count: cpus.length,
+        model: cpus[0]?.model,
+      }
+
+      const payload = {
+        eventType: 'visit',
+        platform: metrics.platform,
+        version: metrics.version,
+        isAnonymous: true,
+        metadata: {
+          kind: 'startup',
+          sessionId: metrics.sessionId,
+          timestamp: metrics.timestamp,
+          arch: metrics.arch,
+          electronVersion: metrics.electronVersion,
+          nodeVersion: metrics.nodeVersion,
+          isPackaged: metrics.isPackaged,
+          totalStartupTime: metrics.totalStartupTime,
+          mainProcess: metrics.mainProcess,
+          renderer: metrics.renderer,
+          memory,
+          cpu,
+          uptime: os.uptime(),
+          hostname: os.hostname(),
+          release: os.release(),
+          type: os.type(),
+        },
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(`Startup analytics report failed: ${response.status} ${response.statusText} ${text}`.trim())
+      }
+
+      analyticsLog.success('Metrics reported (anonymous)')
     }
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)

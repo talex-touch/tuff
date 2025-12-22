@@ -278,6 +278,8 @@ export class TouchApp implements TalexTouch.TouchApp {
       // Save metrics to history (async, don't wait)
       void analytics.saveToHistory()
 
+      void analytics.reportMetrics()
+
       return {
         id: (event?.sender as Electron.WebContents).id,
         version: this.version,

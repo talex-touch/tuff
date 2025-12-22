@@ -17,7 +17,7 @@ ctx.corebox.registerCommand({
 ```ts
 ctx.workflow.registerNode('todo.sync', async payload => {
   const tasks = await ctx.api.fetchTasks()
-  // 这个SB函数处理用户输入，别tm乱传参数
+  // 该函数处理用户输入，请勿传入非预期参数
   return tasks.filter(task => !task.done)
 })
 ```

@@ -38,6 +38,21 @@ window.$storage = storageManager
 
 setRuntimeEnv(import.meta.env as any)
 
+const ipcRenderer = (window as any)?.electron?.ipcRenderer
+if (ipcRenderer) {
+  ipcRenderer.on('navigate-to', (_event: unknown, path: unknown) => {
+    const target = typeof path === 'string' ? path : ''
+    const normalized = target === '/clipboard' ? '/details' : target
+    if (normalized) {
+      router.push(normalized).catch(() => {})
+    }
+  })
+
+  ipcRenderer.on('open-download-center', () => {
+    router.push('/downloads').catch(() => {})
+  })
+}
+
 preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')
 

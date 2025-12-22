@@ -30,6 +30,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxLayoutSkeleton 布局骨架](./layout-skeleton.md)** - 通用布局骨架占位
 - **[TxCardItem 卡片项](./card-item.md)** - 左侧头像/图标，右侧标题与描述，支持右侧操作区
 - **[TxTabs 标签页](./tabs.md)** - 左侧导航 Tabs（Windows 风格）
+- **[TxAutoSizer 自适应尺寸](./auto-sizer.md)** - 内容宽高变化时自动跟随并过渡
 - **[TxAgentsList 智能体列表](./agents.md)** - 常见智能体列表/分组
 - **[TxStagger 依次进入](./stagger.md)** - 列表依次进入/离开动画
 - **[TxSortableList 拖拽排序](./sortable-list.md)** - 可拖拽排序列表
