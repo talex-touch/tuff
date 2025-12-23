@@ -104,12 +104,72 @@
   }
 
   .tx-button__inner {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
+    --tx-button-gap: 0.5rem;
+    gap: var(--tx-button-gap);
     white-space: nowrap;
     transition: width var(--tx-transition-duration-fast) var(--tx-transition-function);
+  }
+
+  .tx-button__spinner-slot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0;
+    overflow: hidden;
+    margin-right: calc(-1 * var(--tx-button-gap));
+    transition: width 0.18s cubic-bezier(0.2, 0, 0, 1), margin-right 0.18s cubic-bezier(0.2, 0, 0, 1);
+    will-change: width, margin-right;
+
+    &.is-visible {
+      width: var(--tx-button-spinner-size, 16px);
+      margin-right: 0;
+    }
+  }
+
+  .tx-button__spinner {
+    position: relative;
+    opacity: 1;
+    filter: blur(0);
+    scale: 1;
+    transition: opacity 0.18s cubic-bezier(0.2, 0, 0, 1), filter 0.18s cubic-bezier(0.2, 0, 0, 1), scale 0.18s cubic-bezier(0.2, 0, 0, 1);
+    will-change: opacity, filter, scale;
+  }
+
+  .tx-button__spinner.is-overlay {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    left: 50%;
+    translate: -50% -50%;
+  }
+
+  &:not(.loading) {
+    .tx-button__spinner {
+      opacity: 0;
+      filter: blur(4px);
+      scale: 0.86;
+      pointer-events: none;
+    }
+  }
+
+  &.loading {
+    .tx-button__inner > :not(.tx-button__spinner) {
+      opacity: 0.92;
+    }
+
+    .tx-button__spinner.is-overlay {
+      z-index: 1;
+    }
+
+    .tx-button__spinner.is-overlay ~ .tx-button__icon,
+    .tx-button__spinner.is-overlay ~ :not(.tx-button__spinner) {
+      opacity: 0;
+      filter: blur(2px);
+    }
   }
 
   &.auto-width {
@@ -120,7 +180,8 @@
 
   &.tx-size-sm {
     padding: 0 0.25rem;
-    height: 30px;
+    height: 26px;
+    min-width: 60px;
     font-size: 13px;
   }
 

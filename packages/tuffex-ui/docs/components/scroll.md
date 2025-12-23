@@ -2,39 +2,42 @@
 
 基于 `@better-scroll/scroll-bar` 的滚动容器，提供更一致的滚动条体验，并兼容 `TouchScroll` 组件名。
 
+<script setup lang="ts">
+import scrollBasicSource from '../.vitepress/theme/components/demos/ScrollBasicDemo.vue?raw'
+import scrollHorizontalSource from '../.vitepress/theme/components/demos/ScrollHorizontalDemo.vue?raw'
+import scrollBounceScrollbarSource from '../.vitepress/theme/components/demos/ScrollBounceScrollbarDemo.vue?raw'
+import scrollNativeSource from '../.vitepress/theme/components/demos/ScrollNativeDemo.vue?raw'
+import scrollPullDownUpSource from '../.vitepress/theme/components/demos/ScrollPullDownUpDemo.vue?raw'
+</script>
+
+## 行为说明
+
+- **BetterScroll 模式**
+  - 支持 `bounce`、更一致的滚动条外观
+  - 内容/容器变化会自动 `refresh()`（可通过 `refreshOnContentChange` 控制）
+- **Native 模式**
+  - 使用浏览器原生滚动
+  - `direction` 会映射为 `overflow-x/y` 以保持结构一致
+
 ## 基础用法
 
-<DemoBlock title="Scroll">
+<DemoBlock title="Scroll" :code="scrollBasicSource" code-lang="vue">
 <template #preview>
-<div class="demo-container" style="height: 220px;">
-  <div style="height: 100%;">
-    <TouchScroll style="height: 100%;">
-      <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-        <div v-for="i in 24" :key="i" class="demo-scroll-item">
-          Row {{ i }}
-        </div>
-      </div>
-    </TouchScroll>
-  </div>
-</div>
+<ScrollBasicDemo />
 </template>
+</DemoBlock>
 
-<template #code>
-```vue
-<template>
-  <div style="height: 220px;">
-    <div style="height: 100%;">
-      <TouchScroll style="height: 100%;">
-        <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-          <div v-for="i in 24" :key="i" class="demo-scroll-item">
-            Row {{ i }}
-          </div>
-        </div>
-      </TouchScroll>
-    </div>
-  </div>
+## 方向与滚动条
+
+<DemoBlock title="Scroll (horizontal)" :code="scrollHorizontalSource" code-lang="vue">
+<template #preview>
+<ScrollHorizontalDemo />
 </template>
-```
+</DemoBlock>
+
+<DemoBlock title="Scroll (bounce + always show scrollbar)" :code="scrollBounceScrollbarSource" code-lang="vue">
+<template #preview>
+<ScrollBounceScrollbarDemo />
 </template>
 </DemoBlock>
 
@@ -42,37 +45,17 @@
 
 当你不需要 BetterScroll 行为时，可以切换为原生滚动（仍保持统一容器结构）。
 
-<DemoBlock title="Scroll (native)">
+<DemoBlock title="Scroll (native)" :code="scrollNativeSource" code-lang="vue">
 <template #preview>
-<div class="demo-container" style="height: 220px;">
-  <div style="height: 100%;">
-    <TxScroll native style="height: 100%;">
-      <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-        <div v-for="i in 24" :key="i" class="demo-scroll-item">
-          Native Row {{ i }}
-        </div>
-      </div>
-    </TxScroll>
-  </div>
-</div>
+<ScrollNativeDemo />
 </template>
+</DemoBlock>
 
-<template #code>
-```vue
-<template>
-  <div style="height: 220px;">
-    <div style="height: 100%;">
-      <TxScroll native style="height: 100%;">
-        <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
-          <div v-for="i in 24" :key="i" class="demo-scroll-item">
-            Native Row {{ i }}
-          </div>
-        </div>
-      </TxScroll>
-    </div>
-  </div>
-</template>
-```
+## 下拉刷新与上拉加载
+
+<DemoBlock title="Scroll (pull down + pull up)" :code="scrollPullDownUpSource" code-lang="vue">
+<template #preview>
+<ScrollPullDownUpDemo />
 </template>
 </DemoBlock>
 
@@ -84,10 +67,28 @@
 |------|------|---------|------|
 | `native` | `boolean` | `false` | 使用原生滚动 |
 | `noPadding` | `boolean` | `false` | 禁用内边距 |
-| `options` | `Record<string, unknown>` | `{}` | BetterScroll 初始化参数 |
+| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 滚动方向 |
+| `scrollbar` | `boolean` | `true` | 是否启用 BetterScroll 滚动条 |
+| `scrollbarFade` | `boolean` | `true` | 滚动条自动淡出 |
+| `scrollbarInteractive` | `boolean` | `true` | 滚动条是否可拖拽 |
+| `scrollbarAlwaysVisible` | `boolean` | `false` | 强制滚动条常显（用于 bounce/无边界场景） |
+| `scrollbarMinSize` | `number` | `18` | 指示器最小尺寸（px） |
+| `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType` |
+| `bounce` | `boolean` | `true` | 是否开启边界回弹 |
+| `click` | `boolean` | `true` | 是否派发 click（BetterScroll 选项） |
+| `wheel` | `boolean` | `true` | 是否拦截滚轮并驱动 BetterScroll |
+| `refreshOnContentChange` | `boolean` | `true` | 内容变更时自动 refresh |
+| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | 下拉刷新（BetterScroll 模式为原生能力；native 模式为降级触发） |
+| `pullDownThreshold` | `number` | `70` | 下拉触发阈值（px） |
+| `pullDownStop` | `number` | `56` | 下拉停留距离（px，仅 BetterScroll） |
+| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | 上拉加载更多（BetterScroll 模式为原生能力；native 模式为降级触发） |
+| `pullUpThreshold` | `number` | `0` | 距离底部阈值（px） |
+| `options` | `Record<string, unknown>` | `{}` | BetterScroll 初始化参数（兜底，会覆盖部分默认值） |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
 | `scroll` | `{ scrollTop: number; scrollLeft: number }` | 滚动事件 |
+| `pulling-down` | - | 触发下拉刷新 |
+| `pulling-up` | - | 触发上拉加载更多 |

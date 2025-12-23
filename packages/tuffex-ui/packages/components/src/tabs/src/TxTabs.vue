@@ -1,4 +1,5 @@
 <script lang="ts">
+import type { PropType } from 'vue'
 import { computed, defineComponent, h, nextTick, ref, watch } from 'vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
@@ -20,6 +21,7 @@ export default defineComponent({
     autoHeight: { type: Boolean, default: false },
     autoHeightDurationMs: { type: Number, default: 250 },
     autoHeightEasing: { type: String, default: 'ease' },
+    animation: { type: Object as PropType<any>, default: undefined },
   },
   emits: ['update:modelValue', 'change'],
   setup(props, { slots, emit }) {
@@ -44,8 +46,67 @@ export default defineComponent({
       emit('change', getNodeName(vnode))
     }
 
+    const animationSize = computed(() => {
+      const raw = props.animation?.size
+      if (typeof raw === 'boolean') {
+        return {
+          enabled: raw,
+          durationMs: props.autoHeightDurationMs,
+          easing: props.autoHeightEasing,
+        }
+      }
+      if (raw && typeof raw === 'object') {
+        return {
+          enabled: raw.enabled !== false,
+          durationMs: typeof raw.durationMs === 'number' ? raw.durationMs : props.autoHeightDurationMs,
+          easing: typeof raw.easing === 'string' ? raw.easing : props.autoHeightEasing,
+        }
+      }
+      return {
+        enabled: !!props.autoHeight,
+        durationMs: props.autoHeightDurationMs,
+        easing: props.autoHeightEasing,
+      }
+    })
+
+    const animationIndicator = computed(() => {
+      const raw = props.animation?.indicator
+      if (typeof raw === 'boolean') {
+        return {
+          enabled: raw,
+          durationMs: 180,
+          easing: 'ease',
+        }
+      }
+      if (raw && typeof raw === 'object') {
+        return {
+          enabled: raw.enabled !== false,
+          durationMs: typeof raw.durationMs === 'number' ? raw.durationMs : 180,
+          easing: typeof raw.easing === 'string' ? raw.easing : 'ease',
+        }
+      }
+      return {
+        enabled: true,
+        durationMs: 180,
+        easing: 'ease',
+      }
+    })
+
+    const animationContent = computed(() => {
+      const raw = props.animation?.content
+      if (typeof raw === 'boolean')
+        return { enabled: raw }
+      if (raw && typeof raw === 'object')
+        return { enabled: raw.enabled !== false }
+      return { enabled: true }
+    })
+
+    const sizeAnimEnabled = computed(() => {
+      return animationSize.value.enabled && !props.contentScrollable
+    })
+
     async function runAutoHeight(action: () => void) {
-      if (!props.autoHeight) {
+      if (!sizeAnimEnabled.value) {
         action()
         return
       }
@@ -129,11 +190,13 @@ export default defineComponent({
           if (vnode.props && 'disabled' in vnode.props) return
           const el = slotWrapper.value?.el as HTMLElement | undefined
           if (el) {
-            el.classList.remove('tx-tabs-zoom')
+            if (animationContent.value.enabled)
+              el.classList.remove('tx-tabs-zoom')
             void runAutoHeight(() => setActive(vnode)).then(() => {
               nextTick(() => {
                 applyPointerFor(tab)
-                el.classList.add('tx-tabs-zoom')
+                if (animationContent.value.enabled)
+                  el.classList.add('tx-tabs-zoom')
               })
             })
           }
@@ -243,18 +306,22 @@ export default defineComponent({
         class: 'tx-tabs__pointer',
       })
 
-      const selectSlot = h('div', { class: 'tx-tabs__select-slot tx-tabs-zoom' }, renderContent(tabHeader))
+      const selectSlot = h(
+        'div',
+        { class: ['tx-tabs__select-slot', { 'tx-tabs-zoom': animationContent.value.enabled }] },
+        renderContent(tabHeader),
+      )
       slotWrapper.value = selectSlot
 
-      const content = props.autoHeight && !props.contentScrollable
+      const content = sizeAnimEnabled.value
         ? h(
           TxAutoSizer,
           {
             ref: (el: any) => (autoSizerRef.value = el),
             width: false,
             height: true,
-            durationMs: props.autoHeightDurationMs,
-            easing: props.autoHeightEasing,
+            durationMs: animationSize.value.durationMs,
+            easing: animationSize.value.easing,
             outerClass: 'tx-tabs__auto-sizer overflow-hidden',
           },
           {
@@ -301,7 +368,25 @@ export default defineComponent({
       const reverse = placement.value === 'right' || placement.value === 'bottom'
       const children = reverse ? [main, nav] : [nav, main]
 
-      return h('div', { class: ['tx-tabs', `tx-tabs--${placement.value}`, { 'tx-tabs--auto-height': props.autoHeight }] }, children)
+      return h(
+        'div',
+        {
+          class: [
+            'tx-tabs',
+            `tx-tabs--${placement.value}`,
+            {
+              'tx-tabs--auto-height': sizeAnimEnabled.value,
+              'tx-tabs--indicator-anim': animationIndicator.value.enabled,
+              'tx-tabs--content-anim': animationContent.value.enabled,
+            },
+          ],
+          style: {
+            '--tx-tabs-indicator-duration': `${animationIndicator.value.durationMs}ms`,
+            '--tx-tabs-indicator-easing': animationIndicator.value.easing,
+          } as any,
+        },
+        children,
+      )
     }
   },
 })
@@ -350,7 +435,10 @@ export default defineComponent({
   border-radius: 50px;
   background-color: var(--tx-color-primary, #409eff);
   opacity: 0;
-  transition: opacity 0.18s ease, top 0.18s ease, left 0.18s ease, right 0.18s ease, bottom 0.18s ease, width 0.18s ease, height 0.18s ease;
+}
+
+.tx-tabs--indicator-anim .tx-tabs__pointer {
+  transition: opacity var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease), top var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease), left var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease), right var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease), bottom var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease), width var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease), height var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease);
 }
 
 .tx-tabs--right {
@@ -423,6 +511,9 @@ export default defineComponent({
   position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .tx-tabs--auto-height .tx-tabs__select-slot {
@@ -437,11 +528,15 @@ export default defineComponent({
   width: 100%;
   height: 100%;
   overflow: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .tx-tabs__content-wrapper {
   box-sizing: border-box;
   padding: 6px 2px;
+  flex: 1;
+  min-height: 0;
 }
 
 .tx-tabs__empty {

@@ -10,6 +10,27 @@ export interface TabsProps {
   autoHeight?: boolean
   autoHeightDurationMs?: number
   autoHeightEasing?: string
+  animation?: TabsAnimation
+}
+
+export interface TabsAnimationOption {
+  enabled?: boolean
+}
+
+export interface TabsAnimationSize extends TabsAnimationOption {
+  durationMs?: number
+  easing?: string
+}
+
+export interface TabsAnimationIndicator extends TabsAnimationOption {
+  durationMs?: number
+  easing?: string
+}
+
+export interface TabsAnimation {
+  size?: boolean | TabsAnimationSize
+  indicator?: boolean | TabsAnimationIndicator
+  content?: boolean | TabsAnimationOption
 }
 
 export interface TabsEmits {

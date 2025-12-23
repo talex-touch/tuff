@@ -187,8 +187,6 @@ packages/tuff-ui/
 
 以下组件 **不迁移** 到 tuff-ui（因为包含 Electron 特定逻辑）：
 - `AppUpgradationView.vue` - 应用更新视图
-- `BuildSecurityBanner.vue` - 构建安全横幅
-- `TuffUserInfo.vue` - 用户信息（依赖 AccountSDK）
 - 任何使用 `window.$nodeApi` 的组件
 
 ### 5.3 后续计划
@@ -196,6 +194,12 @@ packages/tuff-ui/
 1. **v0.2.0**: 完成 Phase 1 + Phase 2 组件迁移
 2. **v0.3.0**: 完成 Phase 3 + Phase 4 组件迁移
 3. **v1.0.0**: 稳定 API，正式发布
+
+### 5.4 近期问题与落地计划（2025-12-23）
+- **Docs 示例易报 “missing end tag”**：Markdown 中直接写 `<template #preview/#code>` 被 Vue 解析。改造方案：DemoBlock 支持 `code` prop；示例全部迁移为独立 demo 组件，md 中 `import Demo from './demos/xxx.vue'` + `import demoSource from './demos/xxx.vue?raw'`，DemoBlock 用 `:code="demoSource"`。先迁移 `tabs.md`、`gradual-blur.md`，后续按同策略批量迁移。
+- **Button spinner 行为**：只有 icon-only 按钮（如 circle 或无文本）才使用 overlay 覆盖；带文字的按钮仍左侧固定 spinner，保持宽度稳定且与 FLIP 动画共存。
+- **优先级**：Docs 安全性（demo 迁移、防解析错误）> Button spinner 行为修正 > 其他页面按批次迁移。
+- **Scroll 文档异常**：`docs/components/scroll.md` 的 `<template #code>` + ```vue 仍触发 “Element is missing end tag”。方案：统一抽离所有 Scroll demos 为 `docs/.vitepress/theme/components/demos/Scroll*.vue`，md 中引用 `<ScrollDemoX />` + `import demoSource from './demos/ScrollDemoX.vue?raw'` 并用 `:code="demoSource"`。调整 DemoBlock 如有需要，避免在 md 内嵌真实模板/脚本。
 
 ## 6. 成功指标
 

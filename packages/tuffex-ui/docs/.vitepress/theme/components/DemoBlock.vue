@@ -4,13 +4,59 @@
  * 
  * 用于在文档中展示组件的实时预览效果
  */
-import { ref } from 'vue'
+import { computed, ref, useSlots } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   title?: string
+  code?: string
+  codeLang?: string
 }>()
 
+const slots = useSlots()
+
 const showCode = ref(false)
+
+function toText(nodes: any): string {
+  if (!nodes)
+    return ''
+  if (typeof nodes === 'string')
+    return nodes
+  if (Array.isArray(nodes))
+    return nodes.map(toText).join('')
+  if (typeof nodes === 'object') {
+    const children = (nodes as any).children
+    if (typeof children === 'string')
+      return children
+    return toText(children)
+  }
+  return ''
+}
+
+function decodeEntities(input: string): string {
+  return input
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+}
+
+const codeContent = computed(() => {
+  if (typeof props.code === 'string' && props.code.trim()) {
+    const raw = props.code.trim()
+    if (raw.includes('```'))
+      return raw
+    return `\n\n\`\`\`${props.codeLang || 'vue'}\n${raw}\n\`\`\`\n`
+  }
+  const vnodes = slots.code?.() ?? []
+  const decoded = decodeEntities(toText(vnodes).trim())
+  if (decoded) {
+    if (decoded.includes('```'))
+      return decoded
+    return `\n\n\`\`\`${props.codeLang || 'vue'}\n${decoded}\n\`\`\`\n`
+  }
+  return ''
+})
 
 function toggleCode() {
   showCode.value = !showCode.value
@@ -30,7 +76,8 @@ function toggleCode() {
       </button>
     </div>
     <div v-show="showCode" class="demo-block__code">
-      <slot name="code" />
+      <TxMarkdownView v-if="codeContent" :content="codeContent" />
+      <slot v-else name="code" />
     </div>
   </div>
 </template>
