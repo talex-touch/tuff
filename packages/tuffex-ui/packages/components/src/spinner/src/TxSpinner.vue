@@ -9,7 +9,10 @@ defineOptions({
 const props = withDefaults(defineProps<SpinnerProps>(), {
   size: 16,
   strokeWidth: 2,
-  fallback: false
+  fallback: false,
+  visible: true,
+  pauseOnHidden: true,
+  unmountOnHidden: false,
 })
 
 const styleVars = computed(() => ({
@@ -19,26 +22,35 @@ const styleVars = computed(() => ({
 </script>
 
 <template>
-  <span class="tx-spinner" :style="styleVars" aria-busy="true" aria-live="polite">
-    <svg v-if="fallback" class="tx-spinner__svg" viewBox="0 0 24 24" :width="size" :height="size">
-      <circle
-        class="tx-spinner__circle"
-        cx="12"
-        cy="12"
-        r="10"
-        fill="none"
-        stroke="currentColor"
-        :stroke-width="strokeWidth"
-        stroke-linecap="round"
-        stroke-dasharray="31.416"
-        stroke-dashoffset="31.416"
-      />
-    </svg>
-    <div class="tx-spinner-container" v-else>
-      <div class="tx-spinner-container-ball"></div>
-      <div class="tx-spinner-container-float"></div>
-    </div>
-  </span>
+  <Transition name="tx-spinner-visibility" appear>
+    <span
+      v-if="!unmountOnHidden || visible"
+      class="tx-spinner"
+      :class="{ 'is-hidden': !visible, 'is-paused': !visible && pauseOnHidden }"
+      :style="styleVars"
+      :aria-busy="visible ? 'true' : 'false'"
+      aria-live="polite"
+    >
+      <svg v-if="fallback" class="tx-spinner__svg" viewBox="0 0 24 24" :width="size" :height="size">
+        <circle
+          class="tx-spinner__circle"
+          cx="12"
+          cy="12"
+          r="10"
+          fill="none"
+          stroke="currentColor"
+          :stroke-width="strokeWidth"
+          stroke-linecap="round"
+          stroke-dasharray="31.416"
+          stroke-dashoffset="31.416"
+        />
+      </svg>
+      <div class="tx-spinner-container" v-else>
+        <div class="tx-spinner-container-ball"></div>
+        <div class="tx-spinner-container-float"></div>
+      </div>
+    </span>
+  </Transition>
 </template>
 
 <style lang="scss">
@@ -130,7 +142,28 @@ const styleVars = computed(() => ({
   height: var(--tx-spinner-size, 16px);
   color: var(--tx-text-color-secondary, #909399);
 
+  scale: 1;
+  transition: opacity 0.18s cubic-bezier(0.2, 0, 0, 1), filter 0.18s cubic-bezier(0.2, 0, 0, 1), scale 0.18s cubic-bezier(0.2, 0, 0, 1);
+  will-change: opacity, filter, scale;
+
   animation: tx-spinner-float-rotate 0.85s linear infinite;
+
+  &.is-hidden {
+    opacity: 0;
+    filter: blur(4px);
+    scale: 0.86;
+    pointer-events: none;
+  }
+
+  &.is-paused {
+    animation-play-state: paused;
+
+    .tx-spinner__svg,
+    .tx-spinner__circle,
+    .tx-spinner-container-ball {
+      animation-play-state: paused;
+    }
+  }
 
   &__svg {
     width: 100%;
@@ -141,5 +174,12 @@ const styleVars = computed(() => ({
   &__circle {
     animation: tx-spinner-dash 1.5s ease-in-out infinite;
   }
+}
+
+.tx-spinner-visibility-enter-from,
+.tx-spinner-visibility-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+  scale: 0.86;
 }
 </style>

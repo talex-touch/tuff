@@ -23,6 +23,8 @@ const props = defineProps<TabHeaderProps>()
   display: flex;
   align-items: center;
   box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
 }
 
 .touch-blur .tx-tab-header {

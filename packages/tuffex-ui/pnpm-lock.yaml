@@ -11,6 +11,12 @@ importers:
       '@better-scroll/core':
         specifier: ^2.5.1
         version: 2.5.1
+      '@better-scroll/pull-down':
+        specifier: ^2.5.1
+        version: 2.5.1
+      '@better-scroll/pull-up':
+        specifier: ^2.5.1
+        version: 2.5.1
       '@better-scroll/scroll-bar':
         specifier: ^2.5.1
         version: 2.5.1
@@ -200,6 +206,12 @@ packages:
 
   '@better-scroll/core@2.5.1':
     resolution: {integrity: sha512-koKOuYA55dQ04FJRIVUpMGDr1hbCfWmfX0MGp1hKagkQSWSRpwblqACiwtggVauoj9aaJRJZ9hDsTM4weaavlg==}
+
+  '@better-scroll/pull-down@2.5.1':
+    resolution: {integrity: sha512-Y6XcGu2NlevPg3k9VBRRFvpmfoTA+rO96JGdog2qKHclIPNXnsVwsIHtZfAm9weE/f9UuC4BnB+VUFRlucfupg==}
+
+  '@better-scroll/pull-up@2.5.1':
+    resolution: {integrity: sha512-1hu3xSMxdB8T391KffpNZ7g93lMwZEHjfb1F1Y4KvIkciDt8nXqkGpqrZF+YwR+EJTgYcWqUO8kgmI6XXu7Pkg==}
 
   '@better-scroll/scroll-bar@2.5.1':
     resolution: {integrity: sha512-i6r60pWG/ztkFK2j5Gj54I0LJb2jGh5TWJNQBoW0gUkp28B+0JvBFTwZn9tF7beZCBorKR7Hvvu4O9A1TJy94Q==}
@@ -3198,6 +3210,14 @@ snapshots:
   '@better-scroll/core@2.5.1':
     dependencies:
       '@better-scroll/shared-utils': 2.5.1
+
+  '@better-scroll/pull-down@2.5.1':
+    dependencies:
+      '@better-scroll/core': 2.5.1
+
+  '@better-scroll/pull-up@2.5.1':
+    dependencies:
+      '@better-scroll/core': 2.5.1
 
   '@better-scroll/scroll-bar@2.5.1':
     dependencies:

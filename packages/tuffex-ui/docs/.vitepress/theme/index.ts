@@ -69,6 +69,11 @@ import {
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
 import GradualBlurAnimatedDemo from './components/demos/GradualBlurAnimatedDemo.vue'
+import ScrollBasicDemo from './components/demos/ScrollBasicDemo.vue'
+import ScrollHorizontalDemo from './components/demos/ScrollHorizontalDemo.vue'
+import ScrollBounceScrollbarDemo from './components/demos/ScrollBounceScrollbarDemo.vue'
+import ScrollNativeDemo from './components/demos/ScrollNativeDemo.vue'
+import ScrollPullDownUpDemo from './components/demos/ScrollPullDownUpDemo.vue'
 
 export default {
   extends: DefaultTheme,
@@ -149,5 +154,10 @@ export default {
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)
     app.component('GradualBlurAnimatedDemo', GradualBlurAnimatedDemo)
+    app.component('ScrollBasicDemo', ScrollBasicDemo)
+    app.component('ScrollHorizontalDemo', ScrollHorizontalDemo)
+    app.component('ScrollBounceScrollbarDemo', ScrollBounceScrollbarDemo)
+    app.component('ScrollNativeDemo', ScrollNativeDemo)
+    app.component('ScrollPullDownUpDemo', ScrollPullDownUpDemo)
   },
 } satisfies Theme

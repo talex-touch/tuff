@@ -113,6 +113,8 @@ async function handleClick() {
   <TxButton variant="secondary" :loading="loading" @click="handleClick">
     {{ loading.value ? '加载中' : '点击加载' }}
   </TxButton>
+  <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick">
+  </TxButton>
 </div>
 
 ::: details Show Code

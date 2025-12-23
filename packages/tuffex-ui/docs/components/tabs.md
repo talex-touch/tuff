@@ -3,53 +3,49 @@
 用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import TabsBasicDemo from '../.vitepress/theme/components/demos/TabsBasicDemo.vue'
+import TabsBasicDemoSource from '../.vitepress/theme/components/demos/TabsBasicDemo.vue?raw'
 
-const active = ref('General')
+import TabsPlacementDemo from '../.vitepress/theme/components/demos/TabsPlacementDemo.vue'
+import TabsPlacementDemoSource from '../.vitepress/theme/components/demos/TabsPlacementDemo.vue?raw'
+
+import TabsAutoSizeDemo from '../.vitepress/theme/components/demos/TabsAutoSizeDemo.vue'
+import TabsAutoSizeDemoSource from '../.vitepress/theme/components/demos/TabsAutoSizeDemo.vue?raw'
+
+import TabsDisableAnimDemo from '../.vitepress/theme/components/demos/TabsDisableAnimDemo.vue'
+import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/TabsDisableAnimDemo.vue?raw'
 </script>
 
 ## 基础用法
 
-<DemoBlock title="Tabs">
-<template #preview>
-<div style="height: 320px;">
-  <TxTabs v-model="active">
-    <TxTabItem name="General" icon-class="i-carbon-settings" activation>
-      <div style="padding: 8px;">
-        <h3 style="margin: 0 0 8px;">General</h3>
-        <p style="margin: 0; color: var(--tx-text-color-secondary);">Basic settings content</p>
-      </div>
-    </TxTabItem>
-    <TxTabItem name="Account" icon-class="i-carbon-user">
-      <div style="padding: 8px;">
-        <h3 style="margin: 0 0 8px;">Account</h3>
-        <p style="margin: 0; color: var(--tx-text-color-secondary);">Account settings content</p>
-      </div>
-    </TxTabItem>
-    <TxTabItem name="About" icon-class="i-carbon-information">
-      <div style="padding: 8px;">
-        <h3 style="margin: 0 0 8px;">About</h3>
-        <p style="margin: 0; color: var(--tx-text-color-secondary);">About content</p>
-      </div>
-    </TxTabItem>
-  </TxTabs>
-</div>
-</template>
+<DemoBlock title="Tabs" :code="TabsBasicDemoSource">
+  <template #preview>
+    <TabsBasicDemo />
+  </template>
+</DemoBlock>
 
-<template #code>
-```vue
-<template>
-  <TxTabs v-model="active">
-    <TxTabItem name="General" icon-class="i-carbon-settings" activation>
-      General Content
-    </TxTabItem>
-    <TxTabItem name="Account" icon-class="i-carbon-user">
-      Account Content
-    </TxTabItem>
-  </TxTabs>
-</template>
-```
-</template>
+## 布局方向（placement）
+
+<DemoBlock title="Placement + Header Slot" :code="TabsPlacementDemoSource">
+  <template #preview>
+    <TabsPlacementDemo />
+  </template>
+</DemoBlock>
+
+## 高度跟随内容（animation.size）
+
+<DemoBlock title="Auto Size (contentScrollable=false)" :code="TabsAutoSizeDemoSource">
+  <template #preview>
+    <TabsAutoSizeDemo />
+  </template>
+</DemoBlock>
+
+## 关闭动画（indicator/content）
+
+<DemoBlock title="Disable Animations" :code="TabsDisableAnimDemoSource">
+  <template #preview>
+    <TabsDisableAnimDemo />
+  </template>
 </DemoBlock>
 
 ## API
@@ -66,9 +62,13 @@ const active = ref('General')
 | `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |
 | `contentPadding` | `number` | `12` | 内容区 padding |
 | `contentScrollable` | `boolean` | `true` | 内容区是否可滚动 |
-| `autoHeight` | `boolean` | `false` | 内容区高度是否跟随内容并过渡（仅在 `contentScrollable=false` 时生效） |
-| `autoHeightDurationMs` | `number` | `250` | 高度过渡时长(ms) |
-| `autoHeightEasing` | `string` | `ease` | 高度过渡曲线 |
+| `animation` | `{ size?; indicator?; content? }` | - | 动画配置对象 |
+| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时兼容 `autoHeight*` |
+| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | 指示条动画 |
+| `animation.content` | `boolean \| { enabled? }` | - | 内容切换过渡（zoom 动画） |
+| `autoHeight` | `boolean` | `false` | 兼容字段：等价于 `animation.size` |
+| `autoHeightDurationMs` | `number` | `250` | 兼容字段：`animation.size.durationMs` |
+| `autoHeightEasing` | `string` | `ease` | 兼容字段：`animation.size.easing` |
 
 ### TxTabItem Props
 

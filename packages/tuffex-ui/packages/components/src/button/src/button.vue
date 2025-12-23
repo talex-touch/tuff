@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { ButtonEmits, ButtonProps } from './types'
 import VWave from 'v-wave'
-import { computed, nextTick, ref, watch } from 'vue'
-import { useAutoResize } from '../../../../utils/animation/auto-resize'
+import { computed, nextTick, ref, useSlots, watch } from 'vue'
+import { useFlip } from '../../../../utils/animation/flip'
 import { useVibrate } from '../../../../utils/vibrate'
 import Spinner from '../../spinner'
 
@@ -33,40 +33,33 @@ const { vWave } = VWave.createLocalWaveDirective()
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const innerRef = ref<HTMLElement | null>(null)
+const slots = useSlots()
 
 const autoWidthEnabled = computed(() => {
   return !props.block && !props.circle
 })
 
-const { refresh: refreshAutoWidth, setEnabled: setAutoWidthEnabled } = useAutoResize(buttonRef, innerRef, {
-  width: true,
-  height: false,
-  applyStyle: true,
-  applyMode: 'transition',
-  styleTarget: 'inner',
-  immediate: true,
-  rafBatch: true,
-  durationMs: 180,
+const { flip: flipSize } = useFlip(buttonRef, {
+  mode: 'size',
+  includeScale: false,
+  duration: 180,
   easing: 'cubic-bezier(0.2, 0, 0, 1)',
-  clearStyleOnFinish: true,
-})
-
-watch(
-  autoWidthEnabled,
-  (enabled) => {
-    setAutoWidthEnabled(enabled)
-    if (!enabled && innerRef.value)
-      innerRef.value.style.width = ''
-    void refreshAutoWidth()
+  size: {
+    width: true,
+    height: false,
   },
-  { immediate: true },
-)
+})
 
 watch(
   () => props.loading,
   () => {
-    void refreshAutoWidth()
+    if (!autoWidthEnabled.value)
+      return
+    void flipSize(async () => {
+      await nextTick()
+    })
   },
+  { flush: 'sync' },
 )
 
 const normalizedVariant = computed(() => {
@@ -98,6 +91,38 @@ const normalizedSize = computed(() => {
   if (props.size === 'sm' || props.size === 'small' || props.size === 'mini')
     return 'sm'
   return 'md'
+})
+
+const spinnerSize = computed(() => {
+  if (normalizedSize.value === 'sm')
+    return 14
+  if (normalizedSize.value === 'lg')
+    return 18
+  return 16
+})
+
+const innerStyle = computed(() => {
+  return {
+    '--tx-button-spinner-size': `${spinnerSize.value}px`,
+  }
+})
+
+function hasDefaultContent(): boolean {
+  const vnodes = slots.default?.()
+  if (!vnodes || !vnodes.length)
+    return false
+  return vnodes.some((node) => {
+    if (typeof node.children === 'string')
+      return node.children.trim().length > 0
+    if (Array.isArray(node.children))
+      return node.children.some((c: any) => typeof c === 'string' ? c.trim().length > 0 : !!c)
+    return !!node.children
+  })
+}
+
+const isIconOnly = computed(() => {
+  const slotHasContent = hasDefaultContent()
+  return props.circle || (props.icon && !slotHasContent)
 })
 
 const classList = computed(() => {
@@ -164,8 +189,25 @@ if (props.autofocus) {
     :disabled="disabled || loading"
     @click="handleClick"
   >
-    <span ref="innerRef" class="tx-button__inner">
-      <Spinner v-if="loading" class="tx-button__spinner" />
+    <span ref="innerRef" class="tx-button__inner" :style="innerStyle">
+      <template v-if="isIconOnly">
+        <Spinner
+          class="tx-button__spinner"
+          :class="{ 'is-overlay': true }"
+          :visible="loading"
+          :size="spinnerSize"
+        />
+      </template>
+      <template v-else>
+        <span class="tx-button__spinner-slot" :class="{ 'is-visible': loading }">
+          <Spinner
+            class="tx-button__spinner"
+            :visible="loading"
+            :size="spinnerSize"
+          />
+        </span>
+      </template>
+
       <i v-if="icon" class="tx-button__icon" :class="icon" />
       <slot />
     </span>
