@@ -1,133 +1,161 @@
 # Avatar 头像
 
-Avatar 头像组件用于展示用户头像、品牌标识或其他圆形图像内容，支持图片、文字、图标等多种展示方式。
+Avatar 头像组件用于展示用户头像、品牌标识或其他圆形内容，支持图片、文字（slot / name）、图标等多种展示方式。
 
 ## 基础用法
 
-最简单的头像展示：
+<DemoBlock title="Avatar">
+<template #preview>
+<div style="display: flex; gap: 12px; align-items: center;">
+  <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <TxAvatar name="Talex DreamSoul" />
+  <TxAvatar icon="user" />
+  <TxAvatar>U</TxAvatar>
+</div>
+</template>
 
+<template #code>
 ```vue
 <template>
-  <div class="avatar-demo">
-    <TxAvatar src="https://example.com/avatar.jpg" />
+  <div style="display: flex; gap: 12px; align-items: center;">
+    <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+    <TxAvatar name="Talex DreamSoul" />
+    <TxAvatar icon="user" />
     <TxAvatar>U</TxAvatar>
-    <TxAvatar>
-      <TxIcon name="user" />
-    </TxAvatar>
   </div>
 </template>
 ```
+</template>
+</DemoBlock>
 
 ## 头像尺寸
 
 提供多种预设尺寸：
 
+<DemoBlock title="Sizes">
+<template #preview>
+<div style="display: flex; gap: 12px; align-items: center;">
+  <TxAvatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <TxAvatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <TxAvatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <TxAvatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
+</div>
+</template>
+
+<template #code>
 ```vue
 <template>
-  <div class="size-demo">
-    <TxAvatar size="small" src="avatar.jpg" />
-    <TxAvatar size="medium" src="avatar.jpg" />
-    <TxAvatar size="large" src="avatar.jpg" />
-    <TxAvatar size="extra-large" src="avatar.jpg" />
-    <TxAvatar :size="64" src="avatar.jpg" />
+  <div style="display: flex; gap: 12px; align-items: center;">
+    <TxAvatar size="small" src="..." />
+    <TxAvatar size="medium" src="..." />
+    <TxAvatar size="large" src="..." />
+    <TxAvatar size="xlarge" src="..." />
   </div>
 </template>
 ```
-
-## 头像形状
-
-支持圆形和方形两种形状：
-
-```vue
-<template>
-  <div class="shape-demo">
-    <TxAvatar shape="circle" src="avatar.jpg" />
-    <TxAvatar shape="square" src="avatar.jpg" />
-  </div>
 </template>
-```
+</DemoBlock>
 
 ## 文字头像
 
 使用文字作为头像内容：
 
+<DemoBlock title="Text">
+<template #preview>
+<div style="display: flex; gap: 12px; align-items: center;">
+  <TxAvatar>张</TxAvatar>
+  <TxAvatar>AB</TxAvatar>
+  <TxAvatar>User</TxAvatar>
+</div>
+</template>
+
+<template #code>
 ```vue
 <template>
-  <div class="text-demo">
-    <TxAvatar>张</TxAvatar>
-    <TxAvatar>AB</TxAvatar>
-    <TxAvatar>User</TxAvatar>
-  </div>
+  <TxAvatar>张</TxAvatar>
+  <TxAvatar>AB</TxAvatar>
+  <TxAvatar>User</TxAvatar>
 </template>
 ```
+</template>
+</DemoBlock>
 
 ## 图标头像
 
 使用图标作为头像内容：
 
+<DemoBlock title="Icon">
+<template #preview>
+<div style="display: flex; gap: 12px; align-items: center;">
+  <TxAvatar icon="user" />
+  <TxAvatar icon="team" />
+</div>
+</template>
+
+<template #code>
 ```vue
 <template>
-  <div class="icon-demo">
-    <TxAvatar>
-      <TxIcon name="user" />
-    </TxAvatar>
-    <TxAvatar>
-      <TxIcon name="team" />
-    </TxAvatar>
-  </div>
+  <TxAvatar icon="user" />
+  <TxAvatar icon="team" />
 </template>
 ```
+</template>
+</DemoBlock>
 
 ## 头像组
 
-展示多个头像的组合：
+展示多个头像叠放：
 
+<DemoBlock title="AvatarGroup">
+<template #preview>
+<TxAvatarGroup :max="3" size="small" :overlap="10">
+  <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <TxAvatar src="https://avatars.githubusercontent.com/u/2?v=4" />
+  <TxAvatar src="https://avatars.githubusercontent.com/u/3?v=4" />
+  <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+  <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+</TxAvatarGroup>
+</template>
+
+<template #code>
 ```vue
 <template>
-  <div class="group-demo">
-    <TxAvatarGroup :max="3">
-      <TxAvatar src="avatar1.jpg" />
-      <TxAvatar src="avatar2.jpg" />
-      <TxAvatar src="avatar3.jpg" />
-      <TxAvatar src="avatar4.jpg" />
-      <TxAvatar src="avatar5.jpg" />
-    </TxAvatarGroup>
-  </div>
+  <TxAvatarGroup :max="3" size="small" :overlap="10">
+    <TxAvatar src="..." />
+    <TxAvatar src="..." />
+    <TxAvatar src="..." />
+    <TxAvatar src="..." />
+  </TxAvatarGroup>
 </template>
 ```
+</template>
+</DemoBlock>
 
-## 带徽章的头像
+## 状态
 
-在头像上显示状态徽章：
+在头像上显示在线状态：
 
+<DemoBlock title="Status">
+<template #preview>
+<div style="display: flex; gap: 12px; align-items: center;">
+  <TxAvatar status="online" name="Online" />
+  <TxAvatar status="offline" name="Offline" />
+  <TxAvatar status="busy" name="Busy" />
+  <TxAvatar status="away" name="Away" />
+</div>
+</template>
+
+<template #code>
 ```vue
 <template>
-  <div class="badge-demo">
-    <TxAvatar src="avatar.jpg" badge="online" />
-    <TxAvatar src="avatar.jpg" badge="offline" />
-    <TxAvatar src="avatar.jpg" badge="busy" />
-    <TxAvatar src="avatar.jpg" badge="away" />
-  </div>
+  <TxAvatar status="online" name="Online" />
+  <TxAvatar status="offline" name="Offline" />
+  <TxAvatar status="busy" name="Busy" />
+  <TxAvatar status="away" name="Away" />
 </template>
 ```
-
-## 加载状态
-
-头像加载失败时的处理：
-
-```vue
-<template>
-  <div class="fallback-demo">
-    <TxAvatar 
-      src="invalid-url.jpg"
-      fallback="https://example.com/default-avatar.jpg"
-    />
-    <TxAvatar src="invalid-url.jpg">
-      <TxIcon name="user" />
-    </TxAvatar>
-  </div>
 </template>
-```
+</DemoBlock>
 
 ## 可点击头像
 
@@ -135,8 +163,8 @@ Avatar 头像组件用于展示用户头像、品牌标识或其他圆形图像�
 
 ```vue
 <template>
-  <TxAvatar 
-    src="avatar.jpg"
+  <TxAvatar
+    name="Click"
     clickable
     @click="handleAvatarClick"
   />
@@ -151,33 +179,33 @@ Avatar 头像组件用于展示用户头像、品牌标识或其他圆形图像�
 |------|------|--------|------|
 | src | `string` | - | 头像图片地址 |
 | alt | `string` | - | 图片替代文本 |
-| size | `'small' \| 'medium' \| 'large' \| 'extra-large' \| number` | `'medium'` | 头像尺寸 |
-| shape | `'circle' \| 'square'` | `'circle'` | 头像形状 |
-| fallback | `string` | - | 加载失败时的备用图片 |
-| badge | `'online' \| 'offline' \| 'busy' \| 'away'` | - | 状态徽章 |
+| name | `string` | - | 名称（用于生成首字母 fallback） |
+| icon | `string` | - | icon 名称（基于 TxIcon） |
+| size | `'small' \| 'medium' \| 'large' \| 'xlarge'` | `'medium'` | 头像尺寸 |
+| status | `'online' \| 'offline' \| 'busy' \| 'away'` | - | 状态 |
 | clickable | `boolean` | `false` | 是否可点击 |
+| backgroundColor | `string` | - | 自定义背景色 |
+| textColor | `string` | - | 自定义文字色 |
 
 ### Avatar Events
 
 | 事件名 | 参数 | 说明 |
 |--------|------|------|
-| click | `(event: MouseEvent)` | 点击头像时触发 |
-| error | `(event: Event)` | 图片加载失败时触发 |
-| load | `(event: Event)` | 图片加载成功时触发 |
+| click | `()` | 点击头像时触发（仅 `clickable=true`） |
 
 ### Avatar Slots
 
 | 插槽名 | 说明 |
 |--------|------|
-| default | 自定义头像内容（文字或图标） |
+| default | 自定义头像内容（优先级高于 icon/name） |
 
 ### AvatarGroup Props
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| max | `number` | - | 最大显示数量 |
-| size | `'small' \| 'medium' \| 'large' \| 'extra-large' \| number` | `'medium'` | 头像尺寸 |
-| shape | `'circle' \| 'square'` | `'circle'` | 头像形状 |
+| max | `number` | - | 最大显示数量（超出显示 `+N`） |
+| size | `'small' \| 'medium' \| 'large' \| 'xlarge'` | - | 统一设置子头像尺寸（未显式设置时生效） |
+| overlap | `number \| string` | `8` | 叠放重叠距离（px 或 css string） |
 
 ## 样式定制
 

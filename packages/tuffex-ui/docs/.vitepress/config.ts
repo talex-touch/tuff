@@ -67,6 +67,7 @@ export default defineConfig({
           items: [
             { text: '按钮 Button', link: '/components/button' },
             { text: '图标 Icon', link: '/components/icon' },
+            { text: '头像 Avatar', link: '/components/avatar' },
             { text: '标签 Tag', link: '/components/tag' },
             { text: '状态徽标 StatusBadge', link: '/components/status-badge' },
           ],
@@ -150,6 +151,7 @@ export default defineConfig({
           text: '视觉',
           items: [
             { text: '玻璃拟态 GlassSurface', link: '/components/glass-surface' },
+            { text: '渐变模糊 GradualBlur', link: '/components/gradual-blur' },
             { text: '渐变边框 GradientBorder', link: '/components/gradient-border' },
           ],
         },

@@ -1,6 +1,7 @@
 export interface TabsProps {
   modelValue?: string
   defaultValue?: string
+  placement?: 'left' | 'right' | 'top' | 'bottom'
   offset?: number
   navMinWidth?: number
   navMaxWidth?: number

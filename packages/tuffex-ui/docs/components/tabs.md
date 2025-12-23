@@ -60,6 +60,7 @@ const active = ref('General')
 |------|------|---------|------|
 | `modelValue` | `string` | - | 当前激活 tab（v-model） |
 | `defaultValue` | `string` | - | 默认激活 tab（当未传 modelValue 时） |
+| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Tabs 布局位置 |
 | `offset` | `number` | `0` | 指示条定位偏移 |
 | `navMinWidth` | `number` | `220` | 左侧导航最小宽度 |
 | `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |

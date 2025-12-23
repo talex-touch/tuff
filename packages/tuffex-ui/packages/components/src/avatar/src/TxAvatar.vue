@@ -17,7 +17,8 @@
     />
     
     <div v-else class="tx-avatar__fallback">
-      <TxIcon v-if="icon" :name="icon" class="tx-avatar__icon" />
+      <slot v-if="$slots.default" />
+      <TxIcon v-else-if="icon" :name="icon" class="tx-avatar__icon" />
       <span v-else-if="fallbackText" class="tx-avatar__text">
         {{ fallbackText }}
       </span>
@@ -33,6 +34,10 @@
 import { computed, ref } from 'vue'
 import { TxIcon } from '../../icon'
 import type { AvatarSize, AvatarStatus, AvatarProps } from './types'
+
+defineOptions({
+  name: 'TxAvatar',
+})
 
 interface Props extends AvatarProps {}
 

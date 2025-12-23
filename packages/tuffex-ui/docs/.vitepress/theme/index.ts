@@ -7,6 +7,8 @@ import '../../../packages/components/style/index.scss'
 import {
   TxTag,
   TxStatusBadge,
+  TxAvatar,
+  TxAvatarGroup,
   TxDrawer,
   TxGroupBlock,
   TxBlockLine,
@@ -36,6 +38,7 @@ import {
   TxListItemSkeleton,
   TxToastHost,
   TxGlassSurface,
+  TxGradualBlur,
   TxGradientBorder,
   TxGridLayout,
   TxLayoutSkeleton,
@@ -65,6 +68,7 @@ import {
 
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
+import GradualBlurAnimatedDemo from './components/demos/GradualBlurAnimatedDemo.vue'
 
 export default {
   extends: DefaultTheme,
@@ -75,6 +79,8 @@ export default {
     // 注册 TuffEx UI 组件
     app.component('TxTag', TxTag)
     app.component('TxStatusBadge', TxStatusBadge)
+    app.component('TxAvatar', TxAvatar)
+    app.component('TxAvatarGroup', TxAvatarGroup)
     app.component('TxDrawer', TxDrawer)
     app.component('TxGroupBlock', TxGroupBlock)
     app.component('TxBlockLine', TxBlockLine)
@@ -111,6 +117,7 @@ export default {
     app.component('TxListItemSkeleton', TxListItemSkeleton)
     app.component('TxToastHost', TxToastHost)
     app.component('TxGlassSurface', TxGlassSurface)
+    app.component('TxGradualBlur', TxGradualBlur)
     app.component('TxGradientBorder', TxGradientBorder)
     app.component('TxGridLayout', TxGridLayout)
     app.component('TxLayoutSkeleton', TxLayoutSkeleton)
@@ -141,5 +148,6 @@ export default {
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)
+    app.component('GradualBlurAnimatedDemo', GradualBlurAnimatedDemo)
   },
 } satisfies Theme
