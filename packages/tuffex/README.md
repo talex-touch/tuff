@@ -16,7 +16,7 @@
 
 <p align="center">
   A modern Vue3 component library focused on <strong>tactile experience</strong> and <strong>smooth animations</strong><br/>
-  Part of the <a href="https://tuff.tagzxia.com">Tuff</a> ecosystem - bringing life to every interaction
+  Part of the <a href="https://tuffex.tagzxia.com">Tuff</a> ecosystem - bringing life to every interaction
 </p>
 
 <p align="center">
@@ -90,13 +90,13 @@ app.use(TxAvatar)
 
 ```typescript
 import { createApp } from 'vue'
-import TouchXUI from '@talex-touch/touchx-ui'
-import '@talex-touch/touchx-ui/dist/style.css'
+import TuffUI from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 
 // Custom theme configuration
-app.use(TouchXUI, {
+app.use(TuffUI, {
   theme: {
     primaryColor: '#6366f1',
     borderRadius: '12px',
@@ -124,7 +124,7 @@ app.use(TouchXUI, {
 
     <!-- Glass Card -->
     <TxCard glass blur>
-      <h3>TouchX UI</h3>
+      <h3>TuffEx</h3>
       <p>Bringing life to every interaction</p>
     </TxCard>
   </div>
@@ -132,14 +132,14 @@ app.use(TouchXUI, {
 
 <script setup>
 const handleClick = () => {
-  console.log('Can you feel it? This is TouchX!')
+  console.log('Can you feel it? This is TuffEx!')
 }
 </script>
 ```
 
 ## 🎯 Design Philosophy
 
-TouchX UI embodies an **interaction philosophy** - interfaces should feel alive and respond with warmth.
+TuffEx embodies an **interaction philosophy** - interfaces should feel alive and respond with warmth.
 
 **Touch First** - Every interaction has soul through warm, textured feedback systems.
 **Vitality** - Components breathe, express emotions, and anticipate user intentions.
@@ -193,7 +193,7 @@ Built with modern frontend technologies aligned with the Tuff core application:
 
 ## 📖 Documentation
 
-- **[Tuff Documentation](https://tuff.tagzxia.com/docs/dev/tuff-ui)** - Official docs in Tuff ecosystem
+- **[TuffEx Documentation](https://tuffex.tagzxia.com/docs/dev/tuffex)** - Official docs in Tuff ecosystem
 - **[Component Docs](http://localhost:8000)** - Local VitePress documentation (run `pnpm docs:dev`)
 
 ## 🛠️ Development
@@ -206,6 +206,25 @@ pnpm install
 pnpm docs:dev          # Start documentation server at :8000
 pnpm build             # Build library with Gulp
 pnpm build:vite        # Build library with Vite
+pnpm docs:build        # Build documentation
+```
+
+## 🗂️ Project Structure
+
+This repository is a pnpm monorepo. TuffEx lives under `packages/tuffex`.
+
+```
+talex-touch/tuff
+├── apps/               # Applications (Electron app, Nexus site, ...)
+├── packages/
+│   ├── tuffex/         # TuffEx package (this)
+│   │   ├── packages/components/   # Component source
+│   │   ├── packages/script/       # Build scripts (gulp/vite)
+│   │   ├── docs/                  # VitePress docs
+│   │   └── utils/                 # Scaffolding utilities
+│   └── utils/          # Shared utilities
+├── plugins/            # Example plugins
+└── docs/               # Repo-level docs
 ```
 
 ## 🔗 Integration with Tuff
@@ -215,7 +234,6 @@ TuffEx is designed to work seamlessly with the Tuff desktop application. Compone
 1. **Code Reuse** - Share UI components across projects
 2. **Plugin Development** - Enable plugin developers to use consistent UI
 3. **Community** - Allow external projects to adopt Tuff's design language
-
 ## 🤖 Intelligence & AI
 
 - Pair TuffEx with `@talex-touch/tuff-intelligence` to build AI-driven flows (capabilities, prompts, provider routing).
@@ -225,28 +243,28 @@ TuffEx is designed to work seamlessly with the Tuff desktop application. Compone
 
 We welcome all contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
 
-- 🐛 [Report Issues](https://github.com/talex-touch/touchx-ui/issues)
-- 💡 [Feature Requests](https://github.com/talex-touch/touchx-ui/discussions)
-- 🔧 [Submit PRs](https://github.com/talex-touch/touchx-ui/pulls)
+- 🐛 [Report Issues](https://github.com/talex-touch/tuff/issues)
+- 💡 [Feature Requests](https://github.com/talex-touch/tuff/discussions)
+- 🔧 [Submit PRs](https://github.com/talex-touch/tuff/pulls)
 
-## � License
+## 📄 License
 
 [MIT License](LICENSE) © 2025 TalexDreamSoul
 
 ---
 
 <p align="center">
-  <img src="playground/vue-vite-playground/public/touchx-logo-transparent.png" width="120" height="120" alt="TouchX UI Logo">
+  <img src="https://i.imgur.com/pd3YUxf.png" width="120" height="120" alt="TuffEx Logo">
 </p>
 
 <p align="center">
   <strong>🎭 Bringing life to every touch</strong><br/>
-  <em>TouchX UI - Touchable Beautiful Animations</em>
+  <em>TuffEx - Touchable Beautiful Animations</em>
 </p>
 
 <p align="center">
-  <a href="https://touchx-ui.talex.cn">📖 Documentation</a> ·
-  <a href="https://github.com/talex-touch/touchx-ui">⭐ GitHub</a> ·
-  <a href="https://www.npmjs.com/package/@talex-touch/touchx-ui">📦 NPM</a> ·
-  <a href="https://github.com/talex-touch/touchx-ui/discussions">💬 Discussions</a>
+  <a href="https://tuffex.tagzxia.com/docs/dev/tuffex">📖 Documentation</a> ·
+  <a href="https://github.com/talex-touch/tuff/tree/master/packages/tuffex">⭐ GitHub</a> ·
+  <a href="https://www.npmjs.com/package/@talex-touch/tuffex">📦 NPM</a> ·
+  <a href="https://github.com/talex-touch/tuff/discussions">💬 Discussions</a>
 </p>

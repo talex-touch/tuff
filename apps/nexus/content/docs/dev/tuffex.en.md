@@ -137,7 +137,7 @@ pnpm build       # Build library
 
 ## Related Links
 
-- [GitHub Repository](https://github.com/AncientMC/talex-touch/tree/master/packages/tuffex)
+- [GitHub Repository](https://github.com/talex-touch/tuff/tree/master/packages/tuffex)
 - [NPM Package](https://www.npmjs.com/package/@talex-touch/tuffex)
 
 ## Browser Support
