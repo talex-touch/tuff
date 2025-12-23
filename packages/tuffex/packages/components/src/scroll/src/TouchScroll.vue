@@ -10,6 +10,7 @@ const props = withDefaults(
   defineProps<{
     noPadding?: boolean
     native?: boolean
+    scrollChaining?: boolean
     direction?: 'vertical' | 'horizontal' | 'both'
     scrollbar?: boolean
     scrollbarFade?: boolean
@@ -31,6 +32,7 @@ const props = withDefaults(
   {
     noPadding: false,
     native: false,
+    scrollChaining: false,
     direction: 'vertical',
     scrollbar: true,
     scrollbarFade: true,
@@ -99,6 +101,7 @@ defineExpose({
     ref="scrollRef"
     :no-padding="noPadding"
     :native="native"
+    :scroll-chaining="scrollChaining"
     :direction="direction"
     :scrollbar="scrollbar"
     :scrollbar-fade="scrollbarFade"

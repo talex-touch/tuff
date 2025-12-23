@@ -13,6 +13,7 @@ const props = withDefaults(
   defineProps<{
     noPadding?: boolean
     native?: boolean
+    scrollChaining?: boolean
     direction?: 'vertical' | 'horizontal' | 'both'
     scrollbar?: boolean
     scrollbarFade?: boolean
@@ -34,6 +35,7 @@ const props = withDefaults(
   {
     noPadding: false,
     native: false,
+    scrollChaining: false,
     direction: 'vertical',
     scrollbar: true,
     scrollbarFade: true,
@@ -85,13 +87,29 @@ const wrapperClass = computed(() => {
 
   return {
     'tx-scroll__wrapper--always-visible': alwaysVisible,
+    'tx-scroll__wrapper--wheeling': isWheeling.value,
   }
+})
+
+const contentStyle = computed(() => {
+  const style: Record<string, string> = {}
+  if (props.noPadding)
+    style.padding = '0'
+  if (isScrollXEnabled.value)
+    style.width = 'max-content'
+  return style
 })
 
 const nativeScrollStyle = computed(() => {
   return {
     overflowY: isScrollYEnabled.value ? 'auto' : 'hidden',
     overflowX: isScrollXEnabled.value ? 'auto' : 'hidden',
+    overscrollBehaviorY: isScrollYEnabled.value
+      ? (props.scrollChaining ? 'auto' : 'contain')
+      : 'auto',
+    overscrollBehaviorX: isScrollXEnabled.value
+      ? (props.scrollChaining ? 'auto' : 'contain')
+      : 'auto',
   } as Record<string, string>
 })
 
@@ -100,6 +118,9 @@ let ro: ResizeObserver | null = null
 let mo: MutationObserver | null = null
 let wheelCleanup: (() => void) | null = null
 let refreshTimer: number | null = null
+
+let wheelIndicatorTimer: number | null = null
+const isWheeling = ref(false)
 
 let nativeTouchStartY: number | null = null
 let nativePullingDown = false
@@ -222,6 +243,9 @@ async function initBetterScroll() {
     if (!props.wheel)
       return
 
+    if (e.ctrlKey)
+      return
+
     const currX = typeof bs.x === 'number' ? bs.x : 0
     const currY = typeof bs.y === 'number' ? bs.y : 0
     const maxX = typeof (bs as any).maxScrollX === 'number' ? (bs as any).maxScrollX : -Infinity
@@ -230,18 +254,57 @@ async function initBetterScroll() {
     const dx = typeof e.deltaX === 'number' ? e.deltaX : 0
     const dy = typeof e.deltaY === 'number' ? e.deltaY : 0
 
-    if (dx === 0 && dy === 0)
+    let effDx = dx
+    let effDy = dy
+
+    if (!isScrollYEnabled.value && isScrollXEnabled.value) {
+      if (effDx === 0 && effDy !== 0) {
+        effDx = effDy
+        effDy = 0
+      }
+    }
+    else if (!isScrollXEnabled.value && isScrollYEnabled.value) {
+      if (effDy === 0 && effDx !== 0) {
+        effDy = effDx
+        effDx = 0
+      }
+    }
+
+    if (effDx === 0 && effDy === 0)
       return
 
-    const nextX = Math.max(maxX, Math.min(0, currX - dx))
-    const nextY = Math.max(maxY, Math.min(0, currY - dy))
+    isWheeling.value = true
+    wheelIndicatorTimer && window.clearTimeout(wheelIndicatorTimer)
+    wheelIndicatorTimer = window.setTimeout(() => {
+      isWheeling.value = false
+      wheelIndicatorTimer = null
+    }, 520)
 
-    const willMoveX = isScrollXEnabled.value && dx !== 0 && nextX !== currX
-    const willMoveY = isScrollYEnabled.value && dy !== 0 && nextY !== currY
+    const overshoot = props.bounce ? 60 : 0
+    const nextX = Math.max(maxX - overshoot, Math.min(0 + overshoot, currX - effDx))
+    const nextY = Math.max(maxY - overshoot, Math.min(0 + overshoot, currY - effDy))
+
+    const willMoveX = isScrollXEnabled.value && effDx !== 0 && nextX !== currX
+    const willMoveY = isScrollYEnabled.value && effDy !== 0 && nextY !== currY
+
+    const canScrollXNow = isScrollXEnabled.value && maxX < 0
+    const canScrollYNow = isScrollYEnabled.value && maxY < 0
+    const shouldBlockScrollChaining = !props.scrollChaining && (
+      (effDx !== 0 && canScrollXNow)
+      || (effDy !== 0 && canScrollYNow)
+    )
+
+    if (shouldBlockScrollChaining) {
+      if (e.cancelable)
+        e.preventDefault()
+      e.stopPropagation()
+    }
+
     if (!willMoveX && !willMoveY)
       return
 
-    e.preventDefault()
+    if (e.cancelable)
+      e.preventDefault()
     bs.scrollTo(willMoveX ? nextX : currX, willMoveY ? nextY : currY, 0)
   }
 
@@ -252,6 +315,10 @@ async function initBetterScroll() {
 function destroyBetterScroll() {
   wheelCleanup?.()
   wheelCleanup = null
+
+  wheelIndicatorTimer && window.clearTimeout(wheelIndicatorTimer)
+  wheelIndicatorTimer = null
+  isWheeling.value = false
 
   if (mo) {
     mo.disconnect()
@@ -518,7 +585,7 @@ watch(
         @touchend="handleNativeTouchEnd"
       >
         <slot name="header" />
-        <div class="tx-scroll__content" :style="noPadding ? 'padding: 0 !important' : ''">
+        <div class="tx-scroll__content" :style="contentStyle">
           <slot />
           <slot name="footer" />
         </div>
@@ -527,7 +594,7 @@ watch(
 
     <template v-else>
       <div ref="wrapperRef" class="tx-scroll__wrapper" :class="wrapperClass" :style="wrapperStyle">
-        <div ref="contentRef" class="tx-scroll__content" :style="noPadding ? 'padding: 0 !important' : ''">
+        <div ref="contentRef" class="tx-scroll__content" :style="contentStyle">
           <slot name="header" />
           <slot />
           <slot name="footer" />
@@ -591,6 +658,12 @@ watch(
 
 .tx-scroll__wrapper--always-visible :deep(.bscroll-vertical-scrollbar),
 .tx-scroll__wrapper--always-visible :deep(.bscroll-horizontal-scrollbar) {
+  opacity: 1 !important;
+  display: block !important;
+}
+
+.tx-scroll__wrapper--wheeling :deep(.bscroll-vertical-scrollbar),
+.tx-scroll__wrapper--wheeling :deep(.bscroll-horizontal-scrollbar) {
   opacity: 1 !important;
   display: block !important;
 }
