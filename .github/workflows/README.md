@@ -52,8 +52,8 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Triggers on changes to `packages/utils/**`
   - TypeScript source package (no build step)
 
-- **`package-tuffex-ui-ci.yml`** - CI for `@talex-touch/tuff-ui`
-  - Triggers on changes to `packages/tuffex-ui/**`
+- **`package-tuffex-ci.yml`** - CI for `@talex-touch/tuffex`
+  - Triggers on changes to `packages/tuffex/**`
   - Runs build process
 
 - **`package-unplugin-ci.yml`** - CI for `@talex-touch/unplugin-export-plugin`

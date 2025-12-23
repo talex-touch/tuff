@@ -36,9 +36,9 @@ Created individual workflows that call the reusable workflow:
 - **Triggers**: Changes to `packages/utils/**`
 - **Configuration**: TypeScript source (no build)
 
-#### `package-tuffex-ui-ci.yml`
-- **Package**: `@talex-touch/tuff-ui`
-- **Triggers**: Changes to `packages/tuffex-ui/**`
+#### `package-tuffex-ci.yml`
+- **Package**: `@talex-touch/tuffex`
+- **Triggers**: Changes to `packages/tuffex/**`
 - **Configuration**: Build enabled
 
 #### `package-unplugin-ci.yml`
@@ -134,6 +134,6 @@ This ensures CI runs when:
 
 - `.github/workflows/package-ci.yml` - Reusable workflow
 - `.github/workflows/package-utils-ci.yml` - Utils package CI
-- `.github/workflows/package-tuffex-ui-ci.yml` - Tuffex UI package CI
+- `.github/workflows/package-tuffex-ci.yml` - Tuffex package CI
 - `.github/workflows/package-unplugin-ci.yml` - Unplugin package CI
 - `.github/workflows/README.md` - Comprehensive documentation

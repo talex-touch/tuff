@@ -1,25 +1,26 @@
 ---
-title: TUFF UI
+title: TuffEx
 description: Modern Vue3 component library with beautiful animations
 ---
 
-# TUFF UI
+# TuffEx
 
-TUFF UI is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
+TuffEx is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
 
-> **Migration in Progress** - TUFF UI is migrating components from Tuff core app. Tech stack upgraded to Vue 3.5 / Vite 6 / TypeScript 5.8.
+> **Migration in Progress** - TuffEx is migrating components from Tuff core app. Tech stack upgraded to Vue 3.5 / Vite 6 / TypeScript 5.8.
+
 
 ## Installation
 
 ```bash
 # npm
-npm install @talex-touch/tuff-ui
+npm install @talex-touch/tuffex
 
 # yarn
-yarn add @talex-touch/tuff-ui
+yarn add @talex-touch/tuffex
 
 # pnpm (recommended)
-pnpm add @talex-touch/tuff-ui
+pnpm add @talex-touch/tuffex
 ```
 
 ## Quick Start
@@ -28,8 +29,8 @@ pnpm add @talex-touch/tuff-ui
 
 ```typescript
 import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import TuffUI from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TuffUI)
@@ -40,8 +41,8 @@ app.mount('#app')
 
 ```typescript
 import { createApp } from 'vue'
-import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TuffButton)
@@ -122,9 +123,8 @@ TUFF UI supports custom theming through CSS variables:
 # In monorepo root
 pnpm install
 
-# In packages/tuff-ui directory
+# In packages/tuffex directory
 pnpm docs:dev    # Start docs server at :8000
-pnpm comp:play   # Start component playground
 pnpm build       # Build library
 ```
 
@@ -137,8 +137,8 @@ pnpm build       # Build library
 
 ## Related Links
 
-- [GitHub Repository](https://github.com/AncientMC/talex-touch/tree/master/packages/tuff-ui)
-- [NPM Package](https://www.npmjs.com/package/@talex-touch/tuff-ui)
+- [GitHub Repository](https://github.com/AncientMC/talex-touch/tree/master/packages/tuffex)
+- [NPM Package](https://www.npmjs.com/package/@talex-touch/tuffex)
 
 ## Browser Support
 

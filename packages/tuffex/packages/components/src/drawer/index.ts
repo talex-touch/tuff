@@ -7,7 +7,7 @@ import type { DrawerProps, DrawerEmits } from './src/types'
  *
  * @example
  * ```ts
- * import { TxDrawer } from '@talex-touch/tuff-ui'
+ * import { TxDrawer } from '@talex-touch/tuffex'
  *
  * // Use in template
  * <TxDrawer v-model:visible="visible" title="Settings">

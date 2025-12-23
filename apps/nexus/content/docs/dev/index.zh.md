@@ -18,7 +18,7 @@
 
 ## 开发工具
 - **[TUFF CLI](./tuff-cli.zh.md)** — 命令行工具，快速创建和管理插件项目。
-- **[TUFF UI](./tuff-ui.zh.md)** — Vue3 组件库，统一设计语言和交互体验。
+- **[TuffEx](./tuffex.zh.md)** — Vue3 组件库，统一设计语言和交互体验。
 
 ## 发布
 - **[发布流程](./publish.zh.md)** — 将插件提交到市场。

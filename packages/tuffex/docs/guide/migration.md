@@ -1,6 +1,6 @@
 # 迁移指南
 
-本指南帮助你将现有项目逐步迁移到 TuffEx UI（`@talex-touch/tuff-ui`），并统一使用 `--tx-*` 设计令牌。
+本指南帮助你将现有项目逐步迁移到 TuffEx（`@talex-touch/tuffex`），并统一使用 `--tx-*` 设计令牌。
 
 ## 从 core-app 旧组件迁移（推荐）
 
@@ -11,7 +11,7 @@
 
 ### 常见组件映射
 
-| core-app 旧组件 | TuffEx UI 新组件 | 说明 |
+| core-app 旧组件 | TuffEx 新组件 | 说明 |
 |---|---|---|
 | `TButton` | `TxButton` | 基础按钮 |
 | `FlatButton` | `TxFlatButton` | 扁平按钮 |
@@ -24,13 +24,13 @@
 ## 安装与使用
 
 ```bash
-npm install @talex-touch/tuff-ui
+npm install @talex-touch/tuffex
 ```
 
 ```ts
 import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/style.css'
+import TuffUI from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/style.css'
 
 import App from './App.vue'
 
@@ -39,7 +39,7 @@ createApp(App).use(TuffUI).mount('#app')
 
 ## 主题与 CSS 变量
 
-TuffEx UI 使用 `--tx-*` 作为设计令牌。
+TuffEx 使用 `--tx-*` 作为设计令牌。
 
 ```css
 :root {

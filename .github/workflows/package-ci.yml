@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       package-name:
-        description: 'Package name (e.g., utils, tuffex-ui, unplugin-export-plugin)'
+        description: 'Package name (e.g., utils, tuffex, unplugin-export-plugin)'
         required: true
         type: string
       package-path:

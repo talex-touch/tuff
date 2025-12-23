@@ -24,7 +24,7 @@
     "@floating-ui/vue": "catalog:",
     "@iconify-json/cib": "catalog:",
     "@sentry/nuxt": "catalog:",
-    "@talex-touch/tuff-ui": "workspace:*",
+    "@talex-touch/tuffex": "workspace:*",
     "@talex-touch/utils": "workspace:*",
     "gsap": "catalog:",
     "jszip": "catalog:",

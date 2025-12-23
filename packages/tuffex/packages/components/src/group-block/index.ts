@@ -19,7 +19,7 @@ import type {
  *
  * @example
  * ```ts
- * import { TxGroupBlock, TxBlockLine, TxBlockSlot, TxBlockSwitch } from '@talex-touch/tuff-ui'
+ * import { TxGroupBlock, TxBlockLine, TxBlockSlot, TxBlockSwitch } from '@talex-touch/tuffex'
  * ```
  *
  * @public

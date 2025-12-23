@@ -19,7 +19,7 @@ import type {
  *
  * @example
  * ```ts
- * import { TxBottomDialog, TxBlowDialog } from '@talex-touch/tuff-ui'
+ * import { TxBottomDialog, TxBlowDialog } from '@talex-touch/tuffex'
  * ```
  *
  * @public

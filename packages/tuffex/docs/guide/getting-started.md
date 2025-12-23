@@ -1,14 +1,14 @@
 # 快速开始
 
-本指南假设您已经 [安装了 TuffEx UI](/guide/installation)。让我们开始使用您的第一个 TuffEx UI 组件吧！
+本指南假设您已经 [安装了 TuffEx](/guide/installation)。让我们开始使用您的第一个 TuffEx 组件吧！
 
 ## 使用方式
 
 ### 全量引入
 ```typescript
 import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import TuffUI from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TuffUI)
@@ -18,8 +18,8 @@ app.mount('#app')
 ### 按需引入（推荐）
 ```typescript
 import { createApp } from 'vue'
-import { TxButton, TxTag } from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import { TxButton, TxTag } from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TxButton)
@@ -42,7 +42,7 @@ app.mount('#app')
 </template>
 
 <script setup>
-import { TxButton, TxTag } from '@talex-touch/tuff-ui'
+import { TxButton, TxTag } from '@talex-touch/tuffex'
 
 const handleClick = () => {
   console.log('按钮被点击了！')
@@ -58,15 +58,15 @@ const handleClick = () => {
 ```vue
 <template>
   <TxButton type="primary" @click="handleClick">
-    你好 TuffEx UI！ ✨
+    你好 TuffEx！ ✨
   </TxButton>
 </template>
 
 <script setup>
-import { TxButton } from '@talex-touch/tuff-ui'
+import { TxButton } from '@talex-touch/tuffex'
 
 const handleClick = () => {
-  alert('欢迎使用 TuffEx UI！')
+  alert('欢迎使用 TuffEx！')
 }
 </script>
 ```
@@ -87,7 +87,7 @@ const handleClick = () => {
 </template>
 
 <script setup>
-import { TxButton, TxTag } from '@talex-touch/tuff-ui'
+import { TxButton, TxTag } from '@talex-touch/tuffex'
 
 const user = {
   name: '张三',
@@ -101,10 +101,10 @@ const viewProfile = () => {
 
 ## TypeScript 支持
 
-TuffEx UI 开箱即用地提供完整的 TypeScript 支持：
+TuffEx 开箱即用地提供完整的 TypeScript 支持：
 
 ```typescript
-import type { TxButtonProps } from '@talex-touch/tuff-ui'
+import type { TxButtonProps } from '@talex-touch/tuffex'
 
 const buttonProps: TxButtonProps = {
   type: 'primary',
@@ -115,7 +115,7 @@ const buttonProps: TxButtonProps = {
 
 ## 组件属性和事件
 
-TuffEx UI 组件完全类型化，提供优秀的智能提示：
+TuffEx 组件完全类型化，提供优秀的智能提示：
 
 ```vue
 <template>
@@ -132,8 +132,8 @@ TuffEx UI 组件完全类型化，提供优秀的智能提示：
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { TxButton } from '@talex-touch/tuff-ui'
-import type { TxButtonProps } from '@talex-touch/tuff-ui'
+import { TxButton } from '@talex-touch/tuffex'
+import type { TxButtonProps } from '@talex-touch/tuffex'
 
 const buttonType = ref<TxButtonProps['type']>('primary')
 const buttonSize = ref<TxButtonProps['size']>('medium')

@@ -1,44 +1,44 @@
 # 安装
 
-本指南介绍了在项目中安装和设置 TuffEx UI 的不同方式。
+本指南介绍了在项目中安装和设置 TuffEx 的不同方式。
 
 ## 包管理器
 
 ### NPM
 ```bash
-npm install @talex-touch/tuff-ui
+npm install @talex-touch/tuffex
 ```
 
 ### Yarn
 ```bash
-yarn add @talex-touch/tuff-ui
+yarn add @talex-touch/tuffex
 ```
 
 ### PNPM（推荐）
 ```bash
-pnpm add @talex-touch/tuff-ui
+pnpm add @talex-touch/tuffex
 ```
 
 ## CDN
 
-对于快速原型或简单项目，可以通过 CDN 使用 TuffEx UI：
+对于快速原型或简单项目，可以通过 CDN 使用 TuffEx：
 
 ```html
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- 引入 TuffEx UI CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/@talex-touch/tuff-ui/dist/style.css">
+  <!-- 引入 TuffEx CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/@talex-touch/tuffex/dist/style.css">
 </head>
 <body>
   <div id="app">
-    <tx-button type="primary">你好 TuffEx UI！</tx-button>
+    <tx-button type="primary">你好 TuffEx！</tx-button>
   </div>
 
   <!-- 引入 Vue 3 -->
   <script src="https://unpkg.com/vue@next"></script>
-  <!-- 引入 TuffEx UI -->
-  <script src="https://unpkg.com/@talex-touch/tuff-ui"></script>
+  <!-- 引入 TuffEx -->
+  <script src="https://unpkg.com/@talex-touch/tuffex"></script>
   
   <script>
     const { createApp } = Vue
@@ -58,7 +58,7 @@ pnpm add @talex-touch/tuff-ui
 
 ### Vite
 
-在 Vite 项目中添加 TuffEx UI：
+在 Vite 项目中添加 TuffEx：
 
 ```typescript
 // vite.config.ts
@@ -68,12 +68,12 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   optimizeDeps: {
-    include: ['@talex-touch/tuff-ui']
+    include: ['@talex-touch/tuffex']
   },
   css: {
     preprocessorOptions: {
       scss: {
-        additionalData: `@import "@talex-touch/tuff-ui/dist/theme.scss";`
+        additionalData: `@import "@talex-touch/tuffex/dist/theme.scss";`
       }
     }
   }
@@ -90,7 +90,7 @@ module.exports = {
   // ... 其他配置
   resolve: {
     alias: {
-      '@tuff-ui': '@talex-touch/tuff-ui'
+      '@tuffex': '@talex-touch/tuffex'
     }
   }
 }
@@ -101,9 +101,9 @@ module.exports = {
 为 Nuxt 3 创建插件：
 
 ```typescript
-// plugins/tuff-ui.client.ts
-import TuffUI from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+// plugins/tuffex.client.ts
+import TuffUI from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.vueApp.use(TuffUI)
@@ -115,20 +115,20 @@ export default defineNuxtPlugin((nuxtApp) => {
 ### 完整 CSS 引入
 ```typescript
 // main.ts
-import '@talex-touch/tuff-ui/dist/style.css'
+import '@talex-touch/tuffex/dist/style.css'
 ```
 
 ### SCSS 引入（推荐）
 ```scss
 // main.scss
-@import '@talex-touch/tuff-ui/dist/theme.scss';
+@import '@talex-touch/tuffex/dist/theme.scss';
 ```
 
 ### 单独组件样式
 ```typescript
 // 用于 CSS Tree Shaking
-import '@talex-touch/tuff-ui/dist/components/button.css'
-import '@talex-touch/tuff-ui/dist/components/tag.css'
+import '@talex-touch/tuffex/dist/components/button.css'
+import '@talex-touch/tuffex/dist/components/tag.css'
 ```
 
 ## 环境要求
@@ -149,19 +149,19 @@ import '@talex-touch/tuff-ui/dist/components/tag.css'
 
 ## 验证安装
 
-安装后，验证 TuffEx UI 是否正常工作：
+安装后，验证 TuffEx 是否正常工作：
 
 ```vue
 <template>
   <div>
     <TxButton type="primary">
-      TuffEx UI 运行正常！ ✨
+      TuffEx 运行正常！ ✨
     </TxButton>
   </div>
 </template>
 
 <script setup>
-import { TxButton } from '@talex-touch/tuff-ui'
+import { TxButton } from '@talex-touch/tuffex'
 </script>
 ```
 
@@ -190,11 +190,11 @@ npm install
 **CSS 未加载：**
 确保在主入口文件中引入了 CSS 文件：
 ```typescript
-import '@talex-touch/tuff-ui/dist/style.css'
+import '@talex-touch/tuffex/dist/style.css'
 ```
 
 ## 下一步
 
-- 🚀 **[快速开始](/guide/getting-started)** - 开始使用 TuffEx UI
+- 🚀 **[快速开始](/guide/getting-started)** - 开始使用 TuffEx
 - 📚 **[组件](/components/)** - 探索可用组件
 - 🎨 **[主题定制](/guide/theming)** - 自定义外观

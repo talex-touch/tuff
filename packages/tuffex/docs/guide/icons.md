@@ -1,6 +1,6 @@
 # Icons 图标
 
-TuffEx UI 统一使用 **UnoCSS + icones** 的图标方案。
+TuffEx 统一使用 **UnoCSS + icones** 的图标方案。
 
 ## Usage
 
