@@ -137,7 +137,7 @@ pnpm build       # 构建库
 
 ## 相关链接
 
-- [GitHub 仓库](https://github.com/AncientMC/talex-touch/tree/master/packages/tuffex)
+- [GitHub 仓库](https://github.com/talex-touch/tuff/tree/master/packages/tuffex)
 - [NPM 包](https://www.npmjs.com/package/@talex-touch/tuffex)
 
 ## 浏览器支持

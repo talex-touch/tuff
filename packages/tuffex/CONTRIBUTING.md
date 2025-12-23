@@ -1,22 +1,22 @@
-# Contributing to TouchX UI
+# Contributing to TuffEx
 
-Thank you for your interest in contributing to TouchX UI! We welcome all forms of contributions, from bug reports and feature requests to code contributions and documentation improvements.
+Thank you for your interest in contributing to TuffEx! We welcome all forms of contributions, from bug reports and feature requests to code contributions and documentation improvements.
 
 ## 🌟 Ways to Contribute
 
 ### 🐛 Bug Reports
 Found a bug? Help us improve by reporting it:
-- Use our [Bug Report Template](https://github.com/talex-touch/touchx-ui/issues/new?template=bug_report.md)
+- Use our [Bug Report Template](https://github.com/talex-touch/tuff/issues/new)
 - Provide clear reproduction steps
 - Include environment details (OS, browser, Vue version)
 - Add screenshots or videos if applicable
 
 ### 💡 Feature Requests
 Have an idea for a new feature?
-- Use our [Feature Request Template](https://github.com/talex-touch/touchx-ui/issues/new?template=feature_request.md)
+- Use our [Feature Request Template](https://github.com/talex-touch/tuff/issues/new)
 - Describe the use case and expected behavior
 - Consider the impact on existing functionality
-- Discuss in [GitHub Discussions](https://github.com/talex-touch/touchx-ui/discussions) first for major features
+- Discuss in [GitHub Discussions](https://github.com/talex-touch/tuff/discussions) first for major features
 
 ### 📝 Documentation
 Help improve our documentation:
@@ -47,8 +47,8 @@ Before you begin, ensure you have the following installed:
 1. **Fork the repository**
    ```bash
    # Fork the repo on GitHub, then clone your fork
-   git clone https://github.com/YOUR_USERNAME/touchx-ui.git
-   cd touchx-ui
+   git clone https://github.com/YOUR_USERNAME/talex-touch.git
+   cd talex-touch
    ```
 
 2. **Install dependencies**
@@ -60,9 +60,6 @@ Before you begin, ensure you have the following installed:
    ```bash
    # Start documentation development server
    pnpm docs:dev
-   
-   # Start component playground
-   pnpm comp:play
    ```
 
 4. **Run tests**
@@ -80,7 +77,7 @@ Before you begin, ensure you have the following installed:
 ### Project Structure
 
 ```
-touchx-ui/
+talex-touch/
 ├── packages/
 │   ├── components/          # Component source code
 │   │   ├── button/         # Individual component
@@ -88,9 +85,8 @@ touchx-ui/
 │   │   └── ...
 │   ├── theme/              # Theme system
 │   ├── utils/              # Utility functions
-│   └── touchx-ui/          # Main package entry
+│   └── tuffex/             # Main package entry
 ├── docs/                   # Documentation source
-├── playground/             # Component playground
 ├── scripts/                # Build and development scripts
 ├── tests/                  # Test files
 └── tools/                  # Development tools
@@ -217,7 +213,7 @@ We use Vitest for unit testing:
 
 ### Animation Guidelines
 
-TouchX UI focuses on smooth, meaningful animations:
+TuffEx focuses on smooth, meaningful animations:
 
 **Performance:**
 - Use `transform` and `opacity` for animations
@@ -291,7 +287,7 @@ TouchX UI focuses on smooth, meaningful animations:
    ```
 
 2. **Create Pull Request**
-   - Use our [PR template](https://github.com/talex-touch/touchx-ui/blob/main/.github/pull_request_template.md)
+   - Use our [PR template](https://github.com/talex-touch/tuff/tree/master/.github/PULL_REQUEST_TEMPLATE)
    - Provide clear description of changes
    - Link related issues
    - Add screenshots for UI changes
@@ -399,9 +395,9 @@ Contributors are recognized in:
 ## 📚 Resources
 
 ### Documentation
-- [Component API Reference](https://touchx-ui.talex.cn/components)
-- [Design Guidelines](https://touchx-ui.talex.cn/guide/design)
-- [Theme Customization](https://touchx-ui.talex.cn/guide/theme)
+- [Component API Reference](https://tuffex.tagzxia.com/docs/dev/tuffex/components)
+- [Design Guidelines](https://tuffex.tagzxia.com/docs/dev/tuffex/design)
+- [Theme Customization](https://tuffex.tagzxia.com/docs/dev/tuffex/guide/theming)
 
 ### Development Tools
 - [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=talex-touch.touchx-ui)
@@ -418,12 +414,12 @@ Contributors are recognized in:
 Need help? Here's how to get support:
 
 1. **Check existing resources**
-   - Search [GitHub Issues](https://github.com/talex-touch/touchx-ui/issues)
-   - Browse [Documentation](https://touchx-ui.talex.cn)
-   - Read [FAQ](https://touchx-ui.talex.cn/guide/faq)
+   - Search [GitHub Issues](https://github.com/talex-touch/tuff/issues)
+   - Browse [Documentation](https://tuffex.tagzxia.com/docs/dev/tuffex)
+   - Read [FAQ](https://tuffex.tagzxia.com/docs/dev/tuffex/guide/faq)
 
 2. **Ask the community**
-   - [GitHub Discussions](https://github.com/talex-touch/touchx-ui/discussions)
+   - [GitHub Discussions](https://github.com/talex-touch/tuff/discussions)
    - [Discord Server](https://discord.gg/touchx-ui)
 
 3. **Report issues**
@@ -433,4 +429,4 @@ Need help? Here's how to get support:
 
 ---
 
-Thank you for contributing to TouchX UI! Together, we're building the future of tactile web interfaces. 🎭✨
+Thank you for contributing to TuffEx! Together, we're building the future of tactile web interfaces.

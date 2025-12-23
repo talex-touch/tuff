@@ -1,6 +1,5 @@
 import chalk from 'chalk'
 import { createComponent } from '../createComponent/create.ts'
-import { createPage } from '../createTestVue/createPage.ts'
 import { createVitepressComp } from '../createVitepressComp/create.ts'
 
 const componentsPath = './packages/components/src'
@@ -16,7 +15,6 @@ function create() {
     createComponent(componentsPath, item)
     createVitepressComp(item)
   }
-  createPage(commands)
 }
 
 create()

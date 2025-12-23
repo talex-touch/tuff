@@ -44,6 +44,15 @@
 
 ## 🔴 P0 紧急任务
 
+### 🧩 TuffEx 迁移收尾（tuffex-ui -> tuffex）
+
+- [ ] `packages/tuffex`：确保 `pnpm -C packages/tuffex build` 可跑通（Gulp + ts-node/esm）
+- [ ] `packages/tuffex`：确保 `pnpm -C packages/tuffex docs:build` 可跑通
+- [ ] `pnpm approve-builds`：如仍提示忽略 `less` 的 build scripts，在根目录执行并允许 `less`
+- [ ] 全仓校验：grep 清理旧名（tuff-ui/tuffex-ui/touchx-ui）残留，确认无影响构建的引用
+- [ ] 清理产物：确认 `packages/tuffex/**/node_modules` 与旧 `playground` 目录已删除（仓库内不提交）
+- [ ] 提交变更：README/CONTRIBUTING/Nexus docs 链接更新 + createTestVue 删除 + 构建脚本修复
+
 ### ✅ 模块日志系统 (v2.4.8) - Phase 1 核心完成
 **来源**: `plan-prd/02-architecture/module-logging-system-prd.md`
 **工期**: 8-11 天 → **Phase 1 已完成**

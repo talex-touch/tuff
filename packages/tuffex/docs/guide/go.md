@@ -5,10 +5,8 @@
 `./.env`文件下
 
 ```
-# CSS预处理器 默认支持sass和less
-CSS_PREPROCESSOR = 'scss'
 # 用于添加组件命名前缀，建议采用首字母大写格式，最后生成的组件会变成<vc-button></vc-button>这种格式
-COMPONENT_NAME = 'Vc'
+COMPONENT_NAME = 'Tx'
 ```
 
 

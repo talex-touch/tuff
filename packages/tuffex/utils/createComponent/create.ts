@@ -2,8 +2,6 @@ import fs from 'node:fs'
 import { createIndexTemplate, createVueTemplate } from './template.ts'
 import '../../config/env.ts'
 
-const cssPreprocessor = process.env.CSS_PREPROCESSOR ?? 'scss'
-
 export function createComponent(componentsPath: string, compName: string) {
   const compRoot = `${componentsPath}/${compName}`
 
@@ -17,7 +15,7 @@ export function createComponent(componentsPath: string, compName: string) {
   const vueTemplate = createVueTemplate(compName)
   const indexTsName = `${compRoot}/index.ts`
   const vueName = `${compRoot}/src/${compName}.vue`
-  const styleName = `${dirName}/index.${cssPreprocessor}`
+  const styleName = `${dirName}/index.scss`
 
   insertComponent(`${componentsPath}/components.ts`, compName)
 
