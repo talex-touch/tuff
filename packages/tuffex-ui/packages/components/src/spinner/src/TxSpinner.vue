@@ -1,18 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { SpinnerProps } from './types'
 
 defineOptions({
   name: 'TxSpinner',
 })
 
-const props = withDefaults(defineProps<SpinnerProps>(), {
-  size: 16,
-  strokeWidth: 2,
-  fallback: false,
-  visible: true,
-  pauseOnHidden: true,
-  unmountOnHidden: false,
+const props = defineProps({
+  size: {
+    type: Number,
+    default: 16,
+  },
+  strokeWidth: {
+    type: Number,
+    default: 2,
+  },
+  fallback: {
+    type: Boolean,
+    default: false,
+  },
+  visible: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const styleVars = computed(() => ({
@@ -24,11 +33,10 @@ const styleVars = computed(() => ({
 <template>
   <Transition name="tx-spinner-visibility" appear>
     <span
-      v-if="!unmountOnHidden || visible"
+      v-if="visible"
       class="tx-spinner"
-      :class="{ 'is-hidden': !visible, 'is-paused': !visible && pauseOnHidden }"
       :style="styleVars"
-      :aria-busy="visible ? 'true' : 'false'"
+      aria-busy="true"
       aria-live="polite"
     >
       <svg v-if="fallback" class="tx-spinner__svg" viewBox="0 0 24 24" :width="size" :height="size">
@@ -147,23 +155,6 @@ const styleVars = computed(() => ({
   will-change: opacity, filter, scale;
 
   animation: tx-spinner-float-rotate 0.85s linear infinite;
-
-  &.is-hidden {
-    opacity: 0;
-    filter: blur(4px);
-    scale: 0.86;
-    pointer-events: none;
-  }
-
-  &.is-paused {
-    animation-play-state: paused;
-
-    .tx-spinner__svg,
-    .tx-spinner__circle,
-    .tx-spinner-container-ball {
-      animation-play-state: paused;
-    }
-  }
 
   &__svg {
     width: 100%;

@@ -3,6 +3,4 @@ export interface SpinnerProps {
   strokeWidth?: number
   fallback?: boolean
   visible?: boolean
-  pauseOnHidden?: boolean
-  unmountOnHidden?: boolean
 }
