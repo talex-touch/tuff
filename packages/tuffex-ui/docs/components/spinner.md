@@ -46,6 +46,4 @@ import SpinnerToggleDemoSource from '../.vitepress/theme/components/demos/Spinne
 | `size` | `number` | `16` | 尺寸(px) |
 | `strokeWidth` | `number` | `2` | 线宽 |
 | `fallback` | `boolean` | `false` | 使用 SVG fallback 样式 |
-| `visible` | `boolean` | `true` | 显示/隐藏（不卸载） |
-| `pauseOnHidden` | `boolean` | `true` | 隐藏时暂停动画（用于节能/减少 CPU） |
-| `unmountOnHidden` | `boolean` | `false` | 隐藏时卸载（内部 v-if），并带 enter/leave 动画 |
+| `visible` | `boolean` | `true` | 显示/隐藏（内部 v-if，带 enter/leave 过渡动画） |
