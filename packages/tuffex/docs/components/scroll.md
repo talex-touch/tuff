@@ -6,6 +6,7 @@
 import scrollBasicSource from '../.vitepress/theme/components/demos/ScrollBasicDemo.vue?raw'
 import scrollHorizontalSource from '../.vitepress/theme/components/demos/ScrollHorizontalDemo.vue?raw'
 import scrollBounceScrollbarSource from '../.vitepress/theme/components/demos/ScrollBounceScrollbarDemo.vue?raw'
+import scrollChainingSource from '../.vitepress/theme/components/demos/ScrollChainingDemo.vue?raw'
 import scrollNativeSource from '../.vitepress/theme/components/demos/ScrollNativeDemo.vue?raw'
 import scrollPullDownUpSource from '../.vitepress/theme/components/demos/ScrollPullDownUpDemo.vue?raw'
 </script>
@@ -41,6 +42,16 @@ import scrollPullDownUpSource from '../.vitepress/theme/components/demos/ScrollP
 </template>
 </DemoBlock>
 
+## 滚动链（Scroll Chaining）
+
+默认会阻止内层滚动把外层一起带着滚动（到边界时也不会继续传递）。如果你希望滚到顶/底后继续滚动外层，需要显式开启 `scrollChaining`。
+
+<DemoBlock title="Scroll (scroll chaining)" :code="scrollChainingSource" code-lang="vue">
+<template #preview>
+<ScrollChainingDemo />
+</template>
+</DemoBlock>
+
 ## 使用原生滚动
 
 当你不需要 BetterScroll 行为时，可以切换为原生滚动（仍保持统一容器结构）。
@@ -67,6 +78,7 @@ import scrollPullDownUpSource from '../.vitepress/theme/components/demos/ScrollP
 |------|------|---------|------|
 | `native` | `boolean` | `false` | 使用原生滚动 |
 | `noPadding` | `boolean` | `false` | 禁用内边距 |
+| `scrollChaining` | `boolean` | `false` | 是否允许滚动链（到边界后继续带动父级滚动） |
 | `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 滚动方向 |
 | `scrollbar` | `boolean` | `true` | 是否启用 BetterScroll 滚动条 |
 | `scrollbarFade` | `boolean` | `true` | 滚动条自动淡出 |

@@ -72,6 +72,7 @@ import GradualBlurAnimatedDemo from './components/demos/GradualBlurAnimatedDemo.
 import ScrollBasicDemo from './components/demos/ScrollBasicDemo.vue'
 import ScrollHorizontalDemo from './components/demos/ScrollHorizontalDemo.vue'
 import ScrollBounceScrollbarDemo from './components/demos/ScrollBounceScrollbarDemo.vue'
+import ScrollChainingDemo from './components/demos/ScrollChainingDemo.vue'
 import ScrollNativeDemo from './components/demos/ScrollNativeDemo.vue'
 import ScrollPullDownUpDemo from './components/demos/ScrollPullDownUpDemo.vue'
 
@@ -157,6 +158,7 @@ export default {
     app.component('ScrollBasicDemo', ScrollBasicDemo)
     app.component('ScrollHorizontalDemo', ScrollHorizontalDemo)
     app.component('ScrollBounceScrollbarDemo', ScrollBounceScrollbarDemo)
+    app.component('ScrollChainingDemo', ScrollChainingDemo)
     app.component('ScrollNativeDemo', ScrollNativeDemo)
     app.component('ScrollPullDownUpDemo', ScrollPullDownUpDemo)
   },

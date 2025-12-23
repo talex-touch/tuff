@@ -114,7 +114,11 @@ defineExpose({
 <template>
   <div ref="scrollContainer" class="touch-scroll" :class="{ 'native-scroll': useNative }">
     <template v-if="useNative">
-      <div ref="nativeScrollRef" class="native-scroll-wrapper" @scroll="handleScroll">
+      <div
+        ref="nativeScrollRef"
+        class="native-scroll-wrapper"
+        @scroll="handleScroll"
+      >
         <slot name="header" />
 
         <div class="py-2 pl-2 pr-3" :style="noPadding ? 'padding: 0 !important' : ''">
