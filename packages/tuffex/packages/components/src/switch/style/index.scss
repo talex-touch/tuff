@@ -36,6 +36,10 @@
   }
 
   &:hover:not(.is-disabled) {
+    box-shadow: 0 0 12px 1px var(--tx-fill-color);
+  }
+
+  &.is-active:hover:not(.is-disabled) {
     box-shadow: 0 0 16px 1px var(--tx-color-primary-light-3, #79bbff);
   }
 

@@ -7,7 +7,7 @@ import type { StatusBadgeProps, StatusBadgeEmits, StatusTone, StatusKey, TxOsTyp
  *
  * @example
  * ```ts
- * import { TxStatusBadge } from '@talex-touch/tuff-ui'
+ * import { TxStatusBadge } from '@talex-touch/tuffex'
  *
  * // Use in template
  * <TxStatusBadge text="Approved" status="success" />

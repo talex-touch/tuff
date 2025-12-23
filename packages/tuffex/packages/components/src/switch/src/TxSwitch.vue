@@ -15,7 +15,7 @@ const props = withDefaults(
     modelValue: false,
     disabled: false,
     size: 'default',
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -29,7 +29,8 @@ const isActive = computed({
 })
 
 function toggle() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   const newVal = !isActive.value
   isActive.value = newVal
   emit('change', newVal)
@@ -42,8 +43,7 @@ function toggle() {
     :aria-checked="isActive"
     :aria-disabled="disabled"
     :tabindex="disabled ? -1 : 0"
-    :class="[
-      'tuff-switch',
+    class="tuff-switch" :class="[
       {
         'is-active': isActive,
         'is-disabled': disabled,

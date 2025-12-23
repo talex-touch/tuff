@@ -7,7 +7,7 @@ import type { ProgressBarProps, ProgressBarEmits } from './src/types'
  *
  * @example
  * ```ts
- * import { TxProgressBar } from '@talex-touch/tuff-ui'
+ * import { TxProgressBar } from '@talex-touch/tuffex'
  *
  * // Use in template
  * <TxProgressBar loading />

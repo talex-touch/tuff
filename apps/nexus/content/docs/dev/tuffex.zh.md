@@ -1,25 +1,26 @@
 ---
-title: TUFF UI
+title: TuffEx
 description: 具有精美动画效果的现代 Vue3 组件库
 ---
 
-# TUFF UI
+# TuffEx
 
-TUFF UI 是一个专注于触感体验和流畅动画的现代 Vue3 组件库。它是 Tuff 生态系统的一部分，提供美观、交互式的 UI 组件。
+TuffEx 是一个专注于触感体验和流畅动画的现代 Vue3 组件库。它是 Tuff 生态系统的一部分，提供美观、交互式的 UI 组件。
 
-> **迁移中** - TUFF UI 正在从 Tuff 核心应用迁移组件，技术栈已升级至 Vue 3.5 / Vite 6 / TypeScript 5.8。
+> **迁移中** - TuffEx 正在从 Tuff 核心应用迁移组件，技术栈已升级至 Vue 3.5 / Vite 6 / TypeScript 5.8。
+
 
 ## 安装
 
 ```bash
 # npm
-npm install @talex-touch/tuff-ui
+npm install @talex-touch/tuffex
 
 # yarn
-yarn add @talex-touch/tuff-ui
+yarn add @talex-touch/tuffex
 
 # pnpm（推荐）
-pnpm add @talex-touch/tuff-ui
+pnpm add @talex-touch/tuffex
 ```
 
 ## 快速开始
@@ -28,8 +29,8 @@ pnpm add @talex-touch/tuff-ui
 
 ```typescript
 import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import TuffUI from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TuffUI)
@@ -40,8 +41,8 @@ app.mount('#app')
 
 ```typescript
 import { createApp } from 'vue'
-import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TuffButton)
@@ -122,9 +123,8 @@ TUFF UI 通过 CSS 变量支持自定义主题：
 # 在 monorepo 根目录
 pnpm install
 
-# 在 packages/tuff-ui 目录
+# 在 packages/tuffex 目录
 pnpm docs:dev    # 启动文档服务器 :8000
-pnpm comp:play   # 启动组件 playground
 pnpm build       # 构建库
 ```
 
@@ -137,8 +137,8 @@ pnpm build       # 构建库
 
 ## 相关链接
 
-- [GitHub 仓库](https://github.com/AncientMC/talex-touch/tree/master/packages/tuff-ui)
-- [NPM 包](https://www.npmjs.com/package/@talex-touch/tuff-ui)
+- [GitHub 仓库](https://github.com/AncientMC/talex-touch/tree/master/packages/tuffex)
+- [NPM 包](https://www.npmjs.com/package/@talex-touch/tuffex)
 
 ## 浏览器支持
 

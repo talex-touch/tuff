@@ -1,11 +1,11 @@
 {
-  "name": "@talex-touch/tuff-ui",
+  "name": "@talex-touch/tuffex",
   "version": "0.2.0",
   "author": "TalexDreamSoul<TalexDreamSoul@gmail.com>",
-  "description": "TUFF UI - Modern Vue3 component library with beautiful animations and tactile experience.",
+  "description": "TuffEx - Modern Vue3 component library with beautiful animations and tactile experience.",
   "keywords": [
     "tuff",
-    "tuff-ui",
+    "tuffex",
     "talex-touch",
     "vue3",
     "components",
@@ -32,7 +32,6 @@
     "build:vite": "vite build",
     "component:create": "esno ./utils/create/index.ts",
     "comp:create": "esno ./utils/createComponent/index.ts",
-    "comp:play": "pnpm run -C playground/vue-vite-playground dev",
     "comp:new": "esno ./utils/createTestVue/index.ts",
     "dev": "vitepress dev docs --port 8000 --host",
     "docs:dev": "vitepress dev docs --port 8000 --host",

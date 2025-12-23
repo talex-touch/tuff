@@ -1,17 +1,17 @@
-# TUFF UI
+# TuffEx
 
 <p align="center">
-  <img src="https://img.shields.io/npm/v/@talex-touch/tuff-ui?style=flat-square&logo=npm&color=ff6b6b" alt="NPM Version">
+  <img src="https://img.shields.io/npm/v/@talex-touch/tuffex?style=flat-square&logo=npm&color=ff6b6b" alt="NPM Version">
   <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Beta Status">
   <img src="https://img.shields.io/badge/Vue-3.5-4fc08d?style=flat-square&logo=vue.js" alt="Vue 3.5">
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/github/license/talex-touch/tuff-ui?style=flat-square" alt="License">
+  <img src="https://img.shields.io/github/license/talex-touch/tuff?style=flat-square" alt="License">
   <img src="https://img.shields.io/badge/bundle%20size-<50kb-brightgreen?style=flat-square" alt="Bundle Size">
   <img src="https://img.shields.io/badge/tree%20shaking-✓-success?style=flat-square" alt="Tree Shaking">
 </p>
 
 <p align="center">
-  <strong>🎭 TUFF UI · Beautiful Animations · Living Component Library</strong>
+  <strong>🎭 TuffEx · Beautiful Animations · Living Component Library</strong>
 </p>
 
 <p align="center">
@@ -53,21 +53,21 @@ Choose your preferred package manager:
 
 ```bash
 # npm
-npm install @talex-touch/tuff-ui
+npm install @talex-touch/tuffex
 
 # yarn
-yarn add @talex-touch/tuff-ui
+yarn add @talex-touch/tuffex
 
 # pnpm (recommended)
-pnpm add @talex-touch/tuff-ui
+pnpm add @talex-touch/tuffex
 ```
 
 ### 🔧 Full Import
 
 ```typescript
 import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import TuffUI from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TuffUI)
@@ -78,8 +78,8 @@ app.mount('#app')
 
 ```typescript
 import { createApp } from 'vue'
-import { TxButton, TxAvatar } from '@talex-touch/tuff-ui'
-import '@talex-touch/tuff-ui/dist/style.css'
+import { TxButton, TxAvatar } from '@talex-touch/tuffex'
+import '@talex-touch/tuffex/dist/style.css'
 
 const app = createApp(App)
 app.use(TxButton)
@@ -193,7 +193,7 @@ Built with modern frontend technologies aligned with the Tuff core application:
 
 ## 📖 Documentation
 
-- **[Tuff Documentation](https://tuff.tagzxia.com/docs/dev/tuff-ui)** - Official TUFF UI docs in Tuff ecosystem
+- **[Tuff Documentation](https://tuff.tagzxia.com/docs/dev/tuff-ui)** - Official docs in Tuff ecosystem
 - **[Component Docs](http://localhost:8000)** - Local VitePress documentation (run `pnpm docs:dev`)
 
 ## 🛠️ Development
@@ -202,16 +202,15 @@ Built with modern frontend technologies aligned with the Tuff core application:
 # In monorepo root
 pnpm install
 
-# In packages/tuff-ui directory
+# In packages/tuffex directory
 pnpm docs:dev          # Start documentation server at :8000
-pnpm comp:play         # Start component playground
 pnpm build             # Build library with Gulp
 pnpm build:vite        # Build library with Vite
 ```
 
 ## 🔗 Integration with Tuff
 
-TUFF UI is designed to work seamlessly with the Tuff desktop application. Components are gradually being migrated from the core renderer to this standalone library for:
+TuffEx is designed to work seamlessly with the Tuff desktop application. Components are gradually being migrated from the core renderer to this standalone library for:
 
 1. **Code Reuse** - Share UI components across projects
 2. **Plugin Development** - Enable plugin developers to use consistent UI
@@ -219,8 +218,8 @@ TUFF UI is designed to work seamlessly with the Tuff desktop application. Compon
 
 ## 🤖 Intelligence & AI
 
-- Pair TUFF UI with `@talex-touch/tuff-intelligence` to build AI-driven flows (capabilities, prompts, provider routing).
-- Frontend can call the unified intelligence client while reusing TUFF UI components for configuration, testing, and auditing views.
+- Pair TuffEx with `@talex-touch/tuff-intelligence` to build AI-driven flows (capabilities, prompts, provider routing).
+- Frontend can call the unified intelligence client while reusing TuffEx components for configuration, testing, and auditing views.
 
 ## 🤝 Contributing
 

@@ -125,6 +125,6 @@ apps/nexus/.data/
 apps/core-app/signature.json
 
 # ========================
-# Project-specific (tuffex-ui)
+# Project-specific (tuffex)
 # ========================
-packages/tuffex-ui/docs/.vitepress/cache/
+packages/tuffex/docs/.vitepress/cache/

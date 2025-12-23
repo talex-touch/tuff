@@ -5,14 +5,14 @@ import { defineConfig } from 'vitepress'
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 
 export default defineConfig({
-  title: 'TuffEx UI',
+  title: 'TuffEx',
   description: '优雅的 Vue3 组件库，为每一次交互注入生命力',
   lang: 'zh-CN',
 
   vite: {
     resolve: {
       alias: {
-        '@tuffex-ui': PACKAGE_ROOT,
+        '@tuffex': PACKAGE_ROOT,
       },
     },
   },
@@ -23,7 +23,7 @@ export default defineConfig({
 
   themeConfig: {
     logo: '/logo.svg',
-    siteTitle: 'TuffEx UI',
+    siteTitle: 'TuffEx',
 
     nav: [
       { text: '首页', link: '/' },
@@ -34,7 +34,7 @@ export default defineConfig({
         text: '生态',
         items: [
           { text: 'GitHub', link: 'https://github.com/talex-touch/touchx-ui' },
-          { text: 'NPM', link: 'https://www.npmjs.com/package/@talex-touch/tuff-ui' },
+          { text: 'NPM', link: 'https://www.npmjs.com/package/@talex-touch/tuffex' },
         ],
       },
     ],

@@ -5,7 +5,7 @@
 > 需要在应用根部挂载一次 `<TxToastHost />`，然后在任意位置调用 `toast()`。
 
 <script setup lang="ts">
-import { toast } from '@tuffex-ui/packages/utils'
+import { toast } from '@tuffex/packages/utils'
 </script>
 
 ## 基础用法
@@ -53,4 +53,4 @@ toast({
 
 ### `dismissToast(id)` / `clearToasts()`
 
-从 `@tuffex-ui/packages/utils` 导入。
+从 `@tuffex/packages/utils` 导入。

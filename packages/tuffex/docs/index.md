@@ -1,15 +1,15 @@
 ---
 layout: home
-title: TuffEx UI
+title: TuffEx
 titleTemplate: 优雅的触感动画组件库
 
 hero:
-  name: TuffEx UI
+  name: TuffEx
   text: 优雅的触感动画
   tagline: 为每一次交互注入生命力的 Vue3 组件库
   image:
     src: https://i.imgur.com/pd3YUxf.png
-    alt: TuffEx UI Logo
+    alt: TuffEx Logo
   actions:
     - theme: brand
       text: 快速开始

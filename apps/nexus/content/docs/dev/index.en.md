@@ -18,7 +18,7 @@
 
 ## Developer Tools
 - **[TUFF CLI](./tuff-cli.en.md)** — command-line tool for creating and managing plugin projects.
-- **[TUFF UI](./tuff-ui.en.md)** — Vue3 component library with unified design language.
+- **[TuffEx](./tuffex.en.md)** — Vue3 component library with unified design language.
 
 ## Publishing
 - **[Publish Flow](./publish.en.md)** — submit your plugin to the marketplace.

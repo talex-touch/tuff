@@ -3,7 +3,7 @@ import type { Theme } from 'vitepress'
 import './style/index.scss'
 import '../../../packages/components/style/index.scss'
 
-// 导入 TuffEx UI 组件
+// 导入 TuffEx 组件
 import {
   TxTag,
   TxStatusBadge,
@@ -81,7 +81,7 @@ export default {
     if (typeof window !== 'undefined') {
       document.documentElement.classList.add('touch-blur')
     }
-    // 注册 TuffEx UI 组件
+    // 注册 TuffEx 组件
     app.component('TxTag', TxTag)
     app.component('TxStatusBadge', TxStatusBadge)
     app.component('TxAvatar', TxAvatar)

@@ -67,12 +67,12 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 ## 快速开始
 
 ```bash
-npm install @talex-touch/tuff-ui
+npm install @talex-touch/tuffex
 ```
 
 ```vue
 <template>
-  <TxButton type="primary">你好 TuffEx UI</TxButton>
+  <TxButton type="primary">你好 TuffEx</TxButton>
   <TxTag label="新" color="var(--tx-color-success)" />
   <TxStatusBadge text="活跃" status="success" />
 </template>
