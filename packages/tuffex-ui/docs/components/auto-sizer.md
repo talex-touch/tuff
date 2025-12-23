@@ -118,4 +118,5 @@ const loading = ref(false)
 | 名称 | 类型 | 说明 |
 |------|------|------|
 | `refresh()` | `() => Promise<void>` | 手动触发重新测量 |
+| `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | 以 action 触发一次尺寸过渡（适合 Tabs 切换/明确动作） |
 | `size` | `Ref<{ width: number; height: number } \| null>` | 最新测量结果 |

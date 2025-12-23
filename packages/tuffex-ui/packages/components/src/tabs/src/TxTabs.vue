@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent, h, nextTick, ref, watch } from 'vue'
+import { computed, defineComponent, h, nextTick, ref, watch } from 'vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
 import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
@@ -11,6 +11,7 @@ export default defineComponent({
   props: {
     modelValue: String,
     defaultValue: String,
+    placement: { type: String, default: 'left' },
     offset: { type: Number, default: 0 },
     navMinWidth: { type: Number, default: 220 },
     navMaxWidth: { type: Number, default: 320 },
@@ -26,6 +27,13 @@ export default defineComponent({
     const slotWrapper = ref<any>()
     const autoSizerRef = ref<any>()
 
+    const placement = computed(() => {
+      const v = props.placement
+      return (v === 'left' || v === 'right' || v === 'top' || v === 'bottom') ? v : 'left'
+    })
+
+    const isVertical = computed(() => placement.value === 'left' || placement.value === 'right')
+
     function getNodeName(vnode: any): string {
       return vnode?.props?.name ?? ''
     }
@@ -36,10 +44,22 @@ export default defineComponent({
       emit('change', getNodeName(vnode))
     }
 
-    function refreshAutoSizer() {
-      if (!props.autoHeight)
+    async function runAutoHeight(action: () => void) {
+      if (!props.autoHeight) {
+        action()
         return
-      autoSizerRef.value?.refresh?.()
+      }
+
+      const api = autoSizerRef.value
+      if (api?.flip) {
+        await api.flip(async () => {
+          action()
+        })
+        return
+      }
+
+      action()
+      api?.refresh?.()
     }
 
     function findByName(name: string): any {
@@ -48,18 +68,57 @@ export default defineComponent({
     }
 
     const pointerElRef = ref<HTMLElement | null>(null)
+    const navElRef = ref<HTMLElement | null>(null)
+    const navInnerElRef = ref<HTMLElement | null>(null)
 
     function applyPointerFor(vnode: any) {
       const pointerEl = pointerElRef.value
       const nodeEl = vnode?.el as HTMLElement | undefined
-      if (!pointerEl || !nodeEl) return
+      const navInnerEl = navInnerElRef.value
+      if (!pointerEl || !nodeEl || !navInnerEl) return
 
       const nodeRect = nodeEl.getBoundingClientRect()
-      const diffTop = props.offset || 0
+      const navInnerRect = navInnerEl.getBoundingClientRect()
+      const diff = props.offset || 0
 
       pointerEl.style.opacity = '1'
-      pointerEl.style.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
-      pointerEl.style.height = `${nodeRect.height * 0.6}px`
+
+      pointerEl.style.top = ''
+      pointerEl.style.right = ''
+      pointerEl.style.bottom = ''
+      pointerEl.style.left = ''
+      pointerEl.style.width = ''
+      pointerEl.style.height = ''
+
+      if (isVertical.value) {
+        const top = nodeRect.top - navInnerRect.top + navInnerEl.scrollTop + nodeRect.height * 0.2 + diff
+
+        pointerEl.style.top = `${top}px`
+        pointerEl.style.height = `${nodeRect.height * 0.6}px`
+
+        if (placement.value === 'right')
+          pointerEl.style.right = '0px'
+        else
+          pointerEl.style.left = '0px'
+      }
+      else {
+        const left = nodeRect.left - navInnerRect.left + navInnerEl.scrollLeft + nodeRect.width * 0.2 + diff
+
+        pointerEl.style.left = `${left}px`
+        pointerEl.style.width = `${nodeRect.width * 0.6}px`
+
+        if (placement.value === 'bottom')
+          pointerEl.style.top = '0px'
+        else
+          pointerEl.style.bottom = '0px'
+
+        try {
+          nodeEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+        }
+        catch {
+          nodeEl.scrollIntoView()
+        }
+      }
     }
 
     function createTab(vnode: any): any {
@@ -71,11 +130,11 @@ export default defineComponent({
           const el = slotWrapper.value?.el as HTMLElement | undefined
           if (el) {
             el.classList.remove('tx-tabs-zoom')
-            setActive(vnode)
-            nextTick(() => {
-              refreshAutoSizer()
-              applyPointerFor(tab)
-              el.classList.add('tx-tabs-zoom')
+            void runAutoHeight(() => setActive(vnode)).then(() => {
+              nextTick(() => {
+                applyPointerFor(tab)
+                el.classList.add('tx-tabs-zoom')
+              })
             })
           }
         },
@@ -150,9 +209,10 @@ export default defineComponent({
         const node = findByName(val)
         if (node) {
           activeNode.value = node
-          nextTick(() => {
-            refreshAutoSizer()
-            applyPointerFor(node)
+          void runAutoHeight(() => {}).then(() => {
+            nextTick(() => {
+              applyPointerFor(node)
+            })
           })
         }
       },
@@ -165,10 +225,10 @@ export default defineComponent({
         if (!val || props.modelValue) return
         const node = findByName(val)
         if (node) {
-          setActive(node)
-          nextTick(() => {
-            refreshAutoSizer()
-            applyPointerFor(node)
+          void runAutoHeight(() => setActive(node)).then(() => {
+            nextTick(() => {
+              applyPointerFor(node)
+            })
           })
         }
       },
@@ -179,7 +239,7 @@ export default defineComponent({
       const [tabs, tabHeader] = renderTabs()
 
       const pointer = h('div', {
-        ref: (el: any) => (pointerElRef.value = el),
+        ref: pointerElRef,
         class: 'tx-tabs__pointer',
       })
 
@@ -203,27 +263,45 @@ export default defineComponent({
         )
         : selectSlot
 
-      return h('div', { class: ['tx-tabs', { 'tx-tabs--auto-height': props.autoHeight }] }, [
-        h(
-          'div',
-          {
-            class: 'tx-tabs__nav',
-            style: {
-              minWidth: `${props.navMinWidth}px`,
-              maxWidth: `${props.navMaxWidth}px`,
+      const navStyle = isVertical.value
+        ? {
+            minWidth: `${props.navMinWidth}px`,
+            maxWidth: `${props.navMaxWidth}px`,
+          }
+        : undefined
+
+      const nav = h(
+        'div',
+        {
+          ref: (el: any) => (navElRef.value = el),
+          class: 'tx-tabs__nav',
+          style: navStyle,
+        },
+        [
+          h(
+            'div',
+            {
+              ref: (el: any) => (navInnerElRef.value = el),
+              class: 'tx-tabs__nav-inner',
             },
-          },
-          [h('div', { class: 'tx-tabs__nav-inner' }, tabs), pointer],
-        ),
-        h(
-          'div',
-          {
-            class: 'tx-tabs__main',
-            style: { padding: `${props.contentPadding}px` },
-          },
-          [content],
-        ),
-      ])
+            [...tabs, pointer],
+          ),
+        ],
+      )
+
+      const main = h(
+        'div',
+        {
+          class: 'tx-tabs__main',
+          style: { padding: `${props.contentPadding}px` },
+        },
+        [content],
+      )
+
+      const reverse = placement.value === 'right' || placement.value === 'bottom'
+      const children = reverse ? [main, nav] : [nav, main]
+
+      return h('div', { class: ['tx-tabs', `tx-tabs--${placement.value}`, { 'tx-tabs--auto-height': props.autoHeight }] }, children)
     }
   },
 })
@@ -267,13 +345,62 @@ export default defineComponent({
 }
 
 .tx-tabs__pointer {
-  position: fixed;
-  left: 0;
+  position: absolute;
   width: 3px;
   border-radius: 50px;
   background-color: var(--tx-color-primary, #409eff);
   opacity: 0;
-  transition: opacity 0.18s ease, top 0.18s ease, height 0.18s ease;
+  transition: opacity 0.18s ease, top 0.18s ease, left 0.18s ease, right 0.18s ease, bottom 0.18s ease, width 0.18s ease, height 0.18s ease;
+}
+
+.tx-tabs--right {
+  flex-direction: row-reverse;
+}
+
+.tx-tabs--top {
+  flex-direction: column;
+}
+
+.tx-tabs--bottom {
+  flex-direction: column-reverse;
+}
+
+.tx-tabs--top .tx-tabs__nav,
+.tx-tabs--bottom .tx-tabs__nav {
+  flex-direction: row;
+  border-right: none;
+}
+
+.tx-tabs--top .tx-tabs__nav {
+  border-bottom: 1px solid var(--tx-border-color, #dcdfe6);
+}
+
+.tx-tabs--bottom .tx-tabs__nav {
+  border-top: 1px solid var(--tx-border-color, #dcdfe6);
+}
+
+.tx-tabs--top .tx-tabs__nav-inner,
+.tx-tabs--bottom .tx-tabs__nav-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 6px 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tx-tabs--top .tx-tabs__nav-inner::-webkit-scrollbar,
+.tx-tabs--bottom .tx-tabs__nav-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.tx-tabs--top .tx-tabs__pointer,
+.tx-tabs--bottom .tx-tabs__pointer {
+  width: auto;
+  height: 3px;
 }
 
 .tx-tabs__main {

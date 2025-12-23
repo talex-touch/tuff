@@ -17,3 +17,9 @@ export interface AvatarProps {
 export interface AvatarEmits {
   click: []
 }
+
+export interface AvatarGroupProps {
+  max?: number
+  size?: AvatarSize
+  overlap?: number | string
+}

@@ -14,12 +14,22 @@ export interface AutoResizeEvent {
 
 export type AutoResizeRounding = 'none' | 'round' | 'floor' | 'ceil'
 
+export type AutoResizeApplyMode = 'sync' | 'transition'
+
 export interface UseAutoResizeOptions {
   width?: boolean
 
   height?: boolean
 
   applyStyle?: boolean
+
+  applyMode?: AutoResizeApplyMode
+
+  durationMs?: number
+
+  easing?: string
+
+  clearStyleOnFinish?: boolean
 
   styleTarget?: 'outer' | 'inner'
 
@@ -57,10 +67,14 @@ export function useAutoResize(
     width: options.width ?? true,
     height: options.height ?? false,
     applyStyle: options.applyStyle ?? true,
+    applyMode: options.applyMode ?? 'sync',
     styleTarget: options.styleTarget ?? 'outer',
     rounding: options.rounding ?? 'ceil',
     immediate: options.immediate ?? true,
     rafBatch: options.rafBatch ?? true,
+    durationMs: options.durationMs ?? 200,
+    easing: options.easing ?? 'ease',
+    clearStyleOnFinish: options.clearStyleOnFinish ?? true,
     onResize: options.onResize ?? (() => {}),
     onBeforeApply: options.onBeforeApply ?? (() => {}),
     onAfterApply: options.onAfterApply ?? (() => {}),
@@ -71,6 +85,7 @@ export function useAutoResize(
   const ro = ref<ResizeObserver | null>(null)
   let rafId: number | null = null
   let pendingManual = false
+  let activeApplyCleanup: (() => void) | null = null
 
   const round = (v: number) => {
     switch (opt.rounding) {
@@ -96,10 +111,111 @@ export function useAutoResize(
   const apply = (e: AutoResizeEvent, styleEl: HTMLElement) => {
     if (!opt.applyStyle)
       return
-    if (opt.width)
+
+    activeApplyCleanup?.()
+    activeApplyCleanup = null
+
+    if (opt.applyMode === 'sync') {
+      if (opt.width)
+        styleEl.style.width = `${e.next.width}px`
+      if (opt.height)
+        styleEl.style.height = `${e.next.height}px`
+      return
+    }
+
+    const prev = e.prev
+    if (!prev)
+      return
+
+    const props: string[] = []
+    if (opt.width && prev.width !== e.next.width)
+      props.push('width')
+    if (opt.height && prev.height !== e.next.height)
+      props.push('height')
+
+    if (props.length === 0)
+      return
+
+    const prevTransitionProperty = styleEl.style.transitionProperty
+    const prevTransitionDuration = styleEl.style.transitionDuration
+    const prevTransitionTimingFunction = styleEl.style.transitionTimingFunction
+    const prevWidth = styleEl.style.width
+    const prevHeight = styleEl.style.height
+
+    styleEl.style.transitionProperty = props.join(',')
+    styleEl.style.transitionDuration = '0ms'
+    styleEl.style.transitionTimingFunction = opt.easing
+
+    if (props.includes('width'))
+      styleEl.style.width = `${prev.width}px`
+    if (props.includes('height'))
+      styleEl.style.height = `${prev.height}px`
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    styleEl.offsetWidth
+
+    styleEl.style.transitionDuration = `${opt.durationMs}ms`
+    if (props.includes('width'))
       styleEl.style.width = `${e.next.width}px`
-    if (opt.height)
+    if (props.includes('height'))
       styleEl.style.height = `${e.next.height}px`
+
+    let finished = false
+    const remaining = new Set(props)
+    let timeoutId: number | null = null
+
+    const done = () => {
+      if (finished)
+        return
+      finished = true
+
+      styleEl.style.transitionProperty = prevTransitionProperty
+      styleEl.style.transitionDuration = prevTransitionDuration
+      styleEl.style.transitionTimingFunction = prevTransitionTimingFunction
+
+      if (opt.clearStyleOnFinish) {
+        if (props.includes('width'))
+          styleEl.style.width = ''
+        if (props.includes('height'))
+          styleEl.style.height = ''
+      }
+      else {
+        if (props.includes('width'))
+          styleEl.style.width = prevWidth
+        if (props.includes('height'))
+          styleEl.style.height = prevHeight
+      }
+    }
+
+    const onEnd = (ev: TransitionEvent) => {
+      if (ev.target !== styleEl)
+        return
+      if (!props.includes(ev.propertyName))
+        return
+
+      remaining.delete(ev.propertyName)
+      if (remaining.size > 0)
+        return
+
+      styleEl.removeEventListener('transitionend', onEnd)
+      done()
+    }
+
+    styleEl.addEventListener('transitionend', onEnd)
+
+    if (typeof setTimeout !== 'undefined') {
+      timeoutId = setTimeout(() => {
+        styleEl.removeEventListener('transitionend', onEnd)
+        done()
+      }, opt.durationMs + 34) as unknown as number
+    }
+
+    activeApplyCleanup = () => {
+      styleEl.removeEventListener('transitionend', onEnd)
+      if (timeoutId != null)
+        clearTimeout(timeoutId)
+      done()
+    }
   }
 
   const measureAndSync = async (isManual: boolean) => {
@@ -165,6 +281,8 @@ export function useAutoResize(
       cancelAnimationFrame(rafId)
     rafId = null
     pendingManual = false
+    activeApplyCleanup?.()
+    activeApplyCleanup = null
   }
 
   const setEnabled = (v: boolean) => {
