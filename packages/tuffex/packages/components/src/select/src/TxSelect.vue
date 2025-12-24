@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
 
 defineOptions({
   name: 'TuffSelect',
@@ -11,6 +12,8 @@ const props = withDefaults(
     modelValue?: string | number
     placeholder?: string
     disabled?: boolean
+    searchable?: boolean
+    searchPlaceholder?: string
     dropdownMaxHeight?: number
     dropdownOffset?: number
   }>(),
@@ -18,6 +21,8 @@ const props = withDefaults(
     modelValue: '',
     placeholder: '请选择',
     disabled: false,
+    searchable: false,
+    searchPlaceholder: 'Search',
     dropdownMaxHeight: 280,
     dropdownOffset: 6,
   }
@@ -31,6 +36,9 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const selectRef = ref<HTMLElement | null>(null)
 const selectedLabel = ref('')
+
+const searchInputRef = ref<any>(null)
+const searchQuery = ref('')
 
 const dropdownRef = ref<HTMLElement | null>(null)
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
@@ -50,7 +58,7 @@ const { floatingStyles, update } = useFloating(selectRef, dropdownRef, {
         Object.assign(elements.floating.style, {
           width: `${rects.reference.width}px`,
           maxHeight: `${Math.min(availableHeight, props.dropdownMaxHeight)}px`,
-          overflowY: 'auto',
+          overflowY: 'hidden',
         })
       },
     }),
@@ -72,6 +80,11 @@ function toggle() {
 
 function close() {
   isOpen.value = false
+}
+
+function clear() {
+  currentValue.value = ''
+  selectedLabel.value = ''
 }
 
 function handleSelect(value: string | number, label: string) {
@@ -110,6 +123,16 @@ provide('tuffSelect', {
   currentValue,
   handleSelect,
   registerOption,
+  searchQuery,
+})
+
+defineExpose({
+  open: () => (isOpen.value = true),
+  close,
+  toggle,
+  focus: () => selectRef.value?.focus?.(),
+  blur: () => (selectRef.value as any)?.blur?.(),
+  clear,
 })
 
 onMounted(() => {
@@ -138,6 +161,7 @@ watch(
     if (!open) {
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = null
+      searchQuery.value = ''
       return
     }
 
@@ -148,6 +172,9 @@ watch(
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = autoUpdate(selectRef.value, dropdownRef.value, () => updatePosition())
     }
+
+    if (props.searchable)
+      searchInputRef.value?.focus?.()
   },
   { flush: 'post' }
 )
@@ -188,7 +215,17 @@ onBeforeUnmount(() => {
           class="tuff-select__dropdown"
           :style="floatingStyles"
         >
-          <slot />
+          <div v-if="searchable" class="tuff-select__search">
+            <TxSearchInput
+              ref="searchInputRef"
+              v-model="searchQuery"
+              :placeholder="searchPlaceholder"
+            />
+          </div>
+
+          <div class="tuff-select__list">
+            <slot />
+          </div>
         </div>
       </Transition>
     </Teleport>
@@ -249,6 +286,21 @@ onBeforeUnmount(() => {
 
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
+
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  &__search {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--tx-border-color-light, #e4e7ed);
+  }
+
+  &__list {
+    overflow: auto;
+    flex: 1;
+    min-height: 0;
   }
 
   &.is-open {

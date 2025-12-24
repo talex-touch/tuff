@@ -5,6 +5,7 @@ export interface AutoSizerProps {
   innerAs?: string
   width?: boolean
   height?: boolean
+  inline?: boolean
   durationMs?: number
   easing?: string
   outerClass?: string

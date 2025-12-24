@@ -227,9 +227,24 @@ export function useAutoResize(
       return
 
     const rect = inner.getBoundingClientRect()
+
+    let extraW = 0
+    let extraH = 0
+    if (styleEl !== inner) {
+      const cs = getComputedStyle(styleEl)
+      if (cs.boxSizing === 'border-box') {
+        const px = Number.parseFloat(cs.paddingLeft) + Number.parseFloat(cs.paddingRight)
+        const py = Number.parseFloat(cs.paddingTop) + Number.parseFloat(cs.paddingBottom)
+        const bx = Number.parseFloat(cs.borderLeftWidth) + Number.parseFloat(cs.borderRightWidth)
+        const by = Number.parseFloat(cs.borderTopWidth) + Number.parseFloat(cs.borderBottomWidth)
+        extraW = (Number.isFinite(px) ? px : 0) + (Number.isFinite(bx) ? bx : 0)
+        extraH = (Number.isFinite(py) ? py : 0) + (Number.isFinite(by) ? by : 0)
+      }
+    }
+
     const next: AutoResizeSize = {
-      width: round(rect.width),
-      height: round(rect.height),
+      width: round(rect.width + extraW),
+      height: round(rect.height + extraH),
     }
 
     const prev = size.value

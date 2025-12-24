@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 defineOptions({
   name: 'TuffInput',
@@ -42,6 +42,8 @@ const inputValue = computed({
   },
 })
 
+const inputEl = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
+
 const showClear = computed(() => {
   return props.clearable && inputValue.value && !props.disabled && !props.readonly
 })
@@ -58,6 +60,15 @@ function handleFocus(e: FocusEvent) {
 function handleBlur(e: FocusEvent) {
   emit('blur', e)
 }
+
+defineExpose({
+  focus: () => inputEl.value?.focus?.(),
+  blur: () => inputEl.value?.blur?.(),
+  clear: () => handleClear(),
+  setValue: (v: string) => (inputValue.value = v),
+  getValue: () => inputValue.value,
+  inputEl,
+})
 </script>
 
 <template>
@@ -75,6 +86,7 @@ function handleBlur(e: FocusEvent) {
 
     <textarea
       v-if="type === 'textarea'"
+      ref="inputEl"
       v-model="inputValue"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -86,6 +98,7 @@ function handleBlur(e: FocusEvent) {
     />
     <input
       v-else
+      ref="inputEl"
       v-model="inputValue"
       :type="type"
       :placeholder="placeholder"

@@ -19,6 +19,7 @@ export default defineComponent({
     contentPadding: { type: Number, default: 12 },
     contentScrollable: { type: Boolean, default: true },
     autoHeight: { type: Boolean, default: false },
+    autoWidth: { type: Boolean, default: false },
     autoHeightDurationMs: { type: Number, default: 250 },
     autoHeightEasing: { type: String, default: 'ease' },
     animation: { type: Object as PropType<any>, default: undefined },
@@ -63,7 +64,7 @@ export default defineComponent({
         }
       }
       return {
-        enabled: !!props.autoHeight,
+        enabled: !!(props.autoHeight || props.autoWidth),
         durationMs: props.autoHeightDurationMs,
         easing: props.autoHeightEasing,
       }
@@ -92,6 +93,29 @@ export default defineComponent({
       }
     })
 
+    const animationNav = computed(() => {
+      const raw = props.animation?.nav
+      if (typeof raw === 'boolean') {
+        return {
+          enabled: raw,
+          durationMs: 220,
+          easing: 'ease',
+        }
+      }
+      if (raw && typeof raw === 'object') {
+        return {
+          enabled: raw.enabled !== false,
+          durationMs: typeof raw.durationMs === 'number' ? raw.durationMs : 220,
+          easing: typeof raw.easing === 'string' ? raw.easing : 'ease',
+        }
+      }
+      return {
+        enabled: true,
+        durationMs: 220,
+        easing: 'ease',
+      }
+    })
+
     const animationContent = computed(() => {
       const raw = props.animation?.content
       if (typeof raw === 'boolean')
@@ -101,8 +125,16 @@ export default defineComponent({
       return { enabled: true }
     })
 
+    const widthAnimEnabled = computed(() => {
+      return animationSize.value.enabled && !!props.autoWidth
+    })
+
+    const heightAnimEnabled = computed(() => {
+      return animationSize.value.enabled && !!props.autoHeight && !props.contentScrollable
+    })
+
     const sizeAnimEnabled = computed(() => {
-      return animationSize.value.enabled && !props.contentScrollable
+      return widthAnimEnabled.value || heightAnimEnabled.value
     })
 
     async function runAutoHeight(action: () => void) {
@@ -254,10 +286,8 @@ export default defineComponent({
       if (tabHeader) {
         const headerVNode = h(
           TxTabHeader,
-          {},
-          tabHeader.children && typeof tabHeader.children === 'object' && 'default' in tabHeader.children && typeof tabHeader.children.default === 'function'
-            ? tabHeader.children.default?.({ ...tabHeader.props, node: activeNode.value })
-            : undefined,
+          { ...tabHeader.props, node: activeNode.value },
+          tabHeader.children,
         )
         return [headerVNode, content]
       }
@@ -301,6 +331,8 @@ export default defineComponent({
     return () => {
       const [tabs, tabHeader] = renderTabs()
 
+      const navRightSlot = slots['nav-right']?.()
+
       const pointer = h('div', {
         ref: pointerElRef,
         class: 'tx-tabs__pointer',
@@ -318,8 +350,8 @@ export default defineComponent({
           TxAutoSizer,
           {
             ref: (el: any) => (autoSizerRef.value = el),
-            width: false,
-            height: true,
+            width: widthAnimEnabled.value,
+            height: heightAnimEnabled.value,
             durationMs: animationSize.value.durationMs,
             easing: animationSize.value.easing,
             outerClass: 'tx-tabs__auto-sizer overflow-hidden',
@@ -348,10 +380,21 @@ export default defineComponent({
           h(
             'div',
             {
-              ref: (el: any) => (navInnerElRef.value = el),
-              class: 'tx-tabs__nav-inner',
+              class: 'tx-tabs__nav-bar',
             },
-            [...tabs, pointer],
+            [
+              h(
+                'div',
+                {
+                  ref: (el: any) => (navInnerElRef.value = el),
+                  class: 'tx-tabs__nav-inner',
+                },
+                [...tabs, pointer],
+              ),
+              navRightSlot
+                ? h('div', { class: 'tx-tabs__nav-extra' }, navRightSlot)
+                : null,
+            ],
           ),
         ],
       )
@@ -375,14 +418,18 @@ export default defineComponent({
             'tx-tabs',
             `tx-tabs--${placement.value}`,
             {
-              'tx-tabs--auto-height': sizeAnimEnabled.value,
+              'tx-tabs--auto-height': heightAnimEnabled.value,
+              'tx-tabs--auto-width': !!props.autoWidth,
               'tx-tabs--indicator-anim': animationIndicator.value.enabled,
+              'tx-tabs--nav-anim': animationNav.value.enabled,
               'tx-tabs--content-anim': animationContent.value.enabled,
             },
           ],
           style: {
             '--tx-tabs-indicator-duration': `${animationIndicator.value.durationMs}ms`,
             '--tx-tabs-indicator-easing': animationIndicator.value.easing,
+            '--tx-tabs-nav-duration': `${animationNav.value.durationMs}ms`,
+            '--tx-tabs-nav-easing': animationNav.value.easing,
           } as any,
         },
         children,
@@ -404,6 +451,23 @@ export default defineComponent({
   background: var(--tx-bg-color, #fff);
 }
 
+.tx-tabs--auto-width {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.tx-tabs--auto-width .tx-tabs__main {
+  flex: 0 1 auto;
+}
+
+.tx-tabs--auto-width .tx-tabs__auto-sizer,
+.tx-tabs--auto-width .tx-tabs__select-slot,
+.tx-tabs--auto-width .tx-tabs__content-scroll {
+  width: auto;
+  max-width: 100%;
+}
+
 .tx-tabs__nav {
   position: relative;
   display: flex;
@@ -412,10 +476,44 @@ export default defineComponent({
   box-sizing: border-box;
 }
 
+.tx-tabs__nav-bar {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.tx-tabs--top .tx-tabs__nav-bar,
+.tx-tabs--bottom .tx-tabs__nav-bar {
+  flex-direction: row;
+  align-items: center;
+}
+
+.tx-tabs--left .tx-tabs__nav-bar,
+.tx-tabs--right .tx-tabs__nav-bar {
+  flex-direction: column;
+}
+
+.tx-tabs__nav-extra {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.tx-tabs--nav-anim .tx-tabs__nav {
+  transition:
+    min-width var(--tx-tabs-nav-duration, 220ms) var(--tx-tabs-nav-easing, ease),
+    max-width var(--tx-tabs-nav-duration, 220ms) var(--tx-tabs-nav-easing, ease),
+    width var(--tx-tabs-nav-duration, 220ms) var(--tx-tabs-nav-easing, ease),
+    flex-basis var(--tx-tabs-nav-duration, 220ms) var(--tx-tabs-nav-easing, ease);
+}
+
 .tx-tabs__nav-inner {
   position: relative;
   padding: 8px 6px;
   flex: 1;
+  min-height: 0;
 }
 
 .tx-tabs__group {

@@ -62,13 +62,22 @@ import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/Tabs
 | `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |
 | `contentPadding` | `number` | `12` | 内容区 padding |
 | `contentScrollable` | `boolean` | `true` | 内容区是否可滚动 |
+| `autoWidth` | `boolean` | `false` | 宽度跟随内容（用于顶部 Tabs + 右侧操作区等）。建议配合 `animation.size` |
 | `animation` | `{ size?; indicator?; content? }` | - | 动画配置对象 |
 | `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时兼容 `autoHeight*` |
+| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | 导航容器动画（nav 宽度/布局变化过渡） |
 | `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | 指示条动画 |
 | `animation.content` | `boolean \| { enabled? }` | - | 内容切换过渡（zoom 动画） |
 | `autoHeight` | `boolean` | `false` | 兼容字段：等价于 `animation.size` |
 | `autoHeightDurationMs` | `number` | `250` | 兼容字段：`animation.size.durationMs` |
 | `autoHeightEasing` | `string` | `ease` | 兼容字段：`animation.size.easing` |
+
+### Slots
+
+| 名称 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 放置 `TxTabItem` / `TxTabItemGroup` / `TxTabHeader` |
+| `nav-right` | - | 顶部/底部 Tabs 的导航右侧区域（适合放按钮、搜索等），宽度变化会配合 `autoWidth` 跟随内容 |
 
 ### TxTabItem Props
 

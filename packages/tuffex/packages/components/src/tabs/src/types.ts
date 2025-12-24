@@ -8,6 +8,7 @@ export interface TabsProps {
   contentPadding?: number
   contentScrollable?: boolean
   autoHeight?: boolean
+  autoWidth?: boolean
   autoHeightDurationMs?: number
   autoHeightEasing?: string
   animation?: TabsAnimation
@@ -22,6 +23,11 @@ export interface TabsAnimationSize extends TabsAnimationOption {
   easing?: string
 }
 
+export interface TabsAnimationNav extends TabsAnimationOption {
+  durationMs?: number
+  easing?: string
+}
+
 export interface TabsAnimationIndicator extends TabsAnimationOption {
   durationMs?: number
   easing?: string
@@ -29,6 +35,7 @@ export interface TabsAnimationIndicator extends TabsAnimationOption {
 
 export interface TabsAnimation {
   size?: boolean | TabsAnimationSize
+  nav?: boolean | TabsAnimationNav
   indicator?: boolean | TabsAnimationIndicator
   content?: boolean | TabsAnimationOption
 }
