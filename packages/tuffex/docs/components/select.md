@@ -10,6 +10,24 @@ const value2 = ref('')
 const value3 = ref('')
 const value4 = ref('option18')
 const value5 = ref('')
+
+const value6 = ref('')
+const remoteQuery = ref('')
+const remoteOptions = ref(
+  Array.from({ length: 30 }).map((_, i) => {
+    const n = i + 1
+    return { value: `option${n}`, label: `Option ${n}` }
+  }),
+)
+
+function onRemoteSearch(q: string) {
+  remoteQuery.value = q
+  const query = q.trim().toLowerCase()
+  remoteOptions.value = Array.from({ length: 30 }).map((_, i) => {
+    const n = i + 1
+    return { value: `option${n}`, label: `Option ${n}` }
+  }).filter(o => o.label.toLowerCase().includes(query))
+}
 </script>
 
 ## 基础用法
@@ -27,13 +45,47 @@ const value5 = ref('')
 
 <template #code>
 ```vue
-<template>
-  <TuffSelect v-model="value" placeholder="请选择">
-    <TuffSelectItem value="option1" label="选项 1" />
-    <TuffSelectItem value="option2" label="选项 2" />
-    <TuffSelectItem value="option3" label="选项 3" />
-  </TuffSelect>
+&lt;template&gt;
+  &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
+    &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
+    &lt;TuffSelectItem value="option2" label="选项 2" /&gt;
+    &lt;TuffSelectItem value="option3" label="选项 3" /&gt;
+  &lt;/TuffSelect&gt;
+&lt;/template&gt;
+```
 </template>
+</DemoBlock>
+
+## 远程搜索（可编辑）
+
+<DemoBlock title="Select (remote searchable)">
+<template #preview>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
+  <TuffSelect v-model="value6" placeholder="Remote" remote editable @search="onRemoteSearch">
+    <TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" />
+  </TuffSelect>
+</div>
+</template>
+
+<template #code>
+```vue
+&lt;script setup lang="ts"&gt;
+import { ref } from 'vue'
+
+const value = ref('')
+const remoteOptions = ref&lt;Array&lt;{ value: string; label: string }&gt;&gt;([])
+
+async function onSearch(q: string) {
+  // remote request
+  // remoteOptions.value = await fetch(...)
+}
+&lt;/script&gt;
+
+&lt;template&gt;
+  &lt;TuffSelect v-model="value" remote editable @search="onSearch"&gt;
+    &lt;TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" /&gt;
+  &lt;/TuffSelect&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -51,11 +103,11 @@ const value5 = ref('')
 
 <template #code>
 ```vue
-<template>
-  <TuffSelect v-model="value" placeholder="Searchable" searchable>
-    <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
-  </TuffSelect>
-</template>
+&lt;template&gt;
+  &lt;TuffSelect v-model="value" placeholder="Searchable" searchable&gt;
+    &lt;TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" /&gt;
+  &lt;/TuffSelect&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -73,11 +125,11 @@ const value5 = ref('')
 
 <template #code>
 ```vue
-<template>
-  <TuffSelect v-model="value" placeholder="禁用状态" disabled>
-    <TuffSelectItem value="option1" label="选项 1" />
-  </TuffSelect>
-</template>
+&lt;template&gt;
+  &lt;TuffSelect v-model="value" placeholder="禁用状态" disabled&gt;
+    &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
+  &lt;/TuffSelect&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -97,13 +149,13 @@ const value5 = ref('')
 
 <template #code>
 ```vue
-<template>
-  <TuffSelect v-model="value" placeholder="请选择">
-    <TuffSelectItem value="option1" label="可选项 1" />
-    <TuffSelectItem value="option2" label="禁用选项" disabled />
-    <TuffSelectItem value="option3" label="可选项 2" />
-  </TuffSelect>
-</template>
+&lt;template&gt;
+  &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
+    &lt;TuffSelectItem value="option1" label="可选项 1" /&gt;
+    &lt;TuffSelectItem value="option2" label="禁用选项" disabled /&gt;
+    &lt;TuffSelectItem value="option3" label="可选项 2" /&gt;
+  &lt;/TuffSelect&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -121,11 +173,11 @@ const value5 = ref('')
 
 <template #code>
 ```vue
-<template>
-  <TuffSelect v-model="value" :dropdown-max-height="220">
-    <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
-  </TuffSelect>
-</template>
+&lt;template&gt;
+  &lt;TuffSelect v-model="value" :dropdown-max-height="220"&gt;
+    &lt;TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" /&gt;
+  &lt;/TuffSelect&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -141,6 +193,8 @@ const value5 = ref('')
 | disabled | 是否禁用 | `boolean` | `false` |
 | searchable | 是否可搜索 | `boolean` | `false` |
 | searchPlaceholder | 搜索框占位 | `string` | `'Search'` |
+| editable | 是否可编辑（在触发器输入） | `boolean` | `false` |
+| remote | 是否远程搜索（输入时触发 `search`） | `boolean` | `false` |
 | dropdownMaxHeight | 下拉面板最大高度 | `number` | `280` |
 | dropdownOffset | 触发器与面板间距 | `number` | `6` |
 
@@ -150,6 +204,7 @@ const value5 = ref('')
 |--------|------|----------|
 | change | 选中值改变时触发 | `(value: string \| number) => void` |
 | update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
+| search | 输入触发搜索（remote 模式） | `(query: string) => void` |
 
 ### TuffSelectItem Props
 

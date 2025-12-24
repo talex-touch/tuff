@@ -77,6 +77,7 @@ const inline = computed(() => {
 
 const baseStyle = computed(() => {
   return {
+    boxSizing: 'border-box',
     display: inline.value ? 'inline-block' : undefined,
     width: inline.value ? 'fit-content' : undefined,
     maxWidth: inline.value ? '100%' : undefined,
@@ -111,7 +112,7 @@ defineExpose({
 
 <template>
   <component :is="as" ref="outer" :class="mergedClass" :style="mergedStyle" v-bind="passthroughAttrs">
-    <component :is="innerAs" ref="inner" :class="innerClass">
+    <component :is="innerAs" ref="inner" :class="innerClass" style="display: flow-root;">
       <slot />
     </component>
   </component>

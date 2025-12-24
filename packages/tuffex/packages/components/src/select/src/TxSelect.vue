@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import TuffInput from '../../input/src/TxInput.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
+import TxScroll from '../../scroll/src/TxScroll.vue'
 
 defineOptions({
   name: 'TuffSelect',
@@ -14,6 +16,8 @@ const props = withDefaults(
     disabled?: boolean
     searchable?: boolean
     searchPlaceholder?: string
+    editable?: boolean
+    remote?: boolean
     dropdownMaxHeight?: number
     dropdownOffset?: number
   }>(),
@@ -23,6 +27,8 @@ const props = withDefaults(
     disabled: false,
     searchable: false,
     searchPlaceholder: 'Search',
+    editable: false,
+    remote: false,
     dropdownMaxHeight: 280,
     dropdownOffset: 6,
   }
@@ -31,6 +37,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   'update:modelValue': [value: string | number]
   'change': [value: string | number]
+  'search': [query: string]
 }>()
 
 const isOpen = ref(false)
@@ -39,6 +46,21 @@ const selectedLabel = ref('')
 
 const searchInputRef = ref<any>(null)
 const searchQuery = ref('')
+
+const triggerInputRef = ref<any>(null)
+
+const isEditable = computed(() => props.editable || props.remote)
+
+const triggerText = computed({
+  get: () => (isEditable.value ? searchQuery.value : selectedLabel.value),
+  set: (v: string) => {
+    if (!isEditable.value)
+      return
+    searchQuery.value = v
+    if (props.remote)
+      emit('search', v)
+  },
+})
 
 const dropdownRef = ref<HTMLElement | null>(null)
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
@@ -90,6 +112,8 @@ function clear() {
 function handleSelect(value: string | number, label: string) {
   currentValue.value = value
   selectedLabel.value = label
+  if (isEditable.value)
+    searchQuery.value = label
   close()
 }
 
@@ -123,15 +147,15 @@ provide('tuffSelect', {
   currentValue,
   handleSelect,
   registerOption,
-  searchQuery,
+  searchQuery: computed(() => (props.remote ? '' : searchQuery.value)),
 })
 
 defineExpose({
   open: () => (isOpen.value = true),
   close,
   toggle,
-  focus: () => selectRef.value?.focus?.(),
-  blur: () => (selectRef.value as any)?.blur?.(),
+  focus: () => triggerInputRef.value?.focus?.(),
+  blur: () => triggerInputRef.value?.blur?.(),
   clear,
 })
 
@@ -161,7 +185,10 @@ watch(
     if (!open) {
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = null
-      searchQuery.value = ''
+      if (isEditable.value)
+        searchQuery.value = selectedLabel.value
+      else
+        searchQuery.value = ''
       return
     }
 
@@ -175,8 +202,19 @@ watch(
 
     if (props.searchable)
       searchInputRef.value?.focus?.()
+    if (isEditable.value)
+      triggerInputRef.value?.focus?.()
   },
   { flush: 'post' }
+)
+
+watch(
+  searchQuery,
+  (v) => {
+    if (props.remote && isOpen.value)
+      emit('search', v)
+  },
+  { flush: 'post' },
 )
 
 onBeforeUnmount(() => {
@@ -196,15 +234,23 @@ onBeforeUnmount(() => {
       },
     ]"
   >
-    <div class="tuff-select__trigger" @click="toggle">
-      <span :class="['tuff-select__value', { 'is-placeholder': !selectedLabel }]">
-        {{ selectedLabel || placeholder }}
-      </span>
-      <span class="tuff-select__arrow">
-        <svg viewBox="0 0 24 24" width="16" height="16">
-          <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z"/>
-        </svg>
-      </span>
+    <div class="tuff-select__trigger" @click="!isEditable && toggle()">
+      <TuffInput
+        ref="triggerInputRef"
+        v-model="triggerText"
+        :placeholder="placeholder"
+        :readonly="!isEditable"
+        :disabled="disabled"
+        @focus="!disabled && (isOpen = true)"
+      >
+        <template #suffix>
+          <span class="tuff-select__arrow">
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z"/>
+            </svg>
+          </span>
+        </template>
+      </TuffInput>
     </div>
 
     <Teleport to="body">
@@ -215,7 +261,7 @@ onBeforeUnmount(() => {
           class="tuff-select__dropdown"
           :style="floatingStyles"
         >
-          <div v-if="searchable" class="tuff-select__search">
+          <div v-if="searchable && !isEditable" class="tuff-select__search">
             <TxSearchInput
               ref="searchInputRef"
               v-model="searchQuery"
@@ -224,7 +270,9 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="tuff-select__list">
-            <slot />
+            <TxScroll style="height: 100%;" :no-padding="true" :scrollbar="true" :scrollbar-fade="true">
+              <slot />
+            </TxScroll>
           </div>
         </div>
       </Transition>
@@ -239,37 +287,11 @@ onBeforeUnmount(() => {
   width: 100%;
 
   &__trigger {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 32px;
-    padding: 0 12px;
-    border: 1px solid var(--tx-border-color, #dcdfe6);
-    border-radius: 4px;
-    background-color: var(--tx-bg-color, #fff);
-    cursor: pointer;
-    transition: all 0.25s;
-
-    &:hover {
-      border-color: var(--tx-color-primary-light-3, #79bbff);
-    }
-  }
-
-  &__value {
-    flex: 1;
-    font-size: 14px;
-    color: var(--tx-text-color-primary, #303133);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &.is-placeholder {
-      color: var(--tx-text-color-placeholder, #a8abb2);
-    }
+    display: block;
   }
 
   &__arrow {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     color: var(--tx-text-color-secondary, #909399);
     transition: transform 0.3s;
@@ -298,9 +320,9 @@ onBeforeUnmount(() => {
   }
 
   &__list {
-    overflow: auto;
     flex: 1;
     min-height: 0;
+    height: 100%;
   }
 
   &.is-open {

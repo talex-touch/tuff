@@ -24,9 +24,9 @@ const checked5 = ref(false)
 
 <template #code>
 ```vue
-<template>
-  <TxCheckbox v-model="checked" label="选项" />
-</template>
+&lt;template&gt;
+  &lt;TxCheckbox v-model="checked" label="选项" /&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -43,9 +43,9 @@ const checked5 = ref(false)
 
 <template #code>
 ```vue
-<template>
-  <TxCheckbox v-model="checked" label="我在前面" label-placement="start" />
-</template>
+&lt;template&gt;
+  &lt;TxCheckbox v-model="checked" label="我在前面" label-placement="start" /&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -63,9 +63,9 @@ const checked5 = ref(false)
 
 <template #code>
 ```vue
-<template>
-  <TxCheckbox v-model="checked" aria-label="勾选" />
-</template>
+&lt;template&gt;
+  &lt;TxCheckbox v-model="checked" aria-label="勾选" /&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -82,9 +82,9 @@ const checked5 = ref(false)
 
 <template #code>
 ```vue
-<template>
-  <TxCheckbox v-model="checked" label="禁用" disabled />
-</template>
+&lt;template&gt;
+  &lt;TxCheckbox v-model="checked" label="禁用" disabled /&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>
@@ -102,11 +102,11 @@ const checked5 = ref(false)
 
 <template #code>
 ```vue
-<template>
-  <TxCheckbox v-model="checked">
-    <span>自定义标签</span>
-  </TxCheckbox>
-</template>
+&lt;template&gt;
+  &lt;TxCheckbox v-model="checked"&gt;
+    &lt;span&gt;自定义标签&lt;/span&gt;
+  &lt;/TxCheckbox&gt;
+&lt;/template&gt;
 ```
 </template>
 </DemoBlock>

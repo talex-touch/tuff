@@ -76,9 +76,12 @@ export default defineConfig({
           text: '表单',
           items: [
             { text: '输入框 Input', link: '/components/input' },
+            { text: '搜索输入框 SearchInput', link: '/components/search-input' },
             { text: '复选框 Checkbox', link: '/components/checkbox' },
             { text: '开关 Switch', link: '/components/switch' },
             { text: '选择器 Select', link: '/components/select' },
+            { text: '树选择器 TreeSelect', link: '/components/tree-select' },
+            { text: '级联选择 Cascader', link: '/components/cascader' },
             { text: '滑块 Slider', link: '/components/slider' },
           ],
         },
