@@ -25,6 +25,7 @@ export interface CascaderProps {
   dropdownWidth?: number
   dropdownMaxWidth?: number
   dropdownMaxHeight?: number
+  expandTrigger?: 'click' | 'hover' | 'both'
   load?: (node: CascaderNode | null, level: number) => Promise<CascaderNode[]>
 }
 

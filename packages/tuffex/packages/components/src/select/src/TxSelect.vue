@@ -78,8 +78,10 @@ const { floatingStyles, update } = useFloating(selectRef, dropdownRef, {
       padding: 8,
       apply({ rects, availableHeight, elements }) {
         Object.assign(elements.floating.style, {
-          width: `${rects.reference.width}px`,
+          minWidth: `${rects.reference.width}px`,
+          maxWidth: `${rects.reference.width}px`,
           maxHeight: `${Math.min(availableHeight, props.dropdownMaxHeight)}px`,
+          overflow: 'hidden',
           overflowY: 'hidden',
         })
       },
@@ -143,6 +145,16 @@ async function updatePosition() {
   await update()
 }
 
+function scrollSelectedIntoView() {
+  if (!dropdownRef.value) return
+  const el = dropdownRef.value.querySelector<HTMLElement>('.tuff-select-item.is-selected')
+  if (!el) return
+
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ block: 'nearest' })
+  })
+}
+
 provide('tuffSelect', {
   currentValue,
   handleSelect,
@@ -204,6 +216,9 @@ watch(
       searchInputRef.value?.focus?.()
     if (isEditable.value)
       triggerInputRef.value?.focus?.()
+
+    await nextTick()
+    scrollSelectedIntoView()
   },
   { flush: 'post' }
 )
@@ -270,7 +285,13 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="tuff-select__list">
-            <TxScroll style="height: 100%;" :no-padding="true" :scrollbar="true" :scrollbar-fade="true">
+            <TxScroll
+              class="tuff-select__scroll"
+              :native="true"
+              :no-padding="true"
+              :scrollbar="true"
+              :scrollbar-fade="true"
+            >
               <slot />
             </TxScroll>
           </div>
@@ -285,6 +306,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: inline-block;
   width: 100%;
+  min-width: 180px;
 
   &__trigger {
     display: block;
@@ -322,6 +344,9 @@ onBeforeUnmount(() => {
   &__list {
     flex: 1;
     min-height: 0;
+  }
+
+  &__scroll {
     height: 100%;
   }
 

@@ -19,6 +19,7 @@ export interface PopoverProps {
   offset?: number
   width?: number
   maxWidth?: number
+  referenceFullWidth?: boolean
   closeOnClickOutside?: boolean
   closeOnEsc?: boolean
 }

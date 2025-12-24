@@ -210,6 +210,7 @@ defineExpose({
     :offset="dropdownOffset"
     :width="dropdownWidth"
     :max-width="dropdownMaxWidth"
+    :reference-full-width="true"
   >
     <template #reference>
       <div
@@ -320,6 +321,7 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   width: 100%;
+  min-width: 180px;
   min-height: 32px;
   padding: 4px 10px;
   border-radius: 12px;

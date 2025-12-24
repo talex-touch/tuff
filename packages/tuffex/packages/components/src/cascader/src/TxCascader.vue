@@ -17,9 +17,10 @@ const props = withDefaults(defineProps<CascaderProps>(), {
   clearable: true,
   placement: 'bottom-start',
   dropdownOffset: 6,
-  dropdownWidth: 0,
+  dropdownWidth: 360,
   dropdownMaxWidth: 520,
   dropdownMaxHeight: 340,
+  expandTrigger: 'both',
   load: undefined,
 })
 
@@ -195,6 +196,11 @@ const columns = computed<ColumnItem[][]>(() => {
 })
 
 async function onHoverItem(item: ColumnItem) {
+  if (props.expandTrigger === 'click') return
+  if (props.disabled || item.node.disabled) return
+  if (item.leaf) return
+
+  activePath.value = item.path
   if (!props.load) return
   if (item.leaf) return
   await ensureChildren(item.node, item.path, item.level + 1)
@@ -205,6 +211,10 @@ async function onPick(item: ColumnItem) {
 
   if (item.leaf) {
     toggleSelect(item.path)
+    return
+  }
+
+  if (props.expandTrigger === 'hover') {
     return
   }
 
@@ -306,6 +316,7 @@ defineExpose({
     :offset="dropdownOffset"
     :width="dropdownWidth"
     :max-width="dropdownMaxWidth"
+    :reference-full-width="true"
   >
     <template #reference>
       <div
@@ -423,6 +434,7 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   width: 100%;
+  min-width: 180px;
   min-height: 32px;
   padding: 4px 10px;
   border-radius: 12px;
