@@ -21,7 +21,10 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 ## 表单组件
 
 - **[TxInput 输入框](./input.md)** - 表单输入组件
+- **[TxSearchInput 搜索输入框](./search-input.md)** - 搜索输入框（Enter 触发 search）
 - **[TxCheckbox 复选框](./checkbox.md)** - 复选框组件
+- **[TxTreeSelect 树选择器](./tree-select.md)** - 下拉树选择（支持搜索/单选/多选）
+- **[TxCascader 级联选择](./cascader.md)** - 级联选择（支持搜索/单选/多选/异步加载）
 
 ## 布局组件
 

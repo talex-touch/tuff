@@ -20,6 +20,7 @@ const txSelect = inject<{
   currentValue: { value: string | number }
   handleSelect: (value: string | number, label: string) => void
   registerOption?: (value: string | number, label: string) => void
+  searchQuery?: { value: string }
 }>('tuffSelect')
 
 onMounted(() => {
@@ -31,6 +32,13 @@ const isSelected = computed(() => {
   return txSelect?.currentValue.value === props.value
 })
 
+const visible = computed(() => {
+  const q = (txSelect?.searchQuery?.value ?? '').trim().toLowerCase()
+  if (!q) return true
+  const label = (props.label || String(props.value)).toLowerCase()
+  return label.includes(q)
+})
+
 function handleClick() {
   if (props.disabled) return
   txSelect?.handleSelect(props.value, props.label || String(props.value))
@@ -39,6 +47,7 @@ function handleClick() {
 
 <template>
   <div
+    v-show="visible"
     :class="[
       'tuff-select-item',
       {

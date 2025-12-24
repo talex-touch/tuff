@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<AutoSizerProps>(), {
   innerAs: 'div',
   width: true,
   height: true,
+  inline: undefined,
   durationMs: 200,
   easing: 'ease',
   outerClass: 'overflow-hidden',
@@ -68,8 +69,18 @@ const transitionProperty = computed(() => {
   return [props.width ? 'width' : '', props.height ? 'height' : ''].filter(Boolean).join(',')
 })
 
+const inline = computed(() => {
+  if (typeof props.inline === 'boolean')
+    return props.inline
+  return props.width && !props.height
+})
+
 const baseStyle = computed(() => {
   return {
+    display: inline.value ? 'inline-block' : undefined,
+    width: inline.value ? 'fit-content' : undefined,
+    maxWidth: inline.value ? '100%' : undefined,
+    flex: inline.value ? '0 0 auto' : undefined,
     transitionProperty: transitionProperty.value,
     transitionDuration: `${props.durationMs}ms`,
     transitionTimingFunction: props.easing,

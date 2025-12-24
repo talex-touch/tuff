@@ -6,6 +6,9 @@ export interface SliderProps {
   disabled?: boolean
   showValue?: boolean
   formatValue?: (value: number) => string
+  showTooltip?: boolean
+  tooltipFormatter?: (value: number) => string
+  tooltipTilt?: boolean
 }
 
 export interface SliderEmits {

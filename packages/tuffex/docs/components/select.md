@@ -9,6 +9,7 @@ const value1 = ref('')
 const value2 = ref('')
 const value3 = ref('')
 const value4 = ref('option18')
+const value5 = ref('')
 </script>
 
 ## 基础用法
@@ -31,6 +32,28 @@ const value4 = ref('option18')
     <TuffSelectItem value="option1" label="选项 1" />
     <TuffSelectItem value="option2" label="选项 2" />
     <TuffSelectItem value="option3" label="选项 3" />
+  </TuffSelect>
+</template>
+```
+</template>
+</DemoBlock>
+
+## 可搜索
+
+<DemoBlock title="Select (searchable)">
+<template #preview>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
+  <TuffSelect v-model="value5" placeholder="Searchable" searchable>
+    <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
+  </TuffSelect>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TuffSelect v-model="value" placeholder="Searchable" searchable>
+    <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
   </TuffSelect>
 </template>
 ```
@@ -116,6 +139,8 @@ const value4 = ref('option18')
 | modelValue / v-model | 绑定值 | `string \| number` | `''` |
 | placeholder | 占位文本 | `string` | `'请选择'` |
 | disabled | 是否禁用 | `boolean` | `false` |
+| searchable | 是否可搜索 | `boolean` | `false` |
+| searchPlaceholder | 搜索框占位 | `string` | `'Search'` |
 | dropdownMaxHeight | 下拉面板最大高度 | `number` | `280` |
 | dropdownOffset | 触发器与面板间距 | `number` | `6` |
 
