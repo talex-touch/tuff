@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   offset: 8,
   width: 0,
   maxWidth: 360,
+  referenceFullWidth: false,
   closeOnClickOutside: true,
   closeOnEsc: true,
 })
@@ -133,7 +134,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="referenceRef" class="tx-popover__reference" @click.capture="toggle">
+  <div
+    ref="referenceRef"
+    class="tx-popover__reference"
+    :class="{ 'is-full-width': referenceFullWidth }"
+    @click.capture="toggle"
+  >
     <slot name="reference" />
   </div>
 
@@ -151,6 +157,10 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   width: fit-content;
+
+  &.is-full-width {
+    width: 100%;
+  }
 }
 
 .tx-popover {
