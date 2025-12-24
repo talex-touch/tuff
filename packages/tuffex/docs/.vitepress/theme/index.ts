@@ -26,6 +26,9 @@ import {
   TuffCheckbox,
   TuffSelect,
   TuffSelectItem,
+  TxSearchInput,
+  TxTreeSelect,
+  TxCascader,
   TuffProgress,
   TuffFlatButton,
   TxScroll,
@@ -110,6 +113,10 @@ export default {
     app.component('TuffSelect', TuffSelect)
     app.component('TxSelectItem', TuffSelectItem)
     app.component('TuffSelectItem', TuffSelectItem)
+
+    app.component('TxSearchInput', TxSearchInput)
+    app.component('TxTreeSelect', TxTreeSelect)
+    app.component('TxCascader', TxCascader)
     app.component('TxProgress', TuffProgress)
     app.component('TxFlatButton', TuffFlatButton)
     app.component('TxScroll', TxScroll)

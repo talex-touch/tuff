@@ -1,4 +1,4 @@
-export type TxIconType = 'emoji' | 'url' | 'file' | 'class'
+export type TxIconType = 'emoji' | 'url' | 'file' | 'class' | 'builtin'
 
 export type TxIconStatus = 'normal' | 'loading' | 'error'
 

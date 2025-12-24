@@ -9,6 +9,7 @@ defineOptions({
 const props = withDefaults(
   defineProps<{
     icon?: TxIconSource | null
+    name?: string
     alt?: string
     size?: number
     empty?: string
@@ -16,6 +17,7 @@ const props = withDefaults(
   }>(),
   {
     icon: null,
+    name: '',
     alt: '',
     size: undefined,
     empty: '',
@@ -23,8 +25,48 @@ const props = withDefaults(
   },
 )
 
+const builtinIcons = {
+  'chevron-down': {
+    viewBox: '0 0 24 24',
+    path: 'M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z',
+  },
+  close: {
+    viewBox: '0 0 24 24',
+    path: 'M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z',
+  },
+  search: {
+    viewBox: '0 0 24 24',
+    path: 'M10 2a8 8 0 105.293 14.293l4.707 4.707 1.414-1.414-4.707-4.707A8 8 0 0010 2zm0 2a6 6 0 110 12 6 6 0 010-12z',
+  },
+  user: {
+    viewBox: '0 0 24 24',
+    path: 'M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z',
+  },
+  star: {
+    viewBox: '0 0 24 24',
+    path: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z',
+  },
+  'star-half': {
+    viewBox: '0 0 24 24',
+    path: 'M12 2l2.19 6.62 7.81.62-5.9 4.73 1.82 7.03L12 17.77V2z',
+  },
+} as const
+
 const safeIcon = computed<TxIconSource>(() => {
-  return (props.icon ?? { type: 'emoji', value: '' }) as TxIconSource
+  if (props.icon)
+    return props.icon as TxIconSource
+
+  const name = (props.name ?? '').trim()
+  if (!name)
+    return { type: 'emoji', value: '' }
+
+  if (name.startsWith('i-'))
+    return { type: 'class', value: name }
+
+  if (name in builtinIcons)
+    return { type: 'builtin', value: name }
+
+  return { type: 'class', value: name }
 })
 
 const isLoading = computed(() => safeIcon.value.status === 'loading')
@@ -39,6 +81,12 @@ const resolvedUrl = computed(() => {
 const isSvg = computed(() => {
   const v = resolvedUrl.value
   return typeof v === 'string' && v.toLowerCase().endsWith('.svg')
+})
+
+const builtin = computed(() => {
+  if (safeIcon.value.type !== 'builtin')
+    return null
+  return (builtinIcons as any)[safeIcon.value.value] ?? null
 })
 
 const svgContent = ref<string>('')
@@ -106,6 +154,12 @@ watch(
       <i :class="safeIcon.value" />
     </span>
 
+    <span v-else-if="safeIcon.type === 'builtin' && builtin" class="tuff-icon__builtin">
+      <svg :viewBox="builtin.viewBox" width="1em" height="1em" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path :d="builtin.path" fill="currentColor" />
+      </svg>
+    </span>
+
     <template v-else-if="isAddressable">
       <template v-if="isSvg && !colorful && svgContent">
         <span class="tuff-icon__svg-mask" :style="{ WebkitMaskImage: `url('${svgDataUrl}')`, maskImage: `url('${svgDataUrl}')` }" />
@@ -143,6 +197,12 @@ watch(
   mask-position: center;
   -webkit-mask-size: contain;
   mask-size: contain;
+}
+
+.tuff-icon__builtin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tuff-icon__loading-skeleton {
