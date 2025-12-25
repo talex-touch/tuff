@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import TxCard from '../../card/src/TxCard.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
-import TxScroll from '../../scroll/src/TxScroll.vue'
 
 defineOptions({
   name: 'TuffSelect',
@@ -77,12 +77,13 @@ const { floatingStyles, update } = useFloating(selectRef, dropdownRef, {
     size({
       padding: 8,
       apply({ rects, availableHeight, elements }) {
+        const h = Math.min(availableHeight, props.dropdownMaxHeight)
         Object.assign(elements.floating.style, {
           minWidth: `${rects.reference.width}px`,
           maxWidth: `${rects.reference.width}px`,
-          maxHeight: `${Math.min(availableHeight, props.dropdownMaxHeight)}px`,
+          height: `${h}px`,
+          maxHeight: `${h}px`,
           overflow: 'hidden',
-          overflowY: 'hidden',
         })
       },
     }),
@@ -276,25 +277,19 @@ onBeforeUnmount(() => {
           class="tuff-select__dropdown"
           :style="floatingStyles"
         >
-          <div v-if="searchable && !isEditable" class="tuff-select__search">
-            <TxSearchInput
-              ref="searchInputRef"
-              v-model="searchQuery"
-              :placeholder="searchPlaceholder"
-            />
-          </div>
+          <TxCard class="tuff-select__panel" variant="solid" background="glass" shadow="soft" :radius="18" :padding="4">
+            <div v-if="searchable && !isEditable" class="tuff-select__search">
+              <TxSearchInput
+                ref="searchInputRef"
+                v-model="searchQuery"
+                :placeholder="searchPlaceholder"
+              />
+            </div>
 
-          <div class="tuff-select__list">
-            <TxScroll
-              class="tuff-select__scroll"
-              :native="true"
-              :no-padding="true"
-              :scrollbar="true"
-              :scrollbar-fade="true"
-            >
+            <div class="tuff-select__list">
               <slot />
-            </TxScroll>
-          </div>
+            </div>
+          </TxCard>
         </div>
       </Transition>
     </Teleport>
@@ -322,32 +317,35 @@ onBeforeUnmount(() => {
   &__dropdown {
     z-index: 1000;
     width: 100%;
-    padding: 4px 0;
-    background-color: var(--tx-bg-color, #fff);
-    border: 1px solid var(--tx-border-color-light, #e4e7ed);
-    border-radius: 4px;
-    box-shadow: var(--tx-box-shadow-light, 0 2px 12px rgba(0, 0, 0, 0.1));
-
-    backdrop-filter: blur(14px) saturate(140%);
-    -webkit-backdrop-filter: blur(14px) saturate(140%);
-
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+
+  &__panel {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
   }
 
   &__search {
     padding: 8px 10px;
     border-bottom: 1px solid var(--tx-border-color-light, #e4e7ed);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--tx-bg-color, #fff);
   }
 
   &__list {
-    flex: 1;
-    min-height: 0;
-  }
-
-  &__scroll {
-    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
   }
 
   &.is-open {

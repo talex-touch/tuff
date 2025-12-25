@@ -20,6 +20,11 @@ export interface PopoverProps {
   width?: number
   maxWidth?: number
   referenceFullWidth?: boolean
+  panelVariant?: 'solid' | 'dashed' | 'plain'
+  panelBackground?: 'blur' | 'glass' | 'mask'
+  panelShadow?: 'none' | 'soft' | 'medium'
+  panelRadius?: number
+  panelPadding?: number
   closeOnClickOutside?: boolean
   closeOnEsc?: boolean
 }

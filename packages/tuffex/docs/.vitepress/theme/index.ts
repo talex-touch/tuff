@@ -20,6 +20,7 @@ import {
   TxTouchTip,
   TxProgressBar,
   TxButton,
+  TxCard,
   TxIcon,
   TuffSwitch,
   TuffInput,
@@ -27,6 +28,7 @@ import {
   TuffSelect,
   TuffSelectItem,
   TxSearchInput,
+  TxSearchSelect,
   TxTreeSelect,
   TxCascader,
   TuffProgress,
@@ -56,6 +58,8 @@ import {
   TxDropdownItem,
   TxContextMenu,
   TxEmpty,
+  TxRadio,
+  TxRadioGroup,
   TxAgentsList,
   TxAgentItem,
   TxStagger,
@@ -78,6 +82,19 @@ import ScrollBounceScrollbarDemo from './components/demos/ScrollBounceScrollbarD
 import ScrollChainingDemo from './components/demos/ScrollChainingDemo.vue'
 import ScrollNativeDemo from './components/demos/ScrollNativeDemo.vue'
 import ScrollPullDownUpDemo from './components/demos/ScrollPullDownUpDemo.vue'
+import CardVariantsDemo from './components/demos/CardVariantsDemo.vue'
+import CardBackgroundScrollDemo from './components/demos/CardBackgroundScrollDemo.vue'
+import CardEmptyDemo from './components/demos/CardEmptyDemo.vue'
+import CardCompositionsDemo from './components/demos/CardCompositionsDemo.vue'
+import CardBasicDemo from './components/demos/CardBasicDemo.vue'
+import CardHeaderDemo from './components/demos/CardHeaderDemo.vue'
+import CardActionsDemo from './components/demos/CardActionsDemo.vue'
+import CardBasicSlotsDemo from './components/demos/CardBasicSlotsDemo.vue'
+import CardModeDemo from './components/demos/CardModeDemo.vue'
+import CardSizeDemo from './components/demos/CardSizeDemo.vue'
+import CardLayoutPropsDemo from './components/demos/CardLayoutPropsDemo.vue'
+import CardStatesDemo from './components/demos/CardStatesDemo.vue'
+import CardInertialDemo from './components/demos/CardInertialDemo.vue'
 
 export default {
   extends: DefaultTheme,
@@ -101,6 +118,7 @@ export default {
     app.component('TxTouchTip', TxTouchTip)
     app.component('TxProgressBar', TxProgressBar)
     app.component('TxButton', TxButton)
+    app.component('TxCard', TxCard)
     app.component('TxIcon', TxIcon)
     app.component('TuffIcon', TxIcon)
     app.component('TxSwitch', TuffSwitch)
@@ -115,6 +133,7 @@ export default {
     app.component('TuffSelectItem', TuffSelectItem)
 
     app.component('TxSearchInput', TxSearchInput)
+    app.component('TxSearchSelect', TxSearchSelect)
     app.component('TxTreeSelect', TxTreeSelect)
     app.component('TxCascader', TxCascader)
     app.component('TxProgress', TuffProgress)
@@ -147,6 +166,8 @@ export default {
     app.component('TxDropdownItem', TxDropdownItem)
     app.component('TxContextMenu', TxContextMenu)
     app.component('TxEmpty', TxEmpty)
+    app.component('TxRadio', TxRadio)
+    app.component('TxRadioGroup', TxRadioGroup)
     app.component('TxAgentsList', TxAgentsList)
     app.component('TxAgentItem', TxAgentItem)
     app.component('TxStagger', TxStagger)
@@ -168,5 +189,18 @@ export default {
     app.component('ScrollChainingDemo', ScrollChainingDemo)
     app.component('ScrollNativeDemo', ScrollNativeDemo)
     app.component('ScrollPullDownUpDemo', ScrollPullDownUpDemo)
+    app.component('CardVariantsDemo', CardVariantsDemo)
+    app.component('CardBackgroundScrollDemo', CardBackgroundScrollDemo)
+    app.component('CardEmptyDemo', CardEmptyDemo)
+    app.component('CardCompositionsDemo', CardCompositionsDemo)
+    app.component('CardBasicDemo', CardBasicDemo)
+    app.component('CardHeaderDemo', CardHeaderDemo)
+    app.component('CardActionsDemo', CardActionsDemo)
+    app.component('CardBasicSlotsDemo', CardBasicSlotsDemo)
+    app.component('CardModeDemo', CardModeDemo)
+    app.component('CardSizeDemo', CardSizeDemo)
+    app.component('CardLayoutPropsDemo', CardLayoutPropsDemo)
+    app.component('CardStatesDemo', CardStatesDemo)
+    app.component('CardInertialDemo', CardInertialDemo)
   },
 } satisfies Theme

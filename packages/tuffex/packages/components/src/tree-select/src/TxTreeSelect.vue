@@ -410,6 +410,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow: hidden;
 }
 
 .tx-tree-select__search {
@@ -417,6 +418,8 @@ defineExpose({
 }
 
 .tx-tree-select__list {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   display: flex;
   flex-direction: column;
