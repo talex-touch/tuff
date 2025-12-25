@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import type { SearchInputEmits, SearchInputProps } from './types'
 
@@ -10,6 +10,8 @@ const props = withDefaults(defineProps<SearchInputProps>(), {
   placeholder: 'Search',
   disabled: false,
   clearable: true,
+  remote: false,
+  searchDebounce: 200,
 })
 
 const emit = defineEmits<SearchInputEmits>()
@@ -24,9 +26,41 @@ const value = computed({
   },
 })
 
+const searchTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
+function emitRemoteSearch(v: string) {
+  if (!props.remote) return
+  if (props.disabled) return
+  emit('search', v)
+}
+
 function onEnter() {
   emit('search', value.value)
 }
+
+watch(
+  value,
+  (v) => {
+    if (!props.remote) return
+    if (searchTimer.value) {
+      clearTimeout(searchTimer.value)
+      searchTimer.value = null
+    }
+    const delay = Math.max(0, props.searchDebounce ?? 0)
+    searchTimer.value = setTimeout(() => {
+      searchTimer.value = null
+      emitRemoteSearch(v)
+    }, delay)
+  },
+  { flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  if (searchTimer.value) {
+    clearTimeout(searchTimer.value)
+    searchTimer.value = null
+  }
+})
 
 defineExpose({
   focus: () => inputRef.value?.focus?.(),

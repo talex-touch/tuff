@@ -2,9 +2,14 @@
 
 基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。
 
+如果你需要“像 Select 一样展开结果面板”的搜索框，推荐使用 `SearchSelect`。
+
 <script setup lang="ts">
 import SearchInputBasicDemo from '../.vitepress/theme/components/demos/SearchInputBasicDemo.vue'
 import SearchInputBasicDemoSource from '../.vitepress/theme/components/demos/SearchInputBasicDemo.vue?raw'
+
+import SearchInputRemoteDemo from '../.vitepress/theme/components/demos/SearchInputRemoteDemo.vue'
+import SearchInputRemoteDemoSource from '../.vitepress/theme/components/demos/SearchInputRemoteDemo.vue?raw'
 </script>
 
 ## 基础用法
@@ -12,6 +17,14 @@ import SearchInputBasicDemoSource from '../.vitepress/theme/components/demos/Sea
 <DemoBlock title="SearchInput" :code="SearchInputBasicDemoSource">
   <template #preview>
     <SearchInputBasicDemo />
+  </template>
+</DemoBlock>
+
+## 远程搜索
+
+<DemoBlock title="SearchInput (remote)" :code="SearchInputRemoteDemoSource">
+  <template #preview>
+    <SearchInputRemoteDemo />
   </template>
 </DemoBlock>
 
@@ -25,6 +38,8 @@ import SearchInputBasicDemoSource from '../.vitepress/theme/components/demos/Sea
 | `placeholder` | `string` | `'Search'` | 占位 |
 | `disabled` | `boolean` | `false` | 禁用 |
 | `clearable` | `boolean` | `true` | 可清空 |
+| `remote` | `boolean` | `false` | 是否远程搜索（输入时触发 `search`） |
+| `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
 
 ### Events
 
@@ -35,7 +50,7 @@ import SearchInputBasicDemoSource from '../.vitepress/theme/components/demos/Sea
 | `focus` | `(e: FocusEvent)` | 聚焦 |
 | `blur` | `(e: FocusEvent)` | 失焦 |
 | `clear` | - | 清空 |
-| `search` | `(v: string)` | Enter 触发搜索 |
+| `search` | `(v: string)` | Enter 或 remote 输入触发 |
 
 ### Expose
 

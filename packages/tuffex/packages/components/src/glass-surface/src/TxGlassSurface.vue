@@ -70,9 +70,9 @@ function supportsSVGFilters() {
 
   if (isWebkit || isFirefox) return false
 
-  const div = document.createElement('div')
-  div.style.backdropFilter = `url(#${filterId})`
-  return div.style.backdropFilter !== ''
+  const value = `url(#${filterId})`
+  if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') return false
+  return CSS.supports('backdrop-filter', value) || CSS.supports('-webkit-backdrop-filter', value)
 }
 
 function supportsBackdropFilter() {

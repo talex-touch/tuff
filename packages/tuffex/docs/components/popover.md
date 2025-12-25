@@ -2,6 +2,8 @@
 
 基于 Floating UI 的点击弹出层。
 
+Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` 控制面板的边框、背景与阴影。
+
 <script setup lang="ts">
 import { ref } from 'vue'
 const open = ref(false)
@@ -50,6 +52,12 @@ const open = ref(false)
 | `offset` | `number` | `8` | 间距 |
 | `width` | `number` | `0` | 面板宽度（0 = 跟随 reference） |
 | `maxWidth` | `number` | `360` | 最大宽度 |
+| `referenceFullWidth` | `boolean` | `false` | reference 容器是否占满宽度（用于 flex 场景） |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
+| `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
+| `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 

@@ -27,7 +27,6 @@ export default defineConfig({
 
     nav: [
       { text: '首页', link: '/' },
-      { text: '指南', link: '/guide/introduction' },
       { text: '组件', link: '/components/' },
       { text: '设计', link: '/design/colors' },
       {
@@ -40,27 +39,6 @@ export default defineConfig({
     ],
 
     sidebar: {
-      '/guide/': [
-        {
-          text: '入门',
-          items: [
-            { text: '介绍', link: '/guide/introduction' },
-            { text: '快速开始', link: '/guide/getting-started' },
-            { text: '安装', link: '/guide/installation' },
-          ],
-        },
-        {
-          text: '进阶',
-          items: [
-            { text: '主题定制', link: '/guide/theming' },
-            { text: '暗色模式', link: '/guide/dark-mode' },
-            { text: '国际化', link: '/guide/i18n' },
-            { text: 'Dialog Manager', link: '/guide/dialog-manager' },
-            { text: 'Icons', link: '/guide/icons' },
-          ],
-        },
-      ],
-
       '/components/': [
         {
           text: '基础',
@@ -77,7 +55,9 @@ export default defineConfig({
           items: [
             { text: '输入框 Input', link: '/components/input' },
             { text: '搜索输入框 SearchInput', link: '/components/search-input' },
+            { text: '搜索选择器 SearchSelect', link: '/components/search-select' },
             { text: '复选框 Checkbox', link: '/components/checkbox' },
+            { text: '单选框 Radio', link: '/components/radio' },
             { text: '开关 Switch', link: '/components/switch' },
             { text: '选择器 Select', link: '/components/select' },
             { text: '树选择器 TreeSelect', link: '/components/tree-select' },
@@ -88,6 +68,7 @@ export default defineConfig({
         {
           text: '数据展示',
           items: [
+            { text: '卡片 Card', link: '/components/card' },
             { text: '卡片项 CardItem', link: '/components/card-item' },
             { text: '空状态 Empty', link: '/components/empty' },
             { text: '指标卡片 StatCard', link: '/components/stat-card' },

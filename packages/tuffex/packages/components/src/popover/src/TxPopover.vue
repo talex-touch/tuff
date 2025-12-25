@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import TxCard from '../../card/src/TxCard.vue'
 import type { PopoverProps } from './types'
 
 defineOptions({ name: 'TxPopover' })
@@ -13,6 +14,11 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   width: 0,
   maxWidth: 360,
   referenceFullWidth: false,
+  panelVariant: 'solid',
+  panelBackground: 'glass',
+  panelShadow: 'soft',
+  panelRadius: 18,
+  panelPadding: 10,
   closeOnClickOutside: true,
   closeOnEsc: true,
 })
@@ -146,7 +152,16 @@ onBeforeUnmount(() => {
   <Teleport to="body">
     <Transition name="tx-popover">
       <div v-show="open && !disabled" ref="floatingRef" class="tx-popover" :style="floatingStyles">
-        <slot />
+        <TxCard
+          class="tx-popover__card"
+          :variant="panelVariant"
+          :background="panelBackground"
+          :shadow="panelShadow"
+          :radius="panelRadius"
+          :padding="panelPadding"
+        >
+          <slot />
+        </TxCard>
       </div>
     </Transition>
   </Teleport>
@@ -165,13 +180,16 @@ onBeforeUnmount(() => {
 
 .tx-popover {
   z-index: var(--tx-index-popper, 2000);
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid var(--tx-border-color-light, #e4e7ed);
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 90%, transparent);
-  box-shadow: var(--tx-box-shadow-light, 0 2px 12px rgba(0, 0, 0, 0.1));
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  padding: 0;
+  background: transparent;
+  border: none;
+  overflow: hidden;
+}
+
+.tx-popover__card {
+  width: 100%;
+  max-height: 100%;
+  overflow: auto;
 }
 
 .tx-popover-enter-active,

@@ -3,6 +3,8 @@ export interface SearchInputProps {
   placeholder?: string
   disabled?: boolean
   clearable?: boolean
+  remote?: boolean
+  searchDebounce?: number
 }
 
 export interface SearchInputEmits {

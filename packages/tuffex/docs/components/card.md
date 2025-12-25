@@ -2,175 +2,154 @@
 
 Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。
 
+<script setup lang="ts">
+import CardBasicDemo from '../.vitepress/theme/components/demos/CardBasicDemo.vue'
+import CardBasicDemoSource from '../.vitepress/theme/components/demos/CardBasicDemo.vue?raw'
+
+import CardHeaderDemo from '../.vitepress/theme/components/demos/CardHeaderDemo.vue'
+import CardHeaderDemoSource from '../.vitepress/theme/components/demos/CardHeaderDemo.vue?raw'
+
+import CardActionsDemo from '../.vitepress/theme/components/demos/CardActionsDemo.vue'
+import CardActionsDemoSource from '../.vitepress/theme/components/demos/CardActionsDemo.vue?raw'
+
+import CardVariantsDemo from '../.vitepress/theme/components/demos/CardVariantsDemo.vue'
+import CardVariantsDemoSource from '../.vitepress/theme/components/demos/CardVariantsDemo.vue?raw'
+
+import CardBackgroundScrollDemo from '../.vitepress/theme/components/demos/CardBackgroundScrollDemo.vue'
+import CardBackgroundScrollDemoSource from '../.vitepress/theme/components/demos/CardBackgroundScrollDemo.vue?raw'
+
+import CardEmptyDemo from '../.vitepress/theme/components/demos/CardEmptyDemo.vue'
+import CardEmptyDemoSource from '../.vitepress/theme/components/demos/CardEmptyDemo.vue?raw'
+
+import CardCompositionsDemo from '../.vitepress/theme/components/demos/CardCompositionsDemo.vue'
+import CardCompositionsDemoSource from '../.vitepress/theme/components/demos/CardCompositionsDemo.vue?raw'
+
+import CardBasicSlotsDemo from '../.vitepress/theme/components/demos/CardBasicSlotsDemo.vue'
+import CardBasicSlotsDemoSource from '../.vitepress/theme/components/demos/CardBasicSlotsDemo.vue?raw'
+
+import CardSizeDemo from '../.vitepress/theme/components/demos/CardSizeDemo.vue'
+import CardSizeDemoSource from '../.vitepress/theme/components/demos/CardSizeDemo.vue?raw'
+
+import CardLayoutPropsDemo from '../.vitepress/theme/components/demos/CardLayoutPropsDemo.vue'
+import CardLayoutPropsDemoSource from '../.vitepress/theme/components/demos/CardLayoutPropsDemo.vue?raw'
+
+import CardStatesDemo from '../.vitepress/theme/components/demos/CardStatesDemo.vue'
+import CardStatesDemoSource from '../.vitepress/theme/components/demos/CardStatesDemo.vue?raw'
+
+import CardInertialDemo from '../.vitepress/theme/components/demos/CardInertialDemo.vue'
+import CardInertialDemoSource from '../.vitepress/theme/components/demos/CardInertialDemo.vue?raw'
+</script>
+
 ## 基础用法
 
-最简单的卡片使用：
+<DemoBlock title="Basic" :code="CardBasicDemoSource">
+  <template #preview>
+    <CardBasicDemo />
+  </template>
+</DemoBlock>
 
-```vue
-<template>
-  <TxCard>
-    <h3>卡片标题</h3>
-    <p>这是卡片的内容区域，可以放置任何内容。</p>
-  </TxCard>
-</template>
-```
+<DemoBlock title="Basic slots" :code="CardBasicSlotsDemoSource">
+  <template #preview>
+    <CardBasicSlotsDemo />
+  </template>
+</DemoBlock>
+
+## 惯性跟随回弹（inertial）
+
+<DemoBlock title="inertial" :code="CardInertialDemoSource">
+  <template #preview>
+    <CardInertialDemo />
+  </template>
+</DemoBlock>
 
 ## 带标题的卡片
 
-使用 header 插槽添加卡片标题：
-
-```vue
-<template>
-  <TxCard>
-    <template #header>
-      <h3>卡片标题</h3>
-    </template>
-    <p>卡片内容区域</p>
-  </TxCard>
-</template>
-```
+<DemoBlock title="Header" :code="CardHeaderDemoSource">
+  <template #preview>
+    <CardHeaderDemo />
+  </template>
+</DemoBlock>
 
 ## 带操作按钮的卡片
 
-在卡片底部添加操作按钮：
-
-```vue
-<template>
-  <TxCard>
-    <template #header>
-      <h3>用户信息</h3>
-    </template>
-    
-    <div class="user-info">
-      <TxAvatar src="avatar.jpg" />
-      <div>
-        <h4>张三</h4>
-        <p>前端开发工程师</p>
-      </div>
-    </div>
-    
-    <template #footer>
-      <TxButton variant="primary">编辑</TxButton>
-      <TxButton variant="outline">删除</TxButton>
-    </template>
-  </TxCard>
-</template>
-```
+<DemoBlock title="Header + Footer actions" :code="CardActionsDemoSource">
+  <template #preview>
+    <CardActionsDemo />
+  </template>
+</DemoBlock>
 
 ## 卡片变体
 
 提供不同的视觉样式：
 
-```vue
-<template>
-  <div class="card-variants">
-    <TxCard variant="default">默认卡片</TxCard>
-    <TxCard variant="outlined">边框卡片</TxCard>
-    <TxCard variant="elevated">阴影卡片</TxCard>
-    <TxCard variant="glass">玻璃卡片</TxCard>
-  </div>
-</template>
-```
+<DemoBlock title="variants" :code="CardVariantsDemoSource">
+  <template #preview>
+    <div style="width: 100%;">
+      <CardVariantsDemo />
+    </div>
+  </template>
+</DemoBlock>
 
-## 可点击卡片
+## 不同背景下的效果（blur / glass）
 
-支持点击交互的卡片：
+单卡片对比：背后提供文本与图形内容，通过开关切换 background（blur / glass / mask）。
 
-```vue
-<template>
-  <TxCard 
-    clickable
-    @click="handleCardClick"
-  >
-    <h3>可点击卡片</h3>
-    <p>点击整个卡片区域都会触发事件</p>
-  </TxCard>
-</template>
-```
+<DemoBlock title="Card backgrounds (scroll)" :code="CardBackgroundScrollDemoSource">
+  <template #preview>
+    <div style="width: 100%;">
+      <CardBackgroundScrollDemo />
+    </div>
+  </template>
+</DemoBlock>
 
-## 加载状态
+## Empty 布局
 
-显示加载中的卡片：
+<DemoBlock title="Card with Empty" :code="CardEmptyDemoSource">
+  <template #preview>
+    <CardEmptyDemo />
+  </template>
+</DemoBlock>
 
-```vue
-<template>
-  <TxCard :loading="isLoading">
-    <h3>数据加载中...</h3>
-    <p>请稍候，正在获取最新数据</p>
-  </TxCard>
-</template>
-```
+## 与组件结合方式（Popover / SearchSelect）
+
+<DemoBlock title="Card compositions" :code="CardCompositionsDemoSource">
+  <template #preview>
+    <div style="width: 100%;">
+      <CardCompositionsDemo />
+    </div>
+  </template>
+</DemoBlock>
 
 ## 卡片尺寸
 
-提供不同的卡片尺寸：
+<DemoBlock title="size" :code="CardSizeDemoSource">
+  <template #preview>
+    <div style="width: 100%;">
+      <CardSizeDemo />
+    </div>
+  </template>
+</DemoBlock>
 
-```vue
-<template>
-  <div class="card-sizes">
-    <TxCard size="small">小尺寸卡片</TxCard>
-    <TxCard size="medium">中等尺寸卡片</TxCard>
-    <TxCard size="large">大尺寸卡片</TxCard>
-  </div>
-</template>
-```
+## 布局属性（padding / radius）
 
-## 图片卡片
+<DemoBlock title="layout props" :code="CardLayoutPropsDemoSource">
+  <template #preview>
+    <div style="width: 100%;">
+      <CardLayoutPropsDemo />
+    </div>
+  </template>
+</DemoBlock>
 
-包含图片的卡片样式：
+## 状态（clickable / loading / disabled）
 
-```vue
-<template>
-  <TxCard class="image-card">
-    <template #cover>
-      <img src="cover-image.jpg" alt="封面图片" />
-    </template>
-    
-    <template #header>
-      <h3>文章标题</h3>
-    </template>
-    
-    <p>文章摘要内容...</p>
-    
-    <template #footer>
-      <div class="card-meta">
-        <span>2024-01-15</span>
-        <span>阅读量: 1.2k</span>
-      </div>
-    </template>
-  </TxCard>
-</template>
-```
+<DemoBlock title="states" :code="CardStatesDemoSource">
+  <template #preview>
+    <div style="width: 100%;">
+      <CardStatesDemo />
+    </div>
+  </template>
+</DemoBlock>
 
-## 统计卡片
-
-用于展示数据统计的卡片：
-
-```vue
-<template>
-  <div class="stats-cards">
-    <TxCard class="stat-card">
-      <div class="stat-content">
-        <TxIcon name="users" class="stat-icon" />
-        <div class="stat-info">
-          <h3>1,234</h3>
-          <p>总用户数</p>
-        </div>
-      </div>
-    </TxCard>
-    
-    <TxCard class="stat-card">
-      <div class="stat-content">
-        <TxIcon name="shopping-cart" class="stat-icon" />
-        <div class="stat-info">
-          <h3>5,678</h3>
-          <p>订单数量</p>
-        </div>
-      </div>
-    </TxCard>
-  </div>
-</template>
-```
 
 ## API 参考
 
@@ -178,11 +157,19 @@ Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| variant | `'default' \| 'outlined' \| 'elevated' \| 'glass'` | `'default'` | 卡片变体 |
+| variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框与交互形态 |
+| background | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 背景风格（玻璃效果在 `glass` 中最明显） |
+| shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | 阴影强度 |
 | size | `'small' \| 'medium' \| 'large'` | `'medium'` | 卡片尺寸 |
-| clickable | `boolean` | `false` | 是否可点击 |
+| radius | `number` | `18` | 圆角 |
+| padding | `number` | - | 内边距（不传时由 `size` 决定） |
+| clickable | `boolean` | `false` | 是否可点击（hover feedback） |
 | loading | `boolean` | `false` | 是否显示加载状态 |
+| loadingSpinnerSize | `number` | - | loading spinner 大小（px） |
 | disabled | `boolean` | `false` | 是否禁用 |
+| inertial | `boolean` | `false` | 是否启用惯性拖拽回弹 |
+| inertialMaxOffset | `number` | `22` | 拖拽最大位移（px） |
+| inertialRebound | `number` | `0.12` | 回弹弹性（0=更粘更稳，1=更弹簧） |
 
 ### Events
 
@@ -205,11 +192,7 @@ Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适
 
 ```css
 .custom-card {
-  --tx-card-background: rgba(255, 255, 255, 0.8);
-  --tx-card-border: 1px solid rgba(255, 255, 255, 0.2);
-  --tx-card-border-radius: 12px;
-  --tx-card-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  --tx-card-backdrop-filter: blur(10px);
+  --tx-card-fake-background: rgba(255, 255, 255, 0.8);
   --tx-card-padding: 24px;
 }
 ```
@@ -274,3 +257,4 @@ Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适
 </template>
 
 TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。
+```
