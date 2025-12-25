@@ -1,6 +1,7 @@
 export type CardItemAvatarShape = 'circle' | 'rounded'
 
 export interface CardItemProps {
+  role?: string
   title?: string
   subtitle?: string
   description?: string

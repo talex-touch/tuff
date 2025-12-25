@@ -4,6 +4,11 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 type Bg = 'blur' | 'glass' | 'mask'
 const bg = ref<Bg>('glass')
 
+const glassBlur = ref(true)
+const glassBlurAmount = ref(22)
+const glassOverlay = ref(true)
+const glassOverlayOpacity = ref(0.22)
+
 const cardHostRef = ref<HTMLDivElement | null>(null)
 const cardW = ref(320)
 const cardH = ref(186)
@@ -42,6 +47,30 @@ onBeforeUnmount(() => {
       <TxRadio value="glass">glass</TxRadio>
       <TxRadio value="mask">mask</TxRadio>
     </TxRadioGroup>
+
+    <div v-if="bg === 'glass'" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+      <label style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
+        <span style="opacity: 0.75;">glass blur</span>
+        <TxSwitch v-model="glassBlur" />
+      </label>
+
+      <label v-if="glassBlur" style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
+        <span style="opacity: 0.75;">blur</span>
+        <input v-model.number="glassBlurAmount" type="range" min="0" max="40" step="1" />
+        <span style="min-width: 30px; text-align: right; opacity: 0.75;">{{ glassBlurAmount }}</span>
+      </label>
+
+      <label style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
+        <span style="opacity: 0.75;">overlay</span>
+        <TxSwitch v-model="glassOverlay" />
+      </label>
+
+      <label v-if="glassOverlay" style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
+        <span style="opacity: 0.75;">opacity</span>
+        <input v-model.number="glassOverlayOpacity" type="range" min="0" max="0.6" step="0.02" />
+        <span style="min-width: 42px; text-align: right; opacity: 0.75;">{{ glassOverlayOpacity.toFixed(2) }}</span>
+      </label>
+    </div>
 
     <div
       style="
@@ -99,7 +128,18 @@ onBeforeUnmount(() => {
             class="tx-card-bg-glass"
           />
 
-          <TxCard variant="solid" :background="bg" shadow="soft" :radius="18" :padding="14" class="tx-card-bg-card__inner">
+          <TxCard
+            variant="solid"
+            :background="bg"
+            shadow="soft"
+            :radius="18"
+            :padding="14"
+            :glass-blur="glassBlur"
+            :glass-blur-amount="glassBlurAmount"
+            :glass-overlay="glassOverlay"
+            :glass-overlay-opacity="glassOverlayOpacity"
+            class="tx-card-bg-card__inner"
+          >
             <template #header>
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                 <div style="font-weight: 700;">TxCard</div>

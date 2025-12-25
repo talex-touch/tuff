@@ -1,5 +1,4 @@
 <script lang="ts">
-import { sleep } from '@talex-touch/utils/common/utils'
 import { ElScrollbar } from 'element-plus'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import TTabHeader from '~/components/tabs/TTabHeader.vue'
@@ -8,6 +7,8 @@ import TTabItem from '~/components/tabs/TTabItem.vue'
 const qualifiedName = ['TTabItem', 'TTabItemGroup', 'TTabHeader']
 const activeNode = ref()
 const slotWrapper = ref()
+
+const headerWrapper = ref<HTMLElement | null>(null)
 
 export default defineComponent({
   name: 'TTabs',
@@ -19,6 +20,7 @@ export default defineComponent({
   render() {
     let tabHeader: any = null
     const pointer = h('div', { class: 'TTabs-Pointer' })
+    let activeTabVNode: any = null
 
     const fixPointer = async (vnode: any): Promise<void> => {
       const pointerEl = pointer.el
@@ -26,47 +28,25 @@ export default defineComponent({
       if (!pointerEl || !nodeEl)
         return
 
-      const pointerStyle = pointerEl.style
-      const pointerRect = pointerEl.getBoundingClientRect()
+      const parentEl = (pointerEl as HTMLElement).offsetParent as HTMLElement | null
+      if (!parentEl)
+        return
+
+      const parentRect = parentEl.getBoundingClientRect()
       const nodeRect = nodeEl.getBoundingClientRect()
 
+      const pointerStyle = pointerEl.style
       const diffTop = +(this.$props?.offset ?? 0)
 
-      if (nodeRect.top > pointerRect.top) {
-        pointerStyle.height = `${nodeRect.height * 0.8}px`
-        pointerStyle.transition = 'all 0'
-        pointerStyle.opacity = '0'
+      const top = nodeRect.top - parentRect.top + nodeRect.height * 0.2 + diffTop
+      const height = nodeRect.height * 0.6
 
-        await sleep(100)
-        pointerStyle.top = `${nodeRect.top + diffTop}px`
+      pointerStyle.opacity = '1'
+      pointerStyle.height = `${height}px`
 
-        await sleep(100)
-        pointerStyle.transition = 'all .25s'
-        pointerStyle.opacity = '1'
-
-        await sleep(100)
-        pointerStyle.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
-        pointerStyle.height = `${nodeRect.height * 0.6}px`
-      }
-      else {
-        pointerStyle.transform = `translate(0, -${nodeRect.height * 0.2}px)`
-        pointerStyle.height = `${nodeRect.height * 0.8}px`
-
-        await sleep(100)
-        pointerStyle.transition = 'all 0'
-        pointerStyle.opacity = '0'
-
-        await sleep(100)
-        pointerStyle.transform = ''
-        pointerStyle.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
-
-        await sleep(100)
-        pointerStyle.transition = 'all .25s'
-        pointerStyle.opacity = '1'
-
-        await sleep(100)
-        pointerStyle.height = `${nodeRect.height * 0.6}px`
-      }
+      requestAnimationFrame(() => {
+        pointerStyle.top = `${top}px`
+      })
     }
 
     const createTab = (vnode: any): any => {
@@ -90,9 +70,16 @@ export default defineComponent({
         },
       })
 
-      if (!activeNode.value && tab.props && 'activation' in tab.props) {
+      const isActivation = !!(tab.props && 'activation' in tab.props)
+      const isDefault = !!(this.$props?.default && vnode.props?.name === this.$props.default)
+
+      if (!activeNode.value && (isDefault || isActivation)) {
         activeNode.value = vnode
         nextTick(() => fixPointer(tab))
+      }
+
+      if (activeNode.value?.props?.name && activeNode.value?.props?.name === vnode.props?.name) {
+        activeTabVNode = tab
       }
 
       return tab
@@ -144,6 +131,30 @@ export default defineComponent({
       )
     }
 
+    const ensureDefault = async () => {
+      await nextTick()
+      if (!activeNode.value) {
+        const nodes = this.$slots.default?.() ?? []
+        const first = nodes.find((n: any) => n?.props?.name && qualifiedName.includes(n?.type?.name))
+        if (first) activeNode.value = first
+      }
+
+      if (activeTabVNode) {
+        await fixPointer(activeTabVNode)
+        return
+      }
+
+      const pointerEl = pointer.el as HTMLElement | undefined
+      const parentEl = pointerEl?.offsetParent as HTMLElement | null | undefined
+      if (!pointerEl || !parentEl) return
+
+      const activeEl = parentEl.querySelector<HTMLElement>('.TTabItem-Container.active')
+        ?? parentEl.querySelector<HTMLElement>('.TTabItem-Container')
+      if (!activeEl) return
+
+      await fixPointer({ el: activeEl })
+    }
+
     const renderContent = (): any => {
       if (!activeNode.value) {
         return h('div', { class: 'TTabs-SelectSlot-Empty' }, 'No tab selected')
@@ -181,8 +192,12 @@ export default defineComponent({
     const selectSlot = h('div', { class: 'TTabs-SelectSlot animated' }, renderContent())
     slotWrapper.value = selectSlot
 
+    const header = h('div', { ref: (el: any) => (headerWrapper.value = el), class: 'TTabs-Header' }, [this.$slots?.tabHeader?.(), ...renderTabs()])
+
+    ensureDefault()
+
     return h('div', { class: 'TTabs-Container' }, [
-      h('div', { class: 'TTabs-Header' }, [this.$slots?.tabHeader?.(), ...renderTabs()]),
+      header,
       h(
         'div',
         {
@@ -257,7 +272,7 @@ export default defineComponent({
   width: 3px;
 
   opacity: 0;
-  transition: all 0.25s;
+  transition: top 0.22s cubic-bezier(0.2, 0.9, 0.2, 1), height 0.22s cubic-bezier(0.2, 0.9, 0.2, 1), opacity 0.18s ease;
   border-radius: 50px;
   background-color: var(--el-color-primary);
 }

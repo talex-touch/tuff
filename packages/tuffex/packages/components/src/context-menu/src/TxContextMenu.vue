@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import type { ContextMenuProps } from './types'
 
 defineOptions({ name: 'TxContextMenu' })
@@ -63,6 +63,10 @@ const { floatingStyles, update } = useFloating(virtualReference as any, menuRef,
 function close() {
   open.value = false
 }
+
+provide('txContextMenu', {
+  close,
+})
 
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()

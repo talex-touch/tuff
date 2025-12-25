@@ -4,6 +4,7 @@ import TxPopover from '../../popover/src/TxPopover.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
 import TxTag from '../../tag/src/TxTag.vue'
 import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
+import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import type { CascaderEmits, CascaderNode, CascaderPath, CascaderProps, CascaderValue } from './types'
 
 defineOptions({ name: 'TxCascader' })
@@ -374,29 +375,35 @@ defineExpose({
       </div>
 
       <div v-if="query.trim()" class="tx-cascader__search-list">
-        <div
+        <TxCardItem
           v-for="hit in searchHits"
           :key="hit.key"
           class="tx-cascader__search-item"
           :class="{ 'is-disabled': hit.disabled }"
-          @click="!hit.disabled && toggleSelect(hit.path)"
+          :clickable="!hit.disabled"
+          :active="hit.checked"
+          :disabled="hit.disabled"
+          @click="toggleSelect(hit.path)"
         >
-          <TxCheckbox
-            v-if="multiple"
-            :model-value="hit.checked"
-            :disabled="hit.disabled"
-            aria-label="Select"
-            @click.stop
-            @update:model-value="() => toggleSelect(hit.path)"
-          />
-          <span class="tx-cascader__search-label">{{ hit.label }}</span>
-        </div>
+          <template v-if="multiple" #avatar>
+            <TxCheckbox
+              :model-value="hit.checked"
+              :disabled="hit.disabled"
+              aria-label="Select"
+              @click.stop
+              @update:model-value="() => toggleSelect(hit.path)"
+            />
+          </template>
+          <template #title>
+            <span class="tx-cascader__search-label">{{ hit.label }}</span>
+          </template>
+        </TxCardItem>
         <div v-if="!searchHits.length" class="tx-cascader__empty">No results</div>
       </div>
 
       <div v-else class="tx-cascader__columns">
         <div v-for="(col, idx) in columns" :key="idx" class="tx-cascader__col">
-          <div
+          <TxCardItem
             v-for="item in col"
             :key="pathKey(item.path)"
             class="tx-cascader__item"
@@ -407,21 +414,29 @@ defineExpose({
             }"
             @mouseenter="onHoverItem(item)"
             @click="onPick(item)"
+            :clickable="!item.node.disabled"
+            :disabled="!!item.node.disabled"
+            :active="activePath[item.level] === item.node.value || selectedPaths.some(p => samePath(p, item.path))"
           >
-            <TxCheckbox
-              v-if="multiple && item.leaf"
-              :model-value="selectedPaths.some(p => samePath(p, item.path))"
-              :disabled="!!item.node.disabled"
-              aria-label="Select"
-              @click.stop
-              @update:model-value="() => toggleSelect(item.path)"
-            />
+            <template v-if="multiple && item.leaf" #avatar>
+              <TxCheckbox
+                :model-value="selectedPaths.some(p => samePath(p, item.path))"
+                :disabled="!!item.node.disabled"
+                aria-label="Select"
+                @click.stop
+                @update:model-value="() => toggleSelect(item.path)"
+              />
+            </template>
 
-            <span class="tx-cascader__label">{{ item.node.label }}</span>
+            <template #title>
+              <span class="tx-cascader__label">{{ item.node.label }}</span>
+            </template>
 
-            <span v-if="item.loading" class="tx-cascader__meta">Loading</span>
-            <span v-else-if="!item.leaf" class="tx-cascader__meta">›</span>
-          </div>
+            <template #right>
+              <span v-if="item.loading" class="tx-cascader__meta">Loading</span>
+              <span v-else-if="!item.leaf" class="tx-cascader__meta">›</span>
+            </template>
+          </TxCardItem>
         </div>
       </div>
     </div>
@@ -550,31 +565,9 @@ defineExpose({
 }
 
 .tx-cascader__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  user-select: none;
-  cursor: pointer;
-
-  &:hover:not(.is-disabled) {
-    background: var(--tx-fill-color-light, #f5f7fa);
-  }
-
-  &.is-active {
-    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, transparent);
-  }
-
-  &.is-checked {
-    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
-  }
-
-  &.is-disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
+  --tx-card-item-padding: 6px 10px;
+  --tx-card-item-radius: 10px;
+  --tx-card-item-gap: 8px;
 }
 
 .tx-cascader__label {
@@ -600,22 +593,9 @@ defineExpose({
 }
 
 .tx-cascader__search-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-
-  &:hover:not(.is-disabled) {
-    background: var(--tx-fill-color-light, #f5f7fa);
-  }
-
-  &.is-disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
+  --tx-card-item-padding: 6px 10px;
+  --tx-card-item-radius: 10px;
+  --tx-card-item-gap: 8px;
 }
 
 .tx-cascader__search-label {

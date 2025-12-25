@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
-import type { DropdownItemProps } from './types'
 
-defineOptions({ name: 'TxDropdownItem' })
+defineOptions({ name: 'TxContextMenuItem' })
 
-const props = withDefaults(defineProps<DropdownItemProps>(), {
+const props = withDefaults(defineProps<{
+  disabled?: boolean
+  danger?: boolean
+}>(), {
   disabled: false,
   danger: false,
 })
@@ -14,18 +16,18 @@ const emit = defineEmits<{
   (e: 'select'): void
 }>()
 
-const ctx = inject<{ close: () => void; closeOnSelect: boolean }>('txDropdownMenu')
+const ctx = inject<{ close: () => void } | null>('txContextMenu', null)
 
 function onClick() {
   if (props.disabled) return
   emit('select')
-  if (ctx?.closeOnSelect) ctx?.close()
+  ctx?.close?.()
 }
 </script>
 
 <template>
   <TxCardItem
-    class="tx-dropdown-item"
+    class="tx-context-menu-item"
     :class="{ 'is-disabled': disabled, 'is-danger': danger }"
     role="menuitem"
     :clickable="!disabled"
@@ -39,22 +41,22 @@ function onClick() {
 </template>
 
 <style lang="scss" scoped>
-.tx-dropdown-item {
+.tx-context-menu-item {
   --tx-card-item-padding: 8px 10px;
   --tx-card-item-radius: 10px;
   --tx-card-item-gap: 10px;
 }
 
-.tx-dropdown-item :deep(.tx-card-item__title) {
+.tx-context-menu-item :deep(.tx-card-item__title) {
   font-weight: 500;
   color: var(--tx-text-color-primary, #303133);
 }
 
-.tx-dropdown-item.is-danger :deep(.tx-card-item__title) {
+.tx-context-menu-item.is-danger :deep(.tx-card-item__title) {
   color: var(--tx-color-danger, #f56c6c);
 }
 
-.tx-dropdown-item.is-disabled {
+.tx-context-menu-item.is-disabled {
   opacity: 0.5;
 }
 </style>

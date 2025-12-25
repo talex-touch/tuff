@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, toRefs } from 'vue'
 import TxSpinner from '../../spinner/src/TxSpinner.vue'
 import type { TxCardProps } from './types'
 
@@ -10,6 +10,10 @@ const props = withDefaults(defineProps<TxCardProps>(), {
   background: 'blur',
   shadow: 'none',
   size: 'medium',
+  glassBlur: true,
+  glassBlurAmount: 22,
+  glassOverlay: true,
+  glassOverlayOpacity: 0.22,
   clickable: false,
   loading: false,
   disabled: false,
@@ -20,6 +24,23 @@ const props = withDefaults(defineProps<TxCardProps>(), {
   inertialMaxOffset: 22,
   inertialRebound: 0.12,
 })
+
+const {
+  variant,
+  background,
+  shadow,
+  size,
+  clickable,
+  loading,
+  disabled,
+  inertial,
+  inertialMaxOffset,
+  inertialRebound,
+  glassBlur,
+  glassBlurAmount,
+  glassOverlay,
+  glassOverlayOpacity,
+} = toRefs(props)
 
 const emit = defineEmits<{
   (e: 'click', ev: MouseEvent): void
@@ -183,6 +204,8 @@ function onClick(ev: MouseEvent) {
       '--tx-card-padding': `${resolvedPadding}px`,
       '--tx-card-dx': `${motionX}px`,
       '--tx-card-dy': `${motionY}px`,
+      '--tx-card-glass-blur': `${glassBlur ? glassBlurAmount : 0}px`,
+      '--tx-card-glass-overlay-opacity': `${glassOverlay ? glassOverlayOpacity : 0}`,
     }"
     @click="onClick"
     @mousemove="onMouseMove"
@@ -261,12 +284,12 @@ function onClick(ev: MouseEvent) {
 
   &.is-bg-glass {
     background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
-    // backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
-    // -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+    backdrop-filter: blur(var(--tx-card-glass-blur, 22px)) saturate(185%) contrast(1.08);
+    -webkit-backdrop-filter: blur(var(--tx-card-glass-blur, 22px)) saturate(185%) contrast(1.08);
     border-color: color-mix(in srgb, rgba(255, 255, 255, 0.26) 55%, var(--tx-border-color-light, #e4e7ed));
 
     &::before {
-      opacity: 0.22;
+      opacity: var(--tx-card-glass-overlay-opacity, 0.22);
       background:
         radial-gradient(700px 220px at 0% 0%, rgba(255, 255, 255, 0.55), transparent 55%),
         radial-gradient(600px 260px at 100% 0%, rgba(255, 255, 255, 0.22), transparent 58%),
