@@ -170,7 +170,10 @@ const flatItems = computed(() => {
 watch(
   open,
   async (v) => {
-    emit(v ? 'open' : 'close')
+    if (v)
+      emit('open')
+    else
+      emit('close')
     if (v && props.searchable) {
       await nextTick()
     }

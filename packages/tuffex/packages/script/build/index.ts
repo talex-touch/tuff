@@ -4,8 +4,8 @@ import autoPrefixer from 'gulp-autoprefixer'
 import sassLang from 'sass'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { delPath } from './del'
-import run from './run'
+import { delPath } from './del.ts'
+import run from './run.ts'
 import '../../../config/env.ts'
 
 const __filename = fileURLToPath(import.meta.url)

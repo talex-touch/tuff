@@ -22,7 +22,7 @@
     
     <div v-if="showText" class="tx-rating__text">
       <slot name="text" :value="rating" :max="maxStars">
-        {{ rating.toFixed(precision) }} / {{ maxStars }}
+        {{ rating.toFixed(precisionDigits) }} / {{ maxStars }}
       </slot>
     </div>
   </div>
@@ -53,6 +53,15 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
+
+const rating = computed(() => props.modelValue ?? 0)
+
+const precisionDigits = computed(() => {
+  const p = props.precision ?? 1
+  if (p === 0.5) return 1
+  if (typeof p !== 'number' || !Number.isFinite(p)) return 1
+  return Math.max(0, Math.min(6, Math.round(p)))
+})
 
 const hoverValue = ref<number>(props.modelValue)
 

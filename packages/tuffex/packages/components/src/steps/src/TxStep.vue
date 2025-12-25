@@ -88,7 +88,8 @@ const isLast = computed(() => {
 
 const handleClick = () => {
   if (props.clickable && !props.disabled && steps) {
-    steps.setActiveStep(props.step)
+    if (props.step !== undefined)
+      steps.setActiveStep(props.step)
   }
 }
 </script>

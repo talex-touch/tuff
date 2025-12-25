@@ -34,7 +34,10 @@ const open = computed({
       return
     internalOpen.value = v
     emit('update:modelValue', v)
-    emit(v ? 'open' : 'close')
+    if (v)
+      emit('open')
+    else
+      emit('close')
   },
 })
 

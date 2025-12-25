@@ -2,93 +2,57 @@
 
 用于在区间内选择数值的滑块组件。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const value = ref(30)
-const value2 = ref(60)
-const value3 = ref(42)
-const value4 = ref(30)
+<script setup>
+import SliderBasicDemo from '../.vitepress/theme/components/demos/SliderBasicDemo.vue'
+import SliderBasicDemoSource from '../.vitepress/theme/components/demos/SliderBasicDemo.vue?raw'
+import SliderDisabledDemo from '../.vitepress/theme/components/demos/SliderDisabledDemo.vue'
+import SliderDisabledDemoSource from '../.vitepress/theme/components/demos/SliderDisabledDemo.vue?raw'
+import SliderFormatValueDemo from '../.vitepress/theme/components/demos/SliderFormatValueDemo.vue'
+import SliderFormatValueDemoSource from '../.vitepress/theme/components/demos/SliderFormatValueDemo.vue?raw'
+import SliderShowValueDemo from '../.vitepress/theme/components/demos/SliderShowValueDemo.vue'
+import SliderShowValueDemoSource from '../.vitepress/theme/components/demos/SliderShowValueDemo.vue?raw'
+import SliderElasticTooltipDemo from '../.vitepress/theme/components/demos/SliderElasticTooltipDemo.vue'
+import ElasticTooltipDemoCode from '../.vitepress/theme/components/demos/SliderElasticTooltipDemo.vue?raw'
 </script>
 
 ## 基础用法
 
-<DemoBlock title="Slider">
-<template #preview>
-<div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-  <TxSlider v-model="value" :min="0" :max="100" :step="1" />
-  <div style="margin-top: 8px; color: var(--tx-text-color-secondary);">Value: {{ value }}</div>
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxSlider v-model="value" :min="0" :max="100" :step="1" />
-  <div>Value: {{ value }}</div>
-</template>
-```
-</template>
+<DemoBlock title="Slider" :code="SliderBasicDemoSource">
+  <template #preview>
+    <SliderBasicDemo />
+  </template>
 </DemoBlock>
 
 ## 禁用
 
-<DemoBlock title="Slider (disabled)">
-<template #preview>
-<div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-  <TxSlider v-model="value3" disabled show-value />
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxSlider v-model="value" disabled show-value />
-</template>
-```
-</template>
+<DemoBlock title="Slider (disabled)" :code="SliderDisabledDemoSource">
+  <template #preview>
+    <SliderDisabledDemo />
+  </template>
 </DemoBlock>
 
 ## 格式化显示
 
-<DemoBlock title="Slider (formatValue)">
-<template #preview>
-<div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-  <TxSlider
-    v-model="value4"
-    :min="0"
-    :max="100"
-    show-value
-    :format-value="(v) => `${v}%`"
-  />
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxSlider v-model="value" show-value :format-value="(v) => `${v}%`" />
-</template>
-```
-</template>
+<DemoBlock title="Slider (formatValue)" :code="SliderFormatValueDemoSource">
+  <template #preview>
+    <SliderFormatValueDemo />
+  </template>
 </DemoBlock>
 
 ## 显示数值
 
-<DemoBlock title="Slider (show value)">
-<template #preview>
-<div style="width: 320px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-  <TxSlider v-model="value2" :min="0" :max="100" :step="1" show-value />
-</div>
-</template>
+<DemoBlock title="Slider (show value)" :code="SliderShowValueDemoSource">
+  <template #preview>
+    <SliderShowValueDemo />
+  </template>
+</DemoBlock>
 
-<template #code>
-```vue
-<template>
-  <TxSlider v-model="value" :min="0" :max="100" :step="1" show-value />
-</template>
-```
-</template>
+## 弹性 tooltip（速度 + 加速度）
+
+<DemoBlock title="Slider (elastic tooltip)" :code="ElasticTooltipDemoCode">
+  <template #preview>
+    <SliderElasticTooltipDemo />
+  </template>
 </DemoBlock>
 
 ## API
@@ -104,6 +68,16 @@ const value4 = ref(30)
 | `disabled` | `boolean` | `false` | 禁用 |
 | `showValue` | `boolean` | `false` | 右侧显示当前值 |
 | `formatValue` | `(value: number) => string` | - | 格式化显示值 |
+| `showTooltip` | `boolean` | `true` | 是否显示 tooltip |
+| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip 显示触发方式 |
+| `tooltipFormatter` | `(value: number) => string` | - | tooltip 文本格式化 |
+| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | tooltip 位置 |
+| `tooltipTilt` | `boolean` | `false` | tooltip 是否启用倾斜与偏移动效 |
+| `tooltipTiltMaxDeg` | `number` | `14` | tooltip 最大倾斜角度 |
+| `tooltipOffsetMaxPx` | `number` | `18` | tooltip 最大水平偏移 |
+| `tooltipAccelBoost` | `number` | `0.35` | 加速度对动效强度的加成 |
+| `tooltipSpringStiffness` | `number` | `240` | 弹簧刚度 |
+| `tooltipSpringDamping` | `number` | `26` | 弹簧阻尼 |
 
 ### Events
 

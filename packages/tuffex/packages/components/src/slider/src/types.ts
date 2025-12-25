@@ -7,8 +7,16 @@ export interface SliderProps {
   showValue?: boolean
   formatValue?: (value: number) => string
   showTooltip?: boolean
+  tooltipTrigger?: 'drag' | 'hover' | 'always'
   tooltipFormatter?: (value: number) => string
+  tooltipPlacement?: 'top' | 'bottom'
   tooltipTilt?: boolean
+
+  tooltipTiltMaxDeg?: number
+  tooltipOffsetMaxPx?: number
+  tooltipAccelBoost?: number
+  tooltipSpringStiffness?: number
+  tooltipSpringDamping?: number
 }
 
 export interface SliderEmits {

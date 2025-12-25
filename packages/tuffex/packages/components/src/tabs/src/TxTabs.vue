@@ -164,9 +164,9 @@ export default defineComponent({
     const navElRef = ref<HTMLElement | null>(null)
     const navInnerElRef = ref<HTMLElement | null>(null)
 
-    function applyPointerFor(vnode: any) {
+    function applyPointerFor(vnodeOrEl: any) {
       const pointerEl = pointerElRef.value
-      const nodeEl = vnode?.el as HTMLElement | undefined
+      const nodeEl = (vnodeOrEl?.el ?? vnodeOrEl) as HTMLElement | undefined
       const navInnerEl = navInnerElRef.value
       if (!pointerEl || !nodeEl || !navInnerEl) return
 
@@ -254,11 +254,13 @@ export default defineComponent({
           return type && typeof type === 'object' && 'name' in type && type.name && qualifiedName.includes(type.name as string)
         })
         .map((child) => {
-          if (child?.type?.name === 'TxTabHeader') {
+          const childName = (child?.type as any)?.name
+
+          if (childName === 'TxTabHeader') {
             tabHeader = child
             return null
           }
-          if (child?.type?.name === 'TxTabItemGroup') {
+          if (childName === 'TxTabItemGroup') {
             return h('div', { class: 'tx-tabs__group' }, [
               h('div', { class: 'tx-tabs__group-name' }, child.props?.name),
               child.children && typeof child.children === 'object' && 'default' in child.children && typeof child.children.default === 'function'
@@ -301,10 +303,12 @@ export default defineComponent({
         if (!val) return
         const node = findByName(val)
         if (node) {
-          activeNode.value = node
-          void runAutoHeight(() => {}).then(() => {
+          void runAutoHeight(() => {
+            activeNode.value = node
+          }).then(() => {
             nextTick(() => {
-              applyPointerFor(node)
+              const el = navInnerElRef.value?.querySelector('.tx-tab-item.is-active')
+              applyPointerFor(el)
             })
           })
         }
@@ -320,7 +324,8 @@ export default defineComponent({
         if (node) {
           void runAutoHeight(() => setActive(node)).then(() => {
             nextTick(() => {
-              applyPointerFor(node)
+              const el = navInnerElRef.value?.querySelector('.tx-tab-item.is-active')
+              applyPointerFor(el)
             })
           })
         }

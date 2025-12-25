@@ -3,28 +3,16 @@
 用于展示一个数字/指标与对应描述。
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
-const value = ref(12880)
+import StatCardBasicDemo from '../.vitepress/theme/components/demos/StatCardBasicDemo.vue'
+import StatCardBasicDemoSource from '../.vitepress/theme/components/demos/StatCardBasicDemo.vue?raw'
 </script>
 
 ## 基础用法
 
-<DemoBlock title="StatCard">
-<template #preview>
-<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
-  <TxStatCard :value="value" label="Downloads" icon-class="i-carbon-download" clickable />
-  <TxStatCard :value="42" label="Tasks" icon-class="i-carbon-task" />
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxStatCard :value="12880" label="Downloads" icon-class="i-carbon-download" />
-</template>
-```
-</template>
+<DemoBlock title="StatCard" :code="StatCardBasicDemoSource">
+  <template #preview>
+    <StatCardBasicDemo />
+  </template>
 </DemoBlock>
 
 ## API
