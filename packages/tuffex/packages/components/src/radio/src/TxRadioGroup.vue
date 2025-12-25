@@ -11,13 +11,18 @@ const props = withDefaults(defineProps<TxRadioGroupProps>(), {
   type: 'button',
   glass: false,
   blur: false,
-  stiffness: 85,
-  damping: 10,
-  blurAmount: 12,
+  stiffness: 110,
+  damping: 12,
+  blurAmount: 18,
   elastic: true,
 })
 
 const { disabled, type, glass } = toRefs(props)
+
+const resolvedDirection = computed(() => {
+  if (type.value === 'standard') return props.direction ?? 'column'
+  return 'row'
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: TxRadioValue): void
@@ -211,8 +216,8 @@ const glassLook = computed(() => {
   }
 })
 
-const glassDisplace = computed(() => (motionActive.value ? 1.8 : 1.0))
-const glassDistortionScale = computed(() => (motionActive.value ? -500 : -300))
+const glassDisplace = computed(() => (motionActive.value ? 2.2 : 1.2))
+const glassDistortionScale = computed(() => (motionActive.value ? -700 : -420))
 
 const glassOpacity = computed(() => {
   if (!motionActive.value) return 0.35  // idle时保持可见，折射效果连续
@@ -278,12 +283,14 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
 
   const blurOpacity = motionActive.value ? 1 : 0.4
 
+  const blurPx = motionActive.value ? props.blurAmount : 0
+
   return {
     opacity: `${blurOpacity}`,
     width: `${width}px`,
     height: `${height}px`,
-    backdropFilter: `blur(${props.blurAmount}px)`,
-    WebkitBackdropFilter: `blur(${props.blurAmount}px)`,
+    backdropFilter: `blur(${blurPx}px)`,
+    WebkitBackdropFilter: `blur(${blurPx}px)`,
     transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
   }
 })
@@ -377,7 +384,7 @@ function setMotionPhase(next: 'idle' | 'emerge' | 'sink', ttl = 0) {
 function startMotion() {
   if (motionRaf != null) return
   isAnimating.value = true
-  if (!isDragging.value) setMotionPhase('emerge', 220)
+  if (!isDragging.value) setMotionPhase('emerge', 170)
   motionRaf = requestAnimationFrame(stepMotion)
 }
 
@@ -403,6 +410,45 @@ function stepMotion(ts: number) {
     v.h += (dh * stiffnessDrag * 1.12 - v.h * dampingDrag) * dt
     velocity.value = { ...v }
     impact.value *= Math.exp(-dt * 7.4)
+    motionRaf = requestAnimationFrame(stepMotion)
+    return
+  }
+
+  if (!props.elastic) {
+    const follow = 34
+    const alpha = 1 - Math.exp(-follow * dt)
+
+    const nx = c.x + dx * alpha
+    const ny = c.y + dy * alpha
+    const nw = c.width + dw * alpha
+    const nh = c.height + dh * alpha
+
+    currentRect.value = { x: nx, y: ny, width: nw, height: nh }
+    velocity.value = {
+      x: (nx - c.x) / Math.max(dt, 0.001),
+      y: (ny - c.y) / Math.max(dt, 0.001),
+      w: (nw - c.width) / Math.max(dt, 0.001),
+      h: (nh - c.height) / Math.max(dt, 0.001),
+    }
+    impact.value = 0
+
+    const settled =
+      Math.abs(t.x - nx) < 0.35 &&
+      Math.abs(t.y - ny) < 0.35 &&
+      Math.abs(t.width - nw) < 0.35 &&
+      Math.abs(t.height - nh) < 0.35
+
+    if (settled) {
+      currentRect.value = { ...t }
+      velocity.value = { x: 0, y: 0, w: 0, h: 0 }
+      cancelMotionRaf()
+      setMotionPhase('sink', 120)
+      setTimeout(() => {
+        isAnimating.value = false
+      }, 120)
+      return
+    }
+
     motionRaf = requestAnimationFrame(stepMotion)
     return
   }
@@ -456,10 +502,10 @@ function stepMotion(ts: number) {
     velocity.value = { x: 0, y: 0, w: 0, h: 0 }
     impact.value = 0
     cancelMotionRaf()
-    setMotionPhase('sink', 150)
+    setMotionPhase('sink', 120)
     setTimeout(() => {
       isAnimating.value = false
-    }, 150)
+    }, 120)
     return
   }
 
@@ -644,7 +690,7 @@ function onPointerDown(e: PointerEvent) {
   target.setPointerCapture?.(e.pointerId)
   isDragging.value = true
   dragLockY.value = currentRect.value.y || targetRect.value.y || 0
-  setMotionPhase('emerge', 140)
+  setMotionPhase('emerge', 110)
 
   const now = performance.now()
   lastPointer = { x: e.clientX, y: e.clientY, ts: now }
@@ -708,7 +754,7 @@ watch(
     class="tx-radio-group"
     role="radiogroup"
     :aria-disabled="disabled"
-    :class="[`tx-radio-group--${type}`, { 'is-motion': motionActive }]"
+    :class="[`tx-radio-group--${type}`, `tx-radio-group--dir-${resolvedDirection}`, { 'is-motion': motionActive }]"
   >
     <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true"></span>
 
@@ -729,7 +775,7 @@ watch(
       :background-opacity="glassLook.backgroundOpacity"
       :saturation="glassLook.saturation"
       :distortion-scale="glassDistortionScale"
-      mix-blend-mode="normal"
+      mix-blend-mode="difference"
       aria-hidden="true"
     >
       <div class="tx-radio-group__indicator-glass-inner" :style="glassInnerStyle"></div>
@@ -790,6 +836,13 @@ watch(
   }
 }
 
+.tx-radio-group--standard.tx-radio-group--dir-row {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .tx-radio-group__indicator-outline {
   position: absolute;
   left: 0;
@@ -811,9 +864,9 @@ watch(
   left: 0;
   top: 0;
   pointer-events: none;
-  z-index: 0;
+  z-index: 10;
   will-change: transform, opacity;
-  transition: opacity 150ms ease, filter 120ms ease;
+  transition: opacity 120ms ease, filter 120ms ease;
   opacity: 0;
 }
 
@@ -825,7 +878,7 @@ watch(
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  transition: transform 140ms ease;
+  transition: transform 120ms ease;
   background:
     radial-gradient(ellipse 80% 60% at 20% 15%, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0) 55%),
     radial-gradient(ellipse 50% 40% at 75% 80%, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 50%),
@@ -837,11 +890,12 @@ watch(
   left: 0;
   top: 0;
   border-radius: 999px;
+  overflow: hidden;
   pointer-events: none;
-  z-index: 0;
+  z-index: 10;
   will-change: transform, opacity, backdrop-filter;
-  transition: opacity 150ms ease, box-shadow 150ms ease;
-  background: rgba(255, 255, 255, 0.15);
+  transition: opacity 120ms ease, box-shadow 120ms ease, backdrop-filter 160ms ease, -webkit-backdrop-filter 160ms ease;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
@@ -858,7 +912,7 @@ watch(
   pointer-events: none;
   z-index: 0;
   will-change: transform, opacity;
-  transition: opacity 150ms ease, box-shadow 150ms ease;
+  transition: opacity 120ms ease, box-shadow 120ms ease;
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 85%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);

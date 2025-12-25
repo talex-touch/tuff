@@ -6,6 +6,9 @@
 import RadioBasicDemo from '../.vitepress/theme/components/demos/RadioBasicDemo.vue'
 import RadioBasicDemoSource from '../.vitepress/theme/components/demos/RadioBasicDemo.vue?raw'
 
+import RadioIndicatorDemo from '../.vitepress/theme/components/demos/RadioIndicatorDemo.vue'
+import RadioIndicatorDemoSource from '../.vitepress/theme/components/demos/RadioIndicatorDemo.vue?raw'
+
 import RadioStandardDemo from '../.vitepress/theme/components/demos/RadioStandardDemo.vue'
 import RadioStandardDemoSource from '../.vitepress/theme/components/demos/RadioStandardDemo.vue?raw'
 
@@ -17,9 +20,19 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 
 紧凑排列的按钮组，适合选项较少的场景。
 
-<DemoBlock title="Radio (button)" :code="RadioBasicDemoSource">
+<DemoBlock title="Radio (simple)" :code="RadioBasicDemoSource">
   <template #preview>
     <RadioBasicDemo />
+  </template>
+</DemoBlock>
+
+## Indicator 动效
+
+带指示器的按钮组动效示例：默认 → 普通 → 模糊 → 玻璃。
+
+<DemoBlock title="Radio (indicator)" :code="RadioIndicatorDemoSource">
+  <template #preview>
+    <RadioIndicatorDemo />
   </template>
 </DemoBlock>
 
@@ -51,6 +64,14 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 |--------|------|------|--------|
 | modelValue / v-model | 绑定值 | `string \| number` | - |
 | disabled | 是否禁用（整组） | `boolean` | `false` |
+| type | 形态：按钮组 / 标准单选 | `'button' \| 'standard'` | `'button'` |
+| direction | 排列方向（standard 有效） | `'row' \| 'column'` | `column` |
+| glass | 玻璃指示器（button 有效） | `boolean` | `false` |
+| blur | 模糊指示器（button 有效） | `boolean` | `false` |
+| stiffness | 动效刚度（越大越快） | `number` | `110` |
+| damping | 动效阻尼（越大越稳） | `number` | `12` |
+| blurAmount | 模糊强度（blur 有效） | `number` | `18` |
+| elastic | 是否启用弹性形变 | `boolean` | `true` |
 
 #### Events
 
@@ -68,6 +89,7 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 | value | 当前项的值 | `string \| number` | - |
 | label | 文案（无插槽时） | `string` | `''` |
 | disabled | 是否禁用（单项） | `boolean` | `false` |
+| type | 形态（一般由 group 决定） | `'button' \| 'standard'` | `'button'` |
 
 #### Events
 
