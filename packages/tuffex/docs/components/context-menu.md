@@ -15,9 +15,9 @@
     </template>
 
     <template #menu>
-      <TxDropdownItem @select="() => {}">Copy</TxDropdownItem>
-      <TxDropdownItem @select="() => {}">Paste</TxDropdownItem>
-      <TxDropdownItem danger @select="() => {}">Delete</TxDropdownItem>
+      <TxContextMenuItem @select="() => {}">Copy</TxContextMenuItem>
+      <TxContextMenuItem @select="() => {}">Paste</TxContextMenuItem>
+      <TxContextMenuItem danger @select="() => {}">Delete</TxContextMenuItem>
     </template>
   </TxContextMenu>
 </div>
@@ -31,7 +31,7 @@
       <div>Right click here</div>
     </template>
     <template #menu>
-      <TxDropdownItem>Copy</TxDropdownItem>
+      <TxContextMenuItem>Copy</TxContextMenuItem>
     </template>
   </TxContextMenu>
 </template>
@@ -51,3 +51,16 @@
 | `width` | `number` | `220` | 菜单宽度 |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
+
+### TxContextMenuItem Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `disabled` | `boolean` | `false` | 是否禁用 |
+| `danger` | `boolean` | `false` | 危险操作样式 |
+
+### TxContextMenuItem Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | - | 选中条目（点击后自动关闭菜单） |

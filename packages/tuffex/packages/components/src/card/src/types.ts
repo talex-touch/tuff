@@ -13,6 +13,10 @@ export interface TxCardProps {
   size?: TxCardSize
   radius?: number
   padding?: number
+  glassBlur?: boolean
+  glassBlurAmount?: number
+  glassOverlay?: boolean
+  glassOverlayOpacity?: number
   clickable?: boolean
   loading?: boolean
   loadingSpinnerSize?: number

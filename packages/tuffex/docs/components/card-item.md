@@ -60,6 +60,7 @@ const enabled = ref(true)
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
+| `role` | `string` | `'button'` | ARIA role（用于 menuitem / option 等语义） |
 | `title` | `string` | `''` | 标题 |
 | `subtitle` | `string` | `''` | 副标题 |
 | `description` | `string` | `''` | 描述 |

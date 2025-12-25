@@ -4,6 +4,7 @@ import TxPopover from '../../popover/src/TxPopover.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
 import TxTag from '../../tag/src/TxTag.vue'
+import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import type { TreeSelectEmits, TreeSelectKey, TreeSelectNode, TreeSelectProps, TreeSelectValue } from './types'
 
 defineOptions({ name: 'TxTreeSelect' })
@@ -268,46 +269,55 @@ defineExpose({
       </div>
 
       <div class="tx-tree-select__list">
-        <div
+        <TxCardItem
           v-for="item in flatItems"
           :key="item.node.key"
           class="tx-tree-select__item"
           :class="{ 'is-disabled': item.node.disabled, 'is-selected': isChecked(item.node) }"
+          :clickable="!item.node.disabled"
+          :disabled="!!item.node.disabled"
+          :active="isChecked(item.node)"
           :style="{ paddingLeft: `${10 + item.level * 16}px` }"
-          @click="!item.node.disabled && toggleKey(item.node.key)"
+          @click="toggleKey(item.node.key)"
         >
-          <button
-            v-if="item.hasChildren"
-            type="button"
-            class="tx-tree-select__caret"
-            :aria-label="item.expanded ? 'Collapse' : 'Expand'"
-            @click.stop="toggleExpand(item.node)"
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" :style="{ transform: item.expanded ? 'rotate(90deg)' : 'rotate(0deg)' }">
-              <path fill="currentColor" d="M10 6l6 6-6 6" />
-            </svg>
-          </button>
-          <span v-else class="tx-tree-select__caret-placeholder" aria-hidden="true" />
+          <template #avatar>
+            <div class="tx-tree-select__left" @click.stop>
+              <button
+                v-if="item.hasChildren"
+                type="button"
+                class="tx-tree-select__caret"
+                :aria-label="item.expanded ? 'Collapse' : 'Expand'"
+                @click.stop="toggleExpand(item.node)"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" :style="{ transform: item.expanded ? 'rotate(90deg)' : 'rotate(0deg)' }">
+                  <path fill="currentColor" d="M10 6l6 6-6 6" />
+                </svg>
+              </button>
+              <span v-else class="tx-tree-select__caret-placeholder" aria-hidden="true" />
 
-          <TxCheckbox
-            v-if="multiple"
-            :model-value="isChecked(item.node)"
-            :disabled="!!item.node.disabled"
-            aria-label="Select"
-            @click.stop
-            @update:model-value="() => toggleKey(item.node.key)"
-          />
+              <TxCheckbox
+                v-if="multiple"
+                :model-value="isChecked(item.node)"
+                :disabled="!!item.node.disabled"
+                aria-label="Select"
+                @click.stop
+                @update:model-value="() => toggleKey(item.node.key)"
+              />
+            </div>
+          </template>
 
-          <slot
-            name="node"
-            :node="item.node"
-            :level="item.level"
-            :expanded="item.expanded"
-            :selected="isChecked(item.node)"
-          >
-            <span class="tx-tree-select__label">{{ item.node.label }}</span>
-          </slot>
-        </div>
+          <template #title>
+            <slot
+              name="node"
+              :node="item.node"
+              :level="item.level"
+              :expanded="item.expanded"
+              :selected="isChecked(item.node)"
+            >
+              <span class="tx-tree-select__label">{{ item.node.label }}</span>
+            </slot>
+          </template>
+        </TxCardItem>
 
         <div v-if="!flatItems.length" class="tx-tree-select__empty">No results</div>
       </div>
@@ -427,29 +437,15 @@ defineExpose({
 }
 
 .tx-tree-select__item {
-  display: flex;
+  --tx-card-item-padding: 6px 10px;
+  --tx-card-item-radius: 10px;
+  --tx-card-item-gap: 8px;
+}
+
+.tx-tree-select__left {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding-top: 6px;
-  padding-bottom: 6px;
-  border-radius: 10px;
-  user-select: none;
-  cursor: pointer;
-  color: var(--tx-text-color-primary, #303133);
-
-  &:hover:not(.is-disabled) {
-    background: var(--tx-fill-color-light, #f5f7fa);
-  }
-
-  &.is-selected {
-    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, transparent);
-  }
-
-  &.is-disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
 }
 
 .tx-tree-select__caret {

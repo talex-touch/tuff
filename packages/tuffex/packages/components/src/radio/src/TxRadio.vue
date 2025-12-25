@@ -69,7 +69,8 @@ function select() {
   align-items: center;
   cursor: pointer;
   user-select: none;
-  transition: background 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.12s ease, color 0.16s ease;
+  outline: none;
 
   &--button {
     justify-content: center;
@@ -82,8 +83,6 @@ function select() {
     font-size: 13px;
 
     &.is-checked {
-      background: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
-      border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, transparent);
       color: color-mix(in srgb, var(--tx-color-primary, #409eff) 92%, var(--tx-text-color-regular, #606266));
     }
 
@@ -95,15 +94,20 @@ function select() {
     &:active:not(.is-disabled) {
       transform: scale(0.98);
     }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 26%, transparent);
+    }
   }
 
   &--standard {
     gap: 8px;
-    padding: 6px 0;
+    padding: 6px 2px;
     border: none;
     background: transparent;
     color: var(--tx-text-color-regular, #606266);
     font-size: 14px;
+    border-radius: 10px;
 
     &.is-checked {
       color: var(--tx-text-color-primary, #303133);
@@ -115,9 +119,15 @@ function select() {
     }
 
     &:hover:not(.is-disabled) {
-      .tx-radio__indicator {
-        border-color: var(--tx-color-primary, #409eff);
-      }
+      background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 14%, transparent);
+    }
+
+    &:active:not(.is-disabled) {
+      transform: scale(0.99);
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
     }
   }
 
@@ -141,17 +151,18 @@ function select() {
 
   &::after {
     content: '';
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: white;
-    opacity: 0;
-    transition: opacity 0.16s ease;
+    opacity: 1;
+    transform: scale(0);
+    transition: transform 0.18s cubic-bezier(0.2, 0.9, 0.2, 1);
   }
 }
 
 .tx-radio--standard.is-checked .tx-radio__indicator::after {
-  opacity: 1;
+  transform: scale(1);
 }
 
 .tx-radio__label {

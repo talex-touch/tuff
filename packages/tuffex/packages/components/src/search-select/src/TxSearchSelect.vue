@@ -2,6 +2,7 @@
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TxCard from '../../card/src/TxCard.vue'
+import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxSpinner from '../../spinner/src/TxSpinner.vue'
 import type { TxSearchSelectEmits, TxSearchSelectOption, TxSearchSelectProps } from './types'
@@ -277,17 +278,20 @@ defineExpose({
             :padding="props.panelPadding"
           >
             <div class="tx-search-select__list">
-              <button
+              <TxCardItem
                 v-for="opt in filteredOptions"
                 :key="String(opt.value)"
                 class="tx-search-select__item"
-                type="button"
-                :disabled="opt.disabled"
                 :class="{ 'is-selected': opt.value === props.modelValue, 'is-disabled': opt.disabled }"
+                :clickable="!opt.disabled"
+                :disabled="!!opt.disabled"
+                :active="opt.value === props.modelValue"
                 @click="onPick(opt)"
               >
-                <span class="tx-search-select__item-label">{{ opt.label }}</span>
-              </button>
+                <template #title>
+                  <span class="tx-search-select__item-label">{{ opt.label }}</span>
+                </template>
+              </TxCardItem>
 
               <div v-if="!props.loading && !filteredOptions.length" class="tx-search-select__empty">
                 No results
@@ -337,28 +341,18 @@ defineExpose({
 }
 
 .tx-search-select__item {
-  width: 100%;
-  text-align: left;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
+  --tx-card-item-padding: 10px 10px;
+  --tx-card-item-radius: 12px;
+  --tx-card-item-gap: 8px;
+}
+
+.tx-search-select__item :deep(.tx-card-item__title) {
+  font-weight: 500;
   color: var(--tx-text-color-primary, #303133);
+}
 
-  &:hover:not(.is-disabled) {
-    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent);
-  }
-
-  &.is-selected {
-    border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 45%, transparent);
-    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
-  }
-
-  &.is-disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
+.tx-search-select__item.is-disabled :deep(.tx-card-item__title) {
+  color: var(--tx-disabled-text-color, #c0c4cc);
 }
 
 .tx-search-select__empty {

@@ -163,6 +163,10 @@ import CardInertialDemoSource from '../.vitepress/theme/components/demos/CardIne
 | size | `'small' \| 'medium' \| 'large'` | `'medium'` | 卡片尺寸 |
 | radius | `number` | `18` | 圆角 |
 | padding | `number` | - | 内边距（不传时由 `size` 决定） |
+| glassBlur | `boolean` | `true` | 仅 `background='glass'`：是否启用 backdrop blur |
+| glassBlurAmount | `number` | `22` | 仅 `background='glass'`：blur 强度（px） |
+| glassOverlay | `boolean` | `true` | 仅 `background='glass'`：是否启用高光遮罩层 |
+| glassOverlayOpacity | `number` | `0.22` | 仅 `background='glass'`：遮罩层透明度 |
 | clickable | `boolean` | `false` | 是否可点击（hover feedback） |
 | loading | `boolean` | `false` | 是否显示加载状态 |
 | loadingSpinnerSize | `number` | - | loading spinner 大小（px） |

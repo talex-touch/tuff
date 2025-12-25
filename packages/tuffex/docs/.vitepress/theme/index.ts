@@ -57,6 +57,7 @@ import {
   TxDropdownMenu,
   TxDropdownItem,
   TxContextMenu,
+  TxContextMenuItem,
   TxEmpty,
   TxRadio,
   TxRadioGroup,
@@ -165,6 +166,7 @@ export default {
     app.component('TxDropdownMenu', TxDropdownMenu)
     app.component('TxDropdownItem', TxDropdownItem)
     app.component('TxContextMenu', TxContextMenu)
+    app.component('TxContextMenuItem', TxContextMenuItem)
     app.component('TxEmpty', TxEmpty)
     app.component('TxRadio', TxRadio)
     app.component('TxRadioGroup', TxRadioGroup)

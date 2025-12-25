@@ -7,6 +7,7 @@ defineOptions({
 })
 
 const props = withDefaults(defineProps<CardItemProps>(), {
+  role: 'button',
   title: '',
   subtitle: '',
   description: '',
@@ -43,13 +44,14 @@ const avatarStyle = computed(() => {
       'tx-card-item--clickable': clickable,
       'tx-card-item--active': active,
       'tx-card-item--disabled': disabled,
+      'tx-card-item--no-left': !($slots.avatar || avatarUrl || iconClass || avatarText),
     }"
-    role="button"
+    :role="role"
     :tabindex="(clickable && !disabled) ? 0 : -1"
     @click="!disabled && clickable && $emit('click', $event)"
     @keydown.enter="!disabled && clickable && $emit('click', $event as any)"
   >
-    <div class="tx-card-item__left" :style="avatarStyle">
+    <div v-if="$slots.avatar || avatarUrl || iconClass || avatarText" class="tx-card-item__left" :style="avatarStyle">
       <slot name="avatar">
         <div v-if="avatarUrl" class="tx-card-item__avatar" aria-hidden="true">
           <img class="tx-card-item__avatar-img" :src="avatarUrl" alt="" />
@@ -90,21 +92,19 @@ const avatarStyle = computed(() => {
 .tx-card-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--tx-card-item-gap, 12px);
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
+  padding: var(--tx-card-item-padding, 10px 12px);
+  border-radius: var(--tx-card-item-radius, 12px);
   box-sizing: border-box;
 
-  border: 1px solid var(--tx-border-color-lighter, #eee);
-  background: color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid transparent;
+  background: transparent;
 
   transition:
     border-color 0.18s ease,
     background-color 0.18s ease,
-    transform 0.18s ease,
+    box-shadow 0.18s ease,
     opacity 0.18s ease;
 }
 
@@ -118,13 +118,25 @@ const avatarStyle = computed(() => {
 }
 
 .tx-card-item--clickable:hover {
-  border-color: var(--tx-border-color, #dcdfe6);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 18%, transparent);
 }
 
 .tx-card-item--active {
   border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 40%, transparent);
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 6%, var(--tx-bg-color, #fff));
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent);
+}
+
+.tx-card-item--clickable:active {
+  box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.03);
+}
+
+.tx-card-item:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
+}
+
+.tx-card-item--no-left {
+  gap: 0;
 }
 
 .tx-card-item__left {
