@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
-import { TxGlassSurface } from '../../glass-surface'
 import type { TxRadioGroupProps, TxRadioValue } from './types'
 
 defineOptions({ name: 'TxRadioGroup' })
@@ -193,36 +192,10 @@ const glassInnerStyle = computed<Record<string, string>>(() => {
   }
 })
 
-const glassRadius = computed(() => {
-  // 圆角和按钮一致，使用 999px 实现胶囊形状
-  return 999
-})
-
-const glassLook = computed(() => {
-  if (isDarkMode.value) {
-    return {
-      brightness: 24,
-      opacity: 0.75,
-      backgroundOpacity: 0.08,
-      saturation: 1.2,
-    }
-  }
-
-  return {
-    brightness: 108,
-    opacity: 0.92,
-    backgroundOpacity: 0.025,
-    saturation: 1.5,
-  }
-})
-
-const glassDisplace = computed(() => (motionActive.value ? 2.2 : 1.2))
-const glassDistortionScale = computed(() => (motionActive.value ? -700 : -420))
-
 const glassOpacity = computed(() => {
-  if (!motionActive.value) return 0.35  // idle时保持可见，折射效果连续
+  if (!motionActive.value && motionPhase.value === 'idle') return 0
   if (motionPhase.value === 'emerge') return 0.9
-  if (motionPhase.value === 'sink') return 0.6
+  if (motionPhase.value === 'sink') return 0.22
   return 1
 })
 
@@ -281,7 +254,7 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
 
-  const blurOpacity = motionActive.value ? 1 : 0.4
+  const blurOpacity = motionActive.value ? 1 : 0
 
   const blurPx = motionActive.value ? props.blurAmount : 0
 
@@ -442,10 +415,10 @@ function stepMotion(ts: number) {
       currentRect.value = { ...t }
       velocity.value = { x: 0, y: 0, w: 0, h: 0 }
       cancelMotionRaf()
-      setMotionPhase('sink', 120)
+      setMotionPhase('sink', 40)
       setTimeout(() => {
         isAnimating.value = false
-      }, 120)
+      }, 40)
       return
     }
 
@@ -502,10 +475,10 @@ function stepMotion(ts: number) {
     velocity.value = { x: 0, y: 0, w: 0, h: 0 }
     impact.value = 0
     cancelMotionRaf()
-    setMotionPhase('sink', 120)
+    setMotionPhase('sink', 80)
     setTimeout(() => {
       isAnimating.value = false
-    }, 120)
+    }, 80)
     return
   }
 
@@ -759,27 +732,15 @@ watch(
     <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true"></span>
 
     <!-- 玻璃效果 -->
-    <TxGlassSurface
+    <span
       v-if="type === 'button' && glass && indicatorVisible"
       class="tx-radio-group__indicator-glass-wrap"
       :class="{ 'is-active': motionActive, 'is-sink': motionPhase === 'sink', 'is-emerge': motionPhase === 'emerge' }"
       :style="glassWrapStyle"
-      :width="currentRect.width || 1"
-      :height="currentRect.height || 1"
-      :border-radius="glassRadius"
-      :border-width="0.08"
-      :brightness="glassLook.brightness"
-      :opacity="glassLook.opacity"
-      :blur="14"
-      :displace="glassDisplace"
-      :background-opacity="glassLook.backgroundOpacity"
-      :saturation="glassLook.saturation"
-      :distortion-scale="glassDistortionScale"
-      mix-blend-mode="difference"
       aria-hidden="true"
     >
-      <div class="tx-radio-group__indicator-glass-inner" :style="glassInnerStyle"></div>
-    </TxGlassSurface>
+      <span class="tx-radio-group__indicator-glass-inner" :style="glassInnerStyle"></span>
+    </span>
 
     <!-- 模糊效果 -->
     <span
@@ -790,9 +751,9 @@ watch(
       aria-hidden="true"
     ></span>
 
-    <!-- 普通指示器（有弹性但无特效） -->
+    <!-- 普通指示器（基础选中态） -->
     <span
-      v-if="type === 'button' && !glass && !blur && indicatorVisible"
+      v-if="type === 'button' && indicatorVisible"
       class="tx-radio-group__indicator-plain"
       :class="{ 'is-active': motionActive }"
       :style="plainIndicatorStyle"
@@ -865,9 +826,16 @@ watch(
   top: 0;
   pointer-events: none;
   z-index: 10;
+  overflow: hidden;
+  border-radius: 999px;
   will-change: transform, opacity;
-  transition: opacity 120ms ease, filter 120ms ease;
+  transition: opacity 90ms ease, filter 90ms ease;
   opacity: 0;
+  background:
+    radial-gradient(ellipse 90% 70% at 18% 20%, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0) 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.46) 0%, rgba(255, 255, 255, 0.18) 60%);
+  border: 1px solid color-mix(in srgb, rgba(255, 255, 255, 0.55) 60%, transparent);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12);
 }
 
 .tx-radio-group__indicator-glass-wrap.is-active {
@@ -894,7 +862,7 @@ watch(
   pointer-events: none;
   z-index: 10;
   will-change: transform, opacity, backdrop-filter;
-  transition: opacity 120ms ease, box-shadow 120ms ease, backdrop-filter 160ms ease, -webkit-backdrop-filter 160ms ease;
+  transition: opacity 90ms ease, box-shadow 90ms ease, backdrop-filter 120ms ease, -webkit-backdrop-filter 120ms ease;
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
