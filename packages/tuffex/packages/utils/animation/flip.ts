@@ -44,10 +44,26 @@ export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = 
   }
 
   let activeCleanup: (() => void) | null = null
+  let lastMode: FlipMode = opt.mode
 
   const kill = () => {
+    const el = targetRef.value
+    const shouldFreeze = running.value && el && lastMode === 'size'
+    const freezeRect = shouldFreeze && el ? el.getBoundingClientRect() : null
+
     activeCleanup?.()
     activeCleanup = null
+
+    if (shouldFreeze && el && freezeRect) {
+      el.style.transitionProperty = ''
+      el.style.transitionDuration = '0ms'
+      el.style.transitionTimingFunction = ''
+      el.style.width = `${freezeRect.width}px`
+      el.style.height = `${freezeRect.height}px`
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      el.offsetWidth
+    }
+
     running.value = false
   }
 
@@ -74,6 +90,7 @@ export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = 
 
     kill()
     running.value = true
+    lastMode = opt.mode
 
     const first = el.getBoundingClientRect()
 

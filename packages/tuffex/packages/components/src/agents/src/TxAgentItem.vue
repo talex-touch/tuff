@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import type { AgentItemProps } from './types'
 
 defineOptions({
@@ -23,65 +24,45 @@ const rootClass = computed(() => {
 </script>
 
 <template>
-  <div
+  <TxCardItem
     class="tx-agent-item"
     :class="rootClass"
     role="button"
-    tabindex="0"
+    :clickable="!disabled"
+    :disabled="disabled"
+    :active="selected"
+    :avatar-size="34"
+    avatar-shape="rounded"
     :aria-selected="selected"
     :aria-disabled="disabled"
   >
-    <div class="tx-agent-item__icon" aria-hidden="true">
-      <i :class="iconClass" />
-    </div>
+    <template #avatar>
+      <div class="tx-agent-item__icon" aria-hidden="true">
+        <i :class="iconClass" />
+      </div>
+    </template>
 
-    <div class="tx-agent-item__info">
-      <div class="tx-agent-item__name">{{ name }}</div>
-      <div v-if="description" class="tx-agent-item__desc">{{ description }}</div>
-    </div>
+    <template #title>
+      <span class="tx-agent-item__name">{{ name }}</span>
+    </template>
 
-    <div v-if="badgeText !== '' && badgeText !== undefined && badgeText !== null" class="tx-agent-item__badge">
-      <slot name="badge">{{ badgeText }}</slot>
-    </div>
-  </div>
+    <template v-if="description" #description>
+      <span class="tx-agent-item__desc">{{ description }}</span>
+    </template>
+
+    <template v-if="badgeText !== '' && badgeText !== undefined && badgeText !== null" #right>
+      <span class="tx-agent-item__badge">
+        <slot name="badge">{{ badgeText }}</slot>
+      </span>
+    </template>
+  </TxCardItem>
 </template>
 
 <style scoped lang="scss">
 .tx-agent-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0.75rem;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: var(--tx-fill-color-blank, #fff);
-  cursor: pointer;
-  user-select: none;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
-}
-
-.tx-agent-item:hover {
-  border-color: var(--tx-border-color-lighter, #e5e7eb);
-  background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent);
-}
-
-.tx-agent-item:active {
-  transform: translateY(0.5px);
-}
-
-.tx-agent-item:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 35%, transparent);
-}
-
-.tx-agent-item--selected {
-  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, var(--tx-fill-color-blank, #fff));
-}
-
-.tx-agent-item--disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  --tx-card-item-padding: 0.75rem 0.75rem;
+  --tx-card-item-radius: 12px;
+  --tx-card-item-gap: 0.75rem;
 }
 
 .tx-agent-item__icon {
@@ -96,12 +77,12 @@ const rootClass = computed(() => {
   flex-shrink: 0;
 }
 
-.tx-agent-item__info {
-  flex: 1;
-  min-width: 0;
+.tx-agent-item.tx-agent-item--selected .tx-agent-item__icon {
+  color: var(--tx-text-color-primary, #303133);
 }
 
 .tx-agent-item__name {
+  display: inline-block;
   font-size: 13px;
   font-weight: 600;
   color: var(--tx-text-color-primary, #111827);

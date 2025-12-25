@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { SliderEmits, SliderProps } from './types'
 
 defineOptions({
@@ -14,28 +14,49 @@ const props = withDefaults(defineProps<SliderProps>(), {
   disabled: false,
   showValue: false,
   showTooltip: true,
-  tooltipTilt: true,
+  tooltipTrigger: 'drag',
+  tooltipPlacement: 'top',
+  tooltipTilt: false,
+  tooltipTiltMaxDeg: 14,
+  tooltipOffsetMaxPx: 18,
+  tooltipAccelBoost: 0.35,
+  tooltipSpringStiffness: 240,
+  tooltipSpringDamping: 26,
 })
 
 const emit = defineEmits<SliderEmits>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
 const mainRef = ref<HTMLDivElement | null>(null)
+const tooltipRef = ref<HTMLDivElement | null>(null)
 
 const mainWidth = ref(0)
 const thumbSizePx = ref(14)
+const tooltipWidth = ref(0)
 
 const dragging = ref(false)
+const hovering = ref(false)
 const lastInputTs = ref<number | null>(null)
 const lastInputValue = ref<number | null>(null)
 const velocity = ref(0)
+const acceleration = ref(0)
+
+const lastPointerTs = ref<number | null>(null)
+const lastPointerX = ref<number | null>(null)
+const pointerVelocity = ref(0)
+const pointerAcceleration = ref(0)
+const hadPointerMove = ref(false)
 
 const tooltipTiltDeg = ref(0)
 const tooltipOffsetX = ref(0)
 const tooltipTargetTiltDeg = ref(0)
 const tooltipTargetOffsetX = ref(0)
+const tooltipTiltVel = ref(0)
+const tooltipOffsetVel = ref(0)
 let tooltipRafId: number | null = null
+let tooltipLastRafTs: number | null = null
 let resizeObserver: ResizeObserver | null = null
+let tooltipResizeObserver: ResizeObserver | null = null
 
 const clampedValue = computed(() => {
   const v = Number.isFinite(props.modelValue) ? props.modelValue : props.min
@@ -69,14 +90,70 @@ const tooltipText = computed(() => {
   return displayValue.value
 })
 
+const shouldShowTooltip = computed(() => {
+  if (!props.showTooltip) return false
+  if (props.disabled) return false
+  if (props.tooltipTrigger === 'always') return true
+  if (props.tooltipTrigger === 'hover') return hovering.value || dragging.value
+  return dragging.value
+})
+
 const tooltipStyle = computed(() => {
-  const x = thumbCenterPx.value
+  const baseX = thumbCenterPx.value
+  const offsetX = props.tooltipTilt ? tooltipOffsetX.value : 0
   const rotate = props.tooltipTilt ? tooltipTiltDeg.value : 0
+  
+  // Clamp position to prevent overflow
+  const half = tooltipWidth.value > 0 ? tooltipWidth.value / 2 : 40 // fallback width
+  const safe = 8
+  const min = half + safe
+  const max = Math.max(min, mainWidth.value - half - safe)
+  const clampedX = Math.min(max, Math.max(min, baseX + offsetX))
+  
+  const y = props.tooltipPlacement === 'bottom' ? 28 : -28
+  const origin = props.tooltipPlacement === 'bottom' ? '50% 0%' : '50% 100%'
+  
   return {
-    left: `${x}px`,
-    transform: `translateX(-50%) translateX(${tooltipOffsetX.value}px) translateY(-8px) rotate(${rotate}deg)`,
+    left: `${clampedX}px`,
+    top: '50%',
+    transformOrigin: origin,
+    transform: `translateX(-50%) translateY(-50%) translateY(${y}px) rotate(${rotate}deg)`,
+    transition: dragging.value ? 'transform 0.1s ease-out' : 'opacity 0.2s ease, transform 0.3s ease',
   }
 })
+
+function refreshTooltipWidth() {
+  if (!tooltipRef.value) return
+  const w = tooltipRef.value.getBoundingClientRect().width
+  if (Number.isFinite(w) && w > 0) tooltipWidth.value = w
+}
+
+function onGlobalPointerMove(e: PointerEvent) {
+  if (!dragging.value || !props.tooltipTilt) return
+
+  const now = performance.now()
+  const x = e.clientX
+
+  if (lastPointerTs.value != null && lastPointerX.value != null) {
+    const dtMs = now - lastPointerTs.value
+    const dx = x - lastPointerX.value
+    if (dtMs > 0 && dtMs < 100 && Math.abs(dx) > 1) {
+      hadPointerMove.value = true
+      const v = dx / (dtMs / 1000)
+      const absV = Math.abs(v)
+      
+      if (absV > 20) {
+        const dir = v >= 0 ? 1 : -1
+        const intensity = Math.min(1, absV / 800)
+        tooltipTiltDeg.value = -dir * intensity * props.tooltipTiltMaxDeg
+        tooltipOffsetX.value = -dir * intensity * props.tooltipOffsetMaxPx
+      }
+    }
+  }
+
+  lastPointerTs.value = now
+  lastPointerX.value = x
+}
 
 function updateValue(next: number) {
   const v = Math.min(props.max, Math.max(props.min, next))
@@ -92,14 +169,9 @@ function onInput(e: Event) {
     const dv = next - lastInputValue.value
     if (dt > 0) {
       const perSec = (dv / dt) * 1000
+      const prevV = velocity.value
       velocity.value = perSec
-      if (props.tooltipTilt) {
-        const normalized = Math.min(1, Math.abs(perSec) / 80)
-        const dir = perSec >= 0 ? 1 : -1
-        tooltipTargetTiltDeg.value = -dir * (normalized * 12)
-        tooltipTargetOffsetX.value = -dir * (normalized * 16)
-        ensureTooltipAnim()
-      }
+      acceleration.value = ((perSec - prevV) / dt) * 1000
     }
   }
   lastInputTs.value = now
@@ -121,49 +193,36 @@ function refreshMetrics() {
   if (Number.isFinite(size) && size > 0) thumbSizePx.value = size
 }
 
-function ensureTooltipAnim() {
-  if (tooltipRafId != null) return
-  const tick = () => {
-    const k = 0.22
-    tooltipTiltDeg.value += (tooltipTargetTiltDeg.value - tooltipTiltDeg.value) * k
-    tooltipOffsetX.value += (tooltipTargetOffsetX.value - tooltipOffsetX.value) * k
-
-    const shouldStop =
-      !dragging.value
-      && Math.abs(tooltipTiltDeg.value) < 0.05
-      && Math.abs(tooltipOffsetX.value) < 0.05
-      && Math.abs(tooltipTargetTiltDeg.value) < 0.05
-      && Math.abs(tooltipTargetOffsetX.value) < 0.05
-
-    if (shouldStop) {
-      tooltipTiltDeg.value = 0
-      tooltipOffsetX.value = 0
-      tooltipTargetTiltDeg.value = 0
-      tooltipTargetOffsetX.value = 0
-      tooltipRafId = null
-      return
-    }
-
-    tooltipRafId = requestAnimationFrame(tick)
-  }
-  tooltipRafId = requestAnimationFrame(tick)
-}
-
-function startDragging() {
+function startDragging(e: PointerEvent) {
   if (props.disabled) return
   dragging.value = true
   refreshMetrics()
+
+  lastPointerTs.value = performance.now()
+  lastPointerX.value = e.clientX
+  pointerVelocity.value = 0
+  pointerAcceleration.value = 0
+  hadPointerMove.value = false
+  window.addEventListener('pointermove', onGlobalPointerMove)
 }
 
 function stopDragging() {
   if (!dragging.value) return
   dragging.value = false
-  lastInputTs.value = null
-  lastInputValue.value = null
-  velocity.value = 0
-  tooltipTargetTiltDeg.value = 0
-  tooltipTargetOffsetX.value = 0
-  ensureTooltipAnim()
+
+  window.removeEventListener('pointermove', onGlobalPointerMove)
+  lastPointerTs.value = null
+  lastPointerX.value = null
+  pointerVelocity.value = 0
+  pointerAcceleration.value = 0
+  hadPointerMove.value = false
+  
+  if (props.tooltipTilt) {
+    setTimeout(() => {
+      tooltipTiltDeg.value = 0
+      tooltipOffsetX.value = 0
+    }, 100)
+  }
 }
 
 function onGlobalPointerUp() {
@@ -180,6 +239,30 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => shouldShowTooltip.value,
+  async (v) => {
+    if (!v) {
+      tooltipWidth.value = 0
+      if (tooltipResizeObserver && tooltipRef.value) {
+        tooltipResizeObserver.unobserve(tooltipRef.value)
+      }
+      return
+    }
+    await nextTick()
+    refreshTooltipWidth()
+    if (tooltipResizeObserver && tooltipRef.value) {
+      tooltipResizeObserver.observe(tooltipRef.value)
+    }
+  },
+)
+
+watch(tooltipText, async () => {
+  if (!shouldShowTooltip.value) return
+  await nextTick()
+  refreshTooltipWidth()
+})
+
 onMounted(() => {
   refreshMetrics()
   window.addEventListener('pointerup', onGlobalPointerUp)
@@ -188,6 +271,10 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => refreshMetrics())
     resizeObserver.observe(mainRef.value)
   }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    tooltipResizeObserver = new ResizeObserver(() => refreshTooltipWidth())
+  }
 })
 
 onBeforeUnmount(() => {
@@ -195,23 +282,35 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(tooltipRafId)
     tooltipRafId = null
   }
+  tooltipLastRafTs = null
   window.removeEventListener('pointerup', onGlobalPointerUp)
+  window.removeEventListener('pointermove', onGlobalPointerMove)
 
   if (resizeObserver && mainRef.value) {
     resizeObserver.unobserve(mainRef.value)
   }
   resizeObserver = null
+
+  if (tooltipResizeObserver && tooltipRef.value) {
+    tooltipResizeObserver.unobserve(tooltipRef.value)
+  }
+  tooltipResizeObserver = null
 })
 </script>
 
 <template>
   <div class="tx-slider" :class="{ 'is-disabled': disabled }">
-    <div ref="mainRef" class="tx-slider__main">
+    <div
+      ref="mainRef"
+      class="tx-slider__main"
+      @pointerenter="hovering = true"
+      @pointerleave="hovering = false"
+    >
       <div class="tx-slider__track" aria-hidden="true">
         <div class="tx-slider__range" :style="fillWidthStyle" />
       </div>
 
-      <div v-if="showTooltip && dragging" class="tx-slider__tooltip" :style="tooltipStyle">
+      <div v-if="shouldShowTooltip" ref="tooltipRef" class="tx-slider__tooltip" :style="tooltipStyle">
         {{ tooltipText }}
       </div>
 

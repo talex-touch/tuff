@@ -63,6 +63,7 @@ export default defineConfig({
             { text: '树选择器 TreeSelect', link: '/components/tree-select' },
             { text: '级联选择 Cascader', link: '/components/cascader' },
             { text: '滑块 Slider', link: '/components/slider' },
+            { text: '分段滑块 SegmentedSlider', link: '/components/segmented-slider' },
           ],
         },
         {
@@ -117,6 +118,7 @@ export default defineConfig({
           text: '动效',
           items: [
             { text: '自适应尺寸 AutoSizer', link: '/components/auto-sizer' },
+            { text: '文本变换 TextTransformer', link: '/components/text-transformer' },
             { text: '依次进入 Stagger', link: '/components/stagger' },
             { text: '拖拽排序 SortableList', link: '/components/sortable-list' },
           ],

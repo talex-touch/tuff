@@ -4,12 +4,12 @@ import dts from 'vite-plugin-dts'
 
 export default defineConfig({
   build: {
-    target: 'modules',
+    target: 'esnext',
     outDir: 'es',
     emptyOutDir: false,
     minify: false,
     rollupOptions: {
-      external: ['vue'],
+      external: ['vue', '@number-flow/vue'],
       input: ['./src/index.ts'],
       output: [
         {

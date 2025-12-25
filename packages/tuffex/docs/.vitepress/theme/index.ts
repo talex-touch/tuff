@@ -36,6 +36,7 @@ import {
   TxScroll,
   TouchScroll,
   TxSlider,
+  TxSegmentedSlider,
   TxSpinner,
   TxLoadingOverlay,
   TxSkeleton,
@@ -49,6 +50,8 @@ import {
   TxLayoutSkeleton,
   TxStatCard,
   TxCardItem,
+  TxAutoSizer,
+  TxTextTransformer,
   TxTabs,
   TxTabItem,
   TxTabHeader,
@@ -143,6 +146,7 @@ export default {
     app.component('TouchScroll', TouchScroll)
 
     app.component('TxSlider', TxSlider)
+    app.component('TxSegmentedSlider', TxSegmentedSlider)
     app.component('TxSpinner', TxSpinner)
     app.component('TxLoadingOverlay', TxLoadingOverlay)
     app.component('TxSkeleton', TxSkeleton)
@@ -156,6 +160,8 @@ export default {
     app.component('TxLayoutSkeleton', TxLayoutSkeleton)
     app.component('TxStatCard', TxStatCard)
     app.component('TxCardItem', TxCardItem)
+    app.component('TxAutoSizer', TxAutoSizer)
+    app.component('TxTextTransformer', TxTextTransformer)
 
     app.component('TxTabs', TxTabs)
     app.component('TxTabItem', TxTabItem)

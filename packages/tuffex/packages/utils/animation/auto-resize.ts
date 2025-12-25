@@ -33,6 +33,8 @@ export interface UseAutoResizeOptions {
 
   styleTarget?: 'outer' | 'inner'
 
+  observeTarget?: 'inner' | 'outer' | 'both'
+
   rounding?: AutoResizeRounding
 
   immediate?: boolean
@@ -48,6 +50,8 @@ export interface UseAutoResizeOptions {
 
 export interface UseAutoResizeReturn {
   refresh: () => Promise<void>
+
+  measure: (isManual?: boolean) => Promise<AutoResizeSize | null>
 
   start: () => void
 
@@ -69,6 +73,7 @@ export function useAutoResize(
     applyStyle: options.applyStyle ?? true,
     applyMode: options.applyMode ?? 'sync',
     styleTarget: options.styleTarget ?? 'outer',
+    observeTarget: options.observeTarget ?? 'inner',
     rounding: options.rounding ?? 'ceil',
     immediate: options.immediate ?? true,
     rafBatch: options.rafBatch ?? true,
@@ -258,6 +263,42 @@ export function useAutoResize(
     opt.onAfterApply(event)
   }
 
+  const measure = async (isManual = false): Promise<AutoResizeSize | null> => {
+    await nextTick()
+    const { inner, styleEl } = getTargets()
+    if (!inner || !styleEl)
+      return null
+    if (!enabled.value)
+      return null
+
+    const rect = inner.getBoundingClientRect()
+
+    let extraW = 0
+    let extraH = 0
+    if (styleEl !== inner) {
+      const cs = getComputedStyle(styleEl)
+      if (cs.boxSizing === 'border-box') {
+        const px = Number.parseFloat(cs.paddingLeft) + Number.parseFloat(cs.paddingRight)
+        const py = Number.parseFloat(cs.paddingTop) + Number.parseFloat(cs.paddingBottom)
+        const bx = Number.parseFloat(cs.borderLeftWidth) + Number.parseFloat(cs.borderRightWidth)
+        const by = Number.parseFloat(cs.borderTopWidth) + Number.parseFloat(cs.borderBottomWidth)
+        extraW = (Number.isFinite(px) ? px : 0) + (Number.isFinite(bx) ? bx : 0)
+        extraH = (Number.isFinite(py) ? py : 0) + (Number.isFinite(by) ? by : 0)
+      }
+    }
+
+    const next: AutoResizeSize = {
+      width: round(rect.width + extraW),
+      height: round(rect.height + extraH),
+    }
+
+    const prev = size.value
+    const event: AutoResizeEvent = { prev, next, isManual }
+    size.value = next
+    opt.onResize(event)
+    return next
+  }
+
   const schedule = (isManual: boolean) => {
     if (!opt.rafBatch) {
       void measureAndSync(isManual)
@@ -280,13 +321,30 @@ export function useAutoResize(
   const start = () => {
     if (ro.value)
       return
-    const { inner } = getTargets()
-    if (!inner)
+    const { outer, inner } = getTargets()
+    const targets: HTMLElement[] = []
+    if (opt.observeTarget === 'inner') {
+      if (inner)
+        targets.push(inner)
+    }
+    else if (opt.observeTarget === 'outer') {
+      if (outer)
+        targets.push(outer)
+    }
+    else {
+      if (inner)
+        targets.push(inner)
+      if (outer && outer !== inner)
+        targets.push(outer)
+    }
+
+    if (targets.length === 0)
       return
     if (typeof ResizeObserver === 'undefined')
       return
     ro.value = new ResizeObserver(() => schedule(false))
-    ro.value.observe(inner)
+    for (const t of targets)
+      ro.value.observe(t)
   }
 
   const stop = () => {
@@ -327,5 +385,5 @@ export function useAutoResize(
 
   onBeforeUnmount(() => stop())
 
-  return { refresh, start, stop, setEnabled, size }
+  return { refresh, measure, start, stop, setEnabled, size }
 }

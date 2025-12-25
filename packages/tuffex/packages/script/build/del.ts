@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import { resolve } from 'node:path'
-import { rootPath } from './path'
+import { rootPath } from './path.ts'
 
 const stayFile = ['package.json', 'README.md']
 
