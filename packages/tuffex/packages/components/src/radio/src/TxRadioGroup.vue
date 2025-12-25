@@ -10,8 +10,11 @@ const props = withDefaults(defineProps<TxRadioGroupProps>(), {
   disabled: false,
   type: 'button',
   glass: false,
+  blur: false,
   stiffness: 85,
   damping: 10,
+  blurAmount: 12,
+  elastic: true,
 })
 
 const { disabled, type, glass } = toRefs(props)
@@ -232,6 +235,104 @@ const glassFilter = computed(() => {
   }
 
   return motionActive.value ? `${shadow} brightness(1.15) contrast(1.08) saturate(1.06)` : shadow
+})
+
+// 模糊效果样式
+const blurWrapStyle = computed<Record<string, string>>(() => {
+  if (!indicatorVisible.value) return { opacity: '0' }
+
+  const { width, height, x, y } = currentRect.value
+  const v = velocity.value
+  const speed = Math.hypot(v.x, v.y)
+  const imp = impact.value
+
+  let stretchX = 1
+  let stretchY = 1
+
+  // 滑动时形变
+  if (props.elastic && motionActive.value && speed > 3) {
+    const dragBoost = isDragging.value ? 1.8 : 1.0
+    const stretch = Math.min(speed / 100, 0.6) * dragBoost
+    stretchX = 1 - stretch * 0.35
+    stretchY = 1 + stretch * 0.6
+  }
+
+  // 撞击时形变
+  if (props.elastic && imp > 0.01) {
+    const squash = imp * 0.7
+    if (impactAxis.value === 'x') {
+      stretchX = stretchX * (1 + squash * 0.5)
+      stretchY = stretchY * (1 - squash * 0.4)
+    } else {
+      stretchY = stretchY * (1 + squash * 0.5)
+      stretchX = stretchX * (1 - squash * 0.4)
+    }
+  }
+
+  const phaseScale = glassPhaseScale.value
+  let scaleX = phaseScale * stretchX
+  let scaleY = phaseScale * stretchY
+
+  scaleX = Math.max(0, Math.min(2, scaleX))
+  scaleY = Math.max(0, Math.min(2, scaleY))
+
+  const blurOpacity = motionActive.value ? 1 : 0.4
+
+  return {
+    opacity: `${blurOpacity}`,
+    width: `${width}px`,
+    height: `${height}px`,
+    backdropFilter: `blur(${props.blurAmount}px)`,
+    WebkitBackdropFilter: `blur(${props.blurAmount}px)`,
+    transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
+  }
+})
+
+// 普通指示器样式（无特效但有弹性）
+const plainIndicatorStyle = computed<Record<string, string>>(() => {
+  if (!indicatorVisible.value) return { opacity: '0' }
+
+  const { width, height, x, y } = currentRect.value
+  const v = velocity.value
+  const speed = Math.hypot(v.x, v.y)
+  const imp = impact.value
+
+  let stretchX = 1
+  let stretchY = 1
+
+  // 弹性形变 - 和其他效果一致
+  if (props.elastic && motionActive.value && speed > 3) {
+    const dragBoost = isDragging.value ? 1.8 : 1.0
+    const stretch = Math.min(speed / 100, 0.6) * dragBoost
+    stretchX = 1 - stretch * 0.35
+    stretchY = 1 + stretch * 0.6
+  }
+
+  // 撞击形变 - 和其他效果一致
+  if (props.elastic && imp > 0.01) {
+    const squash = imp * 0.7
+    if (impactAxis.value === 'x') {
+      stretchX = stretchX * (1 + squash * 0.5)
+      stretchY = stretchY * (1 - squash * 0.4)
+    } else {
+      stretchY = stretchY * (1 + squash * 0.5)
+      stretchX = stretchX * (1 - squash * 0.4)
+    }
+  }
+
+  const phaseScale = props.elastic ? glassPhaseScale.value : 1
+  let scaleX = phaseScale * stretchX
+  let scaleY = phaseScale * stretchY
+
+  scaleX = Math.max(0, Math.min(2, scaleX))
+  scaleY = Math.max(0, Math.min(2, scaleY))
+
+  return {
+    opacity: '1',
+    width: `${width}px`,
+    height: `${height}px`,
+    transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
+  }
 })
 
 const hitStyle = computed<Record<string, string>>(() => {
@@ -611,6 +712,7 @@ watch(
   >
     <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true"></span>
 
+    <!-- 玻璃效果 -->
     <TxGlassSurface
       v-if="type === 'button' && glass && indicatorVisible"
       class="tx-radio-group__indicator-glass-wrap"
@@ -632,6 +734,24 @@ watch(
     >
       <div class="tx-radio-group__indicator-glass-inner" :style="glassInnerStyle"></div>
     </TxGlassSurface>
+
+    <!-- 模糊效果 -->
+    <span
+      v-if="type === 'button' && blur && !glass && indicatorVisible"
+      class="tx-radio-group__indicator-blur"
+      :class="{ 'is-active': motionActive }"
+      :style="blurWrapStyle"
+      aria-hidden="true"
+    ></span>
+
+    <!-- 普通指示器（有弹性但无特效） -->
+    <span
+      v-if="type === 'button' && !glass && !blur && indicatorVisible"
+      class="tx-radio-group__indicator-plain"
+      :class="{ 'is-active': motionActive }"
+      :style="plainIndicatorStyle"
+      aria-hidden="true"
+    ></span>
 
     <span
       v-if="type === 'button' && indicatorVisible"
@@ -710,6 +830,42 @@ watch(
     radial-gradient(ellipse 80% 60% at 20% 15%, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0) 55%),
     radial-gradient(ellipse 50% 40% at 75% 80%, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 50%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 60%);
+}
+
+.tx-radio-group__indicator-blur {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, opacity, backdrop-filter;
+  transition: opacity 150ms ease, box-shadow 150ms ease;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.tx-radio-group__indicator-blur.is-active {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.tx-radio-group__indicator-plain {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, opacity;
+  transition: opacity 150ms ease, box-shadow 150ms ease;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.tx-radio-group__indicator-plain.is-active {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
 }
 
 .tx-radio-group__indicator-hit {
