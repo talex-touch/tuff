@@ -142,8 +142,9 @@ const glassWrapStyle = computed<Record<string, string>>(() => {
   }
 
   const phaseScale = glassPhaseScale.value
-  let scaleX = phaseScale * stretchX
-  let scaleY = phaseScale * stretchY
+  const baseScale = activeScale.value
+  let scaleX = baseScale * phaseScale * stretchX
+  let scaleY = baseScale * phaseScale * stretchY
 
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
@@ -243,6 +244,22 @@ const glassPhaseScale = computed(() => {
   return 1.0
 })
 
+const activeScale = computed(() => {
+  if (!indicatorVisible.value) {
+    return 1
+  }
+  if (isDragging.value) {
+    return 1.08
+  }
+  if (motionPhase.value === 'emerge') {
+    return 1.06
+  }
+  if (motionActive.value) {
+    return 1.03
+  }
+  return 1
+})
+
 const glassFilter = computed(() => {
   const shadow = 'drop-shadow(0 10px 20px rgba(0, 0, 0, 0.08))'
   if (isDarkMode.value) {
@@ -285,8 +302,9 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
   }
 
   const phaseScale = glassPhaseScale.value
-  let scaleX = phaseScale * stretchX
-  let scaleY = phaseScale * stretchY
+  const baseScale = activeScale.value
+  let scaleX = baseScale * phaseScale * stretchX
+  let scaleY = baseScale * phaseScale * stretchY
 
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
@@ -338,8 +356,9 @@ const plainIndicatorStyle = computed<Record<string, string>>(() => {
   }
 
   const phaseScale = props.elastic ? glassPhaseScale.value : 1
-  let scaleX = phaseScale * stretchX
-  let scaleY = phaseScale * stretchY
+  const baseScale = activeScale.value
+  let scaleX = baseScale * phaseScale * stretchX
+  let scaleY = baseScale * phaseScale * stretchY
 
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
@@ -825,7 +844,7 @@ watch(
       :brightness="glassLook.brightness"
       :opacity="glassLook.opacity"
       :blur="2"
-      :displace="0"
+      :displace="0.25"
       :background-opacity="glassLook.backgroundOpacity"
       :saturation="glassLook.saturation"
       :distortion-scale="2"
@@ -902,9 +921,11 @@ watch(
   left: 0;
   top: 0;
   border-radius: 999px;
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 80%, transparent);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.04);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0));
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 55%, transparent);
+  // box-shadow:
+  //   0 10px 18px rgba(15, 23, 42, 0.08),
+  //   inset 0 1px 0 rgba(255, 255, 255, 0.7);
   transition: opacity 40ms ease;
   pointer-events: none;
   z-index: 0;
@@ -965,14 +986,18 @@ watch(
   z-index: 0;
   will-change: transform, opacity;
   transition: opacity 40ms ease, box-shadow 40ms ease;
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 85%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
+  box-shadow:
+    0 2px 8px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.17);
 }
 
-.tx-radio-group__indicator-plain.is-active {
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-}
+// .tx-radio-group__indicator-plain.is-active {
+//   box-shadow:
+//     0 10px 20px rgba(15, 23, 42, 0.12),
+//     inset 0 1px 0 rgba(255, 255, 255, 0.75);
+// }
 
 .tx-radio-group__indicator-hit {
   position: absolute;
