@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { TxRadioGroupProps, TxRadioValue } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
 import { TxGlassSurface } from '../../glass-surface'
-import type { TxRadioGroupProps, TxRadioValue } from './types'
 
 defineOptions({ name: 'TxRadioGroup' })
 
@@ -17,17 +17,19 @@ const props = withDefaults(defineProps<TxRadioGroupProps>(), {
   elastic: true,
 })
 
-const { disabled, type, glass } = toRefs(props)
-
-const resolvedDirection = computed(() => {
-  if (type.value === 'standard') return props.direction ?? 'column'
-  return 'row'
-})
-
 const emit = defineEmits<{
   (e: 'update:modelValue', v: TxRadioValue): void
   (e: 'change', v: TxRadioValue): void
 }>()
+
+const { disabled, type, glass } = toRefs(props)
+
+const resolvedDirection = computed(() => {
+  if (type.value === 'standard') {
+    return props.direction ?? 'column'
+  }
+  return 'row'
+})
 
 const model = computed({
   get: () => props.modelValue,
@@ -57,7 +59,6 @@ let indicatorRaf: number | null = null
 let motionRaf: number | null = null
 let motionLastTs: number | null = null
 
-let dragPointerId: number | null = null
 let lastPointer = { x: 0, y: 0, ts: 0 }
 let lastPointerVelocity = { x: 0, y: 0 }
 const dragLockY = ref<number | null>(null)
@@ -66,23 +67,21 @@ const motionActive = computed(() => isDragging.value || isAnimating.value)
 
 const overscan = 2
 
-const baseMotionScale = 1.15
-const stretchCap = 0.35
-const squashCap = 0.25
-const impactScale = 0.22
-
-// 弹簧参数从 props 获取
 const stiffnessIdle = computed(() => props.stiffness ?? 150)
 const dampingIdle = computed(() => props.damping ?? 8)
-// 拖拽时不使用弹簧追赶，直接跟手
 const stiffnessDrag = 112
 const dampingDrag = 9.0
 
 const isDarkMode = ref(false)
 let cleanupDarkMode: (() => void) | undefined
 
-function updateDarkMode() {
-  if (typeof window === 'undefined') return
+/**
+ * Sync prefers-color-scheme and return cleanup handler.
+ */
+function updateDarkMode(): (() => void) | undefined {
+  if (typeof window === 'undefined') {
+    return
+  }
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   isDarkMode.value = mediaQuery.matches
   const handler = (e: MediaQueryListEvent) => {
@@ -93,9 +92,13 @@ function updateDarkMode() {
 }
 
 const outlineStyle = computed<Record<string, string>>(() => {
-  if (!indicatorVisible.value) return { opacity: '0' }
+  if (!indicatorVisible.value) {
+    return { opacity: '0' }
+  }
 
-  if (motionActive.value) return { opacity: '0' }
+  if (motionActive.value) {
+    return { opacity: '0' }
+  }
 
   const { width, height, x, y } = currentRect.value
   return {
@@ -107,18 +110,18 @@ const outlineStyle = computed<Record<string, string>>(() => {
 })
 
 const glassWrapStyle = computed<Record<string, string>>(() => {
-  if (!indicatorVisible.value) return { opacity: '0' }
+  if (!indicatorVisible.value) {
+    return { opacity: '0' }
+  }
 
   const { width, height, x, y } = currentRect.value
   const v = velocity.value
   const speed = Math.hypot(v.x, v.y)
   const imp = impact.value
 
-  // 形变独立计算
   let stretchX = 1
   let stretchY = 1
 
-  // 滑动时：X轴变窄，Y轴变高（拉伸）- 拖动时更明显
   if (motionActive.value && speed > 3) {
     const dragBoost = isDragging.value ? 1.8 : 1.0
     const stretch = Math.min(speed / 100, 0.6) * dragBoost
@@ -126,19 +129,18 @@ const glassWrapStyle = computed<Record<string, string>>(() => {
     stretchY = 1 + stretch * 0.6
   }
 
-  // 撞击时：X轴变宽，Y轴变扁（压缩）
   if (imp > 0.01) {
     const squash = imp * 0.7
     if (impactAxis.value === 'x') {
       stretchX = stretchX * (1 + squash * 0.5)
       stretchY = stretchY * (1 - squash * 0.4)
-    } else {
+    }
+    else {
       stretchY = stretchY * (1 + squash * 0.5)
       stretchX = stretchX * (1 - squash * 0.4)
     }
   }
 
-  // 最终 scale
   const phaseScale = glassPhaseScale.value
   let scaleX = phaseScale * stretchX
   let scaleY = phaseScale * stretchY
@@ -156,7 +158,9 @@ const glassWrapStyle = computed<Record<string, string>>(() => {
 })
 
 const glassInnerStyle = computed<Record<string, string>>(() => {
-  if (!indicatorVisible.value) return { opacity: '0' }
+  if (!indicatorVisible.value) {
+    return { opacity: '0' }
+  }
 
   const v = velocity.value
   const speed = Math.hypot(v.x, v.y)
@@ -164,21 +168,19 @@ const glassInnerStyle = computed<Record<string, string>>(() => {
   let scaleX = 1
   let scaleY = 1
 
-  // 运动中根据速度拉伸
   if (motionActive.value && speed > 50) {
     const stretch = Math.min(speed / 400, 0.3)
     scaleX = 1 + stretch * 0.5
     scaleY = 1 - stretch * 0.25
   }
 
-  // 撞击挤压效果 - 幅度要大！
   if (impact.value > 0.01) {
-    const squash = impact.value * 0.6  // 加大幅度
+    const squash = impact.value * 0.6
     if (impactAxis.value === 'x') {
-      // 水平撞击：scaleX 压扁，scaleY 挤高
       scaleX = scaleX * (1 - squash * 0.5)
       scaleY = scaleY * (1 + squash * 0.7)
-    } else {
+    }
+    else {
       scaleY = scaleY * (1 - squash * 0.5)
       scaleX = scaleX * (1 + squash * 0.7)
     }
@@ -200,50 +202,63 @@ const glassRadius = computed(() => 999)
 const glassLook = computed(() => {
   if (isDarkMode.value) {
     return {
-      brightness: 12,
-      opacity: 0.75,
-      backgroundOpacity: 0.08,
-      saturation: 1.1,
+      brightness: 8,
+      opacity: 0.6,
+      backgroundOpacity: 0.06,
+      saturation: 1.05,
     }
   }
 
   return {
-    brightness: 105,
-    opacity: 0.92,
-    backgroundOpacity: 0.025,
-    saturation: 1.25,
+    brightness: 100,
+    opacity: 0.85,
+    backgroundOpacity: 0.02,
+    saturation: 1.15,
   }
 })
 
-const glassDisplace = computed(() => (motionActive.value ? 2.2 : 1.2))
-const glassDistortionScale = computed(() => (motionActive.value ? -700 : -420))
+const glassDisplace = computed(() => (motionActive.value ? 1.6 : 1))
+const glassDistortionScale = computed(() => (motionActive.value ? -360 : -240))
 
 const glassOpacity = computed(() => {
-  if (!motionActive.value && motionPhase.value === 'idle') return 0
-  if (motionPhase.value === 'emerge') return 0.9
-  if (motionPhase.value === 'sink') return 0.22
+  if (!motionActive.value && motionPhase.value === 'idle') {
+    return 0
+  }
+  if (motionPhase.value === 'emerge') {
+    return 0.75
+  }
+  if (motionPhase.value === 'sink') {
+    return 0.18
+  }
   return 1
 })
 
 const glassPhaseScale = computed(() => {
-  if (!motionActive.value) return 1.0  // idle时保持正常大小
-  if (motionPhase.value === 'emerge') return 1.15
-  if (motionPhase.value === 'sink') return 0.95
+  if (!motionActive.value) {
+    return 1.0
+  }
+  if (motionPhase.value === 'emerge') {
+    return 1.08
+  }
+  if (motionPhase.value === 'sink') {
+    return 0.97
+  }
   return 1.0
 })
 
 const glassFilter = computed(() => {
-  const shadow = 'drop-shadow(0 16px 34px rgba(0, 0, 0, 0.11))'
+  const shadow = 'drop-shadow(0 10px 20px rgba(0, 0, 0, 0.08))'
   if (isDarkMode.value) {
-    return motionActive.value ? `${shadow} brightness(0.92) contrast(1.06) saturate(1.06)` : shadow
+    return motionActive.value ? `${shadow} brightness(0.98)` : shadow
   }
 
-  return motionActive.value ? `${shadow} brightness(1.15) contrast(1.08) saturate(1.06)` : shadow
+  return motionActive.value ? `${shadow} brightness(1.02)` : shadow
 })
 
-// 模糊效果样式
 const blurWrapStyle = computed<Record<string, string>>(() => {
-  if (!indicatorVisible.value) return { opacity: '0' }
+  if (!indicatorVisible.value) {
+    return { opacity: '0' }
+  }
 
   const { width, height, x, y } = currentRect.value
   const v = velocity.value
@@ -253,7 +268,6 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
   let stretchX = 1
   let stretchY = 1
 
-  // 滑动时形变
   if (props.elastic && motionActive.value && speed > 3) {
     const dragBoost = isDragging.value ? 1.8 : 1.0
     const stretch = Math.min(speed / 100, 0.6) * dragBoost
@@ -261,13 +275,13 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
     stretchY = 1 + stretch * 0.6
   }
 
-  // 撞击时形变
   if (props.elastic && imp > 0.01) {
     const squash = imp * 0.7
     if (impactAxis.value === 'x') {
       stretchX = stretchX * (1 + squash * 0.5)
       stretchY = stretchY * (1 - squash * 0.4)
-    } else {
+    }
+    else {
       stretchY = stretchY * (1 + squash * 0.5)
       stretchX = stretchX * (1 - squash * 0.4)
     }
@@ -294,9 +308,10 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
   }
 })
 
-// 普通指示器样式（无特效但有弹性）
 const plainIndicatorStyle = computed<Record<string, string>>(() => {
-  if (!indicatorVisible.value) return { opacity: '0' }
+  if (!indicatorVisible.value) {
+    return { opacity: '0' }
+  }
 
   const { width, height, x, y } = currentRect.value
   const v = velocity.value
@@ -306,7 +321,6 @@ const plainIndicatorStyle = computed<Record<string, string>>(() => {
   let stretchX = 1
   let stretchY = 1
 
-  // 弹性形变 - 和其他效果一致
   if (props.elastic && motionActive.value && speed > 3) {
     const dragBoost = isDragging.value ? 1.8 : 1.0
     const stretch = Math.min(speed / 100, 0.6) * dragBoost
@@ -314,13 +328,13 @@ const plainIndicatorStyle = computed<Record<string, string>>(() => {
     stretchY = 1 + stretch * 0.6
   }
 
-  // 撞击形变 - 和其他效果一致
   if (props.elastic && imp > 0.01) {
     const squash = imp * 0.7
     if (impactAxis.value === 'x') {
       stretchX = stretchX * (1 + squash * 0.5)
       stretchY = stretchY * (1 - squash * 0.4)
-    } else {
+    }
+    else {
       stretchY = stretchY * (1 + squash * 0.5)
       stretchX = stretchX * (1 - squash * 0.4)
     }
@@ -344,7 +358,9 @@ const plainIndicatorStyle = computed<Record<string, string>>(() => {
 })
 
 const hitStyle = computed<Record<string, string>>(() => {
-  if (!indicatorVisible.value) return { opacity: '0' }
+  if (!indicatorVisible.value) {
+    return { opacity: '0' }
+  }
 
   const { width, height, x, y } = currentRect.value
   return {
@@ -355,15 +371,20 @@ const hitStyle = computed<Record<string, string>>(() => {
   }
 })
 
+/**
+ * Stop and reset animation loop.
+ */
 function stopMotion() {
-  if (motionRaf != null) cancelAnimationFrame(motionRaf)
+  if (motionRaf != null)
+    cancelAnimationFrame(motionRaf)
   motionRaf = null
   motionLastTs = null
   isAnimating.value = false
 }
 
 function cancelMotionRaf() {
-  if (motionRaf != null) cancelAnimationFrame(motionRaf)
+  if (motionRaf != null)
+    cancelAnimationFrame(motionRaf)
   motionRaf = null
   motionLastTs = null
 }
@@ -383,14 +404,21 @@ function setMotionPhase(next: 'idle' | 'emerge' | 'sink', ttl = 0) {
 }
 
 function startMotion() {
-  if (motionRaf != null) return
+  if (motionRaf != null) {
+    return
+  }
   isAnimating.value = true
-  if (!isDragging.value) setMotionPhase('emerge', 170)
+  if (!isDragging.value)
+    setMotionPhase('emerge', 170)
   motionRaf = requestAnimationFrame(stepMotion)
 }
 
+/**
+ * Advance indicator motion each frame.
+ */
 function stepMotion(ts: number) {
-  if (motionLastTs == null) motionLastTs = ts
+  if (motionLastTs == null)
+    motionLastTs = ts
   const dt = Math.min((ts - motionLastTs) / 1000, 0.024)
   motionLastTs = ts
 
@@ -403,9 +431,8 @@ function stepMotion(ts: number) {
   const dw = t.width - c.width
   const dh = t.height - c.height
 
-  // 拖拽期间：不用弹簧追位置，只衰减速度用于形变
   if (isDragging.value) {
-    v.x *= Math.exp(-dt * 6)  // 衰减更慢，形变更持久
+    v.x *= Math.exp(-dt * 6)
     v.y *= Math.exp(-dt * 6)
     v.w += (dw * stiffnessDrag * 1.12 - v.w * dampingDrag) * dt
     v.h += (dh * stiffnessDrag * 1.12 - v.h * dampingDrag) * dt
@@ -433,11 +460,11 @@ function stepMotion(ts: number) {
     }
     impact.value = 0
 
-    const settled =
-      Math.abs(t.x - nx) < 0.35 &&
-      Math.abs(t.y - ny) < 0.35 &&
-      Math.abs(t.width - nw) < 0.35 &&
-      Math.abs(t.height - nh) < 0.35
+    const settled
+      = Math.abs(t.x - nx) < 0.35
+        && Math.abs(t.y - ny) < 0.35
+        && Math.abs(t.width - nw) < 0.35
+        && Math.abs(t.height - nh) < 0.35
 
     if (settled) {
       currentRect.value = { ...t }
@@ -454,7 +481,6 @@ function stepMotion(ts: number) {
     return
   }
 
-  // 松手后：弹簧动画追赶目标
   const prevDx = dx + v.x * dt
   const prevDy = dy + v.y * dt
 
@@ -488,15 +514,15 @@ function stepMotion(ts: number) {
   currentRect.value = { x: nx, y: ny, width: nw, height: nh }
   velocity.value = { ...v }
 
-  const settled =
-    Math.abs(nextDx) < 0.25 &&
-    Math.abs(nextDy) < 0.25 &&
-    Math.abs(dw) < 0.25 &&
-    Math.abs(dh) < 0.25 &&
-    Math.abs(v.x) < 8 &&
-    Math.abs(v.y) < 8 &&
-    Math.abs(v.w) < 8 &&
-    Math.abs(v.h) < 8
+  const settled
+    = Math.abs(nextDx) < 0.25
+      && Math.abs(nextDy) < 0.25
+      && Math.abs(dw) < 0.25
+      && Math.abs(dh) < 0.25
+      && Math.abs(v.x) < 8
+      && Math.abs(v.y) < 8
+      && Math.abs(v.w) < 8
+      && Math.abs(v.h) < 8
 
   if (settled) {
     currentRect.value = { ...t }
@@ -513,10 +539,17 @@ function stepMotion(ts: number) {
   motionRaf = requestAnimationFrame(stepMotion)
 }
 
+/**
+ * Sync target rect with currently checked button.
+ */
 function updateIndicator() {
-  if (type.value !== 'button') return
+  if (type.value !== 'button') {
+    return
+  }
   const root = groupRef.value
-  if (!root) return
+  if (!root) {
+    return
+  }
 
   const checked = root.querySelector<HTMLElement>('.tx-radio.tx-radio--button.is-checked')
   if (!checked) {
@@ -544,7 +577,8 @@ function updateIndicator() {
 }
 
 function queueUpdateIndicator() {
-  if (indicatorRaf != null) cancelAnimationFrame(indicatorRaf)
+  if (indicatorRaf != null)
+    cancelAnimationFrame(indicatorRaf)
   indicatorRaf = requestAnimationFrame(() => {
     indicatorRaf = null
     updateIndicator()
@@ -555,8 +589,12 @@ function pickRadioAtPoint(clientX: number, clientY: number) {
   const els = document.elementsFromPoint(clientX, clientY)
   for (const el of els) {
     const radio = (el as HTMLElement | null)?.closest?.('button.tx-radio.tx-radio--button') as HTMLButtonElement | null
-    if (!radio) continue
-    if (radio.disabled) continue
+    if (!radio) {
+      continue
+    }
+    if (radio.disabled) {
+      continue
+    }
     return radio
   }
   return null
@@ -564,7 +602,9 @@ function pickRadioAtPoint(clientX: number, clientY: number) {
 
 function syncTargetToElement(el: HTMLElement) {
   const root = groupRef.value
-  if (!root) return
+  if (!root) {
+    return
+  }
 
   const rootRect = root.getBoundingClientRect()
   const rect = el.getBoundingClientRect()
@@ -581,8 +621,13 @@ function syncTargetToElement(el: HTMLElement) {
   startMotion()
 }
 
+/**
+ * Track pointer drag motion.
+ */
 function onPointerMove(e: PointerEvent) {
-  if (!isDragging.value) return
+  if (!isDragging.value) {
+    return
+  }
   const now = performance.now()
   const dt = Math.max((now - lastPointer.ts) / 1000, 0.001)
   lastPointerVelocity = {
@@ -591,7 +636,6 @@ function onPointerMove(e: PointerEvent) {
   }
   lastPointer = { x: e.clientX, y: e.clientY, ts: now }
 
-  // 拖动时只更新位置，不选中中间选项
   const over = pickRadioAtPoint(e.clientX, e.clientY)
   if (over) {
     syncTargetToElement(over)
@@ -599,7 +643,9 @@ function onPointerMove(e: PointerEvent) {
   }
 
   const root = groupRef.value
-  if (!root) return
+  if (!root) {
+    return
+  }
   const r = root.getBoundingClientRect()
   const width = currentRect.value.width || targetRect.value.width || 0
   const height = currentRect.value.height || targetRect.value.height || 0
@@ -633,12 +679,12 @@ function onPointerMove(e: PointerEvent) {
 }
 
 function endDrag() {
-  if (!isDragging.value) return
+  if (!isDragging.value) {
+    return
+  }
   isDragging.value = false
-  dragPointerId = null
   dragLockY.value = null
 
-  // 松手时选中最近的选项
   const root = groupRef.value
   if (root) {
     const currentX = currentRect.value.x + currentRect.value.width / 2
@@ -679,15 +725,24 @@ function onPointerUp() {
 }
 
 function onPointerDown(e: PointerEvent) {
-  if (type.value !== 'button') return
-  if (disabled.value) return
-  if (e.button !== 0) return
-  if (!indicatorVisible.value) return
+  if (type.value !== 'button') {
+    return
+  }
+  if (disabled.value) {
+    return
+  }
+  if (e.button !== 0) {
+    return
+  }
+  if (!indicatorVisible.value) {
+    return
+  }
 
   const target = e.currentTarget as HTMLElement | null
-  if (!target) return
+  if (!target) {
+    return
+  }
 
-  dragPointerId = e.pointerId
   target.setPointerCapture?.(e.pointerId)
   isDragging.value = true
   dragLockY.value = currentRect.value.y || targetRect.value.y || 0
@@ -720,19 +775,21 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (indicatorRaf != null) cancelAnimationFrame(indicatorRaf)
+  if (indicatorRaf != null)
+    cancelAnimationFrame(indicatorRaf)
   window.removeEventListener('resize', queueUpdateIndicator)
   stopMotion()
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('pointercancel', onPointerUp)
-  if (motionPhaseTimer != null) clearTimeout(motionPhaseTimer)
+  if (motionPhaseTimer != null)
+    clearTimeout(motionPhaseTimer)
   cleanupDarkMode?.()
 })
 
 watch(
   () => props.modelValue,
-  async (value, oldValue) => {
+  async () => {
     await nextTick()
     queueUpdateIndicator()
   },
@@ -757,9 +814,8 @@ watch(
     :aria-disabled="disabled"
     :class="[`tx-radio-group--${type}`, `tx-radio-group--dir-${resolvedDirection}`, { 'is-motion': motionActive }]"
   >
-    <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true"></span>
+    <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true" />
 
-    <!-- 玻璃效果 -->
     <TxGlassSurface
       v-if="type === 'button' && glass && indicatorVisible"
       class="tx-radio-group__indicator-glass-wrap"
@@ -771,33 +827,31 @@ watch(
       :border-width="0.08"
       :brightness="glassLook.brightness"
       :opacity="glassLook.opacity"
-      :blur="1"
+      :blur="0"
       :displace="glassDisplace"
       :background-opacity="glassLook.backgroundOpacity"
       :saturation="glassLook.saturation"
       :distortion-scale="glassDistortionScale"
       aria-hidden="true"
     >
-      <div class="tx-radio-group__indicator-glass-inner" :style="glassInnerStyle"></div>
+      <div class="tx-radio-group__indicator-glass-inner" :style="glassInnerStyle" />
     </TxGlassSurface>
 
-    <!-- 模糊效果 -->
     <span
       v-if="type === 'button' && blur && !glass && indicatorVisible"
       class="tx-radio-group__indicator-blur"
       :class="{ 'is-active': motionActive }"
       :style="blurWrapStyle"
       aria-hidden="true"
-    ></span>
+    />
 
-    <!-- 普通指示器（基础选中态） -->
     <span
       v-if="type === 'button' && indicatorVisible"
       class="tx-radio-group__indicator-plain"
       :class="{ 'is-active': motionActive }"
       :style="plainIndicatorStyle"
       aria-hidden="true"
-    ></span>
+    />
 
     <span
       v-if="type === 'button' && indicatorVisible"
@@ -806,7 +860,7 @@ watch(
       :style="hitStyle"
       aria-hidden="true"
       @pointerdown="onPointerDown"
-    ></span>
+    />
     <slot />
   </div>
 </template>
@@ -850,7 +904,7 @@ watch(
   border-radius: 999px;
   background: transparent;
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 80%, transparent);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.04);
   transition: opacity 40ms ease;
   pointer-events: none;
   z-index: 0;
@@ -893,13 +947,13 @@ watch(
   z-index: 10;
   will-change: transform, opacity, backdrop-filter;
   transition: opacity 40ms ease, box-shadow 40ms ease, backdrop-filter 55ms ease, -webkit-backdrop-filter 55ms ease;
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 50%, transparent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 40%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .tx-radio-group__indicator-blur.is-active {
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .tx-radio-group__indicator-plain {
@@ -913,11 +967,11 @@ watch(
   transition: opacity 40ms ease, box-shadow 40ms ease;
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 85%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .tx-radio-group__indicator-plain.is-active {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
 }
 
 .tx-radio-group__indicator-hit {
