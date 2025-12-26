@@ -141,6 +141,7 @@ const containerStyles = computed(() => {
     borderRadius: `${props.borderRadius}px`,
   }
 
+  const fallbackBlur = Math.max(0, props.blur)
   const svgSupported = supportsSVGFilters()
   const backdropFilterSupported = supportsBackdropFilter()
 
@@ -166,8 +167,8 @@ const containerStyles = computed(() => {
     return {
       ...baseStyles,
       background: 'rgba(255, 255, 255, 0.1)',
-      backdropFilter: 'blur(12px) saturate(1.8) brightness(1.2)',
-      WebkitBackdropFilter: 'blur(12px) saturate(1.8) brightness(1.2)',
+      backdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.2)`,
+      WebkitBackdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.2)`,
       border: '1px solid rgba(255, 255, 255, 0.2)',
     }
   }
@@ -183,8 +184,8 @@ const containerStyles = computed(() => {
   return {
     ...baseStyles,
     background: 'rgba(255, 255, 255, 0.25)',
-    backdropFilter: 'blur(12px) saturate(1.8) brightness(1.1)',
-    WebkitBackdropFilter: 'blur(12px) saturate(1.8) brightness(1.1)',
+    backdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.1)`,
+    WebkitBackdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.1)`,
     border: '1px solid rgba(255, 255, 255, 0.3)',
   }
 })
