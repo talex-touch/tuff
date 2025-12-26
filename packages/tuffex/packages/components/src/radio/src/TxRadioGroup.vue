@@ -65,7 +65,7 @@ const dragLockY = ref<number | null>(null)
 
 const motionActive = computed(() => isDragging.value || isAnimating.value)
 
-const overscan = 2
+const overscan = 0
 
 const stiffnessIdle = computed(() => props.stiffness ?? 150)
 const dampingIdle = computed(() => props.damping ?? 8)
@@ -197,7 +197,7 @@ const glassInnerStyle = computed<Record<string, string>>(() => {
   }
 })
 
-const glassRadius = computed(() => 999)
+const glassRadius = computed(() => 18)
 
 const glassLook = computed(() => {
   if (isDarkMode.value) {
@@ -216,9 +216,6 @@ const glassLook = computed(() => {
     saturation: 1.15,
   }
 })
-
-const glassDisplace = computed(() => (motionActive.value ? 1.6 : 1))
-const glassDistortionScale = computed(() => (motionActive.value ? -360 : -240))
 
 const glassOpacity = computed(() => {
   if (!motionActive.value && motionPhase.value === 'idle') {
@@ -824,14 +821,17 @@ watch(
       :width="currentRect.width || 1"
       :height="currentRect.height || 1"
       :border-radius="glassRadius"
-      :border-width="0.08"
+      :border-width="8"
       :brightness="glassLook.brightness"
       :opacity="glassLook.opacity"
-      :blur="0"
-      :displace="glassDisplace"
+      :blur="2"
+      :displace="0"
       :background-opacity="glassLook.backgroundOpacity"
       :saturation="glassLook.saturation"
-      :distortion-scale="glassDistortionScale"
+      :distortion-scale="2"
+      :red-offset="0"
+      :green-offset="4"
+      :blue-offset="8"
       aria-hidden="true"
     >
       <div class="tx-radio-group__indicator-glass-inner" :style="glassInnerStyle" />
@@ -916,7 +916,7 @@ watch(
   top: 0;
   pointer-events: none;
   z-index: 10;
-  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 80%, transparent);
   will-change: transform, opacity;
   transition: opacity 40ms ease, filter 40ms ease;
   opacity: 0;
