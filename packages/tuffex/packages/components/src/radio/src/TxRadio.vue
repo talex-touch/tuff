@@ -57,6 +57,10 @@ function select() {
       <span class="tx-radio__indicator"></span>
       <span class="tx-radio__label"><slot>{{ label }}</slot></span>
     </template>
+    <template v-else-if="radioType === 'card'">
+      <span class="tx-radio__indicator"></span>
+      <span class="tx-radio__content"><slot>{{ label }}</slot></span>
+    </template>
     <template v-else>
       <slot>{{ label }}</slot>
     </template>
@@ -97,6 +101,42 @@ function select() {
 
     &:focus-visible {
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 26%, transparent);
+    }
+  }
+
+  &--card {
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 65%, transparent);
+    background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 24%, transparent);
+    color: var(--tx-text-color-regular, #606266);
+    font-size: 14px;
+    text-align: left;
+
+    &.is-checked {
+      color: var(--tx-text-color-primary, #303133);
+      border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, var(--tx-border-color-light, #e4e7ed));
+      background: color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, var(--tx-bg-color-overlay, #fff));
+
+      .tx-radio__indicator {
+        background: var(--tx-color-primary, #409eff);
+        border-color: var(--tx-color-primary, #409eff);
+      }
+    }
+
+    &:hover:not(.is-disabled) {
+      border-color: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 90%, transparent);
+      background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 34%, transparent);
+    }
+
+    &:active:not(.is-disabled) {
+      transform: scale(0.995);
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
     }
   }
 
@@ -161,11 +201,18 @@ function select() {
   }
 }
 
-.tx-radio--standard.is-checked .tx-radio__indicator::after {
+.tx-radio--standard.is-checked .tx-radio__indicator::after,
+.tx-radio--card.is-checked .tx-radio__indicator::after {
   transform: scale(1);
 }
 
 .tx-radio__label {
   display: inline;
+}
+
+.tx-radio__content {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
 }
 </style>

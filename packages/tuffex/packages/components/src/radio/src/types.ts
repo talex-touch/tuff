@@ -1,5 +1,5 @@
 export type TxRadioValue = string | number
-export type TxRadioType = 'button' | 'standard'
+export type TxRadioType = 'button' | 'standard' | 'card'
 
 export interface TxRadioGroupProps {
   modelValue?: TxRadioValue
