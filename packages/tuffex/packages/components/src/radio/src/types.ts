@@ -14,7 +14,7 @@ export interface TxRadioGroupProps {
   stiffness?: number
   /** 弹簧阻尼，值越小越Q弹（默认 10） */
   damping?: number
-  /** 模糊强度（默认 18） */
+  /** 模糊强度（默认 1） */
   blurAmount?: number
   /** 是否启用弹性动画（默认 true） */
   elastic?: boolean

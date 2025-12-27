@@ -15,6 +15,9 @@ import RadioStandardDemoSource from '../.vitepress/theme/components/demos/RadioS
 import RadioCardDemo from '../.vitepress/theme/components/demos/RadioCardDemo.vue'
 import RadioCardDemoSource from '../.vitepress/theme/components/demos/RadioCardDemo.vue?raw'
 
+import RadioGroupPlaygroundDemo from '../.vitepress/theme/components/demos/RadioGroupPlaygroundDemo.vue'
+import RadioGroupPlaygroundDemoSource from '../.vitepress/theme/components/demos/RadioGroupPlaygroundDemo.vue?raw'
+
 import RadioDisabledDemo from '../.vitepress/theme/components/demos/RadioDisabledDemo.vue'
 import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioDisabledDemo.vue?raw'
 </script>
@@ -67,6 +70,16 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
   </template>
 </DemoBlock>
 
+## Playground
+
+把 `TxRadioGroup` 的主要属性做成可调节的控制面板，用于快速验证不同形态/参数组合。
+
+<DemoBlock title="RadioGroup (playground)" :code="RadioGroupPlaygroundDemoSource">
+  <template #preview>
+    <RadioGroupPlaygroundDemo />
+  </template>
+</DemoBlock>
+
 ## API
 
 ### TxRadioGroup
@@ -78,12 +91,12 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 | modelValue / v-model | 绑定值 | `string \| number` | - |
 | disabled | 是否禁用（整组） | `boolean` | `false` |
 | type | 形态：按钮组 / 标准单选 / 卡片 | `'button' \| 'standard' \| 'card'` | `'button'` |
-| direction | 排列方向（button 无效） | `'row' \| 'column'` | `column` |
+| direction | 排列方向（button 无效；standard 默认 row；card 默认 column） | `'row' \| 'column'` | - |
 | glass | 玻璃指示器（button 有效） | `boolean` | `false` |
 | blur | 模糊指示器（button 有效） | `boolean` | `false` |
 | stiffness | 动效刚度（越大越快） | `number` | `110` |
 | damping | 动效阻尼（越大越稳） | `number` | `12` |
-| blurAmount | 模糊强度（blur 有效） | `number` | `18` |
+| blurAmount | 模糊强度（blur 有效） | `number` | `1` |
 | elastic | 是否启用弹性形变 | `boolean` | `true` |
 
 #### Events

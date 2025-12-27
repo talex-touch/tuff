@@ -9,6 +9,8 @@ export default defineConfig({
   description: '优雅的 Vue3 组件库，为每一次交互注入生命力',
   lang: 'zh-CN',
 
+  ignoreDeadLinks: true,
+
   vite: {
     resolve: {
       alias: {
