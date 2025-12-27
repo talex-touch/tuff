@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<TxRadioGroupProps>(), {
   blur: false,
   stiffness: 110,
   damping: 12,
-  blurAmount: 1,
+  blurAmount: 18,
   elastic: true,
 })
 
@@ -25,10 +25,10 @@ const emit = defineEmits<{
 const { disabled, type, glass } = toRefs(props)
 
 const resolvedDirection = computed(() => {
-  if (type.value === 'standard') {
-    return props.direction ?? 'column'
+  if (type.value === 'button') {
+    return 'row'
   }
-  return 'row'
+  return props.direction ?? 'column'
 })
 
 const model = computed({
@@ -601,42 +601,6 @@ function queueUpdateIndicator() {
   })
 }
 
-function pickRadioAtPoint(clientX: number, clientY: number) {
-  const els = document.elementsFromPoint(clientX, clientY)
-  for (const el of els) {
-    const radio = (el as HTMLElement | null)?.closest?.('button.tx-radio.tx-radio--button') as HTMLButtonElement | null
-    if (!radio) {
-      continue
-    }
-    if (radio.disabled) {
-      continue
-    }
-    return radio
-  }
-  return null
-}
-
-function syncTargetToElement(el: HTMLElement) {
-  const root = groupRef.value
-  if (!root) {
-    return
-  }
-
-  const rootRect = root.getBoundingClientRect()
-  const rect = el.getBoundingClientRect()
-  targetRect.value = {
-    width: rect.width + overscan * 2,
-    height: rect.height + overscan * 2,
-    x: rect.left - rootRect.left - overscan,
-    y: rect.top - rootRect.top - overscan,
-  }
-
-  if (isDragging.value) {
-    currentRect.value = { ...targetRect.value }
-  }
-  startMotion()
-}
-
 /**
  * Track pointer drag motion.
  */
@@ -651,12 +615,6 @@ function onPointerMove(e: PointerEvent) {
     y: (e.clientY - lastPointer.y) / dt,
   }
   lastPointer = { x: e.clientX, y: e.clientY, ts: now }
-
-  const over = pickRadioAtPoint(e.clientX, e.clientY)
-  if (over) {
-    syncTargetToElement(over)
-    return
-  }
 
   const root = groupRef.value
   if (!root) {
@@ -907,9 +865,18 @@ watch(
     border: none;
     background: transparent;
   }
+
+  &--card {
+    flex-direction: column;
+    gap: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
 }
 
-.tx-radio-group--standard.tx-radio-group--dir-row {
+.tx-radio-group--standard.tx-radio-group--dir-row,
+.tx-radio-group--card.tx-radio-group--dir-row {
   flex-direction: row;
   align-items: center;
   flex-wrap: wrap;

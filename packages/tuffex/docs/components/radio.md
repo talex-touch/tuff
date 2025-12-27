@@ -1,6 +1,6 @@
 # Radio 单选框
 
-用于单选场景（`TxRadioGroup` + `TxRadio`）。支持两种形式：**按钮组**（紧凑排列）和**标准单选**（圆点+文案）。
+用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。
 
 <script setup lang="ts">
 import RadioBasicDemo from '../.vitepress/theme/components/demos/RadioBasicDemo.vue'
@@ -12,9 +12,32 @@ import RadioIndicatorDemoSource from '../.vitepress/theme/components/demos/Radio
 import RadioStandardDemo from '../.vitepress/theme/components/demos/RadioStandardDemo.vue'
 import RadioStandardDemoSource from '../.vitepress/theme/components/demos/RadioStandardDemo.vue?raw'
 
+import RadioCardDemo from '../.vitepress/theme/components/demos/RadioCardDemo.vue'
+import RadioCardDemoSource from '../.vitepress/theme/components/demos/RadioCardDemo.vue?raw'
+
 import RadioDisabledDemo from '../.vitepress/theme/components/demos/RadioDisabledDemo.vue'
 import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioDisabledDemo.vue?raw'
 </script>
+
+## 标准单选形式
+
+前圆点+后文案的标准单选形式，适合选项较多的场景。
+
+<DemoBlock title="Radio (standard)" :code="RadioStandardDemoSource">
+  <template #preview>
+    <RadioStandardDemo />
+  </template>
+</DemoBlock>
+
+## 卡片单选形式
+
+更强调信息层级的单选形式，适合需要解释文本的场景。
+
+<DemoBlock title="Radio (card)" :code="RadioCardDemoSource">
+  <template #preview>
+    <RadioCardDemo />
+  </template>
+</DemoBlock>
 
 ## 按钮组形式
 
@@ -36,16 +59,6 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
   </template>
 </DemoBlock>
 
-## 标准单选形式
-
-前圆点+后文案的标准单选形式，适合选项较多的场景。
-
-<DemoBlock title="Radio (standard)" :code="RadioStandardDemoSource">
-  <template #preview>
-    <RadioStandardDemo />
-  </template>
-</DemoBlock>
-
 ## 禁用状态
 
 <DemoBlock title="Radio (disabled)" :code="RadioDisabledDemoSource">
@@ -64,8 +77,8 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 |--------|------|------|--------|
 | modelValue / v-model | 绑定值 | `string \| number` | - |
 | disabled | 是否禁用（整组） | `boolean` | `false` |
-| type | 形态：按钮组 / 标准单选 | `'button' \| 'standard'` | `'button'` |
-| direction | 排列方向（standard 有效） | `'row' \| 'column'` | `column` |
+| type | 形态：按钮组 / 标准单选 / 卡片 | `'button' \| 'standard' \| 'card'` | `'button'` |
+| direction | 排列方向（button 无效） | `'row' \| 'column'` | `column` |
 | glass | 玻璃指示器（button 有效） | `boolean` | `false` |
 | blur | 模糊指示器（button 有效） | `boolean` | `false` |
 | stiffness | 动效刚度（越大越快） | `number` | `110` |
@@ -89,7 +102,7 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 | value | 当前项的值 | `string \| number` | - |
 | label | 文案（无插槽时） | `string` | `''` |
 | disabled | 是否禁用（单项） | `boolean` | `false` |
-| type | 形态（一般由 group 决定） | `'button' \| 'standard'` | `'button'` |
+| type | 形态（一般由 group 决定） | `'button' \| 'standard' \| 'card'` | `'button'` |
 
 #### Events
 
