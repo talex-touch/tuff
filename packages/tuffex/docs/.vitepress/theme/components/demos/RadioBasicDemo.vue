@@ -5,7 +5,7 @@ const value = ref<'a' | 'b' | 'c'>('a')
 </script>
 
 <template>
-  <div style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+  <div class="tx-demo tx-demo__col">
     <TxRadioGroup v-model="value">
       <TxRadio value="a">Option A</TxRadio>
       <TxRadio value="b">Option B</TxRadio>
@@ -13,7 +13,7 @@ const value = ref<'a' | 'b' | 'c'>('a')
     </TxRadioGroup>
 
     <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-      <div style="font-size: 12px; opacity: 0.8;">selected: {{ value }}</div>
+      <div class="tx-demo__meta">selected: {{ value }}</div>
     </TxCard>
   </div>
 </template>

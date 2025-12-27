@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<TxRadioGroupProps>(), {
   blur: false,
   stiffness: 110,
   damping: 12,
-  blurAmount: 18,
+  blurAmount: 1,
   elastic: true,
 })
 
@@ -27,6 +27,9 @@ const { disabled, type, glass } = toRefs(props)
 const resolvedDirection = computed(() => {
   if (type.value === 'button') {
     return 'row'
+  }
+  if (type.value === 'standard') {
+    return props.direction ?? 'row'
   }
   return props.direction ?? 'column'
 })
@@ -860,6 +863,7 @@ watch(
 
   &--standard {
     flex-direction: column;
+    align-items: flex-start;
     gap: 8px;
     padding: 0;
     border: none;
@@ -868,6 +872,7 @@ watch(
 
   &--card {
     flex-direction: column;
+    align-items: flex-start;
     gap: 10px;
     padding: 0;
     border: none;
@@ -879,6 +884,7 @@ watch(
 .tx-radio-group--card.tx-radio-group--dir-row {
   flex-direction: row;
   align-items: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 12px;
 }

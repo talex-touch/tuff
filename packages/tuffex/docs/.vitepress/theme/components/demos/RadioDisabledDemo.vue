@@ -5,7 +5,7 @@ const value = ref<'a' | 'b'>('a')
 </script>
 
 <template>
-  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+  <div class="tx-demo tx-demo__row">
     <TxRadioGroup v-model="value" disabled>
       <TxRadio value="a">Disabled A</TxRadio>
       <TxRadio value="b">Disabled B</TxRadio>

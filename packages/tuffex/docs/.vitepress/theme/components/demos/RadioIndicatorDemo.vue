@@ -8,9 +8,9 @@ const valueGlass = ref<'a' | 'b' | 'c'>('a')
 </script>
 
 <template>
-  <div style="display: flex; flex-direction: column; gap: 18px; width: 100%;">
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <div style="font-size: 12px; opacity: 0.7;">Default</div>
+  <div class="tx-demo tx-demo__col tx-demo__col--18">
+    <div class="tx-demo__col tx-demo__col--10">
+      <div class="tx-demo__label">Default</div>
       <TxRadioGroup v-model="valueDefault">
         <TxRadio value="a">Option A</TxRadio>
         <TxRadio value="b">Option B</TxRadio>
@@ -18,8 +18,8 @@ const valueGlass = ref<'a' | 'b' | 'c'>('a')
       </TxRadioGroup>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <div style="font-size: 12px; opacity: 0.7;">Plain</div>
+    <div class="tx-demo__col tx-demo__col--10">
+      <div class="tx-demo__label">Plain</div>
       <TxRadioGroup v-model="valuePlain" :elastic="false">
         <TxRadio value="a">Option A</TxRadio>
         <TxRadio value="b">Option B</TxRadio>
@@ -27,8 +27,8 @@ const valueGlass = ref<'a' | 'b' | 'c'>('a')
       </TxRadioGroup>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <div style="font-size: 12px; opacity: 0.7;">Blur</div>
+    <div class="tx-demo__col tx-demo__col--10">
+      <div class="tx-demo__label">Blur</div>
       <TxRadioGroup v-model="valueBlur" blur>
         <TxRadio value="a">Option A</TxRadio>
         <TxRadio value="b">Option B</TxRadio>
@@ -36,8 +36,8 @@ const valueGlass = ref<'a' | 'b' | 'c'>('a')
       </TxRadioGroup>
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 10px;">
-      <div style="font-size: 12px; opacity: 0.7;">Glass</div>
+    <div class="tx-demo__col tx-demo__col--10">
+      <div class="tx-demo__label">Glass</div>
       <TxRadioGroup v-model="valueGlass" glass>
         <TxRadio value="a">Option A</TxRadio>
         <TxRadio value="b">Option B</TxRadio>
