@@ -6,7 +6,7 @@ import type { ContextMenuProps } from './types'
 defineOptions({ name: 'TxContextMenu' })
 
 const props = withDefaults(defineProps<ContextMenuProps>(), {
-  modelValue: false,
+  modelValue: undefined,
   x: 0,
   y: 0,
   width: 220,
@@ -20,12 +20,16 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const internalOpen = ref(false)
+
 const open = computed({
-  get: () => !!props.modelValue,
+  get: () => (typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value),
   set: (v) => {
+    if (typeof props.modelValue !== 'boolean')
+      internalOpen.value = v
     emit('update:modelValue', v)
     if (v)
-      emit('open', { x: props.x, y: props.y })
+      emit('open', { x: point.value.x, y: point.value.y })
     else
       emit('close')
   },
@@ -34,6 +38,8 @@ const open = computed({
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
 const point = ref({ x: props.x, y: props.y })
+
+const lastOpenedAt = ref(0)
 
 const virtualReference = computed(() => {
   return {
@@ -71,16 +77,38 @@ provide('txContextMenu', {
 function onContextMenu(e: MouseEvent) {
   e.preventDefault()
   point.value = { x: e.clientX, y: e.clientY }
+  lastOpenedAt.value = performance.now()
   open.value = true
+}
+
+watch(
+  () => [props.x, props.y],
+  ([x, y]) => {
+    point.value = { x: x ?? 0, y: y ?? 0 }
+  },
+)
+
+function isEventInside(e: Event, el: HTMLElement | null): boolean {
+  if (!el)
+    return false
+  const anyE = e as any
+  const path: EventTarget[] | undefined = typeof anyE.composedPath === 'function' ? anyE.composedPath() : undefined
+  if (path && path.length)
+    return path.includes(el)
+  const t = (e.target ?? null) as Node | null
+  return !!t && el.contains(t)
 }
 
 function handleOutside(e: MouseEvent) {
   if (!props.closeOnClickOutside) return
   if (!open.value) return
-  const t = e.target as Node | null
-  const inTrigger = !!triggerRef.value && !!t && triggerRef.value.contains(t)
-  const inMenu = !!menuRef.value && !!t && menuRef.value.contains(t)
-  if (!inTrigger && !inMenu) close()
+  if (performance.now() - lastOpenedAt.value < 60)
+    return
+
+  const inTrigger = isEventInside(e, triggerRef.value)
+  const inMenu = isEventInside(e, menuRef.value)
+  if (!inTrigger && !inMenu)
+    close()
 }
 
 function handleEsc(e: KeyboardEvent) {
@@ -109,12 +137,12 @@ watch(
 )
 
 onMounted(() => {
-  document.addEventListener('click', handleOutside)
+  document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', handleEsc)
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', handleOutside)
+  document.removeEventListener('pointerdown', handleOutside, true)
   document.removeEventListener('keydown', handleEsc)
   cleanupAutoUpdate.value?.()
   cleanupAutoUpdate.value = null

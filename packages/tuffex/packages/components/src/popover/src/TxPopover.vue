@@ -48,23 +48,46 @@ const arrowRef = ref<HTMLElement | null>(null)
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
 
+const stablePlacement = ref<string | null>(null)
+
 const splitX = ref(0)
 const splitY = ref(0)
 
 const motion = computed(() => (props.motion === 'fade' ? 'fade' : 'split'))
 
 const popoverVars = computed<Record<string, string>>(() => {
+  const side = String(stablePlacement.value || placement.value || props.placement || 'bottom').split('-')[0]
+  const arrowData = (middlewareData.value as any)?.arrow
+  const arrowSize = props.arrowSize || 12
+
+  let fusionX = '50%'
+  let fusionY = '50%'
+
+  if (props.showArrow && arrowData) {
+    if (side === 'top' || side === 'bottom') {
+      if (arrowData.x != null)
+        fusionX = `${arrowData.x + arrowSize * 0.5}px`
+    }
+    else {
+      if (arrowData.y != null)
+        fusionY = `${arrowData.y + arrowSize * 0.5}px`
+    }
+  }
+
   return {
     '--tx-popover-arrow-size': `${props.arrowSize}px`,
     '--tx-popover-radius': `${props.panelRadius}px`,
     '--tx-popover-split-x': `${splitX.value}px`,
     '--tx-popover-split-y': `${splitY.value}px`,
+    '--tx-popover-fusion-x': fusionX,
+    '--tx-popover-fusion-y': fusionY,
   }
 })
 
 const { floatingStyles, middlewareData, placement, update } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
+  transform: false,
   middleware: [
     offsetMw(() => props.offset),
     flip({ padding: 8 }),
@@ -91,7 +114,7 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
   ],
 })
 
-const arrowSide = computed(() => String(placement.value || props.placement || 'bottom').split('-')[0])
+const arrowSide = computed(() => String(stablePlacement.value || placement.value || props.placement || 'bottom').split('-')[0])
 
 const arrowStyle = computed<Record<string, string>>(() => {
   if (!props.showArrow || !arrowRef.value)
@@ -123,7 +146,7 @@ const arrowStyle = computed<Record<string, string>>(() => {
     bottom: 'top',
     left: 'right',
   }[side] as string
-  
+
   const half = Math.round((props.arrowSize || 12) / 2)
   base[staticSide] = `calc(-${half}px + 1px)`
   return base
@@ -141,7 +164,7 @@ function onBeforeEnter(el: Element) {
   if (!refEl) return
 
   const refRect = refEl.getBoundingClientRect()
-  const side = String(placement.value || props.placement || 'bottom').split('-')[0]
+  const side = arrowSide.value
 
   const refCx = refRect.left + refRect.width * 0.5
   const refCy = refRect.top + refRect.height * 0.5
@@ -168,8 +191,11 @@ function onBeforeEnter(el: Element) {
   const dx = refCx - tipX
   const dy = refCy - tipY
 
-  splitX.value = side === 'left' || side === 'right' ? dx : 0
-  splitY.value = side === 'top' || side === 'bottom' ? dy : 0
+  const limit = 18
+  const clamp = (v: number) => Math.min(limit, Math.max(-limit, v))
+
+  splitX.value = side === 'left' || side === 'right' ? clamp(dx) : 0
+  splitY.value = side === 'top' || side === 'bottom' ? clamp(dy) : 0
 }
 
 function toggle() {
@@ -218,6 +244,7 @@ watch(
   open,
   async (v) => {
     if (!v) {
+      stablePlacement.value = null
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = null
       return
@@ -226,6 +253,7 @@ watch(
     lastOpenedAt.value = performance.now()
     await nextTick()
     await update()
+    stablePlacement.value = placement.value
     if (referenceRef.value && floatingRef.value) {
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = autoUpdate(referenceRef.value, floatingRef.value, () => update())
@@ -273,6 +301,7 @@ onBeforeUnmount(() => {
           `is-bg-${panelBackground}`,
           { 'is-fusion': !!props.fusion, 'is-motion-split': motion === 'split' },
         ]"
+        :data-side="arrowSide"
         :style="[floatingStyles, popoverVars]"
       >
         <div
@@ -327,9 +356,13 @@ onBeforeUnmount(() => {
   z-index: 0;
 }
 
-.tx-popover > * {
+.tx-popover > :not(.tx-popover__arrow) {
   position: relative;
   z-index: 1;
+}
+
+.tx-popover > .tx-popover__arrow {
+  z-index: 0;
 }
 
 .tx-popover.is-fusion {
@@ -337,13 +370,76 @@ onBeforeUnmount(() => {
 }
 
 .tx-popover.is-fusion::before {
-  opacity: 0.45;
+  opacity: 0.08;
   background:
-    radial-gradient(600px 240px at 15% 8%, color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent), transparent 65%),
-    radial-gradient(500px 280px at 85% 0%, rgba(255, 255, 255, 0.42), transparent 70%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent 60%);
-  filter: blur(18px) saturate(1.2);
-  mix-blend-mode: soft-light;
+    radial-gradient(520px 220px at 50% 0%, rgba(255, 255, 255, 0.22), transparent 66%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 60%);
+  filter: blur(16px);
+}
+
+.tx-popover.is-fusion.is-motion-split::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  width: calc(var(--tx-popover-arrow-size, 12px) * 3.2);
+  height: calc(var(--tx-popover-arrow-size, 12px) * 2.4);
+  border-radius: 999px;
+  filter: blur(6px) saturate(1.06);
+  box-shadow: 0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.34) 55%, transparent);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.tx-popover.is-fusion.is-motion-split[data-side='top']::after {
+  left: var(--tx-popover-fusion-x, 50%);
+  bottom: 0;
+  transform: translate3d(-50%, 70%, 0) scale(0.65);
+}
+
+.tx-popover.is-fusion.is-motion-split[data-side='bottom']::after {
+  left: var(--tx-popover-fusion-x, 50%);
+  top: 0;
+  transform: translate3d(-50%, -70%, 0) scale(0.65);
+}
+
+.tx-popover.is-fusion.is-motion-split[data-side='left']::after {
+  top: var(--tx-popover-fusion-y, 50%);
+  right: 0;
+  transform: translate3d(70%, -50%, 0) scale(0.65);
+}
+
+.tx-popover.is-fusion.is-motion-split[data-side='right']::after {
+  top: var(--tx-popover-fusion-y, 50%);
+  left: 0;
+  transform: translate3d(-70%, -50%, 0) scale(0.65);
+}
+
+.tx-popover.is-bg-mask.is-fusion.is-motion-split::after {
+  background:
+    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.42), transparent 62%),
+    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.24), transparent 66%),
+    var(--tx-bg-color-overlay, #fff);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tx-popover.is-bg-blur.is-fusion.is-motion-split::after {
+  background:
+    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.38), transparent 62%),
+    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.22), transparent 66%),
+    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.tx-popover.is-bg-glass.is-fusion.is-motion-split::after {
+  background:
+    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.46), transparent 62%),
+    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.26), transparent 66%),
+    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
+  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
 }
 
 .tx-popover__card {
@@ -431,5 +527,30 @@ onBeforeUnmount(() => {
 .tx-popover.is-motion-split.tx-popover-enter-from,
 .tx-popover.is-motion-split.tx-popover-leave-to {
   transform: translate3d(var(--tx-popover-split-x, 0px), var(--tx-popover-split-y, 0px), 0) scale(0.92);
+}
+
+.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from::after,
+.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to::after {
+  opacity: 0.95;
+}
+
+.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='top']::after,
+.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='top']::after {
+  transform: translate3d(-50%, 85%, 0) scale(1.25);
+}
+
+.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='bottom']::after,
+.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='bottom']::after {
+  transform: translate3d(-50%, -85%, 0) scale(1.25);
+}
+
+.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='left']::after,
+.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='left']::after {
+  transform: translate3d(85%, -50%, 0) scale(1.25);
+}
+
+.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='right']::after,
+.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='right']::after {
+  transform: translate3d(-85%, -50%, 0) scale(1.25);
 }
 </style>
