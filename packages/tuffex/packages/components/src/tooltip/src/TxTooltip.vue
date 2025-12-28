@@ -57,9 +57,12 @@ const cleanupAutoUpdate = ref<(() => void) | null>(null)
 
 const lastOpenedAt = ref(0)
 
+const stablePlacement = ref<string | null>(null)
+
 const { floatingStyles, middlewareData, placement, update } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
+  transform: false,
   middleware: [
     offsetMw(() => props.offset),
     flip({ padding: 8 }),
@@ -95,12 +98,32 @@ const tooltipClass = computed(() => {
 })
 
 const tooltipVars = computed<Record<string, string>>(() => {
+  const side = String(stablePlacement.value || placement.value || props.placement || 'top').split('-')[0]
+  const arrowData = (middlewareData.value as any)?.arrow
+  const arrowSize = props.arrowSize || 12
+
+  let fusionX = '50%'
+  let fusionY = '50%'
+
+  if (props.showArrow && arrowData) {
+    if (side === 'top' || side === 'bottom') {
+      if (arrowData.x != null)
+        fusionX = `${arrowData.x + arrowSize * 0.5}px`
+    }
+    else {
+      if (arrowData.y != null)
+        fusionY = `${arrowData.y + arrowSize * 0.5}px`
+    }
+  }
+
   return {
     '--tx-tooltip-radius': `${props.panelRadius}px`,
     '--tx-tooltip-padding': `${props.panelPadding}px`,
     '--tx-tooltip-arrow-size': `${props.arrowSize}px`,
     '--tx-tooltip-split-x': `${splitX.value}px`,
     '--tx-tooltip-split-y': `${splitY.value}px`,
+    '--tx-tooltip-fusion-x': fusionX,
+    '--tx-tooltip-fusion-y': fusionY,
   }
 })
 
@@ -218,12 +241,14 @@ watch(
   open,
   async (v) => {
     if (!v) {
+      stablePlacement.value = null
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = null
       return
     }
     await nextTick()
     await update()
+    stablePlacement.value = placement.value
     if (referenceRef.value && floatingRef.value) {
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = autoUpdate(referenceRef.value, floatingRef.value, () => update())
@@ -281,14 +306,14 @@ const arrowStyle = computed<Record<string, string>>(() => {
     bottom: 'top',
     left: 'right',
   }[side] as string
-  
+
   const half = Math.round((props.arrowSize || 12) / 2)
   base[staticSide] = `calc(-${half}px + 1px)`
   
   return base
 })
 
-const arrowSide = computed(() => String(placement.value || 'top').split('-')[0])
+const arrowSide = computed(() => String(stablePlacement.value || placement.value || props.placement || 'top').split('-')[0])
 
 function onBeforeEnter(el: Element) {
   if (motion.value !== 'split') {
@@ -302,7 +327,7 @@ function onBeforeEnter(el: Element) {
   if (!refEl) return
 
   const refRect = refEl.getBoundingClientRect()
-  const side = String(placement.value || props.placement || 'top').split('-')[0]
+  const side = arrowSide.value
 
   const refCx = refRect.left + refRect.width * 0.5
   const refCy = refRect.top + refRect.height * 0.5
@@ -329,8 +354,11 @@ function onBeforeEnter(el: Element) {
   const dx = refCx - tipX
   const dy = refCy - tipY
 
-  splitX.value = side === 'left' || side === 'right' ? dx : 0
-  splitY.value = side === 'top' || side === 'bottom' ? dy : 0
+  const limit = 18
+  const clamp = (v: number) => Math.min(limit, Math.max(-limit, v))
+
+  splitX.value = side === 'left' || side === 'right' ? clamp(dx) : 0
+  splitY.value = side === 'top' || side === 'bottom' ? clamp(dy) : 0
 }
 </script>
 
@@ -353,6 +381,7 @@ function onBeforeEnter(el: Element) {
         v-if="open && !disabled"
         ref="floatingRef"
         :class="tooltipClass"
+        :data-side="arrowSide"
         role="tooltip"
         :style="[floatingStyles, tooltipVars]"
         @mouseenter="onFloatingEnter"
@@ -403,9 +432,13 @@ function onBeforeEnter(el: Element) {
   z-index: 0;
 }
 
-.tx-tooltip > * {
+.tx-tooltip > :not(.tx-tooltip__arrow) {
   position: relative;
   z-index: 1;
+}
+
+.tx-tooltip > .tx-tooltip__arrow {
+  z-index: 0;
 }
 
 .tx-tooltip.is-variant-solid,
@@ -465,13 +498,78 @@ function onBeforeEnter(el: Element) {
 }
 
 .tx-tooltip.is-fusion::before {
-  opacity: 0.45;
+  opacity: 0.08;
   background:
-    radial-gradient(600px 240px at 15% 8%, color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent), transparent 65%),
-    radial-gradient(500px 280px at 85% 0%, rgba(255, 255, 255, 0.42), transparent 70%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent 60%);
-  filter: blur(18px) saturate(1.2);
-  mix-blend-mode: soft-light;
+    radial-gradient(520px 220px at 50% 0%, rgba(255, 255, 255, 0.22), transparent 66%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 60%);
+  filter: blur(16px);
+}
+
+.tx-tooltip.is-fusion.is-motion-split::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.18;
+  width: calc(var(--tx-tooltip-arrow-size, 12px) * 3.2);
+  height: calc(var(--tx-tooltip-arrow-size, 12px) * 2.4);
+  border-radius: 999px;
+  filter: blur(4px) saturate(1.12);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.40) 60%, transparent),
+    0 10px 28px rgba(0, 0, 0, 0.08);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.tx-tooltip.is-fusion.is-motion-split[data-side='top']::after {
+  left: var(--tx-tooltip-fusion-x, 50%);
+  bottom: 0;
+  transform: translate3d(-50%, 70%, 0) scale(0.65);
+}
+
+.tx-tooltip.is-fusion.is-motion-split[data-side='bottom']::after {
+  left: var(--tx-tooltip-fusion-x, 50%);
+  top: 0;
+  transform: translate3d(-50%, -70%, 0) scale(0.65);
+}
+
+.tx-tooltip.is-fusion.is-motion-split[data-side='left']::after {
+  top: var(--tx-tooltip-fusion-y, 50%);
+  right: 0;
+  transform: translate3d(70%, -50%, 0) scale(0.65);
+}
+
+.tx-tooltip.is-fusion.is-motion-split[data-side='right']::after {
+  top: var(--tx-tooltip-fusion-y, 50%);
+  left: 0;
+  transform: translate3d(-70%, -50%, 0) scale(0.65);
+}
+
+.tx-tooltip.is-bg-mask.is-fusion.is-motion-split::after {
+  background:
+    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.42), transparent 62%),
+    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.24), transparent 66%),
+    var(--tx-bg-color-overlay, #fff);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tx-tooltip.is-bg-blur.is-fusion.is-motion-split::after {
+  background:
+    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.38), transparent 62%),
+    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.22), transparent 66%),
+    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.tx-tooltip.is-bg-glass.is-fusion.is-motion-split::after {
+  background:
+    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.46), transparent 62%),
+    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.26), transparent 66%),
+    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
+  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
 }
 
 .tx-tooltip__arrow {
@@ -480,6 +578,7 @@ function onBeforeEnter(el: Element) {
   height: var(--tx-tooltip-arrow-size, 12px);
   pointer-events: none;
   background: transparent;
+  z-index: 0;
 }
 
 .tx-tooltip__arrow::before,
@@ -549,5 +648,30 @@ function onBeforeEnter(el: Element) {
 .tx-tooltip.is-motion-split.tx-tooltip-enter-from,
 .tx-tooltip.is-motion-split.tx-tooltip-leave-to {
   transform: translate3d(var(--tx-tooltip-split-x, 0px), var(--tx-tooltip-split-y, 0px), 0) scale(0.92);
+}
+
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from::after,
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to::after {
+  opacity: 1;
+}
+
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='top']::after,
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='top']::after {
+  transform: translate3d(-50%, 85%, 0) scale(1.25);
+}
+
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='bottom']::after,
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='bottom']::after {
+  transform: translate3d(-50%, -85%, 0) scale(1.25);
+}
+
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='left']::after,
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='left']::after {
+  transform: translate3d(85%, -50%, 0) scale(1.25);
+}
+
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='right']::after,
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='right']::after {
+  transform: translate3d(-85%, -50%, 0) scale(1.25);
 }
 </style>
