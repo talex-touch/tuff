@@ -18,8 +18,16 @@ export interface PopoverProps {
   placement?: PopoverPlacement
   offset?: number
   width?: number
+  minWidth?: number
   maxWidth?: number
   referenceFullWidth?: boolean
+
+  showArrow?: boolean
+  arrowSize?: number
+
+  motion?: 'fade' | 'split'
+  fusion?: boolean
+
   panelVariant?: 'solid' | 'dashed' | 'plain'
   panelBackground?: 'blur' | 'glass' | 'mask'
   panelShadow?: 'none' | 'soft' | 'medium'

@@ -75,6 +75,11 @@ import {
   TxTypingIndicator,
   TxImageUploader,
   TxImageGallery,
+  TxTransition,
+  TxTransitionFade,
+  TxTransitionSlideFade,
+  TxTransitionRebound,
+  TxTransitionSmoothSize,
 } from '../../../packages/components/src'
 
 // 导入 Demo 容器组件
@@ -187,6 +192,12 @@ export default {
     app.component('TxTypingIndicator', TxTypingIndicator)
     app.component('TxImageUploader', TxImageUploader)
     app.component('TxImageGallery', TxImageGallery)
+
+    app.component('TxTransition', TxTransition)
+    app.component('TxTransitionFade', TxTransitionFade)
+    app.component('TxTransitionSlideFade', TxTransitionSlideFade)
+    app.component('TxTransitionRebound', TxTransitionRebound)
+    app.component('TxTransitionSmoothSize', TxTransitionSmoothSize)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)

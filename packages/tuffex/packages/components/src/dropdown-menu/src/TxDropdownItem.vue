@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
+import TxIcon from '../../icon/src/TxIcon.vue'
 import type { DropdownItemProps } from './types'
 
 defineOptions({ name: 'TxDropdownItem' })
@@ -8,6 +9,7 @@ defineOptions({ name: 'TxDropdownItem' })
 const props = withDefaults(defineProps<DropdownItemProps>(), {
   disabled: false,
   danger: false,
+  arrow: false,
 })
 
 const emit = defineEmits<{
@@ -35,6 +37,12 @@ function onClick() {
     <template #title>
       <slot />
     </template>
+
+    <template v-if="$slots.right || arrow" #right>
+      <slot name="right">
+        <TxIcon name="chevron-down" class="tx-dropdown-item__arrow" aria-hidden="true" />
+      </slot>
+    </template>
   </TxCardItem>
 </template>
 
@@ -56,5 +64,10 @@ function onClick() {
 
 .tx-dropdown-item.is-disabled {
   opacity: 0.5;
+}
+
+.tx-dropdown-item__arrow {
+  transform: rotate(-90deg);
+  opacity: 0.7;
 }
 </style>

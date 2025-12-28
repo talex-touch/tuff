@@ -5,6 +5,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+import TooltipVisualEffectsDemo from '../.vitepress/theme/components/demos/TooltipVisualEffectsDemo.vue'
+import TooltipVisualEffectsDemoSource from '../.vitepress/theme/components/demos/TooltipVisualEffectsDemo.vue?raw'
+
 const open = ref(false)
 </script>
 
@@ -25,6 +28,14 @@ const open = ref(false)
   </TxTooltip>
 </template>
 ```
+</template>
+</DemoBlock>
+
+## 视觉效果（split / fusion / mask）
+
+<DemoBlock title="Tooltip (visual effects)" :code="TooltipVisualEffectsDemoSource">
+<template #preview>
+<TooltipVisualEffectsDemo />
 </template>
 </DemoBlock>
 
@@ -126,5 +137,13 @@ const open = ref(false)
 | `closeDelay` | `number` | `120` | 关闭延迟(ms) |
 | `maxWidth` | `number` | `280` | 最大宽度 |
 | `showArrow` | `boolean` | `false` | 显示箭头 |
+| `arrowSize` | `number` | `12` | 箭头尺寸 |
 | `interactive` | `boolean` | `false` | 允许鼠标进入 tooltip 内容 |
 | `closeOnClickOutside` | `boolean` | `true` | click trigger 下点击外部关闭 |
+| `motion` | `'fade' \| 'split'` | `'split'` | 动效 |
+| `fusion` | `boolean` | `false` | 融合滤镜 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态 |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 面板背景 |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影 |
+| `panelRadius` | `number` | `10` | 面板圆角 |
+| `panelPadding` | `number` | `8` | 面板 padding |

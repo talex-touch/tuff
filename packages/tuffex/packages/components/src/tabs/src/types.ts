@@ -9,6 +9,8 @@ export interface TabsProps {
   contentScrollable?: boolean
   autoHeight?: boolean
   autoWidth?: boolean
+  indicatorVariant?: 'line' | 'pill' | 'block' | 'dot' | 'outline'
+  indicatorMotion?: 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
   autoHeightDurationMs?: number
   autoHeightEasing?: string
   animation?: TabsAnimation

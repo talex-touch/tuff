@@ -14,7 +14,7 @@ export interface AutoResizeEvent {
 
 export type AutoResizeRounding = 'none' | 'round' | 'floor' | 'ceil'
 
-export type AutoResizeApplyMode = 'sync' | 'transition'
+export type AutoResizeApplyMode = 'sync' | 'transition' | 'waapi' | 'auto'
 
 export interface UseAutoResizeOptions {
   width?: boolean
@@ -89,6 +89,10 @@ export function useAutoResize(
   const enabled = ref(true)
   const ro = ref<ResizeObserver | null>(null)
   let rafId: number | null = null
+  let rafPromise: Promise<void> | null = null
+  let rafPromiseResolve: (() => void) | null = null
+  let microtaskPromise: Promise<void> | null = null
+  let microtaskPromiseResolve: (() => void) | null = null
   let pendingManual = false
   let activeApplyCleanup: (() => void) | null = null
 
@@ -113,9 +117,16 @@ export function useAutoResize(
     return { outer, inner, styleEl }
   }
 
+  const canWaapi = (el: HTMLElement) => {
+    return typeof (el as any).animate === 'function'
+  }
+
   const apply = (e: AutoResizeEvent, styleEl: HTMLElement) => {
     if (!opt.applyStyle)
       return
+
+    // Pause ResizeObserver during style application to prevent feedback loops
+    ro.value?.disconnect()
 
     activeApplyCleanup?.()
     activeApplyCleanup = null
@@ -125,8 +136,14 @@ export function useAutoResize(
         styleEl.style.width = `${e.next.width}px`
       if (opt.height)
         styleEl.style.height = `${e.next.height}px`
+      // Resume ResizeObserver immediately for sync mode
+      if (enabled.value) start()
       return
     }
+
+    const resolvedApplyMode: AutoResizeApplyMode = opt.applyMode === 'auto'
+      ? (canWaapi(styleEl) ? 'waapi' : 'transition')
+      : opt.applyMode
 
     const prev = e.prev
     if (!prev)
@@ -141,11 +158,84 @@ export function useAutoResize(
     if (props.length === 0)
       return
 
+    const prevWidth = styleEl.style.width
+    const prevHeight = styleEl.style.height
+
+    if (resolvedApplyMode === 'waapi') {
+      if (!canWaapi(styleEl))
+        return
+
+      if (props.includes('width'))
+        styleEl.style.width = `${prev.width}px`
+      if (props.includes('height'))
+        styleEl.style.height = `${prev.height}px`
+
+      const frames: Keyframe[] = [
+        {
+          ...(props.includes('width') ? { width: `${prev.width}px` } : {}),
+          ...(props.includes('height') ? { height: `${prev.height}px` } : {}),
+        },
+        {
+          ...(props.includes('width') ? { width: `${e.next.width}px` } : {}),
+          ...(props.includes('height') ? { height: `${e.next.height}px` } : {}),
+        },
+      ]
+
+      const anim = (styleEl as any).animate(frames, {
+        duration: opt.durationMs,
+        easing: opt.easing,
+        fill: 'forwards',
+      }) as Animation
+
+      let finished = false
+      const done = () => {
+        if (finished)
+          return
+        finished = true
+
+        if (opt.clearStyleOnFinish) {
+          if (props.includes('width'))
+            styleEl.style.width = ''
+          if (props.includes('height'))
+            styleEl.style.height = ''
+        }
+        else {
+          if (props.includes('width'))
+            styleEl.style.width = prevWidth
+          if (props.includes('height'))
+            styleEl.style.height = prevHeight
+        }
+      }
+
+      const onFinish = () => {
+        done()
+        // Resume ResizeObserver after animation finishes
+        if (enabled.value) start()
+      }
+      const onCancel = () => {
+        done()
+        // Resume ResizeObserver after animation cancels
+        if (enabled.value) start()
+      }
+
+      anim.addEventListener('finish', onFinish, { once: true })
+      anim.addEventListener('cancel', onCancel, { once: true })
+
+      activeApplyCleanup = () => {
+        anim.removeEventListener('finish', onFinish)
+        anim.removeEventListener('cancel', onCancel)
+        anim.cancel()
+        done()
+        // Resume ResizeObserver after animation cleanup
+        if (enabled.value) start()
+      }
+
+      return
+    }
+
     const prevTransitionProperty = styleEl.style.transitionProperty
     const prevTransitionDuration = styleEl.style.transitionDuration
     const prevTransitionTimingFunction = styleEl.style.transitionTimingFunction
-    const prevWidth = styleEl.style.width
-    const prevHeight = styleEl.style.height
 
     styleEl.style.transitionProperty = props.join(',')
     styleEl.style.transitionDuration = '0ms'
@@ -204,6 +294,8 @@ export function useAutoResize(
 
       styleEl.removeEventListener('transitionend', onEnd)
       done()
+      // Resume ResizeObserver after transition ends
+      if (enabled.value) start()
     }
 
     styleEl.addEventListener('transitionend', onEnd)
@@ -212,6 +304,8 @@ export function useAutoResize(
       timeoutId = setTimeout(() => {
         styleEl.removeEventListener('transitionend', onEnd)
         done()
+        // Resume ResizeObserver after timeout
+        if (enabled.value) start()
       }, opt.durationMs + 34) as unknown as number
     }
 
@@ -220,6 +314,8 @@ export function useAutoResize(
       if (timeoutId != null)
         clearTimeout(timeoutId)
       done()
+      // Resume ResizeObserver after transition cleanup
+      if (enabled.value) start()
     }
   }
 
@@ -300,22 +396,76 @@ export function useAutoResize(
   }
 
   const schedule = (isManual: boolean) => {
-    if (!opt.rafBatch) {
-      void measureAndSync(isManual)
-      return
+    const cancelRaf = () => {
+      if (rafId != null)
+        cancelAnimationFrame(rafId)
+      rafId = null
+      rafPromiseResolve?.()
+      rafPromiseResolve = null
+      rafPromise = null
     }
+
+    if (isManual)
+      pendingManual = true
+
+    if (!enabled.value)
+      return Promise.resolve()
+
+    if (!opt.rafBatch)
+      return measureAndSync(pendingManual)
+
+    if (!isManual) {
+      if (rafId != null)
+        cancelRaf()
+
+      if (microtaskPromise != null)
+        return microtaskPromise
+
+      microtaskPromise = new Promise<void>((resolve) => {
+        microtaskPromiseResolve = resolve
+      })
+
+      const queue = typeof queueMicrotask === 'function'
+        ? queueMicrotask
+        : (cb: () => void) => Promise.resolve().then(cb)
+
+      queue(() => {
+        const manual = pendingManual
+        pendingManual = false
+        void measureAndSync(manual)
+          .finally(() => {
+            microtaskPromiseResolve?.()
+            microtaskPromiseResolve = null
+            microtaskPromise = null
+          })
+      })
+
+      return microtaskPromise
+    }
+
+    if (typeof requestAnimationFrame === 'undefined')
+      return measureAndSync(pendingManual)
+
     if (rafId != null)
-      return
-    if (typeof requestAnimationFrame === 'undefined') {
-      void measureAndSync(isManual)
-      return
-    }
+      return rafPromise ?? Promise.resolve()
+
+    rafPromise = new Promise<void>((resolve) => {
+      rafPromiseResolve = resolve
+    })
+
     rafId = requestAnimationFrame(() => {
       rafId = null
       const manual = pendingManual
       pendingManual = false
       void measureAndSync(manual)
+        .finally(() => {
+          rafPromiseResolve?.()
+          rafPromiseResolve = null
+          rafPromise = null
+        })
     })
+
+    return rafPromise
   }
 
   const start = () => {
@@ -353,6 +503,12 @@ export function useAutoResize(
     if (rafId != null)
       cancelAnimationFrame(rafId)
     rafId = null
+    rafPromiseResolve?.()
+    rafPromiseResolve = null
+    rafPromise = null
+    microtaskPromiseResolve?.()
+    microtaskPromiseResolve = null
+    microtaskPromise = null
     pendingManual = false
     activeApplyCleanup?.()
     activeApplyCleanup = null
@@ -366,13 +522,7 @@ export function useAutoResize(
   }
 
   const refresh = async () => {
-    pendingManual = true
-    schedule(true)
-    if (typeof requestAnimationFrame === 'undefined')
-      return
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve())
-    })
+    await schedule(true)
   }
 
   onMounted(async () => {
