@@ -24,6 +24,16 @@ export interface TooltipProps {
   maxWidth?: number
 
   showArrow?: boolean
+  arrowSize?: number
   interactive?: boolean
   closeOnClickOutside?: boolean
+
+  motion?: 'fade' | 'split'
+  fusion?: boolean
+
+  panelVariant?: 'solid' | 'dashed' | 'plain'
+  panelBackground?: 'blur' | 'glass' | 'mask'
+  panelShadow?: 'none' | 'soft' | 'medium'
+  panelRadius?: number
+  panelPadding?: number
 }

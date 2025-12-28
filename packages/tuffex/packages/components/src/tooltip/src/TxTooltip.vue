@@ -16,8 +16,16 @@ const props = withDefaults(defineProps<TooltipProps>(), {
   closeDelay: 120,
   maxWidth: 280,
   showArrow: false,
+  arrowSize: 12,
   interactive: false,
   closeOnClickOutside: true,
+  motion: 'split',
+  fusion: false,
+  panelVariant: 'solid',
+  panelBackground: 'blur',
+  panelShadow: 'soft',
+  panelRadius: 10,
+  panelPadding: 8,
 })
 
 const emit = defineEmits<{
@@ -64,8 +72,36 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
         })
       },
     }),
-    arrow({ element: arrowRef, padding: 6 }),
+    arrow({ 
+      element: computed(() => arrowRef.value),
+      padding: 6 
+    }),
   ],
+})
+
+const splitX = ref(0)
+const splitY = ref(0)
+
+const motion = computed(() => (props.motion === 'fade' ? 'fade' : 'split'))
+
+const tooltipClass = computed(() => {
+  return [
+    'tx-tooltip',
+    `is-variant-${props.panelVariant}`,
+    `is-bg-${props.panelBackground}`,
+    `is-shadow-${props.panelShadow}`,
+    { 'is-fusion': !!props.fusion, 'is-motion-split': motion.value === 'split' },
+  ]
+})
+
+const tooltipVars = computed<Record<string, string>>(() => {
+  return {
+    '--tx-tooltip-radius': `${props.panelRadius}px`,
+    '--tx-tooltip-padding': `${props.panelPadding}px`,
+    '--tx-tooltip-arrow-size': `${props.arrowSize}px`,
+    '--tx-tooltip-split-x': `${splitX.value}px`,
+    '--tx-tooltip-split-y': `${splitY.value}px`,
+  }
 })
 
 let openTimer: number | null = null
@@ -196,9 +232,15 @@ watch(
   { flush: 'post' },
 )
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', onEsc)
+  
+  // Pre-calculate position even when closed to avoid jump on first open
+  await nextTick()
+  if (referenceRef.value) {
+    await update()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -210,27 +252,86 @@ onBeforeUnmount(() => {
 })
 
 const arrowStyle = computed<Record<string, string>>(() => {
-  if (!props.showArrow)
-    return {}
+  if (!props.showArrow || !arrowRef.value)
+    return { display: 'none' }
+    
   const data = (middlewareData.value as any)?.arrow
-  const x = data?.x
-  const y = data?.y
-  const side = String(placement.value || 'top').split('-')[0]
-  const base: Record<string, string> = {
-    left: x != null ? `${x}px` : '',
-    top: y != null ? `${y}px` : '',
+  
+  // Ensure arrow data is stable and valid
+  if (!data || (data.x == null && data.y == null)) {
+    return { display: 'none' }
   }
-
+  
+  const x = data.x
+  const y = data.y
+  const side = String(placement.value || props.placement || 'top').split('-')[0]
+  
+  const base: Record<string, string> = {
+    display: 'block',
+    position: 'absolute',
+  }
+  
+  // Only set position if we have valid coordinates
+  if (x != null) base.left = `${x}px`
+  if (y != null) base.top = `${y}px`
+  
   const staticSide = {
     top: 'bottom',
-    right: 'left',
+    right: 'left', 
     bottom: 'top',
     left: 'right',
   }[side] as string
-
-  base[staticSide] = '-5px'
+  
+  const half = Math.round((props.arrowSize || 12) / 2)
+  base[staticSide] = `calc(-${half}px + 1px)`
+  
   return base
 })
+
+const arrowSide = computed(() => String(placement.value || 'top').split('-')[0])
+
+function onBeforeEnter(el: Element) {
+  if (motion.value !== 'split') {
+    splitX.value = 0
+    splitY.value = 0
+    return
+  }
+
+  const node = el as HTMLElement
+  const refEl = referenceRef.value
+  if (!refEl) return
+
+  const refRect = refEl.getBoundingClientRect()
+  const side = String(placement.value || props.placement || 'top').split('-')[0]
+
+  const refCx = refRect.left + refRect.width * 0.5
+  const refCy = refRect.top + refRect.height * 0.5
+
+  let tipX = refCx
+  let tipY = refCy
+
+  const arrowEl = props.showArrow ? arrowRef.value : null
+  if (arrowEl) {
+    const arrowRect = arrowEl.getBoundingClientRect()
+    tipX = arrowRect.left + arrowRect.width * 0.5
+    tipY = arrowRect.top + arrowRect.height * 0.5
+    if (side === 'top') tipY = arrowRect.bottom
+    if (side === 'bottom') tipY = arrowRect.top
+    if (side === 'left') tipX = arrowRect.right
+    if (side === 'right') tipX = arrowRect.left
+  }
+  else {
+    const floatRect = node.getBoundingClientRect()
+    tipX = floatRect.left + floatRect.width * 0.5
+    tipY = floatRect.top + floatRect.height * 0.5
+  }
+
+  const dx = refCx - tipX
+  const dy = refCy - tipY
+
+  splitX.value = side === 'left' || side === 'right' ? dx : 0
+  splitY.value = side === 'top' || side === 'bottom' ? dy : 0
+}
 </script>
 
 <template>
@@ -247,17 +348,24 @@ const arrowStyle = computed<Record<string, string>>(() => {
   </span>
 
   <Teleport to="body">
-    <Transition name="tx-tooltip">
+    <Transition name="tx-tooltip" @before-enter="onBeforeEnter">
       <div
-        v-show="open && !disabled"
+        v-if="open && !disabled"
         ref="floatingRef"
-        class="tx-tooltip"
+        :class="tooltipClass"
         role="tooltip"
-        :style="floatingStyles"
+        :style="[floatingStyles, tooltipVars]"
         @mouseenter="onFloatingEnter"
         @mouseleave="onFloatingLeave"
       >
-        <div v-if="props.showArrow" ref="arrowRef" class="tx-tooltip__arrow" :style="arrowStyle" aria-hidden="true" />
+        <div
+          v-if="props.showArrow"
+          ref="arrowRef"
+          class="tx-tooltip__arrow"
+          :data-side="arrowSide"
+          :style="arrowStyle"
+          aria-hidden="true"
+        />
         <slot name="content">
           {{ content }}
         </slot>
@@ -274,36 +382,172 @@ const arrowStyle = computed<Record<string, string>>(() => {
 
 .tx-tooltip {
   z-index: var(--tx-index-popper, 2000);
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--tx-border-color-light, #e4e7ed);
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 86%, transparent);
+  padding: var(--tx-tooltip-padding, 8px);
+  border-radius: var(--tx-tooltip-radius, 10px);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+  background: var(--tx-bg-color-overlay, #fff);
   color: var(--tx-text-color-primary, #303133);
-  box-shadow: var(--tx-box-shadow-light, 0 2px 12px rgba(0, 0, 0, 0.1));
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: none;
   font-size: 12px;
   line-height: 1.2;
+  transform-origin: center;
+}
+
+.tx-tooltip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+}
+
+.tx-tooltip > * {
+  position: relative;
+  z-index: 1;
+}
+
+.tx-tooltip.is-variant-solid,
+.tx-tooltip.is-variant-dashed {
+  border-style: solid;
+}
+
+.tx-tooltip.is-variant-dashed {
+  border-style: dashed;
+}
+
+.tx-tooltip.is-variant-plain {
+  border: none;
+}
+
+.tx-tooltip.is-bg-mask {
+  background: var(--tx-bg-color-overlay, #fff);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tx-tooltip.is-bg-blur {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.tx-tooltip.is-bg-glass {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
+  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+  border-color: color-mix(in srgb, rgba(255, 255, 255, 0.26) 55%, var(--tx-border-color-light, #e4e7ed));
+}
+
+.tx-tooltip.is-bg-glass::before {
+  opacity: 0.22;
+  background:
+    radial-gradient(700px 220px at 0% 0%, rgba(255, 255, 255, 0.55), transparent 55%),
+    radial-gradient(600px 260px at 100% 0%, rgba(255, 255, 255, 0.22), transparent 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0) 68%);
+}
+
+.tx-tooltip.is-shadow-none {
+  box-shadow: none;
+}
+
+.tx-tooltip.is-shadow-soft {
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.14);
+}
+
+.tx-tooltip.is-shadow-medium {
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.18);
+}
+
+.tx-tooltip.is-fusion {
+  filter: saturate(1.35) contrast(1.08);
+}
+
+.tx-tooltip.is-fusion::before {
+  opacity: 0.45;
+  background:
+    radial-gradient(600px 240px at 15% 8%, color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent), transparent 65%),
+    radial-gradient(500px 280px at 85% 0%, rgba(255, 255, 255, 0.42), transparent 70%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent 60%);
+  filter: blur(18px) saturate(1.2);
+  mix-blend-mode: soft-light;
 }
 
 .tx-tooltip__arrow {
   position: absolute;
-  width: 10px;
-  height: 10px;
-  transform: rotate(45deg);
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 86%, transparent);
-  border: 1px solid var(--tx-border-color-light, #e4e7ed);
-  box-sizing: border-box;
+  width: var(--tx-tooltip-arrow-size, 12px);
+  height: var(--tx-tooltip-arrow-size, 12px);
+  pointer-events: none;
+  background: transparent;
+}
+
+.tx-tooltip__arrow::before,
+.tx-tooltip__arrow::after {
+  content: '';
+  position: absolute;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+}
+
+.tx-tooltip__arrow::before {
+  inset: -1px;
+  background: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+  z-index: 0;
+}
+
+.tx-tooltip__arrow::after {
+  inset: 0;
+  background: var(--tx-bg-color-overlay, #fff);
+  z-index: 1;
+}
+
+.tx-tooltip.is-bg-mask .tx-tooltip__arrow::after {
+  background: var(--tx-bg-color-overlay, #fff);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tx-tooltip.is-bg-blur .tx-tooltip__arrow::after {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.tx-tooltip.is-bg-glass .tx-tooltip__arrow::after {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
+  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+}
+
+.tx-tooltip__arrow[data-side='top'] {
+  transform: rotate(180deg);
+}
+
+.tx-tooltip__arrow[data-side='bottom'] {
+  transform: rotate(0deg);
+}
+
+.tx-tooltip__arrow[data-side='left'] {
+  transform: rotate(90deg);
+}
+
+.tx-tooltip__arrow[data-side='right'] {
+  transform: rotate(-90deg);
 }
 
 .tx-tooltip-enter-active,
 .tx-tooltip-leave-active {
-  transition: opacity 0.14s ease, transform 0.14s ease;
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
 .tx-tooltip-enter-from,
 .tx-tooltip-leave-to {
   opacity: 0;
   transform: translateY(4px) scale(0.98);
+}
+
+.tx-tooltip.is-motion-split.tx-tooltip-enter-from,
+.tx-tooltip.is-motion-split.tx-tooltip-leave-to {
+  transform: translate3d(var(--tx-tooltip-split-x, 0px), var(--tx-tooltip-split-y, 0px), 0) scale(0.92);
 }
 </style>

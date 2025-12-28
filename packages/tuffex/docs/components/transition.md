@@ -1,0 +1,50 @@
+# Transition 动效
+
+用于内容切换（X）与列表增删（Y）的通用过渡封装。
+
+<script setup lang="ts">
+import TransitionContentDemo from '../.vitepress/theme/components/demos/TransitionContentDemo.vue'
+import TransitionContentDemoSource from '../.vitepress/theme/components/demos/TransitionContentDemo.vue?raw'
+
+import TransitionListDemo from '../.vitepress/theme/components/demos/TransitionListDemo.vue'
+import TransitionListDemoSource from '../.vitepress/theme/components/demos/TransitionListDemo.vue?raw'
+</script>
+
+## 内容切换（X）
+
+<DemoBlock title="Transition Content" :code="TransitionContentDemoSource">
+  <template #preview>
+    <TransitionContentDemo />
+  </template>
+</DemoBlock>
+
+## 列表增删（Y）
+
+<DemoBlock title="Transition List" :code="TransitionListDemoSource">
+  <template #preview>
+    <TransitionListDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### TxTransition Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | 预设动效 |
+| `group` | `boolean` | `false` | 是否使用 TransitionGroup（列表场景） |
+| `tag` | `string` | `'div'` | group 模式下容器 tag |
+| `appear` | `boolean` | `true` | 是否首屏执行 enter |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | 内容切换模式（非 group） |
+| `duration` | `number` | `180` | 动画时长（ms） |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | 缓动 |
+
+### Semantic Components
+
+- `TxTransitionFade`
+- `TxTransitionSlideFade`
+- `TxTransitionRebound`
+- `TxTransitionSmoothSize`
+
+这些组件等价于 `TxTransition` 的不同 `preset`，用于更语义化的调用方式。

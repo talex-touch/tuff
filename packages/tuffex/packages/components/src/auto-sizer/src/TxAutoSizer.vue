@@ -43,7 +43,7 @@ const { refresh, measure, size, setEnabled } = useAutoResize(outer, inner, {
   width: props.width,
   height: props.height,
   applyStyle: true,
-  applyMode: 'transition',
+  applyMode: 'auto',
   styleTarget: 'outer',
   observeTarget: props.observeTarget,
   rounding: props.rounding,

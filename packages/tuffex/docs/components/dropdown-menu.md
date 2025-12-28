@@ -4,6 +4,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+
+import DropdownMenuNavDemo from '../.vitepress/theme/components/demos/DropdownMenuNavDemo.vue'
+import DropdownMenuNavDemoSource from '../.vitepress/theme/components/demos/DropdownMenuNavDemo.vue?raw'
+
 const open = ref(false)
 </script>
 
@@ -38,6 +42,14 @@ const open = ref(false)
 </template>
 </DemoBlock>
 
+## 导航样式
+
+<DemoBlock title="DropdownMenu (nav)" :code="DropdownMenuNavDemoSource">
+<template #preview>
+<DropdownMenuNavDemo />
+</template>
+</DemoBlock>
+
 ## API
 
 ### TxDropdownMenu Props
@@ -48,6 +60,12 @@ const open = ref(false)
 | `placement` | `DropdownPlacement` | `'bottom-start'` | 位置 |
 | `offset` | `number` | `6` | 间距 |
 | `closeOnSelect` | `boolean` | `true` | 选择后自动关闭 |
+| `minWidth` | `number` | `220` | 最小宽度 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
+| `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
+| `panelPadding` | `number` | `8` | 面板 padding（TxCard padding） |
 
 ### TxDropdownItem Props
 
@@ -55,6 +73,7 @@ const open = ref(false)
 |------|------|---------|------|
 | `disabled` | `boolean` | `false` | 禁用 |
 | `danger` | `boolean` | `false` | 危险样式 |
+| `arrow` | `boolean` | `false` | 显示右侧箭头（可通过 `#right` 覆盖） |
 
 ### Events
 

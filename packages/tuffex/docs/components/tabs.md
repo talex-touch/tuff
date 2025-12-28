@@ -12,6 +12,12 @@ import TabsPlacementDemoSource from '../.vitepress/theme/components/demos/TabsPl
 import TabsAutoSizeDemo from '../.vitepress/theme/components/demos/TabsAutoSizeDemo.vue'
 import TabsAutoSizeDemoSource from '../.vitepress/theme/components/demos/TabsAutoSizeDemo.vue?raw'
 
+import TabsDynamicContentDemo from '../.vitepress/theme/components/demos/TabsDynamicContentDemo.vue'
+import TabsDynamicContentDemoSource from '../.vitepress/theme/components/demos/TabsDynamicContentDemo.vue?raw'
+
+import TabsIndicatorShowcaseDemo from '../.vitepress/theme/components/demos/TabsIndicatorShowcaseDemo.vue'
+import TabsIndicatorShowcaseDemoSource from '../.vitepress/theme/components/demos/TabsIndicatorShowcaseDemo.vue?raw'
+
 import TabsDisableAnimDemo from '../.vitepress/theme/components/demos/TabsDisableAnimDemo.vue'
 import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/TabsDisableAnimDemo.vue?raw'
 </script>
@@ -21,6 +27,22 @@ import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/Tabs
 <DemoBlock title="Tabs" :code="TabsBasicDemoSource">
   <template #preview>
     <TabsBasicDemo />
+  </template>
+</DemoBlock>
+
+## Indicator Showcase
+
+<DemoBlock title="Indicator variants & motions" :code="TabsIndicatorShowcaseDemoSource">
+<template #preview>
+<TabsIndicatorShowcaseDemo />
+</template>
+</DemoBlock>
+
+## 动态内容尺寸（manual, rich content）
+
+<DemoBlock title="Dynamic Content (manual)" :code="TabsDynamicContentDemoSource">
+  <template #preview>
+    <TabsDynamicContentDemo />
   </template>
 </DemoBlock>
 
@@ -61,9 +83,13 @@ import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/Tabs
 | `navMinWidth` | `number` | `220` | 左侧导航最小宽度 |
 | `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |
 | `contentPadding` | `number` | `12` | 内容区 padding |
-| `contentScrollable` | `boolean` | `true` | 内容区是否可滚动 |
-| `autoWidth` | `boolean` | `false` | 宽度跟随内容（用于顶部 Tabs + 右侧操作区等）。建议配合 `animation.size` |
-| `animation` | `{ size?; indicator?; content? }` | - | 动画配置对象 |
+| `contentScrollable` | `boolean` | `true` | 内容是否可滚动（关闭后可用于 autoHeight/autoWidth 的尺寸测量） |
+| `autoHeight` | `boolean` | `false` | 自动高度（需要 `contentScrollable=false` + `animation.size.enabled=true`） |
+| `autoWidth` | `boolean` | `false` | 自动宽度（需要 `animation.size.enabled=true`） |
+| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | 指示器样式 |
+| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器动效风格 |
+| `indicatorMotionStrength` | `number` | `1` | 指示器动效强度（数值越大越“Q弹”，`0` 基本关闭 scale 弹性） |
+| `animation` | `TabsAnimation` | - | 动画配置（size/nav/indicator/content） |
 | `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时兼容 `autoHeight*` |
 | `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | 导航容器动画（nav 宽度/布局变化过渡） |
 | `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | 指示条动画 |
@@ -78,6 +104,15 @@ import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/Tabs
 |------|------|------|
 | `default` | - | 放置 `TxTabItem` / `TxTabItemGroup` / `TxTabHeader` |
 | `nav-right` | - | 顶部/底部 Tabs 的导航右侧区域（适合放按钮、搜索等），宽度变化会配合 `autoWidth` 跟随内容 |
+
+### Expose
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `refresh` | `() => void` | 触发内容尺寸重新测量（AutoSizer passthrough） |
+| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | 包裹一次变更并使用 FLIP 尺寸过渡 |
+| `action` | `(fn: (el: HTMLElement) => void \| Promise<void>, optionsOrDetect?: any) => Promise<any>` | AutoSizer 的 action wrapper（用于丝滑自动切换） |
+| `size` | `() => { width: number; height: number } \| undefined` | 当前测量的尺寸信息 |
 
 ### TxTabItem Props
 

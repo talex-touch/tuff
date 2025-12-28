@@ -10,6 +10,13 @@ const props = withDefaults(defineProps<DropdownMenuProps>(), {
   placement: 'bottom-start',
   offset: 6,
   closeOnSelect: true,
+
+  minWidth: 220,
+  panelVariant: 'solid',
+  panelBackground: 'glass',
+  panelShadow: 'soft',
+  panelRadius: 18,
+  panelPadding: 8,
 })
 
 const emit = defineEmits<{
@@ -43,7 +50,13 @@ provide('txDropdownMenu', {
     :placement="placement"
     :offset="offset"
     :width="0"
+    :min-width="minWidth"
     :max-width="360"
+    :panel-variant="panelVariant"
+    :panel-background="panelBackground"
+    :panel-shadow="panelShadow"
+    :panel-radius="panelRadius"
+    :panel-padding="panelPadding"
   >
     <template #reference>
       <slot name="trigger" />
@@ -60,6 +73,6 @@ provide('txDropdownMenu', {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 6px;
+  padding: 2px;
 }
 </style>

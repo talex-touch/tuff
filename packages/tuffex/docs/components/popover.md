@@ -6,6 +6,9 @@ Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBac
 
 <script setup lang="ts">
 import { ref } from 'vue'
+
+import PopoverVisualEffectsDemo from '../.vitepress/theme/components/demos/PopoverVisualEffectsDemo.vue'
+import PopoverVisualEffectsDemoSource from '../.vitepress/theme/components/demos/PopoverVisualEffectsDemo.vue?raw'
 const open = ref(false)
 </script>
 
@@ -40,6 +43,14 @@ const open = ref(false)
 </template>
 </DemoBlock>
 
+## 视觉效果（split / fusion / mask）
+
+<DemoBlock title="Popover (visual effects)" :code="PopoverVisualEffectsDemoSource">
+<template #preview>
+<PopoverVisualEffectsDemo />
+</template>
+</DemoBlock>
+
 ## API
 
 ### TxPopover Props
@@ -51,10 +62,15 @@ const open = ref(false)
 | `placement` | `PopoverPlacement` | `'bottom-start'` | 位置 |
 | `offset` | `number` | `8` | 间距 |
 | `width` | `number` | `0` | 面板宽度（0 = 跟随 reference） |
+| `minWidth` | `number` | `0` | 最小宽度（width=0 时也会生效） |
 | `maxWidth` | `number` | `360` | 最大宽度 |
 | `referenceFullWidth` | `boolean` | `false` | reference 容器是否占满宽度（用于 flex 场景） |
+| `showArrow` | `boolean` | `false` | 显示箭头 |
+| `arrowSize` | `number` | `12` | 箭头尺寸 |
+| `motion` | `'fade' \| 'split'` | `'split'` | 动效 |
+| `fusion` | `boolean` | `false` | 融合滤镜 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
