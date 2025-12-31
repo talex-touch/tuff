@@ -80,6 +80,7 @@ import {
   TxTransitionSlideFade,
   TxTransitionRebound,
   TxTransitionSmoothSize,
+  TxFusion,
 } from '../../../packages/components/src'
 
 // 导入 Demo 容器组件
@@ -198,6 +199,8 @@ export default {
     app.component('TxTransitionSlideFade', TxTransitionSlideFade)
     app.component('TxTransitionRebound', TxTransitionRebound)
     app.component('TxTransitionSmoothSize', TxTransitionSmoothSize)
+
+    app.component('TxFusion', TxFusion)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)
