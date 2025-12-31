@@ -9,6 +9,10 @@ const type = ref<GroupType>('button')
 const direction = ref<'row' | 'column'>('row')
 const disabled = ref(false)
 
+type IndicatorVariant = 'solid' | 'outline' | 'glass' | 'blur'
+
+const indicatorVariant = ref<IndicatorVariant>('solid')
+
 const glass = ref(false)
 const blur = ref(false)
 const elastic = ref(true)
@@ -21,6 +25,18 @@ const value = ref<OptionValue>('a')
 
 const shouldShowDirection = computed(() => type.value !== 'button')
 const shouldShowIndicatorProps = computed(() => type.value === 'button')
+
+const resolvedGlass = computed(() => {
+  if (!shouldShowIndicatorProps.value) return false
+  if (indicatorVariant.value === 'glass') return true
+  return glass.value
+})
+
+const resolvedBlur = computed(() => {
+  if (!shouldShowIndicatorProps.value) return false
+  if (indicatorVariant.value === 'blur') return true
+  return blur.value
+})
 
 const typeOptions = [
   { value: 'button', label: 'button' },
@@ -66,6 +82,16 @@ const directionOptions = [
           </label>
 
           <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
+            <span class="tx-demo__label">indicator</span>
+            <TuffSelect v-model="indicatorVariant" style="min-width: 180px;">
+              <TuffSelectItem value="solid" label="solid" />
+              <TuffSelectItem value="outline" label="outline" />
+              <TuffSelectItem value="glass" label="glass" />
+              <TuffSelectItem value="blur" label="blur" />
+            </TuffSelect>
+          </label>
+
+          <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
             <span class="tx-demo__label">blur</span>
             <TxSwitch v-model="blur" />
           </label>
@@ -99,8 +125,9 @@ const directionOptions = [
         :type="type"
         :direction="shouldShowDirection ? direction : undefined"
         :disabled="disabled"
-        :glass="shouldShowIndicatorProps ? glass : false"
-        :blur="shouldShowIndicatorProps ? blur : false"
+        :indicator-variant="shouldShowIndicatorProps ? indicatorVariant : undefined"
+        :glass="resolvedGlass"
+        :blur="resolvedBlur"
         :elastic="elastic"
         :stiffness="stiffness"
         :damping="damping"
