@@ -17,6 +17,19 @@ export interface SliderProps {
   tooltipAccelBoost?: number
   tooltipSpringStiffness?: number
   tooltipSpringDamping?: number
+
+  tooltipMotion?: 'blur' | 'fade' | 'none'
+  tooltipMotionDuration?: number
+  tooltipMotionBlurPx?: number
+  tooltipDistortSkewDeg?: number
+
+  tooltipJelly?: boolean
+  tooltipJellyFrequency?: number
+  tooltipJellyDecay?: number
+  tooltipJellyRotateDeg?: number
+  tooltipJellySkewDeg?: number
+  tooltipJellySquash?: number
+  tooltipJellyTriggerAccel?: number
 }
 
 export interface SliderEmits {
