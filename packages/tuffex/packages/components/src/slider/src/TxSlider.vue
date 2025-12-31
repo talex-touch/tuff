@@ -17,11 +17,22 @@ const props = withDefaults(defineProps<SliderProps>(), {
   tooltipTrigger: 'drag',
   tooltipPlacement: 'top',
   tooltipTilt: false,
-  tooltipTiltMaxDeg: 14,
-  tooltipOffsetMaxPx: 18,
-  tooltipAccelBoost: 0.35,
-  tooltipSpringStiffness: 240,
-  tooltipSpringDamping: 26,
+  tooltipTiltMaxDeg: 18,
+  tooltipOffsetMaxPx: 28,
+  tooltipAccelBoost: 0.65,
+  tooltipSpringStiffness: 320,
+  tooltipSpringDamping: 24,
+  tooltipMotion: 'blur',
+  tooltipMotionDuration: 160,
+  tooltipMotionBlurPx: 10,
+  tooltipDistortSkewDeg: 8,
+  tooltipJelly: true,
+  tooltipJellyFrequency: 8.5,
+  tooltipJellyDecay: 10,
+  tooltipJellyRotateDeg: 10,
+  tooltipJellySkewDeg: 12,
+  tooltipJellySquash: 0.16,
+  tooltipJellyTriggerAccel: 2800,
 })
 
 const emit = defineEmits<SliderEmits>()
@@ -53,6 +64,15 @@ const tooltipTargetTiltDeg = ref(0)
 const tooltipTargetOffsetX = ref(0)
 const tooltipTiltVel = ref(0)
 const tooltipOffsetVel = ref(0)
+const tooltipFollowX = ref(0)
+const tooltipFollowVel = ref(0)
+const tooltipTargetFollowX = ref(0)
+const tooltipSquash = ref(0)
+const tooltipSkewDeg = ref(0)
+const tooltipJellyAmp = ref(0)
+const tooltipJellyPhase = ref(0)
+const tooltipJellyDir = ref(1)
+const tooltipJellyWobble = ref(0)
 let tooltipRafId: number | null = null
 let tooltipLastRafTs: number | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -98,10 +118,33 @@ const shouldShowTooltip = computed(() => {
   return dragging.value
 })
 
+const tooltipTransitionStyle = computed<Record<string, string>>(() => {
+  const duration = Math.max(0, props.tooltipMotionDuration)
+  const blur = Math.max(0, props.tooltipMotionBlurPx)
+  return {
+    '--tx-slider-tooltip-motion-duration': `${duration}ms`,
+    '--tx-slider-tooltip-motion-blur': `${blur}px`,
+  }
+})
+
 const tooltipStyle = computed(() => {
-  const baseX = thumbCenterPx.value
+  const baseX = props.tooltipTilt ? tooltipFollowX.value : thumbCenterPx.value
   const offsetX = props.tooltipTilt ? tooltipOffsetX.value : 0
-  const rotate = props.tooltipTilt ? tooltipTiltDeg.value : 0
+  const baseRotate = props.tooltipTilt ? tooltipTiltDeg.value : 0
+  const baseSquash = props.tooltipTilt ? tooltipSquash.value : 0
+  const baseSkew = props.tooltipTilt ? tooltipSkewDeg.value : 0
+
+  const wobble = props.tooltipTilt && props.tooltipJelly ? tooltipJellyWobble.value : 0
+  const wobbleDir = props.tooltipTilt && props.tooltipJelly ? tooltipJellyDir.value : 1
+  const wobbleRotate = wobble * wobbleDir * Math.max(0, props.tooltipJellyRotateDeg)
+  const wobbleSkew = wobble * wobbleDir * Math.max(0, props.tooltipJellySkewDeg)
+  const wobbleAbs = Math.abs(wobble)
+  const wobbleSquash = wobbleAbs * Math.max(0, props.tooltipJellySquash)
+
+  const rotate = baseRotate + wobbleRotate
+  const skew = baseSkew + wobbleSkew
+  const scaleX = 1 + baseSquash * 0.16 + wobbleSquash * 0.28
+  const scaleY = 1 - baseSquash * 0.1 - wobbleSquash * 0.18
   
   // Clamp position to prevent overflow
   const half = tooltipWidth.value > 0 ? tooltipWidth.value / 2 : 40 // fallback width
@@ -112,13 +155,18 @@ const tooltipStyle = computed(() => {
   
   const y = props.tooltipPlacement === 'bottom' ? 28 : -28
   const origin = props.tooltipPlacement === 'bottom' ? '50% 0%' : '50% 100%'
+
+  const useMotion = props.tooltipMotion !== 'none'
+  const transition = useMotion
+    ? (dragging.value ? 'none' : 'transform 0.3s ease')
+    : (dragging.value ? 'opacity 0.12s ease' : 'opacity 0.2s ease, transform 0.3s ease')
   
   return {
     left: `${clampedX}px`,
     top: '50%',
     transformOrigin: origin,
-    transform: `translateX(-50%) translateY(-50%) translateY(${y}px) rotate(${rotate}deg)`,
-    transition: dragging.value ? 'transform 0.1s ease-out' : 'opacity 0.2s ease, transform 0.3s ease',
+    transform: `translateX(-50%) translateY(-50%) rotate(${rotate}deg) skewX(${skew}deg) scaleX(${scaleX}) scaleY(${scaleY}) translateY(${y}px)`,
+    transition,
   }
 })
 
@@ -126,6 +174,124 @@ function refreshTooltipWidth() {
   if (!tooltipRef.value) return
   const w = tooltipRef.value.getBoundingClientRect().width
   if (Number.isFinite(w) && w > 0) tooltipWidth.value = w
+}
+
+function clamp01(v: number) {
+  return Math.min(1, Math.max(0, v))
+}
+
+function resetTooltipMotion() {
+  tooltipLastRafTs = null
+  tooltipFollowX.value = thumbCenterPx.value
+  tooltipFollowVel.value = 0
+  tooltipTargetFollowX.value = thumbCenterPx.value
+
+  tooltipTiltDeg.value = 0
+  tooltipOffsetX.value = 0
+  tooltipTargetTiltDeg.value = 0
+  tooltipTargetOffsetX.value = 0
+  tooltipTiltVel.value = 0
+  tooltipOffsetVel.value = 0
+  tooltipSquash.value = 0
+  tooltipSkewDeg.value = 0
+
+  tooltipJellyAmp.value = 0
+  tooltipJellyPhase.value = 0
+  tooltipJellyDir.value = 1
+  tooltipJellyWobble.value = 0
+}
+
+function triggerJelly(kick: number, dir: number) {
+  if (!props.tooltipTilt) return
+  if (!props.tooltipJelly) return
+
+  const k = clamp01(kick)
+  if (k <= 0) return
+
+  tooltipJellyDir.value = dir === 0 ? 1 : dir
+  tooltipJellyAmp.value = Math.min(1, tooltipJellyAmp.value + k)
+  if (tooltipJellyAmp.value === k)
+    tooltipJellyPhase.value = 0
+}
+
+function ensureTooltipRaf() {
+  if (tooltipRafId != null) return
+
+  tooltipLastRafTs = null
+  tooltipRafId = window.requestAnimationFrame(function loop(ts) {
+    if (!shouldShowTooltip.value || !props.tooltipTilt) {
+      tooltipRafId = null
+      tooltipLastRafTs = null
+      return
+    }
+
+    const last = tooltipLastRafTs ?? ts
+    tooltipLastRafTs = ts
+    const dt = clamp01((ts - last) / 1000 / 0.032) * 0.032
+
+    tooltipTargetFollowX.value = thumbCenterPx.value
+
+    const k = Math.max(1, props.tooltipSpringStiffness)
+    const c = Math.max(0, props.tooltipSpringDamping)
+
+    {
+      const x = tooltipFollowX.value
+      const v = tooltipFollowVel.value
+      const a = -k * (x - tooltipTargetFollowX.value) - c * v
+      const nv = v + a * dt
+      const nx = x + nv * dt
+      tooltipFollowVel.value = nv
+      tooltipFollowX.value = nx
+    }
+
+    {
+      const x = tooltipOffsetX.value
+      const v = tooltipOffsetVel.value
+      const a = -k * 1.1 * (x - tooltipTargetOffsetX.value) - c * 0.95 * v
+      const nv = v + a * dt
+      const nx = x + nv * dt
+      tooltipOffsetVel.value = nv
+      tooltipOffsetX.value = nx
+    }
+
+    {
+      const x = tooltipTiltDeg.value
+      const v = tooltipTiltVel.value
+      const a = -k * 1.05 * (x - tooltipTargetTiltDeg.value) - c * 0.95 * v
+      const nv = v + a * dt
+      const nx = x + nv * dt
+      tooltipTiltVel.value = nv
+      tooltipTiltDeg.value = nx
+    }
+
+    const speed = Math.abs(tooltipFollowVel.value) * 0.9 + Math.abs(tooltipOffsetVel.value) * 0.35
+    tooltipSquash.value = clamp01(speed / 1600)
+
+    const maxSkew = Math.max(0, props.tooltipDistortSkewDeg)
+    const dir = tooltipFollowVel.value >= 0 ? 1 : -1
+    tooltipSkewDeg.value = -dir * tooltipSquash.value * maxSkew
+
+    if (props.tooltipJelly && tooltipJellyAmp.value > 0.0008) {
+      const freq = Math.max(0, props.tooltipJellyFrequency)
+      const decay = Math.max(0, props.tooltipJellyDecay)
+      const omega = 2 * Math.PI * freq
+      tooltipJellyPhase.value += omega * dt
+      tooltipJellyAmp.value *= Math.exp(-decay * dt)
+      tooltipJellyWobble.value = Math.sin(tooltipJellyPhase.value) * tooltipJellyAmp.value
+    }
+    else {
+      tooltipJellyAmp.value = 0
+      tooltipJellyWobble.value = 0
+    }
+
+    tooltipRafId = window.requestAnimationFrame(loop)
+  })
+}
+
+function setElasticTargets(dir: number, intensity: number) {
+  const t = clamp01(intensity)
+  tooltipTargetTiltDeg.value = -dir * t * props.tooltipTiltMaxDeg
+  tooltipTargetOffsetX.value = -dir * t * props.tooltipOffsetMaxPx
 }
 
 function onGlobalPointerMove(e: PointerEvent) {
@@ -140,13 +306,27 @@ function onGlobalPointerMove(e: PointerEvent) {
     if (dtMs > 0 && dtMs < 100 && Math.abs(dx) > 1) {
       hadPointerMove.value = true
       const v = dx / (dtMs / 1000)
+      const prevV = pointerVelocity.value
+      pointerVelocity.value = v
+      pointerAcceleration.value = ((v - prevV) / dtMs) * 1000
+
       const absV = Math.abs(v)
-      
-      if (absV > 20) {
+      const absA = Math.abs(pointerAcceleration.value)
+      if (absV > 20 || absA > 200) {
         const dir = v >= 0 ? 1 : -1
-        const intensity = Math.min(1, absV / 800)
-        tooltipTiltDeg.value = -dir * intensity * props.tooltipTiltMaxDeg
-        tooltipOffsetX.value = -dir * intensity * props.tooltipOffsetMaxPx
+        const intensity = clamp01(absV / 1200 + (absA / 12000) * props.tooltipAccelBoost)
+        setElasticTargets(dir, intensity)
+
+        if (props.tooltipJelly) {
+          const accelGate = Math.max(1, props.tooltipJellyTriggerAccel)
+          const kickA = clamp01(absA / accelGate)
+          const reversed = prevV !== 0 && v !== 0 && Math.sign(prevV) !== Math.sign(v)
+          const kick = reversed ? Math.max(0.55, kickA) : kickA
+          if (kick > 0.08)
+            triggerJelly(kick, dir)
+        }
+
+        ensureTooltipRaf()
       }
     }
   }
@@ -164,6 +344,9 @@ function onInput(e: Event) {
   const el = e.target as HTMLInputElement
   const next = Number(el.value)
   const now = performance.now()
+
+  const prevVelocity = velocity.value
+
   if (lastInputTs.value != null && lastInputValue.value != null) {
     const dt = now - lastInputTs.value
     const dv = next - lastInputValue.value
@@ -177,6 +360,26 @@ function onInput(e: Event) {
   lastInputTs.value = now
   lastInputValue.value = next
   updateValue(next)
+
+  if (dragging.value && props.tooltipTilt) {
+    const v = velocity.value
+    const a = acceleration.value
+    const dir = v >= 0 ? 1 : -1
+    const intensity = clamp01(Math.abs(v) / 260 + (Math.abs(a) / 2400) * props.tooltipAccelBoost)
+    setElasticTargets(dir, intensity)
+
+    if (props.tooltipJelly) {
+      const accelGate = Math.max(1, props.tooltipJellyTriggerAccel)
+      const absA = Math.abs(a)
+      const kickA = clamp01(absA / accelGate)
+      const reversed = prevVelocity !== 0 && v !== 0 && Math.sign(prevVelocity) !== Math.sign(v)
+      const kick = reversed ? Math.max(0.55, kickA) : kickA
+      if (kick > 0.08)
+        triggerJelly(kick, dir)
+    }
+
+    ensureTooltipRaf()
+  }
 }
 
 function onChange(e: Event) {
@@ -198,6 +401,11 @@ function startDragging(e: PointerEvent) {
   dragging.value = true
   refreshMetrics()
 
+  if (props.tooltipTilt) {
+    resetTooltipMotion()
+    ensureTooltipRaf()
+  }
+
   lastPointerTs.value = performance.now()
   lastPointerX.value = e.clientX
   pointerVelocity.value = 0
@@ -218,10 +426,8 @@ function stopDragging() {
   hadPointerMove.value = false
   
   if (props.tooltipTilt) {
-    setTimeout(() => {
-      tooltipTiltDeg.value = 0
-      tooltipOffsetX.value = 0
-    }, 100)
+    setElasticTargets(1, 0)
+    ensureTooltipRaf()
   }
 }
 
@@ -244,6 +450,11 @@ watch(
   async (v) => {
     if (!v) {
       tooltipWidth.value = 0
+      if (tooltipRafId != null) {
+        cancelAnimationFrame(tooltipRafId)
+        tooltipRafId = null
+      }
+      resetTooltipMotion()
       if (tooltipResizeObserver && tooltipRef.value) {
         tooltipResizeObserver.unobserve(tooltipRef.value)
       }
@@ -251,6 +462,10 @@ watch(
     }
     await nextTick()
     refreshTooltipWidth()
+    if (props.tooltipTilt) {
+      resetTooltipMotion()
+      ensureTooltipRaf()
+    }
     if (tooltipResizeObserver && tooltipRef.value) {
       tooltipResizeObserver.observe(tooltipRef.value)
     }
@@ -310,7 +525,25 @@ onBeforeUnmount(() => {
         <div class="tx-slider__range" :style="fillWidthStyle" />
       </div>
 
-      <div v-if="shouldShowTooltip" ref="tooltipRef" class="tx-slider__tooltip" :style="tooltipStyle">
+      <Transition v-if="props.tooltipMotion !== 'none'" name="tx-slider-tooltip">
+        <div
+          v-if="shouldShowTooltip"
+          ref="tooltipRef"
+          class="tx-slider__tooltip"
+          :data-motion="props.tooltipMotion"
+          :style="[tooltipStyle, tooltipTransitionStyle]"
+        >
+          {{ tooltipText }}
+        </div>
+      </Transition>
+
+      <div
+        v-else-if="shouldShowTooltip"
+        ref="tooltipRef"
+        class="tx-slider__tooltip"
+        :data-motion="props.tooltipMotion"
+        :style="[tooltipStyle, tooltipTransitionStyle]"
+      >
         {{ tooltipText }}
       </div>
 
@@ -399,15 +632,42 @@ onBeforeUnmount(() => {
     top: 0;
     transform-origin: 50% 120%;
     pointer-events: none;
+    will-change: transform;
+    filter: none;
     padding: 6px 10px;
     border-radius: 999px;
     font-size: 12px;
     font-weight: 600;
-    color: var(--tx-text-color, #fff);
-    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 92%, #000);
-    box-shadow: 0 8px 22px color-mix(in srgb, #000 40%, transparent);
+    color: var(--tx-text-color-primary, #303133);
+    background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.14);
     white-space: nowrap;
     z-index: 2;
+  }
+
+  .tx-slider-tooltip-enter-active,
+  .tx-slider-tooltip-leave-active {
+    transition:
+      opacity var(--tx-slider-tooltip-motion-duration, 160ms) ease,
+      filter var(--tx-slider-tooltip-motion-duration, 160ms) ease;
+  }
+
+  .tx-slider-tooltip-enter-from,
+  .tx-slider-tooltip-leave-to {
+    opacity: 0;
+  }
+
+  .tx-slider__tooltip[data-motion='blur'].tx-slider-tooltip-enter-from,
+  .tx-slider__tooltip[data-motion='blur'].tx-slider-tooltip-leave-to {
+    filter: blur(var(--tx-slider-tooltip-motion-blur, 10px));
+  }
+
+  .tx-slider__tooltip[data-motion='fade'].tx-slider-tooltip-enter-from,
+  .tx-slider__tooltip[data-motion='fade'].tx-slider-tooltip-leave-to {
+    filter: none;
   }
 
   &__input {

@@ -11,8 +11,8 @@ import SliderFormatValueDemo from '../.vitepress/theme/components/demos/SliderFo
 import SliderFormatValueDemoSource from '../.vitepress/theme/components/demos/SliderFormatValueDemo.vue?raw'
 import SliderShowValueDemo from '../.vitepress/theme/components/demos/SliderShowValueDemo.vue'
 import SliderShowValueDemoSource from '../.vitepress/theme/components/demos/SliderShowValueDemo.vue?raw'
-import SliderElasticTooltipDemo from '../.vitepress/theme/components/demos/SliderElasticTooltipDemo.vue'
-import ElasticTooltipDemoCode from '../.vitepress/theme/components/demos/SliderElasticTooltipDemo.vue?raw'
+import SliderElasticTooltipCompareDemo from '../.vitepress/theme/components/demos/SliderElasticTooltipCompareDemo.vue'
+import ElasticTooltipCompareDemoCode from '../.vitepress/theme/components/demos/SliderElasticTooltipCompareDemo.vue?raw'
 </script>
 
 ## 基础用法
@@ -49,9 +49,9 @@ import ElasticTooltipDemoCode from '../.vitepress/theme/components/demos/SliderE
 
 ## 弹性 tooltip（速度 + 加速度）
 
-<DemoBlock title="Slider (elastic tooltip)" :code="ElasticTooltipDemoCode">
+<DemoBlock title="Slider (elastic tooltip)" :code="ElasticTooltipCompareDemoCode">
   <template #preview>
-    <SliderElasticTooltipDemo />
+    <SliderElasticTooltipCompareDemo />
   </template>
 </DemoBlock>
 
@@ -73,11 +73,22 @@ import ElasticTooltipDemoCode from '../.vitepress/theme/components/demos/SliderE
 | `tooltipFormatter` | `(value: number) => string` | - | tooltip 文本格式化 |
 | `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | tooltip 位置 |
 | `tooltipTilt` | `boolean` | `false` | tooltip 是否启用倾斜与偏移动效 |
-| `tooltipTiltMaxDeg` | `number` | `14` | tooltip 最大倾斜角度 |
-| `tooltipOffsetMaxPx` | `number` | `18` | tooltip 最大水平偏移 |
-| `tooltipAccelBoost` | `number` | `0.35` | 加速度对动效强度的加成 |
-| `tooltipSpringStiffness` | `number` | `240` | 弹簧刚度 |
-| `tooltipSpringDamping` | `number` | `26` | 弹簧阻尼 |
+| `tooltipTiltMaxDeg` | `number` | `18` | tooltip 最大倾斜角度 |
+| `tooltipOffsetMaxPx` | `number` | `28` | tooltip 最大水平偏移 |
+| `tooltipAccelBoost` | `number` | `0.65` | 加速度对动效强度的加成 |
+| `tooltipSpringStiffness` | `number` | `320` | 弹簧刚度 |
+| `tooltipSpringDamping` | `number` | `24` | 弹簧阻尼 |
+| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | tooltip 显示/隐藏动效 |
+| `tooltipMotionDuration` | `number` | `160` | tooltip 显示/隐藏动效时长（ms） |
+| `tooltipMotionBlurPx` | `number` | `10` | tooltip 显示/隐藏动效模糊强度（px） |
+| `tooltipDistortSkewDeg` | `number` | `8` | tooltip 扭曲挤压（skew）最大角度 |
+| `tooltipJelly` | `boolean` | `true` | tooltip 果冻 Q 弹扭曲回弹 |
+| `tooltipJellyFrequency` | `number` | `8.5` | 果冻 wobble 频率（Hz） |
+| `tooltipJellyDecay` | `number` | `10` | 果冻 wobble 衰减（越大越快停） |
+| `tooltipJellyRotateDeg` | `number` | `10` | wobble 旋转最大角度 |
+| `tooltipJellySkewDeg` | `number` | `12` | wobble 扭曲最大角度 |
+| `tooltipJellySquash` | `number` | `0.16` | wobble 挤压强度 |
+| `tooltipJellyTriggerAccel` | `number` | `2800` | 触发 wobble 的加速度阈值 |
 
 ### Events
 

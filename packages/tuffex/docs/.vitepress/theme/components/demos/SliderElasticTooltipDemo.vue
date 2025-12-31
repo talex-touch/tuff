@@ -6,11 +6,11 @@ const tiltMode = ref<'on' | 'off'>('on')
 const placement = ref<'top' | 'bottom'>('top')
 const trigger = ref<'drag' | 'hover' | 'always'>('drag')
 
-const tiltMaxDeg = ref(14)
-const offsetMaxPx = ref(18)
-const accelBoost = ref(0.35)
-const springStiffness = ref(240)
-const springDamping = ref(26)
+const tiltMaxDeg = ref(18)
+const offsetMaxPx = ref(28)
+const accelBoost = ref(0.65)
+const springStiffness = ref(320)
+const springDamping = ref(24)
 </script>
 
 <template>
