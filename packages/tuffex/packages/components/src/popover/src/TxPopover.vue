@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import TxCard from '../../card/src/TxCard.vue'
 import type { PopoverProps } from './types'
 
@@ -67,8 +67,7 @@ const popoverVars = computed<Record<string, string>>(() => {
     if (side === 'top' || side === 'bottom') {
       if (arrowData.x != null)
         fusionX = `${arrowData.x + arrowSize * 0.5}px`
-    }
-    else {
+    } else {
       if (arrowData.y != null)
         fusionY = `${arrowData.y + arrowSize * 0.5}px`
     }
@@ -81,6 +80,24 @@ const popoverVars = computed<Record<string, string>>(() => {
     '--tx-popover-split-y': `${splitY.value}px`,
     '--tx-popover-fusion-x': fusionX,
     '--tx-popover-fusion-y': fusionY,
+  }
+})
+
+const uid = useId()
+const gooFilterId = `tx-popover-goo-${uid}`
+
+const gooMatrixValues = computed(() => {
+  const alpha = 26
+  const alphaOffset = -12
+  return `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 ${alpha} ${alphaOffset}`
+})
+
+const fusionVars = computed<Record<string, string>>(() => {
+  const out = Math.max(12, (props.offset ?? 8) + (props.arrowSize ?? 12) * 0.8)
+  const size = Math.max(26, (props.arrowSize ?? 12) * 3.2)
+  return {
+    '--tx-popover-goo-out': `${out}px`,
+    '--tx-popover-goo-size': `${size}px`,
   }
 })
 
@@ -304,6 +321,16 @@ onBeforeUnmount(() => {
         :data-side="arrowSide"
         :style="[floatingStyles, popoverVars]"
       >
+        <svg class="tx-popover__fusion-filters" width="0" height="0" aria-hidden="true">
+          <defs>
+            <filter :id="gooFilterId">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" :values="gooMatrixValues" result="goo" />
+              <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+            </filter>
+          </defs>
+        </svg>
+
         <div
           v-if="props.showArrow"
           ref="arrowRef"
@@ -312,6 +339,19 @@ onBeforeUnmount(() => {
           :style="arrowStyle"
           aria-hidden="true"
         />
+
+        <div
+          v-if="props.fusion && motion === 'split'"
+          class="tx-popover__fusion"
+          :style="fusionVars"
+          aria-hidden="true"
+        >
+          <div class="tx-popover__fusion-goo" :style="{ filter: `url(#${gooFilterId})` }">
+            <div class="tx-popover__fusion-blob tx-popover__fusion-blob--tip" />
+            <div class="tx-popover__fusion-blob tx-popover__fusion-blob--ref" />
+          </div>
+        </div>
+
         <TxCard
           class="tx-popover__card"
           :variant="panelVariant"
@@ -356,7 +396,7 @@ onBeforeUnmount(() => {
   z-index: 0;
 }
 
-.tx-popover > :not(.tx-popover__arrow) {
+.tx-popover > :not(.tx-popover__arrow):not(.tx-popover__fusion):not(.tx-popover__fusion-filters) {
   position: relative;
   z-index: 1;
 }
@@ -378,17 +418,23 @@ onBeforeUnmount(() => {
 }
 
 .tx-popover.is-fusion.is-motion-split::after {
-  content: '';
+  content: none;
   position: absolute;
   pointer-events: none;
   z-index: 0;
-  opacity: 0;
-  width: calc(var(--tx-popover-arrow-size, 12px) * 3.2);
-  height: calc(var(--tx-popover-arrow-size, 12px) * 2.4);
+  opacity: 0.06;
+  width: calc(var(--tx-popover-arrow-size, 12px) * 3.6);
+  height: calc(var(--tx-popover-arrow-size, 12px) * 2.6);
   border-radius: 999px;
-  filter: blur(6px) saturate(1.06);
-  box-shadow: 0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.34) 55%, transparent);
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  mix-blend-mode: soft-light;
+  filter: blur(3px) saturate(1.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.46),
+    inset 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent),
+    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.52) 62%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent),
+    0 14px 34px rgba(0, 0, 0, 0.10);
+  transition: opacity 0.16s ease, transform 0.16s ease, filter 0.16s ease, border-radius 0.16s ease;
 }
 
 .tx-popover.is-fusion.is-motion-split[data-side='top']::after {
@@ -417,8 +463,9 @@ onBeforeUnmount(() => {
 
 .tx-popover.is-bg-mask.is-fusion.is-motion-split::after {
   background:
-    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.42), transparent 62%),
-    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.24), transparent 66%),
+    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
+    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.42)), transparent 58%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%),
     var(--tx-bg-color-overlay, #fff);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -426,8 +473,9 @@ onBeforeUnmount(() => {
 
 .tx-popover.is-bg-blur.is-fusion.is-motion-split::after {
   background:
-    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.38), transparent 62%),
-    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.22), transparent 66%),
+    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.44), transparent 58%),
+    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.34)), transparent 58%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.14), transparent 74%),
     color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
@@ -435,12 +483,91 @@ onBeforeUnmount(() => {
 
 .tx-popover.is-bg-glass.is-fusion.is-motion-split::after {
   background:
-    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.46), transparent 62%),
-    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.26), transparent 66%),
+    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
+    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 38%, rgba(255, 255, 255, 0.44)), transparent 58%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%),
     color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
   backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
   -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
-}
+ }
+
+ .tx-popover__fusion {
+   position: absolute;
+   inset: 0;
+   pointer-events: none;
+   z-index: 0;
+   opacity: 0.18;
+   transition: opacity 0.16s ease, filter 0.16s ease;
+ }
+
+ .tx-popover__fusion-goo {
+   position: absolute;
+   inset: 0;
+ }
+
+ .tx-popover__fusion-blob {
+   position: absolute;
+   width: var(--tx-popover-goo-size, 38px);
+   height: var(--tx-popover-goo-size, 38px);
+   border-radius: 999px;
+   background:
+     radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
+     radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.42)), transparent 58%),
+     radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%);
+   filter: saturate(1.22);
+   mix-blend-mode: screen;
+   box-shadow:
+     0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.52) 60%, transparent),
+     0 16px 42px rgba(0, 0, 0, 0.10);
+ }
+
+ .tx-popover[data-side='top'] .tx-popover__fusion-blob--tip {
+   left: var(--tx-popover-fusion-x, 50%);
+   top: 100%;
+   transform: translate3d(-50%, -50%, 0) scale(0.78);
+ }
+
+ .tx-popover[data-side='top'] .tx-popover__fusion-blob--ref {
+   left: var(--tx-popover-fusion-x, 50%);
+   top: calc(100% + var(--tx-popover-goo-out, 18px));
+   transform: translate3d(-50%, -50%, 0) scale(0.88);
+ }
+
+ .tx-popover[data-side='bottom'] .tx-popover__fusion-blob--tip {
+   left: var(--tx-popover-fusion-x, 50%);
+   top: 0;
+   transform: translate3d(-50%, -50%, 0) scale(0.78);
+ }
+
+ .tx-popover[data-side='bottom'] .tx-popover__fusion-blob--ref {
+   left: var(--tx-popover-fusion-x, 50%);
+   top: calc(0px - var(--tx-popover-goo-out, 18px));
+   transform: translate3d(-50%, -50%, 0) scale(0.88);
+ }
+
+ .tx-popover[data-side='left'] .tx-popover__fusion-blob--tip {
+   left: 100%;
+   top: var(--tx-popover-fusion-y, 50%);
+   transform: translate3d(-50%, -50%, 0) scale(0.78);
+ }
+
+ .tx-popover[data-side='left'] .tx-popover__fusion-blob--ref {
+   left: calc(100% + var(--tx-popover-goo-out, 18px));
+   top: var(--tx-popover-fusion-y, 50%);
+   transform: translate3d(-50%, -50%, 0) scale(0.88);
+ }
+
+ .tx-popover[data-side='right'] .tx-popover__fusion-blob--tip {
+   left: 0;
+   top: var(--tx-popover-fusion-y, 50%);
+   transform: translate3d(-50%, -50%, 0) scale(0.78);
+ }
+
+ .tx-popover[data-side='right'] .tx-popover__fusion-blob--ref {
+   left: calc(0px - var(--tx-popover-goo-out, 18px));
+   top: var(--tx-popover-fusion-y, 50%);
+   transform: translate3d(-50%, -50%, 0) scale(0.88);
+ }
 
 .tx-popover__card {
   width: 100%;
@@ -529,28 +656,33 @@ onBeforeUnmount(() => {
   transform: translate3d(var(--tx-popover-split-x, 0px), var(--tx-popover-split-y, 0px), 0) scale(0.92);
 }
 
-.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from::after,
-.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to::after {
-  opacity: 0.95;
+.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from .tx-popover__fusion,
+.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to .tx-popover__fusion {
+  opacity: 1;
+  filter: saturate(1.35) contrast(1.12);
 }
 
 .tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='top']::after,
 .tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='top']::after {
-  transform: translate3d(-50%, 85%, 0) scale(1.25);
+  border-radius: 52% 48% 62% 38% / 54% 46% 58% 42%;
+  transform: translate3d(-50%, 104%, 0) rotate(6deg) scaleX(1.58) scaleY(1.18);
 }
 
 .tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='bottom']::after,
 .tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='bottom']::after {
-  transform: translate3d(-50%, -85%, 0) scale(1.25);
+  border-radius: 46% 54% 40% 60% / 42% 58% 46% 54%;
+  transform: translate3d(-50%, -104%, 0) rotate(-6deg) scaleX(1.58) scaleY(1.18);
 }
 
 .tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='left']::after,
 .tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='left']::after {
-  transform: translate3d(85%, -50%, 0) scale(1.25);
+  border-radius: 58% 42% 52% 48% / 44% 56% 40% 60%;
+  transform: translate3d(104%, -50%, 0) rotate(-6deg) scaleX(1.18) scaleY(1.58);
 }
 
 .tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='right']::after,
 .tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='right']::after {
-  transform: translate3d(-85%, -50%, 0) scale(1.25);
+  border-radius: 44% 56% 38% 62% / 60% 40% 56% 44%;
+  transform: translate3d(-104%, -50%, 0) rotate(6deg) scaleX(1.18) scaleY(1.58);
 }
 </style>

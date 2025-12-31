@@ -36,6 +36,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxTabs 标签页](./tabs.md)** - 左侧导航 Tabs（Windows 风格）
 - **[TxAutoSizer 自适应尺寸](./auto-sizer.md)** - 内容宽高变化时自动跟随并过渡
 - **[TxTransition 过渡](./transition.md)** - 内容切换与列表增删的通用过渡封装
+- **[TxFusion 交融](./fusion.md)** - 两个元素交融与分开的视觉效果
 - **[TxAgentsList 智能体列表](./agents.md)** - 常见智能体列表/分组
 - **[TxStagger 依次进入](./stagger.md)** - 列表依次进入/离开动画
 - **[TxSortableList 拖拽排序](./sortable-list.md)** - 可拖拽排序列表

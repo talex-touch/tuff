@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import type { TooltipProps } from './types'
 
 defineOptions({ name: 'TxTooltip' })
@@ -124,6 +124,24 @@ const tooltipVars = computed<Record<string, string>>(() => {
     '--tx-tooltip-split-y': `${splitY.value}px`,
     '--tx-tooltip-fusion-x': fusionX,
     '--tx-tooltip-fusion-y': fusionY,
+  }
+})
+
+const uid = useId()
+const gooFilterId = `tx-tooltip-goo-${uid}`
+
+const gooMatrixValues = computed(() => {
+  const alpha = 26
+  const alphaOffset = -12
+  return `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 ${alpha} ${alphaOffset}`
+})
+
+const fusionVars = computed<Record<string, string>>(() => {
+  const out = Math.max(12, (props.offset ?? 8) + (props.arrowSize ?? 12) * 0.8)
+  const size = Math.max(26, (props.arrowSize ?? 12) * 3.2)
+  return {
+    '--tx-tooltip-goo-out': `${out}px`,
+    '--tx-tooltip-goo-size': `${size}px`,
   }
 })
 
@@ -387,6 +405,16 @@ function onBeforeEnter(el: Element) {
         @mouseenter="onFloatingEnter"
         @mouseleave="onFloatingLeave"
       >
+        <svg class="tx-tooltip__fusion-filters" width="0" height="0" aria-hidden="true">
+          <defs>
+            <filter :id="gooFilterId">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" :values="gooMatrixValues" result="goo" />
+              <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+            </filter>
+          </defs>
+        </svg>
+
         <div
           v-if="props.showArrow"
           ref="arrowRef"
@@ -395,6 +423,19 @@ function onBeforeEnter(el: Element) {
           :style="arrowStyle"
           aria-hidden="true"
         />
+
+        <div
+          v-if="props.fusion && motion === 'split'"
+          class="tx-tooltip__fusion"
+          :style="fusionVars"
+          aria-hidden="true"
+        >
+          <div class="tx-tooltip__fusion-goo" :style="{ filter: `url(#${gooFilterId})` }">
+            <div class="tx-tooltip__fusion-blob tx-tooltip__fusion-blob--tip" />
+            <div class="tx-tooltip__fusion-blob tx-tooltip__fusion-blob--ref" />
+          </div>
+        </div>
+
         <slot name="content">
           {{ content }}
         </slot>
@@ -432,7 +473,7 @@ function onBeforeEnter(el: Element) {
   z-index: 0;
 }
 
-.tx-tooltip > :not(.tx-tooltip__arrow) {
+.tx-tooltip > :not(.tx-tooltip__arrow):not(.tx-tooltip__fusion):not(.tx-tooltip__fusion-filters) {
   position: relative;
   z-index: 1;
 }
@@ -506,19 +547,23 @@ function onBeforeEnter(el: Element) {
 }
 
 .tx-tooltip.is-fusion.is-motion-split::after {
-  content: '';
+  content: none;
   position: absolute;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.18;
-  width: calc(var(--tx-tooltip-arrow-size, 12px) * 3.2);
-  height: calc(var(--tx-tooltip-arrow-size, 12px) * 2.4);
+  opacity: 0.06;
+  width: calc(var(--tx-tooltip-arrow-size, 12px) * 3.6);
+  height: calc(var(--tx-tooltip-arrow-size, 12px) * 2.6);
   border-radius: 999px;
-  filter: blur(4px) saturate(1.12);
+  mix-blend-mode: soft-light;
+  filter: blur(3px) saturate(1.22);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.40) 60%, transparent),
-    0 10px 28px rgba(0, 0, 0, 0.08);
-  transition: opacity 0.16s ease, transform 0.16s ease;
+    inset 0 0 0 1px rgba(255, 255, 255, 0.46),
+    inset 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent),
+    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.52) 62%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent),
+    0 14px 34px rgba(0, 0, 0, 0.10);
+  transition: opacity 0.16s ease, transform 0.16s ease, filter 0.16s ease, border-radius 0.16s ease;
 }
 
 .tx-tooltip.is-fusion.is-motion-split[data-side='top']::after {
@@ -547,8 +592,9 @@ function onBeforeEnter(el: Element) {
 
 .tx-tooltip.is-bg-mask.is-fusion.is-motion-split::after {
   background:
-    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.42), transparent 62%),
-    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.24), transparent 66%),
+    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
+    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 38%, rgba(255, 255, 255, 0.44)), transparent 58%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%),
     var(--tx-bg-color-overlay, #fff);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -556,20 +602,9 @@ function onBeforeEnter(el: Element) {
 
 .tx-tooltip.is-bg-blur.is-fusion.is-motion-split::after {
   background:
-    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.38), transparent 62%),
-    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.22), transparent 66%),
-    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-}
-
-.tx-tooltip.is-bg-glass.is-fusion.is-motion-split::after {
-  background:
-    radial-gradient(circle at 32% 38%, rgba(255, 255, 255, 0.46), transparent 62%),
-    radial-gradient(circle at 68% 62%, rgba(255, 255, 255, 0.26), transparent 66%),
-    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
-  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
-  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.44), transparent 58%),
+    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.34)), transparent 58%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.14), transparent 74%),
 }
 
 .tx-tooltip__arrow {
@@ -650,28 +685,111 @@ function onBeforeEnter(el: Element) {
   transform: translate3d(var(--tx-tooltip-split-x, 0px), var(--tx-tooltip-split-y, 0px), 0) scale(0.92);
 }
 
-.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from::after,
-.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to::after {
+.tx-tooltip__fusion {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.18;
+  transition: opacity 0.16s ease, filter 0.16s ease;
+}
+
+.tx-tooltip__fusion-goo {
+  position: absolute;
+  inset: 0;
+}
+
+.tx-tooltip__fusion-blob {
+  position: absolute;
+  width: var(--tx-tooltip-goo-size, 38px);
+  height: var(--tx-tooltip-goo-size, 38px);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
+    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.42)), transparent 58%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%);
+  filter: saturate(1.22);
+  mix-blend-mode: screen;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.52) 60%, transparent),
+    0 16px 42px rgba(0, 0, 0, 0.10);
+}
+
+.tx-tooltip[data-side='top'] .tx-tooltip__fusion-blob--tip {
+  left: var(--tx-tooltip-fusion-x, 50%);
+  top: 100%;
+  transform: translate3d(-50%, -50%, 0) scale(0.78);
+}
+
+.tx-tooltip[data-side='top'] .tx-tooltip__fusion-blob--ref {
+  left: var(--tx-tooltip-fusion-x, 50%);
+  top: calc(100% + var(--tx-tooltip-goo-out, 18px));
+  transform: translate3d(-50%, -50%, 0) scale(0.88);
+}
+
+.tx-tooltip[data-side='bottom'] .tx-tooltip__fusion-blob--tip {
+  left: var(--tx-tooltip-fusion-x, 50%);
+  top: 0;
+  transform: translate3d(-50%, -50%, 0) scale(0.78);
+}
+
+.tx-tooltip[data-side='bottom'] .tx-tooltip__fusion-blob--ref {
+  left: var(--tx-tooltip-fusion-x, 50%);
+  top: calc(0px - var(--tx-tooltip-goo-out, 18px));
+  transform: translate3d(-50%, -50%, 0) scale(0.88);
+}
+
+.tx-tooltip[data-side='left'] .tx-tooltip__fusion-blob--tip {
+  left: 100%;
+  top: var(--tx-tooltip-fusion-y, 50%);
+  transform: translate3d(-50%, -50%, 0) scale(0.78);
+}
+
+.tx-tooltip[data-side='left'] .tx-tooltip__fusion-blob--ref {
+  left: calc(100% + var(--tx-tooltip-goo-out, 18px));
+  top: var(--tx-tooltip-fusion-y, 50%);
+  transform: translate3d(-50%, -50%, 0) scale(0.88);
+}
+
+.tx-tooltip[data-side='right'] .tx-tooltip__fusion-blob--tip {
+  left: 0;
+  top: var(--tx-tooltip-fusion-y, 50%);
+  transform: translate3d(-50%, -50%, 0) scale(0.78);
+}
+
+.tx-tooltip[data-side='right'] .tx-tooltip__fusion-blob--ref {
+  left: calc(0px - var(--tx-tooltip-goo-out, 18px));
+  top: var(--tx-tooltip-fusion-y, 50%);
+  transform: translate3d(-50%, -50%, 0) scale(0.88);
+}
+
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from .tx-tooltip__fusion,
+.tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to .tx-tooltip__fusion {
   opacity: 1;
+  filter: saturate(1.35) contrast(1.12);
 }
 
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='top']::after,
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='top']::after {
-  transform: translate3d(-50%, 85%, 0) scale(1.25);
+  border-radius: 52% 48% 62% 38% / 54% 46% 58% 42%;
+  transform: translate3d(-50%, 104%, 0) rotate(6deg) scaleX(1.58) scaleY(1.18);
 }
 
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='bottom']::after,
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='bottom']::after {
-  transform: translate3d(-50%, -85%, 0) scale(1.25);
+  border-radius: 46% 54% 40% 60% / 42% 58% 46% 54%;
+  transform: translate3d(-50%, -104%, 0) rotate(-6deg) scaleX(1.58) scaleY(1.18);
 }
 
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='left']::after,
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='left']::after {
-  transform: translate3d(85%, -50%, 0) scale(1.25);
+  border-radius: 58% 42% 52% 48% / 44% 56% 40% 60%;
+  transform: translate3d(104%, -50%, 0) rotate(-6deg) scaleX(1.18) scaleY(1.58);
 }
 
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-enter-from[data-side='right']::after,
 .tx-tooltip.is-fusion.is-motion-split.tx-tooltip-leave-to[data-side='right']::after {
-  transform: translate3d(-85%, -50%, 0) scale(1.25);
+  border-radius: 44% 56% 38% 62% / 60% 40% 56% 44%;
+  transform: translate3d(-104%, -50%, 0) rotate(6deg) scaleX(1.18) scaleY(1.58);
 }
 </style>

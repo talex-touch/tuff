@@ -2,6 +2,10 @@
 
 进度条组件，用于展示操作进度，支持多种状态。
 
+> `Progress` 是对 `ProgressBar` 的兼容封装（内部复用同一实现）。
+> 
+> 如果你需要多段多色、渐变、tooltip、glass/blur mask 等高级能力，请使用 `ProgressBar`。
+
 <script setup lang="ts">
 const format = (percentage: number) => `进度 ${percentage}%`
 </script>
