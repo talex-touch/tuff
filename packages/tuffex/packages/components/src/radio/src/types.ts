@@ -1,11 +1,13 @@
 export type TxRadioValue = string | number
 export type TxRadioType = 'button' | 'standard' | 'card'
+export type TxRadioIndicatorVariant = 'solid' | 'outline' | 'glass' | 'blur'
 
 export interface TxRadioGroupProps {
   modelValue?: TxRadioValue
   disabled?: boolean
   type?: TxRadioType
   direction?: 'row' | 'column'
+  indicatorVariant?: TxRadioIndicatorVariant
   /** 启用玻璃效果（仅 button 类型有效） */
   glass?: boolean
   /** 启用模糊效果（仅 button 类型有效，比玻璃更轻量） */

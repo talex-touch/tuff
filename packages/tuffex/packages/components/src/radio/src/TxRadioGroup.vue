@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TxRadioGroupProps, TxRadioValue } from './types'
+import type { TxRadioGroupProps, TxRadioIndicatorVariant, TxRadioValue } from './types'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
 import { TxGlassSurface } from '../../glass-surface'
 
@@ -9,6 +9,7 @@ const props = withDefaults(defineProps<TxRadioGroupProps>(), {
   modelValue: undefined,
   disabled: false,
   type: 'button',
+  indicatorVariant: undefined,
   glass: false,
   blur: false,
   stiffness: 110,
@@ -23,6 +24,19 @@ const emit = defineEmits<{
 }>()
 
 const { disabled, type, glass } = toRefs(props)
+
+const resolvedIndicatorVariant = computed<TxRadioIndicatorVariant>(() => {
+  const v = props.indicatorVariant
+  if (v) return v
+  if (props.glass) return 'glass'
+  if (props.blur) return 'blur'
+  return 'solid'
+})
+
+const useGlassIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'glass')
+const useBlurIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'blur')
+const useOutlineIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'outline')
+const useSolidIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'solid')
 
 const resolvedDirection = computed(() => {
   if (type.value === 'button') {
@@ -222,14 +236,17 @@ const glassLook = computed(() => {
 })
 
 const glassOpacity = computed(() => {
-  if (!motionActive.value && motionPhase.value === 'idle') {
+  if (!indicatorVisible.value) {
     return 0
   }
+  if (!motionActive.value && motionPhase.value === 'idle') {
+    return 0.9
+  }
   if (motionPhase.value === 'emerge') {
-    return 0.75
+    return 0.95
   }
   if (motionPhase.value === 'sink') {
-    return 0.18
+    return 0.28
   }
   return 1
 })
@@ -312,9 +329,9 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
 
-  const blurOpacity = motionActive.value ? 1 : 0
+  const blurOpacity = motionActive.value ? 1 : 0.9
 
-  const blurPx = motionActive.value ? props.blurAmount : 0
+  const blurPx = motionActive.value ? props.blurAmount : props.blurAmount * 0.85
 
   return {
     opacity: `${blurOpacity}`,
@@ -366,7 +383,7 @@ const plainIndicatorStyle = computed<Record<string, string>>(() => {
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
 
-  const baseOpacity = (props.glass || props.blur) && motionActive.value ? '0' : '1'
+  const baseOpacity = (useGlassIndicator.value || useBlurIndicator.value) ? '0' : '1'
 
   return {
     opacity: baseOpacity,
@@ -789,12 +806,17 @@ watch(
     class="tx-radio-group"
     role="radiogroup"
     :aria-disabled="disabled"
-    :class="[`tx-radio-group--${type}`, `tx-radio-group--dir-${resolvedDirection}`, { 'is-motion': motionActive }]"
+    :class="[
+      `tx-radio-group--${type}`,
+      `tx-radio-group--dir-${resolvedDirection}`,
+      `tx-radio-group--indicator-${resolvedIndicatorVariant}`,
+      { 'is-motion': motionActive }
+    ]"
   >
     <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true" />
 
     <TxGlassSurface
-      v-if="type === 'button' && glass && indicatorVisible"
+      v-if="useGlassIndicator && indicatorVisible"
       class="tx-radio-group__indicator-glass-wrap"
       :class="{ 'is-active': motionActive, 'is-sink': motionPhase === 'sink', 'is-emerge': motionPhase === 'emerge' }"
       :style="glassWrapStyle"
@@ -818,7 +840,7 @@ watch(
     </TxGlassSurface>
 
     <span
-      v-if="type === 'button' && blur && !glass && indicatorVisible"
+      v-if="useBlurIndicator && indicatorVisible"
       class="tx-radio-group__indicator-blur"
       :class="{ 'is-active': motionActive }"
       :style="blurWrapStyle"
@@ -854,6 +876,7 @@ watch(
   touch-action: none;
 
   &--button {
+    flex-wrap: wrap;
     padding: 3px;
     gap: 6px;
     border-radius: 999px;
@@ -966,6 +989,12 @@ watch(
     inset 0 1px 0 rgba(255, 255, 255, 0.17);
 }
 
+.tx-radio-group--indicator-outline .tx-radio-group__indicator-plain {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 40%, var(--tx-color-primary, #409eff));
+  box-shadow: none;
+}
+
 // .tx-radio-group__indicator-plain.is-active {
 //   box-shadow:
 //     0 10px 20px rgba(15, 23, 42, 0.12),
@@ -992,5 +1021,7 @@ watch(
 .tx-radio-group--button :deep(.tx-radio) {
   position: relative;
   z-index: 1;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 </style>

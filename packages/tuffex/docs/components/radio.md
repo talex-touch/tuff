@@ -92,6 +92,7 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 | disabled | 是否禁用（整组） | `boolean` | `false` |
 | type | 形态：按钮组 / 标准单选 / 卡片 | `'button' \| 'standard' \| 'card'` | `'button'` |
 | direction | 排列方向（button 无效；standard 默认 row；card 默认 column） | `'row' \| 'column'` | - |
+| indicatorVariant | 指示器样式（button 有效） | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - |
 | glass | 玻璃指示器（button 有效） | `boolean` | `false` |
 | blur | 模糊指示器（button 有效） | `boolean` | `false` |
 | stiffness | 动效刚度（越大越快） | `number` | `110` |

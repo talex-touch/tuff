@@ -3,6 +3,10 @@ import { ref, watch } from 'vue'
 
 const value = ref(30)
 
+type IndicatorVariant = 'solid' | 'outline' | 'glass' | 'blur'
+
+const indicatorVariant = ref<IndicatorVariant>('blur')
+
 const tiltMode = ref<'on' | 'off'>('on')
 const placement = ref<'top' | 'bottom'>('top')
 const trigger = ref<'drag' | 'hover' | 'always'>('drag')
@@ -207,7 +211,7 @@ watch(
       <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 110px; font-size: 12px; opacity: 0.72;">preset</div>
         <div style="flex: 1; min-width: 0;">
-          <TxRadioGroup v-model="preset" type="button">
+          <TxRadioGroup v-model="preset" type="button" :indicator-variant="indicatorVariant">
             <TxRadio value="current">基础</TxRadio>
             <TxRadio value="tofu">撞豆腐</TxRadio>
             <TxRadio value="jelly">果冻超Q</TxRadio>
@@ -220,9 +224,22 @@ watch(
       </div>
 
       <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 110px; font-size: 12px; opacity: 0.72;">indicator</div>
+        <div style="flex: 1; min-width: 0;">
+          <TxRadioGroup v-model="indicatorVariant" type="button" :indicator-variant="indicatorVariant">
+            <TxRadio value="solid">实色</TxRadio>
+            <TxRadio value="outline">边框</TxRadio>
+            <TxRadio value="glass">玻璃</TxRadio>
+            <TxRadio value="blur">模糊</TxRadio>
+          </TxRadioGroup>
+        </div>
+        <div style="width: 140px; font-size: 12px; opacity: 0.62;">指示器风格</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 110px; font-size: 12px; opacity: 0.72;">tilt</div>
         <div style="flex: 1; min-width: 0;">
-          <TxRadioGroup v-model="tiltMode" type="button">
+          <TxRadioGroup v-model="tiltMode" type="button" :indicator-variant="indicatorVariant">
             <TxRadio value="on">On</TxRadio>
             <TxRadio value="off">Off</TxRadio>
           </TxRadioGroup>
@@ -233,7 +250,7 @@ watch(
       <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 110px; font-size: 12px; opacity: 0.72;">placement</div>
         <div style="flex: 1; min-width: 0;">
-          <TxRadioGroup v-model="placement" type="button">
+          <TxRadioGroup v-model="placement" type="button" :indicator-variant="indicatorVariant">
             <TxRadio value="top">Top</TxRadio>
             <TxRadio value="bottom">Bottom</TxRadio>
           </TxRadioGroup>
@@ -244,7 +261,7 @@ watch(
       <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 110px; font-size: 12px; opacity: 0.72;">trigger</div>
         <div style="flex: 1; min-width: 0;">
-          <TxRadioGroup v-model="trigger" type="button">
+          <TxRadioGroup v-model="trigger" type="button" :indicator-variant="indicatorVariant">
             <TxRadio value="drag">Drag</TxRadio>
             <TxRadio value="hover">Hover</TxRadio>
             <TxRadio value="always">Always</TxRadio>
@@ -256,7 +273,7 @@ watch(
       <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 110px; font-size: 12px; opacity: 0.72;">motion</div>
         <div style="flex: 1; min-width: 0;">
-          <TxRadioGroup v-model="tooltipMotion" type="button">
+          <TxRadioGroup v-model="tooltipMotion" type="button" :indicator-variant="indicatorVariant">
             <TxRadio value="blur">Blur</TxRadio>
             <TxRadio value="fade">Fade</TxRadio>
             <TxRadio value="none">None</TxRadio>
@@ -268,7 +285,7 @@ watch(
       <div style="display: flex; align-items: center; gap: 12px;">
         <div style="width: 110px; font-size: 12px; opacity: 0.72;">jelly</div>
         <div style="flex: 1; min-width: 0;">
-          <TxRadioGroup v-model="tooltipJelly" type="button">
+          <TxRadioGroup v-model="tooltipJelly" type="button" :indicator-variant="indicatorVariant">
             <TxRadio :value="true">On</TxRadio>
             <TxRadio :value="false">Off</TxRadio>
           </TxRadioGroup>
