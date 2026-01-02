@@ -1,0 +1,29 @@
+# Stack 堆叠
+
+通用堆叠布局容器（横向/纵向）。
+
+<script setup lang="ts">
+import StackBasicDemo from '../.vitepress/theme/components/demos/StackBasicDemo.vue'
+import StackBasicDemoSource from '../.vitepress/theme/components/demos/StackBasicDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="Stack" :code="StackBasicDemoSource">
+  <template #preview>
+    <StackBasicDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `direction` | `'horizontal' \| 'vertical'` | `'vertical'` | 方向 |
+| `gap` | `number \| string` | `12` | 间距 |
+| `align` | `string` | `'stretch'` | align-items |
+| `justify` | `string` | `'flex-start'` | justify-content |
+| `wrap` | `boolean` | `false` | 是否换行 |
+| `inline` | `boolean` | `false` | 是否使用 inline-flex |

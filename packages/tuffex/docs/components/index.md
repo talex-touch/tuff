@@ -12,6 +12,8 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxSlider 滑块](./slider.md)** - 区间取值滑块
 - **[TxTooltip 文字提示](./tooltip.md)** - Hover / Focus 提示
 - **[TxPopover 弹出层](./popover.md)** - 点击弹出层
+- **[TxNavBar 导航栏](./nav-bar.md)** - 移动端顶部导航栏
+- **[TxTabBar 底部导航](./tab-bar.md)** - 移动端底部 TabBar
 - **[TxDropdownMenu 下拉菜单](./dropdown-menu.md)** - 下拉菜单
 - **[TxContextMenu 右键菜单](./context-menu.md)** - 右键菜单
 - **[TxEmpty 空状态](./empty.md)** - 空状态占位
@@ -23,12 +25,19 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxInput 输入框](./input.md)** - 表单输入组件
 - **[TxSearchInput 搜索输入框](./search-input.md)** - 搜索输入框（Enter 触发 search）
 - **[TxCheckbox 复选框](./checkbox.md)** - 复选框组件
+- **[TxPicker 滚轮选择](./picker.md)** - 移动端风格滚轮选择
+- **[TxDatePicker 日期选择](./date-picker.md)** - 日期选择（YYYY-MM-DD）
 - **[TxTreeSelect 树选择器](./tree-select.md)** - 下拉树选择（支持搜索/单选/多选）
 - **[TxCascader 级联选择](./cascader.md)** - 级联选择（支持搜索/单选/多选/异步加载）
 
 ## 布局组件
 
 - **[TxGroupBlock 分组块](./group-block.md)** - 分组容器与块项（BlockLine/BlockSlot/BlockSwitch）
+- **[TxContainer 容器](./container.md)** - 容器与栅格（Row/Col）
+- **[TxGrid 栅格](./grid.md)** - CSS Grid 栅格
+- **[TxSplitter 分割面板](./splitter.md)** - 可拖拽分割面板
+- **[TxStack 堆叠](./stack.md)** - 通用堆叠布局容器
+- **[TxFlex 弹性布局](./flex.md)** - 通用 Flex 容器
 - **[TxScroll 滚动](./scroll.md)** - 滚动容器（BetterScroll / 原生）
 - **[TxGridLayout 网格布局](./grid-layout.md)** - 响应式网格与交互 hover
 - **[TxLayoutSkeleton 布局骨架](./layout-skeleton.md)** - 通用布局骨架占位

@@ -2,7 +2,18 @@
 
 栅格组件提供了现代化的 CSS Grid 布局解决方案，支持响应式设计和灵活的网格配置。相比传统的 Flexbox 栅格，Grid 栅格在处理二维布局时更加强大和直观。
 
+<script setup lang="ts">
+import GridBasicDemo from '../.vitepress/theme/components/demos/GridBasicDemo.vue'
+import GridBasicDemoSource from '../.vitepress/theme/components/demos/GridBasicDemo.vue?raw'
+</script>
+
 ## 基础用法
+
+<DemoBlock title="Grid" :code="GridBasicDemoSource">
+  <template #preview>
+    <GridBasicDemo />
+  </template>
+</DemoBlock>
 
 最简单的网格布局：
 

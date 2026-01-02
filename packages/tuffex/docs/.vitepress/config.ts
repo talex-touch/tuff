@@ -62,6 +62,8 @@ export default defineConfig({
             { text: '单选框 Radio', link: '/components/radio' },
             { text: '开关 Switch', link: '/components/switch' },
             { text: '选择器 Select', link: '/components/select' },
+            { text: '滚轮选择 Picker', link: '/components/picker' },
+            { text: '日期选择 DatePicker', link: '/components/date-picker' },
             { text: '树选择器 TreeSelect', link: '/components/tree-select' },
             { text: '级联选择 Cascader', link: '/components/cascader' },
             { text: '滑块 Slider', link: '/components/slider' },
@@ -81,7 +83,9 @@ export default defineConfig({
         {
           text: '导航',
           items: [
+            { text: '导航栏 NavBar', link: '/components/nav-bar' },
             { text: '标签页 Tabs', link: '/components/tabs' },
+            { text: '底部导航 TabBar', link: '/components/tab-bar' },
             { text: '文字提示 Tooltip', link: '/components/tooltip' },
             { text: '弹出层 Popover', link: '/components/popover' },
             { text: '下拉菜单 DropdownMenu', link: '/components/dropdown-menu' },
@@ -91,6 +95,11 @@ export default defineConfig({
         {
           text: '布局',
           items: [
+            { text: '容器 Container', link: '/components/container' },
+            { text: '栅格 Grid', link: '/components/grid' },
+            { text: '分割面板 Splitter', link: '/components/splitter' },
+            { text: '堆叠 Stack', link: '/components/stack' },
+            { text: '弹性布局 Flex', link: '/components/flex' },
             { text: '分组块 GroupBlock', link: '/components/group-block' },
             { text: '滚动 Scroll', link: '/components/scroll' },
             { text: '网格布局 GridLayout', link: '/components/grid-layout' },
