@@ -2,7 +2,18 @@
 
 容器组件是页面布局的基础，提供了灵活的布局选项和响应式设计支持。TouchX UI 的容器组件帮助您快速构建结构化的页面布局。
 
+<script setup lang="ts">
+import ContainerBasicDemo from '../.vitepress/theme/components/demos/ContainerBasicDemo.vue'
+import ContainerBasicDemoSource from '../.vitepress/theme/components/demos/ContainerBasicDemo.vue?raw'
+</script>
+
 ## 基础用法
+
+<DemoBlock title="Container" :code="ContainerBasicDemoSource">
+  <template #preview>
+    <ContainerBasicDemo />
+  </template>
+</DemoBlock>
 
 最简单的容器用法：
 

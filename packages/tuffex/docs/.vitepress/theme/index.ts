@@ -81,6 +81,18 @@ import {
   TxTransitionRebound,
   TxTransitionSmoothSize,
   TxFusion,
+  TxPicker,
+  TxDatePicker,
+  TxNavBar,
+  TxTabBar,
+  TxSplitter,
+  TxStack,
+  TxFlex,
+  TxGrid,
+  TxGridItem,
+  TxContainer,
+  TxRow,
+  TxCol,
 } from '../../../packages/components/src'
 
 // 导入 Demo 容器组件
@@ -201,6 +213,21 @@ export default {
     app.component('TxTransitionSmoothSize', TxTransitionSmoothSize)
 
     app.component('TxFusion', TxFusion)
+
+    app.component('TxPicker', TxPicker)
+    app.component('TxDatePicker', TxDatePicker)
+
+    app.component('TxNavBar', TxNavBar)
+    app.component('TxTabBar', TxTabBar)
+
+    app.component('TxSplitter', TxSplitter)
+    app.component('TxStack', TxStack)
+    app.component('TxFlex', TxFlex)
+    app.component('TxGrid', TxGrid)
+    app.component('TxGridItem', TxGridItem)
+    app.component('TxContainer', TxContainer)
+    app.component('TxRow', TxRow)
+    app.component('TxCol', TxCol)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)
