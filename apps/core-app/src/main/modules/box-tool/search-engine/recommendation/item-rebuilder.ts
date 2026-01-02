@@ -2,11 +2,7 @@ import type { TuffItem, TuffQuery, TuffRender } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
 
-/**
- * Rebuilds complete TuffItems from recommendation results.
- * Converts lightweight ScoredItems (sourceId + itemId) into full TuffItems
- * by querying the database and applying provider transformation logic.
- */
+/** Rebuilds TuffItems from ScoredItems by querying DB and applying provider logic */
 export class ItemRebuilder {
   constructor(private dbUtils: DbUtils) {}
 
@@ -24,9 +20,7 @@ export class ItemRebuilder {
     ])
 
     const allItems = results.flat()
-    const enrichedItems = this.mergeAndEnrichItems(allItems, scoredItems)
-    
-    return enrichedItems
+    return this.mergeAndEnrichItems(allItems, scoredItems)
   }
 
   private normalizeSourceId(sourceId: string): string {
@@ -345,28 +339,27 @@ export class ItemRebuilder {
   }
 
 
-  /** Partial match fallback for items where ID format differs */
   private findScoredByPartialMatch(item: TuffItem, scoredItems: ScoredItem[]): ScoredItem | undefined {
     const itemId = item.id
     const sourceId = item.source.id
+    const originalItemId = (item.meta as any)?._originalItemId
 
-    if (sourceId === 'plugin-features' || sourceId.includes('plugin')) {
-      return scoredItems.find((s) => {
-        if (s.itemId.endsWith(`/${itemId}`)) return true
-        if (s.itemId === itemId) return true
-        return false
-      })
+    // Direct match with original ID (highest priority)
+    if (originalItemId) {
+      const match = scoredItems.find((s) => s.itemId === originalItemId && s.sourceId === sourceId)
+      if (match) return match
     }
 
+    // Plugin features: match by suffix or exact
+    if (sourceId === 'plugin-features' || sourceId.includes('plugin')) {
+      return scoredItems.find((s) => s.itemId.endsWith(`/${itemId}`) || s.itemId === itemId)
+    }
+
+    // App provider: match by path or bundleId inclusion
     if (sourceId === 'app-provider' || sourceId === 'application') {
       return scoredItems.find((s) => {
-        if (itemId.startsWith('/') && s.itemId.startsWith('/')) {
-          return itemId === s.itemId
-        }
-        if (s.itemId.includes(itemId) || itemId.includes(s.itemId)) {
-          return true
-        }
-        return false
+        if (itemId.startsWith('/') && s.itemId.startsWith('/')) return itemId === s.itemId
+        return s.itemId.includes(itemId) || itemId.includes(s.itemId)
       })
     }
 
@@ -382,7 +375,9 @@ export class ItemRebuilder {
 
     return items
       .map((item) => {
-        const scored = scoreMap.get(item.id) 
+        const originalItemId = (item.meta as any)?._originalItemId
+        const scored = (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`))
+          || scoreMap.get(item.id)
           || scoreMap.get(`${item.source.id}:${item.id}`)
           || this.findScoredByPartialMatch(item, scoredItems)
         if (!scored) return null
@@ -395,6 +390,9 @@ export class ItemRebuilder {
           isIntelligent: true,
           badge: this.generateBadge(scored)
         }
+        // Store original itemId for deduplication in recommendation-engine
+        meta._originalItemId = scored.itemId
+        meta._originalSourceId = scored.sourceId
         item.meta = meta
 
         return item
@@ -403,43 +401,24 @@ export class ItemRebuilder {
   }
 
   private getReasonLabel(scored: ScoredItem): string {
-    switch (scored.source) {
-      case 'frequent':
-        return '🔥 Frequent'
-      case 'time-based':
-        return '🕐 Popular Now'
-      case 'recent':
-        return '⏰ Recent'
-      case 'trending':
-        return '📈 Trending'
-      case 'context':
-        return '✨ Smart Match'
-      default:
-        return '💡 Recommended'
+    const labels: Record<string, string> = {
+      frequent: '🔥 Frequent',
+      'time-based': '🕐 Popular Now',
+      recent: '⏰ Recent',
+      trending: '📈 Trending',
+      context: '✨ Smart Match'
     }
+    return labels[scored.source] || '💡 Recommended'
   }
 
-  /**
-   * 生成推荐徽章
-   */
-  private generateBadge(scored: ScoredItem): {
-    text: string
-    icon: string
-    variant: string
-  } {
-    switch (scored.source) {
-      case 'frequent':
-        return { text: '常用', icon: '🔥', variant: 'frequent' }
-      case 'time-based':
-        return { text: '推荐', icon: '🕐', variant: 'intelligent' }
-      case 'recent':
-        return { text: '最近', icon: '⏰', variant: 'recent' }
-      case 'trending':
-        return { text: '趋势', icon: '📈', variant: 'trending' }
-      case 'context':
-        return { text: '智能推荐', icon: '✨', variant: 'intelligent' }
-      default:
-        return { text: '推荐', icon: '💡', variant: 'intelligent' }
+  private generateBadge(scored: ScoredItem): { text: string; icon: string; variant: string } {
+    const badges: Record<string, { text: string; icon: string; variant: string }> = {
+      frequent: { text: '常用', icon: '🔥', variant: 'frequent' },
+      'time-based': { text: '推荐', icon: '🕐', variant: 'intelligent' },
+      recent: { text: '最近', icon: '⏰', variant: 'recent' },
+      trending: { text: '趋势', icon: '📈', variant: 'trending' },
+      context: { text: '智能推荐', icon: '✨', variant: 'intelligent' }
     }
+    return badges[scored.source] || { text: '推荐', icon: '💡', variant: 'intelligent' }
   }
 }

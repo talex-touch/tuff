@@ -7,6 +7,7 @@ import { BoxMode } from '..'
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
+const MAX_CLIPBOARD_AGE_MS = 5 * 60 * 1000
 const autoPastedTimestamps = new Set<number>()
 
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
@@ -44,7 +45,13 @@ export function useClipboard(
 
     const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
     if (!timestamp) return false
-    return !autoPastedTimestamps.has(timestamp)
+    if (autoPastedTimestamps.has(timestamp)) return false
+
+    // Check clipboard freshness
+    const clipboardAge = Date.now() - timestamp
+    const limit = appSetting.tools.autoPaste.time
+    const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_MS : limit * 1000
+    return clipboardAge <= effectiveLimit
   }
 
   function markAsAutoPasted(timestamp: number, clear = true): void {
