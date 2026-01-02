@@ -136,12 +136,18 @@ export class RecommendationEngine {
     }
 
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
-    const filteredItems = items.filter((item) => !pinnedKeys.has(`${item.source.id}:${item.id}`))
+    const filteredItems = items.filter((item) => {
+      const meta = item.meta as any
+      const originalKey = meta?._originalSourceId && meta?._originalItemId
+        ? `${meta._originalSourceId}:${meta._originalItemId}`
+        : `${item.source.id}:${item.id}`
+      return !pinnedKeys.has(originalKey)
+    })
 
     for (const item of filteredItems) {
       if (!item.meta) item.meta = {}
-      if (!item.meta.recommendation) {
-        item.meta.recommendation = { source: 'frequent' }
+      if (!(item.meta as any).recommendation) {
+        (item.meta as any).recommendation = { source: 'frequent' }
       }
     }
 
