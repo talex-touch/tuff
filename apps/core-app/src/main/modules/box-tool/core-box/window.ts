@@ -24,6 +24,7 @@ import { coreBoxManager } from './manager'
 import type { CoreBoxInputChange } from './input-transport'
 import { getBoxItemManager } from '../item-sdk'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
+import { metaOverlayManager } from './meta-overlay'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 
@@ -273,7 +274,13 @@ export class WindowManager {
       } catch (error) {
         coreBoxWindowLog.warn('Failed to update UI view bounds on resize', { error })
       }
+
+      // Update MetaOverlay bounds
+      metaOverlayManager.updateBounds()
     })
+
+    // Initialize MetaOverlay (persistent mode)
+    metaOverlayManager.init(window.window)
 
     coreBoxWindowLog.debug('NewBox created, WebContents loaded')
 
@@ -1231,6 +1238,18 @@ export class WindowManager {
 
     this.uiViewFocused = true
     currentWindow.window.contentView.addChildView(this.uiView)
+
+    // Ensure MetaOverlay is on top (re-add it after uiView)
+    // This ensures z-index order: MainRenderer < PluginView < MetaOverlay
+    const metaView = metaOverlayManager['metaView']
+    if (metaView && currentWindow.window.contentView.children.includes(metaView)) {
+      try {
+        currentWindow.window.contentView.removeChildView(metaView)
+        currentWindow.window.contentView.addChildView(metaView)
+      } catch (error) {
+        coreBoxWindowLog.warn('Failed to reorder MetaOverlay', { error })
+      }
+    }
 
     this.uiView.webContents.addListener('blur', () => {
       this.uiViewFocused = false

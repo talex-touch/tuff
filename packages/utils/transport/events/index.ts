@@ -855,6 +855,12 @@ export const ClipboardEvents = {
 } as const
 
 // ============================================================================
+// MetaOverlay Events
+// ============================================================================
+
+import { MetaOverlayEvents } from './meta-overlay'
+
+// ============================================================================
 // Unified Export
 // ============================================================================
 
@@ -868,6 +874,7 @@ export const ClipboardEvents = {
  * await transport.send(TuffEvents.coreBox.ui.hide)
  * await transport.send(TuffEvents.storage.app.get, { key: 'theme' })
  * await transport.send(TuffEvents.clipboard.getLatest)
+ * await transport.send(TuffEvents.metaOverlay.ui.show, { item, builtinActions: [] })
  * ```
  */
 export const TuffEvents = {
@@ -877,4 +884,8 @@ export const TuffEvents = {
   plugin: PluginEvents,
   boxItem: BoxItemEvents,
   clipboard: ClipboardEvents,
+  metaOverlay: MetaOverlayEvents,
 } as const
+
+// Export MetaOverlayEvents separately for convenience
+export { MetaOverlayEvents }

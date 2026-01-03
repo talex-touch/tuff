@@ -191,28 +191,62 @@ export function useClipboard(
     onPasteCallback?.()
   }
 
-  const cleanup = useClipboardChannel({
-    onNewItem: (item) => {
-      if (!item?.type) return
+  // Delay clipboard channel initialization to ensure TouchChannel is available
+  let cleanup: (() => void) | null = null
+  let initAttempted = false
 
-      const incomingTimestamp = normalizeTimestamp(item.timestamp)
-      const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
+  // Initialize clipboard channel on next tick to ensure TouchChannel is ready
+  const initClipboardChannel = () => {
+    if (initAttempted) return
+    initAttempted = true
 
-      if (incomingTimestamp && dismissedTimestamp && incomingTimestamp === dismissedTimestamp) {
-        return
-      }
+    try {
+      cleanup = useClipboardChannel({
+        onNewItem: (item) => {
+          if (!item?.type) return
 
-      const changed = clipboardOptions.last?.timestamp !== item.timestamp
-      clipboardOptions.last = item
-      clipboardOptions.detectedAt = Date.now()
-      clipboardOptions.lastClearedTimestamp = null
+          const incomingTimestamp = normalizeTimestamp(item.timestamp)
+          const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
 
-      // Only trigger search if CoreBox is visible (document is visible)
-      if (changed && document.visibilityState === 'visible') {
-        onPasteCallback?.()
-      }
+          if (incomingTimestamp && dismissedTimestamp && incomingTimestamp === dismissedTimestamp) {
+            return
+          }
+
+          const changed = clipboardOptions.last?.timestamp !== item.timestamp
+          clipboardOptions.last = item
+          clipboardOptions.detectedAt = Date.now()
+          clipboardOptions.lastClearedTimestamp = null
+
+          // Only trigger search if CoreBox is visible (document is visible)
+          if (changed && document.visibilityState === 'visible') {
+            onPasteCallback?.()
+          }
+        }
+      })
+    } catch (error) {
+      // TouchChannel not available yet, retry on next tick
+      console.warn('[useClipboard] TouchChannel not available, retrying...', error)
+      setTimeout(initClipboardChannel, 100)
     }
-  })
+  }
+
+  // Initialize after component is mounted
+  if (typeof window !== 'undefined') {
+    // Check if TouchChannel is available
+    if (window.$channel || window.touchChannel) {
+      initClipboardChannel()
+    } else {
+      // Wait for TouchChannel to be injected
+      const checkChannel = setInterval(() => {
+        if (window.$channel || window.touchChannel) {
+          clearInterval(checkChannel)
+          initClipboardChannel()
+        }
+      }, 50)
+      // Cleanup interval after 5 seconds
+      setTimeout(() => clearInterval(checkChannel), 5000)
+    }
+  }
 
   return {
     handlePaste,
@@ -220,6 +254,8 @@ export function useClipboard(
     applyToActiveApp,
     clearClipboard,
     resetAutoPasteState,
-    cleanup
+    cleanup: () => {
+      cleanup?.()
+    }
   }
 }

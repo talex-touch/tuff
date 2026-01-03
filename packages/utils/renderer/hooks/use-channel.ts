@@ -49,8 +49,10 @@ function resolveTouchChannel(): TouchChannel | null {
     const channel
       = (globalThis as any).touchChannel
         || (globalThis as any).$touchChannel
+        || (globalThis as any).$channel
         || (globalThis as any).window?.touchChannel
         || (globalThis as any).window?.$touchChannel
+        || (globalThis as any).window?.$channel
 
     if (channel)
       return channel
@@ -58,7 +60,7 @@ function resolveTouchChannel(): TouchChannel | null {
 
   // Try window object (browser environment)
   if (typeof window !== 'undefined') {
-    const channel = window.touchChannel || window.$touchChannel
+    const channel = window.touchChannel || window.$touchChannel || (window as any).$channel
     if (channel)
       return channel
   }

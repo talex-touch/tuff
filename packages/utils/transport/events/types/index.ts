@@ -20,3 +20,6 @@ export * from './box-item'
 
 // Clipboard domain types
 export * from './clipboard'
+
+// MetaOverlay domain types
+export * from './meta-overlay'

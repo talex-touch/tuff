@@ -21,6 +21,7 @@ import {
   createClipboardManager,
   createDivisionBoxSDK,
   createFeatureSDK,
+  createMetaSDK,
   PluginStatus
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
@@ -1159,6 +1160,7 @@ export class TouchPlugin implements ITouchPlugin {
       search: searchManager,
       box: createBoxSDK(boxChannel),
       divisionBox: createDivisionBoxSDK(channelBridge),
+      meta: createMetaSDK(channelBridge, this.name),
     }
 
     return {
@@ -1173,6 +1175,7 @@ export class TouchPlugin implements ITouchPlugin {
       divisionBox: createDivisionBoxSDK(channelBridge),
       box: createBoxSDK(boxChannel),
       feature: createFeatureSDK(boxItems, channelBridge),
+      meta: createMetaSDK(channelBridge, this.name),
       // 新的 BoxItemSDK API
       boxItems,
       // 废弃的 API - 直接抛出错误

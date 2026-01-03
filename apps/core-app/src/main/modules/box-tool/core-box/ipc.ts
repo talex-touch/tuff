@@ -1,4 +1,4 @@
-import type { TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
+import type { TuffQuery, TuffItem } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import type { TouchApp } from '../../../core/touch-app'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { genTouchApp } from '../../../core'
@@ -9,6 +9,9 @@ import { coreBoxInputTransport } from './input-transport'
 import { coreBoxKeyTransport } from './key-transport'
 import { getCoreBoxWindow, windowManager } from './window'
 import { BOX_ITEM_CHANNELS, getBoxItemManager } from '../item-sdk'
+import { metaOverlayManager } from './meta-overlay'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
+import type { MetaShowRequest, MetaActionExecuteRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
 
 /**
  * @class IpcManager
@@ -403,6 +406,112 @@ export class IpcManager {
           reply(DataCode.SUCCESS, { cancelled: true })
         } else {
           reply(DataCode.SUCCESS, { cancelled: false })
+        }
+      }
+    )
+
+    // ============================================================================
+    // MetaOverlay IPC Handlers
+    // ============================================================================
+
+    // Show MetaOverlay
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      MetaOverlayEvents.ui.show.toEventName(),
+      ({ data, reply }) => {
+        try {
+          const request = data as MetaShowRequest
+          // Get plugin actions
+          const pluginActions = metaOverlayManager.getPluginActions()
+          request.pluginActions = pluginActions
+          metaOverlayManager.show(request)
+          reply(DataCode.SUCCESS, {})
+        } catch (error) {
+          reply(DataCode.ERROR, { error: String(error) })
+        }
+      }
+    )
+
+    // Hide MetaOverlay
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      MetaOverlayEvents.ui.hide.toEventName(),
+      ({ reply }) => {
+        try {
+          metaOverlayManager.hide()
+          reply(DataCode.SUCCESS, {})
+        } catch (error) {
+          reply(DataCode.ERROR, { error: String(error) })
+        }
+      }
+    )
+
+    // Check visibility
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      MetaOverlayEvents.ui.isVisible.toEventName(),
+      ({ reply }) => {
+        try {
+          const visible = metaOverlayManager.getVisible()
+          reply(DataCode.SUCCESS, { visible })
+        } catch (error) {
+          reply(DataCode.ERROR, { error: String(error) })
+        }
+      }
+    )
+
+    // Execute action
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      MetaOverlayEvents.action.execute.toEventName(),
+      async ({ data, reply }) => {
+        try {
+          const request = data as MetaActionExecuteRequest & { item?: TuffItem }
+          // Get item from request (passed from renderer) or lookup by ID
+          let item = request.item
+          if (!item) {
+            // TODO: Lookup item by ID from BoxItemManager if needed
+            reply(DataCode.ERROR, { error: 'Item not found', success: false })
+            return
+          }
+          await metaOverlayManager.executeAction(request.actionId, item)
+          reply(DataCode.SUCCESS, { success: true })
+        } catch (error) {
+          reply(DataCode.ERROR, { error: String(error), success: false })
+        }
+      }
+    )
+
+    // Register plugin action
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      MetaOverlayEvents.action.register.toEventName(),
+      ({ data, reply }) => {
+        try {
+          const { pluginId, action } = data as { pluginId: string; action: any }
+          metaOverlayManager.registerPluginAction(pluginId, action)
+          reply(DataCode.SUCCESS, {})
+        } catch (error) {
+          reply(DataCode.ERROR, { error: String(error) })
+        }
+      }
+    )
+
+    // Unregister plugin actions
+    this.touchApp.channel.regChannel(
+      ChannelType.MAIN,
+      MetaOverlayEvents.action.unregister.toEventName(),
+      ({ data, reply }) => {
+        try {
+          const { pluginId, actionId } = data as { pluginId: string; actionId?: string }
+          if (actionId) {
+            metaOverlayManager.unregisterPluginAction(pluginId, actionId)
+          } else {
+            metaOverlayManager.unregisterPluginActions(pluginId)
+          }
+          reply(DataCode.SUCCESS, {})
+        } catch (error) {
+          reply(DataCode.ERROR, { error: String(error) })
         }
       }
     )

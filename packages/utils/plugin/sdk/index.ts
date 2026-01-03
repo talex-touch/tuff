@@ -14,6 +14,7 @@ export * from './core-box'
 export * from './division-box'
 export * from './feature-sdk'
 export * from './flow'
+export * from './meta-sdk'
 export { createFeaturesManager, useFeatures } from './features'
 
 export * from './hooks/index'

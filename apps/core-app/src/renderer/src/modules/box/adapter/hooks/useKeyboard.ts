@@ -173,6 +173,101 @@ const COREBOX_FLOW_EVENT = 'corebox:flow-item'
  */
 const COREBOX_PIN_EVENT = 'corebox:toggle-pin'
 
+// Helper functions for MetaOverlay
+const isMac = process.platform === 'darwin'
+
+function generateBuiltinActions(item: any): any[] {
+  const actions: any[] = []
+  const isPinned = !!(item.meta as any)?.pinned?.isPinned
+
+  // Pin/Unpin action
+  actions.push({
+    id: 'toggle-pin',
+    render: {
+      basic: {
+        title: isPinned ? '取消固定' : '固定到推荐',
+        subtitle: isPinned ? '从推荐列表中移除' : '添加到推荐列表顶部',
+        icon: { type: 'class', value: isPinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line' }
+      },
+      shortcut: isMac ? '↵' : 'Enter',
+      group: '操作'
+    },
+    handler: 'builtin',
+    priority: 0
+  })
+
+  // Copy title action
+  if (item.render?.basic?.title) {
+    actions.push({
+      id: 'copy-title',
+      render: {
+        basic: {
+          title: '复制名称',
+          subtitle: `复制 "${item.render.basic.title}"`,
+          icon: { type: 'class', value: 'i-ri-file-copy-line' }
+        },
+        shortcut: isMac ? '⌘C' : 'Ctrl+C',
+        group: '操作'
+      },
+      handler: 'builtin',
+      priority: 0
+    })
+  }
+
+  // Reveal in Finder (for apps/files)
+  if (item.kind === 'app' || item.kind === 'file') {
+    actions.push({
+      id: 'reveal-in-finder',
+      render: {
+        basic: {
+          title: '在 Finder 中显示',
+          subtitle: '在文件管理器中打开',
+          icon: { type: 'class', value: 'i-ri-folder-open-line' }
+        },
+        shortcut: isMac ? '⌘⇧F' : 'Ctrl+Shift+F',
+        group: '操作'
+      },
+      handler: 'builtin',
+      priority: 0
+    })
+  }
+
+  // Flow Transfer
+  actions.push({
+    id: 'flow-transfer',
+    render: {
+      basic: {
+        title: '流转到其他插件',
+        subtitle: '将当前项传递给其他插件处理',
+        icon: { type: 'class', value: 'i-ri-share-forward-line' }
+      },
+      shortcut: isMac ? '⌘⇧D' : 'Ctrl+Shift+D',
+      group: '操作'
+    },
+    handler: 'builtin',
+    priority: 0
+  })
+
+  return actions
+}
+
+function convertTuffActionToMetaAction(tuffAction: any): any {
+  return {
+    id: tuffAction.id || `item-action-${Date.now()}`,
+    render: {
+      basic: {
+        title: tuffAction.label || tuffAction.title || '操作',
+        subtitle: tuffAction.description || tuffAction.subtitle,
+        icon: tuffAction.icon
+      },
+      shortcut: tuffAction.shortcut,
+      group: tuffAction.group || '操作'
+    },
+    handler: 'item',
+    priority: 50
+  }
+}
+
 /**
  * Determines if a keyboard event should be forwarded to the plugin UI view.
  *
@@ -473,42 +568,66 @@ export function useKeyboard(
       }
     }
     else if (event.key === 'k' || event.key === 'K') {
-      // Command/Ctrl+K: Toggle pin for current item
+      // Command/Ctrl+K: Open MetaOverlay action panel
       if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
-        console.log('[useKeyboard] ⌘K detected, focus:', boxOptions.focus, 'item:', res.value[boxOptions.focus]?.render?.basic?.title)
         const currentItem = res.value[boxOptions.focus]
         if (!currentItem) {
-          console.log('[useKeyboard] ⌘K no current item')
           event.preventDefault()
           return
         }
 
-        console.log('[useKeyboard] ⌘K dispatching event for item:', currentItem.id)
-        window.dispatchEvent(new CustomEvent(COREBOX_PIN_EVENT, {
-          detail: { item: currentItem }
-        }))
+        // Import dynamically to avoid circular dependency
+        void (async () => {
+          try {
+            const { useTuffTransport } = await import('@talex-touch/utils/transport')
+            const { MetaOverlayEvents } = await import('@talex-touch/utils/transport/events/meta-overlay')
+            const transport = useTuffTransport()
+            // Generate built-in actions
+            const builtinActions = generateBuiltinActions(currentItem)
+            await transport.send(MetaOverlayEvents.ui.show, {
+              item: currentItem,
+              builtinActions,
+              itemActions: currentItem.actions?.map(convertTuffActionToMetaAction) || []
+            })
+          } catch (error) {
+            console.error('[useKeyboard] Failed to open MetaOverlay:', error)
+          }
+        })()
         event.preventDefault()
         return
       }
     }
     else if (event.key === 'Escape') {
       /**
-       * ESC key strict sequential handling (FIXED):
-       * 1. Clear clipboard/file attachments (PRIORITY)
-       * 2. Deactivate active providers (attachUIView)
-       * 3. Clear input query
-       * 4. Handle mode transitions
-       * 5. Hide CoreBox window
-       *
-       * Note: handleExit is async but we use void operator (fire-and-forget)
-       * because keyboard event handlers cannot be async. The async operations
-       * will continue in the background without blocking the UI.
-       *
-       * Fix: Prioritize clearing clipboard/attachments before deactivating providers
-       * to prevent attachUIView from closing while clipboard data remains attached.
+       * ESC key strict sequential handling (UPDATED):
+       * 1. Close MetaOverlay if visible (HIGHEST PRIORITY)
+       * 2. Clear clipboard/file attachments
+       * 3. Deactivate active providers (attachUIView)
+       * 4. Clear input query
+       * 5. Handle mode transitions
+       * 6. Hide CoreBox window
        */
 
-      // Step 1: Clear clipboard/file attachments FIRST (highest priority)
+      // Step 0: Check MetaOverlay visibility (highest priority)
+      // Use async/await pattern for better control flow
+      void (async () => {
+        try {
+          const { useTuffTransport } = await import('@talex-touch/utils/transport')
+          const { MetaOverlayEvents } = await import('@talex-touch/utils/transport/events/meta-overlay')
+          const transport = useTuffTransport()
+          const response = await transport.send(MetaOverlayEvents.ui.isVisible)
+          if (response?.visible) {
+            await transport.send(MetaOverlayEvents.ui.hide)
+            event.preventDefault()
+            event.stopPropagation()
+            return
+          }
+        } catch {
+          // If check fails, continue with normal ESC handling
+        }
+      })()
+
+      // Step 1: Clear clipboard/file attachments
       if (clipboardOptions.last || boxOptions.file?.paths?.length > 0) {
         if (clipboardOptions.last) {
           clearClipboard({ remember: true })

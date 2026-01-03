@@ -153,6 +153,14 @@ const routes: any = [
     meta: {
       index: 8
     }
+  },
+  {
+    path: '/meta-overlay',
+    name: 'MetaOverlay',
+    component: () => import('../views/meta/MetaOverlay.vue'),
+    meta: {
+      index: 0
+    }
   }
 ]
 
