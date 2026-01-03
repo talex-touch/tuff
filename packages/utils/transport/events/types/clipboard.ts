@@ -1,86 +1,69 @@
 /**
- * @fileoverview Clipboard domain event types for TuffTransport
+ * @fileoverview Type definitions for Clipboard domain events
  * @module @talex-touch/utils/transport/events/types/clipboard
  * @since v0.9.0
  */
 
+import type { TuffInputType } from './core-box'
+
 /**
- * Clipboard item data structure.
- * @since v0.9.0
+ * Represents a single item in the clipboard history.
  */
 export interface ClipboardItem {
   id: number
-  type: 'text' | 'image' | 'files'
-  content: string
-  thumbnail?: string | null
-  rawContent?: string | null
-  sourceApp?: string | null
-  timestamp: Date
-  isFavorite?: boolean | null
-  meta?: Record<string, unknown> | null
+  type: TuffInputType
+  value: string
+  html?: string
+  rtf?: string
+  source?: string
+  createdAt: number
+  isFavorite?: boolean
 }
 
 /**
- * Clipboard change notification payload.
- * @since v0.9.0
+ * Payload for the clipboard change event stream.
  */
 export interface ClipboardChangePayload {
-  item: ClipboardItem
-  source: 'monitor' | 'manual'
+  latest: ClipboardItem | null
+  history: ClipboardItem[]
 }
 
 /**
- * Clipboard history query parameters.
- * @since v0.9.0
+ * Request to query clipboard history.
  */
 export interface ClipboardQueryRequest {
   page?: number
-  pageSize?: number
-  keyword?: string
-  type?: 'text' | 'image' | 'files'
-  startTime?: number
-  endTime?: number
-  isFavorite?: boolean
-  sourceApp?: string
-  sortOrder?: 'asc' | 'desc'
+  limit?: number
+  type?: 'all' | 'favorite' | 'text' | 'image'
 }
 
 /**
- * Clipboard history query response.
- * @since v0.9.0
+ * Response for clipboard history query.
  */
 export interface ClipboardQueryResponse {
-  history: ClipboardItem[]
+  items: ClipboardItem[]
   total: number
   page: number
-  pageSize: number
+  limit: number
 }
 
 /**
- * Clipboard apply request payload.
- * @since v0.9.0
+ * Request to apply a clipboard item.
  */
 export interface ClipboardApplyRequest {
-  item?: Partial<ClipboardItem>
-  text?: string
-  html?: string | null
-  type?: 'text' | 'image' | 'files'
-  files?: string[]
-  delayMs?: number
-  hideCoreBox?: boolean
+  id: number
+  autoPaste?: boolean
 }
 
 /**
- * Clipboard delete request.
- * @since v0.9.0
+ * Request to delete a clipboard item.
  */
 export interface ClipboardDeleteRequest {
   id: number
 }
 
 /**
- * Clipboard favorite toggle request.
- * @since v0.9.0
+ * Request to set favorite status of a clipboard item.
  */
 export interface ClipboardSetFavoriteRequest {
   id: number
@@ -88,12 +71,9 @@ export interface ClipboardSetFavoriteRequest {
 }
 
 /**
- * Clipboard write request for programmatic clipboard operations.
- * @since v0.9.0
+ * Request to write content to the clipboard.
  */
 export interface ClipboardWriteRequest {
-  text?: string
-  html?: string
-  image?: string
-  files?: string[]
+  type: 'text' | 'html' | 'image'
+  value: string
 }
