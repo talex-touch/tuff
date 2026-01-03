@@ -1,29 +1,122 @@
 import type { IClipboardItem } from './types'
-import { touchChannel } from '~/modules/channel/channel-core'
+import type { ClipboardItem, ClipboardChangePayload } from '@talex-touch/utils/transport/events'
 import {
-  createClipboardTransport,
-  type ClipboardMetaUpdate,
-  type ClipboardTransportHandlers
+  getLatest as getLatestClipboardItem,
+  apply as applyClipboardItem,
+  onClipboardChange,
 } from '../transport/clipboard-transport'
 
-export type { ClipboardMetaUpdate }
+/**
+ * Convert ClipboardItem (from TuffTransport) to IClipboardItem (renderer format)
+ */
+function convertClipboardItem(item: ClipboardItem | null): IClipboardItem | null {
+  if (!item) return null
+
+  return {
+    id: item.id,
+    type: item.type as 'text' | 'image' | 'files',
+    content: item.value,
+    thumbnail: undefined, // Not available in ClipboardItem
+    rawContent: item.html || item.rtf || undefined,
+    sourceApp: item.source || undefined,
+    timestamp: new Date(item.createdAt),
+    isFavorite: item.isFavorite || false,
+    metadata: undefined, // Metadata is stored separately
+    meta: undefined,
+  }
+}
+
+/**
+ * Clipboard metadata update (for backward compatibility)
+ * @deprecated Metadata updates are now handled via the change stream
+ */
+export type ClipboardMetaUpdate = {
+  clipboardId: number
+  entries: Record<string, unknown>
+}
+
+/**
+ * Clipboard transport handlers
+ */
+export interface ClipboardTransportHandlers {
+  onNewItem?: (item: IClipboardItem) => void
+  onMetaUpdate?: (update: ClipboardMetaUpdate) => void
+}
+
 export type ClipboardChannelHandlers = ClipboardTransportHandlers
 
-const clipboardTransport = createClipboardTransport(touchChannel)
+/**
+ * Clipboard channel event names (for backward compatibility)
+ * @deprecated Use TuffTransport ClipboardEvents instead
+ */
+export const CLIPBOARD_CHANNELS = {
+  NEW_ITEM: 'clipboard:new-item',
+  META_UPDATE: 'clipboard:meta-update',
+} as const
 
+/**
+ * Subscribe to clipboard changes using TuffTransport
+ */
 export function useClipboardChannel(handlers?: ClipboardChannelHandlers): () => void {
   if (!handlers) return () => {}
-  return clipboardTransport.subscribe(handlers)
+
+  let streamController: ReturnType<typeof onClipboardChange> | null = null
+
+  if (handlers.onNewItem) {
+    streamController = onClipboardChange((payload: ClipboardChangePayload) => {
+      // Convert and notify about the latest item
+      if (payload.latest) {
+        const converted = convertClipboardItem(payload.latest)
+        if (converted) {
+          handlers.onNewItem!(converted)
+        }
+      }
+    })
+  }
+
+  // Return cleanup function
+  return () => {
+    if (streamController) {
+      streamController.cancel()
+      streamController = null
+    }
+  }
 }
 
+/**
+ * Get the latest clipboard item asynchronously
+ */
 export async function getLatestClipboard(): Promise<IClipboardItem | null> {
-  return clipboardTransport.getLatestAsync()
+  const item = await getLatestClipboardItem()
+  return convertClipboardItem(item)
 }
 
+/**
+ * Get the latest clipboard item synchronously
+ * @deprecated This method is not supported with TuffTransport. Use getLatestClipboard() instead.
+ */
 export function getLatestClipboardSync(): IClipboardItem | null {
-  return clipboardTransport.getLatest()
+  // TuffTransport doesn't support synchronous operations
+  // Return null and log a warning
+  console.warn('[useClipboardChannel] getLatestClipboardSync() is deprecated. Use getLatestClipboard() instead.')
+  return null
 }
 
+/**
+ * Apply clipboard item to active application
+ */
 export async function applyClipboardToActiveApp(item: IClipboardItem): Promise<boolean> {
-  return clipboardTransport.applyToActiveApp(item)
+  if (!item.id) {
+    console.error('[useClipboardChannel] Cannot apply clipboard item without ID')
+    return false
+  }
+
+  try {
+    await applyClipboardItem(item.id)
+    return true
+  }
+  catch (error) {
+    console.error('[useClipboardChannel] Failed to apply clipboard item:', error)
+    return false
+  }
 }
