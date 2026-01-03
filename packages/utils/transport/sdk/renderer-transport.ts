@@ -10,7 +10,7 @@ import type {
   StreamOptions,
 } from '../types'
 import type { TuffEvent } from '../event/types'
-import { useChannel } from '../../renderer/hooks/use-channel'
+import { useChannel, tryUseChannel } from '../../renderer/hooks/use-channel'
 import { assertTuffEvent } from '../event/builder'
 import { DEFAULT_TIMEOUT, STREAM_SUFFIXES } from './constants'
 

@@ -231,6 +231,12 @@ export interface IPluginUtils {
   feature: import('./feature-sdk').FeatureSDK
 
   /**
+   * MetaOverlay SDK for registering global actions
+   * @see {@link MetaSDK}
+   */
+  meta: import('./meta-sdk').MetaSDK
+
+  /**
    * Opens a URL in the default browser
    * @param url - The URL to open
    */
