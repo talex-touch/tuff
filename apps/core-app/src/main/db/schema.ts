@@ -597,9 +597,9 @@ export const analyticsSnapshots = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     windowType: text('window_type').notNull(),
-    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+    timestamp: integer('timestamp').notNull(),
     metrics: text('metrics').notNull(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+    createdAt: integer('created_at').default(sql`(unixepoch())`),
   },
   table => ({
     windowTimeIdx: index('idx_analytics_snapshots_window_time').on(table.windowType, table.timestamp),
@@ -611,14 +611,36 @@ export const pluginAnalytics = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     pluginName: text('plugin_name').notNull(),
+    pluginVersion: text('plugin_version'),
     featureId: text('feature_id'),
     eventType: text('event_type').notNull(),
     count: integer('count').default(1),
     metadata: text('metadata'),
-    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+    timestamp: integer('timestamp').notNull(),
   },
   table => ({
     pluginIdx: index('idx_plugin_analytics_plugin_time').on(table.pluginName, table.timestamp),
+    pluginVersionIdx: index('idx_plugin_analytics_plugin_version_time').on(
+      table.pluginName,
+      table.pluginVersion,
+      table.timestamp,
+    ),
+  }),
+)
+
+export const analyticsReportQueue = sqliteTable(
+  'analytics_report_queue',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    endpoint: text('endpoint').notNull(),
+    payload: text('payload').notNull(),
+    createdAt: integer('created_at').notNull(),
+    retryCount: integer('retry_count').notNull().default(0),
+    lastAttemptAt: integer('last_attempt_at'),
+    lastError: text('last_error'),
+  },
+  table => ({
+    createdAtIdx: index('idx_analytics_report_queue_created_at').on(table.createdAt),
   }),
 )
 

@@ -9,6 +9,8 @@ declare global {
     $plugin: {
       name: string
       path: object
+      version?: string
+      sdkapi?: number
     }
     $channel: ITouchClientChannel
     $crash: (message: string, extraData: any) => void

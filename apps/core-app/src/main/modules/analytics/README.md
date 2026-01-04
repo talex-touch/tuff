@@ -10,13 +10,15 @@
 - analytics.get-range: { windowType, from, to } → AnalyticsSnapshot[]
 - analytics.export: { windowType, from, to, format?, dimensions? } → { format, content, exportedAt }
 - analytics.toggle-reporting: { enabled } → { enabled }
+- analytics.messages.list: { status?, source?, since?, limit? } → AnalyticsMessage[]
+- analytics.messages.mark: { id, status } → AnalyticsMessage | null
 - analytics.sdk.*（插件/渲染进程）
-  - sdk.track-event: { eventName, featureId?, metadata?, pluginName? }
-  - sdk.track-duration: { operationName, durationMs, featureId?, pluginName? }
+  - sdk.track-event: { eventName, featureId?, metadata?, pluginName?, pluginVersion? }
+  - sdk.track-duration: { operationName, durationMs, featureId?, pluginName?, pluginVersion? }
   - sdk.get-stats: { pluginName? } → PluginStats
   - sdk.get-feature-stats: { pluginName?, featureId } → FeatureStats
   - sdk.get-top-features: { pluginName?, limit? } → { id, count }[]
-  - sdk.increment-counter / set-gauge / record-histogram: { name, value, pluginName? }
+  - sdk.increment-counter / set-gauge / record-histogram: { name, value, pluginName?, pluginVersion? }
 
 ## 插件侧 SDK 用法
 ```ts
@@ -33,7 +35,8 @@ await analytics.getStats()
 - 内存：1m(保留5m)/5m(1h)/15m(6h)/1h(24h)/24h(7d)。
 - SQLite 表：
   - analytics_snapshots(window_type, timestamp, metrics JSON)
-  - plugin_analytics(plugin_name, feature_id, event_type, count, metadata JSON, timestamp)
+  - plugin_analytics(plugin_name, plugin_version, feature_id, event_type, count, metadata JSON, timestamp)
+  - analytics_report_queue(endpoint, payload, created_at, retry_count, last_attempt_at, last_error)
 - 持久化窗口：15m、1h、24h 自动落盘并按保留策略清理。
 
 ## 搜索性能接入

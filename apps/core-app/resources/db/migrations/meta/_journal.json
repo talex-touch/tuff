@@ -113,6 +113,20 @@
       "when": 1766000000000,
       "tag": "0015_analytics_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1767528133000,
+      "tag": "0016_hidden_sunfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1767529087000,
+      "tag": "0017_lucky_moon_knight",
+      "breakpoints": true
     }
   ]
 }

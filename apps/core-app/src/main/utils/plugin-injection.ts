@@ -1,7 +1,7 @@
 import { getConfig } from '../modules/storage'
 
 export function getJs(options) {
-  const [name, _path, sdkapi] = options
+  const [name, _path, sdkapi, version] = options
 
   const themeConfig = getConfig('theme-style.ini')
 
@@ -17,7 +17,8 @@ export function getJs(options) {
             Object.assign(window.$plugin, {
                 name: '${name}',
                 path: ${_path},
-                sdkapi: ${typeof sdkapi === 'number' ? sdkapi : 'undefined'}
+                sdkapi: ${typeof sdkapi === 'number' ? sdkapi : 'undefined'},
+                version: ${typeof version === 'string' ? JSON.stringify(version) : 'undefined'}
             })
 
             window.$config = {
