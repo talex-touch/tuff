@@ -7,6 +7,8 @@ export interface IArgMapperOptions {
   touchType?: 'main' | 'core-box'
   /** The sub-type for core-box windows (e.g., division-box) */
   coreType?: 'division-box'
+  /** Whether this is a meta-overlay WebContentsView */
+  metaOverlay?: 'true' | 'false'
   /** User data directory path */
   userDataDir?: string
   /** Application path */
@@ -89,4 +91,13 @@ export function useCoreType() {
  */
 export function isDivisionBox() {
   return isCoreBox() && useCoreType() === 'division-box'
+}
+
+/**
+ * Checks if the current window is a meta-overlay WebContentsView
+ * @returns True if the current window is a meta-overlay
+ */
+export function isMetaOverlay() {
+  const argMapper = useArgMapper()
+  return argMapper.metaOverlay === 'true'
 }
