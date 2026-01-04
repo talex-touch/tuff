@@ -169,6 +169,33 @@
 
 ---
 
+# 2026-01-XX
+
+### Analytics: Nexus 统计扩展与隐私约束
+
+**变更类型**: 功能增强 + 隐私改进
+
+**描述**: Nexus 分析面板新增搜索/执行细分指标与模块耗时可视化，同时强制不采集搜索词。
+
+**主要变更**:
+1. **隐私**:
+   - 关闭搜索词采集与展示，仅保留长度/类型/耗时等聚合数据
+2. **Nexus 指标扩展**:
+   - 搜索场景/输入类型/Provider 分布
+   - 平均排序耗时、平均结果数、平均执行延迟
+3. **模块耗时**:
+   - 统计模块加载耗时（avg/max/min/ratio）并可视化
+4. **UI 优化**:
+   - 二级 Breakdown Drawer 收纳细分分布
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+- `docs/analytics-data-prd.md`
+
+---
+
 ## 2025-01-XX
 
 ### 清理: 移除冗余的窗口关闭处理代码

@@ -62,6 +62,32 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   preview: ['preview-provider'],
 }
 
+const PROVIDER_CATEGORY_MAP: Record<string, string> = {
+  'app-provider': 'app',
+  'file-provider': 'file',
+  'everything-provider': 'file',
+  'plugin-features': 'plugin',
+  'system-provider': 'system',
+  'preview-provider': 'preview',
+  'url-provider': 'url',
+}
+
+function resolveProviderCategory(providerId: string): string {
+  if (PROVIDER_CATEGORY_MAP[providerId])
+    return PROVIDER_CATEGORY_MAP[providerId]
+  if (providerId.includes('file'))
+    return 'file'
+  if (providerId.includes('app'))
+    return 'app'
+  if (providerId.includes('plugin'))
+    return 'plugin'
+  if (providerId.includes('system'))
+    return 'system'
+  if (providerId.includes('url'))
+    return 'url'
+  return 'other'
+}
+
 /**
  * Parsed query with optional provider filter
  */
@@ -144,6 +170,7 @@ export class SearchEngineCore
   private recommendationEngine: RecommendationEngine | null = null
   private timeStatsAggregator: TimeStatsAggregator | null = null
   private latestSessionId: string | null = null // 跟踪最新的搜索 session，防止竞态条件
+  private searchSessionStartTimes = new Map<string, number>()
 
   private touchApp: TouchApp | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
@@ -389,6 +416,12 @@ export class SearchEngineCore
     }
 
     const sessionId = crypto.randomUUID()
+    this.searchSessionStartTimes.set(sessionId, Date.now())
+    if (this.searchSessionStartTimes.size > 200) {
+      const oldest = this.searchSessionStartTimes.keys().next().value
+      if (oldest)
+        this.searchSessionStartTimes.delete(oldest)
+    }
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
       'Query Received',
@@ -614,7 +647,8 @@ export class SearchEngineCore
                   totalDuration,
                   sortingDuration,
                   sourceStats: update.sourceStats || [],
-                  resultCount: sortedItems.length
+                  resultCount: sortedItems.length,
+                  providerFilter
                 })
 
                 this._recordSearchResults(sessionId, sortedItems).catch((error) => {
@@ -698,7 +732,8 @@ export class SearchEngineCore
               totalDuration,
               sortingDuration,
               sourceStats: update.sourceStats || [],
-              resultCount: sortedItems.length
+              resultCount: sortedItems.length,
+              providerFilter
             })
 
             // 异步记录搜索结果统计（不阻塞返回）
@@ -877,7 +912,8 @@ export class SearchEngineCore
     totalDuration,
     sortingDuration,
     sourceStats,
-    resultCount
+    resultCount,
+    providerFilter
   }: {
     sessionId: string
     query: TuffQuery
@@ -890,10 +926,11 @@ export class SearchEngineCore
       duration?: number
     }>
     resultCount: number
+    providerFilter?: string
   }): void {
     try {
       const sentryService = getSentryService()
-      if (!sentryService.isEnabled()) {
+      if (!sentryService.isTelemetryEnabled()) {
         return
       }
 
@@ -914,22 +951,45 @@ export class SearchEngineCore
         ? query.inputs.map((input) => input.type).filter(Boolean)
         : ['text']
 
-      sentryService.recordSearchMetrics({
-        totalDuration,
-        providerTimings,
-        providerResults,
-        sortingDuration,
-        queryText: query.text || '',
-        inputTypes,
-        resultCount,
-        sessionId
-      })
+      const { anonymous } = sentryService.getConfig()
+      const queryLength = (query.text || '').length
+      const queryType = query.type || 'text'
+      const hasFilters = Boolean(query.filters?.kinds?.length || query.filters?.sources?.length || query.filters?.date_range)
+      const filterKinds = query.filters?.kinds?.length ? query.filters.kinds : undefined
+      const filterSources = query.filters?.sources?.length ? query.filters.sources : undefined
+      const searchScene = inputTypes.includes('files')
+        ? 'clipboard-files'
+        : inputTypes.includes('image')
+          ? 'clipboard-image'
+          : inputTypes.includes('html')
+            ? 'clipboard-html'
+            : queryType === 'voice'
+              ? 'voice'
+              : 'text'
+      const resultCategories = Object.entries(providerResults).reduce<Record<string, number>>((acc, [providerId, count]) => {
+        const category = resolveProviderCategory(providerId)
+        acc[category] = (acc[category] ?? 0) + count
+        return acc
+      }, {})
+
+      if (sentryService.isEnabled()) {
+        sentryService.recordSearchMetrics({
+          totalDuration,
+          providerTimings,
+          providerResults,
+          sortingDuration,
+          queryText: '',
+          inputTypes,
+          resultCount,
+          sessionId
+        })
+      }
 
       // Also queue Nexus telemetry for dashboard
       try {
         sentryService.queueNexusTelemetry({
           eventType: 'search',
-          searchQuery: (query.text || '').slice(0, 200),
+          searchQuery: undefined,
           searchDurationMs: Math.round(totalDuration),
           searchResultCount: resultCount,
           providerTimings,
@@ -937,6 +997,15 @@ export class SearchEngineCore
           metadata: {
             sessionId,
             sortingDuration: Math.round(sortingDuration),
+            queryLength,
+            queryType,
+            searchScene,
+            hasFilters,
+            filterKinds,
+            filterSources,
+            providerResults,
+            resultCategories,
+            providerFilter: providerFilter || undefined,
           },
         })
       } catch {}
@@ -947,7 +1016,10 @@ export class SearchEngineCore
   }
 
   public async recordExecute(sessionId: string, item: TuffItem): Promise<void> {
-    if (!this.dbUtils) return
+    if (!this.dbUtils) {
+      this.queueExecuteTelemetry(sessionId, item)
+      return
+    }
 
     const itemId = this._getItemId(item)
 
@@ -992,6 +1064,77 @@ export class SearchEngineCore
     } catch (error) {
       searchEngineLog.error(`Failed to record execute usage for item ${itemId}`, { error })
     }
+
+    this.queueExecuteTelemetry(sessionId, item)
+  }
+
+  private queueExecuteTelemetry(sessionId: string, item: TuffItem): void {
+    try {
+      const sentryService = getSentryService()
+      if (!sentryService.isTelemetryEnabled()) {
+        return
+      }
+
+      const { anonymous } = sentryService.getConfig()
+      const startedAt = this.searchSessionStartTimes.get(sessionId)
+      if (startedAt) {
+        this.searchSessionStartTimes.delete(sessionId)
+      }
+
+      const meta = item.meta as Record<string, unknown> | undefined
+      const metadata: Record<string, unknown> = {
+        sessionId,
+        action: 'execute',
+        sourceType: item.source.type,
+        sourceId: item.source.id,
+        sourceName: item.source.name,
+        sourceVersion: item.source.version,
+        itemKind: item.kind,
+      }
+
+      if (startedAt) {
+        metadata.executeLatencyMs = Math.max(0, Math.round(Date.now() - startedAt))
+      }
+
+      const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : undefined
+      const featureId = typeof meta?.featureId === 'string' ? meta.featureId : undefined
+      if (pluginName)
+        metadata.pluginName = pluginName
+      if (featureId)
+        metadata.featureId = featureId
+
+      if (!anonymous) {
+        const entity = this.resolveTelemetryEntity(item, meta)
+        if (entity) {
+          metadata.entityType = entity.type
+          metadata.entityId = entity.id
+        }
+      }
+
+      sentryService.queueNexusTelemetry({
+        eventType: 'feature_use',
+        metadata,
+      })
+    } catch {
+      // ignore telemetry errors
+    }
+  }
+
+  private resolveTelemetryEntity(
+    item: TuffItem,
+    meta?: Record<string, unknown>,
+  ): { type: string, id: string } | null {
+    if (item.kind === 'app') {
+      const appMeta = meta?.app as { bundle_id?: string } | undefined
+      if (appMeta?.bundle_id)
+        return { type: 'app', id: appMeta.bundle_id }
+    }
+
+    const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : undefined
+    if (pluginName)
+      return { type: 'plugin', id: pluginName }
+
+    return null
   }
 
   maintain(): void {

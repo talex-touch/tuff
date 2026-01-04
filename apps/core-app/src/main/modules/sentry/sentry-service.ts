@@ -9,11 +9,12 @@ import crypto from 'node:crypto'
 import os from 'node:os'
 import * as Sentry from '@sentry/electron/main'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { getTelemetryApiBase } from '@talex-touch/utils/env'
+import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
+import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { storageModule } from '../storage'
 
 // User type from Clerk
@@ -101,6 +102,14 @@ function getEnvironmentContext(): Record<string, unknown> {
   }
 }
 
+function resolveTelemetryApiBase(): string {
+  const isLocal = !app.isPackaged || process.env.NODE_ENV === 'development'
+  if (isLocal) {
+    return normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE_LOCAL', 'http://localhost:3200'))
+  }
+  return getTelemetryApiBase()
+}
+
 /**
  * Sentry Service Module
  */
@@ -119,6 +128,8 @@ export class SentryServiceModule extends BaseModule {
   private lastNexusUploadTime: number | null = null
   private totalNexusUploads = 0
   private failedNexusUploads = 0
+  private lastTelemetryFailureAt: number | null = null
+  private lastTelemetryFailureMessage: string | null = null
 
   constructor() {
     super(SentryServiceModule.key)
@@ -204,7 +215,7 @@ export class SentryServiceModule extends BaseModule {
     try {
       const config = storageModule.getConfig('sentry-config.json') as Partial<SentryConfig> | undefined
       this.config = {
-        enabled: config?.enabled ?? false,
+        enabled: config?.enabled ?? true,
         anonymous: config?.anonymous ?? true,
       }
       sentryLog.debug('Loaded Sentry config', { meta: { enabled: this.config.enabled, anonymous: this.config.anonymous } })
@@ -213,8 +224,7 @@ export class SentryServiceModule extends BaseModule {
       sentryLog.warn('Failed to load Sentry config, using defaults', {
         meta: { error: error instanceof Error ? error.message : String(error) },
       })
-      // Use defaults: disabled by default for privacy
-      this.config = { enabled: false, anonymous: true }
+      this.config = { enabled: true, anonymous: true }
     }
   }
 
@@ -526,6 +536,13 @@ export class SentryServiceModule extends BaseModule {
   }
 
   /**
+   * Check if telemetry upload is enabled (independent of Sentry init).
+   */
+  isTelemetryEnabled(): boolean {
+    return this.config.enabled
+  }
+
+  /**
    * Get search count
    */
   getSearchCount(): number {
@@ -548,7 +565,7 @@ export class SentryServiceModule extends BaseModule {
       lastUploadTime: this.lastNexusUploadTime,
       totalUploads: this.totalNexusUploads,
       failedUploads: this.failedNexusUploads,
-      apiBase: getTelemetryApiBase(),
+      apiBase: resolveTelemetryApiBase(),
       isEnabled: this.config.enabled,
       isAnonymous: this.config.anonymous,
     }
@@ -564,12 +581,14 @@ export class SentryServiceModule extends BaseModule {
       this.searchCount++
     }
 
+    const isAnonymous = this.config.anonymous
     const telemetryEvent: NexusTelemetryEvent = {
       ...event,
-      deviceFingerprint: this.config.anonymous ? undefined : this.deviceFingerprint || undefined,
+      searchQuery: isAnonymous ? undefined : event.searchQuery,
+      deviceFingerprint: isAnonymous ? undefined : this.deviceFingerprint || undefined,
       platform: process.platform,
       version: getAppVersionSafe(),
-      isAnonymous: this.config.anonymous,
+      isAnonymous,
     }
 
     this.nexusTelemetryBuffer.push(telemetryEvent)
@@ -594,10 +613,11 @@ export class SentryServiceModule extends BaseModule {
 
     const events = [...this.nexusTelemetryBuffer]
     this.nexusTelemetryBuffer = []
+    let url: string | undefined
 
     try {
-      const apiBase = getTelemetryApiBase()
-      const url = `${apiBase}/api/telemetry/batch`
+      const apiBase = resolveTelemetryApiBase()
+      url = `${apiBase}/api/telemetry/batch`
       
       sentryLog.debug('Uploading telemetry batch', { meta: { count: events.length, url } })
 
@@ -613,6 +633,13 @@ export class SentryServiceModule extends BaseModule {
         sentryLog.error('Telemetry upload failed', { 
           meta: { status: response.status, statusText: response.statusText, error: errorText } 
         })
+        this.recordTelemetryFailure('Telemetry upload failed', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          url,
+          count: events.length,
+        })
         this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
       } else {
         this.totalNexusUploads++
@@ -624,7 +651,36 @@ export class SentryServiceModule extends BaseModule {
       sentryLog.error('Telemetry upload exception', { 
         meta: { error: error instanceof Error ? error.message : String(error) } 
       })
+      this.recordTelemetryFailure('Telemetry upload exception', {
+        error: error instanceof Error ? error.message : String(error),
+        url,
+        count: events.length,
+      })
       this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
+    }
+  }
+
+  private recordTelemetryFailure(message: string, meta?: Record<string, unknown>): void {
+    const now = Date.now()
+    const throttleWindow = 10 * 60 * 1000
+    if (this.lastTelemetryFailureAt && now - this.lastTelemetryFailureAt < throttleWindow) {
+      if (this.lastTelemetryFailureMessage === message)
+        return
+    }
+
+    try {
+      getAnalyticsMessageStore().add({
+        source: 'sentry',
+        severity: 'warn',
+        title: 'Telemetry sync failed',
+        message,
+        meta,
+      })
+      this.lastTelemetryFailureAt = now
+      this.lastTelemetryFailureMessage = message
+    }
+    catch {
+      // ignore message store failures
     }
   }
 

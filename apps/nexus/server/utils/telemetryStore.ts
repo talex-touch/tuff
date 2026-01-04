@@ -90,7 +90,6 @@ export interface DailyStats {
   avgSearchDuration: number
   deviceDistribution: Record<string, number>
   regionDistribution: Record<string, number>
-  searchTerms: Array<{ term: string; count: number }>
   hourlyDistribution: Record<string, number>
 }
 
@@ -112,6 +111,7 @@ export async function recordTelemetryEvent(
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const today = now.split('T')[0]
+  const safeSearchQuery = undefined
 
   // Insert telemetry event
   await db.prepare(`
@@ -128,7 +128,7 @@ export async function recordTelemetryEvent(
     telemetry.platform || null,
     telemetry.version || null,
     telemetry.region || null,
-    telemetry.searchQuery || null,
+    safeSearchQuery || null,
     telemetry.searchDurationMs || null,
     telemetry.searchResultCount || null,
     telemetry.providerTimings ? JSON.stringify(telemetry.providerTimings) : null,
@@ -152,6 +152,21 @@ export async function recordTelemetryEvent(
     if (telemetry.region && !telemetry.isAnonymous) {
       await incrementDailyStat(db, today, 'region', telemetry.region, 1)
     }
+    if (telemetry.metadata && typeof telemetry.metadata === 'object') {
+      const meta = telemetry.metadata as Record<string, unknown>
+      if (meta.kind === 'startup') {
+        const mainProcess = meta.mainProcess as { moduleDetails?: Array<{ name?: string; loadTime?: number }> } | undefined
+        const moduleDetails = Array.isArray(mainProcess?.moduleDetails) ? mainProcess?.moduleDetails : []
+        for (const detail of moduleDetails) {
+          const moduleName = typeof detail.name === 'string' ? detail.name : 'unknown'
+          const loadTime = typeof detail.loadTime === 'number' ? detail.loadTime : 0
+          await incrementDailyStat(db, today, 'module_load_total', moduleName, loadTime)
+          await incrementDailyStat(db, today, 'module_load_count', moduleName, 1)
+          await updateDailyStatMax(db, today, 'module_load_max', moduleName, loadTime)
+          await updateDailyStatMin(db, today, 'module_load_min', moduleName, loadTime)
+        }
+      }
+    }
   }
 
   if (telemetry.eventType === 'search') {
@@ -159,16 +174,81 @@ export async function recordTelemetryEvent(
     if (telemetry.searchDurationMs) {
       await incrementDailyStat(db, today, 'search_duration_total', '', telemetry.searchDurationMs)
     }
+    if (typeof telemetry.searchResultCount === 'number') {
+      await incrementDailyStat(db, today, 'search_result_total', '', telemetry.searchResultCount)
+      await incrementDailyStat(db, today, 'search_result_count', '', 1)
+    }
     // Track search terms (only first 50 chars, only if not anonymous)
-    if (telemetry.searchQuery && !telemetry.isAnonymous) {
-      const term = telemetry.searchQuery.substring(0, 50).toLowerCase().trim()
-      if (term) {
-        await incrementDailyStat(db, today, 'search_term', term, 1)
+    if (Array.isArray(telemetry.inputTypes)) {
+      for (const inputType of telemetry.inputTypes) {
+        await incrementDailyStat(db, today, 'search_input_type', inputType, 1)
+      }
+    }
+    if (telemetry.providerTimings) {
+      for (const providerId of Object.keys(telemetry.providerTimings)) {
+        await incrementDailyStat(db, today, 'search_provider', providerId, 1)
+      }
+    }
+    if (telemetry.metadata && typeof telemetry.metadata === 'object') {
+      const meta = telemetry.metadata as Record<string, unknown>
+      if (typeof meta.queryLength === 'number') {
+        await incrementDailyStat(db, today, 'search_query_length_total', '', meta.queryLength)
+        await incrementDailyStat(db, today, 'search_query_length_count', '', 1)
+      }
+      if (typeof meta.sortingDuration === 'number') {
+        await incrementDailyStat(db, today, 'search_sorting_total', '', meta.sortingDuration)
+      }
+      if (typeof meta.queryType === 'string') {
+        await incrementDailyStat(db, today, 'search_query_type', meta.queryType, 1)
+      }
+      if (typeof meta.searchScene === 'string') {
+        await incrementDailyStat(db, today, 'search_scene', meta.searchScene, 1)
+      }
+      if (typeof meta.providerFilter === 'string') {
+        await incrementDailyStat(db, today, 'search_provider_filter', meta.providerFilter, 1)
+      }
+      if (meta.resultCategories && typeof meta.resultCategories === 'object') {
+        for (const [key, value] of Object.entries(meta.resultCategories as Record<string, unknown>)) {
+          if (typeof value === 'number') {
+            await incrementDailyStat(db, today, 'search_result_category', key, value)
+          }
+        }
+      }
+      if (meta.providerResults && typeof meta.providerResults === 'object') {
+        for (const [key, value] of Object.entries(meta.providerResults as Record<string, unknown>)) {
+          if (typeof value === 'number') {
+            await incrementDailyStat(db, today, 'search_provider_result', key, value)
+          }
+        }
       }
     }
     // Track hourly distribution
     const hour = new Date(now).getUTCHours().toString().padStart(2, '0')
     await incrementDailyStat(db, today, 'hour', hour, 1)
+  }
+
+  if (telemetry.eventType === 'feature_use') {
+    await incrementDailyStat(db, today, 'feature_use', '', 1)
+    if (telemetry.metadata && typeof telemetry.metadata === 'object') {
+      const meta = telemetry.metadata as Record<string, unknown>
+      if (typeof meta.sourceType === 'string') {
+        await incrementDailyStat(db, today, 'feature_use_source_type', meta.sourceType, 1)
+      }
+      if (typeof meta.itemKind === 'string') {
+        await incrementDailyStat(db, today, 'feature_use_item_kind', meta.itemKind, 1)
+      }
+      if (typeof meta.pluginName === 'string') {
+        await incrementDailyStat(db, today, 'feature_use_plugin', meta.pluginName, 1)
+      }
+      if (typeof meta.entityId === 'string') {
+        const entityType = typeof meta.entityType === 'string' ? meta.entityType : 'entity'
+        await incrementDailyStat(db, today, 'feature_use_entity', `${entityType}:${meta.entityId}`, 1)
+      }
+      if (typeof meta.executeLatencyMs === 'number') {
+        await incrementDailyStat(db, today, 'execute_latency_total', '', meta.executeLatencyMs)
+        await incrementDailyStat(db, today, 'execute_latency_count', '', 1)
+      }
+    }
   }
 }
 
@@ -186,6 +266,34 @@ async function incrementDailyStat(
   `).bind(date, statType, statKey, increment).run()
 }
 
+async function updateDailyStatMax(
+  db: D1Database,
+  date: string,
+  statType: string,
+  statKey: string,
+  value: number
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+    VALUES (?1, ?2, ?3, ?4)
+    ON CONFLICT(date, stat_type, stat_key) DO UPDATE SET value = MAX(value, ?4);
+  `).bind(date, statType, statKey, value).run()
+}
+
+async function updateDailyStatMin(
+  db: D1Database,
+  date: string,
+  statType: string,
+  statKey: string,
+  value: number
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
+    VALUES (?1, ?2, ?3, ?4)
+    ON CONFLICT(date, stat_type, stat_key) DO UPDATE SET value = MIN(value, ?4);
+  `).bind(date, statType, statKey, value).run()
+}
+
 /**
  * Get analytics summary for admin dashboard
  */
@@ -193,9 +301,14 @@ export async function getAnalyticsSummary(
   event: H3Event,
   options: { days?: number } = {}
 ): Promise<{
+  totalEvents: number
   totalUsers: number
   totalSearches: number
   avgSearchDuration: number
+  avgQueryLength: number
+  avgSortingDuration: number
+  avgResultCount: number
+  avgExecuteLatency: number
   dailyStats: Array<{
     date: string
     visits: number
@@ -204,8 +317,23 @@ export async function getAnalyticsSummary(
   }>
   deviceDistribution: Record<string, number>
   regionDistribution: Record<string, number>
-  topSearchTerms: Array<{ term: string; count: number }>
   hourlyDistribution: Record<string, number>
+  searchSceneDistribution: Record<string, number>
+  searchInputTypeDistribution: Record<string, number>
+  searchProviderDistribution: Record<string, number>
+  searchProviderResultDistribution: Record<string, number>
+  searchResultCategoryDistribution: Record<string, number>
+  featureUseSourceTypeDistribution: Record<string, number>
+  featureUseItemKindDistribution: Record<string, number>
+  featureUsePluginDistribution: Record<string, number>
+  featureUseEntityDistribution: Record<string, number>
+  moduleLoadMetrics: Array<{
+    module: string
+    avgDuration: number
+    maxDuration: number
+    minDuration: number
+    ratio: number
+  }>
 }> {
   const db = getD1Database(event)
   if (!db) {
@@ -231,11 +359,31 @@ export async function getAnalyticsSummary(
   const dailyMap = new Map<string, { visits: number; searches: number; durationTotal: number }>()
   const deviceDist: Record<string, number> = {}
   const regionDist: Record<string, number> = {}
-  const searchTerms: Record<string, number> = {}
   const hourlyDist: Record<string, number> = {}
+  const searchSceneDist: Record<string, number> = {}
+  const searchInputDist: Record<string, number> = {}
+  const searchProviderDist: Record<string, number> = {}
+  const searchProviderResultDist: Record<string, number> = {}
+  const searchResultCategoryDist: Record<string, number> = {}
+  const featureUseSourceTypeDist: Record<string, number> = {}
+  const featureUseItemKindDist: Record<string, number> = {}
+  const featureUsePluginDist: Record<string, number> = {}
+  const featureUseEntityDist: Record<string, number> = {}
+  const moduleLoadTotals: Record<string, number> = {}
+  const moduleLoadCounts: Record<string, number> = {}
+  const moduleLoadMax: Record<string, number> = {}
+  const moduleLoadMin: Record<string, number> = {}
+  let totalEvents = 0
   let totalUsers = 0
   let totalSearches = 0
   let totalDuration = 0
+  let queryLengthTotal = 0
+  let queryLengthCount = 0
+  let sortingTotal = 0
+  let resultTotal = 0
+  let resultCount = 0
+  let executeLatencyTotal = 0
+  let executeLatencyCount = 0
 
   for (const row of dailyResults ?? []) {
     if (!dailyMap.has(row.date)) {
@@ -247,6 +395,9 @@ export async function getAnalyticsSummary(
       case 'visits':
         day.visits += row.value
         break
+      case 'total_events':
+        totalEvents += row.value
+        break
       case 'searches':
         day.searches += row.value
         totalSearches += row.value
@@ -254,6 +405,21 @@ export async function getAnalyticsSummary(
       case 'search_duration_total':
         day.durationTotal += row.value
         totalDuration += row.value
+        break
+      case 'search_query_length_total':
+        queryLengthTotal += row.value
+        break
+      case 'search_query_length_count':
+        queryLengthCount += row.value
+        break
+      case 'search_sorting_total':
+        sortingTotal += row.value
+        break
+      case 'search_result_total':
+        resultTotal += row.value
+        break
+      case 'search_result_count':
+        resultCount += row.value
         break
       case 'unique_users':
         totalUsers += 1 // Count distinct keys
@@ -264,11 +430,53 @@ export async function getAnalyticsSummary(
       case 'region':
         regionDist[row.stat_key] = (regionDist[row.stat_key] || 0) + row.value
         break
-      case 'search_term':
-        searchTerms[row.stat_key] = (searchTerms[row.stat_key] || 0) + row.value
-        break
       case 'hour':
         hourlyDist[row.stat_key] = (hourlyDist[row.stat_key] || 0) + row.value
+        break
+      case 'search_scene':
+        searchSceneDist[row.stat_key] = (searchSceneDist[row.stat_key] || 0) + row.value
+        break
+      case 'search_input_type':
+        searchInputDist[row.stat_key] = (searchInputDist[row.stat_key] || 0) + row.value
+        break
+      case 'search_provider':
+        searchProviderDist[row.stat_key] = (searchProviderDist[row.stat_key] || 0) + row.value
+        break
+      case 'search_provider_result':
+        searchProviderResultDist[row.stat_key] = (searchProviderResultDist[row.stat_key] || 0) + row.value
+        break
+      case 'search_result_category':
+        searchResultCategoryDist[row.stat_key] = (searchResultCategoryDist[row.stat_key] || 0) + row.value
+        break
+      case 'feature_use_source_type':
+        featureUseSourceTypeDist[row.stat_key] = (featureUseSourceTypeDist[row.stat_key] || 0) + row.value
+        break
+      case 'feature_use_item_kind':
+        featureUseItemKindDist[row.stat_key] = (featureUseItemKindDist[row.stat_key] || 0) + row.value
+        break
+      case 'feature_use_plugin':
+        featureUsePluginDist[row.stat_key] = (featureUsePluginDist[row.stat_key] || 0) + row.value
+        break
+      case 'feature_use_entity':
+        featureUseEntityDist[row.stat_key] = (featureUseEntityDist[row.stat_key] || 0) + row.value
+        break
+      case 'module_load_total':
+        moduleLoadTotals[row.stat_key] = (moduleLoadTotals[row.stat_key] || 0) + row.value
+        break
+      case 'module_load_count':
+        moduleLoadCounts[row.stat_key] = (moduleLoadCounts[row.stat_key] || 0) + row.value
+        break
+      case 'module_load_max':
+        moduleLoadMax[row.stat_key] = Math.max(moduleLoadMax[row.stat_key] || 0, row.value)
+        break
+      case 'module_load_min':
+        moduleLoadMin[row.stat_key] = Math.min(moduleLoadMin[row.stat_key] ?? row.value, row.value)
+        break
+      case 'execute_latency_total':
+        executeLatencyTotal += row.value
+        break
+      case 'execute_latency_count':
+        executeLatencyCount += row.value
         break
     }
   }
@@ -283,20 +491,50 @@ export async function getAnalyticsSummary(
     }))
     .sort((a, b) => b.date.localeCompare(a.date))
 
-  const topSearchTerms = Object.entries(searchTerms)
-    .map(([term, count]) => ({ term, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 50)
+  const moduleLoadMetrics = Object.keys({
+    ...moduleLoadTotals,
+    ...moduleLoadCounts,
+    ...moduleLoadMax,
+    ...moduleLoadMin,
+  }).map((moduleName) => {
+    const total = moduleLoadTotals[moduleName] || 0
+    const count = moduleLoadCounts[moduleName] || 0
+    const max = moduleLoadMax[moduleName] || 0
+    const min = moduleLoadMin[moduleName] || 0
+    const avg = count > 0 ? total / count : 0
+    const ratio = min > 0 ? max / min : 0
+    return {
+      module: moduleName,
+      avgDuration: Math.round(avg),
+      maxDuration: Math.round(max),
+      minDuration: Math.round(min),
+      ratio: Number.isFinite(ratio) ? Number(ratio.toFixed(2)) : 0,
+    }
+  }).sort((a, b) => b.avgDuration - a.avgDuration)
 
   return {
+    totalEvents,
     totalUsers,
     totalSearches,
     avgSearchDuration: totalSearches > 0 ? Math.round(totalDuration / totalSearches) : 0,
+    avgQueryLength: queryLengthCount > 0 ? Math.round(queryLengthTotal / queryLengthCount) : 0,
+    avgSortingDuration: totalSearches > 0 ? Math.round(sortingTotal / totalSearches) : 0,
+    avgResultCount: resultCount > 0 ? Math.round(resultTotal / resultCount) : 0,
+    avgExecuteLatency: executeLatencyCount > 0 ? Math.round(executeLatencyTotal / executeLatencyCount) : 0,
     dailyStats,
     deviceDistribution: deviceDist,
     regionDistribution: regionDist,
-    topSearchTerms,
     hourlyDistribution: hourlyDist,
+    searchSceneDistribution: searchSceneDist,
+    searchInputTypeDistribution: searchInputDist,
+    searchProviderDistribution: searchProviderDist,
+    searchProviderResultDistribution: searchProviderResultDist,
+    searchResultCategoryDistribution: searchResultCategoryDist,
+    featureUseSourceTypeDistribution: featureUseSourceTypeDist,
+    featureUseItemKindDistribution: featureUseItemKindDist,
+    featureUsePluginDistribution: featureUsePluginDist,
+    featureUseEntityDistribution: featureUseEntityDist,
+    moduleLoadMetrics,
   }
 }
 

@@ -25,9 +25,14 @@ watch(isAdmin, (admin) => {
 
 interface AnalyticsData {
   summary: {
+    totalEvents: number
     totalUsers: number
     totalSearches: number
     avgSearchDuration: number
+    avgQueryLength: number
+    avgSortingDuration: number
+    avgResultCount: number
+    avgExecuteLatency: number
     dailyStats: Array<{
       date: string
       visits: number
@@ -36,8 +41,23 @@ interface AnalyticsData {
     }>
     deviceDistribution: Record<string, number>
     regionDistribution: Record<string, number>
-    topSearchTerms: Array<{ term: string; count: number }>
     hourlyDistribution: Record<string, number>
+    searchSceneDistribution: Record<string, number>
+    searchInputTypeDistribution: Record<string, number>
+    searchProviderDistribution: Record<string, number>
+    searchProviderResultDistribution: Record<string, number>
+    searchResultCategoryDistribution: Record<string, number>
+    featureUseSourceTypeDistribution: Record<string, number>
+    featureUseItemKindDistribution: Record<string, number>
+    featureUsePluginDistribution: Record<string, number>
+    featureUseEntityDistribution: Record<string, number>
+    moduleLoadMetrics: Array<{
+      module: string
+      avgDuration: number
+      maxDuration: number
+      minDuration: number
+      ratio: number
+    }>
   }
   realtime: {
     searchesLast24h: number
@@ -47,10 +67,26 @@ interface AnalyticsData {
   }
 }
 
+interface TelemetryMessage {
+  id: string
+  source: string
+  severity: 'info' | 'warn' | 'error'
+  title: string
+  message: string
+  status: string
+  createdAt: string
+}
+
 const analytics = ref<AnalyticsData | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const selectedDays = ref(30)
+const messages = ref<TelemetryMessage[]>([])
+const messagesLoading = ref(false)
+const messagesError = ref<string | null>(null)
+const showBreakdown = ref(false)
+const activeBreakdownTab = ref<'search' | 'usage'>('search')
+const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
 
 async function fetchAnalytics() {
   loading.value = true
@@ -65,8 +101,23 @@ async function fetchAnalytics() {
   }
 }
 
+async function fetchMessages() {
+  messagesLoading.value = true
+  messagesError.value = null
+  try {
+    const data = await $fetch<{ messages: TelemetryMessage[] }>('/api/telemetry/messages?limit=12')
+    messages.value = data.messages ?? []
+  } catch (e: any) {
+    messagesError.value = e.data?.message || e.message || 'Failed to load messages'
+    messages.value = []
+  } finally {
+    messagesLoading.value = false
+  }
+}
+
 onMounted(() => {
   fetchAnalytics()
+  fetchMessages()
 })
 
 watch(selectedDays, () => {
@@ -77,6 +128,25 @@ function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
   return num.toString()
+}
+
+function toSortedList(source?: Record<string, number>, limit = 6) {
+  return Object.entries(source || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+}
+
+function formatEntityKey(key: string) {
+  const [type, id] = key.split(':')
+  return {
+    type: type || 'entity',
+    id: id || key,
+  }
+}
+
+function formatMessageTime(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
 const deviceColors: Record<string, string> = {
@@ -162,7 +232,13 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Summary Stats -->
-      <div class="grid gap-4 lg:grid-cols-3">
+      <div class="grid gap-4 lg:grid-cols-4">
+        <div class="rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
+          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Uploaded Events</h3>
+          <p class="mt-1 text-3xl font-bold text-black dark:text-light">
+            {{ formatNumber(analytics.summary.totalEvents) }}
+          </p>
+        </div>
         <div class="rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
           <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Total Users</h3>
           <p class="mt-1 text-3xl font-bold text-black dark:text-light">
@@ -179,6 +255,34 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Avg Search Duration</h3>
           <p class="mt-1 text-3xl font-bold text-black dark:text-light">
             {{ analytics.summary.avgSearchDuration }}ms
+          </p>
+        </div>
+      </div>
+
+      <!-- Search Quality -->
+      <div class="grid gap-4 lg:grid-cols-4">
+        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Query Length</h3>
+          <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
+            {{ analytics.summary.avgQueryLength }}
+          </p>
+        </div>
+        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Sorting</h3>
+          <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
+            {{ analytics.summary.avgSortingDuration }}ms
+          </p>
+        </div>
+        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Results</h3>
+          <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
+            {{ analytics.summary.avgResultCount }}
+          </p>
+        </div>
+        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Execute Latency</h3>
+          <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
+            {{ analytics.summary.avgExecuteLatency }}ms
           </p>
         </div>
       </div>
@@ -219,6 +323,34 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <span class="flex items-center gap-1">
             <span class="h-2 w-2 rounded bg-purple-500/60" /> Searches
           </span>
+        </div>
+      </div>
+
+      <!-- Module Load Performance -->
+      <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="font-semibold text-black dark:text-light">Module Load Performance</h3>
+          <span class="text-xs text-black/40 dark:text-light/40">avg / max / min / ratio</span>
+        </div>
+        <div v-if="topModuleLoads.length === 0" class="text-sm text-black/40 dark:text-light/40">
+          No module load metrics yet
+        </div>
+        <div v-else class="space-y-3">
+          <div
+            v-for="item in topModuleLoads"
+            :key="item.module"
+            class="flex items-center justify-between gap-4 rounded-xl bg-black/5 px-4 py-3 text-sm dark:bg-light/5"
+          >
+            <div class="min-w-0">
+              <p class="truncate font-medium text-black dark:text-light">{{ item.module }}</p>
+              <p class="text-xs text-black/40 dark:text-light/40">ratio {{ item.ratio.toFixed(2) }}x</p>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-black/60 dark:text-light/60">
+              <span>avg {{ item.avgDuration }}ms</span>
+              <span>max {{ item.maxDuration }}ms</span>
+              <span>min {{ item.minDuration }}ms</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -309,21 +441,237 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
       </div>
 
-      <!-- Top Search Terms -->
+      <!-- Search Term Collection Disabled -->
       <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
-        <h3 class="mb-4 font-semibold text-black dark:text-light">Top Search Terms</h3>
-        <div v-if="analytics.summary.topSearchTerms.length === 0" class="py-4 text-center text-sm text-black/40 dark:text-light/40">
-          No search term data (anonymous mode)
+        <h3 class="mb-2 font-semibold text-black dark:text-light">Search Terms</h3>
+        <p class="text-sm text-black/50 dark:text-light/50">
+          Disabled by privacy policy. Only length, type, and timing metrics are recorded.
+        </p>
+      </div>
+
+      <!-- Secondary Insights -->
+      <div class="grid gap-4 lg:grid-cols-3">
+        <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-light">Search Scenes</h3>
+            <button
+              type="button"
+              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+              @click="showBreakdown = true; activeBreakdownTab = 'search'"
+            >
+              View details
+            </button>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
+            <div v-for="item in toSortedList(analytics.summary.searchSceneDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="capitalize">{{ item[0].replace('-', ' ') }}</span>
+              <span class="text-xs text-black/40 dark:text-light/40">{{ item[1] }}</span>
+            </div>
+          </div>
         </div>
-        <div v-else class="flex flex-wrap gap-2">
-          <span
-            v-for="item in analytics.summary.topSearchTerms.slice(0, 30)"
-            :key="item.term"
-            class="rounded-full bg-black/5 px-3 py-1 text-xs text-black/70 dark:bg-light/5 dark:text-light/70"
+        <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-light">Result Categories</h3>
+            <button
+              type="button"
+              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+              @click="showBreakdown = true; activeBreakdownTab = 'search'"
+            >
+              View details
+            </button>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
+            <div v-for="item in toSortedList(analytics.summary.searchResultCategoryDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="capitalize">{{ item[0] }}</span>
+              <span class="text-xs text-black/40 dark:text-light/40">{{ item[1] }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-light">Most Executed</h3>
+            <button
+              type="button"
+              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+              @click="showBreakdown = true; activeBreakdownTab = 'usage'"
+            >
+              View details
+            </button>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
+            <div v-for="item in toSortedList(analytics.summary.featureUseEntityDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="truncate">
+                {{ formatEntityKey(item[0]).type }} · {{ formatEntityKey(item[0]).id }}
+              </span>
+              <span class="text-xs text-black/40 dark:text-light/40">{{ item[1] }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Telemetry Messages -->
+      <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="font-semibold text-black dark:text-light">Telemetry Messages</h3>
+          <button
+            type="button"
+            class="rounded-lg bg-black/5 px-3 py-1 text-xs text-black/70 transition hover:bg-black/10 dark:bg-light/5 dark:text-light/70"
+            @click="fetchMessages"
           >
-            {{ item.term }}
-            <span class="ml-1 text-black/40 dark:text-light/40">({{ item.count }})</span>
-          </span>
+            Refresh
+          </button>
+        </div>
+        <div v-if="messagesLoading" class="flex items-center gap-2 text-sm text-black/40 dark:text-light/40">
+          <span class="i-carbon-circle-dash animate-spin" />
+          Loading messages...
+        </div>
+        <div v-else-if="messagesError" class="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
+          {{ messagesError }}
+        </div>
+        <div v-else-if="messages.length === 0" class="text-sm text-black/40 dark:text-light/40">
+          No messages yet
+        </div>
+        <div v-else class="space-y-3">
+          <div
+            v-for="item in messages"
+            :key="item.id"
+            class="rounded-xl border border-black/5 bg-white/70 p-4 text-sm shadow-sm dark:border-light/10 dark:bg-dark/40"
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-semibold uppercase text-black/40 dark:text-light/40">{{ item.source }}</span>
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                    :class="item.severity === 'error'
+                      ? 'bg-red-500/15 text-red-500'
+                      : item.severity === 'warn'
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                        : 'bg-blue-500/15 text-blue-500'"
+                  >
+                    {{ item.severity }}
+                  </span>
+                  <span v-if="item.status === 'unread'" class="rounded-full bg-black/5 px-2 py-0.5 text-[10px] text-black/60 dark:bg-light/10 dark:text-light/60">
+                    unread
+                  </span>
+                </div>
+                <p class="mt-2 font-semibold text-black dark:text-light">{{ item.title }}</p>
+                <p class="mt-1 text-black/60 dark:text-light/60">{{ item.message }}</p>
+              </div>
+              <span class="text-xs text-black/40 dark:text-light/40">{{ formatMessageTime(item.createdAt) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Breakdown Drawer -->
+      <div v-if="showBreakdown" class="fixed inset-0 z-40 flex justify-end bg-black/30 p-4" @click.self="showBreakdown = false">
+        <div class="h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-[#0f1115]">
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-black dark:text-light">Analytics Breakdown</h3>
+              <p class="text-xs text-black/50 dark:text-light/50">Secondary distributions and deep-dive signals</p>
+            </div>
+            <button
+              type="button"
+              class="rounded-full bg-black/5 p-2 text-black/60 transition hover:bg-black/10 dark:bg-light/10 dark:text-light/70"
+              @click="showBreakdown = false"
+            >
+              <span class="i-carbon-close" />
+            </button>
+          </div>
+
+          <div class="mb-4 flex gap-2">
+            <button
+              type="button"
+              class="rounded-full px-3 py-1 text-xs"
+              :class="activeBreakdownTab === 'search'
+                ? 'bg-black text-white dark:bg-light dark:text-black'
+                : 'bg-black/5 text-black/60 dark:bg-light/10 dark:text-light/60'"
+              @click="activeBreakdownTab = 'search'"
+            >
+              Search
+            </button>
+            <button
+              type="button"
+              class="rounded-full px-3 py-1 text-xs"
+              :class="activeBreakdownTab === 'usage'
+                ? 'bg-black text-white dark:bg-light dark:text-black'
+                : 'bg-black/5 text-black/60 dark:bg-light/10 dark:text-light/60'"
+              @click="activeBreakdownTab = 'usage'"
+            >
+              Usage
+            </button>
+          </div>
+
+          <div v-if="activeBreakdownTab === 'search'" class="space-y-6 text-sm">
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">Search Input Types</h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.searchInputTypeDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span>{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">Provider Usage</h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.searchProviderDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span>{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">Provider Results</h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.searchProviderResultDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span>{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="space-y-6 text-sm">
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">Executed Sources</h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.featureUseSourceTypeDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">Item Kinds</h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.featureUseItemKindDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">Plugins</h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.featureUsePluginDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="truncate">{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">Entities</h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.featureUseEntityDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="truncate">{{ formatEntityKey(item[0]).type }} · {{ formatEntityKey(item[0]).id }}</span>
+                  <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </template>

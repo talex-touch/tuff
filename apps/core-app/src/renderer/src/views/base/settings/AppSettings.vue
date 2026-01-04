@@ -8,6 +8,7 @@ import SettingFileIndex from './SettingFileIndex.vue'
 import SettingEverything from './SettingEverything.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
+import SettingMessages from './SettingMessages.vue'
 import SettingSentry from './SettingSentry.vue'
 import SettingSetup from './SettingSetup.vue'
 import SettingTools from './SettingTools.vue'
@@ -39,6 +40,8 @@ const isWindows = computed(() => window.electron?.process?.platform === 'win32')
       <SettingUpdate />
 
       <SettingSentry />
+
+      <SettingMessages />
 
       <!-- <SettingStorage /> -->
 
