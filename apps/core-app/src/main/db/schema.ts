@@ -589,7 +589,41 @@ export const intelligenceUsageStats = sqliteTable(
 )
 
 // =============================================================================
-// 11. 应用更新记录 (App Update Records)
+// 11. Analytics (Performance & Telemetry)
+// =============================================================================
+
+export const analyticsSnapshots = sqliteTable(
+  'analytics_snapshots',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    windowType: text('window_type').notNull(),
+    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+    metrics: text('metrics').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`(unixepoch())`),
+  },
+  table => ({
+    windowTimeIdx: index('idx_analytics_snapshots_window_time').on(table.windowType, table.timestamp),
+  }),
+)
+
+export const pluginAnalytics = sqliteTable(
+  'plugin_analytics',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    pluginName: text('plugin_name').notNull(),
+    featureId: text('feature_id'),
+    eventType: text('event_type').notNull(),
+    count: integer('count').default(1),
+    metadata: text('metadata'),
+    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+  },
+  table => ({
+    pluginIdx: index('idx_plugin_analytics_plugin_time').on(table.pluginName, table.timestamp),
+  }),
+)
+
+// =============================================================================
+// 12. 应用更新记录 (App Update Records)
 // =============================================================================
 
 export const appUpdateRecords = sqliteTable(

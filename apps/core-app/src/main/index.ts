@@ -8,7 +8,7 @@ import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventb
 import { addonOpenerModule } from './modules/addon-opener'
 import { intelligenceModule } from './modules/ai/intelligence-module'
 
-import { getStartupAnalytics } from './modules/analytics'
+import { analyticsModule, getStartupAnalytics } from './modules/analytics'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
 import { buildVerificationModule } from './modules/build-verification'
@@ -66,6 +66,7 @@ const modulesToLoad = [
   shortcutModule,
   extensionLoaderModule,
   commonChannelModule,
+  analyticsModule,
   permissionCheckerModule,
   permissionModule, // Plugin permission management - before plugin module
   sentryModule,

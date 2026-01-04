@@ -14,8 +14,9 @@ import type {
 } from './types'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
-import { app } from 'electron'
+import process from 'node:process'
 import { getBooleanEnv, getTelemetryApiBase } from '@talex-touch/utils/env'
+import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { getConfig, saveConfig } from '../storage'
 

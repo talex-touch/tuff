@@ -16,6 +16,7 @@ import chalk from 'chalk'
 
 import { debounce } from 'lodash'
 import { createLogger } from '../../../utils/logger'
+import { analyticsModule } from '../../analytics'
 import { searchLogger } from './search-logger'
 
 const gatherLog = createLogger('SearchGatherer')
@@ -59,8 +60,9 @@ const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(r
 /**
  * Count total items from search results
  */
-const countItems = (results: TuffSearchResult[]): number =>
-  results.reduce((acc, curr) => acc + curr.items.length, 0)
+function countItems(results: TuffSearchResult[]): number {
+  return results.reduce((acc, curr) => acc + curr.items.length, 0)
+}
 
 /**
  * Creates a search controller that manages the lifecycle of a search operation.
@@ -260,6 +262,12 @@ function createLayeredSearchController(
           `${countItems(allResults)} items in ${totalDuration.toFixed(1)}ms`,
         )
 
+        const providerTimings = sourceStats.reduce<Record<string, number>>((acc, stat) => {
+          acc[stat.providerId || stat.providerName] = stat.duration
+          return acc
+        }, {})
+        analyticsModule.recordSearchMetrics(totalDuration, providerTimings)
+
         onUpdate({
           newResults: [],
           totalCount: countItems(allResults),
@@ -298,8 +306,8 @@ async function runFastLayer(
   const total = providers.length
 
   // Create a race between provider execution and overall timeout
-  const providerPromise = new Promise<void>(async (resolveAll) => {
-    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+  const providerPromise = new Promise<void>((resolveAll) => {
+    const worker = async () => {
       while (queue.length > 0 && !signal.aborted) {
         const provider = queue.shift()
         if (!provider)
@@ -350,10 +358,14 @@ async function runFastLayer(
           completed++
         }
       }
-    })
+    }
 
-    await Promise.all(workers)
-    resolveAll()
+    const workers = Array.from(
+      { length: Math.min(concurrency, queue.length) },
+      () => worker(),
+    )
+
+    void Promise.all(workers).then(() => resolveAll())
   })
 
   const timeoutPromise = new Promise<void>((resolveTimeout) => {
@@ -467,7 +479,8 @@ function logProviderCompletion(
   const message = `${layerTag} Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
   if (status === 'success') {
     gatherLog.debug(message)
-  } else {
+  }
+  else {
     gatherLog.warn(message)
   }
 }
@@ -522,6 +535,14 @@ function createLegacySearchController(
     }
 
     const debouncedFlush = debounce(flushBuffer, debouncePushMs)
+    const finalizeMetrics = () => {
+      const totalDuration = performance.now() - startTime
+      const providerTimings = sourceStats.reduce<Record<string, number>>((acc, stat) => {
+        acc[stat.providerId || stat.providerName] = stat.duration
+        return acc
+      }, {})
+      analyticsModule.recordSearchMetrics(totalDuration, providerTimings)
+    }
 
     const onNewResult = (result: TuffSearchResult): void => {
       searchLogger.resultReceived(result.items.length)
@@ -544,6 +565,7 @@ function createLegacySearchController(
         searchLogger.allProvidersComplete()
         debouncedFlush.flush()
         flushBuffer(true)
+        finalizeMetrics()
       }
     }
 
@@ -563,12 +585,13 @@ function createLegacySearchController(
         cancelled: true,
         sourceStats: sourceStats as TuffSearchResult['sources'],
       })
+      finalizeMetrics()
       resolve(0)
     })
 
     searchLogger.logSearchPhase('Legacy Worker Pool', `Starting ${concurrency} workers`)
 
-    const workers = new Array(concurrency).fill(0).map(async (_, i) => {
+    const workers = Array.from({ length: concurrency }, async (_, i) => {
       await new Promise(r => setTimeout(r, i * 10))
       searchLogger.workerStart(i)
 
@@ -627,6 +650,7 @@ function createLegacySearchController(
     await Promise.all(workers)
     gatherLog.debug('All legacy search tasks completed')
     flushBuffer(true)
+    finalizeMetrics()
     return countItems(allResults)
   })
 }
