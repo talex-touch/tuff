@@ -4,6 +4,14 @@
  * Type definitions for anonymous startup performance monitoring
  */
 
+export type {
+  AnalyticsExportPayload,
+  AnalyticsRangeRequest,
+  AnalyticsSnapshot,
+  AnalyticsWindowType,
+  CoreMetrics,
+} from '@talex-touch/utils/analytics'
+
 /**
  * Metrics for a single module load
  */

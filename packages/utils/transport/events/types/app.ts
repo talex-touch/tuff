@@ -1,3 +1,4 @@
+import type { AnalyticsWindowType } from '../../../analytics'
 /**
  * @fileoverview Type definitions for App domain events
  * @module @talex-touch/utils/transport/events/types/app
@@ -110,7 +111,7 @@ export interface PackageInfo {
   /**
    * Package author.
    */
-  author?: string | { name: string; email?: string }
+  author?: string | { name: string, email?: string }
 
   /**
    * Package license.
@@ -218,28 +219,44 @@ export interface BuildVerificationStatus {
 
 /**
  * Current performance metrics.
+ *
+ * @deprecated Use AnalyticsSnapshot/CoreMetrics from @talex-touch/utils/analytics instead.
  */
 export interface CurrentMetrics {
-  /**
-   * Startup time in milliseconds.
-   */
   startupTime?: number
-
-  /**
-   * Memory usage in bytes.
-   */
   memoryUsage?: number
-
-  /**
-   * CPU usage percentage.
-   */
   cpuUsage?: number
-
-  /**
-   * Additional metrics.
-   */
   [key: string]: unknown
 }
+
+/**
+ * Toggle request for analytics reporting.
+ */
+export interface AnalyticsToggleRequest {
+  enabled: boolean
+}
+
+/**
+ * Snapshot request by window type.
+ */
+export interface AnalyticsSnapshotRequest {
+  windowType: AnalyticsWindowType
+}
+
+export type {
+  AnalyticsExportPayload,
+  AnalyticsExportResult,
+  AnalyticsRangeRequest,
+  AnalyticsSnapshot,
+  AnalyticsWindowType,
+  CounterPayload,
+  FeatureStats,
+  GaugePayload,
+  HistogramPayload,
+  PluginStats,
+  TrackDurationPayload,
+  TrackEventPayload,
+} from '../../../analytics'
 
 /**
  * Performance history entry.

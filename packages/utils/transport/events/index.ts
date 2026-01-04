@@ -20,32 +20,137 @@
  * ```
  */
 
-import { defineEvent } from '../event/builder'
-
-// Re-export all types for convenience
-export * from './types'
+import type {
+  AnalyticsExportPayload,
+  AnalyticsExportResult,
+  AnalyticsRangeRequest,
+  AnalyticsSnapshot,
+  AnalyticsSnapshotRequest,
+  AnalyticsToggleRequest,
+  BuildVerificationStatus,
+  CounterPayload,
+  CurrentMetrics,
+  DevToolsOptions,
+  ExecuteCommandRequest,
+  ExecuteCommandResponse,
+  FeatureStats,
+  GaugePayload,
+  HistogramPayload,
+  OpenAppRequest,
+  OpenExternalRequest,
+  OSInfo,
+  PackageInfo,
+  PerformanceHistoryEntry,
+  PerformanceSummary,
+  PluginStats,
+  ReportMetricsRequest,
+  ReportMetricsResponse,
+  ShowInFolderRequest,
+  TrackDurationPayload,
+  TrackEventPayload,
+} from './types/app'
 
 // ============================================================================
 // App Events
 // ============================================================================
 
 import type {
-  DevToolsOptions,
-  OSInfo,
-  PackageInfo,
-  OpenExternalRequest,
-  ShowInFolderRequest,
-  OpenAppRequest,
-  ExecuteCommandRequest,
-  ExecuteCommandResponse,
-  BuildVerificationStatus,
-  CurrentMetrics,
-  PerformanceHistoryEntry,
-  PerformanceSummary,
-  ExportedMetrics,
-  ReportMetricsRequest,
-  ReportMetricsResponse,
-} from './types/app'
+  BoxItem,
+  BoxItemBatchDeleteResponse,
+  BoxItemBatchUpsertResponse,
+  BoxItemClearRequest,
+  BoxItemClearResponse,
+  BoxItemCreateRequest,
+  BoxItemDeleteRequest,
+  BoxItemSyncResponse,
+  BoxItemUpdateRequest,
+  BoxItemUpsertRequest,
+} from './types/box-item'
+
+// ============================================================================
+// CoreBox Events
+// ============================================================================
+
+import type {
+  ClipboardApplyRequest,
+  ClipboardChangePayload,
+  ClipboardDeleteRequest,
+  ClipboardItem,
+  ClipboardQueryRequest,
+  ClipboardQueryResponse,
+  ClipboardSetFavoriteRequest,
+  ClipboardWriteRequest,
+} from './types/clipboard'
+
+// ============================================================================
+// Storage Events
+// ============================================================================
+
+import type {
+  ActivationState,
+  AllowClipboardRequest,
+  AllowClipboardResponse,
+  AllowInputMonitoringResponse,
+  CancelSearchRequest,
+  CancelSearchResponse,
+  ClearInputResponse,
+  DeactivateProviderRequest,
+  EnterUIModeRequest,
+  ExpandOptions,
+  FocusWindowResponse,
+  GetInputResponse,
+  GetProviderDetailsRequest,
+  ProviderDetail,
+  SetInputRequest,
+  SetInputResponse,
+  SetInputVisibilityRequest,
+  TuffQuery,
+  TuffSearchResult,
+} from './types/core-box'
+
+// ============================================================================
+// Plugin Events
+// ============================================================================
+
+import type {
+  FeatureTriggerRequest,
+  FeatureTriggerResponse,
+  PluginDisableRequest,
+  PluginEnableRequest,
+  PluginInfo,
+  PluginLoadRequest,
+  PluginLogEntry,
+  PluginReloadRequest,
+  PluginUnloadRequest,
+} from './types/plugin'
+
+// ============================================================================
+// BoxItem Events
+// ============================================================================
+
+import type {
+  PluginStorageDeleteRequest,
+  PluginStorageGetRequest,
+  PluginStorageSetRequest,
+  StorageDeleteRequest,
+  StorageGetRequest,
+  StorageSetRequest,
+} from './types/storage'
+
+// ============================================================================
+// Clipboard Events
+// ============================================================================
+
+import { defineEvent } from '../event/builder'
+
+// ============================================================================
+// MetaOverlay Events
+// ============================================================================
+
+import { MetaOverlayEvents } from './meta-overlay'
+
+// Re-export all types for convenience
+export * from './types'
 
 /**
  * Application-level events for window management, system info, and analytics.
@@ -180,7 +285,85 @@ export const AppEvents = {
    */
   analytics: {
     /**
+     * Get aggregated metrics snapshot for a specific window.
+     */
+    getSnapshot: defineEvent('app')
+      .module('analytics')
+      .event('get-snapshot')
+      .define<AnalyticsSnapshotRequest, AnalyticsSnapshot>(),
+
+    /**
+     * Get metrics snapshots within a time range.
+     */
+    getRange: defineEvent('app')
+      .module('analytics')
+      .event('get-range')
+      .define<AnalyticsRangeRequest, AnalyticsSnapshot[]>(),
+
+    /**
+     * Export metrics for a window/range.
+     */
+    export: defineEvent('app')
+      .module('analytics')
+      .event('export')
+      .define<AnalyticsExportPayload, AnalyticsExportResult>(),
+
+    /**
+     * Toggle analytics reporting.
+     */
+    toggleReporting: defineEvent('app')
+      .module('analytics')
+      .event('toggle-reporting')
+      .define<AnalyticsToggleRequest, { enabled: boolean }>(),
+
+    /**
+     * SDK-level plugin analytics events.
+     */
+    sdk: {
+      trackEvent: defineEvent('app')
+        .module('analytics')
+        .event('sdk.track-event')
+        .define<TrackEventPayload, { ok: true }>(),
+
+      trackDuration: defineEvent('app')
+        .module('analytics')
+        .event('sdk.track-duration')
+        .define<TrackDurationPayload, { ok: true }>(),
+
+      getStats: defineEvent('app')
+        .module('analytics')
+        .event('sdk.get-stats')
+        .define<{ pluginName?: string }, PluginStats>(),
+
+      getFeatureStats: defineEvent('app')
+        .module('analytics')
+        .event('sdk.get-feature-stats')
+        .define<{ pluginName?: string, featureId: string }, FeatureStats>(),
+
+      getTopFeatures: defineEvent('app')
+        .module('analytics')
+        .event('sdk.get-top-features')
+        .define<{ pluginName?: string, limit?: number }, Array<{ id: string, count: number }>>(),
+
+      incrementCounter: defineEvent('app')
+        .module('analytics')
+        .event('sdk.increment-counter')
+        .define<CounterPayload, { ok: true }>(),
+
+      setGauge: defineEvent('app')
+        .module('analytics')
+        .event('sdk.set-gauge')
+        .define<GaugePayload, { ok: true }>(),
+
+      recordHistogram: defineEvent('app')
+        .module('analytics')
+        .event('sdk.record-histogram')
+        .define<HistogramPayload, { ok: true }>(),
+    },
+
+    /**
      * Get current performance metrics.
+     * @deprecated Use analytics.getSnapshot instead.
      */
     getCurrent: defineEvent('app')
       .module('analytics')
@@ -204,15 +387,8 @@ export const AppEvents = {
       .define<void, PerformanceSummary>(),
 
     /**
-     * Export all metrics.
-     */
-    export: defineEvent('app')
-      .module('analytics')
-      .event('export')
-      .define<void, ExportedMetrics>(),
-
-    /**
-     * Report metrics to an endpoint.
+     * Report metrics to an endpoint (legacy).
+     * @deprecated Use analytics.export instead.
      */
     report: defineEvent('app')
       .module('analytics')
@@ -220,32 +396,6 @@ export const AppEvents = {
       .define<ReportMetricsRequest, ReportMetricsResponse>(),
   },
 } as const
-
-// ============================================================================
-// CoreBox Events
-// ============================================================================
-
-import type {
-  ExpandOptions,
-  FocusWindowResponse,
-  SetInputVisibilityRequest,
-  TuffQuery,
-  TuffSearchResult,
-  CancelSearchRequest,
-  CancelSearchResponse,
-  GetInputResponse,
-  SetInputRequest,
-  SetInputResponse,
-  ClearInputResponse,
-  DeactivateProviderRequest,
-  ActivationState,
-  GetProviderDetailsRequest,
-  ProviderDetail,
-  EnterUIModeRequest,
-  AllowClipboardRequest,
-  AllowClipboardResponse,
-  AllowInputMonitoringResponse,
-} from './types/core-box'
 
 /**
  * CoreBox events for search, UI control, and input management.
@@ -449,19 +599,6 @@ export const CoreBoxEvents = {
   },
 } as const
 
-// ============================================================================
-// Storage Events
-// ============================================================================
-
-import type {
-  StorageGetRequest,
-  StorageSetRequest,
-  StorageDeleteRequest,
-  PluginStorageGetRequest,
-  PluginStorageSetRequest,
-  PluginStorageDeleteRequest,
-} from './types/storage'
-
 /**
  * Storage events for app and plugin configuration persistence.
  */
@@ -545,22 +682,6 @@ export const StorageEvents = {
   },
 } as const
 
-// ============================================================================
-// Plugin Events
-// ============================================================================
-
-import type {
-  PluginLoadRequest,
-  PluginUnloadRequest,
-  PluginReloadRequest,
-  PluginEnableRequest,
-  PluginDisableRequest,
-  PluginInfo,
-  FeatureTriggerRequest,
-  FeatureTriggerResponse,
-  PluginLogEntry,
-} from './types/plugin'
-
 /**
  * Plugin lifecycle and feature events.
  */
@@ -641,23 +762,6 @@ export const PluginEvents = {
       }),
   },
 } as const
-
-// ============================================================================
-// BoxItem Events
-// ============================================================================
-
-import type {
-  BoxItem,
-  BoxItemCreateRequest,
-  BoxItemUpdateRequest,
-  BoxItemUpsertRequest,
-  BoxItemDeleteRequest,
-  BoxItemBatchUpsertResponse,
-  BoxItemBatchDeleteResponse,
-  BoxItemClearRequest,
-  BoxItemClearResponse,
-  BoxItemSyncResponse,
-} from './types/box-item'
 
 /**
  * BoxItem CRUD and sync events.
@@ -766,21 +870,6 @@ export const BoxItemEvents = {
   },
 } as const
 
-// ============================================================================
-// Clipboard Events
-// ============================================================================
-
-import type {
-  ClipboardItem,
-  ClipboardChangePayload,
-  ClipboardQueryRequest,
-  ClipboardQueryResponse,
-  ClipboardApplyRequest,
-  ClipboardDeleteRequest,
-  ClipboardSetFavoriteRequest,
-  ClipboardWriteRequest,
-} from './types/clipboard'
-
 /**
  * Clipboard domain events for history, monitoring, and actions.
  * @since v0.9.0
@@ -853,12 +942,6 @@ export const ClipboardEvents = {
     .event('write')
     .define<ClipboardWriteRequest, void>(),
 } as const
-
-// ============================================================================
-// MetaOverlay Events
-// ============================================================================
-
-import { MetaOverlayEvents } from './meta-overlay'
 
 // ============================================================================
 // Unified Export

@@ -4,16 +4,32 @@ import type {
   ITouchChannel,
   RawChannelSyncData,
   RawStandardChannelData,
-  StandardChannelData
+  StandardChannelData,
 } from '@talex-touch/utils/channel'
 import type { WebContentsView } from 'electron'
 import type { TalexTouch } from '../types'
+import { performance } from 'node:perf_hooks'
 import { structuredStrictStringify } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { ipcMain } from 'electron'
 import { WindowManager } from '../modules/box-tool/core-box/window'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
+
+type IpcTracer = (eventName: string, durationMs: number, success?: boolean) => void
+
+let ipcTracer: IpcTracer | null = null
+
+export function setIpcTracer(tracer: IpcTracer | null): void {
+  ipcTracer = tracer
+}
+
+function traceIpc(eventName: string, startedAt: number, success: boolean): void {
+  if (!ipcTracer)
+    return
+  const duration = performance.now() - startedAt
+  ipcTracer(eventName, duration, success)
+}
 
 class TouchChannel implements ITouchChannel {
   channelMap: Map<ChannelType, Map<string, ChannelCallback[]>> = new Map()
@@ -74,13 +90,13 @@ class TouchChannel implements ITouchChannel {
             type: pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
             event: e,
-            uniqueKey: uniqueKey as string
+            uniqueKey: uniqueKey as string,
           },
           sync: sync as RawChannelSyncData | undefined,
           code: code as DataCode,
           data: data as IChannelData,
           plugin: pluginName,
-          name: name as string
+          name: name as string,
         }
       }
     }
@@ -100,7 +116,8 @@ class TouchChannel implements ITouchChannel {
 
     const map = this.channelMap.get(rawData.header.type)
 
-    if (!map) throw new Error('Invalid channel type!')
+    if (!map)
+      throw new Error('Invalid channel type!')
 
     map.get(rawData.name)?.forEach((func) => {
       let _replied = false
@@ -126,39 +143,43 @@ class TouchChannel implements ITouchChannel {
               // Check if sender is still valid before sending
               if (e.sender.isDestroyed()) {
                 console.warn(
-                  `[Channel] Cannot send reply for ${rawData.name} to destroyed webContents.`
+                  `[Channel] Cannot send reply for ${rawData.name} to destroyed webContents.`,
                 )
                 return
               }
               e.sender.send(
                 `@${rawData.header.type === ChannelType.MAIN ? 'main' : 'plugin'}-process-message`,
-                finalData
+                finalData,
               )
-            } catch (error) {
+            }
+            catch (error) {
               // Handle EPIPE and other write errors
               const errorMessage = error instanceof Error ? error.message : String(error)
               if (errorMessage.includes('EPIPE') || errorMessage.includes('write')) {
                 console.warn(
-                  `[Channel] EPIPE error when sending reply for ${rawData.name}: ${errorMessage}. WebContents may have crashed.`
+                  `[Channel] EPIPE error when sending reply for ${rawData.name}: ${errorMessage}. WebContents may have crashed.`,
                 )
-              } else {
+              }
+              else {
                 console.error(`[Channel] Error sending reply for ${rawData.name}:`, error)
               }
             }
-          } else {
+          }
+          else {
             try {
               e.returnValue = finalData
-            } catch (error) {
+            }
+            catch (error) {
               // Handle sync IPC errors
               const errorMessage = error instanceof Error ? error.message : String(error)
               console.warn(
-                `[Channel] Error setting returnValue for ${rawData.name}: ${errorMessage}`
+                `[Channel] Error setting returnValue for ${rawData.name}: ${errorMessage}`,
               )
             }
           }
           _replied = true
         },
-        ...rawData
+        ...rawData,
       }
 
       const res = func(handInData)
@@ -189,9 +210,10 @@ class TouchChannel implements ITouchChannel {
     code: DataCode,
     rawData: RawStandardChannelData,
     data: unknown,
-    sync?: RawChannelSyncData
+    sync?: RawChannelSyncData,
   ): RawStandardChannelData {
-    if (!rawData || !rawData.header) throw new Error(`Invalid data!${JSON.stringify(rawData)}`)
+    if (!rawData || !rawData.header)
+      throw new Error(`Invalid data!${JSON.stringify(rawData)}`)
     return {
       code,
       data,
@@ -201,7 +223,7 @@ class TouchChannel implements ITouchChannel {
             timeStamp: new Date().getTime(),
             // reply sync timeout should follow the request timeout, unless user set it.
             timeout: sync.timeout,
-            id: sync.id
+            id: sync.id,
           },
       name: rawData.name,
       plugin: rawData.header.plugin || void 0,
@@ -209,8 +231,8 @@ class TouchChannel implements ITouchChannel {
         event: rawData.header.event,
         status: 'reply',
         type: rawData.header.type,
-        _originData: rawData.header._originData
-      }
+        _originData: rawData.header._originData,
+      },
     }
   }
 
@@ -270,15 +292,17 @@ class TouchChannel implements ITouchChannel {
     type: ChannelType,
     eventName: string,
     arg: any,
-    header: any = {}
+    header: any = {},
   ): Promise<any> {
+    const startedAt = performance.now()
     const webContents = (win as any)?.webContents as Electron.WebContents | undefined
 
     if (!webContents) {
       console.warn(
-        `[Channel] Skip sending "${eventName}" because the target webContents is unavailable.`
+        `[Channel] Skip sending "${eventName}" because the target webContents is unavailable.`,
       )
 
+      traceIpc(eventName, startedAt, false)
       return Promise.resolve()
     }
 
@@ -290,14 +314,14 @@ class TouchChannel implements ITouchChannel {
       sync: {
         timeStamp: new Date().getTime(),
         timeout: CHANNEL_DEFAULT_TIMEOUT,
-        id: uniqueId
+        id: uniqueId,
       },
       name: eventName,
       header: {
         status: 'request',
         type,
-        ...header
-      }
+        ...header,
+      },
     } as RawStandardChannelData
 
     let _channelCategory = '@main-process-message'
@@ -305,20 +329,22 @@ class TouchChannel implements ITouchChannel {
     let finalData: RawStandardChannelData
     try {
       finalData = JSON.parse(structuredStrictStringify(data))
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error(`[Channel] Failed to serialize payload for "${eventName}": ${errorMessage}`, {
         eventName,
         type,
-        argSummary: this.__safePreview(arg)
+        argSummary: this.__safePreview(arg),
       })
+      traceIpc(eventName, startedAt, false)
       return Promise.resolve({
         code: DataCode.ERROR,
         data: {
           message: errorMessage,
           reason: 'serialize_failed',
-          eventName
-        }
+          eventName,
+        },
       })
     }
 
@@ -333,7 +359,7 @@ class TouchChannel implements ITouchChannel {
       _channelCategory = '@plugin-process-message'
       if (webContents.isDestroyed()) {
         console.error(
-          `[Channel] Plugin process message for ${JSON.stringify(arg)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`
+          `[Channel] Plugin process message for ${JSON.stringify(arg)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`,
         )
         return Promise.resolve()
       }
@@ -344,6 +370,7 @@ class TouchChannel implements ITouchChannel {
         // Check if webContents is still valid before sending
         if (webContents.isDestroyed()) {
           console.warn(`[Channel] Cannot send "${eventName}" to destroyed webContents.`)
+          traceIpc(eventName, startedAt, false)
           resolve({ code: DataCode.ERROR, data: 'WebContents destroyed' })
           return
         }
@@ -357,13 +384,14 @@ class TouchChannel implements ITouchChannel {
           }
           this.pendingMap.delete(uniqueId)
           console.warn(`[Channel] Request "${eventName}" timed out after ${timeoutMs}ms.`)
+          traceIpc(eventName, startedAt, false)
           resolve({
             code: DataCode.ERROR,
             data: {
               message: `Channel request "${eventName}" timed out after ${timeoutMs}ms`,
               reason: 'timeout',
-              eventName
-            }
+              eventName,
+            },
           })
         }, timeoutMs)
 
@@ -371,28 +399,32 @@ class TouchChannel implements ITouchChannel {
           clearTimeout(timeoutHandle)
           this.pendingMap.delete(uniqueId)
 
+          traceIpc(eventName, startedAt, res.code === DataCode.SUCCESS)
           resolve(res)
         })
-      } catch (error) {
+      }
+      catch (error) {
         // Handle EPIPE and other write errors
         const errorMessage = error instanceof Error ? error.message : String(error)
         if (errorMessage.includes('EPIPE') || errorMessage.includes('write')) {
           console.warn(
-            `[Channel] EPIPE error when sending "${eventName}": ${errorMessage}. WebContents may have crashed.`
+            `[Channel] EPIPE error when sending "${eventName}": ${errorMessage}. WebContents may have crashed.`,
           )
-        } else {
+        }
+        else {
           console.error(`[Channel] Error sending "${eventName}":`, error)
         }
 
         // Clean up pending map
         this.pendingMap.delete(uniqueId)
+        traceIpc(eventName, startedAt, false)
         resolve({
           code: DataCode.ERROR,
           data: {
             message: errorMessage,
             reason: 'send_failed',
-            eventName
-          }
+            eventName,
+          },
         })
       }
     })
@@ -402,7 +434,7 @@ class TouchChannel implements ITouchChannel {
     win: Electron.BrowserWindow,
     type: ChannelType,
     eventName: string,
-    arg: any
+    arg: any,
   ): Promise<any> {
     return this._sendTo(win, type, eventName, arg)
   }
@@ -412,7 +444,7 @@ class TouchChannel implements ITouchChannel {
     type: ChannelType,
     eventName: string,
     pluginName: string,
-    arg: any
+    arg: any,
   ): Promise<any> {
     if (!win) {
       // UI view not ready yet, silently skip
@@ -427,8 +459,8 @@ class TouchChannel implements ITouchChannel {
       eventName,
       { ...arg, plugin: pluginName },
       {
-        uniqueKey: key
-      }
+        uniqueKey: key,
+      },
     )
   }
 
@@ -459,7 +491,7 @@ class TouchChannel implements ITouchChannel {
     win: Electron.BrowserWindow | WebContentsView | undefined,
     type: ChannelType,
     eventName: string,
-    arg: any
+    arg: any,
   ): void {
     const webContents = (win as any)?.webContents as Electron.WebContents | undefined
 
@@ -473,14 +505,15 @@ class TouchChannel implements ITouchChannel {
       name: eventName,
       header: {
         status: 'request',
-        type
-      }
+        type,
+      },
     } as RawStandardChannelData
 
     let finalData: RawStandardChannelData
     try {
       finalData = JSON.parse(structuredStrictStringify(data))
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       console.error(`[Channel] Failed to serialize broadcast for "${eventName}": ${errorMessage}`)
       return
@@ -490,7 +523,8 @@ class TouchChannel implements ITouchChannel {
 
     try {
       webContents.send(channel, finalData)
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       if (!errorMessage.includes('EPIPE') && !errorMessage.includes('write')) {
         console.error(`[Channel] Error broadcasting "${eventName}":`, error)
@@ -507,11 +541,13 @@ class TouchChannel implements ITouchChannel {
    */
   broadcastPlugin(pluginName: string, eventName: string, arg?: any): void {
     const uiView = WindowManager.getInstance().getUIView()
-    if (!uiView) return
+    if (!uiView)
+      return
 
     const key = this.nameToKeyMap.get(pluginName)
     const webContents = (uiView as any)?.webContents as Electron.WebContents | undefined
-    if (!webContents || webContents.isDestroyed()) return
+    if (!webContents || webContents.isDestroyed())
+      return
 
     const data = {
       code: DataCode.SUCCESS,
@@ -520,20 +556,22 @@ class TouchChannel implements ITouchChannel {
       header: {
         status: 'request',
         type: ChannelType.PLUGIN,
-        uniqueKey: key
-      }
+        uniqueKey: key,
+      },
     } as RawStandardChannelData
 
     let finalData: RawStandardChannelData
     try {
       finalData = JSON.parse(structuredStrictStringify(data))
-    } catch {
+    }
+    catch {
       return
     }
 
     try {
       webContents.send('@plugin-process-message', finalData)
-    } catch {
+    }
+    catch {
       // Ignore send errors for broadcasts
     }
   }
@@ -544,7 +582,7 @@ class TouchChannel implements ITouchChannel {
       ChannelType.PLUGIN,
       eventName,
       pluginName,
-      arg
+      arg,
     )
   }
 
@@ -554,7 +592,7 @@ class TouchChannel implements ITouchChannel {
       ChannelType.PLUGIN,
       eventName,
       pluginName,
-      arg
+      arg,
     )
   }
 
@@ -566,12 +604,14 @@ class TouchChannel implements ITouchChannel {
    * @returns A safely serializable preview of the payload
    */
   private __safePreview(payload: unknown): unknown {
-    if (payload === null || payload === undefined) return payload
+    if (payload === null || payload === undefined)
+      return payload
     if (typeof payload === 'string')
       return payload.length > 200 ? `${payload.slice(0, 200)}…` : payload
     try {
       return JSON.parse(structuredStrictStringify(payload))
-    } catch {
+    }
+    catch {
       return '[unserializable-payload]'
     }
   }
@@ -580,7 +620,8 @@ class TouchChannel implements ITouchChannel {
 let touchChannel: ITouchChannel | null = null
 
 export function genTouchChannel(app?: TalexTouch.TouchApp): ITouchChannel {
-  if (app && !touchChannel) touchChannel = new TouchChannel(app)
+  if (app && !touchChannel)
+    touchChannel = new TouchChannel(app)
 
   return touchChannel!
 }
