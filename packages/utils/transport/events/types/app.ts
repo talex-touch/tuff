@@ -246,6 +246,9 @@ export interface AnalyticsSnapshotRequest {
 export type {
   AnalyticsExportPayload,
   AnalyticsExportResult,
+  AnalyticsMessage,
+  AnalyticsMessageListRequest,
+  AnalyticsMessageUpdateRequest,
   AnalyticsRangeRequest,
   AnalyticsSnapshot,
   AnalyticsWindowType,

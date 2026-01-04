@@ -2,6 +2,9 @@ import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/ut
 import type {
   AnalyticsExportPayload,
   AnalyticsExportResult,
+  AnalyticsMessage,
+  AnalyticsMessageListRequest,
+  AnalyticsMessageUpdateRequest,
   AnalyticsSnapshot,
   CounterPayload,
   FeatureStats,
@@ -31,6 +34,8 @@ import { setIpcTracer } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
+import { pluginModule } from '../plugin/plugin-module'
+import { getAnalyticsMessageStore, type AnalyticsMessageStore } from './message-store'
 import { SystemSampler } from './collectors/system-sampler'
 import { AnalyticsCore } from './core/analytics-core'
 import { DbStore } from './storage/db-store'
@@ -48,6 +53,7 @@ export class AnalyticsModule extends BaseModule {
   private sampler!: SystemSampler
   private dbStore?: DbStore
   private cleanupTimer?: NodeJS.Timeout
+  private messageStore?: AnalyticsMessageStore
 
   constructor() {
     super(AnalyticsModule.key, {
@@ -60,6 +66,7 @@ export class AnalyticsModule extends BaseModule {
     this.dbStore = new DbStore(databaseModule.getDb())
     this.core = new AnalyticsCore({ dbStore: this.dbStore })
     this.sampler = new SystemSampler(sample => this.core.recordSystemSample(sample))
+    this.messageStore = getAnalyticsMessageStore()
 
     this.transport = getTuffTransportMain(
       ctx.app.channel as any,
@@ -144,15 +151,30 @@ export class AnalyticsModule extends BaseModule {
     )
 
     this.disposers.push(
+      this.transport.on<AnalyticsMessageListRequest, AnalyticsMessage[]>(
+        AppEvents.analytics.messages.list,
+        payload => this.messageStore?.list(payload) ?? [],
+      ),
+    )
+
+    this.disposers.push(
+      this.transport.on<AnalyticsMessageUpdateRequest, AnalyticsMessage | null>(
+        AppEvents.analytics.messages.mark,
+        payload => this.messageStore?.updateStatus(payload.id, payload.status) ?? null,
+      ),
+    )
+
+    this.disposers.push(
       this.transport.on<TrackEventPayload, { ok: true }>(
         AppEvents.analytics.sdk.trackEvent,
         async (payload, context) => {
-          const pluginName = this.resolvePluginName(payload, context)
+          const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName)
             return { ok: true }
           this.core.trackPluginEvent(pluginName, payload.featureId, payload.metadata)
           await this.dbStore?.insertPluginEvent({
             pluginName,
+            pluginVersion,
             featureId: payload.featureId,
             eventType: payload.eventName,
             metadata: payload.metadata,
@@ -167,12 +189,13 @@ export class AnalyticsModule extends BaseModule {
       this.transport.on<TrackDurationPayload, { ok: true }>(
         AppEvents.analytics.sdk.trackDuration,
         async (payload, context) => {
-          const pluginName = this.resolvePluginName(payload, context)
+          const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName)
             return { ok: true }
           this.core.trackPluginDuration(pluginName, payload.featureId, payload.durationMs)
           await this.dbStore?.insertPluginEvent({
             pluginName,
+            pluginVersion,
             featureId: payload.featureId,
             eventType: payload.operationName,
             metadata: { durationMs: payload.durationMs },
@@ -232,12 +255,13 @@ export class AnalyticsModule extends BaseModule {
       this.transport.on<CounterPayload, { ok: true }>(
         AppEvents.analytics.sdk.incrementCounter,
         async (payload, context) => {
-          const pluginName = this.resolvePluginName(payload, context)
+          const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName)
             return { ok: true }
           this.core.incrementPluginCounter(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
+            pluginVersion,
             eventType: 'counter',
             metadata: { name: payload.name, value: payload.value },
             timestamp: Date.now(),
@@ -251,12 +275,13 @@ export class AnalyticsModule extends BaseModule {
       this.transport.on<GaugePayload, { ok: true }>(
         AppEvents.analytics.sdk.setGauge,
         async (payload, context) => {
-          const pluginName = this.resolvePluginName(payload, context)
+          const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName)
             return { ok: true }
           this.core.setPluginGauge(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
+            pluginVersion,
             eventType: 'gauge',
             metadata: { name: payload.name, value: payload.value },
             timestamp: Date.now(),
@@ -270,12 +295,13 @@ export class AnalyticsModule extends BaseModule {
       this.transport.on<HistogramPayload, { ok: true }>(
         AppEvents.analytics.sdk.recordHistogram,
         async (payload, context) => {
-          const pluginName = this.resolvePluginName(payload, context)
+          const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName)
             return { ok: true }
           this.core.recordPluginHistogram(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
+            pluginVersion,
             eventType: 'histogram',
             metadata: { name: payload.name, value: payload.value },
             timestamp: Date.now(),
@@ -371,7 +397,17 @@ export class AnalyticsModule extends BaseModule {
     payload: { pluginName?: string },
     context?: { plugin?: { name?: string } },
   ): string | undefined {
-    return payload.pluginName || context?.plugin?.name
+    return this.resolvePluginInfo(payload, context).pluginName
+  }
+
+  private resolvePluginInfo(
+    payload: { pluginName?: string, pluginVersion?: string },
+    context?: { plugin?: { name?: string } },
+  ): { pluginName?: string, pluginVersion?: string } {
+    const pluginName = payload.pluginName || context?.plugin?.name
+    const pluginVersion = payload.pluginVersion
+      || (pluginName ? pluginModule.pluginManager?.getPluginByName(pluginName)?.version : undefined)
+    return { pluginName, pluginVersion }
   }
 
   private startCleanup(): void {

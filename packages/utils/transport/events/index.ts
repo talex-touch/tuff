@@ -23,6 +23,9 @@
 import type {
   AnalyticsExportPayload,
   AnalyticsExportResult,
+  AnalyticsMessage,
+  AnalyticsMessageListRequest,
+  AnalyticsMessageUpdateRequest,
   AnalyticsRangeRequest,
   AnalyticsSnapshot,
   AnalyticsSnapshotRequest,
@@ -315,6 +318,21 @@ export const AppEvents = {
       .module('analytics')
       .event('toggle-reporting')
       .define<AnalyticsToggleRequest, { enabled: boolean }>(),
+
+    /**
+     * Analytics message center events.
+     */
+    messages: {
+      list: defineEvent('app')
+        .module('analytics')
+        .event('messages.list')
+        .define<AnalyticsMessageListRequest, AnalyticsMessage[]>(),
+
+      mark: defineEvent('app')
+        .module('analytics')
+        .event('messages.mark')
+        .define<AnalyticsMessageUpdateRequest, AnalyticsMessage | null>(),
+    },
 
     /**
      * SDK-level plugin analytics events.

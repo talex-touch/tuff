@@ -84,6 +84,7 @@ export interface TrackEventPayload {
   featureId?: string
   metadata?: Record<string, unknown>
   pluginName?: string
+  pluginVersion?: string
 }
 
 export interface TrackDurationPayload {
@@ -91,24 +92,55 @@ export interface TrackDurationPayload {
   durationMs: number
   featureId?: string
   pluginName?: string
+  pluginVersion?: string
 }
 
 export interface CounterPayload {
   name: string
   value?: number
   pluginName?: string
+  pluginVersion?: string
 }
 
 export interface GaugePayload {
   name: string
   value: number
   pluginName?: string
+  pluginVersion?: string
 }
 
 export interface HistogramPayload {
   name: string
   value: number
   pluginName?: string
+  pluginVersion?: string
+}
+
+export type AnalyticsMessageStatus = 'unread' | 'read' | 'archived'
+export type AnalyticsMessageSeverity = 'info' | 'warn' | 'error'
+export type AnalyticsMessageSource = 'analytics' | 'sentry' | 'update' | 'permission' | 'system'
+
+export interface AnalyticsMessage {
+  id: string
+  source: AnalyticsMessageSource
+  severity: AnalyticsMessageSeverity
+  title: string
+  message: string
+  meta?: Record<string, unknown>
+  status: AnalyticsMessageStatus
+  createdAt: number
+}
+
+export interface AnalyticsMessageListRequest {
+  status?: AnalyticsMessageStatus | 'all'
+  source?: AnalyticsMessageSource
+  since?: number
+  limit?: number
+}
+
+export interface AnalyticsMessageUpdateRequest {
+  id: string
+  status: AnalyticsMessageStatus
 }
 
 export interface PluginAnalyticsSDK {

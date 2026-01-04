@@ -71,6 +71,7 @@ export class DbStore {
 
   async insertPluginEvent(payload: {
     pluginName: string
+    pluginVersion?: string
     featureId?: string
     eventType: string
     count?: number
@@ -79,6 +80,7 @@ export class DbStore {
   }): Promise<void> {
     await this.db.insert(schema.pluginAnalytics).values({
       pluginName: payload.pluginName,
+      pluginVersion: payload.pluginVersion ?? null,
       featureId: payload.featureId,
       eventType: payload.eventType,
       count: payload.count ?? 1,

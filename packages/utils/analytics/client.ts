@@ -25,10 +25,12 @@ const emptyStats: PluginStats = {
  */
 export function createPluginAnalyticsClient(options?: {
   pluginName?: string
+  pluginVersion?: string
   transport?: ITuffTransport
 }): PluginAnalyticsSDK {
   let transport = options?.transport
   const pluginName = options?.pluginName
+  const pluginVersion = options?.pluginVersion ?? resolveRuntimePluginVersion()
 
   const getTransport = () => {
     if (transport)
@@ -42,9 +44,10 @@ export function createPluginAnalyticsClient(options?: {
     }
   }
 
-  const withDefaultPlugin = <T extends { pluginName?: string }>(payload: T): T => ({
+  const withDefaultPlugin = <T extends { pluginName?: string, pluginVersion?: string }>(payload: T): T => ({
     ...payload,
     pluginName: payload.pluginName ?? pluginName,
+    pluginVersion: payload.pluginVersion ?? pluginVersion,
   })
 
   return {
@@ -120,4 +123,11 @@ export function createPluginAnalyticsClient(options?: {
       await tx.send(AppEvents.analytics.sdk.recordHistogram, withDefaultPlugin(payload))
     },
   }
+}
+
+function resolveRuntimePluginVersion(): string | undefined {
+  if (typeof window === 'undefined')
+    return undefined
+  const plugin = (window as any).$plugin as { version?: unknown } | undefined
+  return typeof plugin?.version === 'string' ? plugin.version : undefined
 }

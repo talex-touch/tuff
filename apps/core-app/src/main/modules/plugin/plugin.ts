@@ -1255,7 +1255,7 @@ export class TouchPlugin implements ITouchPlugin {
         // partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,
-      js: `${getJs([this.name, JSON.stringify(_path), this.sdkapi])}`
+      js: `${getJs([this.name, JSON.stringify(_path), this.sdkapi, this.version])}`
     }
   }
 
