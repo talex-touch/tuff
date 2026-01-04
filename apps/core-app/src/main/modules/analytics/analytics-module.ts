@@ -25,6 +25,8 @@ import type {
   ReportMetricsRequest,
   ReportMetricsResponse,
 } from '@talex-touch/utils/transport/events/types'
+import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
+import { app } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { StartupHistory, StartupMetrics } from './types'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
@@ -34,6 +36,7 @@ import { setIpcTracer } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
+import { getConfig } from '../storage'
 import { pluginModule } from '../plugin/plugin-module'
 import { getAnalyticsMessageStore, type AnalyticsMessageStore } from './message-store'
 import { SystemSampler } from './collectors/system-sampler'
@@ -67,6 +70,11 @@ export class AnalyticsModule extends BaseModule {
     this.core = new AnalyticsCore({ dbStore: this.dbStore })
     this.sampler = new SystemSampler(sample => this.core.recordSystemSample(sample))
     this.messageStore = getAnalyticsMessageStore()
+    if (this.messageStore) {
+      this.disposers.push(
+        this.messageStore.onMessage(message => this.reportMessage(message)),
+      )
+    }
 
     this.transport = getTuffTransportMain(
       ctx.app.channel as any,
@@ -408,6 +416,70 @@ export class AnalyticsModule extends BaseModule {
     const pluginVersion = payload.pluginVersion
       || (pluginName ? pluginModule.pluginManager?.getPluginByName(pluginName)?.version : undefined)
     return { pluginName, pluginVersion }
+  }
+
+  private getMessageReportConfig(): { enabled: boolean, anonymous: boolean } {
+    const config = getConfig('sentry-config.json') as { enabled?: boolean, anonymous?: boolean } | undefined
+    return {
+      enabled: config?.enabled ?? false,
+      anonymous: config?.anonymous ?? true,
+    }
+  }
+
+  private resolveMessageEndpoint(): string | null {
+    const isLocal = !app.isPackaged || process.env.NODE_ENV === 'development'
+    if (isLocal) {
+      return `${normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE_LOCAL', 'http://localhost:3200'))}/api/telemetry/messages`
+    }
+    try {
+      return `${getTelemetryApiBase()}/api/telemetry/messages`
+    }
+    catch {
+      return null
+    }
+  }
+
+  private async reportMessage(message: AnalyticsMessage): Promise<void> {
+    const config = this.getMessageReportConfig()
+    if (!config.enabled)
+      return
+    const endpoint = this.resolveMessageEndpoint()
+    if (!endpoint)
+      return
+
+    const payload = {
+      messages: [
+        {
+          id: message.id,
+          source: message.source,
+          severity: message.severity,
+          title: message.title,
+          message: message.message,
+          meta: config.anonymous ? undefined : message.meta,
+          status: message.status,
+          createdAt: message.createdAt,
+          platform: process.platform,
+          version: app.getVersion(),
+          isAnonymous: config.anonymous,
+        },
+      ],
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        throw new Error(`Message report failed: ${response.status} ${response.statusText} ${text}`.trim())
+      }
+    }
+    catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      analyticsLog.warn('Failed to report analytics message', { error: errorMessage })
+    }
   }
 
   private startCleanup(): void {

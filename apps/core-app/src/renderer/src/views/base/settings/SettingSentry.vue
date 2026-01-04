@@ -32,7 +32,7 @@ async function loadConfig() {
       enabled?: boolean
       anonymous?: boolean
     }
-    enabled.value = config?.enabled ?? false
+    enabled.value = config?.enabled ?? true
     anonymous.value = config?.anonymous ?? true
 
     try {

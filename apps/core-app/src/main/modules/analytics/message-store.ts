@@ -16,6 +16,8 @@ type MessageInput = Omit<AnalyticsMessage, 'id' | 'createdAt' | 'status'> & {
 }
 
 export class AnalyticsMessageStore {
+  private listeners = new Set<(message: AnalyticsMessage) => void | Promise<void>>()
+
   list(request?: AnalyticsMessageListRequest): AnalyticsMessage[] {
     const messages = this.load()
     const status = request?.status ?? 'all'
@@ -49,6 +51,7 @@ export class AnalyticsMessageStore {
     const messages = this.load()
     messages.unshift(message)
     this.save(messages)
+    this.emit(message)
     return message
   }
 
@@ -61,6 +64,13 @@ export class AnalyticsMessageStore {
     target.status = status
     this.save(messages)
     return target
+  }
+
+  onMessage(listener: (message: AnalyticsMessage) => void | Promise<void>): () => void {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
   }
 
   private load(): AnalyticsMessage[] {
@@ -81,6 +91,20 @@ export class AnalyticsMessageStore {
     return messages
       .filter(message => message.createdAt >= cutoff)
       .sort((a, b) => b.createdAt - a.createdAt)
+  }
+
+  private emit(message: AnalyticsMessage): void {
+    for (const listener of this.listeners) {
+      try {
+        const result = listener(message)
+        if (result && typeof (result as Promise<void>).catch === 'function') {
+          void (result as Promise<void>).catch(() => {})
+        }
+      }
+      catch {
+        // ignore listener errors
+      }
+    }
   }
 }
 
