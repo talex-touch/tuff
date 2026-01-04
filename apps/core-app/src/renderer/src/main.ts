@@ -71,9 +71,11 @@ async function bootstrap() {
 
   const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
 
-  await runBootStep('Registering plugins and global modules', 0.05, () =>
+  await runBootStep('Registering plugins and global modules', 0.05, () => {
     registerCorePlugins(app, i18n)
-  )
+    // Expose router to window for MetaOverlay access
+    ;(window as any).__VUE_ROUTER__ = router
+  })
 
   await runBootStep('Initializing plugin store', 0.05, () => maybeInitializePluginStore())
 

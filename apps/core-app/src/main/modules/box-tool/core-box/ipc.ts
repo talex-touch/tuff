@@ -12,6 +12,9 @@ import { BOX_ITEM_CHANNELS, getBoxItemManager } from '../item-sdk'
 import { metaOverlayManager } from './meta-overlay'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import type { MetaShowRequest, MetaActionExecuteRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
+import { createLogger } from '../../../utils/logger'
+
+const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
 
 /**
  * @class IpcManager
@@ -421,6 +424,13 @@ export class IpcManager {
       ({ data, reply }) => {
         try {
           const request = data as MetaShowRequest
+          metaOverlayIpcLog.info('ui.show received', {
+            meta: {
+              hasItem: Boolean(request.item),
+              builtinActions: request.builtinActions?.length ?? 0,
+              itemActions: request.itemActions?.length ?? 0
+            }
+          })
           // Get plugin actions
           const pluginActions = metaOverlayManager.getPluginActions()
           request.pluginActions = pluginActions
@@ -438,6 +448,7 @@ export class IpcManager {
       MetaOverlayEvents.ui.hide.toEventName(),
       ({ reply }) => {
         try {
+          metaOverlayIpcLog.info('ui.hide received')
           metaOverlayManager.hide()
           reply(DataCode.SUCCESS, {})
         } catch (error) {
@@ -453,6 +464,7 @@ export class IpcManager {
       ({ reply }) => {
         try {
           const visible = metaOverlayManager.getVisible()
+          metaOverlayIpcLog.debug('ui.isVisible received', { meta: { visible } })
           reply(DataCode.SUCCESS, { visible })
         } catch (error) {
           reply(DataCode.ERROR, { error: String(error) })

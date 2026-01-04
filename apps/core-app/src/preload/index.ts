@@ -18,6 +18,8 @@ declare global {
     $startupInfo?: StartupInfo
     /** DivisionBox mode flag - set by preload based on command line args */
     $isDivisionBox?: boolean
+    /** MetaOverlay mode flag - set by preload based on URL hash or command line args */
+    $isMetaOverlay?: boolean
   }
 }
 import appLogoAsset from '../../public/logo.png?asset'
@@ -683,19 +685,35 @@ const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoad
 domReady().then(() => {
   const info = useInitialize()
   
-  // Debug: log window type detection
   const argMapper = useArgMapper()
-  console.log('[preload] process.argv:', process.argv)
-  console.log('[preload] argMapper:', argMapper)
-  console.log('[preload] touchType:', argMapper.touchType)
-  console.log('[preload] isMainWindow:', isMainWindow())
-  console.log('[preload] isCoreBox:', isCoreBox())
+  
+  // Check if this is MetaOverlay by URL hash or command line args
+  // Priority: 1. URL hash (#/meta-overlay), 2. command line args (--meta-overlay=true)
+  const isMetaOverlayByHash = window.location.hash === '#/meta-overlay' || window.location.hash === '#meta-overlay'
+  const isMetaOverlayByArgs = argMapper.metaOverlay === 'true'
+  const isMetaOverlay = isMetaOverlayByHash || isMetaOverlayByArgs
+  
+  // Set global flag for AppEntrance to check
+  window.$isMetaOverlay = isMetaOverlay
+
+  if (isDebugMode) {
+    console.log('[preload] process.argv:', process.argv)
+    console.log('[preload] argMapper:', argMapper)
+    console.log('[preload] touchType:', argMapper.touchType)
+    console.log('[preload] isMainWindow:', isMainWindow())
+    console.log('[preload] isCoreBox:', isCoreBox())
+    console.log('[preload] isMetaOverlay:', isMetaOverlay, { byHash: isMetaOverlayByHash, byArgs: isMetaOverlayByArgs })
+  }
   
   if (isMainWindow()) {
     appendLoading()
   }
   else if (isCoreBox()) {
     document.body.classList.add('core-box')
+  }
+  
+  if (isMetaOverlay) {
+    document.body.classList.add('meta-overlay')
   }
 
   document.body.classList.add(info.platform)

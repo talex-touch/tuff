@@ -5,6 +5,7 @@ import { BoxMode } from '..'
 import { onBeforeUnmount } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { createCoreBoxKeyTransport, type ForwardedKeyEvent } from '../transport/key-transport'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 
 interface SectionRange {
   start: number
@@ -168,11 +169,6 @@ const COREBOX_DETACH_EVENT = 'corebox:detach-item'
  */
 const COREBOX_FLOW_EVENT = 'corebox:flow-item'
 
-/**
- * Event name for triggering pin toggle (Command+K)
- */
-const COREBOX_PIN_EVENT = 'corebox:toggle-pin'
-
 // Helper functions for MetaOverlay
 const isMac = process.platform === 'darwin'
 
@@ -298,6 +294,11 @@ function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
     return false
   }
 
+  // Never forward ⌘K/Ctrl+K - reserved for MetaOverlay panel
+  if ((event.metaKey || event.ctrlKey) && (event.key === 'k' || event.key === 'K')) {
+    return false
+  }
+
   // In input-hidden mode (UI mode), forward almost all keys except system keys
   if (inputHidden) {
     // Don't forward Cmd+V (handled separately for paste)
@@ -394,6 +395,29 @@ export function useKeyboard(
     const uiMode = isInUIMode()
     const inputAllowed = Boolean(activeActivations.value?.some((a: any) => a?.showInput === true))
     const inputHidden = uiMode && !inputAllowed
+
+    // Command/Ctrl+K: Open MetaOverlay action panel (should work even in UI mode)
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === 'k' || event.key === 'K')) {
+      const currentItem = res.value[boxOptions.focus]
+      if (!currentItem) {
+        event.preventDefault()
+        return
+      }
+
+      const builtinActions = generateBuiltinActions(currentItem)
+      touchChannel
+        .send(MetaOverlayEvents.ui.show.toEventName(), {
+          item: currentItem,
+          builtinActions,
+          itemActions: currentItem.actions?.map(convertTuffActionToMetaAction) || []
+        })
+        .catch((error) => {
+          console.error('[useKeyboard] Failed to open MetaOverlay:', error)
+        })
+
+      event.preventDefault()
+      return
+    }
 
     // Debug: log ⌘← events
     if (event.metaKey && event.key === 'ArrowLeft') {
@@ -567,36 +591,6 @@ export function useKeyboard(
         return
       }
     }
-    else if (event.key === 'k' || event.key === 'K') {
-      // Command/Ctrl+K: Open MetaOverlay action panel
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
-        const currentItem = res.value[boxOptions.focus]
-        if (!currentItem) {
-          event.preventDefault()
-          return
-        }
-
-        // Import dynamically to avoid circular dependency
-        void (async () => {
-          try {
-            const { useTuffTransport } = await import('@talex-touch/utils/transport')
-            const { MetaOverlayEvents } = await import('@talex-touch/utils/transport/events/meta-overlay')
-            const transport = useTuffTransport()
-            // Generate built-in actions
-            const builtinActions = generateBuiltinActions(currentItem)
-            await transport.send(MetaOverlayEvents.ui.show, {
-              item: currentItem,
-              builtinActions,
-              itemActions: currentItem.actions?.map(convertTuffActionToMetaAction) || []
-            })
-          } catch (error) {
-            console.error('[useKeyboard] Failed to open MetaOverlay:', error)
-          }
-        })()
-        event.preventDefault()
-        return
-      }
-    }
     else if (event.key === 'Escape') {
       /**
        * ESC key strict sequential handling (UPDATED):
@@ -612,12 +606,9 @@ export function useKeyboard(
       // Use async/await pattern for better control flow
       void (async () => {
         try {
-          const { useTuffTransport } = await import('@talex-touch/utils/transport')
-          const { MetaOverlayEvents } = await import('@talex-touch/utils/transport/events/meta-overlay')
-          const transport = useTuffTransport()
-          const response = await transport.send(MetaOverlayEvents.ui.isVisible)
+          const response = await touchChannel.send(MetaOverlayEvents.ui.isVisible.toEventName())
           if (response?.visible) {
-            await transport.send(MetaOverlayEvents.ui.hide)
+            await touchChannel.send(MetaOverlayEvents.ui.hide.toEventName())
             event.preventDefault()
             event.stopPropagation()
             return

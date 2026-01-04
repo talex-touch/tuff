@@ -261,7 +261,7 @@ onBeforeUnmount(() => {
           <template v-for="group in groupedActions" :key="group.title">
             <div v-if="group.title" class="GroupTitle">{{ group.title }}</div>
             <MetaActionItem
-              v-for="(action, index) in group.actions"
+              v-for="action in group.actions"
               :key="action.id"
               :action="action"
               :active="flatActions.indexOf(action) === activeIndex"
@@ -403,4 +403,3 @@ onBeforeUnmount(() => {
   transform: translateY(-10px) scale(0.98);
 }
 </style>
-

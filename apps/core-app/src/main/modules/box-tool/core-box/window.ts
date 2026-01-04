@@ -413,9 +413,9 @@ export class WindowManager {
     }
 
     const baseLeft = rect.x + (rect.width - windowWidth) / 2
-    
+
     let top: number
-    
+
     if (this.customTopPercent !== null) {
       // Use custom position if set
       top = rect.y + Math.round(rect.height * this.customTopPercent) - Math.round(windowHeight / 2)
@@ -537,7 +537,7 @@ export class WindowManager {
   ): void {
     const { length = 0, forceMax = false, height: customHeight } = options
     const effectiveLength = length > 0 ? length : 1
-    
+
     // Priority: customHeight > isUIMode > forceMax > calculated from length
     let height: number
     if (typeof customHeight === 'number' && customHeight > 0) {
@@ -614,7 +614,7 @@ export class WindowManager {
    */
   public setHeight(height: number): void {
     const safeHeight = Math.max(60, Math.min(height, 600))
-    
+
     const currentWindow = this.current
     if (!currentWindow) {
       coreBoxWindowLog.error('No current window available for setHeight')
@@ -649,13 +649,13 @@ export class WindowManager {
   public setPositionOffset(topPercent: number): void {
     const safePercent = Math.max(0.1, Math.min(0.9, topPercent))
     this.customTopPercent = safePercent
-    
+
     // Apply immediately if window is visible
     const currentWindow = this.current
     if (currentWindow && currentWindow.window.isVisible()) {
       this.updatePosition(currentWindow)
     }
-    
+
     coreBoxWindowLog.debug(`Position offset set to ${Math.round(safePercent * 100)}% from top`)
   }
 
@@ -1239,17 +1239,7 @@ export class WindowManager {
     this.uiViewFocused = true
     currentWindow.window.contentView.addChildView(this.uiView)
 
-    // Ensure MetaOverlay is on top (re-add it after uiView)
-    // This ensures z-index order: MainRenderer < PluginView < MetaOverlay
-    const metaView = metaOverlayManager['metaView']
-    if (metaView && currentWindow.window.contentView.children.includes(metaView)) {
-      try {
-        currentWindow.window.contentView.removeChildView(metaView)
-        currentWindow.window.contentView.addChildView(metaView)
-      } catch (error) {
-        coreBoxWindowLog.warn('Failed to reorder MetaOverlay', { error })
-      }
-    }
+    metaOverlayManager.ensureOnTop()
 
     this.uiView.webContents.addListener('blur', () => {
       this.uiViewFocused = false

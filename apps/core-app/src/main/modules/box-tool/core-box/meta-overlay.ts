@@ -17,6 +17,7 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { createLogger } from '../../../utils/logger'
 import { genTouchApp } from '../../../core'
 import { getCoreBoxWindow } from './window'
+import { BoxWindowOption } from '../../../config/default'
 
 const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
 
@@ -57,9 +58,11 @@ export class MetaOverlayManager {
 
     this.parentWindow = parentWindow
 
-    // Use the same preload as CoreBox to inject TouchChannel
-    // Path: from core-box/ -> box-tool/ -> modules/ -> main/ -> preload/
-    const preloadPath = path.join(__dirname, '..', '..', '..', 'preload', 'index.js')
+    const preloadPath = BoxWindowOption.webPreferences?.preload
+    if (!preloadPath) {
+      metaOverlayLog.error('MetaOverlay preload path missing')
+      return
+    }
 
     const webPreferences: Electron.WebPreferences = {
       preload: preloadPath,
@@ -67,14 +70,27 @@ export class MetaOverlayManager {
       nodeIntegration: true,
       contextIsolation: false,
       sandbox: false,
-      transparent: true,
-      additionalArguments: ['--touch-type=core-box']
+      additionalArguments: ['--touch-type=core-box', '--meta-overlay=true']
     }
 
     this.metaView = new WebContentsView({ webPreferences })
 
     this.metaView.webContents.addListener('dom-ready', () => {
       metaOverlayLog.debug('MetaOverlay DOM ready')
+    })
+
+    this.metaView.webContents.addListener('did-finish-load', () => {
+      metaOverlayLog.debug('MetaOverlay finished loading')
+    })
+
+    this.metaView.webContents.addListener('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+      metaOverlayLog.error('MetaOverlay failed to load', {
+        meta: {
+          errorCode,
+          errorDescription,
+          validatedURL
+        }
+      })
     })
 
     // Handle ESC key to close MetaOverlay
@@ -99,20 +115,44 @@ export class MetaOverlayManager {
       height: bounds.height
     })
 
-    // Set background transparent
-    this.metaView.setBackgroundColor('#00000000')
+    // Set background transparent (but allow content to be visible)
+    // Use a slightly opaque background to ensure content is visible
+    this.metaView.setBackgroundColor('#00000001')
+
+    // Initially hide the view
+    this.metaView.setVisible(false)
 
     // Load URL
+    const loadUrl = app.isPackaged
+      ? path.join(__dirname, '..', 'renderer', 'index.html') + '#/meta-overlay'
+      : (process.env.ELECTRON_RENDERER_URL as string) + '#/meta-overlay'
+
     if (app.isPackaged) {
       this.metaView.webContents.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
-        hash: 'meta-overlay'
+        hash: '/meta-overlay'
       })
     } else {
-      const url = (process.env.ELECTRON_RENDERER_URL as string) + '#/meta-overlay'
-      this.metaView.webContents.loadURL(url)
+      this.metaView.webContents.loadURL(loadUrl)
     }
 
-    metaOverlayLog.info('MetaOverlay initialized')
+    metaOverlayLog.info(`MetaOverlay initialized, loading: ${loadUrl}`)
+  }
+
+  public getView(): WebContentsView | null {
+    return this.metaView
+  }
+
+  public ensureOnTop(): void {
+    if (!this.metaView || !this.parentWindow) return
+
+    try {
+      if (this.parentWindow.contentView.children.includes(this.metaView)) {
+        this.parentWindow.contentView.removeChildView(this.metaView)
+      }
+      this.parentWindow.contentView.addChildView(this.metaView)
+    } catch (error) {
+      metaOverlayLog.warn('Failed to reorder MetaOverlay', { error })
+    }
   }
 
   /**
@@ -142,27 +182,49 @@ export class MetaOverlayManager {
       height: bounds.height
     })
 
-    // Send show message to renderer via IPC
-    if (!this.metaView.webContents.isDestroyed()) {
-      this.metaView.webContents.send('meta-overlay:show', {
-        type: 'meta-overlay:show',
-        item: request.item,
-        actions: allActions
-      })
+    this.ensureOnTop()
+
+    // Wait for content to be loaded before showing
+    const waitForContent = () => {
+      if (this.metaView && !this.metaView.webContents.isDestroyed()) {
+        // Check if content is loaded
+        const isLoading = this.metaView.webContents.isLoading()
+        if (isLoading) {
+          metaOverlayLog.debug('MetaOverlay still loading, waiting...')
+          setTimeout(waitForContent, 50)
+          return
+        }
+
+        // Send show message to renderer via IPC
+        this.metaView.webContents.send('meta-overlay:show', {
+          type: 'meta-overlay:show',
+          item: request.item,
+          actions: allActions
+        })
+
+        metaOverlayLog.debug('Sent show message to MetaOverlay renderer')
+
+        // Show the view
+        this.metaView.setVisible(true)
+        this.isVisible = true
+        const afterVisible = this.metaView.getVisible()
+
+        metaOverlayLog.debug(
+          `MetaOverlay shown with ${allActions.length} actions, visible: ${afterVisible}, bounds: ${bounds.width}x${bounds.height}, loading: ${this.metaView.webContents.isLoading()}`
+        )
+
+        // Focus after a short delay to ensure DOM is ready
+        setTimeout(() => {
+          if (this.metaView && !this.metaView.webContents.isDestroyed()) {
+            this.metaView.webContents.focus()
+            metaOverlayLog.debug('MetaOverlay focused')
+          }
+        }, 100)
+      }
     }
 
-    // Show the view
-    this.metaView.setVisible(true)
-    this.isVisible = true
-
-    // Focus after a short delay to ensure DOM is ready
-    setTimeout(() => {
-      if (this.metaView && !this.metaView.webContents.isDestroyed()) {
-        this.metaView.webContents.focus()
-      }
-    }, 100)
-
-    metaOverlayLog.debug(`MetaOverlay shown with ${allActions.length} actions`)
+    // Start waiting for content
+    waitForContent()
   }
 
   /**
@@ -405,4 +467,3 @@ export class MetaOverlayManager {
 }
 
 export const metaOverlayManager = MetaOverlayManager.getInstance()
-

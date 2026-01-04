@@ -451,11 +451,11 @@ export class TouchPlugin implements ITouchPlugin {
     lastActiveTime: number
   } {
     const loadTime = this._performanceMetrics.loadEndTime - this._performanceMetrics.loadStartTime
-    
+
     // Memory usage estimation based on features and storage
     const storageStats = this.getStorageStats()
     const estimatedMemory = storageStats.totalSize + (this.features.length * 1024) // rough estimate
-    
+
     return {
       loadTime: loadTime > 0 ? loadTime : 0,
       memoryUsage: estimatedMemory,
