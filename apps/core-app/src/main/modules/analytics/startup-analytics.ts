@@ -22,6 +22,7 @@ import { getAnalyticsMessageStore } from './message-store'
 import { ReportQueueStore } from './report-queue-store'
 import { databaseModule } from '../database'
 import { getConfig, saveConfig } from '../storage'
+import { getOrCreateTelemetryClientId } from './telemetry-client'
 
 const analyticsLog = createLogger('StartupAnalytics')
 const REPORT_QUEUE_FILE = 'startup-analytics-report-queue.json'
@@ -350,6 +351,7 @@ export class StartupAnalytics {
 
       const payload = {
         eventType: 'visit',
+        clientId: getOrCreateTelemetryClientId(),
         platform: metrics.platform,
         version: metrics.version,
         isAnonymous: true,
@@ -367,7 +369,6 @@ export class StartupAnalytics {
           memory,
           cpu,
           uptime: os.uptime(),
-          hostname: os.hostname(),
           release: os.release(),
           type: os.type(),
         },
@@ -404,6 +405,7 @@ export class StartupAnalytics {
       try {
         const payload = {
           eventType: 'visit',
+          clientId: getOrCreateTelemetryClientId(),
           platform: metrics.platform,
           version: metrics.version,
           isAnonymous: true,
@@ -427,7 +429,6 @@ export class StartupAnalytics {
               return { count: cpus.length, model: cpus[0]?.model }
             })(),
             uptime: os.uptime(),
-            hostname: os.hostname(),
             release: os.release(),
             type: os.type(),
           },

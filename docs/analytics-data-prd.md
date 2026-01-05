@@ -25,6 +25,41 @@
 - 上报失败归档：入库或队列化（建议本地 DB 队列），保留 14 天，过期清理。
   - analytics_report_queue(endpoint, payload, created_at, retry_count, last_attempt_at, last_error)
 
+## 异常与脏数据处理（Hard Gate + Soft Gate）
+- 目标：不阻断真实低频行为，但要隔离噪声、可追溯、可解释。
+- 规则优先：先做白名单与 schema 校验，再做范围/长度/频控。
+
+### 采集入口（Hard Gate）
+- Schema 校验：事件名/字段类型/必填项/版本化 schema（旧客户端可兼容但需降级）。
+- Sanity check：时间范围、数值上下限、字符串长度、properties key 数量上限。
+- Rate limit：按 user/device/ip 做 QPS 限制，异常时短暂封禁写入。
+- 白名单：event_name + property_key 白名单，避免维度爆炸。
+
+### 落地与质量（Soft Gate）
+- Quarantine：不合规数据入 `events_quarantine`，主表只保留合规数据。
+- DQ 评分：schema_pass/time_valid/value_valid/dup_rate 等加权形成 dq_score。
+- 去重：event_id 幂等；或 (user_id, event_name, ts, properties_hash) 近似去重。
+
+### 用户可控输入（重点）
+- 文本不进事实表：用户输入独立表 `user_reports`，主表只保留 report_id。
+- 强约束：长度/频率/敏感词/控制字符过滤，避免注入与维度污染。
+- 自动结构化：关键词/主题/情绪/严重度分类，仅回写结构化维度。
+
+### 自动异常检测
+- 规则异常：缺失率/量级突增/错误率/慢查询阈值，滚动窗口检测。
+- 统计异常：EWMA/Holt-Winters/季节性基线，输出 anomaly_score。
+- RCA：异常窗口 vs 基准窗口，做字段分布差异（KL/卡方/信息增益）。
+
+### 异常处理矩阵
+| 类型 | 处理 | 原因 |
+| --- | --- | --- |
+| schema 不合法 | 丢弃/隔离 | 无法使用 |
+| 字段缺失/类型错 | 隔离 + 统计缺失率 | 可能 SDK bug |
+| 值超范围但可修正 | 修正并标记 | 不影响主链路 |
+| 用户输入文本 | 独立表 + 分类 | 文本不是维度 |
+| 高频重复 | 去重 + 限流 | 防刷防成本 |
+| 小概率但合法 | 保留 | 可能真实信号 |
+
 ## 维度与筛选（App / 官网共用）
 - 时间：小时/日/周/30天；对比窗口（本期 vs 上期）。
 - 应用：appVersion、channel（dev/stable）、平台/架构、地区/时区（匿名聚合）。

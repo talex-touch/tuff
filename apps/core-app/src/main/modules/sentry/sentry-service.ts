@@ -16,6 +16,7 @@ import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
+import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
 import { databaseModule } from '../database'
 import { storageModule } from '../storage'
 import {
@@ -58,6 +59,7 @@ const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000
 
 interface NexusTelemetryEvent {
   eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
+  clientId?: string
   userId?: string
   deviceFingerprint?: string
   platform?: string
@@ -120,6 +122,8 @@ export class SentryServiceModule extends BaseModule {
 
   private config: SentryConfig = { enabled: false, anonymous: true }
   private deviceFingerprint: string | null = null
+  private clientId: string | null = null
+  private currentUserId: string | null = null
   private searchCount = 0
   private searchMetricsBuffer: SearchMetrics[] = []
   private isInitialized = false
@@ -153,6 +157,7 @@ export class SentryServiceModule extends BaseModule {
 
     // Generate device fingerprint (but don't use it if anonymous)
     this.deviceFingerprint = generateDeviceFingerprint()
+    this.clientId = getOrCreateTelemetryClientId()
 
     await this.hydrateTelemetryStats()
 
@@ -578,19 +583,23 @@ export class SentryServiceModule extends BaseModule {
    * Update user context based on authentication and privacy settings
    */
   updateUserContext(user?: ClerkUser | null): void {
-    if (!this.isInitialized) {
-      return
-    }
-
     if (this.config.anonymous) {
+      this.currentUserId = null
       // Anonymous mode: no user ID or fingerprint
-      Sentry.setUser(null)
-      sentryLog.debug('User context cleared (anonymous mode)')
+      if (this.isInitialized) {
+        Sentry.setUser(null)
+        sentryLog.debug('User context cleared (anonymous mode)')
+      }
       return
     }
 
     // Non-anonymous mode
     if (user && user.id) {
+      this.currentUserId = user.id
+
+      if (!this.isInitialized)
+        return
+
       const userContext: Sentry.User = {
         id: user.id,
         username: user.username || undefined,
@@ -609,6 +618,11 @@ export class SentryServiceModule extends BaseModule {
         meta: { userId: user.id, hasFingerprint: !!this.deviceFingerprint }
       })
     } else {
+      this.currentUserId = null
+
+      if (!this.isInitialized)
+        return
+
       // Not authenticated, but not anonymous mode - use device fingerprint only
       if (this.deviceFingerprint) {
         Sentry.setUser({
@@ -874,6 +888,8 @@ export class SentryServiceModule extends BaseModule {
     const isAnonymous = this.config.anonymous
     const telemetryEvent: NexusTelemetryEvent = {
       ...event,
+      clientId: this.clientId || undefined,
+      userId: isAnonymous ? undefined : this.currentUserId || undefined,
       searchQuery: isAnonymous ? undefined : event.searchQuery,
       deviceFingerprint: isAnonymous ? undefined : this.deviceFingerprint || undefined,
       platform: process.platform,
