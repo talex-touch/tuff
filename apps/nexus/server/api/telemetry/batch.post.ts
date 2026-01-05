@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
   const events = body.events as Array<{
     eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
     userId?: string
+    clientId?: string
     deviceFingerprint?: string
     platform?: string
     version?: string
@@ -40,6 +41,7 @@ export default defineEventHandler(async (event) => {
       await recordTelemetryEvent(event, {
         eventType: e.eventType,
         userId: e.userId || undefined,
+        clientId: e.clientId || undefined,
         deviceFingerprint: e.deviceFingerprint || undefined,
         platform: e.platform || undefined,
         version: e.version || undefined,

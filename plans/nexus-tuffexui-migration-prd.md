@@ -13,7 +13,8 @@ Dashboard 与 Marketplace 存在多套基础组件和弹层实现，维护成本
   - [`apps/nexus/app/pages/dashboard/plugins.vue`](apps/nexus/app/pages/dashboard/plugins.vue)
   - [`apps/nexus/app/pages/dashboard/updates.vue`](apps/nexus/app/pages/dashboard/updates.vue)
   - [`apps/nexus/app/pages/market.vue`](apps/nexus/app/pages/market.vue)
-- 覆盖组件：按钮、输入/搜索、抽屉、模态、Toast、标签/徽章/状态、开关
+- 覆盖组件：按钮、输入/搜索、抽屉、模态、开关；Toast/标签/徽章/状态保持 Nexus 实现
+- 兼容策略：按钮/输入/Drawer/Modal/Switch 以 Tuffex 为参考基准，其余保持 Nexus 视觉
 
 ## 非范围
 - Landing/动效密集区域不改
@@ -24,8 +25,8 @@ Dashboard 与 Marketplace 存在多套基础组件和弹层实现，维护成本
 - Search / MarketSearch → TxSearchInput / TxInput
 - Create/Version/PluginDetail/Update Drawer → TxDrawer
 - ReviewModal → TxModal
-- ToastContainer + useToast → TxToastHost（保持 useToast API，内部适配）
-- PluginListItem / MarketItem 标记 → TxTag / TxBadge / TxStatusBadge
+- ToastContainer + useToast → Nexus ToastHost（保持 useToast API，内部自实现）
+- PluginListItem / MarketItem 标记 → Nexus Tag / Badge / StatusBadge（封装层自实现）
 - DarkToggle → TxSwitch
 
 ## 技术方案
@@ -50,4 +51,5 @@ Dashboard 与 Marketplace 存在多套基础组件和弹层实现，维护成本
 
 ## 风险与对策
 - 样式冲突：封装层 + 局部样式隔离
+- 样式优先级：Nexus 视觉优先，冲突记录见 `plans/nexus-tuffexui-style-conflicts.md`
 - SSR/水合差异：必要时 client-only 加载

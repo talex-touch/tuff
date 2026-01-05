@@ -13,6 +13,7 @@ export default defineEventHandler(async (event) => {
   const {
     eventType,
     userId,
+    clientId,
     deviceFingerprint,
     platform,
     version,
@@ -33,6 +34,7 @@ export default defineEventHandler(async (event) => {
   await recordTelemetryEvent(event, {
     eventType,
     userId: userId || undefined,
+    clientId: clientId || undefined,
     deviceFingerprint: deviceFingerprint || undefined,
     platform: platform || undefined,
     version: version || undefined,

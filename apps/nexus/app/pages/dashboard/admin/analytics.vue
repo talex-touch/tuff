@@ -8,7 +8,7 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { user } = useUser()
 
 // Admin check - redirect if not admin
@@ -104,6 +104,41 @@ const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'mes
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
+const regionTotal = computed(() =>
+  Object.values(analytics.value?.summary.regionDistribution ?? {}).reduce((sum, count) => sum + count, 0),
+)
+const regionDisplayNames = computed(() => {
+  try {
+    return new Intl.DisplayNames([locale.value], { type: 'region' })
+  } catch {
+    return null
+  }
+})
+const topRegions = computed(() => {
+  const distribution = analytics.value?.summary.regionDistribution ?? {}
+  return Object.entries(distribution)
+    .map(([code, count]) => ({
+      code,
+      count,
+      label: regionDisplayNames.value?.of(code.toUpperCase()) ?? code,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
+})
+const hourlySeries = computed(() => {
+  const distribution = analytics.value?.summary.hourlyDistribution ?? {}
+  const series = hourLabels.map((label) => {
+    const key = label.slice(0, 2)
+    return {
+      key,
+      label,
+      count: Number(distribution[key] || 0),
+    }
+  })
+  const max = Math.max(0, ...series.map(item => item.count))
+  return { series, max }
+})
+const hasHourlyData = computed(() => hourlySeries.value.series.some(item => item.count > 0))
 
 async function fetchAnalytics() {
   loading.value = true
@@ -518,23 +553,23 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <div v-else class="space-y-4">
             <WorldBubbleMap :distribution="analytics.summary.regionDistribution" />
             <div
-              v-for="(count, region) in Object.fromEntries(Object.entries(analytics.summary.regionDistribution).slice(0, 10))"
-              :key="region"
+              v-for="region in topRegions"
+              :key="region.code"
               class="flex items-center gap-3"
             >
               <span class="w-20 truncate text-xs font-medium text-black/60 dark:text-light/60">
-                {{ region }}
+                {{ region.label }}
               </span>
               <div class="flex-1">
                 <div class="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-light/10">
                   <div
                     class="h-full rounded-full bg-emerald-500"
-                    :style="{ width: `${(count / Object.values(analytics.summary.regionDistribution).reduce((a, b) => a + b, 0)) * 100}%` }"
+                    :style="{ width: `${regionTotal ? (region.count / regionTotal) * 100 : 0}%` }"
                   />
                 </div>
               </div>
               <span class="w-12 text-right text-xs text-black/40 dark:text-light/40">
-                {{ ((count / Object.values(analytics.summary.regionDistribution).reduce((a, b) => a + b, 0)) * 100).toFixed(1) }}%
+                {{ regionTotal ? ((region.count / regionTotal) * 100).toFixed(1) : '0.0' }}%
               </span>
             </div>
           </div>
@@ -544,27 +579,32 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <!-- Hourly Distribution -->
       <div v-if="activeSection === 'overview'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <h3 class="mb-4 font-semibold text-black dark:text-light">Hourly Distribution (UTC)</h3>
-        <div class="flex items-end gap-1" style="height: 100px">
-          <div
-            v-for="hour in 24"
-            :key="hour"
-            class="flex-1"
-          >
-            <div
-              class="w-full rounded-t bg-blue-500/60 transition-all"
-              :style="{
-                height: `${Math.max(4, (analytics.summary.hourlyDistribution[(hour - 1).toString().padStart(2, '0')] || 0) / Math.max(...Object.values(analytics.summary.hourlyDistribution), 1) * 100)}%`
-              }"
-              :title="`${(hour - 1).toString().padStart(2, '0')}:00 - ${analytics.summary.hourlyDistribution[(hour - 1).toString().padStart(2, '0')] || 0} searches`"
-            />
-          </div>
+        <div v-if="!hasHourlyData" class="py-4 text-center text-sm text-black/40 dark:text-light/40">
+          No hourly data yet
         </div>
-        <div class="mt-2 flex justify-between text-[10px] text-black/40 dark:text-light/40">
-          <span>00:00</span>
-          <span>06:00</span>
-          <span>12:00</span>
-          <span>18:00</span>
-          <span>24:00</span>
+        <div v-else>
+          <div class="flex items-end gap-1" style="height: 100px">
+            <div
+              v-for="hour in hourlySeries.series"
+              :key="hour.key"
+              class="flex-1"
+            >
+              <div
+                class="w-full rounded-t bg-blue-500/60 transition-all"
+                :style="{
+                  height: `${Math.max(4, hourlySeries.max ? (hour.count / hourlySeries.max) * 100 : 0)}%`
+                }"
+                :title="`${hour.label} - ${hour.count}`"
+              />
+            </div>
+          </div>
+          <div class="mt-2 flex justify-between text-[10px] text-black/40 dark:text-light/40">
+            <span>00:00</span>
+            <span>06:00</span>
+            <span>12:00</span>
+            <span>18:00</span>
+            <span>24:00</span>
+          </div>
         </div>
       </div>
 
