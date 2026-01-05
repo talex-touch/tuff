@@ -4,7 +4,7 @@
   Sentry privacy controls and analytics settings
 -->
 <script setup lang="ts" name="SettingSentry">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -12,6 +12,7 @@ import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
@@ -19,12 +20,27 @@ const { t } = useI18n()
 
 const NEXUS_URL = getTuffBaseUrl()
 
+interface TelemetryStats {
+  searchCount: number
+  bufferSize: number
+  lastUploadTime: number | null
+  totalUploads: number
+  failedUploads: number
+  lastFailureAt: number | null
+  lastFailureMessage: string | null
+  apiBase: string
+  isEnabled: boolean
+  isAnonymous: boolean
+}
+
 const enabled = ref(false)
 const anonymous = ref(true)
 const loading = ref(false)
+const statsLoading = ref(false)
 const searchCount = ref(0)
-const telemetryStats = ref<any>(null)
+const telemetryStats = ref<TelemetryStats | null>(null)
 const isDev = import.meta.env.DEV
+const autoRefreshTimer = ref<number | null>(null)
 
 async function loadConfig() {
   try {
@@ -34,23 +50,45 @@ async function loadConfig() {
     }
     enabled.value = config?.enabled ?? true
     anonymous.value = config?.anonymous ?? true
-
-    try {
-      const count = await touchChannel.send('sentry:get-search-count')
-      searchCount.value = count || 0
-    }
-    catch {}
-
-    if (isDev) {
-      try {
-        telemetryStats.value = await touchChannel.send('sentry:get-telemetry-stats')
-      }
-      catch {}
-    }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to load Sentry config', error)
   }
+}
+
+async function refreshStats(options?: { silent?: boolean }) {
+  if (statsLoading.value) return
+
+  statsLoading.value = true
+  try {
+    const count = await touchChannel.send('sentry:get-search-count')
+    searchCount.value = typeof count === 'number' ? count : 0
+
+    if (isDev) {
+      telemetryStats.value = (await touchChannel.send(
+        'sentry:get-telemetry-stats'
+      )) as TelemetryStats
+    }
+  } catch (error) {
+    if (!options?.silent) {
+      console.error('Failed to refresh telemetry stats', error)
+      toast.error(t('settingSentry.refreshError', '刷新统计信息失败'))
+    }
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+function startAutoRefresh() {
+  if (autoRefreshTimer.value !== null) return
+  autoRefreshTimer.value = window.setInterval(() => {
+    void refreshStats({ silent: true })
+  }, 10_000)
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer.value === null) return
+  window.clearInterval(autoRefreshTimer.value)
+  autoRefreshTimer.value = null
 }
 
 async function saveConfig() {
@@ -60,16 +98,14 @@ async function saveConfig() {
       key: 'sentry-config.json',
       content: JSON.stringify({
         enabled: enabled.value,
-        anonymous: anonymous.value,
-      }),
+        anonymous: anonymous.value
+      })
     })
     toast.success(t('settingSentry.saveSuccess', '设置已保存'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to save Sentry config', error)
     toast.error(t('settingSentry.saveError', '保存设置失败'))
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
@@ -77,6 +113,7 @@ async function saveConfig() {
 async function updateEnabled(value: boolean) {
   enabled.value = value
   await saveConfig()
+  await refreshStats({ silent: true })
 }
 
 async function updateAnonymous(value: boolean) {
@@ -101,7 +138,23 @@ function formatTimestamp(ts: number | null) {
 }
 
 onMounted(() => {
-  loadConfig()
+  loadConfig().then(() => refreshStats({ silent: true }))
+})
+
+watch(
+  enabled,
+  (value) => {
+    if (value) {
+      startAutoRefresh()
+    } else {
+      stopAutoRefresh()
+    }
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(() => {
+  stopAutoRefresh()
 })
 </script>
 
@@ -113,16 +166,15 @@ onMounted(() => {
     active-icon="i-carbon-chart-column"
     memory-name="setting-sentry"
   >
-    <section class="SentryBanner">
-      <p>
-        {{
-          t(
-            'settingSentry.descriptionText',
-            '启用数据分析可以帮助我们改进应用性能和用户体验。数据会上传到 Nexus 分析平台和 Sentry 错误监控平台，所有数据都经过匿名化处理，不会包含敏感信息。',
-          )
-        }}
-      </p>
-    </section>
+    <TuffBlockLine
+      :title="t('settingSentry.notice', '说明')"
+      :description="
+        t(
+          'settingSentry.descriptionText',
+          '启用数据分析可以帮助我们改进应用性能和用户体验。数据会上传到 Nexus 分析平台和 Sentry 错误监控平台。匿名模式仅影响是否关联到用户（如设备指纹/用户 ID），与是否上传无关。'
+        )
+      "
+    />
 
     <TuffBlockSwitch
       v-model="enabled"
@@ -153,42 +205,88 @@ onMounted(() => {
       </template>
     </TuffBlockLine>
 
-    <section v-if="enabled && !anonymous" class="SentryBanner warning">
-      <p>
-        {{
-          t(
-            'settingSentry.warning',
-            '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。',
-          )
-        }}
-      </p>
-    </section>
+    <TuffBlockLine v-if="enabled && !anonymous" :title="t('settingSentry.warningTitle', '提示')">
+      <template #description>
+        <TuffStatusBadge
+          size="md"
+          status="warning"
+          :text="
+            t(
+              'settingSentry.warning',
+              '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。'
+            )
+          "
+        />
+      </template>
+    </TuffBlockLine>
 
-    <section v-if="isDev && enabled && telemetryStats" class="DevStatsPanel">
-      <h4>开发者统计信息</h4>
-      <div class="stats-grid">
-        <div class="stat-item">
-          <span class="stat-label">Buffer 大小</span>
-          <span class="stat-value">{{ telemetryStats.bufferSize }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">总上传次数</span>
-          <span class="stat-value">{{ telemetryStats.totalUploads }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">失败次数</span>
-          <span class="stat-value">{{ telemetryStats.failedUploads }}</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">最近上传</span>
-          <span class="stat-value">{{ formatTimestamp(telemetryStats.lastUploadTime) }}</span>
-        </div>
-        <div class="stat-item full-width">
-          <span class="stat-label">API 地址</span>
-          <span class="stat-value mono">{{ telemetryStats.apiBase }}</span>
-        </div>
-      </div>
-    </section>
+    <TuffBlockSlot
+      v-if="enabled"
+      :title="t('settingSentry.refreshStats', '刷新统计数据')"
+      :description="t('settingSentry.refreshStatsDesc', '从本地数据库获取最新状态')"
+      default-icon="i-carbon-renew"
+      active-icon="i-carbon-renew"
+      @click="refreshStats()"
+    >
+      <FlatButton mini :class="{ 'opacity-60': statsLoading }" @click.stop="refreshStats()">
+        <span v-if="statsLoading" class="i-carbon-renew animate-spin text-sm" />
+        {{ t('settingSentry.refresh', '刷新') }}
+      </FlatButton>
+    </TuffBlockSlot>
+
+    <template v-if="isDev && enabled && telemetryStats">
+      <TuffBlockLine :title="t('settingSentry.bufferSize', 'Buffer 大小')">
+        <template #description>
+          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+            {{ telemetryStats.bufferSize ?? 0 }}
+          </span>
+        </template>
+      </TuffBlockLine>
+
+      <TuffBlockLine :title="t('settingSentry.totalUploads', '总上传次数')">
+        <template #description>
+          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+            {{ telemetryStats.totalUploads ?? 0 }}
+          </span>
+        </template>
+      </TuffBlockLine>
+
+      <TuffBlockLine :title="t('settingSentry.failedUploads', '失败次数')">
+        <template #description>
+          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+            {{ telemetryStats.failedUploads ?? 0 }}
+          </span>
+        </template>
+      </TuffBlockLine>
+
+      <TuffBlockLine :title="t('settingSentry.lastUpload', '最近上传')">
+        <template #description>
+          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+            {{ formatTimestamp(telemetryStats.lastUploadTime ?? null) }}
+          </span>
+        </template>
+      </TuffBlockLine>
+
+      <TuffBlockLine
+        v-if="telemetryStats.lastFailureMessage"
+        :title="t('settingSentry.lastFailure', '最近失败')"
+      >
+        <template #description>
+          <span class="font-mono text-[var(--el-text-color-primary)]">
+            {{ formatTimestamp(telemetryStats.lastFailureAt ?? null) }} ·
+            {{ telemetryStats.lastFailureMessage }}
+          </span>
+        </template>
+      </TuffBlockLine>
+
+      <TuffBlockLine :title="t('settingSentry.apiBase', 'API 地址')">
+        <template #description>
+          <span class="font-mono text-[var(--el-text-color-primary)] break-all">
+            {{ telemetryStats.apiBase || NEXUS_URL }}
+          </span>
+        </template>
+      </TuffBlockLine>
+    </template>
 
     <!-- Privacy Management -->
     <TuffBlockSlot
@@ -216,93 +314,3 @@ onMounted(() => {
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>
-
-<style scoped lang="scss">
-.SentryBanner {
-  padding: 16px 18px;
-  border-radius: 14px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--el-color-primary) 5%, transparent) 0%,
-    color-mix(in srgb, var(--el-color-primary) 8%, transparent) 100%
-  );
-  margin-bottom: 12px;
-  color: var(--el-text-color-regular);
-  font-size: 13px;
-  line-height: 1.7;
-  backdrop-filter: blur(8px);
-
-  p {
-    margin: 0;
-  }
-}
-
-.SentryBanner.warning {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--el-color-warning) 8%, transparent) 0%,
-    color-mix(in srgb, var(--el-color-warning) 12%, transparent) 100%
-  );
-  border-color: color-mix(in srgb, var(--el-color-warning) 30%, var(--el-border-color-lighter));
-  color: var(--el-text-color-regular);
-
-  :deep(.dark) & {
-    color: var(--el-color-warning-light-3);
-  }
-}
-
-.DevStatsPanel {
-  padding: 16px 18px;
-  border-radius: 14px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-fill-color-lighter);
-  margin-bottom: 12px;
-
-  h4 {
-    margin: 0 0 12px 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--el-text-color-primary);
-  }
-
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-
-  .stat-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
-    background: var(--el-bg-color);
-    border-radius: 8px;
-    border: 1px solid var(--el-border-color-lighter);
-
-    &.full-width {
-      grid-column: 1 / -1;
-    }
-  }
-
-  .stat-label {
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
-    font-weight: 500;
-  }
-
-  .stat-value {
-    font-size: 14px;
-    color: var(--el-text-color-primary);
-    font-weight: 600;
-
-    &.mono {
-      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-      font-size: 12px;
-      word-break: break-all;
-    }
-  }
-}
-
-</style>

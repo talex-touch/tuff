@@ -33,6 +33,22 @@ interface AnalyticsData {
     avgSortingDuration: number
     avgResultCount: number
     avgExecuteLatency: number
+    performance: {
+      longTaskCount: number
+      longTaskTotalMs: number
+      longTaskMaxMs: number
+      longTaskAvgMs: number
+      rafJankCount: number
+      rafJankTotalMs: number
+      rafJankMaxMs: number
+      rafJankAvgMs: number
+      eventLoopDelayP95AvgMs: number
+      eventLoopDelayMaxMs: number
+      unresponsiveCount: number
+      unresponsiveTotalMs: number
+      unresponsiveMaxMs: number
+      unresponsiveAvgMs: number
+    }
     dailyStats: Array<{
       date: string
       visits: number
@@ -84,6 +100,7 @@ const selectedDays = ref(30)
 const messages = ref<TelemetryMessage[]>([])
 const messagesLoading = ref(false)
 const messagesError = ref<string | null>(null)
+const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'messages'>('overview')
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
@@ -231,8 +248,62 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
       </div>
 
+      <!-- Sections -->
+      <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-white/50 p-2 text-sm dark:bg-dark/40">
+        <button
+          type="button"
+          class="rounded-full px-3 py-1 text-xs transition"
+          :class="activeSection === 'overview'
+            ? 'bg-black text-white dark:bg-light dark:text-black'
+            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+          @click="activeSection = 'overview'"
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          class="rounded-full px-3 py-1 text-xs transition"
+          :class="activeSection === 'performance'
+            ? 'bg-black text-white dark:bg-light dark:text-black'
+            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+          @click="activeSection = 'performance'"
+        >
+          Performance
+        </button>
+        <button
+          type="button"
+          class="rounded-full px-3 py-1 text-xs transition"
+          :class="activeSection === 'search'
+            ? 'bg-black text-white dark:bg-light dark:text-black'
+            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+          @click="activeSection = 'search'"
+        >
+          Search
+        </button>
+        <button
+          type="button"
+          class="rounded-full px-3 py-1 text-xs transition"
+          :class="activeSection === 'usage'
+            ? 'bg-black text-white dark:bg-light dark:text-black'
+            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+          @click="activeSection = 'usage'"
+        >
+          Usage
+        </button>
+        <button
+          type="button"
+          class="rounded-full px-3 py-1 text-xs transition"
+          :class="activeSection === 'messages'
+            ? 'bg-black text-white dark:bg-light dark:text-black'
+            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+          @click="activeSection = 'messages'"
+        >
+          Alerts
+        </button>
+      </div>
+
       <!-- Summary Stats -->
-      <div class="grid gap-4 lg:grid-cols-4">
+      <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-4">
         <div class="rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
           <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Uploaded Events</h3>
           <p class="mt-1 text-3xl font-bold text-black dark:text-light">
@@ -260,7 +331,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Search Quality -->
-      <div class="grid gap-4 lg:grid-cols-4">
+      <div v-if="activeSection === 'search'" class="grid gap-4 lg:grid-cols-4">
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
           <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Query Length</h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
@@ -288,7 +359,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Daily Trend Chart (simplified bar representation) -->
-      <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+      <div v-if="activeSection === 'overview'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <h3 class="mb-4 font-semibold text-black dark:text-light">Daily Activity</h3>
         <div class="space-y-2">
           <div
@@ -326,8 +397,63 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
       </div>
 
+      <!-- UI & Main Performance -->
+      <div v-if="activeSection === 'performance'" class="grid gap-4 lg:grid-cols-4">
+        <div class="rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 p-4">
+          <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <span class="i-carbon-time text-lg" />
+            <span class="text-xs font-medium">Long Tasks</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-black dark:text-light">
+            {{ analytics.summary.performance.longTaskAvgMs }}ms
+          </p>
+          <p class="mt-1 text-xs text-black/50 dark:text-light/50">
+            max {{ analytics.summary.performance.longTaskMaxMs }}ms · {{ formatNumber(analytics.summary.performance.longTaskCount) }} tasks
+          </p>
+        </div>
+
+        <div class="rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 p-4">
+          <div class="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+            <span class="i-carbon-chart-line-smooth text-lg" />
+            <span class="text-xs font-medium">Frame Jank</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-black dark:text-light">
+            {{ analytics.summary.performance.rafJankAvgMs }}ms
+          </p>
+          <p class="mt-1 text-xs text-black/50 dark:text-light/50">
+            max {{ analytics.summary.performance.rafJankMaxMs }}ms · {{ formatNumber(analytics.summary.performance.rafJankCount) }} frames
+          </p>
+        </div>
+
+        <div class="rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 p-4">
+          <div class="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+            <span class="i-carbon-activity text-lg" />
+            <span class="text-xs font-medium">Main Loop Delay (p95)</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-black dark:text-light">
+            {{ analytics.summary.performance.eventLoopDelayP95AvgMs }}ms
+          </p>
+          <p class="mt-1 text-xs text-black/50 dark:text-light/50">
+            max {{ analytics.summary.performance.eventLoopDelayMaxMs }}ms
+          </p>
+        </div>
+
+        <div class="rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 p-4">
+          <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <span class="i-carbon-warning-alt text-lg" />
+            <span class="text-xs font-medium">Unresponsive</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-black dark:text-light">
+            {{ analytics.summary.performance.unresponsiveAvgMs }}ms
+          </p>
+          <p class="mt-1 text-xs text-black/50 dark:text-light/50">
+            max {{ analytics.summary.performance.unresponsiveMaxMs }}ms · {{ formatNumber(analytics.summary.performance.unresponsiveCount) }} times
+          </p>
+        </div>
+      </div>
+
       <!-- Module Load Performance -->
-      <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+      <div v-if="activeSection === 'performance'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <div class="mb-4 flex items-center justify-between">
           <h3 class="font-semibold text-black dark:text-light">Module Load Performance</h3>
           <span class="text-xs text-black/40 dark:text-light/40">avg / max / min / ratio</span>
@@ -355,7 +481,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Device & Region Distribution -->
-      <div class="grid gap-4 lg:grid-cols-2">
+      <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-2">
         <!-- Device Distribution -->
         <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <h3 class="mb-4 font-semibold text-black dark:text-light">Device Distribution</h3>
@@ -387,9 +513,10 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <h3 class="mb-4 font-semibold text-black dark:text-light">Region Distribution</h3>
           <div v-if="Object.keys(analytics.summary.regionDistribution).length === 0" class="py-4 text-center text-sm text-black/40 dark:text-light/40">
-            No region data (anonymous mode)
+            No region data yet
           </div>
-          <div v-else class="space-y-3">
+          <div v-else class="space-y-4">
+            <WorldBubbleMap :distribution="analytics.summary.regionDistribution" />
             <div
               v-for="(count, region) in Object.fromEntries(Object.entries(analytics.summary.regionDistribution).slice(0, 10))"
               :key="region"
@@ -407,7 +534,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                 </div>
               </div>
               <span class="w-12 text-right text-xs text-black/40 dark:text-light/40">
-                {{ count }}
+                {{ ((count / Object.values(analytics.summary.regionDistribution).reduce((a, b) => a + b, 0)) * 100).toFixed(1) }}%
               </span>
             </div>
           </div>
@@ -415,7 +542,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Hourly Distribution -->
-      <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+      <div v-if="activeSection === 'overview'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <h3 class="mb-4 font-semibold text-black dark:text-light">Hourly Distribution (UTC)</h3>
         <div class="flex items-end gap-1" style="height: 100px">
           <div
@@ -442,7 +569,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Search Term Collection Disabled -->
-      <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+      <div v-if="activeSection === 'search'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <h3 class="mb-2 font-semibold text-black dark:text-light">Search Terms</h3>
         <p class="text-sm text-black/50 dark:text-light/50">
           Disabled by privacy policy. Only length, type, and timing metrics are recorded.
@@ -450,8 +577,8 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Secondary Insights -->
-      <div class="grid gap-4 lg:grid-cols-3">
-        <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+      <div v-if="activeSection === 'search' || activeSection === 'usage'" class="grid gap-4 lg:grid-cols-3">
+        <div v-if="activeSection === 'search'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-light">Search Scenes</h3>
             <button
@@ -469,7 +596,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </div>
           </div>
         </div>
-        <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+        <div v-if="activeSection === 'search'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-light">Result Categories</h3>
             <button
@@ -487,7 +614,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </div>
           </div>
         </div>
-        <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-light">Most Executed</h3>
             <button
@@ -510,7 +637,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </div>
 
       <!-- Telemetry Messages -->
-      <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
+      <div v-if="activeSection === 'messages'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <div class="mb-4 flex items-center justify-between">
           <h3 class="font-semibold text-black dark:text-light">Telemetry Messages</h3>
           <button

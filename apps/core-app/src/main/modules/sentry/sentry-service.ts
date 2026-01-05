@@ -7,15 +7,21 @@
 import type { ModuleKey } from '@talex-touch/utils'
 import crypto from 'node:crypto'
 import os from 'node:os'
+import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
-import { app } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
+import { databaseModule } from '../database'
 import { storageModule } from '../storage'
+import {
+  TelemetryUploadStatsStore,
+  type TelemetryUploadStatsRecord
+} from './telemetry-upload-stats-store'
 
 // User type from Clerk
 interface ClerkUser {
@@ -27,7 +33,8 @@ interface ClerkUser {
 const sentryLog = createLogger('SentryService')
 
 // Sentry DSN
-const SENTRY_DSN = 'https://f8019096132f03a7a66c879a53462a67@o4508024637620224.ingest.us.sentry.io/4510196503871488'
+const SENTRY_DSN =
+  'https://f8019096132f03a7a66c879a53462a67@o4508024637620224.ingest.us.sentry.io/4510196503871488'
 
 interface SentryConfig {
   enabled: boolean
@@ -50,7 +57,7 @@ const NEXUS_TELEMETRY_BATCH_SIZE = 20
 const NEXUS_TELEMETRY_FLUSH_INTERVAL = 60000
 
 interface NexusTelemetryEvent {
-  eventType: 'search' | 'visit' | 'error' | 'feature_use'
+  eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
   userId?: string
   deviceFingerprint?: string
   platform?: string
@@ -69,13 +76,7 @@ interface NexusTelemetryEvent {
  * Generate device fingerprint based on system information
  */
 function generateDeviceFingerprint(): string {
-  const components = [
-    process.platform,
-    os.arch(),
-    os.hostname(),
-    os.type(),
-    os.release(),
-  ]
+  const components = [process.platform, os.arch(), os.hostname(), os.type(), os.release()]
   const hash = crypto.createHash('sha256')
   hash.update(components.join('|'))
   return hash.digest('hex').substring(0, 16)
@@ -98,7 +99,7 @@ function getEnvironmentContext(): Record<string, unknown> {
     electronVersion: process.versions.electron,
     nodeVersion: process.versions.node,
     isPackaged: app.isPackaged,
-    buildTimestamp: Date.now(),
+    buildTimestamp: Date.now()
   }
 }
 
@@ -122,14 +123,23 @@ export class SentryServiceModule extends BaseModule {
   private searchCount = 0
   private searchMetricsBuffer: SearchMetrics[] = []
   private isInitialized = false
-  
+
   private nexusTelemetryBuffer: NexusTelemetryEvent[] = []
   private nexusFlushTimer: NodeJS.Timeout | null = null
   private lastNexusUploadTime: number | null = null
   private totalNexusUploads = 0
   private failedNexusUploads = 0
+  private telemetryCooldownUntil: number | null = null
   private lastTelemetryFailureAt: number | null = null
   private lastTelemetryFailureMessage: string | null = null
+  private telemetryStatsStore: TelemetryUploadStatsStore | null = null
+  private telemetryStatsPersistTimer: NodeJS.Timeout | null = null
+
+  private perfFlushTimer: NodeJS.Timeout | null = null
+  private eventLoopDelay?: ReturnType<typeof monitorEventLoopDelay>
+  private unresponsiveAt = new Map<number, number>()
+  private unresponsiveStats = { count: 0, totalMs: 0, maxMs: 0 }
+  private windowPerfListenersReady = false
 
   constructor() {
     super(SentryServiceModule.key)
@@ -144,15 +154,15 @@ export class SentryServiceModule extends BaseModule {
     // Generate device fingerprint (but don't use it if anonymous)
     this.deviceFingerprint = generateDeviceFingerprint()
 
+    await this.hydrateTelemetryStats()
+
     // Initialize Sentry if enabled
     if (this.config.enabled) {
       this.initializeSentry()
-    }
-    else {
+    } else {
       sentryLog.info('Sentry is disabled by configuration')
     }
 
-    
     this.setupIPCChannels()
 
     try {
@@ -160,12 +170,13 @@ export class SentryServiceModule extends BaseModule {
         const cfg = data as Partial<SentryConfig>
         this.saveConfig(cfg)
       })
-    }
-    catch (error) {
+    } catch (error) {
       sentryLog.warn('Failed to subscribe sentry-config changes', {
         meta: { error: error instanceof Error ? error.message : String(error) }
       })
     }
+
+    this.syncPerformanceMonitors()
   }
 
   /**
@@ -173,8 +184,7 @@ export class SentryServiceModule extends BaseModule {
    */
   private setupIPCChannels(): void {
     const channel = $app.channel
-    if (!channel)
-      return
+    if (!channel) return
 
     // Listen for user context updates from renderer
     channel.regChannel(ChannelType.MAIN, 'sentry:update-user', ({ data }) => {
@@ -190,22 +200,27 @@ export class SentryServiceModule extends BaseModule {
     })
 
     channel.regChannel(ChannelType.MAIN, 'sentry:get-search-count', () => {
-      return this.getSearchCount()
+      return this.getSearchCountFromDb()
     })
 
     channel.regChannel(ChannelType.MAIN, 'sentry:get-telemetry-stats', () => {
-      return this.getTelemetryStats()
+      return this.getTelemetryStatsFromDb()
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'sentry:record-performance', ({ data }) => {
+      this.recordRendererPerformance(data)
+      return { success: true }
     })
   }
 
   async onDestroy(): Promise<void> {
-    
     if (this.isInitialized) {
-      
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
-    
-    this.stopNexusTelemetryTimer()
+
+    await this.stopNexusTelemetryTimer()
+    this.stopPerformanceMonitors()
+    await this.flushTelemetryStats()
   }
 
   /**
@@ -213,18 +228,87 @@ export class SentryServiceModule extends BaseModule {
    */
   private loadConfig(): void {
     try {
-      const config = storageModule.getConfig('sentry-config.json') as Partial<SentryConfig> | undefined
+      const config = storageModule.getConfig('sentry-config.json') as
+        | Partial<SentryConfig>
+        | undefined
       this.config = {
         enabled: config?.enabled ?? true,
-        anonymous: config?.anonymous ?? true,
+        anonymous: config?.anonymous ?? true
       }
-      sentryLog.debug('Loaded Sentry config', { meta: { enabled: this.config.enabled, anonymous: this.config.anonymous } })
-    }
-    catch (error) {
+      sentryLog.debug('Loaded Sentry config', {
+        meta: { enabled: this.config.enabled, anonymous: this.config.anonymous }
+      })
+    } catch (error) {
       sentryLog.warn('Failed to load Sentry config, using defaults', {
-        meta: { error: error instanceof Error ? error.message : String(error) },
+        meta: { error: error instanceof Error ? error.message : String(error) }
       })
       this.config = { enabled: true, anonymous: true }
+    }
+  }
+
+  private getTelemetryStatsStore(): TelemetryUploadStatsStore | null {
+    if (this.telemetryStatsStore) return this.telemetryStatsStore
+    try {
+      const db = databaseModule.getDb()
+      this.telemetryStatsStore = new TelemetryUploadStatsStore(db)
+      return this.telemetryStatsStore
+    } catch {
+      return null
+    }
+  }
+
+  private schedulePersistTelemetryStats(): void {
+    if (this.telemetryStatsPersistTimer) return
+    this.telemetryStatsPersistTimer = setTimeout(() => {
+      this.telemetryStatsPersistTimer = null
+      void this.persistTelemetryStats()
+    }, 1500)
+  }
+
+  private async flushTelemetryStats(): Promise<void> {
+    if (this.telemetryStatsPersistTimer) {
+      clearTimeout(this.telemetryStatsPersistTimer)
+      this.telemetryStatsPersistTimer = null
+    }
+    await this.persistTelemetryStats()
+  }
+
+  private async persistTelemetryStats(): Promise<void> {
+    const store = this.getTelemetryStatsStore()
+    if (!store) return
+    try {
+      await store.upsert({
+        searchCount: this.searchCount,
+        totalUploads: this.totalNexusUploads,
+        failedUploads: this.failedNexusUploads,
+        lastUploadTime: this.lastNexusUploadTime,
+        lastFailureAt: this.lastTelemetryFailureAt,
+        lastFailureMessage: this.lastTelemetryFailureMessage,
+        updatedAt: Date.now()
+      })
+    } catch (error) {
+      sentryLog.debug('Failed to persist telemetry upload stats', {
+        meta: { error: error instanceof Error ? error.message : String(error) }
+      })
+    }
+  }
+
+  private async hydrateTelemetryStats(): Promise<void> {
+    const store = this.getTelemetryStatsStore()
+    if (!store) return
+    try {
+      const record = await store.get()
+      if (!record) return
+      this.searchCount = record.searchCount
+      this.totalNexusUploads = record.totalUploads
+      this.failedNexusUploads = record.failedUploads
+      this.lastNexusUploadTime = record.lastUploadTime
+      this.lastTelemetryFailureAt = record.lastFailureAt
+      this.lastTelemetryFailureMessage = record.lastFailureMessage
+    } catch (error) {
+      sentryLog.warn('Failed to hydrate telemetry upload stats', {
+        meta: { error: error instanceof Error ? error.message : String(error) }
+      })
     }
   }
 
@@ -235,23 +319,171 @@ export class SentryServiceModule extends BaseModule {
     this.config = { ...this.config, ...config }
     storageModule.saveConfig('sentry-config.json', JSON.stringify(this.config))
     sentryLog.info('Saved Sentry config', {
-      meta: { enabled: this.config.enabled, anonymous: this.config.anonymous },
+      meta: { enabled: this.config.enabled, anonymous: this.config.anonymous }
     })
 
     // Reinitialize if enabled state changed
     if (config.enabled !== undefined) {
       if (this.config.enabled && !this.isInitialized) {
         this.initializeSentry()
-      }
-      else if (!this.config.enabled && this.isInitialized) {
+      } else if (!this.config.enabled && this.isInitialized) {
         this.shutdownSentry()
       }
+
+      this.syncPerformanceMonitors()
     }
 
     // Update user context if anonymous state changed
     if (config.anonymous !== undefined && this.isInitialized) {
       this.updateUserContext()
     }
+  }
+
+  private syncPerformanceMonitors(): void {
+    if (this.config.enabled) {
+      this.startPerformanceMonitors()
+    } else {
+      this.stopPerformanceMonitors()
+    }
+  }
+
+  private startPerformanceMonitors(): void {
+    if (this.perfFlushTimer) return
+
+    this.ensureWindowPerformanceListeners()
+
+    try {
+      this.eventLoopDelay = monitorEventLoopDelay({ resolution: 20 })
+      this.eventLoopDelay.enable()
+    } catch {
+      this.eventLoopDelay = undefined
+    }
+
+    const flushIntervalMs = 60_000
+    this.perfFlushTimer = setInterval(() => {
+      this.flushPerformanceMetrics()
+    }, flushIntervalMs)
+  }
+
+  private stopPerformanceMonitors(): void {
+    if (this.perfFlushTimer) {
+      clearInterval(this.perfFlushTimer)
+      this.perfFlushTimer = null
+    }
+    if (this.eventLoopDelay) {
+      try {
+        this.eventLoopDelay.disable()
+      } catch (error) {
+        sentryLog.debug('Failed to disable event loop delay monitor', {
+          meta: { error: error instanceof Error ? error.message : String(error) }
+        })
+      }
+      this.eventLoopDelay = undefined
+    }
+    this.unresponsiveAt.clear()
+    this.unresponsiveStats = { count: 0, totalMs: 0, maxMs: 0 }
+  }
+
+  private ensureWindowPerformanceListeners(): void {
+    if (this.windowPerfListenersReady) return
+    this.windowPerfListenersReady = true
+
+    const attach = (win: BrowserWindow) => {
+      const wcId = win.webContents.id
+
+      win.on('unresponsive', () => {
+        this.unresponsiveAt.set(wcId, Date.now())
+      })
+
+      win.on('responsive', () => {
+        const startedAt = this.unresponsiveAt.get(wcId)
+        if (!startedAt) return
+        this.unresponsiveAt.delete(wcId)
+        const durationMs = Math.max(0, Date.now() - startedAt)
+        this.unresponsiveStats.count += 1
+        this.unresponsiveStats.totalMs += durationMs
+        this.unresponsiveStats.maxMs = Math.max(this.unresponsiveStats.maxMs, durationMs)
+      })
+
+      win.on('closed', () => {
+        this.unresponsiveAt.delete(wcId)
+      })
+    }
+
+    app.on('browser-window-created', (_event, win) => {
+      attach(win)
+    })
+
+    for (const win of BrowserWindow.getAllWindows()) {
+      attach(win)
+    }
+  }
+
+  private flushPerformanceMetrics(): void {
+    const metadata: Record<string, unknown> = { perfSource: 'main' }
+
+    if (this.eventLoopDelay) {
+      const p95 = Number(this.eventLoopDelay.percentile(95)) / 1e6
+      const max = Number(this.eventLoopDelay.max) / 1e6
+      if (Number.isFinite(p95)) {
+        metadata.eventLoopDelayP95Ms = Math.round(p95)
+      }
+      if (Number.isFinite(max)) {
+        metadata.eventLoopDelayMaxMs = Math.round(max)
+      }
+      this.eventLoopDelay.reset()
+    }
+
+    if (this.unresponsiveStats.count > 0) {
+      metadata.unresponsiveCount = this.unresponsiveStats.count
+      metadata.unresponsiveTotalMs = Math.round(this.unresponsiveStats.totalMs)
+      metadata.unresponsiveMaxMs = Math.round(this.unresponsiveStats.maxMs)
+      this.unresponsiveStats = { count: 0, totalMs: 0, maxMs: 0 }
+    }
+
+    const hasPayload = Object.keys(metadata).some((key) => key !== 'perfSource')
+    if (!hasPayload) return
+
+    this.queueNexusTelemetry({
+      eventType: 'performance',
+      metadata
+    })
+  }
+
+  private recordRendererPerformance(payload: unknown): void {
+    if (!payload || typeof payload !== 'object') return
+
+    const data = payload as Record<string, unknown>
+    const pickMs = (key: string): number | undefined => {
+      const value = data[key]
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined
+      return Math.min(Math.round(value), 60 * 60 * 1000)
+    }
+    const pickCount = (key: string): number | undefined => {
+      const value = data[key]
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined
+      return Math.min(Math.round(value), 1_000_000)
+    }
+
+    const metadata: Record<string, unknown> = { perfSource: 'renderer' }
+    const longTaskTotalMs = pickMs('longTaskTotalMs')
+    const longTaskMaxMs = pickMs('longTaskMaxMs')
+    const rafJankTotalMs = pickMs('rafJankTotalMs')
+    const rafJankMaxMs = pickMs('rafJankMaxMs')
+    const longTaskCount = pickCount('longTaskCount')
+    const rafJankCount = pickCount('rafJankCount')
+
+    if (longTaskTotalMs !== undefined) metadata.longTaskTotalMs = longTaskTotalMs
+    if (longTaskCount !== undefined) metadata.longTaskCount = longTaskCount
+    if (longTaskMaxMs !== undefined) metadata.longTaskMaxMs = longTaskMaxMs
+    if (rafJankTotalMs !== undefined) metadata.rafJankTotalMs = rafJankTotalMs
+    if (rafJankCount !== undefined) metadata.rafJankCount = rafJankCount
+    if (rafJankMaxMs !== undefined) metadata.rafJankMaxMs = rafJankMaxMs
+
+    const hasPayload = Object.keys(metadata).some((key) => key !== 'perfSource')
+    if (!hasPayload) return
+
+    this.queueNexusTelemetry({ eventType: 'performance', metadata })
   }
 
   /**
@@ -282,7 +514,7 @@ export class SentryServiceModule extends BaseModule {
           // Always include environment context
           event.contexts = {
             ...event.contexts,
-            environment: getEnvironmentContext(),
+            environment: getEnvironmentContext()
           }
 
           return event
@@ -290,7 +522,7 @@ export class SentryServiceModule extends BaseModule {
         // Before breadcrumb hook
         beforeBreadcrumb(breadcrumb) {
           return breadcrumb
-        },
+        }
         // Error handling is done by Sentry automatically
       })
 
@@ -307,13 +539,12 @@ export class SentryServiceModule extends BaseModule {
       sentryLog.success('Sentry initialized', {
         meta: {
           environment: process.env.BUILD_TYPE || (app.isPackaged ? 'production' : 'development'),
-          anonymous: this.config.anonymous,
-        },
+          anonymous: this.config.anonymous
+        }
       })
-    }
-    catch (error) {
+    } catch (error) {
       sentryLog.error('Failed to initialize Sentry', {
-        meta: { error: error instanceof Error ? error.message : String(error) },
+        meta: { error: error instanceof Error ? error.message : String(error) }
       })
     }
   }
@@ -363,7 +594,7 @@ export class SentryServiceModule extends BaseModule {
       const userContext: Sentry.User = {
         id: user.id,
         username: user.username || undefined,
-        email: undefined, // Never send email
+        email: undefined // Never send email
       }
 
       // Add device fingerprint if available
@@ -375,23 +606,21 @@ export class SentryServiceModule extends BaseModule {
 
       Sentry.setUser(userContext)
       sentryLog.debug('User context updated', {
-        meta: { userId: user.id, hasFingerprint: !!this.deviceFingerprint },
+        meta: { userId: user.id, hasFingerprint: !!this.deviceFingerprint }
       })
-    }
-    else {
+    } else {
       // Not authenticated, but not anonymous mode - use device fingerprint only
       if (this.deviceFingerprint) {
         Sentry.setUser({
           id: `device:${this.deviceFingerprint}`,
           username: undefined,
-          email: undefined,
+          email: undefined
         })
         Sentry.setTag('device.fingerprint', this.deviceFingerprint)
         sentryLog.debug('User context set to device fingerprint', {
-          meta: { fingerprint: this.deviceFingerprint },
+          meta: { fingerprint: this.deviceFingerprint }
         })
-      }
-      else {
+      } else {
         Sentry.setUser(null)
       }
     }
@@ -425,8 +654,8 @@ export class SentryServiceModule extends BaseModule {
     try {
       // Calculate aggregated metrics
       const totalSearches = this.searchMetricsBuffer.length
-      const avgDuration
-        = this.searchMetricsBuffer.reduce((sum, m) => sum + m.totalDuration, 0) / totalSearches
+      const avgDuration =
+        this.searchMetricsBuffer.reduce((sum, m) => sum + m.totalDuration, 0) / totalSearches
       const totalResults = this.searchMetricsBuffer.reduce((sum, m) => sum + m.resultCount, 0)
       const avgResults = totalResults / totalSearches
 
@@ -462,14 +691,14 @@ export class SentryServiceModule extends BaseModule {
           provider_timing_percentages: providerPercentages,
           provider_total_results: providerTotalResults,
           provider_avg_times_ms: Object.fromEntries(
-            Object.entries(providerTotalTimes).map(([p, t]) => [p, Math.round(t / totalSearches)]),
+            Object.entries(providerTotalTimes).map(([p, t]) => [p, Math.round(t / totalSearches)])
           ),
-          sample_queries: this.searchMetricsBuffer.slice(-5).map(m => ({
+          sample_queries: this.searchMetricsBuffer.slice(-5).map((m) => ({
             text: m.queryText.substring(0, 100), // Truncate for privacy
             inputTypes: m.inputTypes,
             duration: m.totalDuration,
-            results: m.resultCount,
-          })),
+            results: m.resultCount
+          }))
         })
 
         Sentry.captureMessage('Search analytics batch report', 'info')
@@ -482,13 +711,12 @@ export class SentryServiceModule extends BaseModule {
         meta: {
           searchCount: this.searchCount,
           batchSize: totalSearches,
-          avgDuration: avgDuration.toFixed(2),
-        },
+          avgDuration: avgDuration.toFixed(2)
+        }
       })
-    }
-    catch (error) {
+    } catch (error) {
       sentryLog.error('Failed to report search analytics', {
-        meta: { error: error instanceof Error ? error.message : String(error) },
+        meta: { error: error instanceof Error ? error.message : String(error) }
       })
     }
   }
@@ -513,7 +741,11 @@ export class SentryServiceModule extends BaseModule {
   /**
    * Capture message
    */
-  captureMessage(message: string, level: Sentry.SeverityLevel = 'info', context?: Record<string, unknown>): void {
+  captureMessage(
+    message: string,
+    level: Sentry.SeverityLevel = 'info',
+    context?: Record<string, unknown>
+  ): void {
     if (!this.config.enabled || !this.isInitialized) {
       return
     }
@@ -549,6 +781,59 @@ export class SentryServiceModule extends BaseModule {
     return this.searchCount
   }
 
+  private telemetryStatsSnapshot(): TelemetryUploadStatsRecord {
+    return {
+      searchCount: this.searchCount,
+      totalUploads: this.totalNexusUploads,
+      failedUploads: this.failedNexusUploads,
+      lastUploadTime: this.lastNexusUploadTime,
+      lastFailureAt: this.lastTelemetryFailureAt,
+      lastFailureMessage: this.lastTelemetryFailureMessage,
+      updatedAt: Date.now()
+    }
+  }
+
+  private async readTelemetryStatsRecord(): Promise<TelemetryUploadStatsRecord> {
+    const store = this.getTelemetryStatsStore()
+    if (!store) return this.telemetryStatsSnapshot()
+
+    await this.flushTelemetryStats()
+    const record = await store.get()
+    return record ?? this.telemetryStatsSnapshot()
+  }
+
+  private async getSearchCountFromDb(): Promise<number> {
+    const record = await this.readTelemetryStatsRecord()
+    return record.searchCount
+  }
+
+  private async getTelemetryStatsFromDb(): Promise<{
+    searchCount: number
+    bufferSize: number
+    lastUploadTime: number | null
+    totalUploads: number
+    failedUploads: number
+    lastFailureAt: number | null
+    lastFailureMessage: string | null
+    apiBase: string
+    isEnabled: boolean
+    isAnonymous: boolean
+  }> {
+    const record = await this.readTelemetryStatsRecord()
+    return {
+      searchCount: record.searchCount,
+      bufferSize: this.nexusTelemetryBuffer.length,
+      lastUploadTime: record.lastUploadTime,
+      totalUploads: record.totalUploads,
+      failedUploads: record.failedUploads,
+      lastFailureAt: record.lastFailureAt,
+      lastFailureMessage: record.lastFailureMessage,
+      apiBase: resolveTelemetryApiBase(),
+      isEnabled: this.config.enabled,
+      isAnonymous: this.config.anonymous
+    }
+  }
+
   getTelemetryStats(): {
     searchCount: number
     bufferSize: number
@@ -567,7 +852,7 @@ export class SentryServiceModule extends BaseModule {
       failedUploads: this.failedNexusUploads,
       apiBase: resolveTelemetryApiBase(),
       isEnabled: this.config.enabled,
-      isAnonymous: this.config.anonymous,
+      isAnonymous: this.config.anonymous
     }
   }
 
@@ -577,8 +862,13 @@ export class SentryServiceModule extends BaseModule {
   queueNexusTelemetry(event: Omit<NexusTelemetryEvent, 'isAnonymous'>): void {
     if (!this.config.enabled) return
 
+    if (this.telemetryCooldownUntil && Date.now() < this.telemetryCooldownUntil) {
+      return
+    }
+
     if (event.eventType === 'search') {
       this.searchCount++
+      this.schedulePersistTelemetryStats()
     }
 
     const isAnonymous = this.config.anonymous
@@ -588,7 +878,7 @@ export class SentryServiceModule extends BaseModule {
       deviceFingerprint: isAnonymous ? undefined : this.deviceFingerprint || undefined,
       platform: process.platform,
       version: getAppVersionSafe(),
-      isAnonymous,
+      isAnonymous
     }
 
     this.nexusTelemetryBuffer.push(telemetryEvent)
@@ -610,6 +900,7 @@ export class SentryServiceModule extends BaseModule {
    */
   private async flushNexusTelemetry(): Promise<void> {
     if (this.nexusTelemetryBuffer.length === 0) return
+    if (this.telemetryCooldownUntil && Date.now() < this.telemetryCooldownUntil) return
 
     const events = [...this.nexusTelemetryBuffer]
     this.nexusTelemetryBuffer = []
@@ -618,43 +909,64 @@ export class SentryServiceModule extends BaseModule {
     try {
       const apiBase = resolveTelemetryApiBase()
       url = `${apiBase}/api/telemetry/batch`
-      
+
       sentryLog.debug('Uploading telemetry batch', { meta: { count: events.length, url } })
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ events }),
+        body: JSON.stringify({ events })
       })
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error')
+        if (response.status === 403) {
+          this.telemetryCooldownUntil = Date.now() + 60 * 60_000
+          sentryLog.warn('Telemetry blocked by server', { meta: { status: response.status, url } })
+          this.recordTelemetryFailure('Telemetry blocked by server', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorText,
+            url
+          })
+          return
+        }
+        if (response.status === 429) {
+          this.telemetryCooldownUntil = Date.now() + 5 * 60_000
+        }
         this.failedNexusUploads++
-        sentryLog.error('Telemetry upload failed', { 
-          meta: { status: response.status, statusText: response.statusText, error: errorText } 
+        this.schedulePersistTelemetryStats()
+        sentryLog.error('Telemetry upload failed', {
+          meta: { status: response.status, statusText: response.statusText, error: errorText }
         })
         this.recordTelemetryFailure('Telemetry upload failed', {
           status: response.status,
           statusText: response.statusText,
           error: errorText,
           url,
-          count: events.length,
+          count: events.length
         })
-        this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
+        this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(
+          0,
+          100
+        )
       } else {
+        this.telemetryCooldownUntil = null
         this.totalNexusUploads++
         this.lastNexusUploadTime = Date.now()
+        this.schedulePersistTelemetryStats()
         sentryLog.debug('Telemetry batch uploaded', { meta: { count: events.length } })
       }
     } catch (error) {
       this.failedNexusUploads++
-      sentryLog.error('Telemetry upload exception', { 
-        meta: { error: error instanceof Error ? error.message : String(error) } 
+      this.schedulePersistTelemetryStats()
+      sentryLog.error('Telemetry upload exception', {
+        meta: { error: error instanceof Error ? error.message : String(error) }
       })
       this.recordTelemetryFailure('Telemetry upload exception', {
         error: error instanceof Error ? error.message : String(error),
         url,
-        count: events.length,
+        count: events.length
       })
       this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
     }
@@ -664,9 +976,12 @@ export class SentryServiceModule extends BaseModule {
     const now = Date.now()
     const throttleWindow = 10 * 60 * 1000
     if (this.lastTelemetryFailureAt && now - this.lastTelemetryFailureAt < throttleWindow) {
-      if (this.lastTelemetryFailureMessage === message)
-        return
+      if (this.lastTelemetryFailureMessage === message) return
     }
+
+    this.lastTelemetryFailureAt = now
+    this.lastTelemetryFailureMessage = message
+    this.schedulePersistTelemetryStats()
 
     try {
       getAnalyticsMessageStore().add({
@@ -674,12 +989,9 @@ export class SentryServiceModule extends BaseModule {
         severity: 'warn',
         title: 'Telemetry sync failed',
         message,
-        meta,
+        meta
       })
-      this.lastTelemetryFailureAt = now
-      this.lastTelemetryFailureMessage = message
-    }
-    catch {
+    } catch {
       // ignore message store failures
     }
   }
@@ -687,13 +999,13 @@ export class SentryServiceModule extends BaseModule {
   /**
    * Stop Nexus telemetry flush timer
    */
-  stopNexusTelemetryTimer(): void {
+  async stopNexusTelemetryTimer(): Promise<void> {
     if (this.nexusFlushTimer) {
       clearInterval(this.nexusFlushTimer)
       this.nexusFlushTimer = null
     }
     // Flush remaining events
-    this.flushNexusTelemetry()
+    await this.flushNexusTelemetry()
   }
 }
 

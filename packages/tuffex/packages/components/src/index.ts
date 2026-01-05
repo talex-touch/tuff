@@ -3,6 +3,7 @@ import * as components from './components'
 import '../style/index.scss'
 
 export * from './components'
+export * from './utils'
 
 function install(app: App) {
   for (const n in components) {

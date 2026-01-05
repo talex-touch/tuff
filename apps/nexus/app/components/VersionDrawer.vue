@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-touch/utils/plugin/providers'
 import { computed, ref, watch } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import Drawer from '~/components/ui/Drawer.vue'
+import Button from '~/components/ui/Button.vue'
+import FlatButton from '~/components/ui/FlatButton.vue'
+import Input from '~/components/ui/Input.vue'
 
 interface Props {
   isOpen: boolean
@@ -26,7 +29,6 @@ export interface VersionFormData {
 }
 
 const { t } = useI18n()
-const drawerRef = ref<HTMLElement | null>(null)
 
 const formData = ref<VersionFormData>({
   version: '',
@@ -54,10 +56,6 @@ watch(() => props.isOpen, (isOpen) => {
   }
 })
 
-onClickOutside(drawerRef, () => {
-  if (props.isOpen)
-    emit('close')
-})
 
 // Workflow Steps
 type Step = 'form' | 'warning' | 'license'
@@ -143,229 +141,166 @@ const channelVisibility = computed(() =>
 </script>
 
 <template>
-  <Teleport to="body">
-    <!-- Backdrop -->
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="isOpen"
-        class="fixed inset-0 z-50 bg-black/20 backdrop-blur-sm dark:bg-black/40"
-      />
-    </Transition>
+  <Drawer
+    :visible="isOpen"
+    width="520px"
+    @update:visible="(v) => {
+      if (!v)
+        emit('close')
+    }"
+    @close="emit('close')"
+  >
+    <div class="flex h-full flex-col">
+      <div class="flex items-center justify-between border-b border-black/5 pb-4 dark:border-white/5">
+        <div>
+          <h2 class="text-lg font-medium text-black dark:text-white">
+            {{ t('dashboard.sections.plugins.publishVersion') }}
+          </h2>
+          <p class="text-xs text-black/50 dark:text-white/50">
+            {{ pluginName }}
+          </p>
+        </div>
+        <FlatButton @click="emit('close')">
+          <span class="i-carbon-close text-lg" />
+        </FlatButton>
+      </div>
 
-    <!-- Drawer -->
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
-      enter-from-class="translate-x-full"
-      enter-to-class="translate-x-0"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="translate-x-0"
-      leave-to-class="translate-x-full"
-    >
-      <div
-        v-if="isOpen"
-        ref="drawerRef"
-        class="fixed right-0 top-0 z-50 h-full w-full max-w-md border-l border-black/5 bg-white shadow-2xl dark:border-white/10 dark:bg-[#111]"
-      >
-        <div class="flex h-full flex-col">
-          <!-- Header -->
-          <div class="flex items-center justify-between border-b border-black/5 p-6 dark:border-white/5">
-            <div>
-              <h2 class="text-lg font-medium text-black dark:text-white">
-                {{ t('dashboard.sections.plugins.publishVersion') }}
-              </h2>
-              <p class="text-xs text-black/50 dark:text-white/50">
-                {{ pluginName }}
-              </p>
-            </div>
-            <button
-              class="flex size-8 items-center justify-center rounded-full text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
-              @click="emit('close')"
-            >
-              <span class="i-carbon-close text-lg" />
-            </button>
+      <div class="flex-1 overflow-y-auto pt-4">
+        <form v-if="step === 'form'" class="space-y-6" @submit.prevent="onFormSubmit">
+          <div class="flex flex-col gap-2">
+            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.plugins.versionForm.version') }}
+            </label>
+            <Input
+              v-model="formData.version"
+              placeholder="1.0.0"
+              pattern="^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+            />
           </div>
 
-          <!-- Content -->
-          <div class="flex-1 overflow-y-auto p-6">
-            <!-- Step 1: Form -->
-            <form v-if="step === 'form'" @submit.prevent="onFormSubmit" class="flex flex-col gap-6">
-              <!-- Version -->
-              <div class="flex flex-col gap-2">
-                <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                  {{ t('dashboard.sections.plugins.versionForm.version') }}
-                </label>
-                <input
-                  v-model="formData.version"
-                  type="text"
-                  placeholder="1.0.0"
-                  required
-                  pattern="^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
-                  class="w-full border-b border-black/10 bg-transparent py-2 text-sm text-black outline-none transition focus:border-black dark:border-white/10 dark:text-white dark:focus:border-white"
-                >
-              </div>
+          <div class="flex flex-col gap-2">
+            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.plugins.versionForm.channel') }}
+            </label>
+            <div class="relative">
+              <select
+                v-model="formData.channel"
+                class="w-full appearance-none border-b border-black/10 bg-transparent py-2 text-sm text-black outline-none transition focus:border-black dark:border-white/10 dark:text-white dark:focus:border-white"
+              >
+                <option value="RELEASE">RELEASE</option>
+                <option value="BETA">BETA</option>
+                <option value="SNAPSHOT">SNAPSHOT</option>
+              </select>
+              <span class="i-carbon-chevron-down absolute right-0 top-1/2 -translate-y-1/2 text-black/40 dark:text-white/40" />
+            </div>
+            <div class="mt-2 rounded bg-black/5 p-3 text-xs dark:bg-white/5">
+              <p class="mb-1 text-black/70 dark:text-white/70">{{ channelDescription }}</p>
+              <p class="font-medium text-black dark:text-white">{{ channelVisibility }}</p>
+            </div>
+          </div>
 
-              <!-- Channel -->
-              <div class="flex flex-col gap-2">
-                <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                  {{ t('dashboard.sections.plugins.versionForm.channel') }}
-                </label>
-                <div class="relative">
-                  <select
-                    v-model="formData.channel"
-                    class="w-full appearance-none border-b border-black/10 bg-transparent py-2 text-sm text-black outline-none transition focus:border-black dark:border-white/10 dark:text-white dark:focus:border-white"
-                  >
-                    <option value="RELEASE">RELEASE</option>
-                    <option value="BETA">BETA</option>
-                    <option value="SNAPSHOT">SNAPSHOT</option>
-                  </select>
-                  <span class="i-carbon-chevron-down absolute right-0 top-1/2 -translate-y-1/2 text-black/40 dark:text-white/40" />
-                </div>
-                <!-- Channel Visibility Prompt -->
-                <div class="mt-2 rounded bg-black/5 p-3 text-xs dark:bg-white/5">
-                  <p class="mb-1 text-black/70 dark:text-white/70">{{ channelDescription }}</p>
-                  <p class="font-medium text-black dark:text-white">{{ channelVisibility }}</p>
-                </div>
-              </div>
-
-              <!-- Package -->
-              <div class="flex flex-col gap-2">
-                <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                  {{ t('dashboard.sections.plugins.versionForm.package') }}
-                </label>
-                <div class="relative">
-                  <input
-                    type="file"
-                    accept=".tpex"
-                    required
-                    class="absolute inset-0 cursor-pointer opacity-0"
-                    @change="handlePackageInput"
-                  >
-                  <div class="flex items-center gap-2 border-b border-black/10 py-2 transition dark:border-white/10">
-                    <span v-if="packageLoading" class="i-carbon-circle-dash animate-spin text-black/40 dark:text-white/40" />
-                    <span v-else class="i-carbon-document-add text-black/40 dark:text-white/40" />
-                    <span class="text-sm text-black dark:text-white">
-                      {{ formData.packageFile ? formData.packageFile.name : t('dashboard.sections.plugins.packageAwaiting') }}
-                    </span>
-                  </div>
-                </div>
-                <p v-if="packageError" class="text-xs text-red-500">{{ packageError }}</p>
-
-                <!-- Manifest Preview -->
-                <div v-if="manifestPreview" class="mt-2 rounded-lg bg-black/5 p-3 dark:bg-white/5">
-                  <p class="mb-2 text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                    {{ t('dashboard.sections.plugins.manifestPreview') }}
-                  </p>
-                  <div class="space-y-1 text-xs text-black/70 dark:text-white/70">
-                    <p v-if="manifestPreview.name"><span class="font-medium">Name:</span> {{ manifestPreview.name }}</p>
-                    <p v-if="manifestPreview.version"><span class="font-medium">Version:</span> {{ manifestPreview.version }}</p>
-                    <p v-if="manifestPreview.channel"><span class="font-medium">Channel:</span> {{ manifestPreview.channel }}</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Changelog -->
-              <div class="flex flex-col gap-2">
-                <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                  {{ t('dashboard.sections.plugins.versionForm.changelog') }}
-                </label>
-                <textarea
-                  v-model="formData.changelog"
-                  rows="6"
-                  required
-                  class="w-full resize-none rounded border border-black/10 bg-transparent p-3 text-sm text-black outline-none transition focus:border-black dark:border-white/10 dark:text-white dark:focus:border-white"
-                ></textarea>
-              </div>
-
-              <!-- Submit Button -->
-              <div class="mt-auto pt-6">
-                <button
-                  type="submit"
-                  :disabled="loading"
-                  class="w-full rounded bg-black py-3 text-sm font-medium text-white transition hover:bg-black/90 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/90"
-                >
-                  <span v-if="loading" class="i-carbon-circle-dash animate-spin mr-2" />
-                  {{ t('dashboard.sections.plugins.versionForm.submit') }}
-                </button>
-                <p v-if="error" class="mt-2 text-center text-xs text-red-500">{{ error }}</p>
-              </div>
-            </form>
-
-            <!-- Step 2: Warning -->
-            <div v-else-if="step === 'warning'" class="flex h-full flex-col justify-center text-center">
-              <div class="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400">
-                <span class="i-carbon-warning-alt text-3xl" />
-              </div>
-              <h3 class="mb-2 text-lg font-medium text-black dark:text-white">
-                {{ t('dashboard.sections.plugins.warnings.immutable.title') }}
-              </h3>
-              <p class="mb-8 text-sm text-black/60 dark:text-white/60">
-                {{ t('dashboard.sections.plugins.warnings.immutable.message') }}
-              </p>
-              <div class="flex flex-col gap-3">
-                <button
-                  class="w-full rounded bg-black py-3 text-sm font-medium text-white transition hover:bg-black/90 dark:bg-white dark:text-black"
-                  @click="onWarningConfirm"
-                >
-                  {{ t('dashboard.sections.plugins.warnings.immutable.understand') }}
-                </button>
-                <button
-                  class="w-full py-2 text-sm text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
-                  @click="step = 'form'"
-                >
-                  {{ t('dashboard.sections.plugins.warnings.immutable.cancel') }}
-                </button>
+          <div class="flex flex-col gap-2">
+            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.plugins.versionForm.package') }}
+            </label>
+            <div class="relative">
+              <input
+                type="file"
+                accept=".tpex"
+                required
+                class="absolute inset-0 cursor-pointer opacity-0"
+                @change="handlePackageInput"
+              >
+              <div class="flex items-center gap-2 border-b border-black/10 py-2 transition dark:border-white/10">
+                <span v-if="packageLoading" class="i-carbon-circle-dash animate-spin text-black/40 dark:text-white/40" />
+                <span v-else class="i-carbon-document-add text-black/40 dark:text-white/40" />
+                <span class="text-sm text-black dark:text-white">
+                  {{ formData.packageFile ? formData.packageFile.name : t('dashboard.sections.plugins.packageAwaiting') }}
+                </span>
               </div>
             </div>
+            <p v-if="packageError" class="text-xs text-red-500">{{ packageError }}</p>
 
-            <!-- Step 3: License -->
-            <div v-else-if="step === 'license'" class="flex h-full flex-col">
-              <h3 class="mb-4 text-lg font-medium text-black dark:text-white">
-                {{ t('dashboard.sections.plugins.license.title') }}
-              </h3>
-              <div class="flex-1 overflow-y-auto rounded border border-black/10 bg-black/5 p-4 text-sm leading-relaxed text-black/80 dark:border-white/10 dark:bg-white/5 dark:text-white/80">
-                <div class="prose prose-sm dark:prose-invert">
-                  <ContentRendererMarkdown :value="t('dashboard.sections.plugins.license.agreement')" />
-                </div>
+            <div v-if="manifestPreview" class="mt-2 rounded-lg bg-black/5 p-3 dark:bg-white/5">
+              <p class="mb-2 text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
+                {{ t('dashboard.sections.plugins.manifestPreview') }}
+              </p>
+              <div class="space-y-1 text-xs text-black/70 dark:text-white/70">
+                <p v-if="manifestPreview.name"><span class="font-medium">Name:</span> {{ manifestPreview.name }}</p>
+                <p v-if="manifestPreview.version"><span class="font-medium">Version:</span> {{ manifestPreview.version }}</p>
+                <p v-if="manifestPreview.channel"><span class="font-medium">Channel:</span> {{ manifestPreview.channel }}</p>
               </div>
-              <div class="mt-6 flex flex-col gap-4">
-                <label class="flex items-center gap-3 cursor-pointer">
-                  <input
-                    v-model="licenseAgreed"
-                    type="checkbox"
-                    class="size-4 rounded border-black/20 text-black focus:ring-black dark:border-white/20 dark:bg-white/10 dark:focus:ring-white"
-                  >
-                  <span class="text-sm text-black/80 dark:text-white/80">
-                    {{ t('dashboard.sections.plugins.license.confirm') }}
-                  </span>
-                </label>
-                <div class="flex gap-3">
-                  <button
-                    class="flex-1 rounded border border-black/10 py-3 text-sm font-medium text-black transition hover:bg-black/5 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
-                    @click="step = 'form'"
-                  >
-                    {{ t('dashboard.sections.plugins.license.cancel') }}
-                  </button>
-                  <button
-                    class="flex-1 rounded bg-black py-3 text-sm font-medium text-white transition hover:bg-black/90 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/90"
-                    :disabled="!licenseAgreed || loading"
-                    @click="onLicenseSubmit"
-                  >
-                    <span v-if="loading" class="i-carbon-circle-dash animate-spin mr-2" />
-                    {{ t('dashboard.sections.plugins.license.submit') }}
-                  </button>
-                </div>
-              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.plugins.versionForm.changelog') }}
+            </label>
+            <Input v-model="formData.changelog" type="textarea" :rows="6" />
+          </div>
+
+          <div class="pt-2">
+            <Button block :disabled="loading" native-type="submit">
+              <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
+              {{ t('dashboard.sections.plugins.versionForm.submit') }}
+            </Button>
+            <p v-if="error" class="mt-2 text-center text-xs text-red-500">{{ error }}</p>
+          </div>
+        </form>
+
+        <div v-else-if="step === 'warning'" class="flex h-full flex-col justify-center text-center">
+          <div class="mx-auto mb-4 flex size-16 items-center justify-center rounded-full bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400">
+            <span class="i-carbon-warning-alt text-3xl" />
+          </div>
+          <h3 class="mb-2 text-lg font-medium text-black dark:text-white">
+            {{ t('dashboard.sections.plugins.warnings.immutable.title') }}
+          </h3>
+          <p class="mb-8 text-sm text-black/60 dark:text-white/60">
+            {{ t('dashboard.sections.plugins.warnings.immutable.message') }}
+          </p>
+          <div class="flex flex-col gap-3">
+            <Button block @click="onWarningConfirm">
+              {{ t('dashboard.sections.plugins.warnings.immutable.understand') }}
+            </Button>
+            <FlatButton @click="step = 'form'">
+              {{ t('dashboard.sections.plugins.warnings.immutable.cancel') }}
+            </FlatButton>
+          </div>
+        </div>
+
+        <div v-else-if="step === 'license'" class="flex h-full flex-col">
+          <h3 class="mb-4 text-lg font-medium text-black dark:text-white">
+            {{ t('dashboard.sections.plugins.license.title') }}
+          </h3>
+          <div class="flex-1 overflow-y-auto rounded border border-black/10 bg-black/5 p-4 text-sm leading-relaxed text-black/80 dark:border-white/10 dark:bg-white/5 dark:text-white/80">
+            <div class="prose prose-sm dark:prose-invert">
+              <ContentRendererMarkdown :value="t('dashboard.sections.plugins.license.agreement')" />
+            </div>
+          </div>
+          <div class="mt-6 flex flex-col gap-4">
+            <label class="flex items-center gap-3">
+              <Switch v-model="licenseAgreed" />
+              <span class="text-sm text-black/80 dark:text-white/80">
+                {{ t('dashboard.sections.plugins.license.confirm') }}
+              </span>
+            </label>
+            <div class="flex gap-3">
+              <FlatButton class="flex-1" @click="step = 'form'">
+                {{ t('dashboard.sections.plugins.license.cancel') }}
+              </FlatButton>
+              <Button
+                class="flex-1"
+                :disabled="!licenseAgreed || loading"
+                @click="onLicenseSubmit"
+              >
+                <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
+                {{ t('dashboard.sections.plugins.license.submit') }}
+              </Button>
             </div>
           </div>
         </div>
       </div>
-    </Transition>
-  </Teleport>
+    </div>
+  </Drawer>
 </template>

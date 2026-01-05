@@ -64,6 +64,9 @@ catalogs:
     ogl:
       specifier: ^1.0.11
       version: 1.0.11
+    sass:
+      specifier: ^1.89.2
+      version: 1.94.0
     simplex-noise:
       specifier: ^4.0.3
       version: 4.0.3
@@ -628,6 +631,9 @@ importers:
       react-dom:
         specifier: ^19.2.1
         version: 19.2.1(react@19.2.1)
+      sass:
+        specifier: 'catalog:'
+        version: 1.94.0
       typescript:
         specifier: catalog:dev
         version: 5.9.3

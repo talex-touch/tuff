@@ -1,4 +1,5 @@
 import { recordTelemetryEvent } from '../../utils/telemetryStore'
+import { guardTelemetryIp } from '../../utils/ipSecurityStore'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -8,7 +9,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const events = body.events as Array<{
-    eventType: 'search' | 'visit' | 'error' | 'feature_use'
+    eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
     userId?: string
     deviceFingerprint?: string
     platform?: string
@@ -27,9 +28,11 @@ export default defineEventHandler(async (event) => {
   const maxBatchSize = 100
   const eventsToProcess = events.slice(0, maxBatchSize)
 
+  await guardTelemetryIp(event, { weight: eventsToProcess.length, action: 'telemetry.batch' })
+
   // Process all events (fire and forget for performance)
   const promises = eventsToProcess.map(async (e) => {
-    if (!e.eventType || !['search', 'visit', 'error', 'feature_use'].includes(e.eventType)) {
+    if (!e.eventType || !['search', 'visit', 'error', 'feature_use', 'performance'].includes(e.eventType)) {
       return // Skip invalid events
     }
 

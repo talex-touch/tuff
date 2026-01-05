@@ -7,6 +7,11 @@ import type {
 import { computed, reactive, ref } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'
+import Modal from '~/components/ui/Modal.vue'
+import Button from '~/components/ui/Button.vue'
+import FlatButton from '~/components/ui/FlatButton.vue'
+import Tag from '~/components/ui/Tag.vue'
+import StatusBadge from '~/components/ui/StatusBadge.vue'
 import { useMarketCategories } from '~/composables/useMarketCategories'
 import { useMarketFormatters } from '~/composables/useMarketFormatters'
 
@@ -68,6 +73,11 @@ function closePluginDetail() {
   selectedSlug.value = null
   selectedPlugin.value = null
   detailError.value = null
+}
+
+function openExternal(url: string) {
+  if (import.meta.client)
+    window.open(url, '_blank', 'noopener')
 }
 
 const filteredPlugins = computed(() => {
@@ -165,146 +175,134 @@ useSeoMeta({
         />
       </div>
     </div>
-    <div
-      v-if="selectedSlug"
-      class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-10"
-      @click.self="closePluginDetail"
+    <Modal
+      :model-value="Boolean(selectedSlug)"
+      width="860px"
+      @update:model-value="(v) => {
+        if (!v)
+          closePluginDetail()
+      }"
+      @close="closePluginDetail"
     >
-      <div class="relative max-w-3xl w-full border border-primary/10 rounded-3xl bg-white/95 p-6 shadow-2xl backdrop-blur dark:border-light/15 dark:bg-dark/90">
-        <button
-          type="button"
-          class="absolute right-4 top-4 h-9 w-9 inline-flex items-center justify-center border border-primary/20 rounded-full bg-white text-black transition dark:border-light/20 hover:border-primary/40 dark:bg-dark/70 hover:bg-primary/10 dark:text-light"
-          @click="closePluginDetail"
-        >
-          <span class="i-carbon-close text-lg" aria-hidden="true" />
-        </button>
-        <div v-if="detailPending" class="flex items-center justify-center gap-3 py-16 text-sm text-black/70 dark:text-light/70">
-          <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
-          <span>{{ t('market.detail.loading') }}</span>
+      <template #header>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-semibold text-black dark:text-light">
+              {{ t('market.detail.title', 'Plugin Details') }}
+            </h2>
+            <p class="text-xs text-black/50 dark:text-light/60">
+              {{ selectedPlugin?.name || '' }}
+            </p>
+          </div>
+          <FlatButton @click="closePluginDetail">
+            <span class="i-carbon-close text-lg" aria-hidden="true" />
+          </FlatButton>
         </div>
-        <div v-else-if="detailError" class="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-          {{ detailError }}
-        </div>
-        <div v-else-if="selectedPlugin" class="space-y-6">
-          <header class="space-y-3">
-            <div class="flex flex-wrap items-center gap-3">
-              <h2 class="text-2xl text-black font-semibold dark:text-light">
-                {{ selectedPlugin.name }}
-              </h2>
-              <span
-                class="inline-flex items-center gap-1 border border-primary/20 rounded-full px-3 py-1 text-[11px] text-black font-semibold tracking-[0.35em] uppercase dark:border-light/20 dark:text-light"
-              >
-                <span class="i-carbon-tag text-sm" aria-hidden="true" />
-                {{ resolveCategoryLabel(selectedPlugin.category) }}
-              </span>
-              <span
-                v-if="selectedPlugin.isOfficial"
-                class="inline-flex items-center gap-1 border border-primary/20 rounded-full px-3 py-1 text-[11px] text-black font-semibold tracking-[0.35em] uppercase dark:border-light/20 dark:text-light"
-              >
-                <span class="i-carbon-certificate text-sm" aria-hidden="true" />
-                {{ t('market.badges.official') }}
-              </span>
-            </div>
-            <p class="text-sm text-black/70 dark:text-light/80">
-              {{ selectedPlugin.summary }}
-            </p>
-            <p
-              v-if="selectedPlugin.author?.name"
-              class="text-xs text-black/50 dark:text-light/60"
-            >
-              {{ t('market.detail.author', { name: selectedPlugin.author.name }) }}
-            </p>
-            <div class="flex flex-wrap gap-2 text-xs text-black/60 dark:text-light/60">
-              <span class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-1 dark:bg-light/10 dark:text-light/80">
-                <span class="i-carbon-user-multiple text-sm" aria-hidden="true" />
-                {{ t('dashboard.sections.plugins.stats.installs', { count: formatInstalls(selectedPlugin.installs) }) }}
-              </span>
-              <span v-if="selectedPlugin.latestVersion" class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-1 dark:bg-light/10 dark:text-light/80">
-                <span class="i-carbon-cube text-sm" aria-hidden="true" />
-                v{{ selectedPlugin.latestVersion.version }}
-              </span>
-              <span v-if="selectedPlugin.latestVersion" class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-1 dark:bg-light/10 dark:text-light/80">
-                <span class="i-carbon-time text-sm" aria-hidden="true" />
-                {{ formatDate(selectedPlugin.latestVersion.createdAt) }}
-              </span>
-            </div>
-            <div
-              v-if="selectedPlugin.badges?.length"
-              class="flex flex-wrap gap-2"
-            >
-              <span
-                v-for="badge in selectedPlugin.badges"
-                :key="badge"
-                class="inline-flex items-center gap-1 border border-primary/15 rounded-full px-2 py-0.5 text-[10px] text-black/60 tracking-[0.35em] uppercase dark:border-light/20 dark:text-light/70"
-              >
-                <span class="i-carbon-tag text-xs" aria-hidden="true" />
-                {{ badge }}
-              </span>
-            </div>
-          </header>
-
-          <section>
-            <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
-              {{ t('market.detail.readme') }}
-            </h3>
-            <div v-if="selectedPlugin.readmeMarkdown" class="mt-3 max-w-none prose prose-sm dark:prose-invert">
-              <ContentRendererMarkdown :value="selectedPlugin.readmeMarkdown" />
-            </div>
-            <p v-else class="mt-3 text-sm text-black/60 dark:text-light/60">
-              {{ t('market.detail.noReadme') }}
-            </p>
-          </section>
-
-          <section>
-            <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
-              {{ t('market.detail.versions') }}
-            </h3>
-            <div
-              v-if="selectedPlugin.versions?.length"
-              class="mt-3 space-y-3"
-            >
-              <article
-                v-for="version in selectedPlugin.versions"
-                :key="version.id"
-                class="border border-primary/10 rounded-2xl bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80"
-              >
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <div class="flex items-center gap-2 text-black font-semibold dark:text-light">
-                    <span>v{{ version.version }}</span>
-                    <span class="rounded-full bg-dark/10 px-2 py-0.5 text-[11px] text-black tracking-wide uppercase dark:bg-light/10 dark:text-light">
-                      {{ version.channel }}
-                    </span>
-                  </div>
-                  <span class="text-xs text-black/50 dark:text-light/60">
-                    {{ formatDate(version.createdAt) }} · {{ formatPackageSize(version.packageSize) }}
-                  </span>
-                </div>
-                <p v-if="version.changelog" class="mt-2 text-sm text-black/70 leading-relaxed dark:text-light/70">
-                  {{ version.changelog }}
-                </p>
-                <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                  <a
-                    :href="version.packageUrl"
-                    target="_blank"
-                    rel="noopener"
-                    class="inline-flex items-center gap-1 border border-primary/20 rounded-full px-3 py-1 text-xs text-black font-semibold tracking-wide uppercase transition dark:border-light/20 hover:border-primary/30 hover:bg-dark/10 dark:text-light dark:hover:bg-light/10"
-                  >
-                    <span class="i-carbon-download text-sm" aria-hidden="true" />
-                    {{ t('market.detail.download') }}
-                  </a>
-                  <span class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-0.5 text-[11px] text-black/60 dark:bg-light/10 dark:text-light/70">
-                    <span class="i-carbon-hash text-xs" aria-hidden="true" />
-                    {{ version.signature.slice(0, 12) }}…
-                  </span>
-                </div>
-              </article>
-            </div>
-            <p v-else class="mt-3 text-sm text-black/60 dark:text-light/60">
-              {{ t('market.detail.noVersions') }}
-            </p>
-          </section>
-        </div>
+      </template>
+      <div v-if="detailPending" class="flex items-center justify-center gap-3 py-16 text-sm text-black/70 dark:text-light/70">
+        <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
+        <span>{{ t('market.detail.loading') }}</span>
       </div>
-    </div>
+      <div v-else-if="detailError" class="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+        {{ detailError }}
+      </div>
+      <div v-else-if="selectedPlugin" class="space-y-6">
+        <header class="space-y-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-2xl text-black font-semibold dark:text-light">
+              {{ selectedPlugin.name }}
+            </h2>
+            <Tag :label="resolveCategoryLabel(selectedPlugin.category)" size="sm" icon="i-carbon-tag" />
+            <Tag
+              v-if="selectedPlugin.isOfficial"
+              :label="t('market.badges.official')"
+              size="sm"
+              icon="i-carbon-certificate"
+            />
+          </div>
+          <p class="text-sm text-black/70 dark:text-light/80">
+            {{ selectedPlugin.summary }}
+          </p>
+          <p
+            v-if="selectedPlugin.author?.name"
+            class="text-xs text-black/50 dark:text-light/60"
+          >
+            {{ t('market.detail.author', { name: selectedPlugin.author.name }) }}
+          </p>
+          <div class="flex flex-wrap gap-2 text-xs text-black/60 dark:text-light/60">
+            <Tag :label="t('dashboard.sections.plugins.stats.installs', { count: formatInstalls(selectedPlugin.installs) })" size="sm" icon="i-carbon-user-multiple" />
+            <Tag
+              v-if="selectedPlugin.latestVersion"
+              :label="`v${selectedPlugin.latestVersion.version}`"
+              size="sm"
+              icon="i-carbon-cube"
+            />
+            <Tag
+              v-if="selectedPlugin.latestVersion"
+              :label="formatDate(selectedPlugin.latestVersion.createdAt)"
+              size="sm"
+              icon="i-carbon-time"
+            />
+          </div>
+          <div
+            v-if="selectedPlugin.badges?.length"
+            class="flex flex-wrap gap-2"
+          >
+            <Tag v-for="badge in selectedPlugin.badges" :key="badge" :label="badge" size="sm" icon="i-carbon-tag" />
+          </div>
+        </header>
+
+        <section>
+          <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
+            {{ t('market.detail.readme') }}
+          </h3>
+          <div v-if="selectedPlugin.readmeMarkdown" class="mt-3 max-w-none prose prose-sm dark:prose-invert">
+            <ContentRendererMarkdown :value="selectedPlugin.readmeMarkdown" />
+          </div>
+          <p v-else class="mt-3 text-sm text-black/60 dark:text-light/60">
+            {{ t('market.detail.noReadme') }}
+          </p>
+        </section>
+
+        <section>
+          <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
+            {{ t('market.detail.versions') }}
+          </h3>
+          <div
+            v-if="selectedPlugin.versions?.length"
+            class="mt-3 space-y-3"
+          >
+            <article
+              v-for="version in selectedPlugin.versions"
+              :key="version.id"
+              class="border border-primary/10 rounded-2xl bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2 text-black font-semibold dark:text-light">
+                  <span>v{{ version.version }}</span>
+                  <StatusBadge :text="version.channel" status="info" size="sm" />
+                </div>
+                <span class="text-xs text-black/50 dark:text-light/60">
+                  {{ formatDate(version.createdAt) }} · {{ formatPackageSize(version.packageSize) }}
+                </span>
+              </div>
+              <p v-if="version.changelog" class="mt-2 text-sm text-black/70 leading-relaxed dark:text-light/70">
+                {{ version.changelog }}
+              </p>
+              <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <Button size="small" @click="openExternal(version.packageUrl)">
+                  <span class="i-carbon-download text-sm" aria-hidden="true" />
+                  {{ t('market.detail.download') }}
+                </Button>
+                <Tag :label="`${version.signature.slice(0, 12)}…`" size="sm" icon="i-carbon-hash" />
+              </div>
+            </article>
+          </div>
+          <p v-else class="mt-3 text-sm text-black/60 dark:text-light/60">
+            {{ t('market.detail.noVersions') }}
+          </p>
+        </section>
+      </div>
+    </Modal>
   </section>
 </template>

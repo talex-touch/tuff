@@ -30,7 +30,7 @@ pnpm add @talex-touch/tuffex
 ```typescript
 import { createApp } from 'vue'
 import TuffUI from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/dist/style.css'
+import '@talex-touch/tuffex/style.css'
 
 const app = createApp(App)
 app.use(TuffUI)
@@ -42,7 +42,7 @@ app.mount('#app')
 ```typescript
 import { createApp } from 'vue'
 import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/dist/style.css'
+import '@talex-touch/tuffex/style.css'
 
 const app = createApp(App)
 app.use(TuffButton)

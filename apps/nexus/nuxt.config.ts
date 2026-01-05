@@ -1,4 +1,6 @@
 import process from 'node:process'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
@@ -11,6 +13,11 @@ loadEnv({ path: '.env.local', override: true })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}.local`, override: true })
 
 const isDev = process.env.NODE_ENV !== 'production'
+const currentDir = dirname(fileURLToPath(import.meta.url))
+const workspaceRoot = resolve(currentDir, '../..')
+const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
+const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
+const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 
 export default defineNuxtConfig({
   modules: [
@@ -65,6 +72,10 @@ export default defineNuxtConfig({
 
   debug: false,
 
+  build: {
+    transpile: ['@talex-touch/tuffex'],
+  },
+
   devtools: {
     enabled: false,
   },
@@ -106,9 +117,31 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-08-14',
 
   vite: {
+    resolve: {
+      alias: [
+        { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
+        { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
+        { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
+      ],
+    },
     server: {
+      fs: {
+        allow: [workspaceRoot],
+      },
       hmr: {
         overlay: false,
+      },
+    },
+  },
+
+  typescript: {
+    tsConfig: {
+      compilerOptions: {
+        paths: {
+          '@talex-touch/tuffex': [tuffexSourceEntry],
+          '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
+          '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
+        },
       },
     },
   },

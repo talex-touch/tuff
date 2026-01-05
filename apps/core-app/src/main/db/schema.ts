@@ -644,6 +644,20 @@ export const analyticsReportQueue = sqliteTable(
   }),
 )
 
+export const telemetryUploadStats = sqliteTable(
+  'telemetry_upload_stats',
+  {
+    id: integer('id').primaryKey(),
+    searchCount: integer('search_count').notNull().default(0),
+    totalUploads: integer('total_uploads').notNull().default(0),
+    failedUploads: integer('failed_uploads').notNull().default(0),
+    lastUploadTime: integer('last_upload_time'),
+    lastFailureAt: integer('last_failure_at'),
+    lastFailureMessage: text('last_failure_message'),
+    updatedAt: integer('updated_at').notNull().default(0),
+  },
+)
+
 // =============================================================================
 // 12. 应用更新记录 (App Update Records)
 // =============================================================================

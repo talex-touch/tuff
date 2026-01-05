@@ -90,6 +90,16 @@ export function useAppLifecycle() {
         }
       })()
 
+      void (async () => {
+        try {
+          const { startRendererPerformanceTelemetry } = await import('~/modules/telemetry/performance')
+          await startRendererPerformanceTelemetry()
+        }
+        catch (error) {
+          console.warn('[useAppLifecycle] Failed to start performance telemetry', error)
+        }
+      })()
+
       preloadDebugStep('Running renderer warmup tasks', 0.05)
       await onReady()
 

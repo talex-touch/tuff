@@ -1,7 +1,8 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { createError } from 'h3'
+import { createError, getHeader } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { resolveRequestIp } from './ipSecurityStore'
 
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
@@ -26,6 +27,7 @@ async function ensureTelemetrySchema(db: D1Database) {
       platform TEXT,
       version TEXT,
       region TEXT,
+      ip TEXT,
       search_query TEXT,
       search_duration_ms INTEGER,
       search_result_count INTEGER,
@@ -48,6 +50,8 @@ async function ensureTelemetrySchema(db: D1Database) {
     );
   `).run()
 
+  await ensureTelemetryColumns(db)
+
   // Indexes for efficient queries
   await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_telemetry_created_at ON ${TELEMETRY_TABLE}(created_at);
@@ -57,6 +61,15 @@ async function ensureTelemetrySchema(db: D1Database) {
     CREATE INDEX IF NOT EXISTS idx_telemetry_event_type ON ${TELEMETRY_TABLE}(event_type);
   `).run()
 
+  try {
+    await db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_telemetry_ip_created_at ON ${TELEMETRY_TABLE}(ip, created_at);
+    `).run()
+  }
+  catch {
+    // ignore index creation failures for older schemas
+  }
+
   await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON ${DAILY_STATS_TABLE}(date);
   `).run()
@@ -64,9 +77,22 @@ async function ensureTelemetrySchema(db: D1Database) {
   telemetrySchemaInitialized = true
 }
 
+async function ensureTelemetryColumns(db: D1Database): Promise<void> {
+  try {
+    const { results } = await db.prepare(`PRAGMA table_info(${TELEMETRY_TABLE});`).all<{ name?: string }>()
+    const columns = new Set((results ?? []).map(item => item.name).filter(Boolean) as string[])
+    if (!columns.has('ip')) {
+      await db.prepare(`ALTER TABLE ${TELEMETRY_TABLE} ADD COLUMN ip TEXT;`).run()
+    }
+  }
+  catch {
+    // ignore schema evolution failures
+  }
+}
+
 export interface TelemetryEvent {
   id: string
-  eventType: 'search' | 'visit' | 'error' | 'feature_use'
+  eventType: 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
   userId?: string
   deviceFingerprint?: string
   platform?: string
@@ -112,14 +138,16 @@ export async function recordTelemetryEvent(
   const now = new Date().toISOString()
   const today = now.split('T')[0]
   const safeSearchQuery = undefined
+  const region = resolveRequestRegion(event) || telemetry.region
+  const ip = resolveRequestIp(event)
 
   // Insert telemetry event
   await db.prepare(`
     INSERT INTO ${TELEMETRY_TABLE} (
       id, event_type, user_id, device_fingerprint, platform, version,
-      region, search_query, search_duration_ms, search_result_count,
+      region, ip, search_query, search_duration_ms, search_result_count,
       provider_timings, input_types, metadata, is_anonymous, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15);
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16);
   `).bind(
     id,
     telemetry.eventType,
@@ -127,7 +155,8 @@ export async function recordTelemetryEvent(
     telemetry.deviceFingerprint || null,
     telemetry.platform || null,
     telemetry.version || null,
-    telemetry.region || null,
+    region || null,
+    ip || null,
     safeSearchQuery || null,
     telemetry.searchDurationMs || null,
     telemetry.searchResultCount || null,
@@ -149,8 +178,8 @@ export async function recordTelemetryEvent(
     if (telemetry.platform) {
       await incrementDailyStat(db, today, 'platform', telemetry.platform, 1)
     }
-    if (telemetry.region && !telemetry.isAnonymous) {
-      await incrementDailyStat(db, today, 'region', telemetry.region, 1)
+    if (region) {
+      await incrementDailyStat(db, today, 'region', region, 1)
     }
     if (telemetry.metadata && typeof telemetry.metadata === 'object') {
       const meta = telemetry.metadata as Record<string, unknown>
@@ -250,6 +279,65 @@ export async function recordTelemetryEvent(
       }
     }
   }
+
+  if (telemetry.eventType === 'performance') {
+    if (telemetry.metadata && typeof telemetry.metadata === 'object') {
+      const meta = telemetry.metadata as Record<string, unknown>
+      if (typeof meta.longTaskTotalMs === 'number') {
+        await incrementDailyStat(db, today, 'perf_longtask_total_ms', '', meta.longTaskTotalMs)
+      }
+      if (typeof meta.longTaskCount === 'number') {
+        await incrementDailyStat(db, today, 'perf_longtask_count', '', meta.longTaskCount)
+      }
+      if (typeof meta.longTaskMaxMs === 'number') {
+        await updateDailyStatMax(db, today, 'perf_longtask_max_ms', '', meta.longTaskMaxMs)
+      }
+      if (typeof meta.rafJankTotalMs === 'number') {
+        await incrementDailyStat(db, today, 'perf_raf_jank_total_ms', '', meta.rafJankTotalMs)
+      }
+      if (typeof meta.rafJankCount === 'number') {
+        await incrementDailyStat(db, today, 'perf_raf_jank_count', '', meta.rafJankCount)
+      }
+      if (typeof meta.rafJankMaxMs === 'number') {
+        await updateDailyStatMax(db, today, 'perf_raf_jank_max_ms', '', meta.rafJankMaxMs)
+      }
+      if (typeof meta.eventLoopDelayP95Ms === 'number') {
+        await incrementDailyStat(db, today, 'perf_event_loop_delay_p95_total_ms', '', meta.eventLoopDelayP95Ms)
+        await incrementDailyStat(db, today, 'perf_event_loop_delay_p95_count', '', 1)
+      }
+      if (typeof meta.eventLoopDelayMaxMs === 'number') {
+        await updateDailyStatMax(db, today, 'perf_event_loop_delay_max_ms', '', meta.eventLoopDelayMaxMs)
+      }
+      if (typeof meta.unresponsiveTotalMs === 'number') {
+        await incrementDailyStat(db, today, 'perf_unresponsive_total_ms', '', meta.unresponsiveTotalMs)
+      }
+      if (typeof meta.unresponsiveCount === 'number') {
+        await incrementDailyStat(db, today, 'perf_unresponsive_count', '', meta.unresponsiveCount)
+      }
+      if (typeof meta.unresponsiveMaxMs === 'number') {
+        await updateDailyStatMax(db, today, 'perf_unresponsive_max_ms', '', meta.unresponsiveMaxMs)
+      }
+    }
+  }
+}
+
+function resolveRequestRegion(event: H3Event): string | undefined {
+  const raw
+    = getHeader(event, 'cf-ipcountry')
+      || getHeader(event, 'CF-IPCountry')
+      || getHeader(event, 'x-vercel-ip-country')
+      || getHeader(event, 'x-nf-country')
+      || undefined
+
+  if (!raw)
+    return undefined
+
+  const normalized = raw.trim().toUpperCase()
+  if (!normalized || normalized === 'XX')
+    return undefined
+  if (!/^[A-Z]{2}$/.test(normalized))
+    return undefined
+  return normalized
 }
 
 async function incrementDailyStat(
@@ -309,6 +397,22 @@ export async function getAnalyticsSummary(
   avgSortingDuration: number
   avgResultCount: number
   avgExecuteLatency: number
+  performance: {
+    longTaskCount: number
+    longTaskTotalMs: number
+    longTaskMaxMs: number
+    longTaskAvgMs: number
+    rafJankCount: number
+    rafJankTotalMs: number
+    rafJankMaxMs: number
+    rafJankAvgMs: number
+    eventLoopDelayP95AvgMs: number
+    eventLoopDelayMaxMs: number
+    unresponsiveCount: number
+    unresponsiveTotalMs: number
+    unresponsiveMaxMs: number
+    unresponsiveAvgMs: number
+  }
   dailyStats: Array<{
     date: string
     visits: number
@@ -384,6 +488,18 @@ export async function getAnalyticsSummary(
   let resultCount = 0
   let executeLatencyTotal = 0
   let executeLatencyCount = 0
+  let perfLongTaskTotalMs = 0
+  let perfLongTaskCount = 0
+  let perfLongTaskMaxMs = 0
+  let perfRafJankTotalMs = 0
+  let perfRafJankCount = 0
+  let perfRafJankMaxMs = 0
+  let perfEventLoopDelayP95TotalMs = 0
+  let perfEventLoopDelayP95Count = 0
+  let perfEventLoopDelayMaxMs = 0
+  let perfUnresponsiveTotalMs = 0
+  let perfUnresponsiveCount = 0
+  let perfUnresponsiveMaxMs = 0
 
   for (const row of dailyResults ?? []) {
     if (!dailyMap.has(row.date)) {
@@ -478,6 +594,42 @@ export async function getAnalyticsSummary(
       case 'execute_latency_count':
         executeLatencyCount += row.value
         break
+      case 'perf_longtask_total_ms':
+        perfLongTaskTotalMs += row.value
+        break
+      case 'perf_longtask_count':
+        perfLongTaskCount += row.value
+        break
+      case 'perf_longtask_max_ms':
+        perfLongTaskMaxMs = Math.max(perfLongTaskMaxMs, row.value)
+        break
+      case 'perf_raf_jank_total_ms':
+        perfRafJankTotalMs += row.value
+        break
+      case 'perf_raf_jank_count':
+        perfRafJankCount += row.value
+        break
+      case 'perf_raf_jank_max_ms':
+        perfRafJankMaxMs = Math.max(perfRafJankMaxMs, row.value)
+        break
+      case 'perf_event_loop_delay_p95_total_ms':
+        perfEventLoopDelayP95TotalMs += row.value
+        break
+      case 'perf_event_loop_delay_p95_count':
+        perfEventLoopDelayP95Count += row.value
+        break
+      case 'perf_event_loop_delay_max_ms':
+        perfEventLoopDelayMaxMs = Math.max(perfEventLoopDelayMaxMs, row.value)
+        break
+      case 'perf_unresponsive_total_ms':
+        perfUnresponsiveTotalMs += row.value
+        break
+      case 'perf_unresponsive_count':
+        perfUnresponsiveCount += row.value
+        break
+      case 'perf_unresponsive_max_ms':
+        perfUnresponsiveMaxMs = Math.max(perfUnresponsiveMaxMs, row.value)
+        break
     }
   }
 
@@ -521,6 +673,22 @@ export async function getAnalyticsSummary(
     avgSortingDuration: totalSearches > 0 ? Math.round(sortingTotal / totalSearches) : 0,
     avgResultCount: resultCount > 0 ? Math.round(resultTotal / resultCount) : 0,
     avgExecuteLatency: executeLatencyCount > 0 ? Math.round(executeLatencyTotal / executeLatencyCount) : 0,
+    performance: {
+      longTaskCount: perfLongTaskCount,
+      longTaskTotalMs: perfLongTaskTotalMs,
+      longTaskMaxMs: perfLongTaskMaxMs,
+      longTaskAvgMs: perfLongTaskCount > 0 ? Math.round(perfLongTaskTotalMs / perfLongTaskCount) : 0,
+      rafJankCount: perfRafJankCount,
+      rafJankTotalMs: perfRafJankTotalMs,
+      rafJankMaxMs: perfRafJankMaxMs,
+      rafJankAvgMs: perfRafJankCount > 0 ? Math.round(perfRafJankTotalMs / perfRafJankCount) : 0,
+      eventLoopDelayP95AvgMs: perfEventLoopDelayP95Count > 0 ? Math.round(perfEventLoopDelayP95TotalMs / perfEventLoopDelayP95Count) : 0,
+      eventLoopDelayMaxMs: perfEventLoopDelayMaxMs,
+      unresponsiveCount: perfUnresponsiveCount,
+      unresponsiveTotalMs: perfUnresponsiveTotalMs,
+      unresponsiveMaxMs: perfUnresponsiveMaxMs,
+      unresponsiveAvgMs: perfUnresponsiveCount > 0 ? Math.round(perfUnresponsiveTotalMs / perfUnresponsiveCount) : 0,
+    },
     dailyStats,
     deviceDistribution: deviceDist,
     regionDistribution: regionDist,
