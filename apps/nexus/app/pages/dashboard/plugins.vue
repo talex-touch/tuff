@@ -9,6 +9,10 @@ import PluginListItem from '~/components/dashboard/PluginListItem.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
 import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vue'
 import ReviewModal from '~/components/dashboard/ReviewModal.vue'
+import Button from '~/components/ui/Button.vue'
+import FlatButton from '~/components/ui/FlatButton.vue'
+import Input from '~/components/ui/Input.vue'
+import Switch from '~/components/ui/Switch.vue'
 import { useUser } from '@clerk/vue'
 import { computed, ref } from 'vue'
 import { PLUGIN_CATEGORIES, isPluginCategoryId } from '~/utils/plugin-categories'
@@ -981,14 +985,10 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           <span class="i-carbon-explore" />
           {{ t('dashboard.sections.plugins.cta') }}
         </NuxtLink>
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/80"
-          @click="openCreatePluginForm"
-        >
+        <Button type="primary" size="small" @click="openCreatePluginForm">
           <span class="i-carbon-add" />
           {{ t('dashboard.sections.plugins.addButton') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -1026,26 +1026,19 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         <div class="grid gap-4 md:grid-cols-2">
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
             {{ t('dashboard.sections.plugins.form.identifier') }}
-            <input
+            <Input
               v-model="pluginForm.slug"
-              type="text"
               :disabled="pluginFormMode === 'edit'"
+              placeholder="com.example.plugin"
               required
-              autocomplete="off"
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition disabled:cursor-not-allowed disabled:bg-black/5 focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light dark:disabled:bg-white/5"
-            >
+            />
             <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
               {{ t('dashboard.sections.plugins.form.identifierHelp') }}
             </span>
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
             {{ t('dashboard.sections.plugins.form.name') }}
-            <input
-              v-model="pluginForm.name"
-              type="text"
-              required
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light dark:focus:border-light/40 dark:focus:ring-light/20"
-            >
+            <Input v-model="pluginForm.name" required />
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
             {{ t('dashboard.sections.plugins.form.category') }}
@@ -1065,12 +1058,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
             {{ t('dashboard.sections.plugins.form.summary') }}
-            <textarea
-              v-model="pluginForm.summary"
-              rows="3"
-              required
-              class="resize-y rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            ></textarea>
+            <Input v-model="pluginForm.summary" type="textarea" :rows="3" required />
           </label>
           <div class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
             <span>{{ t('dashboard.sections.plugins.form.icon') }}</span>
@@ -1093,15 +1081,14 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                     @change="handlePluginIconInput"
                   >
                 </label>
-                <button
+                <FlatButton
                   v-if="pluginFormMode === 'edit' && (pluginForm.iconPreviewUrl || editingPluginHasIcon)"
-                  type="button"
-                  class="inline-flex w-max items-center gap-1 rounded-full border border-primary/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-black transition hover:border-primary/30 hover:bg-dark/10 dark:border-light/20 dark:text-light dark:hover:bg-light/10"
+                  class="text-[11px] font-semibold uppercase tracking-wide"
                   @click="removePluginIconPreview"
                 >
                   <span class="i-carbon-trash-can text-xs" />
                   {{ t('dashboard.sections.plugins.form.iconRemove') }}
-                </button>
+                </FlatButton>
                 <p class="max-w-xs leading-relaxed">
                   {{ t('dashboard.sections.plugins.form.iconHelp') }}
                 </p>
@@ -1200,12 +1187,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           </div>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
             {{ t('dashboard.sections.plugins.form.homepage') }}
-            <input
-              v-model="pluginForm.homepage"
-              type="url"
-              placeholder="https://github.com/..."
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            >
+            <Input v-model="pluginForm.homepage" placeholder="https://github.com/..." />
           </label>
           <div
             v-if="pluginFormMode === 'edit'"
@@ -1218,32 +1200,18 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           </div>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
             {{ t('dashboard.sections.plugins.form.badges') }}
-            <input
-              v-model="pluginForm.badges"
-              type="text"
-              placeholder="featured, stable"
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            >
+            <Input v-model="pluginForm.badges" placeholder="featured, stable" />
           </label>
           <label
             v-if="isAdmin"
             class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60"
           >
-            <input
-              v-model="pluginForm.isOfficial"
-              type="checkbox"
-              class="h-4 w-4 rounded border border-primary/30 text-black focus:ring-primary/40 dark:border-light/30 dark:bg-dark/40"
-            >
+            <Switch v-model="pluginForm.isOfficial" />
             {{ t('dashboard.sections.plugins.form.isOfficial') }}
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
             {{ t('dashboard.sections.plugins.form.readme') }}
-            <textarea
-              v-model="pluginForm.readme"
-              rows="8"
-              required
-              class="min-h-32 resize-y rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            ></textarea>
+            <Input v-model="pluginForm.readme" type="textarea" :rows="8" required />
             <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
               {{ t('dashboard.sections.plugins.form.readmeHelp') }}
             </span>
@@ -1256,14 +1224,9 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           >
             {{ pluginFormError }}
           </p>
-          <button
-            type="submit"
-            class="inline-flex items-center gap-2 rounded-full bg-dark px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-dark/90 disabled:cursor-not-allowed disabled:opacity-70 dark:bg-light dark:text-black dark:hover:bg-light/90"
-            :disabled="pluginSaving"
-          >
-            <span v-if="pluginSaving" class="i-carbon-circle-dash animate-spin" />
+          <Button native-type="submit" :loading="pluginSaving">
             {{ pluginFormMode === 'create' ? t('dashboard.sections.plugins.createSubmit') : t('dashboard.sections.plugins.updateSubmit') }}
-          </button>
+          </Button>
         </div>
       </form>
 

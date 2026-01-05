@@ -1,6 +1,9 @@
 import { recordTelemetryEvent } from '../../utils/telemetryStore'
+import { guardTelemetryIp } from '../../utils/ipSecurityStore'
 
 export default defineEventHandler(async (event) => {
+  await guardTelemetryIp(event, { weight: 1, action: 'telemetry.record' })
+
   const body = await readBody(event)
 
   if (!body || typeof body !== 'object') {
@@ -23,7 +26,7 @@ export default defineEventHandler(async (event) => {
     isAnonymous = true,
   } = body
 
-  if (!eventType || !['search', 'visit', 'error', 'feature_use'].includes(eventType)) {
+  if (!eventType || !['search', 'visit', 'error', 'feature_use', 'performance'].includes(eventType)) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid event type' })
   }
 

@@ -1,3 +1,6 @@
+import { computed } from 'vue'
+import { dismissToast, toast, toastStore } from '@talex-touch/tuffex/utils'
+
 export interface Toast {
   id: string
   type: 'success' | 'error' | 'warning' | 'info'
@@ -6,34 +9,42 @@ export interface Toast {
   duration?: number
 }
 
-const toasts = ref<Toast[]>([])
-
-let toastId = 0
+const toasts = computed<Toast[]>(() =>
+  toastStore.items.map(item => ({
+    id: item.id,
+    type: item.variant === 'success'
+      ? 'success'
+      : item.variant === 'warning'
+        ? 'warning'
+        : item.variant === 'danger'
+          ? 'error'
+          : 'info',
+    title: item.title ?? '',
+    message: item.description,
+    duration: item.duration,
+  })),
+)
 
 export function useToast() {
   function show(options: Omit<Toast, 'id'>) {
-    const id = `toast-${++toastId}`
-    const toast: Toast = {
-      id,
-      duration: 5000,
-      ...options,
-    }
-    toasts.value.push(toast)
+    const variant = options.type === 'success'
+      ? 'success'
+      : options.type === 'warning'
+        ? 'warning'
+        : options.type === 'error'
+          ? 'danger'
+          : 'default'
 
-    if (toast.duration && toast.duration > 0) {
-      setTimeout(() => {
-        remove(id)
-      }, toast.duration)
-    }
-
-    return id
+    return toast({
+      title: options.title,
+      description: options.message,
+      duration: options.duration,
+      variant,
+    })
   }
 
   function remove(id: string) {
-    const index = toasts.value.findIndex(t => t.id === id)
-    if (index > -1) {
-      toasts.value.splice(index, 1)
-    }
+    dismissToast(id)
   }
 
   function success(title: string, message?: string) {
@@ -53,7 +64,7 @@ export function useToast() {
   }
 
   return {
-    toasts: readonly(toasts),
+    toasts,
     show,
     remove,
     success,

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import StatusBadge from '~/components/ui/StatusBadge.vue'
+
 interface PluginVersion {
   id: string
   channel: 'SNAPSHOT' | 'BETA' | 'RELEASE'
@@ -33,27 +35,27 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-function statusClass(status: Plugin['status']) {
+function statusTone(status: Plugin['status']) {
   switch (status) {
     case 'approved':
-      return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+      return 'success'
     case 'pending':
-      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+      return 'warning'
     case 'rejected':
-      return 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+      return 'danger'
     default:
-      return 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
+      return 'muted'
   }
 }
 
-function channelClass(channel: PluginVersion['channel']) {
+function channelTone(channel: PluginVersion['channel']) {
   switch (channel) {
     case 'RELEASE':
-      return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+      return 'success'
     case 'BETA':
-      return 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+      return 'warning'
     default:
-      return 'bg-slate-500/10 text-slate-600 dark:text-slate-400'
+      return 'muted'
   }
 }
 </script>
@@ -96,23 +98,21 @@ function channelClass(channel: PluginVersion['channel']) {
 
     <!-- Status -->
     <div class="hidden shrink-0 sm:block">
-      <span
-        class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-        :class="statusClass(plugin.status)"
-      >
-        {{ t(`dashboard.sections.plugins.statuses.${plugin.status}`) }}
-      </span>
+      <StatusBadge
+        :text="t(`dashboard.sections.plugins.statuses.${plugin.status}`)"
+        :status="statusTone(plugin.status)"
+        size="sm"
+      />
     </div>
 
     <!-- Version -->
     <div class="hidden shrink-0 md:block">
       <template v-if="plugin.latestVersion">
-        <span
-          class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-          :class="channelClass(plugin.latestVersion.channel)"
-        >
-          v{{ plugin.latestVersion.version }}
-        </span>
+        <StatusBadge
+          :text="`v${plugin.latestVersion.version}`"
+          :status="channelTone(plugin.latestVersion.channel)"
+          size="sm"
+        />
       </template>
       <span v-else class="text-xs text-black/30 dark:text-white/30">—</span>
     </div>

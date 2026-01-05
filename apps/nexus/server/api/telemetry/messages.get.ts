@@ -1,6 +1,9 @@
 import { listTelemetryMessages } from '../../utils/messageStore'
+import { requireAdmin } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
+  await requireAdmin(event)
+
   const query = getQuery(event)
   const status = query.status as string | undefined
   const source = query.source as string | undefined

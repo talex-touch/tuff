@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import Button from '~/components/ui/Button.vue'
+import FlatButton from '~/components/ui/FlatButton.vue'
 import { useDashboardUpdatesData } from '~/composables/useDashboardData'
 
 interface DashboardUpdate {
@@ -87,19 +89,16 @@ async function deleteUpdateItem(update: DashboardUpdate) {
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <UButton
+        <Button
           v-if="isAdmin"
           icon="i-carbon-add"
-          size="sm"
+          size="small"
           @click="openCreate"
         >
           {{ t('dashboard.sections.updates.addButton') }}
-        </UButton>
-        <UButton
+        </Button>
+        <FlatButton
           icon="i-carbon-news"
-          color="gray"
-          variant="ghost"
-          size="sm"
           to="https://docs.tuff.chat/changelog"
           target="_blank"
         />
@@ -108,7 +107,7 @@ async function deleteUpdateItem(update: DashboardUpdate) {
 
     <!-- Loading -->
     <div v-if="updatesPending" class="mt-4 flex items-center justify-center py-8">
-      <UIcon name="i-carbon-circle-dash" class="h-5 w-5 animate-spin text-gray-400" />
+      <span class="i-carbon-circle-dash h-5 w-5 animate-spin text-gray-400" />
     </div>
 
     <!-- Empty -->
@@ -153,20 +152,8 @@ async function deleteUpdateItem(update: DashboardUpdate) {
             </p>
           </div>
           <div v-if="isAdmin" class="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
-            <UButton
-              icon="i-carbon-edit"
-              color="gray"
-              variant="ghost"
-              size="xs"
-              @click="openEdit(update)"
-            />
-            <UButton
-              icon="i-carbon-trash-can"
-              color="red"
-              variant="ghost"
-              size="xs"
-              @click="deleteUpdateItem(update)"
-            />
+            <FlatButton icon="i-carbon-edit" @click="openEdit(update)" />
+            <FlatButton icon="i-carbon-trash-can" @click="deleteUpdateItem(update)" />
           </div>
         </div>
       </li>

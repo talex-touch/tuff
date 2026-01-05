@@ -105,6 +105,7 @@ apps/core-app/src/renderer/src/distinformation.json
 .kilocode*
 .wrangler*
 .data&
+.claude*
 
 # ========================
 # Docs / Local notes

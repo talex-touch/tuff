@@ -1,5 +1,7 @@
 <script lang="ts" setup>
 import type { MarketplacePluginSummary } from '~/types/marketplace'
+import Tag from '~/components/ui/Tag.vue'
+import StatusBadge from '~/components/ui/StatusBadge.vue'
 import { useMarketCategories } from '~/composables/useMarketCategories'
 import { useMarketFormatters } from '~/composables/useMarketFormatters'
 
@@ -14,6 +16,19 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { resolveCategoryLabel } = useMarketCategories()
 const { formatDate, formatInstalls } = useMarketFormatters()
+
+function channelTone(channel?: string) {
+  switch (channel) {
+    case 'RELEASE':
+      return 'success'
+    case 'BETA':
+      return 'warning'
+    case 'SNAPSHOT':
+      return 'muted'
+    default:
+      return 'info'
+  }
+}
 
 function viewDetails() {
   emit('viewDetail', props.plugin)
@@ -52,19 +67,11 @@ function viewDetails() {
             <p class="m-0 text-[11px] text-black/50 font-semibold tracking-[0.35em] uppercase dark:text-light/60" />
           </div>
         </div>
-        <span class="inline-flex items-center gap-1 rounded-full bg-dark/5 px-2 py-1 text-[10px] text-black/80 font-semibold dark:bg-light/10 dark:text-light/80">
-          {{ resolveCategoryLabel(plugin.category) }}
-          <!-- <span class="i-carbon-badge text-sm" aria-hidden="true" />
-          <template v-if="plugin.isOfficial">
-            {{ t('market.badges.official') }}
-          </template>
-          <template v-else-if="plugin.author">
-            {{ plugin.author.name }}
-          </template>
-          <template v-else>
-            {{ t('market.badges.community', 'Community') }}
-          </template> -->
-        </span>
+        <Tag
+          :label="resolveCategoryLabel(plugin.category)"
+          size="sm"
+          class="rounded-full bg-dark/5 px-2 py-1 text-[10px] font-semibold dark:bg-light/10 dark:text-light/80"
+        />
       </div>
 
       <div class="flex flex-wrap gap-2 text-xs text-black/60 dark:text-light/70">
@@ -81,13 +88,12 @@ function viewDetails() {
             —
           </template>
         </span>
-        <span
+        <StatusBadge
           v-if="plugin.latestVersion"
-          class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-1 dark:bg-light/10 dark:text-light/80"
-        >
-          <span class="i-carbon-skill-level text-sm" aria-hidden="true" />
-          {{ plugin.latestVersion.channel }}
-        </span>
+          :text="plugin.latestVersion.channel"
+          :status="channelTone(plugin.latestVersion.channel)"
+          size="sm"
+        />
         <span class="inline-flex items-center gap-1 rounded-full bg-dark/10 px-2 py-1 dark:bg-light/10 dark:text-light/80">
           <span class="i-carbon-user-multiple text-sm" aria-hidden="true" />
           {{ t('dashboard.sections.plugins.stats.installs', { count: formatInstalls(plugin.installs) }) }}
@@ -98,14 +104,13 @@ function viewDetails() {
         v-if="plugin.badges.length"
         class="flex flex-wrap gap-2"
       >
-        <span
+        <Tag
           v-for="badge in plugin.badges"
           :key="badge"
-          class="inline-flex items-center gap-1 border border-primary/15 rounded-full px-2 py-0.5 text-[10px] text-black/60 tracking-[0.35em] uppercase dark:border-light/20 dark:text-light/70"
-        >
-          <span class="i-carbon-tag text-xs" aria-hidden="true" />
-          {{ badge }}
-        </span>
+          :label="badge"
+          size="sm"
+          class="border border-primary/15 rounded-full px-2 py-0.5 text-[10px] text-black/60 tracking-[0.35em] uppercase dark:border-light/20 dark:text-light/70"
+        />
       </div>
     </div>
   </article>

@@ -1,4 +1,5 @@
 import { recordTelemetryMessages, type TelemetryMessageInput } from '../../utils/messageStore'
+import { guardTelemetryIp } from '../../utils/ipSecurityStore'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -7,6 +8,8 @@ export default defineEventHandler(async (event) => {
   if (!messages.length) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid request body' })
   }
+
+  await guardTelemetryIp(event, { weight: messages.length, action: 'telemetry.messages' })
 
   const processed = await recordTelemetryMessages(event, messages)
 
