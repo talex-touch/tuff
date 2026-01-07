@@ -492,31 +492,33 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
     <template v-if="!isUIMode">
       <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
         <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-          <Transition :name="resultTransitionName" mode="out-in">
-            <BoxGrid
-              v-if="isGridMode"
-              :key="'grid-' + resultBatchKey"
-              :items="res"
-              :layout="boxOptions.layout"
-              :focus="boxOptions.focus"
-              @select="handleGridSelect"
-            />
-            <div v-else :key="'list-' + resultBatchKey" class="item-list">
-              <CoreBoxRender
-                v-for="(item, index) in res"
-                :key="item.id || index"
-                :ref="(el) => setItemRef(el, index)"
-                :active="boxOptions.focus === index"
-                :item="item"
-                :index="index"
-                :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && !lowBatteryMode && newItemIds.has(item.id) }"
-                :style="{
-                  '--stagger-delay': getStaggerDelay(index, res.length) + 's'
-                }"
-                @trigger="handleItemTrigger(index, item)"
+          <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
+            <Transition :name="resultTransitionName" mode="out-in">
+              <BoxGrid
+                v-if="isGridMode"
+                :key="'grid-' + resultBatchKey"
+                :items="res"
+                :layout="boxOptions.layout"
+                :focus="boxOptions.focus"
+                @select="handleGridSelect"
               />
-            </div>
-          </Transition>
+              <div v-else :key="'list-' + resultBatchKey" class="item-list">
+                <CoreBoxRender
+                  v-for="(item, index) in res"
+                  :key="item.id || index"
+                  :ref="(el) => setItemRef(el, index)"
+                  :active="boxOptions.focus === index"
+                  :item="item"
+                  :index="index"
+                  :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && !lowBatteryMode && newItemIds.has(item.id) }"
+                  :style="{
+                    '--stagger-delay': getStaggerDelay(index, res.length) + 's'
+                  }"
+                  @trigger="handleItemTrigger(index, item)"
+                />
+              </div>
+            </Transition>
+          </div>
         </TouchScroll>
         <CoreBoxFooter
           :display="!!res.length"
@@ -638,15 +640,19 @@ div.CoreBoxRes {
   bottom: 0;
 }
 
-.CoreBoxRes-Main > .scroll-area .item-list {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
+  .CoreBoxRes-Main > .scroll-area .item-list {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
 
-.CoreBoxRes-Main > .scroll-area .item-list > .CoreBoxRender:last-child {
-  margin-bottom: 44px;
-}
+  .CoreBoxRes-ScrollContent {
+    width: 100%;
+  }
+
+  .CoreBoxRes-ScrollContent.has-footer {
+    padding-bottom: 44px;
+  }
 
 // Result switch animation (list <-> grid, or new results)
 .result-switch-enter-active {

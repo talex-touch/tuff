@@ -1,8 +1,9 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
-import { useDebounceFn } from '@vueuse/core'
-import { onMounted, watch } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/events/types'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
 interface UseResizeOptions {
   results: ComputedRef<TuffItem[]>
@@ -11,94 +12,107 @@ interface UseResizeOptions {
   recommendationPending?: Ref<boolean>
 }
 
-const COLLAPSE_DEBOUNCE_MS = 60
 const SCROLLBAR_WIDTH_ESTIMATE = 12
 const HEIGHT_SAFETY_PADDING = 10
+const HEADER_HEIGHT = 60
+const MIN_HEIGHT = 60
+const MAX_HEIGHT = 600
 
-function sendExpandMax(): void {
-  touchChannel.sendSync('core-box:expand', { mode: 'max' })
+function clampHeight(height: number): number {
+  return Math.max(MIN_HEIGHT, Math.min(height, MAX_HEIGHT))
 }
 
-function sendCollapseCommand(): void {
-  touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
-}
+function calculateDesiredHeight(resultCount: number): number {
+  if (resultCount === 0)
+    return MIN_HEIGHT
 
-function sendHeight(height: number): void {
-  touchChannel.sendSync('core-box:set-height', { height })
-}
-
-function calculateActualHeight(): number {
   const scrollRoot = document.querySelector('.CoreBoxRes-Main .touch-scroll')
-  if (!scrollRoot) return 0
+  if (!scrollRoot)
+    return MIN_HEIGHT
 
   const nativeWrap = scrollRoot.querySelector('.native-scroll-wrapper') as HTMLElement | null
   const elWrap = scrollRoot.querySelector('.el-scroll-wrapper .el-scrollbar__wrap') as HTMLElement | null
   const wrap = nativeWrap ?? elWrap
-  if (!wrap) return 0
+  if (!wrap)
+    return MIN_HEIGHT
 
   const scrollHeight = wrap.scrollHeight
   const clientHeight = wrap.clientHeight
-  const headerHeight = 60
-  const footerHeight = 44
   const extraBuffer = scrollHeight > clientHeight ? SCROLLBAR_WIDTH_ESTIMATE : 0
-  
-  return Math.min(scrollHeight + headerHeight + footerHeight + extraBuffer + HEIGHT_SAFETY_PADDING, 600)
+
+  return clampHeight(scrollHeight + HEADER_HEIGHT + extraBuffer + HEIGHT_SAFETY_PADDING)
 }
 
 export function useResize(options: UseResizeOptions): void {
   const { results, activeActivations, loading, recommendationPending } = options
+  const transport = useTuffTransport()
 
-  function checkShouldCollapse(): boolean {
-    if (activeActivations.value?.length) return false
-    if (results.value.length > 0) return false
-    if (loading.value) return false
-    return !recommendationPending?.value
-  }
+  let lastPayload: CoreBoxLayoutUpdateRequest | null = null
+  let rafId = 0
+  let pendingSource: string | null = null
 
-  const debouncedCollapse = useDebounceFn(() => {
-    const shouldCollapse = checkShouldCollapse()
-    if (shouldCollapse) {
-      sendCollapseCommand()
+  function sendLayoutUpdate(source: string): void {
+    const activationCount = activeActivations.value?.length ?? 0
+    const resultCount = results.value.length
+    const isLoading = loading.value
+    const isRecommendationPending = recommendationPending?.value ?? false
+
+    const height = calculateDesiredHeight(resultCount)
+
+    const payload: CoreBoxLayoutUpdateRequest = {
+      height,
+      resultCount,
+      loading: isLoading,
+      recommendationPending: isRecommendationPending,
+      activationCount,
+      source
     }
-  }, COLLAPSE_DEBOUNCE_MS)
 
-  function updateHeight(): void {
-    if (activeActivations.value?.length) {
-      sendExpandMax()
+    if (
+      lastPayload
+      && Math.abs(lastPayload.height - payload.height) < 2
+      && lastPayload.resultCount === payload.resultCount
+      && lastPayload.loading === payload.loading
+      && lastPayload.recommendationPending === payload.recommendationPending
+      && lastPayload.activationCount === payload.activationCount
+    ) {
       return
     }
 
-    const resultCount = results.value.length
-    if (resultCount === 0) return
+    lastPayload = payload
+    transport.send(CoreBoxEvents.layout.update, payload).catch(() => {})
+  }
 
-    // Measure and send height - backend handles deduplication via its own height check
-    requestAnimationFrame(() => {
-      const finalHeight = calculateActualHeight()
-      if (finalHeight > 60) {
-        sendHeight(finalHeight)
-      }
+  function scheduleLayoutUpdate(source: string): void {
+    pendingSource = source
+    if (rafId)
+      return
+    rafId = requestAnimationFrame(() => {
+      rafId = 0
+      sendLayoutUpdate(pendingSource ?? 'raf')
+      pendingSource = null
     })
   }
 
+  onBeforeUnmount(() => {
+    if (rafId) {
+      cancelAnimationFrame(rafId)
+      rafId = 0
+    }
+  })
+
   onMounted(() => {
     setTimeout(() => {
-      if (checkShouldCollapse()) sendCollapseCommand()
+      scheduleLayoutUpdate('mounted')
     }, 100)
   })
 
   watch(
     () => results.value,
     (newResults, oldResults) => {
-      if (newResults.length > 0) {
-        if (oldResults && newResults.length === oldResults.length) {
-          const newIds = new Set(newResults.map(r => r.id))
-          const oldIds = new Set(oldResults.map(r => r.id))
-          if ([...newIds].every(id => oldIds.has(id))) return
-        }
-        updateHeight()
-      } else {
-        debouncedCollapse()
-      }
+      if (newResults === oldResults)
+        return
+      scheduleLayoutUpdate('results')
     },
     { deep: true }
   )
@@ -106,24 +120,23 @@ export function useResize(options: UseResizeOptions): void {
   watch(
     () => loading.value,
     (isLoading) => {
-      if (!isLoading) {
-        if (results.value.length === 0) {
-          sendCollapseCommand()
-        } else {
-          debouncedCollapse()
-        }
-      }
+      scheduleLayoutUpdate(isLoading ? 'loading:start' : 'loading:end')
     }
   )
 
   watch(
     () => activeActivations.value,
     (activations) => {
-      if (activations?.length) {
-        sendExpandMax()
-      } else {
-        debouncedCollapse()
-      }
+      scheduleLayoutUpdate(activations?.length ? 'activation:on' : 'activation:off')
     }
   )
+
+  if (recommendationPending) {
+    watch(
+      () => recommendationPending.value,
+      () => {
+        scheduleLayoutUpdate('recommendation:pending')
+      }
+    )
+  }
 }

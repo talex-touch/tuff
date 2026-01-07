@@ -97,6 +97,7 @@ import type {
   CancelSearchRequest,
   CancelSearchResponse,
   ClearInputResponse,
+  CoreBoxLayoutUpdateRequest,
   DeactivateProviderRequest,
   EnterUIModeRequest,
   ExpandOptions,
@@ -454,6 +455,25 @@ export const CoreBoxEvents = {
       .module('ui')
       .event('focus-window')
       .define<void, FocusWindowResponse>(),
+  },
+
+  /**
+   * Layout events (renderer -> main).
+   */
+  layout: {
+    /**
+     * Report current desired window height and state flags.
+     *
+     * @remarks
+     * This event is expected to be sent frequently. The main process should
+     * coalesce updates and decide when/how to resize the window.
+     */
+    update: defineEvent('core-box')
+      .module('layout')
+      .event('update')
+      .define<CoreBoxLayoutUpdateRequest, void>({
+        batch: { enabled: true, windowMs: 16, mergeStrategy: 'latest' },
+      }),
   },
 
   /**

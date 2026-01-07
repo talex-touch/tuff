@@ -595,6 +595,7 @@ export class WindowManager {
         this.stopBoundsAnimation()
         try {
           currentWindow.window.setBounds(bounds, false)
+          this.lastSetBounds = { height: bounds.height, y: bounds.y }
           currentWindow.window.setMinimumSize(720, height)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
@@ -634,6 +635,7 @@ export class WindowManager {
         this.stopBoundsAnimation()
         try {
           currentWindow.window.setBounds(bounds, false)
+          this.lastSetBounds = { height: bounds.height, y: bounds.y }
           currentWindow.window.setMinimumSize(720, 60)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })

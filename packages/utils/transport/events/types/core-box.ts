@@ -26,6 +26,45 @@ export interface ExpandOptions {
 }
 
 /**
+ * Layout update payload from renderer to main process.
+ *
+ * @remarks
+ * This is designed to be high-frequency (e.g. ResizeObserver). The main process
+ * should coalesce updates and decide the final window bounds.
+ */
+export interface CoreBoxLayoutUpdateRequest {
+  /**
+   * Desired CoreBox window height (px).
+   */
+  height: number
+
+  /**
+   * Current rendered item count.
+   */
+  resultCount: number
+
+  /**
+   * Whether CoreBox is currently loading results.
+   */
+  loading: boolean
+
+  /**
+   * Whether recommendation query is pending (empty input state).
+   */
+  recommendationPending: boolean
+
+  /**
+   * Current provider activation count (plugin UI / activation mode).
+   */
+  activationCount: number
+
+  /**
+   * Optional debug source tag.
+   */
+  source?: string
+}
+
+/**
  * Response from focus window operation.
  */
 export interface FocusWindowResponse {
