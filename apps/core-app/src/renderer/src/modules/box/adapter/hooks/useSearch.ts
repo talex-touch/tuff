@@ -137,10 +137,6 @@ export function useSearch(
     return inputs
   }
 
-  const collapseCoreBox = (source: string): void => {
-    touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
-  }
-
   const resetSearchState = (): void => {
     searchResults.value = []
     searchResult.value = null
@@ -183,9 +179,6 @@ export function useSearch(
       }
     }
 
-    if (!activeActivations.value && initialResult.items.length === 0) {
-      collapseCoreBox('emptyRecommend')
-    }
   }
 
   async function executeSearch(): Promise<void> {
@@ -217,7 +210,6 @@ export function useSearch(
 
       if (!hasInputs && appSetting.recommendation?.enabled === false) {
         resetSearchState()
-        collapseCoreBox('recommendDisabled')
         return
       }
 
@@ -230,7 +222,6 @@ export function useSearch(
       recommendationTimeoutId = setTimeout(() => {
         if (recommendationPending.value && searchResults.value.length === 0) {
           resetSearchState()
-          collapseCoreBox('recommendTimeout')
         }
         recommendationTimeoutId = null
       }, RECOMMENDATION_TIMEOUT_MS)
@@ -603,10 +594,8 @@ export function useSearch(
     resetSearchState()
   })
 
-  touchChannel.regChannel('core-box:no-results', ({ data }) => {
-    if (data?.shouldShrink) {
-      collapseCoreBox('noResults')
-    }
+  touchChannel.regChannel('core-box:no-results', () => {
+    // Window resize is handled via layout updates (useResize)
   })
 
   return {
