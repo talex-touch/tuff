@@ -1,4 +1,5 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import { isLocalhostUrl } from '@talex-touch/utils'
 import type { TalexTouch } from '../types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -8,6 +9,7 @@ import { promisify } from 'node:util'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { BrowserWindow, powerMonitor, shell } from 'electron'
 import packageJson from '../../../package.json'
+import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { BaseModule } from '../modules/abstract-base-module'
@@ -225,7 +227,41 @@ export class CommonChannelModule extends BaseModule {
       return { success: true }
     })
 
+    type OpenUrlDecision = 'skip' | 'open' | 'confirm'
+
+    const shouldSkipPromptProtocols = new Set([APP_SCHEMA, FILE_SCHEMA])
+
+    function getOpenUrlDecision(url: string): OpenUrlDecision {
+      if (!url || url.startsWith('/') || url.startsWith('#')) return 'skip'
+
+      let parsed: URL
+      try {
+        parsed = new URL(url)
+      }
+      catch {
+        return 'skip'
+      }
+
+      const protocol = parsed.protocol.replace(':', '')
+
+      if (shouldSkipPromptProtocols.has(protocol)) return 'skip'
+      if (protocol === 'file') return 'open'
+
+      if ((protocol === 'http' || protocol === 'https') && isLocalhostUrl(url)) {
+        return 'open'
+      }
+
+      return 'confirm'
+    }
+
     async function onOpenUrl(url: string) {
+      const decision = getOpenUrlDecision(url)
+      if (decision === 'skip') return
+      if (decision === 'open') {
+        shell.openExternal(url)
+        return
+      }
+
       const data = await channel.send(ChannelType.MAIN, 'url:open', url)
       console.debug('open url', url, data)
 

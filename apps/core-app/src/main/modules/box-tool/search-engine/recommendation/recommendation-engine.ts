@@ -10,13 +10,13 @@ import { desc, sql } from 'drizzle-orm'
 export class RecommendationEngine {
   private contextProvider: ContextProvider
   private itemRebuilder: ItemRebuilder
-  
+
   private recommendationCache: {
     items: TuffItem[]
     timestamp: number
     context: ContextSignal
   } | null = null
-  
+
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
   private refreshTimer: NodeJS.Timeout | null = null
@@ -24,10 +24,10 @@ export class RecommendationEngine {
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder(dbUtils)
-    
+
     this.startBackgroundRefresh()
   }
-  
+
   /** Start background refresh timer */
   private startBackgroundRefresh(): void {
     this.refreshTimer = setInterval(async () => {
@@ -38,7 +38,7 @@ export class RecommendationEngine {
       }
     }, this.REFRESH_INTERVAL_MS)
   }
-  
+
   /** Stop background refresh timer */
   public stopBackgroundRefresh(): void {
     if (this.refreshTimer) {
@@ -95,13 +95,13 @@ export class RecommendationEngine {
     if (candidates.length === 0) {
       const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
       const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, options.limit || 10)
-      
+
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
         context
       }
-      
+
       return {
         items: finalItems,
         context,
@@ -119,13 +119,13 @@ export class RecommendationEngine {
     if (items.length === 0 && diversified.length > 0) {
       const fallbackItems = await this.getFallbackRecommendations(limit)
       const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, limit)
-      
+
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
         context
       }
-      
+
       return {
         items: finalItems,
         context,
@@ -550,6 +550,7 @@ export class RecommendationEngine {
         })
       }
     }
+
 
     return trending
       .sort((a, b) => b.growthScore - a.growthScore)

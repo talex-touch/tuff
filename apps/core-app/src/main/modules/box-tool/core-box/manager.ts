@@ -161,6 +161,14 @@ export class CoreBoxManager {
     windowManager.shrink()
   }
 
+  /**
+   * Mark as expanded without triggering window animation.
+   * Used by set-height IPC to avoid double animation.
+   */
+  public markExpanded(): void {
+    this._isCollapsed = false
+  }
+
   public enterUIMode(
     url: string,
     plugin?: TouchPlugin,

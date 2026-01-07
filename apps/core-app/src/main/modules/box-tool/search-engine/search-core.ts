@@ -400,6 +400,7 @@ export class SearchEngineCore
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
+
     // Normalize query text: trim leading/trailing whitespace
     if (query.text) {
       query.text = query.text.trim()
@@ -812,6 +813,7 @@ export class SearchEngineCore
   private async _injectUsageStats(items: TuffItem[]): Promise<void> {
     if (!this.dbUtils || items.length === 0) return
 
+
     const start = performance.now()
 
     try {
@@ -845,6 +847,7 @@ export class SearchEngineCore
           injectedCount++
         }
       }
+
 
       if (searchLogger.isEnabled()) {
         const duration = performance.now() - start

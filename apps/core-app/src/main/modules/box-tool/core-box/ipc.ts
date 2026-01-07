@@ -78,15 +78,15 @@ export class IpcManager {
       }
       reply(DataCode.SUCCESS, { focused: true })
     })
-    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
-      if (typeof data === 'object' && data) {
-        if (data.mode === 'collapse') {
-          if (coreBoxManager.isUIMode) {
+      this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
+        if (typeof data === 'object' && data) {
+          if (data.mode === 'collapse') {
+            if (coreBoxManager.isUIMode) {
+              return
+            }
+            coreBoxManager.shrink()
             return
           }
-          coreBoxManager.shrink()
-          return
-        }
 
         const currentWindow = windowManager.current?.window
         if (!currentWindow || currentWindow.isDestroyed() || !currentWindow.isVisible()) {
@@ -317,9 +317,9 @@ export class IpcManager {
             return
           }
 
-          if (coreBoxManager.isCollapsed && height > 60) {
-            reply(DataCode.SUCCESS, { height: 60, ignored: true })
-            return
+          // Mark as expanded without triggering window animation (avoids double animation)
+          if (height > 60 && coreBoxManager.isCollapsed) {
+            coreBoxManager.markExpanded()
           }
 
           windowManager.setHeight(height)
@@ -480,7 +480,7 @@ export class IpcManager {
         try {
           const request = data as MetaActionExecuteRequest & { item?: TuffItem }
           // Get item from request (passed from renderer) or lookup by ID
-          let item = request.item
+          const item = request.item
           if (!item) {
             // TODO: Lookup item by ID from BoxItemManager if needed
             reply(DataCode.ERROR, { error: 'Item not found', success: false })

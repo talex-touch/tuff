@@ -62,6 +62,7 @@ export function useSearch(
   const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
 
   let searchSequence = 0
+  let recommendationTimeoutId: ReturnType<typeof setTimeout> | null = null
 
   const MAX_TEXT_INPUT_LENGTH = 2000
   const MAX_HTML_INPUT_LENGTH = 5000
@@ -136,7 +137,7 @@ export function useSearch(
     return inputs
   }
 
-  const collapseCoreBox = (): void => {
+  const collapseCoreBox = (source: string): void => {
     touchChannel.sendSync('core-box:expand', { mode: 'collapse' })
   }
 
@@ -183,13 +184,19 @@ export function useSearch(
     }
 
     if (!activeActivations.value && initialResult.items.length === 0) {
-      collapseCoreBox()
+      collapseCoreBox('emptyRecommend')
     }
   }
 
   async function executeSearch(): Promise<void> {
     const currentSequence = ++searchSequence
     const inputs = buildQueryInputs()
+
+    // Clear any pending recommendation timeout when starting a new search
+    if (recommendationTimeoutId) {
+      clearTimeout(recommendationTimeoutId)
+      recommendationTimeoutId = null
+    }
 
     recommendationPending.value = false
 
@@ -210,20 +217,22 @@ export function useSearch(
 
       if (!hasInputs && appSetting.recommendation?.enabled === false) {
         resetSearchState()
-        collapseCoreBox()
+        collapseCoreBox('recommendDisabled')
         return
       }
 
       loading.value = true
       recommendationPending.value = true
-      collapseCoreBox()
+      // Don't collapse immediately - wait for recommendation to load
+      // This prevents the jarring collapse-then-expand animation
 
       const RECOMMENDATION_TIMEOUT_MS = 400
-      const timeoutId = setTimeout(() => {
+      recommendationTimeoutId = setTimeout(() => {
         if (recommendationPending.value && searchResults.value.length === 0) {
           resetSearchState()
-          collapseCoreBox()
+          collapseCoreBox('recommendTimeout')
         }
+        recommendationTimeoutId = null
       }, RECOMMENDATION_TIMEOUT_MS)
 
       try {
@@ -231,7 +240,10 @@ export function useSearch(
         inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
 
         const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
-        clearTimeout(timeoutId)
+        if (recommendationTimeoutId) {
+          clearTimeout(recommendationTimeoutId)
+          recommendationTimeoutId = null
+        }
 
         if (currentSequence !== searchSequence) {
           recommendationPending.value = false
@@ -242,7 +254,10 @@ export function useSearch(
         loading.value = false
         recommendationPending.value = false
       } catch (error) {
-        clearTimeout(timeoutId)
+        if (recommendationTimeoutId) {
+          clearTimeout(recommendationTimeoutId)
+          recommendationTimeoutId = null
+        }
         console.error('Recommendation search failed:', error)
         resetSearchState()
       }
@@ -266,7 +281,8 @@ export function useSearch(
 
     boxOptions.focus = 0
     loading.value = true
-    searchResults.value = []
+    // Don't clear results immediately - this causes UI flicker
+    // Results will be replaced when new search completes
 
     try {
       const query: TuffQuery = {
@@ -525,11 +541,10 @@ export function useSearch(
   const activeItem = computed(() => res.value[boxOptions.focus])
 
   touchChannel.regChannel('core-box:search-update', ({ data }) => {
-    if (data.searchId === currentSearchId.value) {
-      if (data.items && data.items.length > 0) {
-        searchResults.value = [...searchResults.value, ...data.items]
-      }
-    }
+    // Skip empty updates to avoid unnecessary re-renders
+    if (data.searchId !== currentSearchId.value) return
+    if (!data.items || data.items.length === 0) return
+    searchResults.value = [...searchResults.value, ...data.items]
   })
 
   touchChannel.regChannel('core-box:set-query', ({ data }) => {
@@ -590,7 +605,7 @@ export function useSearch(
 
   touchChannel.regChannel('core-box:no-results', ({ data }) => {
     if (data?.shouldShrink) {
-      collapseCoreBox()
+      collapseCoreBox('noResults')
     }
   })
 
