@@ -77,6 +77,9 @@ export class WindowManager {
   private clipboardAllowedTypes = 0
   private boundsAnimationTimer: NodeJS.Timeout | null = null
   private boundsAnimationToken = 0
+  private currentAnimationTarget: Electron.Rectangle | null = null
+  // Track last set bounds to avoid getBounds() latency issues
+  private lastSetBounds: { height: number; y: number } | null = null
   private customTopPercent: number | null = null  // Custom position offset (0-1)
 
   private get touchApp(): TouchApp {
@@ -290,16 +293,20 @@ export class WindowManager {
   }
 
   /**
-   * 根据当前屏幕和鼠标位置更新窗口位置。
+   * Stop current bounds animation
    */
   private stopBoundsAnimation(): void {
     if (this.boundsAnimationTimer) {
       clearInterval(this.boundsAnimationTimer)
       this.boundsAnimationTimer = null
     }
+    this.currentAnimationTarget = null
     this.boundsAnimationToken += 1
   }
 
+  /**
+   * Animate window bounds. New target cancels old animation and starts from current position.
+   */
   private animateWindowBounds(
     window: TouchWindow,
     target: Electron.Rectangle,
@@ -307,21 +314,41 @@ export class WindowManager {
   ): void {
     if (window.window.isDestroyed()) return
 
-    this.stopBoundsAnimation()
-    const token = this.boundsAnimationToken
-
     const browserWindow = window.window
-    const startBounds = browserWindow.getBounds()
+    const rawBounds = browserWindow.getBounds()
+    
+    // Skip if same target as current animation (prevent duplicate animations)
+    if (this.currentAnimationTarget &&
+        Math.abs(this.currentAnimationTarget.height - target.height) < 3) {
+      return
+    }
+    
+    // Use tracked bounds for start position (more accurate than getBounds)
+    const startBounds = {
+      ...rawBounds,
+      height: this.lastSetBounds?.height ?? rawBounds.height,
+      y: this.lastSetBounds?.y ?? rawBounds.y,
+    }
+
+    // Skip if already at target (within tolerance) - but only if no animation is in progress
+    if (!this.boundsAnimationTimer &&
+        Math.abs(startBounds.height - target.height) < 3 &&
+        Math.abs(startBounds.y - target.y) < 3) {
+      return
+    }
+
+    // Cancel any existing animation and start fresh from current position
+    this.stopBoundsAnimation()
+    this.currentAnimationTarget = { ...target }
+
+    const token = this.boundsAnimationToken
+    const heightDelta = Math.abs(target.height - startBounds.height)
+    // Duration: 120-220ms based on distance
+    const durationMs = Math.min(220, Math.max(120, 120 + heightDelta * 0.2))
+    const startTime = performance.now()
 
     const lerp = (from: number, to: number, t: number): number => from + (to - from) * t
-    // Smoother easing function - ease out quart for more natural feel
     const easeOutQuart = (t: number): number => 1 - (1 - t) ** 4
-
-    const heightDelta = Math.abs(target.height - startBounds.height)
-    const positionDelta = Math.abs(target.y - startBounds.y) + Math.abs(target.x - startBounds.x)
-    // Longer duration for smoother animation, scale with distance
-    const durationMs = Math.min(280, Math.max(120, 140 + heightDelta * 0.25 + positionDelta * 0.1))
-    const startTime = performance.now()
 
     const timer = setInterval(() => {
       if (token !== this.boundsAnimationToken || browserWindow.isDestroyed()) {
@@ -345,6 +372,8 @@ export class WindowManager {
 
       try {
         browserWindow.setBounds(nextBounds, false)
+        // Track the last set bounds for accurate start position on next animation
+        this.lastSetBounds = { height: nextBounds.height, y: nextBounds.y }
       } catch (error) {
         coreBoxWindowLog.warn('Failed to animate window bounds', { error })
         clearInterval(timer)
@@ -359,9 +388,10 @@ export class WindowManager {
         if (this.boundsAnimationTimer === timer) {
           this.boundsAnimationTimer = null
         }
-        this.boundsAnimationToken += 1
+        this.currentAnimationTarget = null
         try {
           browserWindow.setBounds(target, false)
+          this.lastSetBounds = { height: target.height, y: target.y }
           if (typeof options.minHeight === 'number') {
             browserWindow.setMinimumSize(720, options.minHeight)
           }
@@ -585,6 +615,12 @@ export class WindowManager {
 
     const currentWindow = this.current
     if (currentWindow) {
+      // Skip if already shrunk or shrinking (within tolerance)
+      const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
+      if (Math.abs(currentHeight - 60) < 5) {
+        return
+      }
+
       const display = this.getDisplayForWindow(currentWindow)
       const bounds = this.calculateCoreBoxBounds(display, { width: 720, height: 60 })
       if (!bounds) return
@@ -621,19 +657,27 @@ export class WindowManager {
       return
     }
 
+    // Skip if already at target height (within tolerance)
+    const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
+    if (Math.abs(currentHeight - safeHeight) < 3) {
+      return
+    }
+
     const display = this.getDisplayForWindow(currentWindow)
     const bounds = this.calculateCoreBoxBounds(display, { width: 720, height: safeHeight })
     if (!bounds) return
 
     const settings = this.getAppSettingConfig()
     const animationEnabled = settings.animation?.coreBoxResize !== false
+    const isVisible = currentWindow.window.isVisible()
 
-    if (currentWindow.window.isVisible() && animationEnabled) {
+    if (isVisible && animationEnabled) {
       this.animateWindowBounds(currentWindow, bounds, { minHeight: safeHeight })
     } else {
       this.stopBoundsAnimation()
       try {
         currentWindow.window.setBounds(bounds, false)
+        this.lastSetBounds = { height: bounds.height, y: bounds.y }
         currentWindow.window.setMinimumSize(720, safeHeight)
       } catch (error) {
         coreBoxWindowLog.error('Failed to set window height', { error })
