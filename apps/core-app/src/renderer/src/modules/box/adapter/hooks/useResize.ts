@@ -99,13 +99,21 @@ export function useResize(options: UseResizeOptions): void {
       cancelAnimationFrame(rafId)
       rafId = 0
     }
+
+    window.removeEventListener('corebox:shown', handleCoreBoxShown)
   })
 
   onMounted(() => {
     setTimeout(() => {
       scheduleLayoutUpdate('mounted')
     }, 100)
+
+    window.addEventListener('corebox:shown', handleCoreBoxShown)
   })
+
+  function handleCoreBoxShown(): void {
+    scheduleLayoutUpdate('shown')
+  }
 
   watch(
     () => results.value,

@@ -170,7 +170,7 @@ export class CoreBoxModule extends BaseModule {
       return
 
     const currentWindow = windowManager.current?.window
-    if (!currentWindow || currentWindow.isDestroyed() || !currentWindow.isVisible())
+    if (!currentWindow || currentWindow.isDestroyed())
       return
 
     const activationCount = Number.isFinite(payload.activationCount)
