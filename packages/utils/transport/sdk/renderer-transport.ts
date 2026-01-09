@@ -10,9 +10,28 @@ import type {
   StreamOptions,
 } from '../types'
 import type { TuffEvent } from '../event/types'
-import { useChannel, tryUseChannel } from '../../renderer/hooks/use-channel'
+import { useChannel } from '../../renderer/hooks/use-channel'
 import { assertTuffEvent } from '../event/builder'
-import { DEFAULT_TIMEOUT, STREAM_SUFFIXES } from './constants'
+import { STREAM_SUFFIXES } from './constants'
+
+type BatchEntry<TRes> = {
+  key: string
+  payload: unknown
+  resolvers: Array<{
+    resolve: (value: TRes) => void
+    reject: (error: unknown) => void
+  }>
+}
+
+type BatchQueue<TRes> = {
+  timer: ReturnType<typeof setTimeout> | null
+  mergeStrategy: 'queue' | 'dedupe' | 'latest'
+  windowMs: number
+  maxSize: number
+  queue: BatchEntry<TRes>[]
+  dedupe: Map<string, BatchEntry<TRes>>
+  latest: BatchEntry<TRes> | null
+}
 
 /**
  * Renderer-side transport implementation.
@@ -22,6 +41,7 @@ export class TuffRendererTransport implements ITuffTransport {
   private _channel: ReturnType<typeof useChannel> | null = null
   private handlers = new Map<string, Set<(payload: any) => any>>()
   private streamControllers = new Map<string, StreamController>()
+  private batchQueues = new Map<string, BatchQueue<any>>()
 
   /**
    * Get the channel instance, initializing it lazily on first access.
@@ -32,6 +52,17 @@ export class TuffRendererTransport implements ITuffTransport {
       this._channel = useChannel()
     }
     return this._channel
+  }
+
+  private unwrapChannelPayload<T>(data: unknown): T {
+    if (!data || typeof data !== 'object')
+      return data as T
+
+    const record = data as Record<string, unknown>
+    if ('data' in record && 'header' in record)
+      return record.data as T
+
+    return data as T
   }
 
   /**
@@ -55,20 +86,153 @@ export class TuffRendererTransport implements ITuffTransport {
     assertTuffEvent(event, 'TuffRendererTransport.send')
 
     const eventName = event.toEventName()
-    const timeout = options?.timeout ?? DEFAULT_TIMEOUT
+    const isImmediate = options?.immediate === true
 
-    // If immediate flag is set, skip batching (future implementation)
-    // For now, all requests go through the channel directly
+    const batch = event._batch
+    if (!isImmediate && batch?.enabled === true) {
+      return this.enqueueBatch(eventName, batch, payload)
+    }
+
     try {
-      // If payload is undefined and event expects void, don't pass payload
       const shouldPassPayload = payload !== undefined
       return await this.channel.send(eventName, shouldPassPayload ? payload : undefined)
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(
-        `[TuffTransport] Failed to send "${eventName}": ${errorMessage}`,
-      )
+      throw new Error(`[TuffTransport] Failed to send "${eventName}": ${errorMessage}`)
+    }
+  }
+
+  private enqueueBatch<TReq, TRes>(
+    eventName: string,
+    batch: NonNullable<TuffEvent<TReq, TRes>['_batch']>,
+    payload?: TReq | void,
+  ): Promise<TRes> {
+    const windowMs = Math.max(0, Number(batch.windowMs ?? 50))
+    const maxSize = Math.max(1, Number(batch.maxSize ?? 50))
+    const mergeStrategy = (batch.mergeStrategy ?? 'queue') as BatchQueue<TRes>['mergeStrategy']
+
+    let queue = this.batchQueues.get(eventName) as BatchQueue<TRes> | undefined
+    if (!queue) {
+      queue = {
+        timer: null,
+        mergeStrategy,
+        windowMs,
+        maxSize,
+        queue: [],
+        dedupe: new Map(),
+        latest: null,
+      }
+      this.batchQueues.set(eventName, queue)
+    } else {
+      queue.mergeStrategy = mergeStrategy
+      queue.windowMs = windowMs
+      queue.maxSize = maxSize
+    }
+
+    const key = this.buildBatchKey(payload)
+
+    const promise = new Promise<TRes>((resolve, reject) => {
+      const entryResolver = { resolve, reject }
+
+      if (queue!.mergeStrategy === 'latest') {
+        if (!queue!.latest) {
+          queue!.latest = { key: '__latest__', payload, resolvers: [entryResolver] }
+        } else {
+          queue!.latest.payload = payload
+          queue!.latest.resolvers.push(entryResolver)
+        }
+      } else if (queue!.mergeStrategy === 'dedupe') {
+        const existing = queue!.dedupe.get(key)
+        if (existing) {
+          existing.resolvers.push(entryResolver)
+        } else {
+          queue!.dedupe.set(key, { key, payload, resolvers: [entryResolver] })
+        }
+      } else {
+        queue!.queue.push({ key, payload, resolvers: [entryResolver] })
+      }
+
+      const size = queue!.mergeStrategy === 'latest'
+        ? (queue!.latest ? 1 : 0)
+        : queue!.mergeStrategy === 'dedupe'
+          ? queue!.dedupe.size
+          : queue!.queue.length
+
+      if (size >= queue!.maxSize) {
+        void this.flushEvent(eventName)
+        return
+      }
+
+      if (!queue!.timer) {
+        queue!.timer = setTimeout(() => {
+          queue!.timer = null
+          void this.flushEvent(eventName)
+        }, queue!.windowMs)
+      }
+    })
+
+    return promise
+  }
+
+  private buildBatchKey(payload: unknown): string {
+    if (payload === undefined)
+      return '__void__'
+    if (payload === null)
+      return '__null__'
+    if (typeof payload === 'string')
+      return `str:${payload}`
+    try {
+      return `json:${JSON.stringify(payload)}`
+    } catch {
+      return `ref:${Object.prototype.toString.call(payload)}`
+    }
+  }
+
+  private async flushEvent(eventName: string): Promise<void> {
+    const queue = this.batchQueues.get(eventName)
+    if (!queue)
+      return
+
+    if (queue.timer) {
+      clearTimeout(queue.timer)
+      queue.timer = null
+    }
+
+    this.batchQueues.delete(eventName)
+
+    if (queue.mergeStrategy === 'latest') {
+      const entry = queue.latest
+      if (!entry)
+        return
+      await this.flushEntry(eventName, entry)
+      return
+    }
+
+    if (queue.mergeStrategy === 'dedupe') {
+      const entries = Array.from(queue.dedupe.values())
+      await Promise.all(entries.map(entry => this.flushEntry(eventName, entry)))
+      return
+    }
+
+    await queue.queue.reduce<Promise<void>>(
+      (promise, entry) => promise.then(() => this.flushEntry(eventName, entry)),
+      Promise.resolve()
+    )
+  }
+
+  private async flushEntry<TRes>(eventName: string, entry: BatchEntry<TRes>): Promise<void> {
+    try {
+      const shouldPassPayload = entry.payload !== undefined
+      const result = await this.channel.send(eventName, shouldPassPayload ? entry.payload : undefined)
+      for (const { resolve } of entry.resolvers) {
+        resolve(result as TRes)
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const wrapped = new Error(`[TuffTransport] Failed to send "${eventName}": ${errorMessage}`)
+      for (const { reject } of entry.resolvers) {
+        reject(wrapped)
+      }
     }
   }
 
@@ -99,16 +263,18 @@ export class TuffRendererTransport implements ITuffTransport {
       const endEventName = `${eventName}${STREAM_SUFFIXES.END}:${streamId}`
       const errorEventName = `${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`
 
-      const dataHandler = (data: { chunk?: TChunk; error?: string }) => {
+      const dataHandler = (raw: unknown) => {
         if (cancelled)
           return
 
-        if (data.error) {
+        const data = this.unwrapChannelPayload<{ chunk?: TChunk; error?: string }>(raw)
+
+        if (data?.error) {
           options.onError?.(new Error(data.error))
           return
         }
 
-        if (data.chunk !== undefined) {
+        if (data?.chunk !== undefined) {
           options.onData(data.chunk)
         }
       }
@@ -120,10 +286,11 @@ export class TuffRendererTransport implements ITuffTransport {
         cleanup?.()
       }
 
-      const errorHandler = (data: { error: string }) => {
+      const errorHandler = (raw: unknown) => {
         if (cancelled)
           return
-        options.onError?.(new Error(data.error))
+        const data = this.unwrapChannelPayload<{ error: string }>(raw)
+        options.onError?.(new Error(data?.error))
         cleanup?.()
       }
 
@@ -200,7 +367,7 @@ export class TuffRendererTransport implements ITuffTransport {
     // Register with channel
     const cleanup = this.channel.regChannel(eventName, async (data: TReq) => {
       try {
-        return await handler(data)
+        return await handler(this.unwrapChannelPayload<TReq>(data))
       }
       catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -226,8 +393,8 @@ export class TuffRendererTransport implements ITuffTransport {
    * Phase 1: No-op. Batching will be implemented in Phase 2.
    */
   async flush(): Promise<void> {
-    // Phase 1: No batching implementation yet
-    return Promise.resolve()
+    const eventNames = Array.from(this.batchQueues.keys())
+    await Promise.all(eventNames.map(eventName => this.flushEvent(eventName)))
   }
 
   /**
@@ -244,4 +411,3 @@ export class TuffRendererTransport implements ITuffTransport {
     this.handlers.clear()
   }
 }
-

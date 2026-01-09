@@ -11,6 +11,32 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 // Use preload-exposed ipcRenderer via electron-toolkit
 const ipcRenderer = window.electron.ipcRenderer
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
+const CHANNEL_SENDSYNC_WARN_MS = 80
+const CHANNEL_SEND_WARN_MS = 500
+const CHANNEL_SEND_ERROR_MS = 2_000
+const PERF_REPORT_CHANNEL = 'touch:perf-report'
+
+type PerfReport = {
+  kind:
+    | 'channel.sendSync.slow'
+    | 'channel.send.slow'
+    | 'channel.send.timeout'
+    | 'channel.send.errorReply'
+  eventName: string
+  durationMs: number
+  at: number
+  payloadPreview?: string
+  stack?: string
+  meta?: Record<string, unknown>
+}
+
+function reportPerfToMain(report: PerfReport): void {
+  try {
+    ipcRenderer.send(PERF_REPORT_CHANNEL, report)
+  } catch {
+    // ignore perf reporting failures
+  }
+}
 
 class TouchChannel implements ITouchClientChannel {
   channelMap: Map<string, ((data: StandardChannelData) => any)[]> = new Map()
@@ -157,6 +183,8 @@ class TouchChannel implements ITouchClientChannel {
 
   send(eventName: string, arg: any): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
+    const startedAt = performance.now()
+    const stack = new Error().stack
 
     const data = {
       code: DataCode.SUCCESS,
@@ -198,13 +226,75 @@ class TouchChannel implements ITouchClientChannel {
           new Error(`Channel request "${eventName}" timed out after ${timeoutMs}ms`),
           { code: 'channel_timeout' }
         )
-        console.warn(error.message)
+        console.warn(error.message, {
+          payloadPreview: this.formatPayloadPreview(arg),
+          stack
+        })
+        reportPerfToMain({
+          kind: 'channel.send.timeout',
+          eventName,
+          durationMs: timeoutMs,
+          at: Date.now(),
+          payloadPreview: this.formatPayloadPreview(arg),
+          stack,
+          meta: { timeoutMs }
+        })
         reject(error)
       }, timeoutMs)
 
       this.pendingMap.set(uniqueId, (res) => {
         clearTimeout(timeoutHandle)
         this.pendingMap.delete(uniqueId)
+
+        const duration = performance.now() - startedAt
+        if (duration >= CHANNEL_SEND_ERROR_MS) {
+          console.error(`[Channel][send][slow] "${eventName}" took ${duration.toFixed(1)}ms`, {
+            payloadPreview: this.formatPayloadPreview(arg),
+            stack
+          })
+          reportPerfToMain({
+            kind: 'channel.send.slow',
+            eventName,
+            durationMs: duration,
+            at: Date.now(),
+            payloadPreview: this.formatPayloadPreview(arg),
+            stack,
+            meta: { threshold: CHANNEL_SEND_ERROR_MS }
+          })
+        } else if (duration >= CHANNEL_SEND_WARN_MS) {
+          console.warn(`[Channel][send][slow] "${eventName}" took ${duration.toFixed(1)}ms`, {
+            payloadPreview: this.formatPayloadPreview(arg),
+            stack
+          })
+          reportPerfToMain({
+            kind: 'channel.send.slow',
+            eventName,
+            durationMs: duration,
+            at: Date.now(),
+            payloadPreview: this.formatPayloadPreview(arg),
+            stack,
+            meta: { threshold: CHANNEL_SEND_WARN_MS }
+          })
+        }
+
+        if (res.code === DataCode.ERROR) {
+          console.warn(`[Channel][send][errorReply] "${eventName}" replied with ERROR`, {
+            payloadPreview: this.formatPayloadPreview(arg),
+            replyPreview: this.formatPayloadPreview(res.data),
+            stack
+          })
+          reportPerfToMain({
+            kind: 'channel.send.errorReply',
+            eventName,
+            durationMs: duration,
+            at: Date.now(),
+            payloadPreview: this.formatPayloadPreview(arg),
+            stack,
+            meta: {
+              replyPreview: this.formatPayloadPreview(res.data)
+            }
+          })
+        }
 
         resolve(res.data)
       })
@@ -223,7 +313,26 @@ class TouchChannel implements ITouchClientChannel {
     } as RawStandardChannelData
 
     try {
-      const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@main-process-message', data))
+      const startedAt = performance.now()
+      const raw = ipcRenderer.sendSync('@main-process-message', data)
+      const duration = performance.now() - startedAt
+
+      if (duration >= CHANNEL_SENDSYNC_WARN_MS) {
+        console.warn(`[Channel][sendSync][slow] "${eventName}" blocked renderer for ${duration.toFixed(1)}ms`, {
+          payloadPreview: this.formatPayloadPreview(arg),
+          stack: new Error().stack
+        })
+        reportPerfToMain({
+          kind: 'channel.sendSync.slow',
+          eventName,
+          durationMs: duration,
+          at: Date.now(),
+          payloadPreview: this.formatPayloadPreview(arg),
+          stack: new Error().stack
+        })
+      }
+
+      const res = this.__parse_raw_data(null, raw)
 
       if (res?.header?.status === 'reply') return res.data
 

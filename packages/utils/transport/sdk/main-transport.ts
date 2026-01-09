@@ -12,7 +12,7 @@ import type {
 import type { TuffEvent } from '../event/types'
 import type { ITouchChannel } from '../../channel'
 import { assertTuffEvent } from '../event/builder'
-import { ChannelType } from '../../channel'
+import { ChannelType, DataCode } from '../../channel'
 import { STREAM_SUFFIXES } from './constants'
 
 /**
@@ -79,46 +79,82 @@ export class TuffMainTransport implements ITuffTransportMain {
     const startEventName = `${eventName}${STREAM_SUFFIXES.START}`
     const cancelEventName = `${eventName}${STREAM_SUFFIXES.CANCEL}`
 
-    const startHandler = async (data: { streamId: string; [key: string]: any }) => {
-      const { streamId, ...payload } = data
+    const streams = new Map<string, { cancelled: boolean }>()
 
-      // Create stream context
+    const startHandler = (data: any) => {
+      const rawPayload = data?.data as { streamId?: string; [key: string]: any } | undefined
+      const streamId = rawPayload?.streamId
+      const sender = data?.header?.event?.sender as any
+
+      if (!streamId || !sender) {
+        throw new Error(`[TuffTransport] Invalid stream start for "${eventName}"`)
+      }
+
+      streams.set(streamId, { cancelled: false })
+
+      const sendToSender = (name: string, payload: any) => {
+        try {
+          sender.send('@main-process-message', {
+            code: DataCode.SUCCESS,
+            data: payload,
+            name,
+            header: { status: 'request', type: ChannelType.MAIN },
+          })
+        } catch {
+          // Ignore send failures (renderer may have been destroyed)
+        }
+      }
+
+      const cleanup = () => {
+        streams.delete(streamId)
+      }
+
       const streamContext: StreamContext<TChunk> = {
         emit: (chunk: TChunk) => {
-          // Send chunk via IPC
-          const dataEventName = `${eventName}${STREAM_SUFFIXES.DATA}:${streamId}`
-          // Note: This requires access to sender WebContents
-          // For now, we'll need to store it or pass it through context
-          // This is a simplified implementation
+          if (streams.get(streamId)?.cancelled)
+            return
+          sendToSender(`${eventName}${STREAM_SUFFIXES.DATA}:${streamId}`, { chunk })
         },
         error: (err: Error) => {
-          const errorEventName = `${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`
-          // Send error via IPC
+          if (streams.get(streamId)?.cancelled)
+            return
+          sendToSender(`${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`, {
+            error: err instanceof Error ? err.message : String(err),
+          })
+          cleanup()
         },
         end: () => {
-          const endEventName = `${eventName}${STREAM_SUFFIXES.END}:${streamId}`
-          // Send end via IPC
+          if (streams.get(streamId)?.cancelled)
+            return
+          sendToSender(`${eventName}${STREAM_SUFFIXES.END}:${streamId}`, {})
+          cleanup()
         },
         isCancelled: () => {
-          // Check if stream was cancelled
-          return false
+          return streams.get(streamId)?.cancelled === true
         },
         streamId,
       }
 
-      try {
-        await handler(payload as TReq, streamContext)
-      }
-      catch (error) {
+      const payload = rawPayload ? { ...rawPayload } : {}
+      delete (payload as any).streamId
+      const requestPayload = payload as unknown as TReq
+
+      Promise.resolve(handler(requestPayload, streamContext)).catch((error) => {
         const errorMessage = error instanceof Error ? error.message : String(error)
         console.error(`[TuffTransport] Stream handler error for "${eventName}":`, errorMessage)
         streamContext.error(error as Error)
-      }
+      })
     }
 
-    const cancelHandler = (data: { streamId: string }) => {
-      // Handle stream cancellation
-      // Mark stream as cancelled
+    const cancelHandler = (data: any) => {
+      const rawPayload = data?.data as { streamId?: string } | undefined
+      const streamId = rawPayload?.streamId
+      if (!streamId)
+        return
+      const state = streams.get(streamId)
+      if (state)
+        state.cancelled = true
+      streams.delete(streamId)
     }
 
     const startCleanup = this.channel.regChannel(ChannelType.MAIN, startEventName, startHandler)
@@ -141,9 +177,12 @@ export class TuffMainTransport implements ITuffTransportMain {
     assertTuffEvent(event, 'TuffMainTransport.sendToWindow')
 
     const eventName = event.toEventName()
-    // Note: This requires window manager to resolve windowId to BrowserWindow
-    // For now, this is a placeholder implementation
-    throw new Error('[TuffTransport] sendToWindow not yet implemented')
+    const { BrowserWindow } = await import('electron')
+    const win = BrowserWindow.fromId(windowId)
+    if (!win) {
+      throw new Error(`[TuffTransport] Cannot find BrowserWindow for id=${windowId}`)
+    }
+    return this.channel.sendTo(win, ChannelType.MAIN, eventName, payload)
   }
 
   /**
@@ -200,4 +239,3 @@ export class TuffMainTransport implements ITuffTransportMain {
     this.channel.broadcast(ChannelType.MAIN, eventName, payload)
   }
 }
-

@@ -2,6 +2,17 @@ import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
+import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
+import type {
+  ClipboardApplyRequest,
+  ClipboardChangePayload,
+  ClipboardDeleteRequest,
+  ClipboardItem,
+  ClipboardQueryRequest,
+  ClipboardQueryResponse,
+  ClipboardSetFavoriteRequest,
+  TuffInputType,
+} from '@talex-touch/utils/transport/events/types'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -10,6 +21,8 @@ import { DataCode } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage } from 'electron'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { genTouchChannel } from '../core/channel-core'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { BaseModule } from './abstract-base-module'
@@ -297,6 +310,10 @@ class ClipboardHelper {
 }
 
 export class ClipboardModule extends BaseModule {
+  private transport: ITuffTransportMain | null = null
+  private transportDisposers: Array<() => void> = []
+  private transportChangeListeners = new Set<() => void>()
+
   private memoryCache: IClipboardItem[] = []
   private intervalId: NodeJS.Timeout | null = null
   private isDestroyed = false
@@ -388,6 +405,50 @@ export class ClipboardModule extends BaseModule {
 
   public getLatestItem(): IClipboardItem | undefined {
     return this.memoryCache[0]
+  }
+
+  private toTransportItem(item: IClipboardItem): ClipboardItem | null {
+    if (!item || typeof item.id !== 'number')
+      return null
+
+    const createdAt = item.timestamp
+      ? (item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp).getTime())
+      : Date.now()
+
+    const type = item.type === 'image'
+      ? (1 as TuffInputType)
+      : item.type === 'files'
+        ? (2 as TuffInputType)
+        : (0 as TuffInputType)
+
+    return {
+      id: item.id,
+      type,
+      value: item.content ?? '',
+      html: item.type === 'text' ? (item.rawContent ?? undefined) : undefined,
+      source: item.sourceApp ?? undefined,
+      createdAt,
+      isFavorite: item.isFavorite ?? undefined
+    }
+  }
+
+  private buildTransportChangePayload(): ClipboardChangePayload {
+    const history = this.memoryCache
+      .map(item => this.toTransportItem(item))
+      .filter((item): item is ClipboardItem => !!item)
+    const latest = history.length > 0 ? history[0] : null
+    return { latest, history }
+  }
+
+  private notifyTransportChange(): void {
+    const listeners = Array.from(this.transportChangeListeners)
+    for (const listener of listeners) {
+      try {
+        listener()
+      } catch {
+        // ignore listener errors
+      }
+    }
   }
 
   private parseFileList(content?: string | null): string[] {
@@ -667,6 +728,7 @@ export class ClipboardModule extends BaseModule {
     }
 
     this.updateMemoryCache(persisted)
+    this.notifyTransportChange()
 
     const touchChannel = genTouchChannel()
     for (const win of windowManager.windows) {
@@ -849,6 +911,7 @@ export class ClipboardModule extends BaseModule {
     }
 
     this.updateMemoryCache(persisted)
+    this.notifyTransportChange()
 
     const touchChannel = genTouchChannel()
     for (const win of windowManager.windows) {
@@ -965,6 +1028,11 @@ export class ClipboardModule extends BaseModule {
         await this.db!.update(clipboardHistory)
           .set({ isFavorite })
           .where(eq(clipboardHistory.id, id))
+        const cached = this.memoryCache.find(item => item.id === id)
+        if (cached) {
+          cached.isFavorite = isFavorite
+          this.notifyTransportChange()
+        }
         reply(DataCode.SUCCESS, null)
       })
 
@@ -972,6 +1040,7 @@ export class ClipboardModule extends BaseModule {
         const { id } = data ?? {}
         await this.db!.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
         this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
+        this.notifyTransportChange()
         reply(DataCode.SUCCESS, null)
       })
 
@@ -979,6 +1048,7 @@ export class ClipboardModule extends BaseModule {
         const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
         await this.db!.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
         this.memoryCache = []
+        this.notifyTransportChange()
         reply(DataCode.SUCCESS, null)
       })
 
@@ -1224,12 +1294,143 @@ export class ClipboardModule extends BaseModule {
     registerHandlers(ChannelType.PLUGIN)
   }
 
+  private registerTransportHandlers(): void {
+    const channel = genTouchChannel()
+    this.transport = getTuffTransportMain(channel as any, channel as any)
+
+    this.transportDisposers.push(
+      this.transport.on(ClipboardEvents.getLatest, () => {
+        const latest = this.getLatestItem()
+        return latest ? this.toTransportItem(latest) : null
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(ClipboardEvents.getHistory, async (request: ClipboardQueryRequest) => {
+        const page = Number.isFinite(request?.page) ? Math.max(1, Number(request.page)) : 1
+        const limit = Number.isFinite(request?.limit)
+          ? Math.min(Math.max(Number(request.limit), 1), 100)
+          : PAGE_SIZE
+
+        if (!this.db) {
+          return { items: [], total: 0, page, limit } satisfies ClipboardQueryResponse
+        }
+
+        const offset = (page - 1) * limit
+
+        let whereClause: any = undefined
+        if (request?.type === 'favorite') {
+          whereClause = eq(clipboardHistory.isFavorite, true)
+        } else if (request?.type === 'text') {
+          whereClause = eq(clipboardHistory.type, 'text')
+        } else if (request?.type === 'image') {
+          whereClause = eq(clipboardHistory.type, 'image')
+        }
+
+        const rows = await this.db
+          .select()
+          .from(clipboardHistory)
+          .where(whereClause)
+          .orderBy(desc(clipboardHistory.timestamp))
+          .limit(limit)
+          .offset(offset)
+
+        const totalResult = await this.db
+          .select({ count: sql<number>`count(*)` })
+          .from(clipboardHistory)
+          .where(whereClause)
+
+        const total = totalResult[0]?.count ?? 0
+        const items = rows
+          .map(row => this.toTransportItem(row as unknown as IClipboardItem))
+          .filter((item): item is ClipboardItem => !!item)
+
+        return { items, total, page, limit } satisfies ClipboardQueryResponse
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(ClipboardEvents.apply, async (request: ClipboardApplyRequest) => {
+        if (!this.db)
+          return
+        const [row] = await this.db
+          .select()
+          .from(clipboardHistory)
+          .where(eq(clipboardHistory.id, request.id))
+          .limit(1)
+
+        if (!row)
+          return
+
+        if (request.autoPaste === false) {
+          this.writeItemToClipboard(row as unknown as IClipboardItem, { item: row as any })
+          return
+        }
+
+        await this.applyToActiveApp({ item: row as any })
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(ClipboardEvents.delete, async (request: ClipboardDeleteRequest) => {
+        if (!this.db)
+          return
+        await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
+        this.memoryCache = this.memoryCache.filter(item => item.id !== request.id)
+        this.notifyTransportChange()
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(ClipboardEvents.setFavorite, async (request: ClipboardSetFavoriteRequest) => {
+        if (!this.db)
+          return
+        await this.db
+          .update(clipboardHistory)
+          .set({ isFavorite: request.isFavorite })
+          .where(eq(clipboardHistory.id, request.id))
+
+        const cached = this.memoryCache.find(item => item.id === request.id)
+        if (cached) {
+          cached.isFavorite = request.isFavorite
+          this.notifyTransportChange()
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.onStream(ClipboardEvents.change, (_request: void, context: StreamContext<ClipboardChangePayload>) => {
+        const listener = () => {
+          if (context.isCancelled()) {
+            this.transportChangeListeners.delete(listener)
+            return
+          }
+          context.emit(this.buildTransportChangePayload())
+        }
+
+        this.transportChangeListeners.add(listener)
+        listener()
+      })
+    )
+  }
+
   public destroy(): void {
     this.isDestroyed = true
     if (this.intervalId) {
       clearInterval(this.intervalId)
       this.intervalId = null
     }
+
+    for (const dispose of this.transportDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
+    this.transportChangeListeners.clear()
+    this.transport = null
   }
 
   onInit(): MaybePromise<void> {
@@ -1237,6 +1438,7 @@ export class ClipboardModule extends BaseModule {
     this.clipboardHelper = new ClipboardHelper()
     this.startClipboardMonitoring()
     this.loadInitialCache()
+    this.registerTransportHandlers()
     ocrService
       .start()
       .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
