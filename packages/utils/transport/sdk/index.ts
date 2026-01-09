@@ -50,6 +50,7 @@ export function useTuffTransport(): ITuffTransport {
  */
 export function createTuffRendererTransport(module?: string): ITuffTransport {
   // Module parameter is reserved for future namespacing
+  void module
   // For now, we create a new instance
   return new TuffRendererTransport()
 }
@@ -85,4 +86,3 @@ export function getTuffTransportMain(
 ): ITuffTransportMain {
   return new TuffMainTransport(channel, keyManager)
 }
-

@@ -12,9 +12,16 @@ import {
 function convertClipboardItem(item: ClipboardItem | null): IClipboardItem | null {
   if (!item) return null
 
+  const type =
+    item.type === 1
+      ? 'image'
+      : item.type === 2
+        ? 'files'
+        : 'text'
+
   return {
     id: item.id,
-    type: item.type as 'text' | 'image' | 'files',
+    type,
     content: item.value,
     thumbnail: undefined, // Not available in ClipboardItem
     rawContent: item.html || item.rtf || undefined,
@@ -60,10 +67,10 @@ export const CLIPBOARD_CHANNELS = {
 export function useClipboardChannel(handlers?: ClipboardChannelHandlers): () => void {
   if (!handlers) return () => {}
 
-  let streamController: ReturnType<typeof onClipboardChange> | null = null
+  let streamControllerPromise: ReturnType<typeof onClipboardChange> | null = null
 
   if (handlers.onNewItem) {
-    streamController = onClipboardChange((payload: ClipboardChangePayload) => {
+    streamControllerPromise = onClipboardChange((payload: ClipboardChangePayload) => {
       // Convert and notify about the latest item
       if (payload.latest) {
         const converted = convertClipboardItem(payload.latest)
@@ -76,9 +83,9 @@ export function useClipboardChannel(handlers?: ClipboardChannelHandlers): () => 
 
   // Return cleanup function
   return () => {
-    if (streamController) {
-      streamController.cancel()
-      streamController = null
+    if (streamControllerPromise) {
+      streamControllerPromise.then(controller => controller.cancel()).catch(() => {})
+      streamControllerPromise = null
     }
   }
 }
