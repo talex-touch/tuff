@@ -1455,9 +1455,11 @@ export class ClipboardModule extends BaseModule {
     this.startClipboardMonitoring()
     this.loadInitialCache()
     this.registerTransportHandlers()
-    ocrService
-      .start()
-      .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
+    setImmediate(() => {
+      ocrService
+        .start()
+        .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
+    })
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)
   }
 

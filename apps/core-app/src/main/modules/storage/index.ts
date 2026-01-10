@@ -1,7 +1,11 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
+import type { StorageUpdateNotification } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import { createLogger } from '../../utils/logger'
@@ -17,6 +21,7 @@ let pluginConfigPath: string
 
 // Debounced broadcast mechanism to batch updates
 const pendingBroadcasts = new Map<string, NodeJS.Timeout>()
+let storageUpdateEmitter: ((name: string, version: number) => void) | null = null
 
 /**
  * Broadcast storage update to all windows
@@ -39,8 +44,14 @@ function broadcastUpdate(name: string, version: number, sourceWebContentsId?: nu
       if (sourceWebContentsId && win.webContents.id === sourceWebContentsId) {
         continue
       }
-      $app.channel?.sendTo(win, ChannelType.MAIN, 'storage:update', { name, version })
+      const channel = $app.channel as any
+      if (channel?.broadcastTo) {
+        channel.broadcastTo(win, ChannelType.MAIN, 'storage:update', { name, version })
+      } else {
+        channel?.sendTo?.(win, ChannelType.MAIN, 'storage:update', { name, version })
+      }
     }
+    storageUpdateEmitter?.(name, version)
     pendingBroadcasts.delete(name)
   }, 50) // 50ms debounce window
 
@@ -66,6 +77,9 @@ export class StorageModule extends BaseModule {
   private frequencyMonitor = new StorageFrequencyMonitor()
   private subscribers = new Map<string, Set<(data: object) => void>>()
   private hotConfigs = new Set<string>(['app-setting.ini'])
+  private transport: ITuffTransportMain | null = null
+  private transportDisposers: Array<() => void> = []
+  private updateStreams = new Set<StreamContext<StorageUpdateNotification>>()
 
   pluginConfigs = new Map<string, object>()
   PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
@@ -90,7 +104,7 @@ export class StorageModule extends BaseModule {
     )
   }
 
-  onInit({ file }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+  onInit({ file, app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     pluginConfigPath = path.join(file.dirPath!, 'plugins')
     fse.ensureDirSync(pluginConfigPath)
     storageLog.info(`Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`)
@@ -99,6 +113,16 @@ export class StorageModule extends BaseModule {
     this.lruManager.startCleanup()
 
     this.setupListeners()
+
+    this.transport = getTuffTransportMain(
+      app.channel as any,
+      (app.channel as any)?.keyManager ?? app.channel,
+    )
+    this.registerTransportHandlers()
+
+    storageUpdateEmitter = (name, version) => {
+      this.emitStorageUpdate(name, version)
+    }
   }
 
   async onDestroy(): Promise<void> {
@@ -106,7 +130,56 @@ export class StorageModule extends BaseModule {
     this.lruManager.stopCleanup()
     this.cache.clear()
     this.pluginConfigs.clear()
+    for (const stream of Array.from(this.updateStreams)) {
+      if (!stream.isCancelled()) {
+        stream.end()
+      }
+    }
+    this.updateStreams.clear()
+    for (const dispose of this.transportDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
+    this.transport = null
+    storageUpdateEmitter = null
     storageLog.success('Shutdown complete')
+  }
+
+  public emitStorageUpdate(name: string, version?: number): void {
+    if (this.updateStreams.size === 0) {
+      return
+    }
+
+    const payload: StorageUpdateNotification = {
+      key: name,
+      timestamp: Date.now(),
+      version,
+      source: 'local',
+    }
+
+    for (const stream of Array.from(this.updateStreams)) {
+      if (stream.isCancelled()) {
+        this.updateStreams.delete(stream)
+        continue
+      }
+      stream.emit(payload)
+    }
+  }
+
+  private registerTransportHandlers(): void {
+    if (!this.transport) {
+      return
+    }
+
+    this.transportDisposers.push(
+      this.transport.onStream(StorageEvents.app.updated, (_payload, context) => {
+        this.updateStreams.add(context)
+      }),
+    )
   }
 
   /**

@@ -139,20 +139,21 @@ export class TouchApp implements TalexTouch.TouchApp {
       const rendererStart = rendererStartTime || Date.now()
       const currentTime = Date.now()
 
-      // Record renderer process metrics for analytics
-      const analytics = getStartupAnalytics()
-      analytics.setRendererProcessMetrics({
-        startTime: rendererStart,
-        readyTime: currentTime,
-        domContentLoaded: undefined, // Will be set by renderer
-        firstInteractive: undefined, // Will be set by renderer
-        loadEventEnd: undefined, // Will be set by renderer
-      })
+      const senderWebContents = event?.sender as Electron.WebContents | undefined
+      const senderId = senderWebContents?.id
+      const primaryRendererId = this.window.window.webContents.id
 
-      // Save metrics to history (async, don't wait)
-      void analytics.saveToHistory()
-
-      void analytics.reportMetrics()
+      if (senderId === primaryRendererId) {
+        // Record renderer process metrics for analytics (primary window only).
+        const analytics = getStartupAnalytics()
+        analytics.setRendererProcessMetrics({
+          startTime: rendererStart,
+          readyTime: currentTime,
+          domContentLoaded: undefined, // Will be set by renderer
+          firstInteractive: undefined, // Will be set by renderer
+          loadEventEnd: undefined, // Will be set by renderer
+        })
+      }
 
       return {
         id: (event?.sender as Electron.WebContents).id,

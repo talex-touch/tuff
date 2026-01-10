@@ -9,8 +9,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "lint": "eslint .",
-    "lint:fix": "eslint --fix .",
+    "lint": "eslint --cache \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
+    "lint:fix": "eslint --cache --fix \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
     "lint:staged": "lint-staged",
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",

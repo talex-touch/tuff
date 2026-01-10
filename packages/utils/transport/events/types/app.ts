@@ -189,6 +189,16 @@ export interface ExecuteCommandResponse {
   error?: string
 }
 
+/**
+ * Request to read a local file as text.
+ */
+export interface ReadFileRequest {
+  /**
+   * File path or local file URL (file://, tfile://).
+   */
+  source: string
+}
+
 // ============================================================================
 // Build Verification Types
 // ============================================================================

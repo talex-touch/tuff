@@ -111,6 +111,11 @@ export interface StorageUpdateNotification {
   value?: unknown
 
   /**
+   * Version number if available.
+   */
+  version?: number
+
+  /**
    * Update timestamp.
    */
   timestamp: number

@@ -27,6 +27,17 @@ import { getOrCreateTelemetryClientId } from './telemetry-client'
 const analyticsLog = createLogger('StartupAnalytics')
 const REPORT_QUEUE_FILE = 'startup-analytics-report-queue.json'
 const REPORT_QUEUE_MAX_AGE = 14 * 24 * 60 * 60 * 1000
+const REPORT_QUEUE_BACKOFF_BASE_MS = 30_000
+const REPORT_QUEUE_BACKOFF_MAX_MS = 10 * 60_000
+
+type FileReportQueueItem = {
+  payload: any
+  endpoint: string
+  createdAt: number
+  retryCount?: number
+  lastAttemptAt?: number
+  lastError?: string
+}
 
 /**
  * Startup Analytics Service
@@ -38,6 +49,7 @@ export class StartupAnalytics {
   private config: AnalyticsConfig
   private startTime: number
   private reportQueueStore?: ReportQueueStore
+  private autoFinalizePromise: Promise<void> | null = null
 
   constructor(config?: Partial<AnalyticsConfig>) {
     const enabled = getBooleanEnv('TUFF_STARTUP_ANALYTICS_ENABLED', true)
@@ -71,9 +83,17 @@ export class StartupAnalytics {
    */
   setMainProcessMetrics(metrics: MainProcessMetrics): void {
     this.currentMetrics.mainProcess = metrics
+
+    if (this.currentMetrics.renderer) {
+      this.currentMetrics.totalStartupTime
+        = this.currentMetrics.renderer.readyTime - metrics.processCreationTime
+    }
+
     analyticsLog.debug('Main process metrics recorded', {
       meta: { modulesLoadTime: metrics.modulesLoadTime },
     })
+
+    this.tryAutoFinalize()
   }
 
   /**
@@ -94,6 +114,8 @@ export class StartupAnalytics {
         readyTime: metrics.readyTime - metrics.startTime,
       },
     })
+
+    this.tryAutoFinalize()
   }
 
   /**
@@ -187,15 +209,28 @@ export class StartupAnalytics {
     return JSON.stringify(metrics, null, 2)
   }
 
-  private loadReportQueue(): Array<{ payload: any; endpoint: string; createdAt: number }> {
+  private getReportBackoffMs(retryCount: number): number {
+    const exponent = Math.min(10, Math.max(0, retryCount))
+    return Math.min(REPORT_QUEUE_BACKOFF_MAX_MS, REPORT_QUEUE_BACKOFF_BASE_MS * 2 ** exponent)
+  }
+
+  private isReportDue(item: Pick<FileReportQueueItem, 'lastAttemptAt' | 'retryCount'>): boolean {
+    if (!item.lastAttemptAt)
+      return true
+    const retryCount = item.retryCount ?? 0
+    const backoffMs = this.getReportBackoffMs(retryCount)
+    return Date.now() - item.lastAttemptAt >= backoffMs
+  }
+
+  private loadReportQueue(): FileReportQueueItem[] {
     try {
       const data = getConfig(REPORT_QUEUE_FILE) as unknown
       if (Array.isArray(data))
-        return data
+        return data as FileReportQueueItem[]
       if (typeof data === 'string') {
         const parsed = JSON.parse(data)
         if (Array.isArray(parsed))
-          return parsed
+          return parsed as FileReportQueueItem[]
       }
     }
     catch {
@@ -204,7 +239,7 @@ export class StartupAnalytics {
     return []
   }
 
-  private saveReportQueue(queue: Array<{ payload: any; endpoint: string; createdAt: number }>): void {
+  private saveReportQueue(queue: FileReportQueueItem[]): void {
     const pruned = queue.filter(item => Date.now() - item.createdAt <= REPORT_QUEUE_MAX_AGE)
     saveConfig(REPORT_QUEUE_FILE, JSON.stringify(pruned, null, 2))
   }
@@ -235,8 +270,19 @@ export class StartupAnalytics {
 
     const freshQueue = queue.filter(item => Date.now() - item.createdAt <= REPORT_QUEUE_MAX_AGE)
     const remaining: typeof freshQueue = []
+    let attempted = 0
+    let succeeded = 0
+    let skipped = 0
+    let firstError: string | null = null
 
     for (const item of freshQueue) {
+      if (!this.isReportDue(item)) {
+        skipped += 1
+        remaining.push(item)
+        continue
+      }
+
+      attempted += 1
       try {
         const target = item.endpoint || endpoint
         const response = await fetch(target, {
@@ -248,18 +294,40 @@ export class StartupAnalytics {
           const text = await response.text().catch(() => '')
           throw new Error(`Queued report failed: ${response.status} ${response.statusText} ${text}`.trim())
         }
-        analyticsLog.success('Queued startup analytics reported', {
-          meta: { endpoint: target, queuedAt: item.createdAt },
-        })
+        succeeded += 1
       }
       catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        analyticsLog.warn('Retrying queued startup analytics later', { meta: { error: errorMessage } })
-        remaining.push(item)
+        firstError ||= errorMessage
+        remaining.push({
+          ...item,
+          retryCount: (item.retryCount ?? 0) + 1,
+          lastAttemptAt: Date.now(),
+          lastError: errorMessage,
+        })
       }
     }
 
     this.saveReportQueue(remaining)
+
+    if (attempted === 0)
+      return
+
+    if (succeeded === attempted) {
+      analyticsLog.success('Queued startup analytics flushed', {
+        meta: { count: succeeded },
+      })
+      return
+    }
+
+    analyticsLog.warn('Queued startup analytics flush incomplete', {
+      meta: {
+        attempted,
+        succeeded,
+        skipped,
+        error: firstError,
+      },
+    })
   }
 
   private async flushQueuedReportsFromDb(store: ReportQueueStore, endpoint: string): Promise<void> {
@@ -268,7 +336,18 @@ export class StartupAnalytics {
     if (!items.length)
       return
 
+    let attempted = 0
+    let succeeded = 0
+    let skipped = 0
+    let firstError: string | null = null
+
     for (const item of items) {
+      if (!this.isReportDue(item)) {
+        skipped += 1
+        continue
+      }
+
+      attempted += 1
       try {
         const target = item.endpoint || endpoint
         const response = await fetch(target, {
@@ -281,18 +360,35 @@ export class StartupAnalytics {
           throw new Error(`Queued report failed: ${response.status} ${response.statusText} ${text}`.trim())
         }
         await store.remove(item.id)
-        analyticsLog.success('Queued startup analytics reported', {
-          meta: { endpoint: target, queuedAt: item.createdAt },
-        })
+        succeeded += 1
       }
       catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         await store.markAttempt(item.id, errorMessage)
-        analyticsLog.warn('Retrying queued startup analytics later', { meta: { error: errorMessage } })
+        firstError ||= errorMessage
       }
     }
 
     await store.prune(cutoff)
+
+    if (attempted === 0)
+      return
+
+    if (succeeded === attempted) {
+      analyticsLog.success('Queued startup analytics flushed (db)', {
+        meta: { count: succeeded },
+      })
+      return
+    }
+
+    analyticsLog.warn('Queued startup analytics flush incomplete (db)', {
+      meta: {
+        attempted,
+        succeeded,
+        skipped,
+        error: firstError,
+      },
+    })
   }
 
   /**
@@ -455,6 +551,22 @@ export class StartupAnalytics {
         analyticsLog.warn('Failed to queue startup analytics', { meta: { error: queueMessage } })
       }
     }
+  }
+
+  private tryAutoFinalize(): void {
+    if (this.autoFinalizePromise)
+      return
+    const metrics = this.getCurrentMetrics()
+    if (!metrics)
+      return
+
+    this.autoFinalizePromise = (async () => {
+      await this.saveToHistory()
+      await this.reportMetrics()
+    })().catch((error) => {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      analyticsLog.warn('Failed to auto finalize startup analytics', { meta: { error: errorMessage } })
+    })
   }
 
   /**

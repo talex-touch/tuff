@@ -23,3 +23,6 @@ export * from './clipboard'
 
 // MetaOverlay domain types
 export * from './meta-overlay'
+
+// File index domain types
+export * from './file-index'

@@ -1,12 +1,13 @@
 import { ref } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 
 /**
  * 文件索引监控 Composable
  * 提供索引状态查询和手动重建功能
  */
 export function useFileIndexMonitor() {
-  const channel = touchChannel
+  const transport = useTuffTransport()
   
   const indexProgress = ref<any>(null)
   
@@ -15,7 +16,7 @@ export function useFileIndexMonitor() {
    */
   const getIndexStatus = async () => {
     try {
-      const status = await channel.send('file-index:status', {})
+      const status = await transport.send(AppEvents.fileIndex.status)
       return status
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to get index status:', error)
@@ -28,7 +29,7 @@ export function useFileIndexMonitor() {
    */
   const getBatteryLevel = async () => {
     try {
-      const battery = await channel.send('file-index:battery-level', {})
+      const battery = await transport.send(AppEvents.fileIndex.batteryLevel)
       return battery
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to get battery level:', error)
@@ -41,7 +42,7 @@ export function useFileIndexMonitor() {
    */
   const getIndexStats = async () => {
     try {
-      const stats = await channel.send('file-index:stats', {})
+      const stats = await transport.send(AppEvents.fileIndex.stats)
       return stats
     } catch (error: any) {
       // Ignore timeout errors during startup - module may not be ready yet
@@ -60,7 +61,7 @@ export function useFileIndexMonitor() {
   const handleRebuild = async () => {
     try {
       console.log('[FileIndexMonitor] Triggering manual index rebuild...')
-      const result = await channel.send('file-index:rebuild', {})
+      const result = await transport.send(AppEvents.fileIndex.rebuild)
       
       if (result?.success) {
         console.log('[FileIndexMonitor] Rebuild triggered successfully')
@@ -80,16 +81,34 @@ export function useFileIndexMonitor() {
    * 返回取消订阅的函数
    */
   const onProgressUpdate = (callback: (progress: any) => void) => {
-    const handler = (data: any) => {
-      indexProgress.value = data.data
-      callback(data.data)
+    let cancelled = false
+    let controller: { cancel: () => void } | null = null
+
+    transport
+      .stream(AppEvents.fileIndex.progress, undefined, {
+        onData: (data) => {
+          indexProgress.value = data
+          callback(data)
+        },
+        onError: (err) => {
+          console.error('[FileIndexMonitor] Progress stream error:', err)
+        }
+      })
+      .then((stream) => {
+        if (cancelled) {
+          stream.cancel()
+          return
+        }
+        controller = stream
+      })
+      .catch((error) => {
+        console.error('[FileIndexMonitor] Failed to start progress stream:', error)
+      })
+
+    return () => {
+      cancelled = true
+      controller?.cancel()
     }
-    
-    // 使用 regChannel 注册监听器,它会返回取消函数
-    const unsubscribe = channel.regChannel('file-index:progress', handler)
-    
-    // 返回取消订阅函数
-    return unsubscribe
   }
   
   return {

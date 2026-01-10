@@ -46,6 +46,7 @@ import type {
   PerformanceHistoryEntry,
   PerformanceSummary,
   PluginStats,
+  ReadFileRequest,
   ReportMetricsRequest,
   ReportMetricsResponse,
   ShowInFolderRequest,
@@ -139,6 +140,7 @@ import type {
   StorageDeleteRequest,
   StorageGetRequest,
   StorageSetRequest,
+  StorageUpdateNotification,
 } from './types/storage'
 
 // ============================================================================
@@ -152,6 +154,18 @@ import { defineEvent } from '../event/builder'
 // ============================================================================
 
 import { MetaOverlayEvents } from './meta-overlay'
+
+// ============================================================================
+// File Index Events
+// ============================================================================
+
+import type {
+  FileIndexBatteryStatus,
+  FileIndexProgress,
+  FileIndexRebuildResult,
+  FileIndexStats,
+  FileIndexStatus,
+} from './types/file-index'
 
 // Re-export all types for convenience
 export * from './types'
@@ -256,6 +270,61 @@ export const AppEvents = {
       .module('system')
       .event('get-cwd')
       .define<void, string>(),
+
+    /**
+     * Read a local file as text.
+     */
+    readFile: defineEvent('app')
+      .module('system')
+      .event('read-file')
+      .define<ReadFileRequest, string>(),
+  },
+
+  /**
+   * File index events.
+   */
+  fileIndex: {
+    /**
+     * Get current indexing status.
+     */
+    status: defineEvent('app')
+      .module('file-index')
+      .event('status')
+      .define<void, FileIndexStatus>(),
+
+    /**
+     * Get indexing statistics.
+     */
+    stats: defineEvent('app')
+      .module('file-index')
+      .event('stats')
+      .define<void, FileIndexStats>(),
+
+    /**
+     * Trigger a full index rebuild.
+     */
+    rebuild: defineEvent('app')
+      .module('file-index')
+      .event('rebuild')
+      .define<void, FileIndexRebuildResult>(),
+
+    /**
+     * Get current battery status (for indexing throttling UI).
+     */
+    batteryLevel: defineEvent('app')
+      .module('file-index')
+      .event('battery-level')
+      .define<void, FileIndexBatteryStatus | null>(),
+
+    /**
+     * Stream indexing progress updates.
+     */
+    progress: defineEvent('app')
+      .module('file-index')
+      .event('progress')
+      .define<void, AsyncIterable<FileIndexProgress>>({
+        stream: { enabled: true },
+      }),
   },
 
   /**
@@ -678,6 +747,16 @@ export const StorageEvents = {
       .module('app')
       .event('delete')
       .define<StorageDeleteRequest, void>(),
+
+    /**
+     * Subscribe to storage updates.
+     */
+    updated: defineEvent('storage')
+      .module('app')
+      .event('updated')
+      .define<void, AsyncIterable<StorageUpdateNotification>>({
+        stream: { enabled: true },
+      }),
   },
 
   /**

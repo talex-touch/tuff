@@ -16,6 +16,7 @@ import SettingUpdate from './SettingUpdate.vue'
 import SettingUser from './SettingUser.vue'
 
 const isWindows = computed(() => window.electron?.process?.platform === 'win32')
+const isDev = import.meta.env.DEV
 </script>
 
 <template>
@@ -41,7 +42,7 @@ const isWindows = computed(() => window.electron?.process?.platform === 'win32')
 
       <SettingSentry />
 
-      <SettingMessages />
+      <SettingMessages v-if="isDev" />
 
       <!-- <SettingStorage /> -->
 

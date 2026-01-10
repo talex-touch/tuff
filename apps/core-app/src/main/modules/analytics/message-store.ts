@@ -4,22 +4,36 @@ import type {
   AnalyticsMessageStatus,
 } from '@talex-touch/utils/analytics'
 import { randomUUID } from 'node:crypto'
-import { getConfig, saveConfig } from '../storage'
+import { app } from 'electron'
 
-const MESSAGE_FILE = 'analytics-messages.json'
 const MESSAGE_MAX_AGE = 30 * 24 * 60 * 60 * 1000
-const MESSAGE_MAX_COUNT = 200
+const MESSAGE_MAX_COUNT = 120
+const MESSAGE_DEDUPE_WINDOW_MS = 10 * 60 * 1000
 
 type MessageInput = Omit<AnalyticsMessage, 'id' | 'createdAt' | 'status'> & {
   status?: AnalyticsMessageStatus
   createdAt?: number
 }
 
+type MessageDedupeEntry = {
+  message: AnalyticsMessage
+  count: number
+  firstAt: number
+  lastAt: number
+}
+
 export class AnalyticsMessageStore {
   private listeners = new Set<(message: AnalyticsMessage) => void | Promise<void>>()
+  private messages: AnalyticsMessage[] = []
+  private dedupeIndex = new Map<string, MessageDedupeEntry>()
+  private readonly isDev = !app.isPackaged || process.env.NODE_ENV === 'development'
 
   list(request?: AnalyticsMessageListRequest): AnalyticsMessage[] {
-    const messages = this.load()
+    if (!this.isDev) {
+      return []
+    }
+
+    const messages = this.getMessages()
     const status = request?.status ?? 'all'
 
     const filtered = messages.filter((message) => {
@@ -37,6 +51,27 @@ export class AnalyticsMessageStore {
   }
 
   add(input: MessageInput): AnalyticsMessage {
+    const now = input.createdAt ?? Date.now()
+    const dedupeKey = buildDedupeKey(input)
+    const existing = this.dedupeIndex.get(dedupeKey)
+
+    if (existing && now - existing.lastAt <= MESSAGE_DEDUPE_WINDOW_MS) {
+      existing.count += 1
+      existing.lastAt = now
+      existing.message.createdAt = now
+      existing.message.status = 'unread'
+      existing.message.meta = {
+        ...existing.message.meta,
+        count: existing.count,
+        firstAt: existing.firstAt,
+        lastAt: existing.lastAt,
+      }
+      if (this.isDev) {
+        this.bumpMessage(existing.message)
+      }
+      return existing.message
+    }
+
     const message: AnalyticsMessage = {
       id: randomUUID(),
       source: input.source,
@@ -45,24 +80,37 @@ export class AnalyticsMessageStore {
       message: input.message,
       meta: input.meta,
       status: input.status ?? 'unread',
-      createdAt: input.createdAt ?? Date.now(),
+      createdAt: now,
     }
 
-    const messages = this.load()
-    messages.unshift(message)
-    this.save(messages)
+    const entry: MessageDedupeEntry = {
+      message,
+      count: 1,
+      firstAt: now,
+      lastAt: now,
+    }
+
+    this.dedupeIndex.set(dedupeKey, entry)
+    this.pruneDedupeIndex(now)
+
+    if (this.isDev) {
+      this.messages.unshift(message)
+      this.pruneMessages()
+    }
     this.emit(message)
     return message
   }
 
   updateStatus(id: string, status: AnalyticsMessageStatus): AnalyticsMessage | null {
-    const messages = this.load()
-    const target = messages.find(item => item.id === id)
+    if (!this.isDev) {
+      return null
+    }
+
+    const target = this.messages.find(item => item.id === id)
     if (!target)
       return null
 
     target.status = status
-    this.save(messages)
     return target
   }
 
@@ -73,24 +121,40 @@ export class AnalyticsMessageStore {
     }
   }
 
-  private load(): AnalyticsMessage[] {
-    const raw = getConfig(MESSAGE_FILE) as unknown
-    const messages = Array.isArray(raw) ? raw : []
-    const normalized = messages.filter(isValidMessage)
-    return this.prune(normalized)
+  private getMessages(): AnalyticsMessage[] {
+    this.pruneMessages()
+    return this.messages
   }
 
-  private save(messages: AnalyticsMessage[]): void {
-    const pruned = this.prune(messages)
-    const limited = pruned.slice(0, MESSAGE_MAX_COUNT)
-    saveConfig(MESSAGE_FILE, JSON.stringify(limited, null, 2))
-  }
-
-  private prune(messages: AnalyticsMessage[]): AnalyticsMessage[] {
+  private pruneMessages(): void {
     const cutoff = Date.now() - MESSAGE_MAX_AGE
-    return messages
+    this.messages = this.messages
       .filter(message => message.createdAt >= cutoff)
       .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, MESSAGE_MAX_COUNT)
+  }
+
+  private pruneDedupeIndex(now: number): void {
+    const cutoff = now - MESSAGE_MAX_AGE
+    for (const [key, entry] of this.dedupeIndex.entries()) {
+      if (entry.lastAt < cutoff) {
+        this.dedupeIndex.delete(key)
+      }
+    }
+  }
+
+  private bumpMessage(message: AnalyticsMessage): void {
+    const index = this.messages.findIndex(item => item.id === message.id)
+    if (index === -1) {
+      this.messages.unshift(message)
+      this.pruneMessages()
+      return
+    }
+    if (index > 0) {
+      this.messages.splice(index, 1)
+      this.messages.unshift(message)
+    }
+    this.pruneMessages()
   }
 
   private emit(message: AnalyticsMessage): void {
@@ -108,17 +172,8 @@ export class AnalyticsMessageStore {
   }
 }
 
-function isValidMessage(value: unknown): value is AnalyticsMessage {
-  if (!value || typeof value !== 'object')
-    return false
-  const message = value as AnalyticsMessage
-  return typeof message.id === 'string'
-    && typeof message.source === 'string'
-    && typeof message.severity === 'string'
-    && typeof message.title === 'string'
-    && typeof message.message === 'string'
-    && typeof message.status === 'string'
-    && typeof message.createdAt === 'number'
+function buildDedupeKey(input: MessageInput): string {
+  return [input.source, input.severity, input.title, input.message].join('|')
 }
 
 let messageStore: AnalyticsMessageStore | null = null
