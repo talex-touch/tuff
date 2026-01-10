@@ -1,3 +1,4 @@
+import { packageJson } from 'talex-touch:information'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 export class BaseNodeApi {
@@ -22,7 +23,7 @@ export class BaseNodeApi {
   }
 
   getPackageJSON() {
-    return touchChannel.sendSync('get-package')
+    return packageJson
   }
 
   getOS() {

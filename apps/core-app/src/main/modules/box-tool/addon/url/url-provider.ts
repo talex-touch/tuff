@@ -27,6 +27,14 @@ class URLProvider implements ISearchProvider<ProviderContext> {
   readonly expectedDuration = 100
 
   private readonly URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i
+  private installedBrowsersCache:
+    | Array<{ id: string; name: string; bundleId: string; path: string; icon: string }>
+    | null = null
+  private installedBrowsersCachedAt = 0
+  private installedBrowsersPromise:
+    | Promise<Array<{ id: string; name: string; bundleId: string; path: string; icon: string }>>
+    | null = null
+  private readonly installedBrowsersCacheTtlMs = 5 * 60 * 1000
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const text = query.text.trim()
@@ -137,6 +145,35 @@ class URLProvider implements ISearchProvider<ProviderContext> {
    * 获取所有已安装的浏览器
    */
   private async getInstalledBrowsers(): Promise<
+    Array<{
+      id: string
+      name: string
+      bundleId: string
+      path: string
+      icon: string
+    }>
+  > {
+    const now = Date.now()
+    if (this.installedBrowsersCache && now - this.installedBrowsersCachedAt < this.installedBrowsersCacheTtlMs) {
+      return this.installedBrowsersCache
+    }
+
+    if (this.installedBrowsersPromise) {
+      return this.installedBrowsersPromise
+    }
+
+    this.installedBrowsersPromise = this.resolveInstalledBrowsers()
+    try {
+      const browsers = await this.installedBrowsersPromise
+      this.installedBrowsersCache = browsers
+      this.installedBrowsersCachedAt = Date.now()
+      return browsers
+    } finally {
+      this.installedBrowsersPromise = null
+    }
+  }
+
+  private async resolveInstalledBrowsers(): Promise<
     Array<{
       id: string
       name: string

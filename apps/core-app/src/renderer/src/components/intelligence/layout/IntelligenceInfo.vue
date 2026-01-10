@@ -33,7 +33,7 @@ import IntelligenceAdvancedConfig from '../config/IntelligenceAdvancedConfig.vue
 import IntelligenceApiConfig from '../config/IntelligenceApiConfig.vue'
 import IntelligenceModelConfig from '../config/IntelligenceModelConfig.vue'
 import IntelligenceRateLimitConfig from '../config/IntelligenceRateLimitConfig.vue'
-import IntelligenceHeader from './IntelligenceHeader.vue'
+import IntelligenceHeader from './IntelligenceProviderHeader.vue'
 
 const props = defineProps<{
   provider: IntelligenceProviderConfig

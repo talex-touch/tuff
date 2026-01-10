@@ -15,7 +15,7 @@ export class SearchLogger {
   private unsubscribe?: () => void
 
   private constructor() {
-    this.loadSettings()
+    void this.loadSettings()
     this.setupSettingsWatcher()
     // Register with LoggerManager for centralized control
     loggerManager.getLogger('search-engine', { enabled: this.enabled, color: 'cyan' })
@@ -82,16 +82,16 @@ export class SearchLogger {
       }
 
       // Try to get from app settings first
-      const appSettingsData = await storageModule.getConfig('app-setting.ini')
-      if (appSettingsData) {
-        const parsed = JSON.parse(appSettingsData as unknown as string)
-        this.enabled = parsed.searchEngine?.logsEnabled === true
+      const appSettingsData = storageModule.getConfig('app-setting.ini') as any
+      const enabledFromAppSettings = appSettingsData?.searchEngine?.logsEnabled
+      if (typeof enabledFromAppSettings === 'boolean') {
+        this.enabled = enabledFromAppSettings
         return
       }
 
       // Fallback to legacy setting
-      const settings = await storageModule.getConfig('search-engine-logs-enabled')
-      this.enabled = (settings as unknown as string) === 'true'
+      const settings = storageModule.getConfig('search-engine-logs-enabled') as any
+      this.enabled = settings === true || settings === 'true'
     } catch {
       // Silently fail if storage is not ready yet
       this.enabled = false
@@ -105,18 +105,13 @@ export class SearchLogger {
     this.enabled = enabled
     try {
       // Update app settings
-      const appSettingsData = await storageModule.getConfig('app-setting.ini')
-      if (appSettingsData) {
-        const parsed = JSON.parse(appSettingsData as unknown as string)
-        if (!parsed.searchEngine) {
-          parsed.searchEngine = {}
-        }
-        parsed.searchEngine.logsEnabled = enabled
-        await storageModule.saveConfig('app-setting.ini', JSON.stringify(parsed))
-      } else {
-        // Fallback to legacy setting
-        await storageModule.saveConfig('search-engine-logs-enabled', JSON.stringify(enabled))
+      const appSettingsData = storageModule.getConfig('app-setting.ini') as any
+      const parsed = typeof appSettingsData === 'object' && appSettingsData ? { ...appSettingsData } : {}
+      if (!parsed.searchEngine) {
+        parsed.searchEngine = {}
       }
+      parsed.searchEngine.logsEnabled = enabled
+      storageModule.saveConfig('app-setting.ini', JSON.stringify(parsed))
       console.log(`[SearchLogger] Search engine logging ${enabled ? 'enabled' : 'disabled'}`)
     } catch (error) {
       console.error('[SearchLogger] Failed to save settings:', error)

@@ -1,7 +1,8 @@
-<script lang="ts" name="IntelligenceHeader" setup>
+<script lang="ts" name="IntelligenceProviderHeader" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { ElMessageBox } from 'element-plus'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'

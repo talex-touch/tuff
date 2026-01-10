@@ -13,6 +13,11 @@ import { formatLog, LogStyle } from './app-utils'
  * @class AppScanner
  */
 export class AppScanner {
+  private cachedApps: any[] | null = null
+  private cachedAt = 0
+  private scanPromise: Promise<any[]> | null = null
+  private readonly cacheTtlMs = 5 * 60 * 1000
+
   /**
    * Watch paths for different platforms.
    */
@@ -43,7 +48,30 @@ export class AppScanner {
    * Retrieves all applications for the current platform.
    * @returns {Promise<any[]>} A promise that resolves to an array of applications.
    */
-  async getApps(): Promise<any[]> {
+  async getApps(options?: { forceRefresh?: boolean }): Promise<any[]> {
+    const forceRefresh = Boolean(options?.forceRefresh)
+    const now = Date.now()
+
+    if (!forceRefresh && this.cachedApps && now - this.cachedAt < this.cacheTtlMs) {
+      return this.cachedApps
+    }
+
+    if (this.scanPromise) {
+      return this.scanPromise
+    }
+
+    this.scanPromise = this.scanApps()
+    try {
+      const apps = await this.scanPromise
+      this.cachedApps = apps
+      this.cachedAt = Date.now()
+      return apps
+    } finally {
+      this.scanPromise = null
+    }
+  }
+
+  private async scanApps(): Promise<any[]> {
     console.log(formatLog('AppScanner', 'Starting application scan...', LogStyle.process))
 
     try {

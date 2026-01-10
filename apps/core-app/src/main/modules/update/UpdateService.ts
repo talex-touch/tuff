@@ -11,7 +11,7 @@ import path from 'node:path'
 import { AppPreviewChannel, ChannelType, DataCode, UpdateProviderType } from '@talex-touch/utils'
 import { app } from 'electron'
 import axios from 'axios'
-import { TalexEvents, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
+import { TalexEvents, UpdateAvailableEvent, touchEventBus } from '../../core/eventbus/touch-event'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { createLogger } from '../../utils/logger'
 /**
@@ -107,6 +107,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private currentVersion: string
   private currentChannel: AppPreviewChannel
   private cache: Map<string, any> = new Map()
+  private checkInFlight: Promise<UpdateCheckResult> | null = null
+  private settingsSaveTimer: NodeJS.Timeout | null = null
   private initContext?: ModuleInitContext<TalexEvents>
   private updateSystem?: UpdateSystem
   private updateRepository: UpdateRepository | null = null
@@ -124,6 +126,27 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.settings = this.getDefaultSettings()
   }
 
+  private tryInitUpdateSystem(ctx: ModuleInitContext<TalexEvents>): boolean {
+    if (this.updateSystem) {
+      return true
+    }
+
+    const downloadCenterModule = ctx.manager.getModule(Symbol.for('DownloadCenter'))
+    if (!downloadCenterModule) {
+      return false
+    }
+
+    this.updateSystem = new UpdateSystem(downloadCenterModule, {
+      autoDownload: false,
+      autoCheck: this.settings.enabled,
+      checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
+      ignoredVersions: this.settings.ignoredVersions,
+      updateChannel: this.settings.updateChannel,
+    })
+    updateLog.success('UpdateSystem initialized with DownloadCenter integration')
+    return true
+  }
+
   /**
    * Initialize update service
    */
@@ -131,33 +154,30 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.initContext = ctx
     updateLog.info('Initializing update service')
 
-    // Initialize UpdateSystem with DownloadCenter integration
-    const downloadCenterModule = ctx.manager.getModule(Symbol.for('DownloadCenter'))
-      if (downloadCenterModule) {
-        this.updateSystem = new UpdateSystem(downloadCenterModule, {
-          autoDownload: false,
-          autoCheck: this.settings.enabled,
-          checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
-          ignoredVersions: this.settings.ignoredVersions,
-          updateChannel: this.settings.updateChannel
-        })
-        updateLog.success('UpdateSystem initialized with DownloadCenter integration')
-      } else {
-        updateLog.warn('DownloadCenter module not found, UpdateSystem not initialized')
-      }
-
-      try {
-        this.updateRepository = new UpdateRepository(databaseModule.getDb())
-        updateLog.success('UpdateRepository initialized')
-      } catch (error) {
-        updateLog.warn('Failed to initialize UpdateRepository', { error })
-      }
+    try {
+      this.updateRepository = new UpdateRepository(databaseModule.getDb())
+      updateLog.success('UpdateRepository initialized')
+    } catch (error) {
+      updateLog.warn('Failed to initialize UpdateRepository', { error })
+    }
 
     // Register IPC channels
     this.registerIpcChannels()
 
     // Load settings
     this.loadSettings()
+
+    if (!this.tryInitUpdateSystem(ctx)) {
+      touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, () => {
+        if (!this.initContext) {
+          return
+        }
+
+        if (!this.tryInitUpdateSystem(this.initContext)) {
+          updateLog.warn('DownloadCenter module not found, UpdateSystem not initialized')
+        }
+      })
+    }
 
     if (!app.isPackaged) {
       updateLog.info('Development mode detected, skipping automatic update checks')
@@ -182,6 +202,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     // Stop polling service
     this.pollingService.stop()
 
+    if (this.settingsSaveTimer) {
+      clearTimeout(this.settingsSaveTimer)
+      this.settingsSaveTimer = null
+      await this.flushSettingsToDisk()
+    }
+
     // Clear cache if needed
     if (!this.settings.cacheEnabled) {
       this.cache.clear()
@@ -202,7 +228,19 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     appChannel.regChannel(ChannelType.MAIN, 'update:check', async ({ data, reply }) => {
       const force = data?.force ?? false
       try {
-        const result = await this.checkForUpdates(force)
+        const channel = this.getEffectiveChannel()
+
+        if (!force) {
+          const quickResult = await this.getQuickUpdateCheckResult(channel)
+          reply(DataCode.SUCCESS, { success: true, data: quickResult })
+
+          if (app.isPackaged) {
+            this.queueBackgroundUpdateCheck()
+          }
+          return
+        }
+
+        const result = await this.checkForUpdates(true)
         reply(DataCode.SUCCESS, { success: true, data: result })
       } catch (error) {
         updateLog.error('Update check failed', { error })
@@ -500,6 +538,17 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         updateLog.debug('Using persisted record due to frequency throttle')
         return persistedResult
       }
+    }
+
+    if (!app.isPackaged && !force) {
+      const cachedResult = this.getCachedResult(targetChannel)
+      if (cachedResult) {
+        return cachedResult
+      }
+      if (persistedResult) {
+        return persistedResult
+      }
+      return { hasUpdate: false, source: this.settings.source?.name ?? 'Unknown' }
     }
 
     let performedNetworkCheck = false
@@ -1007,20 +1056,61 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateLog.warn('Context not initialized, cannot save settings')
       return
     }
+    if (this.settingsSaveTimer) {
+      clearTimeout(this.settingsSaveTimer)
+    }
+    this.settingsSaveTimer = setTimeout(() => {
+      this.settingsSaveTimer = null
+      void this.flushSettingsToDisk()
+    }, 300)
+  }
+
+  private async flushSettingsToDisk(): Promise<void> {
+    if (!this.initContext) {
+      return
+    }
     try {
       const configDir = path.join(this.initContext.app.rootPath, 'config')
       const settingsFile = path.join(configDir, 'update-settings.json')
-
-      // Ensure config directory exists
-      if (!fs.existsSync(configDir)) {
-        fs.mkdirSync(configDir, { recursive: true })
-      }
-
-      fs.writeFileSync(settingsFile, JSON.stringify(this.settings, null, 2))
+      await fs.promises.mkdir(configDir, { recursive: true })
+      await fs.promises.writeFile(settingsFile, JSON.stringify(this.settings, null, 2))
       updateLog.success(`Settings saved to: ${settingsFile}`)
     } catch (error) {
       updateLog.error('Failed to save settings', { error })
     }
+  }
+
+  private async getQuickUpdateCheckResult(channel: AppPreviewChannel): Promise<UpdateCheckResult> {
+    const cached = this.getCachedResult(channel)
+    if (cached) {
+      return cached
+    }
+
+    if (this.updateRepository) {
+      const record = await this.updateRepository.getLatestRecord(channel)
+      const persisted = await this.buildResultFromRecord(record)
+      if (persisted) {
+        return persisted
+      }
+    }
+
+    return { hasUpdate: false, source: this.settings.source?.name ?? 'Unknown' }
+  }
+
+  private queueBackgroundUpdateCheck(): void {
+    if (this.checkInFlight) {
+      return
+    }
+
+    this.checkInFlight = this.checkForUpdates(false)
+      .catch((error) => {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        updateLog.warn('Background update check failed', { error: errorMessage })
+        return { hasUpdate: false, error: errorMessage, source: this.settings.source?.name ?? 'Unknown' }
+      })
+      .finally(() => {
+        this.checkInFlight = null
+      })
   }
 
   /**

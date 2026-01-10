@@ -2,10 +2,12 @@ import { exec } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import { createRetrier } from '@talex-touch/utils'
 import { reportAppScanError } from './app-error-reporter'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
+const execAsync = promisify(exec)
 
 async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -272,39 +274,88 @@ export async function getAppsViaMdfind(): Promise<
     lastModified: Date
   }[]
 > {
-  return new Promise((resolve, reject) => {
-    exec(
-      'mdfind \'kMDItemContentType == "com.apple.application-bundle"\'',
-      { maxBuffer: 1024 * 1024 * 10 },
-      async (error, stdout) => {
-        if (error) {
-          return reject(new Error(`mdfind command failed: ${error.message}`))
-        }
+  const query = 'kMDItemContentType == "com.apple.application-bundle"'
+  const searchRoots = [
+    '/Applications',
+    '/System/Applications',
+    '/System/Library/CoreServices',
+    path.join(os.homedir(), 'Applications'),
+  ]
 
-        const appPaths = stdout.split('\n').filter(p => p.trim().endsWith('.app'))
-        const appPromises = appPaths.map(appPath => getAppInfo(appPath))
+  const existingRoots: string[] = []
+  for (const root of searchRoots) {
+    try {
+      await fs.access(root)
+      existingRoots.push(root)
+    } catch {
+      // ignore missing roots
+    }
+  }
 
-        const settledApps = await Promise.allSettled(appPromises)
+  const onlyInArgs = existingRoots.map(root => `-onlyin "${root}"`).join(' ')
+  const command = existingRoots.length > 0
+    ? `mdfind ${onlyInArgs} '${query}'`
+    : `mdfind '${query}'`
 
-        const successfulApps = settledApps
-          .filter(
-            (
-              result,
-            ): result is PromiseFulfilledResult<{
-              name: string
-              displayName: string | undefined
-              fileName: string
-              path: string
-              icon: string
-              bundleId: string
-              uniqueId: string
-              lastModified: Date
-            }> => result.status === 'fulfilled' && !!result.value,
-          )
-          .map(result => result.value)
+  const { stdout } = await execAsync(command, { maxBuffer: 1024 * 1024 * 10 })
+  const appPaths = Array.from(
+    new Set(
+      stdout
+        .split('\n')
+        .map(p => p.trim())
+        .filter(p => p.endsWith('.app')),
+    ),
+  )
 
-        resolve(successfulApps)
-      },
-    )
+  const appInfos = await mapWithConcurrency(appPaths, 8, async (appPath) => {
+    try {
+      return await getAppInfo(appPath)
+    }
+    catch {
+      return null
+    }
   })
+
+  return appInfos.filter(
+    (
+      app,
+    ): app is {
+      name: string
+      displayName: string | undefined
+      fileName: string
+      path: string
+      icon: string
+      bundleId: string
+      uniqueId: string
+      lastModified: Date
+    } => !!app,
+  )
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) {
+    return []
+  }
+
+  const results: R[] = new Array(items.length)
+  let nextIndex = 0
+
+  const workerCount = Math.min(Math.max(concurrency, 1), items.length)
+  const workers = new Array(workerCount).fill(0).map(async () => {
+    while (true) {
+      const currentIndex = nextIndex++
+      if (currentIndex >= items.length) {
+        return
+      }
+
+      results[currentIndex] = await mapper(items[currentIndex])
+    }
+  })
+
+  await Promise.all(workers)
+  return results
 }

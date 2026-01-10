@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup name="DownloadProgressBar" lang="ts">
 import { DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
 
@@ -96,7 +96,7 @@ function formatRemainingTime(seconds: number): string {
       :status="progressStatus"
       :show-text="false"
       :stroke-width="compact ? 4 : 8"
-      :class="{ animated: status === 'downloading' }"
+      :class="{ animated: status === DownloadStatus.DOWNLOADING }"
     />
   </div>
 </template>

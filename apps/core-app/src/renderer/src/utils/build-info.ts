@@ -1,4 +1,3 @@
-// @ts-ignore - talex-touch:information is a virtual module injected at build time
 import information from 'talex-touch:information'
 
 export interface BuildInfo {

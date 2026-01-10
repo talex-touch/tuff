@@ -130,7 +130,8 @@ export default defineConfig({
       }),
       sentryVitePlugin({
         org: 'quotawish',
-        project: 'tuff'
+        project: 'tuff',
+        telemetry: false
       })
     ]
   }
