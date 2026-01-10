@@ -1,0 +1,54 @@
+# TuffTransport 迁移清单 260111
+
+## 已迁移（明确使用 TuffTransport）
+### 主进程
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/analytics/analytics-module.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`（含 StorageEvents stream）
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`（布局更新）
+
+### 渲染进程
+- `apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboardChannel.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingMessages.vue`（仅 dev）
+
+## 部分迁移（TuffTransport + Legacy 并存）
+- `apps/core-app/src/main/modules/storage/index.ts`：仍保留 `storage:get/storage:save/storage:update` 的 TouchChannel 方式。
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`：使用 TuffTransport 处理 layout，但仍通过 TouchChannel 发送 `core-box:set-query`。
+- `apps/core-app/src/main/channel/common.ts`：作为 legacy 通道的桥接层存在。
+
+## 仍为 Legacy（TouchChannel / regChannel）
+以下文件仍以 `ChannelType`/`regChannel` 为主：
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/main/service/service-center.ts`
+- `apps/core-app/src/main/modules/system/tuff-dashboard.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/main/modules/download/download-center.ts`
+- `apps/core-app/src/main/modules/drop-manager.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/permission/index.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/ai/agents/agent-channels.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+
+## 迁移建议（优先级）
+1. Storage：统一封装 API，隐藏 stream/legacy 差异
+2. CoreBox：查询、布局、输入等全部迁移到 TuffTransport
+3. FileProvider：索引状态、openers、files 相关事件迁移
+4. UpdateService / SentryService：统一到 TuffTransport + 限流策略
