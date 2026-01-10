@@ -9,6 +9,7 @@ import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import fs from 'node:fs'
 import path from 'node:path'
 import { AppPreviewChannel, ChannelType, DataCode, UpdateProviderType } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { app } from 'electron'
 import axios from 'axios'
 import { TalexEvents, UpdateAvailableEvent, touchEventBus } from '../../core/eventbus/touch-event'
@@ -23,11 +24,11 @@ import { UpdateSystem } from './update-system'
 import { UpdateRecordStatus, UpdateRepository, type UpdateRecordRow } from './update-repository'
 
 const updateLog = createLogger('UpdateService')
-const pollingLog = updateLog.child('Polling')
 
 const HALF_DAY_IN_MS = 12 * 60 * 60 * 1000
 const DAY_IN_MS = 24 * 60 * 60 * 1000
 const REMIND_LATER_INTERVAL = 8 * 60 * 60 * 1000
+const UPDATE_POLL_TASK_ID = 'update-service.check'
 
 /**
  * Update settings interface
@@ -39,63 +40,6 @@ type UpdateSettings = SharedUpdateSettings & {
   maxRetries: number
   retryDelay: number // Base retry delay in milliseconds
   lastCheckedAt: number | null
-}
-
-/**
- * Polling service for periodic update checks
- */
-class PollingService {
-  private intervalId: NodeJS.Timeout | null = null
-  private isRunning = false
-
-  /**
-   * Start polling service
-   * @param interval - Polling interval in milliseconds
-   * @param callback - Callback function to execute
-   */
-  start(interval: number, callback: () => Promise<void>): void {
-    if (this.isRunning) {
-      pollingLog.warn('Already running')
-      return
-    }
-
-    this.isRunning = true
-    this.intervalId = setInterval(async () => {
-      try {
-        await callback()
-      } catch (error) {
-        pollingLog.error('Polling error', { error })
-      }
-    }, interval)
-
-    pollingLog.info(`Started with interval: ${interval}ms`)
-  }
-
-  /**
-   * Stop polling service
-   */
-  stop(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId)
-      this.intervalId = null
-    }
-    this.isRunning = false
-    pollingLog.info('Stopped')
-  }
-
-  /**
-   * Check if polling service is running
-   */
-  isActive(): boolean {
-    return this.isRunning
-  }
-
-  /**
-   * Get current interval ID
-   */
-  getIntervalId(): NodeJS.Timeout | null {
-    return this.intervalId
-  }
 }
 
 /**
@@ -120,7 +64,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
   constructor() {
     super(Symbol.for('UpdateService'))
-    this.pollingService = new PollingService()
+    this.pollingService = PollingService.getInstance()
     this.currentVersion = this.getCurrentVersion()
     this.currentChannel = this.getCurrentChannel()
     this.settings = this.getDefaultSettings()
@@ -199,8 +143,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   async onDestroy(): Promise<void> {
     updateLog.info('Destroying update service')
 
-    // Stop polling service
-    this.pollingService.stop()
+    // Unregister polling task
+    this.pollingService.unregister(UPDATE_POLL_TASK_ID)
 
     if (this.settingsSaveTimer) {
       clearTimeout(this.settingsSaveTimer)
@@ -280,8 +224,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.saveSettings()
 
         // Restart polling if settings changed
-        if (this.pollingService.isActive()) {
-          this.pollingService.stop()
+        if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
+          this.pollingService.unregister(UPDATE_POLL_TASK_ID)
         }
 
         if (this.settings.enabled) {
@@ -307,7 +251,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           frequency: this.settings.frequency,
           source: this.settings.source,
           channel: this.getEffectiveChannel(),
-          polling: this.pollingService.isActive(),
+          polling: this.pollingService.isRegistered(UPDATE_POLL_TASK_ID),
           lastCheck: this.settings.lastCheckedAt ?? null
         }
       })
@@ -463,8 +407,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.saveSettings()
 
         // Restart or stop polling based on setting
-        if (this.pollingService.isActive()) {
-          this.pollingService.stop()
+        if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
+          this.pollingService.unregister(UPDATE_POLL_TASK_ID)
         }
         if (enabled) {
           this.startPolling()
@@ -489,13 +433,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     if (!interval) {
       updateLog.info(`Polling disabled for frequency: ${this.settings.frequency}`)
+      this.pollingService.unregister(UPDATE_POLL_TASK_ID)
       return
     }
 
-    this.pollingService.start(interval, async () => {
-      await this.checkForUpdates()
-    })
-    updateLog.info(`Started polling with interval: ${interval / (60 * 60 * 1000)}h`)
+    const intervalHours = interval / (60 * 60 * 1000)
+
+    this.pollingService.register(
+      UPDATE_POLL_TASK_ID,
+      async () => {
+        await this.checkForUpdates()
+      },
+      { interval: intervalHours, unit: 'hours' }
+    )
+    this.pollingService.start()
+    updateLog.info(`Started polling with interval: ${intervalHours}h`)
   }
 
   /**

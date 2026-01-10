@@ -447,7 +447,7 @@ export class AnalyticsModule extends BaseModule {
   private getMessageReportConfig(): { enabled: boolean, anonymous: boolean } {
     const config = getConfig('sentry-config.json') as { enabled?: boolean, anonymous?: boolean } | undefined
     return {
-      enabled: config?.enabled ?? false,
+      enabled: true,
       anonymous: config?.anonymous ?? true,
     }
   }
