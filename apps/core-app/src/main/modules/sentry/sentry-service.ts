@@ -6,12 +6,15 @@
 
 import type { ModuleKey } from '@talex-touch/utils'
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { BrowserWindow, app } from 'electron'
+import { innerRootPath } from '../../core/precore'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
@@ -145,8 +148,47 @@ export class SentryServiceModule extends BaseModule {
   private unresponsiveStats = { count: 0, totalMs: 0, maxMs: 0 }
   private windowPerfListenersReady = false
 
+  private preInitAttempted = false
+
   constructor() {
     super(SentryServiceModule.key)
+  }
+
+  /**
+   * Pre-initialize Sentry before Electron `ready` (required by @sentry/electron).
+   *
+   * NOTE: This should be called from the main entry before `app.whenReady()`.
+   */
+  preInitBeforeReady(): void {
+    if (this.preInitAttempted) return
+    this.preInitAttempted = true
+
+    // Best-effort: load persisted config without relying on StorageModule.
+    try {
+      const configPath = path.join(innerRootPath, 'modules', 'config', 'sentry-config.json')
+      if (fs.existsSync(configPath)) {
+        const raw = fs.readFileSync(configPath, 'utf8')
+        const parsed = JSON.parse(raw) as Partial<SentryConfig>
+        this.config = {
+          enabled: parsed?.enabled ?? true,
+          anonymous: parsed?.anonymous ?? true
+        }
+      } else {
+        this.config = { enabled: true, anonymous: true }
+      }
+    } catch (error) {
+      sentryLog.warn('Failed to pre-load Sentry config, using defaults', {
+        meta: { error: error instanceof Error ? error.message : String(error) }
+      })
+      this.config = { enabled: true, anonymous: true }
+    }
+
+    if (!this.config.enabled) {
+      return
+    }
+
+    this.deviceFingerprint = generateDeviceFingerprint()
+    this.initializeSentry()
   }
 
   async onInit(): Promise<void> {
@@ -163,7 +205,12 @@ export class SentryServiceModule extends BaseModule {
 
     // Initialize Sentry if enabled
     if (this.config.enabled) {
-      this.initializeSentry()
+      if (!this.isInitialized) {
+        this.initializeSentry()
+      } else {
+        this.updateUserContext()
+        Sentry.setContext('environment', getEnvironmentContext())
+      }
     } else {
       sentryLog.info('Sentry is disabled by configuration')
     }
@@ -976,23 +1023,28 @@ export class SentryServiceModule extends BaseModule {
     } catch (error) {
       this.failedNexusUploads++
       this.schedulePersistTelemetryStats()
-      sentryLog.error('Telemetry upload exception', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
-      })
-      this.recordTelemetryFailure('Telemetry upload exception', {
-        error: error instanceof Error ? error.message : String(error),
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.telemetryCooldownUntil = Date.now() + 5 * 60_000
+      const recorded = this.recordTelemetryFailure('Telemetry upload exception', {
+        error: errorMessage,
         url,
-        count: events.length
+        count: events.length,
+        cooldownMs: 5 * 60_000
       })
+      if (recorded) {
+        sentryLog.warn('Telemetry upload exception', {
+          meta: { error: errorMessage, cooldownMs: 5 * 60_000 }
+        })
+      }
       this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
     }
   }
 
-  private recordTelemetryFailure(message: string, meta?: Record<string, unknown>): void {
+  private recordTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
     const now = Date.now()
     const throttleWindow = 10 * 60 * 1000
     if (this.lastTelemetryFailureAt && now - this.lastTelemetryFailureAt < throttleWindow) {
-      if (this.lastTelemetryFailureMessage === message) return
+      if (this.lastTelemetryFailureMessage === message) return false
     }
 
     this.lastTelemetryFailureAt = now
@@ -1010,6 +1062,7 @@ export class SentryServiceModule extends BaseModule {
     } catch {
       // ignore message store failures
     }
+    return true
   }
 
   /**

@@ -199,3 +199,117 @@
   - handler 慢（update:check）
   - 无 handler（app-ready）
 - `Perf summary` 能按窗口汇总并列出 top slow，便于持续追踪回归。
+
+---
+
+## 修复落地（已按 P0 → P1 完成）
+
+> 目标：优先消除“体感卡顿”（renderer 阻塞 / main event-loop 长阻塞）与“重复触发的大开销任务”（扫描风暴 / 大循环），并把主线程同步 IO 尽量后台化。
+
+### P0（性能优先）
+
+1) **移除 renderer 启动期 `sendSync('get-package')`**
+- 改动：`apps/core-app/src/renderer/src/modules/channel/main/node.ts` 的 `getPackageJSON()` 改为直接读取虚拟模块 `talex-touch:information` 导出的 `packageJson`（不走 IPC）。
+- 预期：不再出现 `get-package channel.sendSync.slow`；渲染进程启动期 UI/输入卡顿点减少。
+
+2) **提前注册 `app-ready` handler，避免 preload 早期握手 “无 handler”**
+- 改动：`apps/core-app/src/main/core/touch-app.ts` 把 `app-ready` handler 注册前移到 `loadURL/loadFile` 之前（确保 preload 发送 `sendSync` 时可命中 handler）。
+- 预期：不再出现 `No handler registered for "app-ready"`；`window.$startupInfo` 在 preload 阶段稳定可用。
+
+3) **Clipboard 图片变更检测改为轻量 hash，避免大图 base64 阻塞主线程**
+- 改动：`apps/core-app/src/main/modules/clipboard.ts`
+  - 初始化不再执行 `clipboard.readImage().toDataURL()`；
+  - `didImageChange/primeImage` 使用 `resize(24x24) + toBitmap() + sha1` 做变更检测，避免每秒轮询都做 DataURL 编码。
+- 预期：Clipboard 模块初始化耗时显著下降；`Perf:EventLoop lag 3.6s` 这类极值应明显减少或消失。
+
+### P1（性能/稳定性）
+
+4) **AppScanner：single-flight + TTL 缓存；Darwin mdfind 限定目录 + 并发限制**
+- 改动：
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/app-scanner.ts`：`getApps()` 增加 5 分钟 TTL 缓存 + in-flight 合并，避免重复全量扫描。
+  - `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`：`mdfind` 改为 `-onlyin` 限定目录（`/Applications`、`/System/Applications`、`/System/Library/CoreServices`、`~/Applications`），并对 `getAppInfo` 做并发限制（8）。
+- 预期：避免短时间 “扫描风暴”；显著降低 DerivedData/WebKit/Logs 等路径带来的 `Info.plist not found` 噪音与额外 IO/重试。
+
+5) **URLProvider：浏览器列表缓存，避免每次 URL 输入触发 AppScanner**
+- 改动：`apps/core-app/src/main/modules/box-tool/addon/url/url-provider.ts` 对 `getInstalledBrowsers()` 加 5 分钟缓存 + in-flight 合并。
+- 预期：输入 URL 时不再频繁触发应用扫描；CPU/IO 抖动明显减少。
+
+6) **FileProvider reconciliation：大循环让出 event-loop + 避免大数组 spread push**
+- 改动：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - reconciliation 阶段避免 `diskFiles.push(...bigArray)`，改为逐项 push；
+  - 对 “磁盘/DB diff” 与 “待删除集合过滤” 增加 `setImmediate` 让出（按批次），降低主线程长同步段风险。
+- 预期：在 `Updating modified files during reconciliation count=...` 场景下，主线程更平滑，持续 event-loop lag 概率下降。
+
+7) **UpdateService：`update:check` IPC 快速返回 + 后台检查；settings 保存 debounce + async**
+- 改动：`apps/core-app/src/main/modules/update/UpdateService.ts`
+  - `update:check`（非 force）优先返回缓存/持久化结果，并在 packaged 下后台触发检查，避免 IPC 直接阻塞；
+  - dev 模式下（非 force）跳过网络检查；
+  - `saveSettings()` 改为 debounce（300ms）+ `fs.promises.writeFile`，避免主线程同步写盘造成 `update:check handler took ~900ms`。
+- 预期：`update:check` IPC 平均耗时显著下降；“Settings saved …” 不再高频同步刷盘；开发环境下不再因为网络受限导致卡顿。
+
+### 验收要点（建议你本地跑一次 dev 启动观察日志）
+
+- 关键观测项（应显著减少/消失）：
+  - `get-package channel.sendSync.slow`
+  - `No handler registered for "app-ready"`
+  - `update:check handler took ...` / `channel.send.slow ...`
+  - `Perf:EventLoop lag 3.6s`
+- 关键观测项（应显著降低）：
+  - `Starting application scan...` 高频刷屏
+  - Darwin `Info.plist not found ... after retries` 大量出现
+
+### P2（工程质量/噪音控制，补齐剩余问题）
+
+8) **修复 unplugin-vue-components 组件命名冲突（避免被忽略）**
+- 改动：删除冲突组件并重命名落地：
+  - `ProgressBar.vue` → `DownloadProgressBar.vue`（下载组件域内命名）
+  - `IntelligenceHeader.vue`（layout 内） → `IntelligenceProviderHeader.vue`
+- 同步更新引用：`TaskCard.vue` / `UpdatePromptDialog.vue` / `IntelligenceInfo.vue`。
+- 补充修正：
+  - `DownloadProgressBar.vue` 动画状态判断改为 `status === DownloadStatus.DOWNLOADING`（避免永远 false）。
+  - `IntelligenceProviderHeader.vue` 补齐 `computed` 引入（避免运行时报错）。
+
+9) **Sentry 初始化时机与 Telemetry 降噪**
+- 改动：
+  - `apps/core-app/src/main/index.ts` 在 `app.whenReady()` 前调用 `sentryModule.preInitBeforeReady()`，满足 `@sentry/electron` 要求。
+  - `apps/core-app/src/main/modules/sentry/sentry-service.ts` 增加预加载配置（不依赖 StorageModule），并对 Telemetry 上传失败做节流+冷却（避免网络受限时刷屏/重试抖动）。
+  - `apps/core-app/electron.vite.config.ts` 设置 `sentryVitePlugin({ telemetry: false })`，关闭构建侧 telemetry 提示。
+
+10) **Storage 频繁 GET 告警降噪（热配置不计频次）**
+- 改动：`apps/core-app/src/main/modules/storage/index.ts` 对 `hotConfigs`（当前包含 `app-setting.ini`）跳过 `frequencyMonitor.trackGet()`。
+- 预期：不再出现 `Frequent GET detected: config "app-setting.ini" accessed ...`。
+
+11) **UpdateService 与 DownloadCenter 加载顺序解耦**
+- 改动：`apps/core-app/src/main/modules/update/UpdateService.ts`
+  - `loadSettings()` 后再尝试初始化 `UpdateSystem`；
+  - 若启动时 `DownloadCenter` 尚未加载，不再立即 warn，而是在 `TalexEvents.ALL_MODULES_LOADED` 时补一次初始化；仍缺失才输出 warn。
+- 预期：减少启动期噪音，并确保最终能接入 DownloadCenter（避免更新下载链路缺失）。
+
+12) **虚拟模块 `talex-touch:information` 类型补齐（去掉 ts-ignore）**
+- 改动：`apps/core-app/src/renderer/src/env.d.ts` 增加 `declare module 'talex-touch:information'`（含 `default` + `packageJson`）。
+- 同步清理：`apps/core-app/src/renderer/src/utils/build-info.ts`、`apps/core-app/src/renderer/src/modules/channel/main/node.ts` 去除 `@ts-ignore`。
+
+---
+
+## Lint / Typecheck 执行结果（当前仓库基线）
+
+> 说明：本次执行的是仓库当前 `main` 工作区状态，输出中包含大量与本次改动无关的历史问题；因此“lint/typecheck 不通过”属于**仓库基线问题**，本次仅做结果记录与与改动相关风险提示。
+
+### Lint
+
+- 命令：`pnpm lint`
+- 结果：失败（`eslint .` 扫描全仓库）
+- 现状特征：
+  - 触发大量 Markdown/YAML/Workflow 等非运行时代码文件规则错误（例如 `.github/**`、`AGENTS.md`）；
+  - 规则包含大量样式类约束（逗号、brace-style、operator-linebreak、no-console、import 排序等），仓库现状未收敛，导致错误数量极大（2w+ 级别）。
+
+### Typecheck
+
+- 命令：`pnpm -F @talex-touch/core-app run typecheck`
+- 结果：失败（node 侧先失败，web 未执行）
+- 失败点：集中在分析/统计相关模块与 utils 的类型约束（如 `analytics-module.ts`、`search-gather.ts`、`packages/utils/analytics/client.ts`），与本次日志修复改动点不直接相关。
+
+### 仍需跟进（仍未定位/需复现）
+
+- `Electron sandboxed_renderer.bundle.js script failed to run` / `TypeError: object is not iterable`：需要可复现入口与 stack，建议先在 devtools 捕获更完整堆栈或加全局 error hook 追源。
+- DevTools 协议噪音（如 `Autofill.* wasn't found`）：通常不影响业务，但可考虑在默认日志里降噪（仅 debug 输出）。

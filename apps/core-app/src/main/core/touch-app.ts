@@ -130,6 +130,61 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     checkDirWithCreate(this.rootPath, true)
 
+    this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header, data }) => {
+      const { event } = header
+      const { rendererStartTime } = data || {}
+
+      // Use renderer's performance.timeOrigin for accurate timing
+      // This ensures reload doesn't accumulate time incorrectly
+      const rendererStart = rendererStartTime || Date.now()
+      const currentTime = Date.now()
+
+      // Record renderer process metrics for analytics
+      const analytics = getStartupAnalytics()
+      analytics.setRendererProcessMetrics({
+        startTime: rendererStart,
+        readyTime: currentTime,
+        domContentLoaded: undefined, // Will be set by renderer
+        firstInteractive: undefined, // Will be set by renderer
+        loadEventEnd: undefined, // Will be set by renderer
+      })
+
+      // Save metrics to history (async, don't wait)
+      void analytics.saveToHistory()
+
+      void analytics.reportMetrics()
+
+      return {
+        id: (event?.sender as Electron.WebContents).id,
+        version: this.version,
+        path: {
+          rootPath: this.rootPath,
+          appPath: app.getAppPath(),
+          appDataPath: app.getPath('appData'),
+          userDataPath: app.getPath('userData'),
+          tempPath: app.getPath('temp'),
+          homePath: app.getPath('home'),
+          exePath: app.getPath('exe'),
+          modulePath: path.join(this.rootPath, 'modules'),
+          configPath: path.join(this.rootPath, 'config'),
+          pluginPath: path.join(this.rootPath, 'plugins'),
+        },
+        isPackaged: app.isPackaged,
+        isDev: this.version === TalexTouch.AppVersion.DEV,
+        isRelease: this.version === TalexTouch.AppVersion.RELEASE,
+        platform: process.platform,
+        arch: process.arch,
+        platformWarning: checkPlatformCompatibility(),
+        t: {
+          _s: process.getCreationTime(),
+          s: rendererStart,
+          e: currentTime,
+          p: process.uptime(),
+          h: process.hrtime(),
+        },
+      }
+    })
+
     const startSilent = this._startSilent
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
@@ -254,61 +309,6 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     renderTimer.end('Renderer ready', {
       meta: { mode: app.isPackaged ? 'file' : 'dev-server' },
-    })
-
-    this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header, data }) => {
-      const { event } = header
-      const { rendererStartTime } = data || {}
-
-      // Use renderer's performance.timeOrigin for accurate timing
-      // This ensures reload doesn't accumulate time incorrectly
-      const rendererStart = rendererStartTime || Date.now()
-      const currentTime = Date.now()
-
-      // Record renderer process metrics for analytics
-      const analytics = getStartupAnalytics()
-      analytics.setRendererProcessMetrics({
-        startTime: rendererStart,
-        readyTime: currentTime,
-        domContentLoaded: undefined, // Will be set by renderer
-        firstInteractive: undefined, // Will be set by renderer
-        loadEventEnd: undefined, // Will be set by renderer
-      })
-
-      // Save metrics to history (async, don't wait)
-      void analytics.saveToHistory()
-
-      void analytics.reportMetrics()
-
-      return {
-        id: (event?.sender as Electron.WebContents).id,
-        version: this.version,
-        path: {
-          rootPath: this.rootPath,
-          appPath: app.getAppPath(),
-          appDataPath: app.getPath('appData'),
-          userDataPath: app.getPath('userData'),
-          tempPath: app.getPath('temp'),
-          homePath: app.getPath('home'),
-          exePath: app.getPath('exe'),
-          modulePath: path.join(this.rootPath, 'modules'),
-          configPath: path.join(this.rootPath, 'config'),
-          pluginPath: path.join(this.rootPath, 'plugins'),
-        },
-        isPackaged: app.isPackaged,
-        isDev: this.version === TalexTouch.AppVersion.DEV,
-        isRelease: this.version === TalexTouch.AppVersion.RELEASE,
-        platform: process.platform,
-        arch: process.arch,
-        platformWarning: checkPlatformCompatibility(),
-        t: {
-          _s: process.getCreationTime(),
-          s: rendererStart,
-          e: currentTime,
-          p: process.uptime(),
-          h: process.hrtime(),
-        },
-      }
     })
   }
 

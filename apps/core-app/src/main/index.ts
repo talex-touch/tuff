@@ -89,6 +89,13 @@ const modulesToLoad = [
 // Record when Electron becomes ready
 let electronReadyTime: number
 
+// Pre-initialize Sentry before `app.whenReady()` to satisfy @sentry/electron requirements.
+try {
+  sentryModule.preInitBeforeReady()
+} catch (error) {
+  mainLog.warn('Failed to pre-initialize Sentry', { error })
+}
+
 app.whenReady().then(async () => {
   electronReadyTime = Date.now()
   const startupTimer = mainLog.time('All modules loaded', 'success')

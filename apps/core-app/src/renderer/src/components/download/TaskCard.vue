@@ -19,7 +19,7 @@ import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/channel/storage'
-import ProgressBar from './ProgressBar.vue'
+import ProgressBar from './DownloadProgressBar.vue'
 
 interface Props {
   task: DownloadTask

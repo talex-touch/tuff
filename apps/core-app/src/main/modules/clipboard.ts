@@ -14,6 +14,7 @@ import type {
   TuffInputType,
 } from '@talex-touch/utils/transport/events/types'
 import { execFile } from 'node:child_process'
+import crypto from 'node:crypto'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
@@ -101,13 +102,28 @@ const CACHE_MAX_COUNT = 20
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
 
 const execFileAsync = promisify(execFile)
+const IMAGE_HASH_SIZE = 24
 
 class ClipboardHelper {
   private lastText: string = clipboard.readText()
   public lastFormats: string[] = []
   public lastChangeHash: string = ''
-  private lastImageHash: string = clipboard.readImage().toDataURL()
+  private lastImageHash: string = this.getImageHash(clipboard.readImage())
   private lastFiles: string[] = this.readClipboardFiles()
+
+  private getImageHash(image: NativeImage): string {
+    if (!image || image.isEmpty())
+      return ''
+
+    const resized = image.resize({
+      width: IMAGE_HASH_SIZE,
+      height: IMAGE_HASH_SIZE,
+      quality: 'good',
+    })
+
+    const buffer = resized.toBitmap()
+    return crypto.createHash('sha1').update(buffer).digest('hex')
+  }
 
   /**
    * Read file paths from clipboard
@@ -284,14 +300,14 @@ class ClipboardHelper {
 
   public didImageChange(image: NativeImage): boolean {
     if (image.isEmpty()) return false
-    const hash = image.toDataURL()
+    const hash = this.getImageHash(image)
     if (hash === this.lastImageHash) return false
     this.lastImageHash = hash
     return true
   }
 
   public primeImage(image: NativeImage | null): void {
-    this.lastImageHash = image && !image.isEmpty() ? image.toDataURL() : ''
+    this.lastImageHash = image && !image.isEmpty() ? this.getImageHash(image) : ''
   }
 
   public primeFiles(files: string[]): void {

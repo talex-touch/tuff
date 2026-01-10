@@ -10,7 +10,7 @@ import {
   Upload,
 } from '@element-plus/icons-vue'
 import { computed } from 'vue'
-import ProgressBar from './ProgressBar.vue'
+import ProgressBar from './DownloadProgressBar.vue'
 
 interface DownloadProgress {
   percentage: number

@@ -118,10 +118,11 @@ export class StorageModule extends BaseModule {
     if (!this.filePath)
       throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
 
-    this.frequencyMonitor.trackGet(name)
-
     // Hot configs skip invalidation check and always stay in cache
     const isHot = this.hotConfigs.has(name)
+    if (!isHot) {
+      this.frequencyMonitor.trackGet(name)
+    }
 
     // Check if cache is invalidated, force reload if so (skip for hot configs)
     if (!isHot && this.cache.isInvalidated(name)) {

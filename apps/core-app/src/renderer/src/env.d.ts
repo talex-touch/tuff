@@ -16,6 +16,12 @@ declare module '*.vue' {
   export default component
 }
 
+declare module 'talex-touch:information' {
+  export const packageJson: Record<string, any>
+  const information: Record<string, any>
+  export default information
+}
+
 declare global {
   export interface IStartupInfo extends StartupInfo {}
 

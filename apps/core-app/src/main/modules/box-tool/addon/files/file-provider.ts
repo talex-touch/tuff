@@ -1635,11 +1635,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       const dbFileMap = new Map(dbFiles.map((file) => [file.path, file]))
 
+      const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
+
       const diskScanStart = performance.now()
       const diskFiles: ScannedFileInfo[] = []
       let reconciledPaths = 0
       for (const dir of reconciliationPaths) {
-        diskFiles.push(...(await scanDirectory(dir, excludePathsSet)))
+        const scanned = await scanDirectory(dir, excludePathsSet)
+        for (const scannedFile of scanned) {
+          diskFiles.push(scannedFile)
+        }
+        await yieldToEventLoop()
         reconciledPaths++
         this.emitIndexingProgress('reconciliation', reconciledPaths, reconciliationPaths.length)
       }
@@ -1647,13 +1653,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         files: diskFiles.length,
         duration: formatDuration(performance.now() - diskScanStart)
       })
-      const diskFileMap = new Map(diskFiles.map((file) => [file.path, file]))
 
       const filesToAdd: ScannedFileInfo[] = []
       const filesToUpdate: (typeof filesSchema.$inferSelect)[] = []
 
-      for (const [path, diskFile] of diskFileMap.entries()) {
-        const dbFile = dbFileMap.get(path)
+      const seenDiskPaths = new Set<string>()
+      let comparedFiles = 0
+      for (const diskFile of diskFiles) {
+        if (seenDiskPaths.has(diskFile.path)) {
+          continue
+        }
+        seenDiskPaths.add(diskFile.path)
+
+        const dbFile = dbFileMap.get(diskFile.path)
         if (!dbFile) {
           filesToAdd.push(diskFile)
         } else if (diskFile.mtime > dbFile.mtime) {
@@ -1669,12 +1681,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             type: 'file'
           })
         }
-        dbFileMap.delete(path)
+        dbFileMap.delete(diskFile.path)
+
+        comparedFiles += 1
+        if (comparedFiles % 2000 === 0) {
+          await yieldToEventLoop()
+        }
       }
 
-      const deletedFiles = Array.from(dbFileMap.values()).filter((file) =>
-        reconciliationPaths.some((p) => file.path.startsWith(p))
-      )
+      const deletedFiles: (typeof filesSchema.$inferSelect)[] = []
+      let checkedDbFiles = 0
+      for (const file of dbFileMap.values()) {
+        if (reconciliationPaths.some((p) => file.path.startsWith(p))) {
+          deletedFiles.push(file)
+        }
+
+        checkedDbFiles += 1
+        if (checkedDbFiles % 4000 === 0) {
+          await yieldToEventLoop()
+        }
+      }
       const deletedFileIds = deletedFiles.map((file) => file.id)
 
       if (deletedFileIds.length > 0) {
