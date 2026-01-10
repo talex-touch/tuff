@@ -1,10 +1,15 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { ReadFileRequest } from '@talex-touch/utils/transport/events/types'
 import { isLocalhostUrl } from '@talex-touch/utils'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import type { TalexTouch } from '../types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { BrowserWindow, powerMonitor, shell } from 'electron'
@@ -54,11 +59,35 @@ function getOSInformation(): any {
   }
 }
 
+function resolveLocalFilePath(source: string): string | null {
+  if (!source) return null
+
+  if (source.startsWith('file:') || source.startsWith(`${FILE_SCHEMA}:`)) {
+    const fileUrl = source.startsWith('file:')
+      ? source
+      : source.replace(`${FILE_SCHEMA}:`, 'file:')
+    try {
+      return fileURLToPath(fileUrl)
+    } catch {
+      return null
+    }
+  }
+
+  if (path.isAbsolute(source) || path.win32.isAbsolute(source)) {
+    return source
+  }
+
+  return null
+}
+
 export class CommonChannelModule extends BaseModule {
   static key: symbol = Symbol.for('CommonChannel')
   name: ModuleKey = CommonChannelModule.key
 
   private batteryPollTimer?: NodeJS.Timeout
+  private channel: ReturnType<typeof genTouchChannel> | null = null
+  private transport: ITuffTransportMain | null = null
+  private transportDisposers: Array<() => void> = []
 
   constructor() {
     super(CommonChannelModule.key, {
@@ -69,6 +98,11 @@ export class CommonChannelModule extends BaseModule {
 
   async onInit({ app }: ModuleInitContext<TalexEvents>): Promise<void> {
     const channel = genTouchChannel(app as TalexTouch.TouchApp)
+    this.channel = channel
+    this.transport = getTuffTransportMain(
+      channel,
+      (channel as any)?.keyManager ?? channel,
+    )
 
     const broadcastBatteryStatus = async (): Promise<void> => {
       const onBattery = safeIsOnBatteryPower()
@@ -303,6 +337,59 @@ export class CommonChannelModule extends BaseModule {
         hasOfficialKey: false
       }
     })
+
+    this.registerTransportHandlers()
+  }
+
+  private registerTransportHandlers(): void {
+    if (!this.transport || !this.channel) {
+      return
+    }
+
+    this.transportDisposers.push(
+      this.transport.on<ReadFileRequest, string>(AppEvents.system.readFile, async (payload) => {
+        const source = payload?.source?.trim()
+        const resolvedPath = source ? resolveLocalFilePath(source) : null
+        if (!resolvedPath) {
+          throw new Error('Unsupported file source')
+        }
+        return await fs.readFile(resolvedPath, { encoding: 'utf8' })
+      }),
+      this.transport.onStream(AppEvents.fileIndex.progress, (_payload, context) => {
+        fileProvider.registerProgressStream(context)
+      }),
+    )
+
+    this.transportDisposers.push(
+      this.channel.regChannel(
+        ChannelType.MAIN,
+        AppEvents.fileIndex.status.toEventName(),
+        () => fileProvider.getIndexingStatus(),
+      ),
+      this.channel.regChannel(
+        ChannelType.MAIN,
+        AppEvents.fileIndex.stats.toEventName(),
+        () => fileProvider.getIndexStats(),
+      ),
+      this.channel.regChannel(
+        ChannelType.MAIN,
+        AppEvents.fileIndex.batteryLevel.toEventName(),
+        () => fileProvider.getBatteryLevel(),
+      ),
+      this.channel.regChannel(
+        ChannelType.MAIN,
+        AppEvents.fileIndex.rebuild.toEventName(),
+        async () => {
+          try {
+            await fileProvider.rebuildIndex()
+            return { success: true, message: 'Index rebuild started' }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            return { success: false, error: message }
+          }
+        },
+      ),
+    )
   }
 
   onDestroy(): MaybePromise<void> {
@@ -312,6 +399,17 @@ export class CommonChannelModule extends BaseModule {
       clearInterval(this.batteryPollTimer)
       this.batteryPollTimer = undefined
     }
+
+    for (const dispose of this.transportDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
+    this.transport = null
+    this.channel = null
   }
 }
 

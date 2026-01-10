@@ -1,5 +1,7 @@
 import type { RetrierOptions } from '@talex-touch/utils'
 import { createRetrier } from '@talex-touch/utils'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 
 export function useSvgContent(
   tempUrl: string = '',
@@ -10,6 +12,7 @@ export function useSvgContent(
   const content = ref<string | null>(null)
   const loading = ref(false)
   const error = ref<Error | null>(null)
+  const transport = useTuffTransport()
 
   const retrier = createRetrier(
     retrierOptions ?? {
@@ -22,8 +25,20 @@ export function useSvgContent(
     fetchSvgContent()
   }
 
+  function isLocalSource(source: string): boolean {
+    if (!source) return false
+    if (source.startsWith('file:') || source.startsWith('tfile:')) return true
+    if (source.startsWith('/')) return true
+    if (source.startsWith('\\\\')) return true
+    return /^[a-zA-Z]:[\\/]/.test(source)
+  }
+
   async function doFetch(): Promise<string> {
     let targetUrl = url.value
+
+    if (isLocalSource(targetUrl)) {
+      return await transport.send(AppEvents.system.readFile, { source: targetUrl })
+    }
 
     try {
       new URL(targetUrl)

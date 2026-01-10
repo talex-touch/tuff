@@ -4,9 +4,8 @@ import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { AnalyticsMessage } from '@talex-touch/utils/analytics'
 
 const { t } = useI18n()
@@ -73,14 +72,34 @@ function severityClass(severity: AnalyticsMessage['severity']) {
 
 onMounted(() => {
   loadMessages()
-  const handler = (data: { name?: string }) => {
-    if (data?.name === 'analytics-messages.json') {
-      loadMessages()
-    }
-  }
-  touchChannel.regChannel('storage:update', handler)
+  let cancelled = false
+  let controller: { cancel: () => void } | null = null
+
+  transport
+    .stream(StorageEvents.app.updated, undefined, {
+      onData: (payload) => {
+        if (payload?.key === 'analytics-messages.json') {
+          loadMessages()
+        }
+      },
+      onError: (err) => {
+        console.error('[SettingMessages] storage update stream error:', err)
+      }
+    })
+    .then((stream) => {
+      if (cancelled) {
+        stream.cancel()
+        return
+      }
+      controller = stream
+    })
+    .catch((error) => {
+      console.error('[SettingMessages] Failed to start storage update stream:', error)
+    })
+
   onBeforeUnmount(() => {
-    touchChannel.unRegChannel('storage:update', handler)
+    cancelled = true
+    controller?.cancel()
   })
 })
 </script>

@@ -34,6 +34,7 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { getStartupAnalytics } from '.'
 import { setIpcTracer } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
+import { setPerfSummaryReporter, type PerfSummary } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { getConfig } from '../storage'
@@ -45,6 +46,20 @@ import { DbStore } from './storage/db-store'
 import { DEFAULT_RETENTION_MS } from './storage/memory-store'
 
 const analyticsLog = createLogger('Analytics')
+const MESSAGE_REPORT_BASE_DELAY_MS = 30_000
+const MESSAGE_REPORT_MAX_DELAY_MS = 5 * 60_000
+const MESSAGE_REPORT_MAX_QUEUE = 120
+const MESSAGE_REPORT_BATCH_SIZE = 10
+const MESSAGE_REPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+type QueuedMessageReport = {
+  key: string
+  message: AnalyticsMessage
+  createdAt: number
+  lastAttemptAt?: number
+  attempts: number
+  count: number
+}
 
 export class AnalyticsModule extends BaseModule {
   static key: symbol = Symbol.for('AnalyticsModule')
@@ -57,6 +72,11 @@ export class AnalyticsModule extends BaseModule {
   private dbStore?: DbStore
   private cleanupTimer?: NodeJS.Timeout
   private messageStore?: AnalyticsMessageStore
+  private messageReportQueue: QueuedMessageReport[] = []
+  private messageReportIndex = new Map<string, QueuedMessageReport>()
+  private messageReportTimer: NodeJS.Timeout | null = null
+  private messageReportInFlight = false
+  private messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
 
   constructor() {
     super(AnalyticsModule.key, {
@@ -75,6 +95,7 @@ export class AnalyticsModule extends BaseModule {
         this.messageStore.onMessage(message => this.reportMessage(message)),
       )
     }
+    setPerfSummaryReporter(summary => this.handlePerfSummary(summary))
 
     this.transport = getTuffTransportMain(
       ctx.app.channel as any,
@@ -102,6 +123,11 @@ export class AnalyticsModule extends BaseModule {
       clearInterval(this.cleanupTimer)
       this.cleanupTimer = undefined
     }
+    if (this.messageReportTimer) {
+      clearTimeout(this.messageReportTimer)
+      this.messageReportTimer = null
+    }
+    setPerfSummaryReporter(null)
     for (const dispose of this.disposers) {
       try {
         dispose()
@@ -439,33 +465,146 @@ export class AnalyticsModule extends BaseModule {
     }
   }
 
-  private async reportMessage(message: AnalyticsMessage): Promise<void> {
-    const config = this.getMessageReportConfig()
-    if (!config.enabled)
+  private handlePerfSummary(summary: PerfSummary): void {
+    if (!this.messageStore) {
       return
-    const endpoint = this.resolveMessageEndpoint()
-    if (!endpoint)
-      return
+    }
 
-    const payload = {
-      messages: [
-        {
-          id: message.id,
-          source: message.source,
-          severity: message.severity,
-          title: message.title,
-          message: message.message,
-          meta: config.anonymous ? undefined : message.meta,
-          status: message.status,
-          createdAt: message.createdAt,
+    const shouldReport =
+      summary.errorCount > 0
+      || summary.kinds.includes('ipc.no_handler')
+      || summary.kinds.includes('channel.send.timeout')
+      || summary.kinds.includes('channel.send.errorReply')
+
+    if (!shouldReport) {
+      return
+    }
+
+    const severity = summary.errorCount > 0 ? 'error' : 'warn'
+    this.messageStore.add({
+      source: 'system',
+      severity,
+      title: 'Perf summary',
+      message: summary.kinds,
+      meta: {
+        total: summary.total,
+        errorCount: summary.errorCount,
+        topEvents: summary.topEvents,
+        topSlow: summary.topSlow,
+      },
+    })
+  }
+
+  private reportMessage(message: AnalyticsMessage): void {
+    this.enqueueMessageReport(message)
+  }
+
+  private enqueueMessageReport(message: AnalyticsMessage): void {
+    const now = Date.now()
+    const key = this.buildMessageReportKey(message)
+    const existing = this.messageReportIndex.get(key)
+    if (existing) {
+      existing.count += 1
+      existing.message.createdAt = Math.max(existing.message.createdAt, message.createdAt)
+      existing.message.meta = {
+        ...existing.message.meta,
+        count: existing.count,
+        lastAt: now,
+      }
+      return
+    }
+
+    const entry: QueuedMessageReport = {
+      key,
+      message,
+      createdAt: now,
+      attempts: 0,
+      count: 1,
+    }
+
+    this.messageReportQueue.push(entry)
+    this.messageReportIndex.set(key, entry)
+
+    if (this.messageReportQueue.length > MESSAGE_REPORT_MAX_QUEUE) {
+      const dropped = this.messageReportQueue.shift()
+      if (dropped) {
+        this.messageReportIndex.delete(dropped.key)
+      }
+    }
+
+    this.pruneMessageReportQueue(now)
+    this.scheduleMessageReportFlush(MESSAGE_REPORT_BASE_DELAY_MS, true)
+  }
+
+  private scheduleMessageReportFlush(delayMs: number, reset: boolean): void {
+    if (this.messageReportTimer) {
+      if (!reset) {
+        return
+      }
+      clearTimeout(this.messageReportTimer)
+    }
+
+    this.messageReportTimer = setTimeout(() => {
+      this.messageReportTimer = null
+      void this.flushMessageReportQueue()
+    }, delayMs)
+  }
+
+  private async flushMessageReportQueue(): Promise<void> {
+    if (this.messageReportInFlight || this.messageReportQueue.length === 0) {
+      return
+    }
+
+    const config = this.getMessageReportConfig()
+    if (!config.enabled) {
+      this.messageReportQueue = []
+      this.messageReportIndex.clear()
+      this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
+      return
+    }
+
+    const endpoint = this.resolveMessageEndpoint()
+    if (!endpoint) {
+      this.scheduleMessageReportFlush(this.messageReportBackoffMs, false)
+      return
+    }
+
+    const now = Date.now()
+    this.pruneMessageReportQueue(now)
+    if (this.messageReportQueue.length === 0) {
+      this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
+      return
+    }
+
+    const batch = this.messageReportQueue.slice(0, MESSAGE_REPORT_BATCH_SIZE)
+    if (!batch.length) {
+      return
+    }
+
+    this.messageReportInFlight = true
+    try {
+      const payload = {
+        messages: batch.map((entry) => ({
+          id: entry.message.id,
+          source: entry.message.source,
+          severity: entry.message.severity,
+          title: entry.message.title,
+          message: entry.message.message,
+          meta: config.anonymous
+            ? undefined
+            : {
+                ...entry.message.meta,
+                count: entry.count,
+                lastAt: entry.lastAttemptAt ?? entry.createdAt,
+              },
+          status: entry.message.status,
+          createdAt: entry.message.createdAt,
           platform: process.platform,
           version: app.getVersion(),
           isAnonymous: config.anonymous,
-        },
-      ],
-    }
+        })),
+      }
 
-    try {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -475,11 +614,51 @@ export class AnalyticsModule extends BaseModule {
         const text = await response.text().catch(() => '')
         throw new Error(`Message report failed: ${response.status} ${response.statusText} ${text}`.trim())
       }
+
+      for (const entry of batch) {
+        this.messageReportIndex.delete(entry.key)
+      }
+      this.messageReportQueue = this.messageReportQueue.filter(
+        entry => !batch.some(done => done.key === entry.key),
+      )
+      this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
     }
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      analyticsLog.warn('Failed to report analytics message', { error: errorMessage })
+      for (const entry of batch) {
+        entry.attempts += 1
+        entry.lastAttemptAt = now
+        entry.message.meta = {
+          ...entry.message.meta,
+          lastError: errorMessage,
+        }
+      }
+      this.messageReportBackoffMs = Math.min(
+        this.messageReportBackoffMs * 2,
+        MESSAGE_REPORT_MAX_DELAY_MS,
+      )
+      analyticsLog.warn('Failed to report analytics messages', { error: errorMessage })
     }
+    finally {
+      this.messageReportInFlight = false
+      if (this.messageReportQueue.length > 0) {
+        this.scheduleMessageReportFlush(this.messageReportBackoffMs, true)
+      }
+    }
+  }
+
+  private pruneMessageReportQueue(now: number): void {
+    const cutoff = now - MESSAGE_REPORT_MAX_AGE_MS
+    const nextQueue = this.messageReportQueue.filter(entry => entry.createdAt >= cutoff)
+    if (nextQueue.length === this.messageReportQueue.length) {
+      return
+    }
+    this.messageReportQueue = nextQueue
+    this.messageReportIndex = new Map(nextQueue.map(entry => [entry.key, entry]))
+  }
+
+  private buildMessageReportKey(message: AnalyticsMessage): string {
+    return [message.source, message.severity, message.title, message.message].join('|')
   }
 
   private startCleanup(): void {

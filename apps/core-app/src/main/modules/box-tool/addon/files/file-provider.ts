@@ -3,10 +3,13 @@ import type {
   IProviderActivate,
   ISearchProvider,
   ITouchEvent,
+  OpenerInfo,
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
 import type { FileParserProgress, FileParserResult } from '@talex-touch/utils/electron/file-parsers'
+import type { StreamContext } from '@talex-touch/utils/transport'
+import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
@@ -26,7 +29,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
-import { timingLogger, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { StorageList, timingLogger, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
@@ -53,6 +56,7 @@ import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
 import { fileProviderLog, formatDuration } from '../../../../utils/logger'
 import FileSystemWatcher from '../../file-system-watcher'
 import { searchLogger } from '../../search-engine/search-logger'
+import { getConfig, saveConfig } from '../../../storage'
 import {
   CONTENT_INDEXABLE_EXTENSIONS,
   getContentSizeLimitMB,
@@ -181,8 +185,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private openersChannelRegistered = false
+  private indexingChannelsRegistered = false
+  private readonly progressStreamContexts = new Set<StreamContext<FileIndexProgressPayload>>()
+  private progressCleanupTimer: NodeJS.Timeout | null = null
+  private launchServicesLoadPromise: Promise<any[]> | null = null
+  private readonly openerNegativeCache = new Map<string, number>()
+  private readonly openerResolveConcurrency = 2
+  private openerResolveInFlight = 0
+  private openerResolveWaiters: Array<() => void> = []
+  private readonly utiCache = new Map<string, string | null>()
+  private readonly bundleIdCache = new Map<string, string | null>()
+  private readonly iconExtractionQueue: Array<{
+    filePath: string
+    resolve: (buffer: Buffer | null) => void
+  }> = []
+  private iconExtractionRunning = false
+  private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly openerCache = new Map<string, ResolvedOpener>()
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
+  private readonly openerIconJobs = new Map<string, Promise<void>>()
   private launchServicesHandlers: any[] | null = null
   private launchServicesMTime?: number
   private readonly failedContentCache = new Map<
@@ -506,6 +527,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.initializeBackgroundTaskService()
 
+    // 尽早注册 channel，避免前端启动期请求出现 no-handler 警告
+    this.registerOpenersChannel(context)
+    this.registerIndexingChannels(context)
+
     // 启动异步后台索引任务，不阻塞onLoad
     if (!this.isInitializing) {
       this.logInfo('onLoad: starting background index task...')
@@ -536,8 +561,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     // 只等待文件系统监听器设置完成，不等待索引完成
     await this.ensureFileSystemWatchers()
-    this.registerOpenersChannel(context)
-    this.registerIndexingChannels(context) // 注册索引管理通道
     const loadDuration = performance.now() - loadStart
     this.logInfo('Provider onLoad completed (indexing continues in background)', {
       duration: formatDuration(loadDuration)
@@ -778,6 +801,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * 注册索引管理相关的 IPC 通道
    */
   private registerIndexingChannels(context: ProviderContext): void {
+    if (this.indexingChannelsRegistered)
+      return
+    this.indexingChannelsRegistered = true
+
     const channel = context.touchApp.channel
 
     // 查询索引状态
@@ -818,9 +845,149 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
+  public registerProgressStream(context: StreamContext<FileIndexProgressPayload>): void {
+    this.progressStreamContexts.add(context)
+    this.ensureProgressCleanupTimer()
+  }
+
+  private emitProgressStream(payload: FileIndexProgressPayload): void {
+    if (this.progressStreamContexts.size === 0) {
+      return
+    }
+
+    for (const stream of Array.from(this.progressStreamContexts)) {
+      if (stream.isCancelled()) {
+        this.progressStreamContexts.delete(stream)
+        continue
+      }
+      stream.emit(payload)
+    }
+
+    if (this.progressStreamContexts.size === 0) {
+      this.clearProgressCleanupTimer()
+    }
+  }
+
+  private ensureProgressCleanupTimer(): void {
+    if (this.progressCleanupTimer) {
+      return
+    }
+
+    this.progressCleanupTimer = setInterval(() => {
+      for (const stream of Array.from(this.progressStreamContexts)) {
+        if (stream.isCancelled()) {
+          this.progressStreamContexts.delete(stream)
+        }
+      }
+
+      if (this.progressStreamContexts.size === 0) {
+        this.clearProgressCleanupTimer()
+      }
+    }, 30_000)
+  }
+
+  private clearProgressCleanupTimer(): void {
+    if (!this.progressCleanupTimer) {
+      return
+    }
+
+    clearInterval(this.progressCleanupTimer)
+    this.progressCleanupTimer = null
+  }
+
+  private async withOpenerResolveSlot<T>(task: () => Promise<T>): Promise<T> {
+    if (this.openerResolveInFlight >= this.openerResolveConcurrency) {
+      await new Promise<void>((resolve) => {
+        this.openerResolveWaiters.push(resolve)
+      })
+    }
+
+    this.openerResolveInFlight += 1
+    try {
+      return await task()
+    } finally {
+      this.openerResolveInFlight -= 1
+      const next = this.openerResolveWaiters.shift()
+      if (next) {
+        next()
+      }
+    }
+  }
+
+  private isOpenerNegativeCached(extension: string): boolean {
+    const expiresAt = this.openerNegativeCache.get(extension)
+    if (!expiresAt) {
+      return false
+    }
+    if (expiresAt <= Date.now()) {
+      this.openerNegativeCache.delete(extension)
+      return false
+    }
+    return true
+  }
+
+  private markOpenerNegativeCache(extension: string): void {
+    const ttlMs = 10 * 60 * 1000
+    this.openerNegativeCache.set(extension, Date.now() + ttlMs)
+  }
+
+  private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
+    const existing = this.iconExtractionPending.get(filePath)
+    if (existing) {
+      return existing
+    }
+
+    const task = new Promise<Buffer | null>((resolve) => {
+      this.iconExtractionQueue.push({ filePath, resolve })
+      this.scheduleIconExtraction()
+    })
+
+    this.iconExtractionPending.set(filePath, task)
+    task.finally(() => {
+      this.iconExtractionPending.delete(filePath)
+    })
+
+    return task
+  }
+
+  private scheduleIconExtraction(): void {
+    if (this.iconExtractionRunning) {
+      return
+    }
+    this.iconExtractionRunning = true
+    setImmediate(() => {
+      void this.processIconExtractionQueue()
+    })
+  }
+
+  private async processIconExtractionQueue(): Promise<void> {
+    while (this.iconExtractionQueue.length > 0) {
+      const job = this.iconExtractionQueue.shift()
+      if (!job) {
+        continue
+      }
+
+      try {
+        const buffer = extractFileIcon(job.filePath)
+        job.resolve(buffer && buffer.length > 0 ? buffer : null)
+      } catch (error) {
+        this.logWarn('Failed to extract icon', error, { path: job.filePath })
+        job.resolve(null)
+      }
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 8))
+    }
+
+    this.iconExtractionRunning = false
+  }
+
   private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
-    const normalized = rawExtension.replace(/^\./, '').toLowerCase()
+    const normalized = normalizeOpenerExtension(rawExtension)
     if (!normalized) {
+      return null
+    }
+
+    if (this.isOpenerNegativeCached(normalized)) {
       return null
     }
 
@@ -830,12 +997,27 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     let pending = this.openerPromises.get(normalized)
     if (!pending) {
-      pending = this.resolveOpener(normalized)
+      pending = this.withOpenerResolveSlot(async () => {
+        try {
+          const result = await this.resolveOpener(normalized)
+          if (!result) {
+            this.markOpenerNegativeCache(normalized)
+          }
+          return result
+        } catch (error) {
+          this.markOpenerNegativeCache(normalized)
+          throw error
+        }
+      })
       this.openerPromises.set(normalized, pending)
     }
 
-    const result = await pending
-    this.openerPromises.delete(normalized)
+    let result: ResolvedOpener | null = null
+    try {
+      result = await pending
+    } finally {
+      this.openerPromises.delete(normalized)
+    }
 
     if (result) {
       this.openerCache.set(normalized, result)
@@ -849,7 +1031,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return null
     }
 
-    const sanitized = extension.replace(/[^a-z0-9.+-]/gi, '')
+    const sanitized = sanitizeOpenerExtension(extension)
     if (!sanitized) {
       return null
     }
@@ -865,14 +1047,24 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     let logo = appInfo.logo
-    if (!logo && appInfo.path) {
-      logo = await this.generateApplicationIcon(appInfo.path)
+    if (!logo) {
+      const cached = this.getOpenerFromStorage(sanitized, bundleId)
+      if (cached?.logo) {
+        logo = cached.logo
+        if (appInfo.fileId) {
+          this.persistOpenerIcon(appInfo.fileId, cached.logo)
+        }
+      }
+    }
+
+    if (!logo && appInfo.path && this.enableFileIconExtraction) {
+      this.scheduleOpenerIconUpdate(sanitized, bundleId, appInfo)
     }
 
     const opener: ResolvedOpener = {
       bundleId,
       name: appInfo.name,
-      logo,
+      logo: logo ?? '',
       path: appInfo.path,
       lastResolvedAt: new Date().toISOString()
     }
@@ -880,9 +1072,125 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return opener
   }
 
+  private getOpenerFromStorage(extension: string, bundleId: string): OpenerInfo | null {
+    try {
+      const raw = getConfig(StorageList.OPENERS) as unknown
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return null
+      }
+      const entry = (raw as Record<string, OpenerInfo>)[extension]
+      if (!entry || entry.bundleId !== bundleId) {
+        return null
+      }
+      return entry
+    } catch (error) {
+      this.logWarn('Failed to read openers cache', error, { extension })
+      return null
+    }
+  }
+
+  private persistOpenerIcon(fileId: number, logo: string): void {
+    if (!this.dbUtils || !logo) {
+      return
+    }
+
+    const db = this.dbUtils.getDb()
+    void db
+      .insert(fileExtensions)
+      .values({
+        fileId,
+        key: 'icon',
+        value: logo
+      })
+      .onConflictDoUpdate({
+        target: [fileExtensions.fileId, fileExtensions.key],
+        set: { value: logo }
+      })
+      .catch((error) => {
+        this.logWarn('Failed to persist opener icon', error, { fileId })
+      })
+  }
+
+  private persistOpenerToStorage(extension: string, opener: OpenerInfo): void {
+    try {
+      const raw = getConfig(StorageList.OPENERS) as unknown
+      const current =
+        raw && typeof raw === 'object' && !Array.isArray(raw)
+          ? (raw as Record<string, OpenerInfo>)
+          : {}
+      const existing = current[extension]
+      const next = { ...existing, ...opener }
+
+      if (
+        existing
+        && existing.logo === next.logo
+        && existing.bundleId === next.bundleId
+        && existing.name === next.name
+        && existing.path === next.path
+        && existing.lastResolvedAt === next.lastResolvedAt
+      ) {
+        return
+      }
+
+      const updated = { ...current, [extension]: next }
+      saveConfig(StorageList.OPENERS, JSON.stringify(updated))
+    } catch (error) {
+      this.logWarn('Failed to persist opener cache', error, { extension })
+    }
+  }
+
+  private scheduleOpenerIconUpdate(
+    extension: string,
+    bundleId: string,
+    appInfo: { fileId: number; name: string; path: string; logo: string }
+  ): void {
+    if (!this.enableFileIconExtraction || !appInfo.path) {
+      return
+    }
+
+    if (this.openerIconJobs.has(extension)) {
+      return
+    }
+
+    const task = (async () => {
+      const logo = await this.generateApplicationIcon(appInfo.path)
+      if (!logo) {
+        return
+      }
+
+      if (appInfo.fileId) {
+        this.persistOpenerIcon(appInfo.fileId, logo)
+      }
+
+      const opener: ResolvedOpener = {
+        bundleId,
+        name: appInfo.name,
+        logo,
+        path: appInfo.path,
+        lastResolvedAt: new Date().toISOString()
+      }
+
+      this.openerCache.set(extension, opener)
+      this.persistOpenerToStorage(extension, opener)
+    })()
+      .catch((error) => {
+        this.logWarn('Failed to refresh opener icon', error, { extension })
+      })
+      .finally(() => {
+        this.openerIconJobs.delete(extension)
+      })
+
+    this.openerIconJobs.set(extension, task)
+  }
+
   private async getBundleIdForExtension(extension: string): Promise<string | null> {
+    if (this.bundleIdCache.has(extension)) {
+      return this.bundleIdCache.get(extension) ?? null
+    }
+
     const handlers = await this.loadLaunchServicesHandlers()
     if (handlers.length === 0) {
+      this.bundleIdCache.set(extension, null)
       return null
     }
 
@@ -897,11 +1205,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const directBundle = this.pickBundleIdFromHandler(directMatch)
     if (directBundle) {
+      this.bundleIdCache.set(extension, directBundle)
       return directBundle
     }
 
     const uti = await this.resolveUniformTypeIdentifier(lower)
     if (!uti) {
+      this.bundleIdCache.set(extension, null)
       return null
     }
 
@@ -911,7 +1221,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         handler.LSHandlerContentType.toLowerCase() === uti.toLowerCase()
     )
 
-    return this.pickBundleIdFromHandler(utiMatch)
+    const bundleId = this.pickBundleIdFromHandler(utiMatch)
+    this.bundleIdCache.set(extension, bundleId)
+    return bundleId
   }
 
   private pickBundleIdFromHandler(handler: any): string | null {
@@ -946,33 +1258,43 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return []
     }
 
-    try {
-      const stats = await fs.stat(LAUNCH_SERVICES_PLIST_PATH)
-      if (this.launchServicesHandlers && this.launchServicesMTime === stats.mtimeMs) {
-        return this.launchServicesHandlers
-      }
-
-      const { stdout } = await execFileAsync('plutil', [
-        '-convert',
-        'xml1',
-        '-o',
-        '-',
-        LAUNCH_SERVICES_PLIST_PATH
-      ])
-
-      const parsed = plist.parse(stdout.toString()) as { LSHandlers?: any[] }
-      const handlers = Array.isArray(parsed?.LSHandlers) ? parsed.LSHandlers : []
-
-      this.launchServicesHandlers = handlers
-      this.launchServicesMTime = stats.mtimeMs
-
-      return handlers
-    } catch (error) {
-      this.logError('Failed to load LaunchServices configuration for opener resolution.', error)
-      this.launchServicesHandlers = []
-      this.launchServicesMTime = undefined
-      return []
+    if (this.launchServicesLoadPromise) {
+      return this.launchServicesLoadPromise
     }
+
+    this.launchServicesLoadPromise = (async () => {
+      try {
+        const stats = await fs.stat(LAUNCH_SERVICES_PLIST_PATH)
+        if (this.launchServicesHandlers && this.launchServicesMTime === stats.mtimeMs) {
+          return this.launchServicesHandlers
+        }
+
+        const { stdout } = await execFileAsync('plutil', [
+          '-convert',
+          'xml1',
+          '-o',
+          '-',
+          LAUNCH_SERVICES_PLIST_PATH
+        ])
+
+        const parsed = plist.parse(stdout.toString()) as { LSHandlers?: any[] }
+        const handlers = Array.isArray(parsed?.LSHandlers) ? parsed.LSHandlers : []
+
+        this.launchServicesHandlers = handlers
+        this.launchServicesMTime = stats.mtimeMs
+
+        return handlers
+      } catch (error) {
+        this.logError('Failed to load LaunchServices configuration for opener resolution.', error)
+        this.launchServicesHandlers = []
+        this.launchServicesMTime = undefined
+        return []
+      } finally {
+        this.launchServicesLoadPromise = null
+      }
+    })()
+
+    return this.launchServicesLoadPromise
   }
 
   private async resolveUniformTypeIdentifier(extension: string): Promise<string | null> {
@@ -985,6 +1307,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return null
     }
 
+    if (this.utiCache.has(safeExt)) {
+      return this.utiCache.get(safeExt) ?? null
+    }
+
     const tempPath = path.join(
       os.tmpdir(),
       `talex-touch-${Date.now()}-${Math.random().toString(16).slice(2)}.${safeExt}`
@@ -994,9 +1320,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await fs.writeFile(tempPath, '')
       const { stdout } = await execFileAsync('mdls', ['-name', 'kMDItemContentType', tempPath])
       const match = /"([^"\n]+)"/.exec(stdout.toString())
-      return match ? match[1] : null
+      const uti = match ? match[1] : null
+      this.utiCache.set(safeExt, uti)
+      return uti
     } catch (error) {
       this.logWarn(`Failed to resolve UTI for extension .${extension}`, error)
+      this.utiCache.set(safeExt, null)
       return null
     } finally {
       try {
@@ -1008,6 +1337,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async getAppInfoByBundleId(bundleId: string): Promise<{
+    fileId: number
     name: string
     path: string
     logo: string
@@ -1052,6 +1382,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         .limit(1)
 
       return {
+        fileId,
         name: fileRow.displayName || fileRow.name,
         path: fileRow.path,
         logo: iconRow?.value ?? ''
@@ -1066,7 +1397,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async generateApplicationIcon(appPath: string): Promise<string> {
     try {
-      const buffer = extractFileIcon(appPath)
+      const buffer = await this.extractFileIconQueued(appPath)
       if (buffer && buffer.length > 0) {
         return `data:image/png;base64,${buffer.toString('base64')}`
       }
@@ -1091,7 +1422,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.pendingIconExtractions.add(fileId)
     try {
-      const icon = extractFileIcon(filePath)
+      const icon = await this.extractFileIconQueued(filePath)
+      if (!icon) {
+        return
+      }
       const iconValue = `data:image/png;base64,${icon.toString('base64')}`
 
       const meta: IconCacheMeta = {
@@ -1430,28 +1764,32 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.indexingProgress = { stage, current, total }
 
-    if (this.touchApp) {
-      // Calculate estimated completion
-      let estimatedRemainingMs: number | null = null
-      if (this.indexingStartTime && total > 0 && current > 0) {
-        const elapsed = now - this.indexingStartTime
-        const progress = current / total
-        if (progress > 0.01) {
-          const estimatedTotalTime = elapsed / progress
-          estimatedRemainingMs = estimatedTotalTime - elapsed
-        }
+    // Calculate estimated completion
+    let estimatedRemainingMs: number | null = null
+    if (this.indexingStartTime && total > 0 && current > 0) {
+      const elapsed = now - this.indexingStartTime
+      const progress = current / total
+      if (progress > 0.01) {
+        const estimatedTotalTime = elapsed / progress
+        estimatedRemainingMs = estimatedTotalTime - elapsed
       }
-
-      this.touchApp.channel.broadcast(ChannelType.MAIN, 'file-index:progress', {
-        stage,
-        current,
-        total,
-        progress: total > 0 ? Math.round((current / total) * 100) : 0,
-        startTime: this.indexingStartTime,
-        estimatedRemainingMs,
-        averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
-      })
     }
+
+    const payload = {
+      stage,
+      current,
+      total,
+      progress: total > 0 ? Math.round((current / total) * 100) : 0,
+      startTime: this.indexingStartTime,
+      estimatedRemainingMs,
+      averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
+    }
+
+    if (this.touchApp) {
+      this.touchApp.channel.broadcast(ChannelType.MAIN, 'file-index:progress', payload)
+    }
+
+    this.emitProgressStream(payload)
   }
 
   private async _initialize(): Promise<void> {
@@ -1953,7 +2291,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             const cached = iconCache.get(fileId)
             if (this.needsIconExtraction(file, cached)) {
               try {
-                await this.ensureFileIcon(fileId, file.path, file)
+                if (files.length > 200) {
+                  void this.ensureFileIcon(fileId, file.path, file)
+                } else {
+                  await this.ensureFileIcon(fileId, file.path, file)
+                }
               } catch {
                 /* ignore icon failures */
               }
@@ -2848,3 +3190,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 }
 
 export const fileProvider = new FileProvider()
+
+function normalizeOpenerExtension(rawExtension: string): string {
+  return rawExtension.replace(/^\./, '').trim().toLowerCase()
+}
+
+function sanitizeOpenerExtension(extension: string): string {
+  return extension.replace(/[^a-z0-9.+-]/gi, '')
+}

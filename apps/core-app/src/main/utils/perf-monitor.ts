@@ -31,6 +31,15 @@ type PerfIncident = {
   stack?: string
 }
 
+export type PerfSummary = {
+  at: number
+  total: number
+  errorCount: number
+  kinds: string
+  topSlow: Array<{ name: string, durationMs: number }>
+  topEvents: Array<{ key: string, count: number }>
+}
+
 type PerfAggregate = {
   count: number
   warnCount: number
@@ -53,6 +62,12 @@ const LOOP_LAG_ERROR_MS = 2_000
 
 const SUMMARY_INTERVAL_MS = 30_000
 const MAX_INCIDENTS = 80
+
+let perfSummaryReporter: ((summary: PerfSummary) => void) | null = null
+
+export function setPerfSummaryReporter(reporter: ((summary: PerfSummary) => void) | null): void {
+  perfSummaryReporter = reporter
+}
 
 function pushWithCap<T>(arr: T[], item: T, cap: number): void {
   arr.push(item)
@@ -288,6 +303,8 @@ export class PerfMonitor {
     if (snapshot.length === 0)
       return
 
+    const errorCount = snapshot.filter(item => item.severity === 'error').length
+
     const byKind = new Map<string, number>()
     for (const incident of snapshot) {
       byKind.set(incident.kind, (byKind.get(incident.kind) ?? 0) + 1)
@@ -311,6 +328,37 @@ export class PerfMonitor {
       const name = incident.eventName ?? incident.kind
       perfLog.warn(`Top slow: ${name} ${formatDuration(incident.durationMs ?? 0)}`)
     }
+
+    const eventCounts = new Map<string, number>()
+    for (const incident of snapshot) {
+      if (!incident.eventName)
+        continue
+      const channelType =
+        incident.meta && typeof incident.meta.channelType === 'string'
+          ? incident.meta.channelType
+          : undefined
+      const direction = incident.direction ? `:${incident.direction}` : ''
+      const channel = channelType ? `:${channelType}` : ''
+      const key = `${incident.kind}${direction}${channel}:${incident.eventName}`
+      eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1)
+    }
+
+    const topEvents = Array.from(eventCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([key, count]) => ({ key, count }))
+
+    perfSummaryReporter?.({
+      at: Date.now(),
+      total: snapshot.length,
+      errorCount,
+      kinds,
+      topSlow: slow.map((incident) => ({
+        name: incident.eventName ?? incident.kind,
+        durationMs: Math.round(incident.durationMs ?? 0),
+      })),
+      topEvents,
+    })
 
     // Reset snapshot window while keeping aggregates.
     this.incidents = []
