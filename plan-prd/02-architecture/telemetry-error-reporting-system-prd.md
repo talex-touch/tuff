@@ -786,6 +786,9 @@ class NexusTransport {
         duration: event.performance?.duration,
         resultCount: event.performance?.resultCount,
         errorCount: event.error ? 1 : 0,
+        eventLoopLagMs: event.performance?.eventLoopLagMs,
+        ipcSlowCount: event.performance?.ipcSlowCount,
+        ipcSlowMaxMs: event.performance?.ipcSlowMaxMs,
       },
       
       // 完整载荷（用于详细分析）

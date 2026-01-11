@@ -59,3 +59,11 @@
 2. CoreBox：查询、布局、输入等全部迁移到 TuffTransport
 3. FileProvider：索引状态、openers、files 相关事件迁移
 4. UpdateService / SentryService：统一到 TuffTransport + 限流策略
+
+## Port 抽象计划（新增）
+- 目标：把 TuffTransport 从具体 IPC 中抽离出统一协议层，支持子 port 多路复用。
+- 设计文档：`plan-prd/04-implementation/TuffTransportPortPlan260111.md`
+- 迁移策略：
+  1) 新增 Port/Protocol 层（不改现有 API）。
+  2) Renderer/Main transport 改为基于 Port Adapter。
+  3) 替换现有 stream 后缀事件为协议化流。

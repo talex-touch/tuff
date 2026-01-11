@@ -38,6 +38,7 @@ import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
 import { formatLog, LogStyle } from './app-utils'
+import { appTaskGate } from '../../../../service/app-task-gate'
 import { processSearchResults } from './search-processing-service'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
@@ -1476,87 +1477,89 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    console.log(formatLog('AppProvider', 'Starting mdls update scan...', LogStyle.process))
+    await appTaskGate.runAppTask(async () => {
+      console.log(formatLog('AppProvider', 'Starting mdls update scan...', LogStyle.process))
 
-    const allDbApps = await this.dbUtils.getFilesByType('app')
-    if (allDbApps.length === 0) {
-      console.log(formatLog('AppProvider', 'No apps in DB, skipping mdls scan', LogStyle.info))
-      return
-    }
+      const allDbApps = await this.dbUtils.getFilesByType('app')
+      if (allDbApps.length === 0) {
+        console.log(formatLog('AppProvider', 'No apps in DB, skipping mdls scan', LogStyle.info))
+        return
+      }
 
-    const { updatedApps, updatedCount, deletedApps } = await appScanner.runMdlsUpdateScan(allDbApps)
+      const { updatedApps, updatedCount, deletedApps } = await appScanner.runMdlsUpdateScan(allDbApps)
 
-    // 处理更新的 app
-    if (updatedCount > 0 && updatedApps.length > 0) {
-      const db = this.dbUtils.getDb()
+      // 处理更新的 app
+      if (updatedCount > 0 && updatedApps.length > 0) {
+        const db = this.dbUtils.getDb()
 
-      for (const app of updatedApps) {
-        await runWithSqliteBusyRetry(() =>
-          db
-            .update(filesSchema)
-            .set({ displayName: app.displayName })
-            .where(eq(filesSchema.id, app.id))
-        )
+        for (const app of updatedApps) {
+          await runWithSqliteBusyRetry(() =>
+            db
+              .update(filesSchema)
+              .set({ displayName: app.displayName })
+              .where(eq(filesSchema.id, app.id))
+          )
 
-        const [appWithExtensions] = await this.fetchExtensionsForFiles([app])
-        if (appWithExtensions) {
-          const appInfo = this._mapDbAppToScannedInfo({
-            ...appWithExtensions,
-            displayName: app.displayName
-          })
+          const [appWithExtensions] = await this.fetchExtensionsForFiles([app])
+          if (appWithExtensions) {
+            const appInfo = this._mapDbAppToScannedInfo({
+              ...appWithExtensions,
+              displayName: app.displayName
+            })
 
-          const itemId = appInfo.uniqueId
-          await this.searchIndex?.removeItems([itemId])
-          await this._syncKeywordsForApp(appInfo)
+            const itemId = appInfo.uniqueId
+            await this.searchIndex?.removeItems([itemId])
+            await this._syncKeywordsForApp(appInfo)
+          }
         }
       }
-    }
 
-    // 处理删除的 app（文件不存在，从数据库中删除）
-    if (deletedApps.length > 0) {
-      const db = this.dbUtils.getDb()
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
-          LogStyle.process
+      // 处理删除的 app（文件不存在，从数据库中删除）
+      if (deletedApps.length > 0) {
+        const db = this.dbUtils.getDb()
+        console.log(
+          formatLog(
+            'AppProvider',
+            `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
+            LogStyle.process
+          )
         )
-      )
 
-      for (const app of deletedApps) {
-        try {
-          const extensions = await this.dbUtils.getFileExtensions(app.id)
-          const itemId = extensions.find((e) => e.key === 'bundleId')?.value || app.path
+        for (const app of deletedApps) {
+          try {
+            const extensions = await this.dbUtils.getFileExtensions(app.id)
+            const itemId = extensions.find((e) => e.key === 'bundleId')?.value || app.path
 
-          await db.transaction(async (tx) => {
-            await tx.delete(filesSchema).where(eq(filesSchema.id, app.id))
-            await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, app.id))
-          })
+            await db.transaction(async (tx) => {
+              await tx.delete(filesSchema).where(eq(filesSchema.id, app.id))
+              await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, app.id))
+            })
 
-          await this.searchIndex?.removeItems([itemId])
+            await this.searchIndex?.removeItems([itemId])
 
-          console.log(
-            formatLog(
-              'AppProvider',
-              `App deleted from database: ${chalk.cyan(app.path)}`,
-              LogStyle.success
+            console.log(
+              formatLog(
+                'AppProvider',
+                `App deleted from database: ${chalk.cyan(app.path)}`,
+                LogStyle.success
+              )
             )
-          )
-        } catch (error) {
-          console.error(
-            formatLog(
-              'AppProvider',
-              `Error deleting app ${chalk.red(app.path)}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              LogStyle.error
+          } catch (error) {
+            console.error(
+              formatLog(
+                'AppProvider',
+                `Error deleting app ${chalk.red(app.path)}: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                LogStyle.error
+              )
             )
-          )
+          }
         }
       }
-    }
 
-    await this._setLastScanTime(Date.now())
+      await this._setLastScanTime(Date.now())
+    })
   }
 
   private async _getPendingDeletions(): Promise<Map<string, PendingDeletionEntry>> {

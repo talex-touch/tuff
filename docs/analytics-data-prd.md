@@ -9,6 +9,7 @@
 
 ## 采集面
 1) IPC：channel-core 已接入耗时/成功率。
+1.1) 性能：主进程 EventLoop lag、IPC send/handler slow（按 eventName/channelType/direction 聚合）。
 2) 系统资源：SystemSampler 周期采样 CPU/内存/堆。
 3) 搜索：fast/deferred/legacy 搜索完成时汇总 providerTimings + totalDuration。
 4) 插件：analytics.sdk.*（事件/耗时/计数/直方图/Top features）；plugin_analytics 表落盘。
@@ -77,6 +78,7 @@
 
 ## Dashboard（前端）
 - 面板：Overview（各窗口卡片）、Real-time（CPU/内存/IPC/搜索）、Modules、Plugins、Search（providerTimings/慢查询）、History（对比）、Reports（导出）。
+- 性能视图：EventLoop lag 列表、Top IPC slow（eventName/direction/p95）。
 - 数据源：上述 TuffTransport 事件；搜索 providerTimings 显示排名/慢查询列表。
 - 开关：刷新频率/上报开关/脱敏开关（默认脱敏搜索内容）。
 - 视图同步：设置页与 Analytics 面板共用数据源与刷新策略，实时一致（同一 store + 订阅刷新）。
@@ -87,6 +89,7 @@
 
 ## 上报与批量
 - BatchReporter（待实现）：5min 或 100 条批量，调用 analytics.export，脱敏后推送 Nexus API。
+- 性能数据上报：EventLoop lag 与 IPC slow 按窗口与事件维度聚合后上报 Nexus。
 - TelemetryClient（待实现）：支持重试、退避、网络不可用降级。
 - 重放防护：批量记录唯一批次 ID 与时间窗口。
 - 本地优先：开发环境默认走本地 Nexus（`http://localhost:3200`），线上走 `NEXUS_API_BASE`。

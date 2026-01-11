@@ -11,6 +11,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { StorageEvents } from '../../transport/events'
 import {
   reactive,
+  toRaw,
 
   watch,
 
@@ -402,7 +403,7 @@ export class TouchStorage<T extends object> {
 
     const result = await this.#saveRemote({
       key: this.#qualifiedName,
-      content: JSON.stringify(this.data),
+      value: toRaw(this.data),
       clear: false,
       version: this.#currentVersion,
     })
@@ -635,7 +636,7 @@ export class TouchStorage<T extends object> {
 
     channel.sendSync('storage:save-sync', {
       key: this.#qualifiedName,
-      content: JSON.stringify(this.data),
+      value: toRaw(this.data),
       clear: false,
       version: this.#currentVersion,
     })

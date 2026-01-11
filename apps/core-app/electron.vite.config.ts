@@ -53,12 +53,21 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: 'src/main/index.ts',
-          'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts'
+          'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
+          'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
+          'file-reconcile-worker': 'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
+          'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts'
         },
         output: {
           entryFileNames: (chunkInfo) => {
             if (chunkInfo.name === 'ocr-worker') {
               return 'ocr-worker.js'
+            } else if (chunkInfo.name === 'file-scan-worker') {
+              return 'file-scan-worker.js'
+            } else if (chunkInfo.name === 'file-reconcile-worker') {
+              return 'file-reconcile-worker.js'
+            } else if (chunkInfo.name === 'icon-worker') {
+              return 'icon-worker.js'
             } else if (chunkInfo.name === 'index') {
               return 'index.js'
             }
