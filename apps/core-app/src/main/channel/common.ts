@@ -385,10 +385,9 @@ export class CommonChannelModule extends BaseModule {
       this.channel.regChannel(
         ChannelType.MAIN,
         AppEvents.fileIndex.rebuild.toEventName(),
-        async () => {
+        async ({ data }) => {
           try {
-            await fileProvider.rebuildIndex()
-            return { success: true, message: 'Index rebuild started' }
+            return await fileProvider.rebuildIndex(data)
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             return { success: false, error: message }

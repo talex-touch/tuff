@@ -56,6 +56,7 @@ export default defineConfig({
           'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
           'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
           'file-reconcile-worker': 'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
+          'file-index-worker': 'src/main/modules/box-tool/addon/files/workers/file-index-worker.ts',
           'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts'
         },
         output: {
@@ -66,6 +67,8 @@ export default defineConfig({
               return 'file-scan-worker.js'
             } else if (chunkInfo.name === 'file-reconcile-worker') {
               return 'file-reconcile-worker.js'
+            } else if (chunkInfo.name === 'file-index-worker') {
+              return 'file-index-worker.js'
             } else if (chunkInfo.name === 'icon-worker') {
               return 'icon-worker.js'
             } else if (chunkInfo.name === 'index') {

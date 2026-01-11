@@ -43,10 +43,18 @@ export interface FileIndexStats {
   skippedFiles: number
 }
 
+export interface FileIndexRebuildRequest {
+  force?: boolean
+}
+
 export interface FileIndexRebuildResult {
   success: boolean
   message?: string
   error?: string
+  requiresConfirm?: boolean
+  reason?: 'battery-low' | 'initializing' | 'missing-context' | 'policy-blocked'
+  battery?: FileIndexBatteryStatus | null
+  threshold?: number
 }
 
 export interface FileIndexBatteryStatus {

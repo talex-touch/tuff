@@ -5,12 +5,13 @@ import { ElMessage } from 'element-plus'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events/types'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 
-const { getIndexStatus, getIndexStats, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
+const { getIndexStatus, getIndexStats, getBatteryLevel, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
 const { t, te } = useI18n()
 
 const indexStatus = ref<any>(null)
@@ -19,6 +20,8 @@ const lastChecked = ref<Date | null>(null)
 const estimatedTimeRemaining = ref<number | null>(null)
 const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
 const indexStats = ref<{ totalFiles: number; failedFiles: number; skippedFiles: number } | null>(null)
+const defaultMinBattery = 60
+const defaultCriticalBattery = 15
 
 const checkStatus = async () => {
   try {
@@ -97,6 +100,27 @@ const progressText = computed(() => {
   return stageLabel
 })
 
+const openRebuildConfirm = async (payload?: {
+  battery?: FileIndexBatteryStatus | null
+  criticalBattery?: number
+  minBattery?: number
+  showCriticalWarning?: boolean
+}) => {
+  await new Promise<void>((resolve, reject) => {
+    popperMention(
+      t('settings.settingFileIndex.rebuildTitle'),
+      () => h(RebuildConfirmDialog, {
+        battery: payload?.battery ?? null,
+        minBattery: payload?.minBattery ?? defaultMinBattery,
+        criticalBattery: payload?.criticalBattery ?? defaultCriticalBattery,
+        showCriticalWarning: payload?.showCriticalWarning ?? false,
+        onConfirm: () => resolve(),
+        onCancel: () => reject(new Error('Cancelled'))
+      })
+    )
+  })
+}
+
 const triggerRebuild = async () => {
   if (isRebuilding.value) {
     ElMessage.warning(t('settings.settingFileIndex.alertRebuilding'))
@@ -110,15 +134,13 @@ const triggerRebuild = async () => {
     return
   }
 
+  const battery = await getBatteryLevel()
+
   try {
-    await new Promise<void>((resolve, reject) => {
-      popperMention(
-        t('settings.settingFileIndex.rebuildTitle'),
-        () => h(RebuildConfirmDialog, {
-          onConfirm: () => resolve(),
-          onCancel: () => reject(new Error('Cancelled'))
-        })
-      )
+    await openRebuildConfirm({
+      battery,
+      minBattery: defaultMinBattery,
+      criticalBattery: defaultCriticalBattery
     })
   } catch {
     return
@@ -126,7 +148,37 @@ const triggerRebuild = async () => {
 
   isRebuilding.value = true
   try {
-    await handleRebuild()
+    const result = await handleRebuild()
+
+    if (result?.requiresConfirm) {
+      const level = result.battery?.level ?? battery?.level
+      if (typeof level === 'number') {
+        ElMessage.warning(
+          t('settings.settingFileIndex.alertBatteryLow', {
+            level,
+            critical: result.threshold ?? defaultCriticalBattery
+          })
+        )
+      }
+
+      try {
+        await openRebuildConfirm({
+          battery: result.battery ?? battery ?? null,
+          minBattery: defaultMinBattery,
+          criticalBattery: result.threshold ?? defaultCriticalBattery,
+          showCriticalWarning: true
+        })
+      } catch {
+        isRebuilding.value = false
+        return
+      }
+
+      const forced = await handleRebuild({ force: true })
+      if (!forced?.success) {
+        throw new Error(forced?.error || 'Rebuild failed')
+      }
+    }
+
     ElMessage.success(t('settings.settingFileIndex.alertRebuildStarted'))
     setTimeout(async () => {
       await checkStatus()

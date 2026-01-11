@@ -9,7 +9,12 @@ import type {
 } from '@talex-touch/utils'
 import type { FileParserProgress, FileParserResult } from '@talex-touch/utils/electron/file-parsers'
 import type { StreamContext } from '@talex-touch/utils/transport'
-import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
+import type {
+  FileIndexBatteryStatus,
+  FileIndexProgress as FileIndexProgressPayload,
+  FileIndexRebuildRequest,
+  FileIndexRebuildResult
+} from '@talex-touch/utils/transport/events/types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
@@ -35,7 +40,7 @@ import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
-import { app, shell } from 'electron'
+import { app, powerMonitor, shell } from 'electron'
 import extractFileIcon from 'extract-file-icon'
 import plist from 'plist'
 import { FileAddedEvent, TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
@@ -55,6 +60,7 @@ import { createFailedFilesCleanupTask } from '../../../../service/failed-files-c
 import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
 import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
 import { fileProviderLog, formatDuration } from '../../../../utils/logger'
+import { enterPerfContext } from '../../../../utils/perf-context'
 import FileSystemWatcher from '../../file-system-watcher'
 import { searchLogger } from '../../search-engine/search-logger'
 import { getConfig, saveConfig } from '../../../storage'
@@ -72,6 +78,8 @@ import type {
   ReconcileDbFile,
   ReconcileDiskFile
 } from './workers/file-reconcile-worker-client'
+import { FileIndexWorkerClient } from './workers/file-index-worker-client'
+import type { IndexWorkerFile } from './workers/file-index-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { IconWorkerClient } from './workers/icon-worker-client'
 
@@ -90,9 +98,32 @@ interface IconCacheEntry {
   meta?: IconCacheMeta
 }
 
+interface FileIndexSettings {
+  autoScanEnabled: boolean
+  autoScanIntervalMs: number
+  autoScanIdleThresholdMs: number
+  autoScanCheckIntervalMs: number
+  autoScanMinBatteryPercent: number
+  autoScanBlockBatteryBelowPercent: number
+  autoScanAllowWhenCharging: boolean
+  manualBlockBatteryBelowPercent: number
+}
+
 const execFileAsync = promisify(execFile)
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
+const FILE_INDEX_AUTO_TASK_ID = 'file-index.auto-scan'
 const pollingService = PollingService.getInstance()
+
+const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
+  autoScanEnabled: true,
+  autoScanIntervalMs: 24 * 60 * 60 * 1000,
+  autoScanIdleThresholdMs: 60 * 60 * 1000,
+  autoScanCheckIntervalMs: 5 * 60 * 1000,
+  autoScanMinBatteryPercent: 60,
+  autoScanBlockBatteryBelowPercent: 15,
+  autoScanAllowWhenCharging: true,
+  manualBlockBatteryBelowPercent: 15
+}
 
 const LAUNCH_SERVICES_PLIST_PATH = path.join(
   os.homedir(),
@@ -208,6 +239,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
+  private readonly fileIndexWorker = new FileIndexWorkerClient()
   private readonly iconWorker = new IconWorkerClient()
   private readonly openerCache = new Map<string, ResolvedOpener>()
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
@@ -222,6 +254,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private backgroundTaskService: BackgroundTaskService | null = null
   private activityTracker: AppUsageActivityTracker | null = null
   private touchApp: TouchApp | null = null
+  private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
+  private autoIndexTaskRegistered = false
   private indexingProgress = {
     current: 0,
     total: 0,
@@ -327,17 +361,94 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.failedContentCache.delete(fileId)
   }
 
+  private normalizeFileIndexSettings(
+    raw?: Partial<FileIndexSettings> | null
+  ): FileIndexSettings {
+    const data = raw && typeof raw === 'object' ? raw : {}
+    const clampPercent = (value: unknown, fallback: number) => {
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return fallback
+      }
+      return Math.max(0, Math.min(100, value))
+    }
+    const clampMs = (value: unknown, fallback: number) => {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        return fallback
+      }
+      return value
+    }
+
+    const autoScanBlockBattery = clampPercent(
+      data.autoScanBlockBatteryBelowPercent,
+      DEFAULT_FILE_INDEX_SETTINGS.autoScanBlockBatteryBelowPercent
+    )
+    const autoScanMinBattery = Math.max(
+      clampPercent(
+        data.autoScanMinBatteryPercent,
+        DEFAULT_FILE_INDEX_SETTINGS.autoScanMinBatteryPercent
+      ),
+      autoScanBlockBattery
+    )
+
+    return {
+      autoScanEnabled:
+        typeof data.autoScanEnabled === 'boolean'
+          ? data.autoScanEnabled
+          : DEFAULT_FILE_INDEX_SETTINGS.autoScanEnabled,
+      autoScanIntervalMs: clampMs(
+        data.autoScanIntervalMs,
+        DEFAULT_FILE_INDEX_SETTINGS.autoScanIntervalMs
+      ),
+      autoScanIdleThresholdMs: clampMs(
+        data.autoScanIdleThresholdMs,
+        DEFAULT_FILE_INDEX_SETTINGS.autoScanIdleThresholdMs
+      ),
+      autoScanCheckIntervalMs: clampMs(
+        data.autoScanCheckIntervalMs,
+        DEFAULT_FILE_INDEX_SETTINGS.autoScanCheckIntervalMs
+      ),
+      autoScanMinBatteryPercent: autoScanMinBattery,
+      autoScanBlockBatteryBelowPercent: autoScanBlockBattery,
+      autoScanAllowWhenCharging:
+        typeof data.autoScanAllowWhenCharging === 'boolean'
+          ? data.autoScanAllowWhenCharging
+          : DEFAULT_FILE_INDEX_SETTINGS.autoScanAllowWhenCharging,
+      manualBlockBatteryBelowPercent: clampPercent(
+        data.manualBlockBatteryBelowPercent,
+        DEFAULT_FILE_INDEX_SETTINGS.manualBlockBatteryBelowPercent
+      )
+    }
+  }
+
+  private loadFileIndexSettings(): void {
+    try {
+      const raw = getConfig(StorageList.FILE_INDEX_SETTINGS) as Partial<FileIndexSettings> | undefined
+      this.fileIndexSettings = this.normalizeFileIndexSettings(raw)
+
+      if (!raw || Object.keys(raw).length === 0) {
+        saveConfig(
+          StorageList.FILE_INDEX_SETTINGS,
+          JSON.stringify(this.fileIndexSettings, null, 2)
+        )
+      }
+    } catch (error) {
+      this.fileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
+      this.logWarn('Failed to load file index settings, using defaults', error)
+    }
+  }
+
   private initializeBackgroundTaskService(): void {
     if (!this.dbUtils) {
       this.logWarn('Database utils not available, skipping background task service initialization')
       return
     }
 
+    this.loadFileIndexSettings()
     this.activityTracker = AppUsageActivityTracker.getInstance()
 
     this.backgroundTaskService = BackgroundTaskService.getInstance(this.activityTracker, {
-      idleThresholdMs: 60 * 60 * 1000,
-      checkIntervalMs: 5 * 60 * 1000,
+      idleThresholdMs: this.fileIndexSettings.autoScanIdleThresholdMs,
+      checkIntervalMs: this.fileIndexSettings.autoScanCheckIntervalMs,
       maxConcurrentTasks: 1,
       taskTimeoutMs: 30 * 60 * 1000
     })
@@ -349,6 +460,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
 
     this.backgroundTaskService.registerTask(cleanupTask)
+
+    if (!this.autoIndexTaskRegistered) {
+      this.backgroundTaskService.registerTask({
+        id: FILE_INDEX_AUTO_TASK_ID,
+        name: 'File Index Auto Scan',
+        priority: 'low',
+        canInterrupt: true,
+        estimatedDuration: 15 * 60 * 1000,
+        execute: async () => {
+          await this.runAutoIndexing()
+        }
+      })
+      this.autoIndexTaskRegistered = true
+    }
 
     this.backgroundTaskService.on('taskCompleted', (data) => {
       this.logDebug(`Background task completed: ${data.task.name}`, {
@@ -372,6 +497,168 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (this.backgroundTaskService) {
       this.backgroundTaskService.recordActivity()
     }
+  }
+
+  private getSystemIdleMs(): number | null {
+    try {
+      if (typeof powerMonitor.getSystemIdleTime === 'function') {
+        return powerMonitor.getSystemIdleTime() * 1000
+      }
+    } catch (error) {
+      this.logWarn('Failed to read system idle time', error)
+    }
+    return null
+  }
+
+  private async getScanEligibility(): Promise<{
+    newPaths: string[]
+    stalePaths: string[]
+    lastScannedAt: number | null
+  }> {
+    if (!this.dbUtils) {
+      return { newPaths: [], stalePaths: [], lastScannedAt: null }
+    }
+
+    const db = this.dbUtils.getDb()
+    const completedScans = await db.select().from(scanProgress)
+    const completedMap = new Map<string, number>()
+    let lastScannedAt: number | null = null
+
+    for (const scan of completedScans) {
+      const timestamp = this.toTimestamp(scan.lastScanned)
+      if (timestamp) {
+        completedMap.set(scan.path, timestamp)
+        if (!lastScannedAt || timestamp > lastScannedAt) {
+          lastScannedAt = timestamp
+        }
+      }
+    }
+
+    const newPaths = this.WATCH_PATHS.filter(path => !completedMap.has(path))
+    const intervalMs = this.fileIndexSettings.autoScanIntervalMs
+    const now = Date.now()
+    const stalePaths = intervalMs <= 0
+      ? Array.from(completedMap.keys()).filter(path => this.WATCH_PATHS.includes(path))
+      : this.WATCH_PATHS.filter((path) => {
+        const last = completedMap.get(path)
+        if (!last) return false
+        return now - last >= intervalMs
+      })
+
+    return { newPaths, stalePaths, lastScannedAt }
+  }
+
+  private async checkAutoBatteryPolicy(): Promise<{
+    allowed: boolean
+    reason?: string
+    battery?: FileIndexBatteryStatus | null
+  }> {
+    const battery = await this.getBatteryLevel()
+    if (!battery) {
+      return { allowed: true, battery }
+    }
+
+    const critical = this.fileIndexSettings.autoScanBlockBatteryBelowPercent
+    if (battery.level < critical) {
+      return { allowed: false, reason: 'battery-critical', battery }
+    }
+
+    if (battery.level >= this.fileIndexSettings.autoScanMinBatteryPercent) {
+      return { allowed: true, battery }
+    }
+
+    if (battery.charging && this.fileIndexSettings.autoScanAllowWhenCharging) {
+      return { allowed: true, battery }
+    }
+
+    return { allowed: false, reason: 'battery-low', battery }
+  }
+
+  private async shouldRunAutoIndexing(): Promise<{
+    allowed: boolean
+    reason?: string
+    battery?: FileIndexBatteryStatus | null
+  }> {
+    if (!this.fileIndexSettings.autoScanEnabled) {
+      return { allowed: false, reason: 'disabled' }
+    }
+
+    if (this.isInitializing) {
+      return { allowed: false, reason: 'initializing' }
+    }
+
+    if (!this.dbUtils || !this.initializationContext) {
+      return { allowed: false, reason: 'missing-context' }
+    }
+
+    if (this.WATCH_PATHS.length === 0) {
+      return { allowed: false, reason: 'no-paths' }
+    }
+
+    if (appTaskGate.isActive()) {
+      return { allowed: false, reason: 'app-busy' }
+    }
+
+    const idleMs = this.getSystemIdleMs()
+    if (idleMs !== null && idleMs < this.fileIndexSettings.autoScanIdleThresholdMs) {
+      return { allowed: false, reason: 'not-idle' }
+    }
+
+    const eligibility = await this.getScanEligibility()
+    if (eligibility.newPaths.length === 0 && eligibility.stalePaths.length === 0) {
+      return { allowed: false, reason: 'interval' }
+    }
+
+    return this.checkAutoBatteryPolicy()
+  }
+
+  private async runAutoIndexing(): Promise<void> {
+    const decision = await this.shouldRunAutoIndexing()
+    if (!decision.allowed) {
+      this.logDebug('Auto index scan skipped', {
+        reason: decision.reason,
+        batteryLevel: decision.battery?.level ?? null,
+        batteryCharging: decision.battery?.charging ?? null
+      })
+      return
+    }
+
+    await this.ensureFileSystemWatchers()
+    try {
+      await this.startIndexing('auto')
+    } catch (error) {
+      this.logWarn('Auto index scan aborted', error)
+    }
+  }
+
+  private async startIndexing(source: 'auto' | 'manual'): Promise<void> {
+    if (this.isInitializing) {
+      throw new Error('Indexing is already in progress')
+    }
+
+    this.initializationFailed = false
+    this.initializationError = null
+
+    const run = this._initialize()
+      .then(() => {
+        this.initializationFailed = false
+        this.logInfo(`File indexing ${source} run completed successfully`)
+      })
+      .catch((error) => {
+        this.initializationFailed = true
+        this.initializationError = error
+        this.logError(`File indexing ${source} run failed`, error)
+        this.emitIndexingProgress('idle', 0, 0)
+        this.notifyIndexingFailure(error)
+      })
+      .finally(() => {
+        if (this.isInitializing === run) {
+          this.isInitializing = null
+        }
+      })
+
+    this.isInitializing = run
+    return run
   }
 
   private async shouldSkipContentDueToFailure(
@@ -524,8 +811,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.touchApp = context.touchApp
     this.initializationContext = context // 保存 context 用于重建
     // Store the database file path to exclude it from scanning
-    // Assuming the database file is named 'database.db' and located in the user data directory.
-    this.databaseFilePath = path.join(app.getPath('userData'), 'database.db')
+    // Prefer database module path when available.
+    const databaseDir = context.databaseManager.filePath
+    this.databaseFilePath = databaseDir
+      ? path.join(databaseDir, 'database.db')
+      : path.join(app.getPath('userData'), 'database.db')
 
     // 🔍 DEBUG: 确认 onLoad 被调用
     this.logInfo('[DEBUG] FileProvider.onLoad called', {
@@ -539,33 +829,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.registerOpenersChannel(context)
     this.registerIndexingChannels(context)
 
-    // 启动异步后台索引任务，不阻塞onLoad
-    if (!this.isInitializing) {
-      this.logInfo('onLoad: starting background index task...')
-      // 重置状态
-      this.isInitializing = null
-      this.initializationFailed = false
-      this.initializationError = null
-
-      // 不等待初始化完成，让它在后台运行
-      this.isInitializing = this._initialize()
-        .then(() => {
-          this.initializationFailed = false
-          this.isInitializing = null // 重置状态，确保前端能正确显示"已完成"
-          this.logInfo('File indexing initialization completed successfully')
-        })
-        .catch((error) => {
-          this.initializationFailed = true
-          this.initializationError = error
-          this.isInitializing = null // 即使失败也重置状态
-          this.logError('Background index task failed', error)
-          this.emitIndexingProgress('idle', 0, 0)
-          // 通知前端索引失败
-          this.notifyIndexingFailure(error)
-        })
-    } else {
-      this.logInfo('[DEBUG] Skipping initialization - already in progress')
-    }
+    // 索引任务由后台调度执行（空闲+电量策略）
+    this.logInfo('onLoad: background index task registered, waiting for idle conditions')
 
     // 只等待文件系统监听器设置完成，不等待索引完成
     await this.ensureFileSystemWatchers()
@@ -741,19 +1006,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   /**
    * Get battery level and charging status
    */
-  public async getBatteryLevel(): Promise<{ level: number; charging: boolean } | null> {
+  public async getBatteryLevel(): Promise<FileIndexBatteryStatus | null> {
     try {
-      const { powerMonitor } = await import('electron')
-
-      // Check if we're on AC power
-      const onBattery = powerMonitor.onBatteryPower ?? false
+      const onBattery = typeof powerMonitor.isOnBatteryPower === 'function'
+        ? powerMonitor.isOnBatteryPower()
+        : ((powerMonitor as any)?.onBatteryPower ?? false)
 
       // For macOS, we can get more detailed battery info
       if (process.platform === 'darwin') {
-        const { execFile } = await import('child_process')
-        const { promisify } = await import('util')
-        const execFileAsync = promisify(execFile)
-
         try {
           const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
           const match = /\d+%/.exec(stdout)
@@ -769,10 +1029,50 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
       }
 
+      if (process.platform === 'win32') {
+        try {
+          const { stdout } = await execFileAsync('powershell', [
+            '-NoProfile',
+            '-Command',
+            'Get-CimInstance -ClassName Win32_Battery | Select-Object -ExpandProperty EstimatedChargeRemaining | Select-Object -First 1'
+          ])
+          const value = parseInt(stdout.trim(), 10)
+          if (!Number.isNaN(value)) {
+            const level = Math.max(0, Math.min(100, value))
+            return { level, charging: !onBattery }
+          }
+        } catch (error) {
+          this.logWarn('Failed to get battery level from PowerShell', error)
+        }
+      }
+
+      if (process.platform === 'linux') {
+        try {
+          const powerSupplyPath = '/sys/class/power_supply'
+          const entries = await fs.readdir(powerSupplyPath)
+          const battery = entries.find((entry) => entry.startsWith('BAT'))
+          if (battery) {
+            const capacityPath = path.join(powerSupplyPath, battery, 'capacity')
+            const content = await fs.readFile(capacityPath, 'utf8')
+            const value = parseInt(content.trim(), 10)
+            if (!Number.isNaN(value)) {
+              const level = Math.max(0, Math.min(100, value))
+              return { level, charging: !onBattery }
+            }
+          }
+        } catch (error) {
+          this.logWarn('Failed to get battery level from sysfs', error)
+        }
+      }
+
+      if (onBattery) {
+        return { level: 0, charging: false }
+      }
+
       // Fallback: assume full battery if on AC power
       return {
-        level: onBattery ? 50 : 100,
-        charging: !onBattery
+        level: 100,
+        charging: true
       }
     } catch (error) {
       this.logError('Failed to check battery status', error)
@@ -783,16 +1083,48 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   /**
    * 手动触发重建索引（清空 scan_progress 强制全量扫描）
    */
-  public async rebuildIndex(): Promise<void> {
+  public async rebuildIndex(
+    request?: FileIndexRebuildRequest
+  ): Promise<FileIndexRebuildResult> {
     if (this.isInitializing) {
-      throw new Error('Indexing is already in progress')
+      return {
+        success: false,
+        reason: 'initializing',
+        error: 'Indexing is already in progress'
+      }
     }
 
     if (!this.initializationContext) {
-      throw new Error('Cannot rebuild: initialization context not available')
+      return {
+        success: false,
+        reason: 'missing-context',
+        error: 'Cannot rebuild: initialization context not available'
+      }
     }
 
-    this.logInfo('Manual index rebuild triggered')
+    const force = request?.force === true
+    const batteryStatus = await this.getBatteryLevel()
+    const criticalThreshold = this.fileIndexSettings.manualBlockBatteryBelowPercent
+
+    if (
+      batteryStatus
+      && batteryStatus.level < criticalThreshold
+      && !force
+    ) {
+      return {
+        success: false,
+        requiresConfirm: true,
+        reason: 'battery-low',
+        battery: batteryStatus,
+        threshold: criticalThreshold
+      }
+    }
+
+    this.logInfo('Manual index rebuild triggered', {
+      force,
+      batteryLevel: batteryStatus?.level ?? null,
+      batteryCharging: batteryStatus?.charging ?? null
+    })
 
     // 清空 scan_progress 表，强制全量扫描
     if (this.dbUtils) {
@@ -801,8 +1133,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logInfo('Cleared scan_progress table for full rescan')
     }
 
-    // 重新初始化
-    await this.onLoad(this.initializationContext)
+    await this.ensureFileSystemWatchers()
+    void this.startIndexing('manual')
+
+    return {
+      success: true,
+      message: 'Index rebuild started',
+      battery: batteryStatus
+    }
   }
 
   /**
@@ -821,10 +1159,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
 
     // 手动触发重建
-    channel.regChannel(ChannelType.MAIN, 'file-index:rebuild', async () => {
+    channel.regChannel(ChannelType.MAIN, 'file-index:rebuild', async ({ data }) => {
       try {
-        await this.rebuildIndex()
-        return { success: true, message: 'Index rebuild started' }
+        return await this.rebuildIndex(data)
       } catch (error: any) {
         this.logError('Failed to trigger index rebuild', error)
         return { success: false, error: error.message }
@@ -995,6 +1332,45 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     return { filesToAdd, filesToUpdate, deletedIds }
+  }
+
+  private scheduleIndexing(
+    files: (typeof filesSchema.$inferSelect)[],
+    reason: string
+  ): void {
+    if (!this.databaseFilePath || !this.searchIndex) {
+      return
+    }
+
+    const payload: IndexWorkerFile[] = files
+      .filter((file) => typeof file.id === 'number')
+      .map((file) => ({
+        id: file.id as number,
+        path: file.path,
+        name: file.name,
+        displayName: file.displayName ?? null,
+        extension: file.extension ?? null,
+        size: typeof file.size === 'number' ? file.size : null,
+        mtime: this.toTimestamp(file.mtime) ?? Date.now(),
+        ctime: this.toTimestamp(file.ctime) ?? Date.now()
+      }))
+
+    if (payload.length === 0) {
+      return
+    }
+
+    const chunkSize = 80
+    for (let i = 0; i < payload.length; i += chunkSize) {
+      const chunk = payload.slice(i, i + chunkSize)
+      void this.fileIndexWorker
+        .indexFiles(this.databaseFilePath, this.id, this.type, chunk)
+        .catch((error) => {
+          this.logWarn('File index worker failed', error, {
+            reason,
+            size: chunk.length
+          })
+        })
+    }
   }
 
   private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
@@ -1721,8 +2097,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         })
         .returning()
       await this.processFileExtensions(inserted)
-      await this.extractContentForFiles(inserted)
-      await this.indexFilesForSearch(inserted)
+      this.scheduleIndexing(inserted, 'incremental-insert')
       this.logInfo('Incremental index completed', {
         inserted: inserted.length
       })
@@ -1910,50 +2285,246 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     // --- 3. Full Scan for New Paths ---
     if (newPathsToScan.length > 0) {
-      this.logInfo('Starting full scan for new paths', {
-        count: newPathsToScan.length,
-        sample: newPathsToScan.slice(0, 3).join(', ')
+      const fullScanContext = enterPerfContext('FileProvider.fullScan', {
+        paths: newPathsToScan.length
       })
-      this.emitIndexingProgress('scanning', 0, newPathsToScan.length)
-      let scannedPaths = 0
-      for (const newPath of newPathsToScan) {
-        const pathScanStart = performance.now()
-        this.logDebug('Scanning new path', { path: newPath })
-        const diskFiles = await this.scanDirectoryWithWorker(newPath, excludePathsSet)
-        this.logDebug('Directory scan completed', {
-          path: newPath,
-          files: diskFiles.length,
-          duration: formatDuration(performance.now() - pathScanStart)
+      try {
+        this.logInfo('Starting full scan for new paths', {
+          count: newPathsToScan.length,
+          sample: newPathsToScan.slice(0, 3).join(', ')
+        })
+        this.emitIndexingProgress('scanning', 0, newPathsToScan.length)
+        let scannedPaths = 0
+        for (const newPath of newPathsToScan) {
+          const pathScanStart = performance.now()
+          this.logDebug('Scanning new path', { path: newPath })
+          const diskFiles = await this.scanDirectoryWithWorker(newPath, excludePathsSet)
+          this.logDebug('Directory scan completed', {
+            path: newPath,
+            files: diskFiles.length,
+            duration: formatDuration(performance.now() - pathScanStart)
+          })
+
+          scannedPaths++
+          this.emitIndexingProgress('scanning', scannedPaths, newPathsToScan.length)
+
+          const newFileRecords = diskFiles.map((file) => ({
+            path: file.path,
+            name: file.name,
+            extension: file.extension,
+            size: file.size,
+            mtime: file.mtime,
+            ctime: file.ctime,
+            lastIndexedAt: new Date(),
+            isDir: false,
+            type: 'file'
+          }))
+
+          if (newFileRecords.length > 0) {
+            this.logInfo('Preparing to index full-scan results', {
+              path: newPath,
+              files: newFileRecords.length
+            })
+            const chunkSize = 100
+            const chunks: (typeof newFileRecords)[] = []
+            for (let i = 0; i < newFileRecords.length; i += chunkSize) {
+              chunks.push(newFileRecords.slice(i, i + chunkSize))
+            }
+
+            let indexedFiles = 0
+            this.emitIndexingProgress('indexing', 0, newFileRecords.length)
+            await runAdaptiveTaskQueue(
+              chunks,
+              async (chunk, chunkIndex) => {
+                await appTaskGate.waitForIdle()
+                const chunkStart = performance.now()
+                const inserted = await db
+                  .insert(filesSchema)
+                  .values(chunk)
+                  .onConflictDoUpdate({
+                    target: filesSchema.path,
+                    set: {
+                      name: sql`excluded.name`,
+                      extension: sql`excluded.extension`,
+                      size: sql`excluded.size`,
+                      mtime: sql`excluded.mtime`,
+                      ctime: sql`excluded.ctime`,
+                      lastIndexedAt: sql`excluded.last_indexed_at`
+                    }
+                  })
+                  .returning()
+              this.logDebug('Full scan chunk inserted', {
+                path: newPath,
+                chunk: `${chunkIndex + 1}/${chunks.length}`,
+                size: chunk.length,
+                duration: formatDuration(performance.now() - chunkStart)
+              })
+              await this.processFileExtensions(inserted)
+              this.scheduleIndexing(inserted, 'full-scan')
+              indexedFiles += chunk.length
+              this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
+            },
+              {
+                estimatedTaskTimeMs: 8,
+                label: `FileProvider::fullScan(${newPath})`
+              }
+            )
+          } else {
+            this.logDebug('No indexable files discovered during full scan', {
+              path: newPath
+            })
+          }
+
+          await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
+          this.logInfo('Full scan complete for path', {
+            path: newPath,
+            duration: formatDuration(performance.now() - pathScanStart),
+            files: newFileRecords.length
+          })
+        }
+      } finally {
+        fullScanContext()
+      }
+    }
+
+    // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
+    if (reconciliationPaths.length > 0) {
+      const reconciliationContext = enterPerfContext('FileProvider.reconciliation', {
+        paths: reconciliationPaths.length
+      })
+      const reconciliationStart = performance.now()
+      try {
+        this.logInfo('Starting reconciliation scan', {
+          count: reconciliationPaths.length,
+          sample: reconciliationPaths.slice(0, 3).join(', ')
+        })
+        this.emitIndexingProgress('reconciliation', 0, reconciliationPaths.length)
+        const dbReadStart = performance.now()
+        const dbFiles = await db
+          .select({
+            id: filesSchema.id,
+            path: filesSchema.path,
+            mtime: filesSchema.mtime
+          })
+          .from(filesSchema)
+          .where(eq(filesSchema.type, 'file'))
+        this.logDebug('Loaded DB file records for reconciliation', {
+          count: dbFiles.length,
+          duration: formatDuration(performance.now() - dbReadStart)
         })
 
-        scannedPaths++
-        this.emitIndexingProgress('scanning', scannedPaths, newPathsToScan.length)
+        const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
 
-        const newFileRecords = diskFiles.map((file) => ({
+        const diskScanStart = performance.now()
+        const diskFiles: ScannedFileInfo[] = []
+        let reconciledPaths = 0
+        for (const dir of reconciliationPaths) {
+          const scanned = await this.scanDirectoryWithWorker(dir, excludePathsSet)
+          for (const scannedFile of scanned) {
+            diskFiles.push(scannedFile)
+          }
+          await yieldToEventLoop()
+          reconciledPaths++
+          this.emitIndexingProgress('reconciliation', reconciledPaths, reconciliationPaths.length)
+        }
+        this.logDebug('Disk reconciliation scan finished', {
+          files: diskFiles.length,
+          duration: formatDuration(performance.now() - diskScanStart)
+        })
+
+        const diskPayload: ReconcileDiskFile[] = diskFiles.map((file) => ({
           path: file.path,
           name: file.name,
           extension: file.extension,
           size: file.size,
-          mtime: file.mtime,
-          ctime: file.ctime,
+          mtime: this.toTimestamp(file.mtime) ?? 0,
+          ctime: this.toTimestamp(file.ctime) ?? 0
+        }))
+        const dbPayload: ReconcileDbFile[] = dbFiles.map((file) => ({
+          id: file.id,
+          path: file.path,
+          mtime: this.toTimestamp(file.mtime) ?? 0
+        }))
+
+        let reconcileResult: {
+          filesToAdd: ReconcileDiskFile[]
+          filesToUpdate: Array<ReconcileDiskFile & { id: number }>
+          deletedIds: number[]
+        }
+        try {
+          reconcileResult = await this.reconcileWorker.reconcile(
+            diskPayload,
+            dbPayload,
+            reconciliationPaths
+          )
+        } catch (error) {
+          this.logWarn('File reconcile worker failed, falling back to main-thread diff', error, {
+            files: diskPayload.length
+          })
+          reconcileResult = this.computeReconciliationDiff(
+            diskPayload,
+            dbPayload,
+            reconciliationPaths
+          )
+        }
+
+        const filesToAdd = reconcileResult.filesToAdd
+        const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
+          id: file.id,
+          path: file.path,
+          name: file.name,
+          extension: file.extension,
+          size: file.size,
+          mtime: new Date(file.mtime),
+          ctime: new Date(file.ctime),
           lastIndexedAt: new Date(),
           isDir: false,
           type: 'file'
         }))
+        const deletedFileIds = reconcileResult.deletedIds
 
-        if (newFileRecords.length > 0) {
-          this.logInfo('Preparing to index full-scan results', {
-            path: newPath,
-            files: newFileRecords.length
+        if (deletedFileIds.length > 0) {
+          this.logInfo('Removing files missing from disk', {
+            count: deletedFileIds.length
           })
-          const chunkSize = 100
+          await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
+          const deletedIdSet = new Set(deletedFileIds)
+          await this.searchIndex?.removeItems(
+            dbFiles.filter((file) => deletedIdSet.has(file.id)).map((file) => file.path)
+          )
+        }
+
+        if (filesToUpdate.length > 0) {
+          this.logInfo('Updating modified files during reconciliation', {
+            count: filesToUpdate.length
+          })
+          await this._processFileUpdates(filesToUpdate)
+        }
+
+        if (filesToAdd.length > 0) {
+          this.logInfo('Indexing new files discovered during reconciliation', {
+            count: filesToAdd.length
+          })
+          const newFileRecords = filesToAdd.map((file) => ({
+            path: file.path,
+            name: file.name,
+            extension: file.extension,
+            size: file.size,
+            mtime: new Date(file.mtime),
+            ctime: new Date(file.ctime),
+            lastIndexedAt: new Date(),
+            isDir: false,
+            type: 'file'
+          }))
+
+          const chunkSize = 500
           const chunks: (typeof newFileRecords)[] = []
           for (let i = 0; i < newFileRecords.length; i += chunkSize) {
             chunks.push(newFileRecords.slice(i, i + chunkSize))
           }
 
-          let indexedFiles = 0
-          this.emitIndexingProgress('indexing', 0, newFileRecords.length)
+          let reconciledFiles = 0
+          this.emitIndexingProgress('indexing', 0, filesToAdd.length)
           await runAdaptiveTaskQueue(
             chunks,
             async (chunk, chunkIndex) => {
@@ -1974,216 +2545,45 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                   }
                 })
                 .returning()
-              this.logDebug('Full scan chunk inserted', {
-                path: newPath,
+              this.logDebug('Reconciliation chunk inserted', {
                 chunk: `${chunkIndex + 1}/${chunks.length}`,
                 size: chunk.length,
                 duration: formatDuration(performance.now() - chunkStart)
               })
               await this.processFileExtensions(inserted)
-              await this.extractContentForFiles(inserted)
-              await this.indexFilesForSearch(inserted)
-              indexedFiles += chunk.length
-              this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
+              this.scheduleIndexing(inserted, 'reconciliation-insert')
+              reconciledFiles += chunk.length
+              this.emitIndexingProgress('indexing', reconciledFiles, filesToAdd.length)
             },
             {
-              estimatedTaskTimeMs: 8,
-              label: `FileProvider::fullScan(${newPath})`
+              estimatedTaskTimeMs: 6,
+              label: 'FileProvider::reconciliationInsert'
             }
           )
-        } else {
-          this.logDebug('No indexable files discovered during full scan', {
-            path: newPath
-          })
         }
 
-        await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
-        this.logInfo('Full scan complete for path', {
-          path: newPath,
-          duration: formatDuration(performance.now() - pathScanStart),
-          files: newFileRecords.length
-        })
-      }
-    }
-
-    // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
-    if (reconciliationPaths.length > 0) {
-      const reconciliationStart = performance.now()
-      this.logInfo('Starting reconciliation scan', {
-        count: reconciliationPaths.length,
-        sample: reconciliationPaths.slice(0, 3).join(', ')
-      })
-      this.emitIndexingProgress('reconciliation', 0, reconciliationPaths.length)
-      const dbReadStart = performance.now()
-      const dbFiles = await db
-        .select({
-          id: filesSchema.id,
-          path: filesSchema.path,
-          mtime: filesSchema.mtime
-        })
-        .from(filesSchema)
-        .where(eq(filesSchema.type, 'file'))
-      this.logDebug('Loaded DB file records for reconciliation', {
-        count: dbFiles.length,
-        duration: formatDuration(performance.now() - dbReadStart)
-      })
-
-      const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
-
-      const diskScanStart = performance.now()
-      const diskFiles: ScannedFileInfo[] = []
-      let reconciledPaths = 0
-      for (const dir of reconciliationPaths) {
-        const scanned = await this.scanDirectoryWithWorker(dir, excludePathsSet)
-        for (const scannedFile of scanned) {
-          diskFiles.push(scannedFile)
-        }
-        await yieldToEventLoop()
-        reconciledPaths++
-        this.emitIndexingProgress('reconciliation', reconciledPaths, reconciliationPaths.length)
-      }
-      this.logDebug('Disk reconciliation scan finished', {
-        files: diskFiles.length,
-        duration: formatDuration(performance.now() - diskScanStart)
-      })
-
-      const diskPayload: ReconcileDiskFile[] = diskFiles.map((file) => ({
-        path: file.path,
-        name: file.name,
-        extension: file.extension,
-        size: file.size,
-        mtime: this.toTimestamp(file.mtime) ?? 0,
-        ctime: this.toTimestamp(file.ctime) ?? 0
-      }))
-      const dbPayload: ReconcileDbFile[] = dbFiles.map((file) => ({
-        id: file.id,
-        path: file.path,
-        mtime: this.toTimestamp(file.mtime) ?? 0
-      }))
-
-      let reconcileResult: {
-        filesToAdd: ReconcileDiskFile[]
-        filesToUpdate: Array<ReconcileDiskFile & { id: number }>
-        deletedIds: number[]
-      }
-      try {
-        reconcileResult = await this.reconcileWorker.reconcile(
-          diskPayload,
-          dbPayload,
-          reconciliationPaths
-        )
-      } catch (error) {
-        this.logWarn('File reconcile worker failed, falling back to main-thread diff', error, {
-          files: diskPayload.length
-        })
-        reconcileResult = this.computeReconciliationDiff(
-          diskPayload,
-          dbPayload,
-          reconciliationPaths
-        )
-      }
-
-      const filesToAdd = reconcileResult.filesToAdd
-      const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
-        id: file.id,
-        path: file.path,
-        name: file.name,
-        extension: file.extension,
-        size: file.size,
-        mtime: new Date(file.mtime),
-        ctime: new Date(file.ctime),
-        lastIndexedAt: new Date(),
-        isDir: false,
-        type: 'file'
-      }))
-      const deletedFileIds = reconcileResult.deletedIds
-
-      if (deletedFileIds.length > 0) {
-        this.logInfo('Removing files missing from disk', {
-          count: deletedFileIds.length
-        })
-        await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
-        const deletedIdSet = new Set(deletedFileIds)
-        await this.searchIndex?.removeItems(
-          dbFiles.filter((file) => deletedIdSet.has(file.id)).map((file) => file.path)
-        )
-      }
-
-      if (filesToUpdate.length > 0) {
-        this.logInfo('Updating modified files during reconciliation', {
-          count: filesToUpdate.length
-        })
-        await this._processFileUpdates(filesToUpdate)
-      }
-
-      if (filesToAdd.length > 0) {
-        this.logInfo('Indexing new files discovered during reconciliation', {
-          count: filesToAdd.length
-        })
-        const newFileRecords = filesToAdd.map((file) => ({
-          path: file.path,
-          name: file.name,
-          extension: file.extension,
-          size: file.size,
-          mtime: new Date(file.mtime),
-          ctime: new Date(file.ctime),
-          lastIndexedAt: new Date(),
-          isDir: false,
-          type: 'file'
-        }))
-
-        const chunkSize = 500
-        const chunks: (typeof newFileRecords)[] = []
-        for (let i = 0; i < newFileRecords.length; i += chunkSize) {
-          chunks.push(newFileRecords.slice(i, i + chunkSize))
-        }
-
-        let reconciledFiles = 0
-        this.emitIndexingProgress('indexing', 0, filesToAdd.length)
-        await runAdaptiveTaskQueue(
-          chunks,
-          async (chunk, chunkIndex) => {
-            await appTaskGate.waitForIdle()
-            const chunkStart = performance.now()
-            const inserted = await db
-              .insert(filesSchema)
-              .values(chunk)
-              .onConflictDoUpdate({
-                target: filesSchema.path,
-                set: {
-                  name: sql`excluded.name`,
-                  extension: sql`excluded.extension`,
-                  size: sql`excluded.size`,
-                  mtime: sql`excluded.mtime`,
-                  ctime: sql`excluded.ctime`,
-                  lastIndexedAt: sql`excluded.last_indexed_at`
-                }
-              })
-              .returning()
-            this.logDebug('Reconciliation chunk inserted', {
-              chunk: `${chunkIndex + 1}/${chunks.length}`,
-              size: chunk.length,
-              duration: formatDuration(performance.now() - chunkStart)
+        if (reconciliationPaths.length > 0) {
+          const scanTime = new Date()
+          await db
+            .insert(scanProgress)
+            .values(reconciliationPaths.map(path => ({ path, lastScanned: scanTime })))
+            .onConflictDoUpdate({
+              target: scanProgress.path,
+              set: {
+                lastScanned: scanTime
+              }
             })
-            await this.processFileExtensions(inserted)
-            await this.extractContentForFiles(inserted)
-            await this.indexFilesForSearch(inserted)
-            reconciledFiles += chunk.length
-            this.emitIndexingProgress('indexing', reconciledFiles, filesToAdd.length)
-          },
-          {
-            estimatedTaskTimeMs: 6,
-            label: 'FileProvider::reconciliationInsert'
-          }
-        )
-      }
+        }
 
-      this.logInfo('Reconciliation completed', {
-        duration: formatDuration(performance.now() - reconciliationStart),
-        added: filesToAdd.length,
-        updated: filesToUpdate.length,
-        deleted: deletedFileIds.length
-      })
+        this.logInfo('Reconciliation completed', {
+          duration: formatDuration(performance.now() - reconciliationStart),
+          added: filesToAdd.length,
+          updated: filesToUpdate.length,
+          deleted: deletedFileIds.length
+        })
+      } finally {
+        reconciliationContext()
+      }
     }
 
     this.emitIndexingProgress('completed', 1, 1)
@@ -2232,9 +2632,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
         await this.processFileExtensions(chunk)
 
-        await this.extractContentForFiles(chunk)
-
-        await this.indexFilesForSearch(chunk)
+        this.scheduleIndexing(chunk, 'file-update')
 
         processedCount += chunk.length
         if (processedCount % logInterval === 0 || processedCount === filesToUpdate.length) {

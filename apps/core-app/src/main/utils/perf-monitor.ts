@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks'
 import { ipcMain } from 'electron'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { createLogger, formatDuration, type Primitive } from './logger'
+import { getPerfContextSnapshot } from './perf-context'
 
 export type RendererPerfReport = {
   kind:
@@ -121,6 +122,12 @@ export class PerfMonitor {
   }
 
   private lastLoopTick = 0
+  private lastSlowIpc: {
+    kind: string
+    eventName: string
+    durationMs: number
+    at: number
+  } | null = null
 
   start(): void {
     if (!pollingService.isRegistered(PERF_LOOP_TASK_ID)) {
@@ -191,6 +198,12 @@ export class PerfMonitor {
     else {
       ipcPerfLog.warn(message, { meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs) }) })
     }
+    this.lastSlowIpc = {
+      kind: 'ipc.handler.slow',
+      eventName,
+      durationMs,
+      at: now,
+    }
   }
 
   recordIpcNoHandler(eventName: string, meta: Record<string, unknown>): void {
@@ -249,6 +262,12 @@ export class PerfMonitor {
     else {
       ipcPerfLog.warn(message, logOptions)
     }
+    this.lastSlowIpc = {
+      kind: report.kind,
+      eventName: report.eventName,
+      durationMs: report.durationMs,
+      at: report.at,
+    }
   }
 
   private recordEventLoopLag(lagMs: number, severity: 'warn' | 'error'): void {
@@ -270,11 +289,37 @@ export class PerfMonitor {
     this.pushIncident(incident)
 
     const message = `Event loop lag ${formatDuration(lagMs)}`
+    const contexts = getPerfContextSnapshot(3)
+    const pollingDiagnostics = pollingService.getDiagnostics()
+    const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4)
+    const pollingRecent = pollingDiagnostics.recentTasks
+      .sort((a, b) => b.lastDurationMs - a.lastDurationMs)
+      .slice(0, 3)
+      .map(task => ({
+        id: task.id,
+        durationMs: Math.round(task.lastDurationMs),
+        ageMs: Math.max(0, now - task.lastEndAt),
+      }))
+    const lastSlowIpc = this.lastSlowIpc
+      ? {
+          kind: this.lastSlowIpc.kind,
+          eventName: this.lastSlowIpc.eventName,
+          durationMs: Math.round(this.lastSlowIpc.durationMs),
+          ageMs: Math.max(0, now - this.lastSlowIpc.at),
+        }
+      : undefined
+    const meta = toLogMeta({
+      lagMs: Math.round(lagMs),
+      contexts,
+      pollingActive,
+      pollingRecent,
+      lastSlowIpc,
+    })
     if (severity === 'error') {
-      loopPerfLog.error(message, { meta: toLogMeta({ lagMs: Math.round(lagMs) }) })
+      loopPerfLog.error(message, { meta })
     }
     else {
-      loopPerfLog.warn(message, { meta: toLogMeta({ lagMs: Math.round(lagMs) }) })
+      loopPerfLog.warn(message, { meta })
     }
   }
 
