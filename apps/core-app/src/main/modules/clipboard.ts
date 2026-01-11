@@ -24,6 +24,7 @@ import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage } from 'electron'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { genTouchChannel } from '../core/channel-core'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { BaseModule } from './abstract-base-module'
@@ -35,6 +36,8 @@ import { activeAppService } from './system/active-app'
 import { createLogger } from '../utils/logger'
 
 const clipboardLog = createLogger('Clipboard')
+const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
+const pollingService = PollingService.getInstance()
 
 const FILE_URL_FORMATS = new Set([
   'public.file-url',
@@ -331,7 +334,6 @@ export class ClipboardModule extends BaseModule {
   private transportChangeListeners = new Set<() => void>()
 
   private memoryCache: IClipboardItem[] = []
-  private intervalId: NodeJS.Timeout | null = null
   private isDestroyed = false
   private clipboardHelper?: ClipboardHelper
   private db?: LibSQLDatabase<typeof schema>
@@ -757,10 +759,15 @@ export class ClipboardModule extends BaseModule {
   }
 
   private startClipboardMonitoring(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId)
+    if (pollingService.isRegistered(CLIPBOARD_POLL_TASK_ID)) {
+      pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
     }
-    this.intervalId = setInterval(this.checkClipboard.bind(this), 1000)
+    pollingService.register(
+      CLIPBOARD_POLL_TASK_ID,
+      () => this.checkClipboard(),
+      { interval: 1, unit: 'seconds' },
+    )
+    pollingService.start()
     this.registerIpcHandlers()
   }
 
@@ -1432,10 +1439,7 @@ export class ClipboardModule extends BaseModule {
 
   public destroy(): void {
     this.isDestroyed = true
-    if (this.intervalId) {
-      clearInterval(this.intervalId)
-      this.intervalId = null
-    }
+    pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
 
     for (const dispose of this.transportDisposers) {
       try {

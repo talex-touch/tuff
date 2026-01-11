@@ -139,6 +139,9 @@ import type {
   PluginStorageSetRequest,
   StorageDeleteRequest,
   StorageGetRequest,
+  StorageGetVersionedResponse,
+  StorageSaveRequest,
+  StorageSaveResult,
   StorageSetRequest,
   StorageUpdateNotification,
 } from './types/storage'
@@ -728,6 +731,16 @@ export const StorageEvents = {
       }),
 
     /**
+     * Get a value with version info from app storage.
+     */
+    getVersioned: defineEvent('storage')
+      .module('app')
+      .event('get-versioned')
+      .define<StorageGetRequest, StorageGetVersionedResponse | null>({
+        batch: { enabled: true, windowMs: 16, maxSize: 20 },
+      }),
+
+    /**
      * Set a value in app storage.
      *
      * @remarks
@@ -739,6 +752,14 @@ export const StorageEvents = {
       .define<StorageSetRequest, void>({
         batch: { enabled: true, windowMs: 100, mergeStrategy: 'latest' },
       }),
+
+    /**
+     * Save a value with version tracking in app storage.
+     */
+    save: defineEvent('storage')
+      .module('app')
+      .event('save')
+      .define<StorageSaveRequest, StorageSaveResult>(),
 
     /**
      * Delete a value from app storage.

@@ -9,6 +9,8 @@ import type { IBoxOptions } from '..'
 import type { IUseSearch } from '../types'
 import type { IClipboardOptions } from './types'
 import { TuffInputType } from '@talex-touch/utils'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
@@ -55,6 +57,7 @@ export function useSearch(
   const recommendationPending = ref(false)
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
+  const transport = useTuffTransport()
 
   const pendingSearchEndById = new Map<string, any>()
 
@@ -230,7 +233,7 @@ export function useSearch(
         const query: TuffQuery = { text: '', inputs }
         inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
 
-        const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+        const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, { query })
         if (recommendationTimeoutId) {
           clearTimeout(recommendationTimeoutId)
           recommendationTimeoutId = null
@@ -287,7 +290,7 @@ export function useSearch(
         source: 'renderer'
       })
 
-      const initialResult: TuffSearchResult = await touchChannel.send('core-box:query', { query })
+      const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, { query })
 
       console.debug('[useSearch] Search result received:', {
         sessionId: initialResult.sessionId,
@@ -357,7 +360,7 @@ export function useSearch(
 
     if (!isPluginFeature && !keepCoreBoxOpen) {
       searchVal.value = ''
-      touchChannel.send('core-box:hide')
+      transport.send(CoreBoxEvents.ui.hide).catch(() => {})
     }
 
     if (isPluginFeature) {
@@ -426,7 +429,7 @@ export function useSearch(
       loading.value = false
 
       if (shouldRestoreAfterExecute) {
-        touchChannel.sendSync('core-box:show')
+        transport.send(CoreBoxEvents.ui.show).catch(() => {})
       }
     }
 
@@ -435,14 +438,14 @@ export function useSearch(
 
   async function deactivateProvider(providerId?: string): Promise<boolean> {
     if (!providerId) {
-      const newState = await touchChannel.send('core-box:deactivate-providers')
+      const newState = await transport.send(CoreBoxEvents.provider.deactivateAll)
       activeActivations.value = newState
       searchVal.value = ''
       await handleSearch()
       return true
     }
 
-    const newState = await touchChannel.send('core-box:deactivate-provider', { id: providerId })
+    const newState = await transport.send(CoreBoxEvents.provider.deactivate, { id: providerId })
     activeActivations.value = newState
 
     if (!newState || newState.length === 0) {
@@ -454,7 +457,7 @@ export function useSearch(
   }
 
   async function deactivateAllProviders(): Promise<void> {
-    const newState = await touchChannel.send('core-box:deactivate-providers')
+    const newState = await transport.send(CoreBoxEvents.provider.deactivateAll)
     activeActivations.value = newState
     searchVal.value = ''
 
@@ -498,7 +501,7 @@ export function useSearch(
     } else if (searchVal.value) {
       searchVal.value = ''
     } else {
-      touchChannel.sendSync('core-box:hide')
+      transport.send(CoreBoxEvents.ui.hide).catch(() => {})
     }
   }
 
@@ -541,6 +544,12 @@ export function useSearch(
   touchChannel.regChannel('core-box:set-query', ({ data }) => {
     const value = typeof data?.value === 'string' ? data.value : ''
     searchVal.value = value
+    window.dispatchEvent(new CustomEvent('corebox:focus-input'))
+  })
+
+  transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
+    const nextValue = typeof value === 'string' ? value : ''
+    searchVal.value = nextValue
     window.dispatchEvent(new CustomEvent('corebox:focus-input'))
   })
 

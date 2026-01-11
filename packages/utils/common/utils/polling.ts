@@ -13,7 +13,7 @@ interface PollingTask {
   nextRunMs: number
 }
 
-type TimeUnit = 'seconds' | 'minutes' | 'hours'
+type TimeUnit = 'milliseconds' | 'seconds' | 'minutes' | 'hours'
 
 export class PollingService {
   private static instance: PollingService
@@ -35,6 +35,8 @@ export class PollingService {
 
   private convertToMs(interval: number, unit: TimeUnit): number {
     switch (unit) {
+      case 'milliseconds':
+        return interval
       case 'seconds':
         return interval * 1000
       case 'minutes':
@@ -55,7 +57,12 @@ export class PollingService {
   public register(
     id: string,
     callback: () => void | Promise<void>,
-    options: { interval: number, unit: TimeUnit, runImmediately?: boolean },
+    options: {
+      interval: number
+      unit: TimeUnit
+      runImmediately?: boolean
+      initialDelayMs?: number
+    },
   ): void {
     if (this.tasks.has(id)) {
       console.warn(`[PollingService] Task with ID '${id}' is already registered. Overwriting.`)
@@ -67,7 +74,12 @@ export class PollingService {
       return
     }
 
-    const nextRunMs = options.runImmediately ? Date.now() : Date.now() + intervalMs
+    const now = Date.now()
+    const nextRunMs = options.runImmediately
+      ? now
+      : typeof options.initialDelayMs === 'number'
+        ? now + Math.max(0, options.initialDelayMs)
+        : now + intervalMs
 
     this.tasks.set(id, {
       id,

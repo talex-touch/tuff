@@ -3,10 +3,10 @@
 ## 现状
 - 主进程 `StorageModule` 同时支持：
   - TouchChannel：`storage:get/storage:save/storage:update`（广播）
-  - TuffTransport：`StorageEvents.*` stream
+  - TuffTransport：`StorageEvents.app.get/getVersioned/save/delete/updated`
 - 渲染进程存在两种接入路径：
-  - `TouchStorage`（依赖 `storage:update`）
-  - 直接订阅 `StorageEvents.app.updated` stream
+  - `TouchStorage`（现在优先走 TuffTransport，保留 legacy）
+  - `storage-subscription`（stream 或 `storage:update`）
 
 ## 痛点
 - **双通道并存**：部分模块走 stream，部分模块走 legacy，行为不一致。
@@ -16,21 +16,20 @@
 ## 你说的“统一封装”我理解是
 把所有 storage 的读/写/订阅入口收敛到一个统一 API（utils 层），业务模块不关心底层是 stream 还是 legacy。
 
-## 推荐方案
-1. **utils 层提供 `StorageGateway`**
-   - `get(key)` / `save(key, data)` / `reload(key)`
-   - `subscribe(key, callback)`：优先 stream，失败自动 fallback 到 `storage:update`
-2. **主进程统一更新事件**
-   - 内部仍可用 stream，但对外只暴露一个订阅入口。
-   - 广播节流/去抖在 StorageModule 内部集中处理。
-3. **渲染进程统一适配**
-   - `TouchStorage` 内部改为调用 `StorageGateway`
-   - `SettingMessages` 等模块不再直接订阅 stream
+## 已落地（本次变更）
+- 渲染端 `TouchStorage` 支持 `initStorageTransport()`，优先走 `StorageEvents`，无 transport 时回落 TouchChannel。
+- `storage-subscription` 支持 stream + legacy 双路径。
+- 主进程补齐 `StorageEvents.app.get/getVersioned/save/delete` 处理器。
+
+## 仍需收口的点
+1. **同步能力**：`saveSync` 仍依赖 TouchChannel（窗口关闭场景）。
+2. **统一入口**：建议继续引入 `StorageGateway`，隐藏 `sendSync/stream` 细节。
+3. **语义对齐**：stream 与 broadcast 的节流策略需统一（目前仍是双轨）。
 
 ## 风险点
 - 多窗口广播时的版本冲突处理需要统一（versioned 存储）。
 - stream/broadcast 的超时和 backoff 行为需一致化。
 
 ## 下一步建议
-- 增加 `packages/utils/renderer/storage/storage-gateway.ts`（或 common）。
-- StorageModule 对外只暴露统一 update 事件，内部可自由切换实现。
+- 增加 `StorageGateway`（utils 层），统一 get/save/reload/subscribe。
+- 同步接口只保留在 gateway 内部，业务层统一 async。

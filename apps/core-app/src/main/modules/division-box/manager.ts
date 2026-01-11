@@ -14,6 +14,7 @@ import {
   type SessionInfo,
   type CloseOptions
 } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { DivisionBoxSession } from './session'
 import { LRUCache } from './lru-cache'
 
@@ -44,6 +45,8 @@ const RESOURCE_LIMITS = {
 export class DivisionBoxManager {
   /** Singleton instance */
   private static instance: DivisionBoxManager | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly memoryPressureTaskId = 'division-box.memory-pressure'
 
   /** Map of all active sessions (sessionId -> DivisionBoxSession) */
   private sessions: Map<string, DivisionBoxSession>
@@ -88,7 +91,9 @@ export class DivisionBoxManager {
     // but we can monitor process memory usage
     
     // Set up periodic memory check (every 30 seconds)
-    setInterval(() => {
+    this.pollingService.register(
+      this.memoryPressureTaskId,
+      () => {
       const memoryUsage = process.memoryUsage()
       const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024
       
@@ -97,7 +102,10 @@ export class DivisionBoxManager {
         console.warn(`[DivisionBoxManager] High memory usage detected: ${heapUsedMB.toFixed(2)}MB`)
         this.handleMemoryPressure()
       }
-    }, 30000)
+      },
+      { interval: 30, unit: 'seconds' }
+    )
+    this.pollingService.start()
   }
 
   /**

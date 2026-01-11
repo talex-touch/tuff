@@ -1,4 +1,5 @@
 import type { StorageCache } from './storage-cache'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import chalk from 'chalk'
 
 /**
@@ -7,12 +8,13 @@ import chalk from 'chalk'
  * Periodically saves dirty configs to disk
  */
 export class StoragePollingService {
+  private static readonly pollingService = PollingService.getInstance()
   private cache: StorageCache
   private saveFn: (name: string) => Promise<void>
-  private pollingTimer: NodeJS.Timeout | null = null
   private isRunning = false
   private pollingInterval: number
-  private pendingWidgetCalls = new Map<string, NodeJS.Timeout>()
+  private readonly pollingTaskId = 'storage.polling'
+  private pendingWidgetCalls = new Map<string, string>()
 
   constructor(
     cache: StorageCache,
@@ -37,9 +39,12 @@ export class StoragePollingService {
       chalk.blue(`[StoragePolling] Started with ${this.pollingInterval / 1000}s interval`),
     )
 
-    this.pollingTimer = setInterval(async () => {
-      await this.performSave()
-    }, this.pollingInterval)
+    StoragePollingService.pollingService.register(
+      this.pollingTaskId,
+      () => this.performSave(),
+      { interval: this.pollingInterval, unit: 'milliseconds' },
+    )
+    StoragePollingService.pollingService.start()
   }
 
   /**
@@ -52,10 +57,7 @@ export class StoragePollingService {
 
     this.isRunning = false
 
-    if (this.pollingTimer) {
-      clearInterval(this.pollingTimer)
-      this.pollingTimer = null
-    }
+    StoragePollingService.pollingService.unregister(this.pollingTaskId)
 
     await this.forceSave()
   }
@@ -139,13 +141,13 @@ export class StoragePollingService {
     this.pollingInterval = ms
 
     if (this.isRunning) {
-      if (this.pollingTimer) {
-        clearInterval(this.pollingTimer)
-      }
-
-      this.pollingTimer = setInterval(async () => {
-        await this.performSave()
-      }, this.pollingInterval)
+      StoragePollingService.pollingService.unregister(this.pollingTaskId)
+      StoragePollingService.pollingService.register(
+        this.pollingTaskId,
+        () => this.performSave(),
+        { interval: this.pollingInterval, unit: 'milliseconds' },
+      )
+      StoragePollingService.pollingService.start()
     }
   }
 
@@ -172,15 +174,25 @@ export class StoragePollingService {
     // Cancel previous pending call for this widget
     const existing = this.pendingWidgetCalls.get(widgetId)
     if (existing) {
-      clearTimeout(existing)
+      StoragePollingService.pollingService.unregister(existing)
     }
 
-    // Delay execution to allow deduplication
-    const timer = setTimeout(() => {
-      callback()
-      this.pendingWidgetCalls.delete(widgetId)
-    }, 100) // 100ms deduplication window
+    const taskId = `storage.widget.${widgetId}`
 
-    this.pendingWidgetCalls.set(widgetId, timer)
+    StoragePollingService.pollingService.register(
+      taskId,
+      () => {
+        try {
+          callback()
+        } finally {
+          StoragePollingService.pollingService.unregister(taskId)
+          this.pendingWidgetCalls.delete(widgetId)
+        }
+      },
+      { interval: 60_000, unit: 'milliseconds', initialDelayMs: 100 },
+    )
+    StoragePollingService.pollingService.start()
+
+    this.pendingWidgetCalls.set(widgetId, taskId)
   }
 }

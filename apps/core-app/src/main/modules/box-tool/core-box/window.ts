@@ -9,6 +9,7 @@ import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { PluginStatus } from '@talex-touch/utils/plugin'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -75,12 +76,13 @@ export class WindowManager {
   private bundledThemeCss: string | null = null
   private inputAllowed = false
   private clipboardAllowedTypes = 0
-  private boundsAnimationTimer: NodeJS.Timeout | null = null
+  private boundsAnimationTaskId: string | null = null
   private boundsAnimationToken = 0
   private currentAnimationTarget: Electron.Rectangle | null = null
   // Track last set bounds to avoid getBounds() latency issues
   private lastSetBounds: { height: number; y: number } | null = null
   private customTopPercent: number | null = null  // Custom position offset (0-1)
+  private readonly pollingService = PollingService.getInstance()
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -296,9 +298,9 @@ export class WindowManager {
    * Stop current bounds animation
    */
   private stopBoundsAnimation(): void {
-    if (this.boundsAnimationTimer) {
-      clearInterval(this.boundsAnimationTimer)
-      this.boundsAnimationTimer = null
+    if (this.boundsAnimationTaskId) {
+      this.pollingService.unregister(this.boundsAnimationTaskId)
+      this.boundsAnimationTaskId = null
     }
     this.currentAnimationTarget = null
     this.boundsAnimationToken += 1
@@ -331,7 +333,7 @@ export class WindowManager {
     }
 
     // Skip if already at target (within tolerance) - but only if no animation is in progress
-    if (!this.boundsAnimationTimer &&
+    if (!this.boundsAnimationTaskId &&
         Math.abs(startBounds.height - target.height) < 3 &&
         Math.abs(startBounds.y - target.y) < 3) {
       return
@@ -350,11 +352,13 @@ export class WindowManager {
     const lerp = (from: number, to: number, t: number): number => from + (to - from) * t
     const easeOutQuart = (t: number): number => 1 - (1 - t) ** 4
 
-    const timer = setInterval(() => {
+    const taskId = 'core-box.window.bounds-animation'
+    this.boundsAnimationTaskId = taskId
+    this.pollingService.register(taskId, () => {
       if (token !== this.boundsAnimationToken || browserWindow.isDestroyed()) {
-        clearInterval(timer)
-        if (this.boundsAnimationTimer === timer) {
-          this.boundsAnimationTimer = null
+        this.pollingService.unregister(taskId)
+        if (this.boundsAnimationTaskId === taskId) {
+          this.boundsAnimationTaskId = null
         }
         return
       }
@@ -376,17 +380,17 @@ export class WindowManager {
         this.lastSetBounds = { height: nextBounds.height, y: nextBounds.y }
       } catch (error) {
         coreBoxWindowLog.warn('Failed to animate window bounds', { error })
-        clearInterval(timer)
-        if (this.boundsAnimationTimer === timer) {
-          this.boundsAnimationTimer = null
+        this.pollingService.unregister(taskId)
+        if (this.boundsAnimationTaskId === taskId) {
+          this.boundsAnimationTaskId = null
         }
         return
       }
 
       if (progress >= 1) {
-        clearInterval(timer)
-        if (this.boundsAnimationTimer === timer) {
-          this.boundsAnimationTimer = null
+        this.pollingService.unregister(taskId)
+        if (this.boundsAnimationTaskId === taskId) {
+          this.boundsAnimationTaskId = null
         }
         this.currentAnimationTarget = null
         try {
@@ -399,9 +403,8 @@ export class WindowManager {
           coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
         }
       }
-    }, 16)
-
-    this.boundsAnimationTimer = timer
+    }, { interval: 16, unit: 'milliseconds' })
+    this.pollingService.start()
   }
 
   private calculateCoreBoxBounds(

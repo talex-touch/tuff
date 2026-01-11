@@ -1,5 +1,6 @@
 import os from 'node:os'
 import process from 'node:process'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 export interface SystemSample {
   cpuUsage: number
@@ -16,7 +17,10 @@ type SampleHandler = (sample: SystemSample) => void
  * Lightweight system sampler that periodically emits CPU and memory usage.
  */
 export class SystemSampler {
-  private timer?: NodeJS.Timeout
+  private static instanceCounter = 0
+  private readonly pollingService = PollingService.getInstance()
+  private readonly taskId = `system-sampler.${SystemSampler.instanceCounter++}`
+  private isRunning = false
 
   constructor(
     private handler: SampleHandler,
@@ -25,17 +29,23 @@ export class SystemSampler {
   ) {}
 
   start(): void {
-    if (this.timer)
+    if (this.isRunning)
       return
+    this.isRunning = true
     this.collect()
-    this.timer = setInterval(() => this.collect(), this.intervalMs)
+    this.pollingService.register(
+      this.taskId,
+      () => this.collect(),
+      { interval: this.intervalMs, unit: 'milliseconds' },
+    )
+    this.pollingService.start()
   }
 
   stop(): void {
-    if (!this.timer)
+    if (!this.isRunning)
       return
-    clearInterval(this.timer)
-    this.timer = undefined
+    this.pollingService.unregister(this.taskId)
+    this.isRunning = false
   }
 
   private collect(): void {

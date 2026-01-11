@@ -8,6 +8,7 @@
  */
 
 import { createLogger } from '../../../../../utils/logger'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 const log = createLogger('FxRateProvider')
 
@@ -113,7 +114,8 @@ export class FxRateProvider {
     source: 'default',
   }
 
-  private refreshTimer: NodeJS.Timeout | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly refreshTaskId = 'fx-rate.refresh'
   private isRefreshing = false
   private retryCount = 0
   private maxRetries = 3
@@ -129,17 +131,22 @@ export class FxRateProvider {
   start(): void {
     log.info('Starting FxRateProvider')
     this.refresh()
-    this.refreshTimer = setInterval(() => this.refresh(), REFRESH_INTERVAL_MS)
+    if (this.pollingService.isRegistered(this.refreshTaskId)) {
+      this.pollingService.unregister(this.refreshTaskId)
+    }
+    this.pollingService.register(
+      this.refreshTaskId,
+      () => this.refresh(),
+      { interval: REFRESH_INTERVAL_MS, unit: 'milliseconds' },
+    )
+    this.pollingService.start()
   }
 
   /**
    * Stop auto-refresh
    */
   stop(): void {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer)
-      this.refreshTimer = null
-    }
+    this.pollingService.unregister(this.refreshTaskId)
     log.info('FxRateProvider stopped')
   }
 

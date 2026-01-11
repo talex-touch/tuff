@@ -13,6 +13,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { BrowserWindow, app } from 'electron'
 import { innerRootPath } from '../../core/precore'
 import { createLogger } from '../../utils/logger'
@@ -35,6 +36,8 @@ interface ClerkUser {
 }
 
 const sentryLog = createLogger('SentryService')
+const SENTRY_PERF_TASK_ID = 'sentry.perf.flush'
+const SENTRY_NEXUS_TASK_ID = 'sentry.nexus.flush'
 
 // Sentry DSN
 const SENTRY_DSN =
@@ -132,7 +135,6 @@ export class SentryServiceModule extends BaseModule {
   private isInitialized = false
 
   private nexusTelemetryBuffer: NexusTelemetryEvent[] = []
-  private nexusFlushTimer: NodeJS.Timeout | null = null
   private lastNexusUploadTime: number | null = null
   private totalNexusUploads = 0
   private failedNexusUploads = 0
@@ -142,11 +144,11 @@ export class SentryServiceModule extends BaseModule {
   private telemetryStatsStore: TelemetryUploadStatsStore | null = null
   private telemetryStatsPersistTimer: NodeJS.Timeout | null = null
 
-  private perfFlushTimer: NodeJS.Timeout | null = null
   private eventLoopDelay?: ReturnType<typeof monitorEventLoopDelay>
   private unresponsiveAt = new Map<number, number>()
   private unresponsiveStats = { count: 0, totalMs: 0, maxMs: 0 }
   private windowPerfListenersReady = false
+  private readonly pollingService = PollingService.getInstance()
 
   private preInitAttempted = false
 
@@ -400,7 +402,7 @@ export class SentryServiceModule extends BaseModule {
   }
 
   private startPerformanceMonitors(): void {
-    if (this.perfFlushTimer) return
+    if (this.pollingService.isRegistered(SENTRY_PERF_TASK_ID)) return
 
     this.ensureWindowPerformanceListeners()
 
@@ -412,16 +414,16 @@ export class SentryServiceModule extends BaseModule {
     }
 
     const flushIntervalMs = 60_000
-    this.perfFlushTimer = setInterval(() => {
-      this.flushPerformanceMetrics()
-    }, flushIntervalMs)
+    this.pollingService.register(
+      SENTRY_PERF_TASK_ID,
+      () => this.flushPerformanceMetrics(),
+      { interval: flushIntervalMs, unit: 'milliseconds' },
+    )
+    this.pollingService.start()
   }
 
   private stopPerformanceMonitors(): void {
-    if (this.perfFlushTimer) {
-      clearInterval(this.perfFlushTimer)
-      this.perfFlushTimer = null
-    }
+    this.pollingService.unregister(SENTRY_PERF_TASK_ID)
     if (this.eventLoopDelay) {
       try {
         this.eventLoopDelay.disable()
@@ -951,10 +953,13 @@ export class SentryServiceModule extends BaseModule {
     }
 
     // Set up periodic flush timer if not already running
-    if (!this.nexusFlushTimer) {
-      this.nexusFlushTimer = setInterval(() => {
-        this.flushNexusTelemetry()
-      }, NEXUS_TELEMETRY_FLUSH_INTERVAL)
+    if (!this.pollingService.isRegistered(SENTRY_NEXUS_TASK_ID)) {
+      this.pollingService.register(
+        SENTRY_NEXUS_TASK_ID,
+        () => this.flushNexusTelemetry(),
+        { interval: NEXUS_TELEMETRY_FLUSH_INTERVAL, unit: 'milliseconds' },
+      )
+      this.pollingService.start()
     }
   }
 
@@ -1069,10 +1074,7 @@ export class SentryServiceModule extends BaseModule {
    * Stop Nexus telemetry flush timer
    */
   async stopNexusTelemetryTimer(): Promise<void> {
-    if (this.nexusFlushTimer) {
-      clearInterval(this.nexusFlushTimer)
-      this.nexusFlushTimer = null
-    }
+    this.pollingService.unregister(SENTRY_NEXUS_TASK_ID)
     // Flush remaining events
     await this.flushNexusTelemetry()
   }

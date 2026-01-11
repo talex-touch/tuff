@@ -2,6 +2,7 @@ import type { IntelligenceAuditLog, IntelligenceUsageInfo } from '@talex-touch/u
 import type { SQL } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
 import { databaseModule } from '../database'
 
@@ -77,7 +78,8 @@ const MODEL_COSTS: Record<string, ModelCostConfig> = {
 export class IntelligenceAuditLogger {
   private memoryLogs: IntelligenceAuditLogEntry[] = []
   private readonly maxMemoryLogs = 1000
-  private flushInterval: NodeJS.Timeout | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly flushTaskId = 'intelligence-audit.flush'
   private pendingLogs: IntelligenceAuditLogEntry[] = []
   private readonly flushBatchSize = 50
   private readonly flushIntervalMs = 5000
@@ -457,19 +459,22 @@ export class IntelligenceAuditLogger {
    * Start automatic flush interval
    */
   private startFlushInterval(): void {
-    this.flushInterval = setInterval(() => {
-      this.flushToDB().catch(err => console.error('[AuditLogger] Flush error:', err))
-    }, this.flushIntervalMs)
+    if (this.pollingService.isRegistered(this.flushTaskId)) {
+      this.pollingService.unregister(this.flushTaskId)
+    }
+    this.pollingService.register(
+      this.flushTaskId,
+      () => this.flushToDB().catch(err => console.error('[AuditLogger] Flush error:', err)),
+      { interval: this.flushIntervalMs, unit: 'milliseconds' },
+    )
+    this.pollingService.start()
   }
 
   /**
    * Stop and cleanup
    */
   async destroy(): Promise<void> {
-    if (this.flushInterval) {
-      clearInterval(this.flushInterval)
-      this.flushInterval = null
-    }
+    this.pollingService.unregister(this.flushTaskId)
     await this.flushToDB()
   }
 }

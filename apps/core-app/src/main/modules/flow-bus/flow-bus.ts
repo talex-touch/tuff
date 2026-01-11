@@ -15,6 +15,7 @@ import type {
   FlowPayloadType
 } from '@talex-touch/utils'
 import { FlowErrorCode } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { flowTargetRegistry } from './target-registry'
 import { flowSessionManager } from './session-manager'
 
@@ -30,6 +31,8 @@ const MAX_PAYLOAD_SIZE = 5 * 1024 * 1024
  */
 export class FlowBus {
   private static instance: FlowBus | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly cleanupTaskId = 'flow-bus.cleanup'
 
   /** Pending target selection callbacks */
   private pendingSelections: Map<string, {
@@ -43,9 +46,12 @@ export class FlowBus {
 
   private constructor() {
     // Start periodic cleanup
-    setInterval(() => {
-      flowSessionManager.cleanup()
-    }, 60000)
+    this.pollingService.register(
+      this.cleanupTaskId,
+      () => flowSessionManager.cleanup(),
+      { interval: 60, unit: 'seconds' },
+    )
+    this.pollingService.start()
   }
 
   static getInstance(): FlowBus {

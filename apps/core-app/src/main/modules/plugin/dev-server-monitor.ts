@@ -7,6 +7,7 @@ import {
   PluginStatus,
 } from '@talex-touch/utils/plugin'
 import { DevServerKeys, i18nMsg } from '@talex-touch/utils/i18n'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import axios from 'axios'
 import { createLogger } from '../../utils/logger'
 
@@ -25,9 +26,10 @@ interface FileStatusMap {
 }
 
 export class DevServerHealthMonitor {
-  private monitors: Map<string, NodeJS.Timeout> = new Map()
+  private monitors: Map<string, string> = new Map()
   private lastFileStatus: Map<string, FileStatusMap> = new Map()
   private failureCount: Map<string, number> = new Map()
+  private readonly pollingService = PollingService.getInstance()
 
   private readonly INTERVAL = 5000 // 探测间隔 5 秒
   private readonly TIMEOUT = 1500 // 请求超时 1.5 秒
@@ -51,23 +53,26 @@ export class DevServerHealthMonitor {
 
     monitorLog.info(`Starting Dev Server monitoring for plugin ${plugin.name}`)
 
-    const interval = setInterval(async () => {
-      await this.checkHealth(plugin)
-    }, this.INTERVAL)
-
-    this.monitors.set(plugin.name, interval)
-
-    // 立即执行一次检查
-    this.checkHealth(plugin)
+    const taskId = `dev-server-monitor.${plugin.name}`
+    if (this.pollingService.isRegistered(taskId)) {
+      this.pollingService.unregister(taskId)
+    }
+    this.pollingService.register(
+      taskId,
+      () => this.checkHealth(plugin),
+      { interval: this.INTERVAL, unit: 'milliseconds', runImmediately: true },
+    )
+    this.pollingService.start()
+    this.monitors.set(plugin.name, taskId)
   }
 
   /**
    * 停止监控指定插件
    */
   stopMonitoring(pluginName: string): void {
-    const interval = this.monitors.get(pluginName)
-    if (interval) {
-      clearInterval(interval)
+    const taskId = this.monitors.get(pluginName)
+    if (taskId) {
+      this.pollingService.unregister(taskId)
       this.monitors.delete(pluginName)
       this.lastFileStatus.delete(pluginName)
       this.failureCount.delete(pluginName)

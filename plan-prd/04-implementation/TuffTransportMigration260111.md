@@ -5,20 +5,28 @@
 - `apps/core-app/src/main/channel/common.ts`
 - `apps/core-app/src/main/modules/analytics/analytics-module.ts`
 - `apps/core-app/src/main/modules/clipboard.ts`
-- `apps/core-app/src/main/modules/storage/index.ts`（含 StorageEvents stream）
+- `apps/core-app/src/main/modules/storage/index.ts`（StorageEvents get/getVersioned/save/delete/updated）
 - `apps/core-app/src/main/modules/box-tool/core-box/index.ts`（布局更新）
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`（CoreBoxEvents 处理器）
 
 ### 渲染进程
 - `apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts`
 - `apps/core-app/src/renderer/src/modules/hooks/useSvgContent.ts`
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboardChannel.ts`
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`（CoreBoxEvents.query/show/hide/provider）
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useFocus.ts`（CoreBoxEvents.focus）
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useChannel.ts`（CoreBox input 事件）
+- `apps/core-app/src/renderer/src/modules/channel/storage/base.ts`（Storage TuffTransport init）
 - `apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue`
 - `apps/core-app/src/renderer/src/views/base/settings/SettingMessages.vue`（仅 dev）
+- `packages/utils/renderer/storage/base-storage.ts`（TouchStorage 走 StorageEvents）
+- `packages/utils/renderer/storage/storage-subscription.ts`
 
 ## 部分迁移（TuffTransport + Legacy 并存）
-- `apps/core-app/src/main/modules/storage/index.ts`：仍保留 `storage:get/storage:save/storage:update` 的 TouchChannel 方式。
-- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`：使用 TuffTransport 处理 layout，但仍通过 TouchChannel 发送 `core-box:set-query`。
+- `apps/core-app/src/main/modules/storage/index.ts`：仍保留 `storage:get/storage:save/storage:update` 的 TouchChannel 方式（同步 / legacy 兼容）。
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`：使用 TuffTransport 处理 layout，但仍通过 TouchChannel 发 `core-box:search-update` 等旧事件。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`：搜索更新仍走 `core-box:search-update/search-end`。
 - `apps/core-app/src/main/channel/common.ts`：作为 legacy 通道的桥接层存在。
 
 ## 仍为 Legacy（TouchChannel / regChannel）
@@ -44,7 +52,6 @@
 - `apps/core-app/src/main/modules/ocr/ocr-service.ts`
 - `apps/core-app/src/main/modules/plugin/plugin.ts`
 - `apps/core-app/src/main/modules/ai/agents/agent-channels.ts`
-- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
 - `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
 
 ## 迁移建议（优先级）

@@ -1,6 +1,7 @@
 // import PinyinMatch from 'pinyin-match'
 // import PinyinMatchTw from 'pinyin-match/es/traditional.js'
 import { isAsyncFunction } from 'node:util/types'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 /**
  * App DataManager
@@ -10,7 +11,8 @@ class AppDataManager {
   private apps: any[] = []
   private lastUpdateTime: number = 0
   private isUpdating: boolean = false
-  private updateTimer: NodeJS.Timeout | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly autoRefreshTaskId = 'app-addon.auto-refresh'
 
   private readonly CACHE_DURATION = 60 * 60 * 1000 // 1小时缓存时间
   private readonly DEBOUNCE_TIME = 5 * 1000 // 5秒防抖时间
@@ -24,14 +26,15 @@ class AppDataManager {
    * Start Auto Refresh Timer
    */
   private startAutoRefresh(): void {
-    if (this.updateTimer) {
-      clearInterval(this.updateTimer)
+    if (this.pollingService.isRegistered(this.autoRefreshTaskId)) {
+      this.pollingService.unregister(this.autoRefreshTaskId)
     }
 
-    this.updateTimer = setInterval(() => {
+    this.pollingService.register(this.autoRefreshTaskId, () => {
       console.log('[AppDataManager] Auto refresh triggered')
       this.refreshApps(true)
-    }, this.AUTO_REFRESH_INTERVAL)
+    }, { interval: this.AUTO_REFRESH_INTERVAL, unit: 'milliseconds' })
+    this.pollingService.start()
   }
 
   /**
@@ -150,10 +153,7 @@ class AppDataManager {
    * Destroy Manager
    */
   destroy(): void {
-    if (this.updateTimer) {
-      clearInterval(this.updateTimer)
-      this.updateTimer = null
-    }
+    this.pollingService.unregister(this.autoRefreshTaskId)
   }
 }
 

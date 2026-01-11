@@ -23,7 +23,7 @@
 
 ## 建议策略
 ### 短期
-- 将 UpdateService 的轮询改为统一 PollingService（已开始执行）。
+- 已统一迁移主/渲染 `setInterval` 到 PollingService，减少集中触发冲突。
 - 对 FileProvider 扫描与图标提取做更严格的分批/让步（yield）。
 - 对 `core-box:query` 关键路径做“输入合并 + 取消旧任务”。
 

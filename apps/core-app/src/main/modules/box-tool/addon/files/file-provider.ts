@@ -32,6 +32,7 @@ import { promisify } from 'node:util'
 import { StorageList, timingLogger, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
@@ -82,6 +83,8 @@ interface IconCacheEntry {
 }
 
 const execFileAsync = promisify(execFile)
+const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
+const pollingService = PollingService.getInstance()
 
 const LAUNCH_SERVICES_PLIST_PATH = path.join(
   os.homedir(),
@@ -187,7 +190,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private openersChannelRegistered = false
   private indexingChannelsRegistered = false
   private readonly progressStreamContexts = new Set<StreamContext<FileIndexProgressPayload>>()
-  private progressCleanupTimer: NodeJS.Timeout | null = null
   private launchServicesLoadPromise: Promise<any[]> | null = null
   private readonly openerNegativeCache = new Map<string, number>()
   private readonly openerResolveConcurrency = 2
@@ -869,30 +871,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private ensureProgressCleanupTimer(): void {
-    if (this.progressCleanupTimer) {
+    if (pollingService.isRegistered(FILE_PROVIDER_PROGRESS_TASK_ID)) {
       return
     }
 
-    this.progressCleanupTimer = setInterval(() => {
-      for (const stream of Array.from(this.progressStreamContexts)) {
-        if (stream.isCancelled()) {
-          this.progressStreamContexts.delete(stream)
+    pollingService.register(
+      FILE_PROVIDER_PROGRESS_TASK_ID,
+      () => {
+        for (const stream of Array.from(this.progressStreamContexts)) {
+          if (stream.isCancelled()) {
+            this.progressStreamContexts.delete(stream)
+          }
         }
-      }
 
-      if (this.progressStreamContexts.size === 0) {
-        this.clearProgressCleanupTimer()
-      }
-    }, 30_000)
+        if (this.progressStreamContexts.size === 0) {
+          this.clearProgressCleanupTimer()
+        }
+      },
+      { interval: 30_000, unit: 'milliseconds' },
+    )
+    pollingService.start()
   }
 
   private clearProgressCleanupTimer(): void {
-    if (!this.progressCleanupTimer) {
-      return
-    }
-
-    clearInterval(this.progressCleanupTimer)
-    this.progressCleanupTimer = null
+    pollingService.unregister(FILE_PROVIDER_PROGRESS_TASK_ID)
   }
 
   private async withOpenerResolveSlot<T>(task: () => Promise<T>): Promise<T> {

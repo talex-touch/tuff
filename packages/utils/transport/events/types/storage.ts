@@ -18,6 +18,21 @@ export interface StorageGetRequest {
 }
 
 /**
+ * Versioned storage response payload.
+ */
+export interface StorageGetVersionedResponse {
+  /**
+   * Stored data.
+   */
+  data: unknown
+
+  /**
+   * Current version number.
+   */
+  version: number
+}
+
+/**
  * Request to set a storage value.
  */
 export interface StorageSetRequest {
@@ -30,6 +45,50 @@ export interface StorageSetRequest {
    * Value to store.
    */
   value: unknown
+}
+
+/**
+ * Request to save a storage value with version tracking.
+ */
+export interface StorageSaveRequest {
+  /**
+   * Storage key.
+   */
+  key: string
+
+  /**
+   * Serialized JSON content.
+   */
+  content?: string
+
+  /**
+   * Raw value to serialize (fallback when content not provided).
+   */
+  value?: unknown
+
+  /**
+   * Clear stored data for the key.
+   */
+  clear?: boolean
+
+  /**
+   * Force save even if content is unchanged.
+   */
+  force?: boolean
+
+  /**
+   * Client version for conflict detection.
+   */
+  version?: number
+}
+
+/**
+ * Result for versioned storage save.
+ */
+export interface StorageSaveResult {
+  success: boolean
+  version: number
+  conflict?: boolean
 }
 
 /**

@@ -1,10 +1,13 @@
 import type { NetworkStatus } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 /**
  * Network monitoring service for tracking network speed, latency, and stability.
  * Provides recommendations for optimal download concurrency based on network conditions.
  */
 export class NetworkMonitor {
+  private static changeMonitorCounter = 0
+  private readonly pollingService = PollingService.getInstance()
   private speedHistory: number[] = []
   private latencyHistory: number[] = []
   private readonly maxHistorySize = 10
@@ -283,14 +286,20 @@ export class NetworkMonitor {
    * @param callback - Function to call when significant changes are detected
    */
   onNetworkChange(callback: (status: NetworkStatus) => void): void {
-    setInterval(async () => {
+    const taskId = `network-monitor.change.${NetworkMonitor.changeMonitorCounter++}`
+    this.pollingService.register(
+      taskId,
+      async () => {
       const oldStatus = this.cachedStatus
       const newStatus = await this.monitorNetwork()
 
       if (oldStatus && this.hasSignificantChange(oldStatus, newStatus)) {
         callback(newStatus)
       }
-    }, 10000)
+      },
+      { interval: 10, unit: 'seconds' },
+    )
+    this.pollingService.start()
   }
 
   /**

@@ -7,6 +7,7 @@ import type { DownloadError } from './error-types'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { DownloadErrorType, ErrorSeverity } from './error-types'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 // 日志级别
 export enum LogLevel {
@@ -33,7 +34,8 @@ export class ErrorLogger {
   private maxLogSize: number = 10 * 1024 * 1024 // 10MB
   private maxLogFiles: number = 5
   private logBuffer: LogEntry[] = []
-  private flushInterval: NodeJS.Timeout | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly flushTaskId = 'download.error-logger.flush'
   private isInitialized: boolean = false
 
   constructor(logDir: string) {
@@ -54,11 +56,17 @@ export class ErrorLogger {
       await fs.mkdir(logDir, { recursive: true })
 
       // 启动定时刷新
-      this.flushInterval = setInterval(() => {
-        this.flush().catch((error) => {
+      if (this.pollingService.isRegistered(this.flushTaskId)) {
+        this.pollingService.unregister(this.flushTaskId)
+      }
+      this.pollingService.register(
+        this.flushTaskId,
+        () => this.flush().catch((error) => {
           console.error('Failed to flush log buffer:', error)
-        })
-      }, 5000) // 每5秒刷新一次
+        }),
+        { interval: 5, unit: 'seconds' },
+      )
+      this.pollingService.start()
 
       this.isInitialized = true
     }
@@ -342,10 +350,7 @@ export class ErrorLogger {
    * 销毁日志记录器
    */
   async destroy(): Promise<void> {
-    if (this.flushInterval) {
-      clearInterval(this.flushInterval)
-      this.flushInterval = null
-    }
+    this.pollingService.unregister(this.flushTaskId)
 
     // 刷新剩余的日志
     await this.flush()

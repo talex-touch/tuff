@@ -1,6 +1,7 @@
 import type { MarketProviderDefinition, MarketSourcesPayload } from '@talex-touch/utils/market'
 import { DEFAULT_MARKET_PROVIDERS, MARKET_SOURCES_STORAGE_KEY } from '@talex-touch/utils/market'
 import { getTpexApiBase } from '@talex-touch/utils/env'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { performMarketHttpRequest } from './market-http.service'
 import { createLogger } from '../utils/logger'
 import { getConfig } from '../modules/storage'
@@ -167,7 +168,8 @@ interface UpdateSchedulerOptions {
 }
 
 class PluginUpdateScheduler {
-  private timer: ReturnType<typeof setInterval> | null = null
+  private static readonly pollingService = PollingService.getInstance()
+  private readonly pollingTaskId = 'plugin-update-scheduler.check'
   private lastCheckTime = 0
   private readonly checkIntervalMs: number
   private readonly getPluginsWithSource: PluginSourceFetcher
@@ -180,7 +182,7 @@ class PluginUpdateScheduler {
   }
 
   start(): void {
-    if (this.timer) {
+    if (PluginUpdateScheduler.pollingService.isRegistered(this.pollingTaskId)) {
       log.warn('Update scheduler already running')
       return
     }
@@ -189,17 +191,17 @@ class PluginUpdateScheduler {
       meta: { intervalHours: this.checkIntervalMs / (60 * 60 * 1000) },
     })
 
-    // Check on startup after a delay
-    setTimeout(() => this.checkForUpdates(), 30_000)
-
-    // Schedule periodic checks
-    this.timer = setInterval(() => this.checkForUpdates(), this.checkIntervalMs)
+    PluginUpdateScheduler.pollingService.register(
+      this.pollingTaskId,
+      () => this.checkForUpdates(),
+      { interval: this.checkIntervalMs, unit: 'milliseconds', initialDelayMs: 30_000 },
+    )
+    PluginUpdateScheduler.pollingService.start()
   }
 
   stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
+    if (PluginUpdateScheduler.pollingService.isRegistered(this.pollingTaskId)) {
+      PluginUpdateScheduler.pollingService.unregister(this.pollingTaskId)
       log.info('Plugin update scheduler stopped')
     }
   }

@@ -1,4 +1,5 @@
 import type { TalexTouch } from '../types'
+import { PollingService } from '../common/utils/polling'
 
 /**
  * Window animation controller return type
@@ -36,7 +37,7 @@ export interface WindowAnimationController {
  * Tracks the state of an animation
  */
 interface AnimationState {
-  intervalId: NodeJS.Timeout | null
+  taskId: string | null
   completed: boolean
 }
 
@@ -55,9 +56,11 @@ function easeInOutCubic(t: number): number {
 export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnimationController {
   // Store current window reference inside the function scope
   let currentWindow: TalexTouch.ITouchWindow | null = window || null
+  const pollingService = PollingService.getInstance()
+  let animationTaskCounter = 0
 
   const animationState: AnimationState = {
-    intervalId: null,
+    taskId: null,
     completed: false,
   }
 
@@ -89,9 +92,9 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
       const window = getCurrentWindow()
 
       // Cancel any existing animation
-      if (animationState.intervalId) {
-        clearInterval(animationState.intervalId)
-        animationState.intervalId = null
+      if (animationState.taskId) {
+        pollingService.unregister(animationState.taskId)
+        animationState.taskId = null
       }
 
       // Reset state for new animation
@@ -107,12 +110,15 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
       const durationMs = duration * 1000
 
       return new Promise<boolean>((resolve) => {
-        animationState.intervalId = setInterval(() => {
+        const taskId = `window-animation.${animationTaskCounter++}`
+        animationState.taskId = taskId
+
+        pollingService.register(taskId, () => {
           // Check if window is still valid
           if (!isWindowValid()) {
-            if (animationState.intervalId) {
-              clearInterval(animationState.intervalId)
-              animationState.intervalId = null
+            if (animationState.taskId) {
+              pollingService.unregister(animationState.taskId)
+              animationState.taskId = null
             }
             resolve(false)
             return
@@ -127,14 +133,15 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
           browserWindow.setPosition(x, y)
 
           if (progress >= 1) {
-            if (animationState.intervalId) {
-              clearInterval(animationState.intervalId)
-              animationState.intervalId = null
+            if (animationState.taskId) {
+              pollingService.unregister(animationState.taskId)
+              animationState.taskId = null
             }
             animationState.completed = true
             resolve(true)
           }
-        }, 16) // ~60fps
+        }, { interval: 16, unit: 'milliseconds' }) // ~60fps
+        pollingService.start()
       })
     }
     catch (error) {
@@ -144,9 +151,9 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
   }
 
   const cancel = async (): Promise<boolean> => {
-    if (animationState.intervalId) {
-      clearInterval(animationState.intervalId)
-      animationState.intervalId = null
+    if (animationState.taskId) {
+      pollingService.unregister(animationState.taskId)
+      animationState.taskId = null
       return Promise.resolve(true)
     }
     return Promise.resolve(false)
@@ -187,9 +194,9 @@ export function useWindowAnimation(window?: TalexTouch.ITouchWindow): WindowAnim
 
   const changeWindow = (newWindow: TalexTouch.ITouchWindow): void => {
     // Cancel any ongoing animation
-    if (animationState.intervalId) {
-      clearInterval(animationState.intervalId)
-      animationState.intervalId = null
+    if (animationState.taskId) {
+      pollingService.unregister(animationState.taskId)
+      animationState.taskId = null
     }
 
     // Set new window

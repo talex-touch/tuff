@@ -1,4 +1,5 @@
 import { isCoreBox } from '@talex-touch/utils/renderer'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface RendererPerformanceBuffer {
@@ -20,7 +21,8 @@ const buffer: RendererPerformanceBuffer = {
 }
 
 let started = false
-let flushTimer: number | null = null
+const pollingService = PollingService.getInstance()
+const flushTaskId = 'renderer.performance.flush'
 
 export async function startRendererPerformanceTelemetry(options?: { flushIntervalMs?: number }): Promise<void> {
   if (started)
@@ -41,9 +43,15 @@ export async function startRendererPerformanceTelemetry(options?: { flushInterva
   startLongTaskObserver()
   startRafJankMonitor()
 
-  flushTimer = window.setInterval(() => {
-    void flush()
-  }, flushIntervalMs)
+  if (pollingService.isRegistered(flushTaskId)) {
+    pollingService.unregister(flushTaskId)
+  }
+  pollingService.register(
+    flushTaskId,
+    () => flush(),
+    { interval: flushIntervalMs, unit: 'milliseconds' },
+  )
+  pollingService.start()
 
   window.addEventListener('beforeunload', () => {
     void flush()
@@ -128,4 +136,3 @@ async function flush(): Promise<void> {
     // ignore telemetry errors
   }
 }
-

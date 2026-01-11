@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { performance } from 'node:perf_hooks'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { fileProviderLog, formatDuration } from '../utils/logger'
 
 /**
@@ -48,13 +49,14 @@ export interface BackgroundTaskServiceOptions {
 
 export class BackgroundTaskService extends EventEmitter {
   private static instance: BackgroundTaskService | null = null
+  private static readonly pollingTaskId = 'background-task.check'
+  private static readonly pollingService = PollingService.getInstance()
   private readonly tasks = new Map<string, BackgroundTask>()
   private readonly runningTasks = new Set<string>()
   private readonly taskQueue: string[] = []
   private readonly options: BackgroundTaskServiceOptions
   private readonly activityTracker: UserActivityTracker
   private isRunning = false
-  private checkInterval: NodeJS.Timeout | null = null
   private lastActivityTime = Date.now()
 
   private constructor(
@@ -126,9 +128,12 @@ export class BackgroundTaskService extends EventEmitter {
       maxConcurrentTasks: this.options.maxConcurrentTasks,
     })
 
-    this.checkInterval = setInterval(() => {
-      this.checkAndExecuteTasks()
-    }, this.options.checkIntervalMs)
+    BackgroundTaskService.pollingService.register(
+      BackgroundTaskService.pollingTaskId,
+      () => this.checkAndExecuteTasks(),
+      { interval: this.options.checkIntervalMs, unit: 'milliseconds' },
+    )
+    BackgroundTaskService.pollingService.start()
 
     this.emit('serviceStarted')
   }
@@ -143,10 +148,7 @@ export class BackgroundTaskService extends EventEmitter {
 
     this.isRunning = false
 
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval)
-      this.checkInterval = null
-    }
+    BackgroundTaskService.pollingService.unregister(BackgroundTaskService.pollingTaskId)
 
     this.logInfo('Stopping background task service')
     this.emit('serviceStopped')

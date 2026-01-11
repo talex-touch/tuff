@@ -6,15 +6,9 @@
 - Comment hygiene and architecture consistency
 
 ## Scheduling & Polling Findings
-- Duplicate PollingService implementations exist alongside `packages/utils/common/utils/polling.ts`:
-  - `apps/core-app/src/main/modules/update/UpdateService.ts` defines a local `PollingService`.
-  - `apps/core-app/src/main/modules/storage/storage-polling-service.ts` implements a separate polling loop.
-- Ad-hoc interval timers likely belong in shared polling:
-  - `apps/core-app/src/main/service/market-api.service.ts` uses `setInterval` + `setTimeout` for update checks.
-  - `apps/core-app/src/main/modules/sentry/sentry-service.ts` uses multiple timers for perf flush, telemetry stats persist, and Nexus upload intervals.
-  - `apps/core-app/src/main/modules/box-tool/search-engine/usage-summary-service.ts` uses `setInterval` for summary aggregation.
-  - `apps/core-app/src/main/modules/clipboard.ts` uses `setInterval` for polling.
-- Recommendation: prefer `PollingService` for periodic tasks with controlled intervals and centralized shutdown; reserve direct `setTimeout` for request timeouts and short-lived debounces.
+- 已收敛：主/渲染进程中的 `setInterval` 已统一迁移到 `PollingService`（Clipboard、Sentry、DownloadCenter、UsageSummary、RecommendationEngine、DevServerMonitor、FxRate、DivisionBox、SystemSampler、renderer perf 等）。
+- 仍保留的 `setTimeout` 为短生命周期的 debounce/timeout，不在统一轮询范围内。
+- `StoragePollingService.setInterval` 仅为配置 API 命名，不是实际定时器。
 
 ## Utils Duplication / Conflict
 - Sleep helpers are duplicated:
@@ -23,7 +17,7 @@
 - Delay helpers are reimplemented:
   - `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts` defines a local `delay`.
   - `apps/core-app/src/main/utils/common-util.ts` includes `debounce` while other debounce utilities are already in shared code.
-- Custom PollingService in `UpdateService` overlaps with shared `PollingService`.
+- `packages/utils/common/utils/task-queue.ts` 已提供 `runAdaptiveTaskQueue`（自动让出事件循环），可替换手写分批/`setImmediate`。
 - Recommendation: consolidate into `packages/utils` and remove local duplicates to avoid inconsistent behavior and divergence.
 
 ## Complexity / Refactor Candidates
