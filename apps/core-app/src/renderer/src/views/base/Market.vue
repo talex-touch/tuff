@@ -1,5 +1,6 @@
 <script lang="ts" name="Market" setup>
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useToggle } from '@vueuse/core'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -51,7 +52,7 @@ let channelLoadFailed = false
 
 async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
   if (rendererChannel) return rendererChannel
-  if (channelLoadFailed || typeof window === 'undefined' || !window.process?.type) return undefined
+  if (channelLoadFailed || !isElectronRenderer()) return undefined
 
   try {
     const module = await import('~/modules/channel/channel-core')

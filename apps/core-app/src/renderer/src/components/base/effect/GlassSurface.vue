@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
+import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import {
   computed,
 
@@ -76,7 +77,7 @@ const props = withDefaults(defineProps<GlassSurfaceProps>(), {
 const isDarkMode = ref(false)
 
 function updateDarkMode() {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
 
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -145,7 +146,7 @@ function updateDisplacementMap() {
 }
 
 function supportsSVGFilters() {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined')
+  if (!hasWindow() || !hasNavigator() || !hasDocument())
     return false
 
   const isWebkit = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
@@ -161,7 +162,7 @@ function supportsSVGFilters() {
 }
 
 function supportsBackdropFilter() {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return false
   return CSS.supports('backdrop-filter', 'blur(10px)')
 }

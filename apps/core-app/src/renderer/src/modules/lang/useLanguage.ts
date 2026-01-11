@@ -1,3 +1,4 @@
+import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { readonly, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { loadLocaleMessages, setI18nLanguage } from './i18n'
@@ -24,7 +25,7 @@ function resolveSupportedLocale(locale?: string | null): SupportedLanguage | nul
 }
 
 const initialLanguage = (() => {
-  if (typeof window === 'undefined') {
+  if (!hasWindow()) {
     return resolveSupportedLocale(appSetting?.lang?.locale) ?? 'zh-CN'
   }
 
@@ -38,7 +39,7 @@ const initialLanguage = (() => {
 })()
 
 const initialFollowSystem = (() => {
-  if (typeof window === 'undefined') {
+  if (!hasWindow()) {
     return Boolean(appSetting?.lang?.followSystem)
   }
 
@@ -62,7 +63,7 @@ const followSystemLanguage = ref(initialFollowSystem)
  * 获取系统语言（使用浏览器可见的 locale 以及本地设置作为回退）
  */
 function getSystemLanguage(): SupportedLanguage {
-  const browserLanguage = typeof navigator !== 'undefined' ? navigator.language : undefined
+  const browserLanguage = hasNavigator() ? navigator.language : undefined
   const intlLocale
     = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : undefined
 

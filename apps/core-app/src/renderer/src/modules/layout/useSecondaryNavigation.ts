@@ -1,4 +1,5 @@
 import type { RouteLocationRaw, RouteRecordRaw } from 'vue-router'
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -235,7 +236,7 @@ export function useSecondaryNavigation(options?: UseSecondaryNavigationOptions) 
   }
 
   const isDebugEnabled = (): boolean => {
-    if (typeof window !== 'undefined' && (window as any).__TALEX_SECONDARY_NAV_DEBUG__) {
+    if (hasWindow() && (window as any).__TALEX_SECONDARY_NAV_DEBUG__) {
       return true
     }
 
