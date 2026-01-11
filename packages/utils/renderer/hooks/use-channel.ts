@@ -1,5 +1,6 @@
 import type { InjectionKey } from 'vue'
 import { inject } from 'vue'
+import { hasWindow } from '../../env'
 
 export interface TouchChannel {
   send: <TRequest = any, TResponse = any>(
@@ -59,7 +60,7 @@ function resolveTouchChannel(): TouchChannel | null {
   }
 
   // Try window object (browser environment)
-  if (typeof window !== 'undefined') {
+  if (hasWindow()) {
     const channel = window.touchChannel || window.$touchChannel || (window as any).$channel
     if (channel)
       return channel

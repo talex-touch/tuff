@@ -56,6 +56,38 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
+let lastVerboseLogsState: boolean | null = null
+
+function applyLoggerConfig(appSettings: any): void {
+  const loggerConfig = typeof appSettings?.logger === 'object' && appSettings.logger
+    ? appSettings.logger
+    : {}
+  const levels = {
+    ...(typeof loggerConfig.levels === 'object' && loggerConfig.levels ? loggerConfig.levels : {}),
+  } as Record<string, any>
+  const verboseLogs = appSettings?.diagnostics?.verboseLogs === true
+  if (verboseLogs && lastVerboseLogsState !== true) {
+    mainLog.warn('================ VERBOSE LOGS ENABLED ================')
+    mainLog.warn('Verbose logs increase CPU/memory/disk usage and may log file paths.')
+    mainLog.warn('Disable after debugging to avoid performance impact.')
+  }
+  lastVerboseLogsState = verboseLogs
+  if (!verboseLogs) {
+    levels.FileProvider = 'warn'
+  }
+  else if (!levels.FileProvider) {
+    levels.FileProvider = 'info'
+  }
+
+  loggerManager.setConfig({
+    defaultLevel: loggerConfig.defaultLevel ?? (app.isPackaged ? 'info' : 'debug'),
+    levels,
+  })
+  ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = verboseLogs
+}
+
+applyLoggerConfig({ diagnostics: { verboseLogs: false } })
+
 // Permission module instance
 const permissionModule = new PermissionModule()
 
@@ -133,10 +165,10 @@ app.whenReady().then(async () => {
     if (moduleCtor === storageModule) {
       try {
         const appSettings = storageModule.getConfig('app-setting.ini') as any
-        if (appSettings && appSettings.logger) {
-          loggerManager.setConfig(appSettings.logger)
-          mainLog.info('Logger configuration loaded from app-setting.ini')
-        }
+        applyLoggerConfig(appSettings)
+        storageModule.subscribe('app-setting.ini', (data) => {
+          applyLoggerConfig(data as any)
+        })
       } catch (error) {
         mainLog.warn('Failed to load logger configuration', { error })
       }

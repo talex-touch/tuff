@@ -23,10 +23,25 @@ import { getStartupAnalytics } from '../modules/analytics'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { buildVerificationModule } from '../modules/build-verification'
 import { activeAppService } from '../modules/system/active-app'
+import { enterPerfContext } from '../utils/perf-context'
 
 const execFileAsync = promisify(execFile)
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
+const READ_FILE_CACHE_TTL_MS = 60_000
+const READ_FILE_CACHE_MAX_ENTRIES = 120
+const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
+const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
+
+type ReadFileCacheEntry = {
+  content: string
+  size: number
+  cachedAt: number
+}
+
+const readFileCache = new Map<string, ReadFileCacheEntry>()
+const readFileInflight = new Map<string, Promise<string>>()
+let readFileCacheBytes = 0
 
 type BatteryStatusPayload = {
   onBattery: boolean
@@ -81,6 +96,60 @@ function resolveLocalFilePath(source: string): string | null {
   }
 
   return null
+}
+
+function getCachedReadFile(path: string): ReadFileCacheEntry | null {
+  const entry = readFileCache.get(path)
+  if (!entry) {
+    return null
+  }
+  if (Date.now() - entry.cachedAt > READ_FILE_CACHE_TTL_MS) {
+    readFileCache.delete(path)
+    readFileCacheBytes = Math.max(0, readFileCacheBytes - entry.size)
+    return null
+  }
+  readFileCache.delete(path)
+  readFileCache.set(path, entry)
+  return entry
+}
+
+function setCachedReadFile(path: string, content: string): void {
+  const size = Buffer.byteLength(content, 'utf8')
+  if (size > READ_FILE_CACHE_MAX_BYTES) {
+    return
+  }
+
+  const existing = readFileCache.get(path)
+  if (existing) {
+    readFileCache.delete(path)
+    readFileCacheBytes = Math.max(0, readFileCacheBytes - existing.size)
+  }
+
+  readFileCache.set(path, {
+    content,
+    size,
+    cachedAt: Date.now(),
+  })
+  readFileCacheBytes += size
+
+  pruneReadFileCache()
+}
+
+function pruneReadFileCache(): void {
+  while (
+    readFileCache.size > READ_FILE_CACHE_MAX_ENTRIES
+    || readFileCacheBytes > READ_FILE_CACHE_TOTAL_BYTES
+  ) {
+    const oldest = readFileCache.keys().next().value as string | undefined
+    if (!oldest) {
+      break
+    }
+    const entry = readFileCache.get(oldest)
+    if (entry) {
+      readFileCacheBytes = Math.max(0, readFileCacheBytes - entry.size)
+    }
+    readFileCache.delete(oldest)
+  }
 }
 
 export class CommonChannelModule extends BaseModule {
@@ -359,7 +428,36 @@ export class CommonChannelModule extends BaseModule {
         if (!resolvedPath) {
           throw new Error('Unsupported file source')
         }
-        return await fs.readFile(resolvedPath, { encoding: 'utf8' })
+
+        const cached = getCachedReadFile(resolvedPath)
+        if (cached) {
+          return cached.content
+        }
+
+        const inflight = readFileInflight.get(resolvedPath)
+        if (inflight) {
+          return await inflight
+        }
+
+        const fileName = path.basename(resolvedPath)
+        const ext = path.extname(resolvedPath).toLowerCase()
+        const dispose = enterPerfContext('system.readFile', {
+          fileName,
+          ext,
+          cacheHit: false,
+        })
+        const task = fs.readFile(resolvedPath, { encoding: 'utf8' })
+          .then((content) => {
+            setCachedReadFile(resolvedPath, content)
+            return content
+          })
+          .finally(() => {
+            readFileInflight.delete(resolvedPath)
+            dispose()
+          })
+
+        readFileInflight.set(resolvedPath, task)
+        return await task
       }),
       this.transport.onStream(AppEvents.fileIndex.progress, (_payload, context) => {
         fileProvider.registerProgressStream(context)

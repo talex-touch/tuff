@@ -22,6 +22,7 @@ export class PollingService {
   private isRunning = false
   private quitListenerCleanup?: () => void
   private activeTasks = new Map<string, number>()
+  private startAttempts = new Map<string, { count: number, lastAt: number }>()
   private taskStats = new Map<
     string,
     {
@@ -76,7 +77,9 @@ export class PollingService {
     },
   ): void {
     if (this.tasks.has(id)) {
-      console.warn(`[PollingService] Task with ID '${id}' is already registered. Overwriting.`)
+      if (this.shouldVerboseLog()) {
+        console.warn(`[PollingService] Task with ID '${id}' is already registered. Overwriting.`)
+      }
     }
 
     const intervalMs = this.convertToMs(options.interval, options.unit)
@@ -99,7 +102,9 @@ export class PollingService {
       nextRunMs,
     })
 
-    console.debug(`[PollingService] Task '${id}' registered to run every ${options.interval} ${options.unit}.`)
+    if (this.shouldVerboseLog()) {
+      console.debug(`[PollingService] Task '${id}' registered to run every ${options.interval} ${options.unit}.`)
+    }
 
     if (this.isRunning) {
       this._reschedule()
@@ -112,13 +117,17 @@ export class PollingService {
    */
   public unregister(id: string): void {
     if (this.tasks.delete(id)) {
-      console.log(`[PollingService] Task '${id}' unregistered.`)
+      if (this.shouldVerboseLog()) {
+        console.log(`[PollingService] Task '${id}' unregistered.`)
+      }
       if (this.isRunning) {
         this._reschedule()
       }
     }
     else {
-      console.warn(`[PollingService] Attempted to unregister a non-existent task with ID '${id}'.`)
+      if (this.shouldVerboseLog()) {
+        console.warn(`[PollingService] Attempted to unregister a non-existent task with ID '${id}'.`)
+      }
     }
   }
 
@@ -137,11 +146,13 @@ export class PollingService {
    */
   public start(): void {
     if (this.isRunning) {
-      console.warn('[PollingService] Already running, skipping start.')
+      this.recordStartAttempt()
       return
     }
     this.isRunning = true
-    console.log('[PollingService] Polling service started')
+    if (this.shouldVerboseLog()) {
+      console.log('[PollingService] Polling service started')
+    }
     this._setupQuitListener()
     this._reschedule()
   }
@@ -201,10 +212,14 @@ export class PollingService {
     }
 
     if (reason) {
-      console.log(`[PollingService] Stopping polling service: ${reason}`)
+      if (this.shouldVerboseLog()) {
+        console.log(`[PollingService] Stopping polling service: ${reason}`)
+      }
     }
     else {
-      console.log('[PollingService] Polling service stopped')
+      if (this.shouldVerboseLog()) {
+        console.log('[PollingService] Polling service stopped')
+      }
     }
   }
 
@@ -284,6 +299,7 @@ export class PollingService {
       count: number
       maxDurationMs: number
     }>
+    startAttempts: Array<{ caller: string, count: number, ageMs: number }>
   } {
     const now = Date.now()
     const activeTasks = Array.from(this.activeTasks.entries())
@@ -304,11 +320,33 @@ export class PollingService {
       }))
       .sort((a, b) => b.lastEndAt - a.lastEndAt)
       .slice(0, 6)
+    const startAttempts = Array.from(this.startAttempts.entries())
+      .map(([caller, stat]) => ({
+        caller,
+        count: stat.count,
+        ageMs: Math.max(0, now - stat.lastAt),
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
 
     return {
       activeTasks,
       recentTasks,
+      startAttempts,
     }
+  }
+
+  private recordStartAttempt(): void {
+    const stack = new Error().stack
+    const caller = stack?.split('\n')[2]?.trim() ?? 'unknown'
+    const entry = this.startAttempts.get(caller) ?? { count: 0, lastAt: 0 }
+    entry.count += 1
+    entry.lastAt = Date.now()
+    this.startAttempts.set(caller, entry)
+  }
+
+  private shouldVerboseLog(): boolean {
+    return (globalThis as any).__TALEX_VERBOSE_LOGS__ === true
   }
 }
 
