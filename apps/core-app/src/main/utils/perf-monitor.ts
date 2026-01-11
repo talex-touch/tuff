@@ -1,6 +1,7 @@
 import type { IpcMainEvent } from 'electron'
 import { performance } from 'node:perf_hooks'
 import { ipcMain } from 'electron'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { createLogger, formatDuration, type Primitive } from './logger'
 
 export type RendererPerfReport = {
@@ -62,6 +63,10 @@ const LOOP_LAG_ERROR_MS = 2_000
 
 const SUMMARY_INTERVAL_MS = 30_000
 const MAX_INCIDENTS = 80
+const PERF_LOOP_TASK_ID = 'perf-monitor.event-loop'
+const PERF_SUMMARY_TASK_ID = 'perf-monitor.summary'
+
+const pollingService = PollingService.getInstance()
 
 let perfSummaryReporter: ((summary: PerfSummary) => void) | null = null
 
@@ -115,40 +120,42 @@ export class PerfMonitor {
     lastAt: 0,
   }
 
-  private loopTimer: NodeJS.Timeout | null = null
-  private summaryTimer: NodeJS.Timeout | null = null
   private lastLoopTick = 0
 
   start(): void {
-    if (!this.loopTimer) {
+    if (!pollingService.isRegistered(PERF_LOOP_TASK_ID)) {
       this.lastLoopTick = performance.now()
-      this.loopTimer = setInterval(() => {
-        const now = performance.now()
-        const expected = this.lastLoopTick + 100
-        const lag = Math.max(0, now - expected)
-        this.lastLoopTick = now
+      pollingService.register(
+        PERF_LOOP_TASK_ID,
+        () => {
+          const now = performance.now()
+          const expected = this.lastLoopTick + 100
+          const lag = Math.max(0, now - expected)
+          this.lastLoopTick = now
 
-        if (lag >= LOOP_LAG_WARN_MS) {
-          const severity = lag >= LOOP_LAG_ERROR_MS ? 'error' : 'warn'
-          this.recordEventLoopLag(lag, severity)
-        }
-      }, 100)
+          if (lag >= LOOP_LAG_WARN_MS) {
+            const severity = lag >= LOOP_LAG_ERROR_MS ? 'error' : 'warn'
+            this.recordEventLoopLag(lag, severity)
+          }
+        },
+        { interval: 100, unit: 'milliseconds' },
+      )
     }
 
-    if (!this.summaryTimer) {
-      this.summaryTimer = setInterval(() => this.flushSummary(), SUMMARY_INTERVAL_MS)
+    if (!pollingService.isRegistered(PERF_SUMMARY_TASK_ID)) {
+      pollingService.register(
+        PERF_SUMMARY_TASK_ID,
+        () => this.flushSummary(),
+        { interval: SUMMARY_INTERVAL_MS, unit: 'milliseconds' },
+      )
     }
+
+    pollingService.start()
   }
 
   stop(): void {
-    if (this.loopTimer) {
-      clearInterval(this.loopTimer)
-      this.loopTimer = null
-    }
-    if (this.summaryTimer) {
-      clearInterval(this.summaryTimer)
-      this.summaryTimer = null
-    }
+    pollingService.unregister(PERF_LOOP_TASK_ID)
+    pollingService.unregister(PERF_SUMMARY_TASK_ID)
   }
 
   recordIpcHandler(

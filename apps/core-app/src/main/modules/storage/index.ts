@@ -1,6 +1,9 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
-import type { StorageUpdateNotification } from '@talex-touch/utils/transport/events/types'
+import type {
+  StorageSaveRequest,
+  StorageUpdateNotification,
+} from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
@@ -174,6 +177,77 @@ export class StorageModule extends BaseModule {
     if (!this.transport) {
       return
     }
+
+    this.transportDisposers.push(
+      this.transport.on(StorageEvents.app.get, (request) => {
+        if (!request?.key || typeof request.key !== 'string') {
+          return {}
+        }
+        return this.getConfig(request.key)
+      }),
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(StorageEvents.app.getVersioned, (request) => {
+        if (!request?.key || typeof request.key !== 'string') {
+          return null
+        }
+        return this.getConfigWithVersion(request.key)
+      }),
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(StorageEvents.app.set, (request, context) => {
+        if (!request?.key || typeof request.key !== 'string') {
+          return
+        }
+        const content = JSON.stringify(request.value ?? {})
+        this.saveConfig(
+          request.key,
+          content,
+          false,
+          false,
+          context?.sender?.id,
+          undefined,
+        )
+      }),
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(StorageEvents.app.save, (request: StorageSaveRequest, context) => {
+        if (!request?.key || typeof request.key !== 'string') {
+          return { success: false, version: 0 }
+        }
+        const content = typeof request.content === 'string'
+          ? request.content
+          : JSON.stringify(request.value ?? {})
+
+        return this.saveConfig(
+          request.key,
+          content,
+          request.clear,
+          request.force,
+          context?.sender?.id,
+          request.version,
+        )
+      }),
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(StorageEvents.app.delete, (request, context) => {
+        if (!request?.key || typeof request.key !== 'string') {
+          return
+        }
+        this.saveConfig(
+          request.key,
+          JSON.stringify({}),
+          true,
+          true,
+          context?.sender?.id,
+          undefined,
+        )
+      }),
+    )
 
     this.transportDisposers.push(
       this.transport.onStream(StorageEvents.app.updated, (_payload, context) => {

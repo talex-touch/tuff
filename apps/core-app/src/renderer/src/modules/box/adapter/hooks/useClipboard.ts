@@ -1,6 +1,7 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChannel'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 
@@ -9,6 +10,7 @@ const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
 const MAX_CLIPBOARD_AGE_MS = 5 * 60 * 1000
 const autoPastedTimestamps = new Set<number>()
+const pollingService = PollingService.getInstance()
 
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
   if (value == null) return null
@@ -237,14 +239,20 @@ export function useClipboard(
       initClipboardChannel()
     } else {
       // Wait for TouchChannel to be injected
-      const checkChannel = setInterval(() => {
-        if (window.$channel || window.touchChannel) {
-          clearInterval(checkChannel)
-          initClipboardChannel()
-        }
-      }, 50)
-      // Cleanup interval after 5 seconds
-      setTimeout(() => clearInterval(checkChannel), 5000)
+      const checkTaskId = `clipboard.channel-check.${Date.now()}`
+      pollingService.register(
+        checkTaskId,
+        () => {
+          if (window.$channel || window.touchChannel) {
+            pollingService.unregister(checkTaskId)
+            initClipboardChannel()
+          }
+        },
+        { interval: 50, unit: 'milliseconds' },
+      )
+      pollingService.start()
+      // Cleanup poller after 5 seconds
+      setTimeout(() => pollingService.unregister(checkTaskId), 5000)
     }
   }
 

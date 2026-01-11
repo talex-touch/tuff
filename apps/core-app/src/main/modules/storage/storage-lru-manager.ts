@@ -1,4 +1,5 @@
 import type { StorageCache } from './storage-cache'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import chalk from 'chalk'
 
 /**
@@ -8,7 +9,7 @@ import chalk from 'chalk'
  */
 export class StorageLRUManager {
   private cache: StorageCache
-  private cleanupTimer: NodeJS.Timeout | null = null
+  private readonly cleanupTaskId = 'storage.lru-cleanup'
   private onEvict: (name: string) => Promise<void>
   private hotConfigs: Set<string>
 
@@ -51,19 +52,20 @@ export class StorageLRUManager {
       chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`),
     )
 
-    this.cleanupTimer = setInterval(async () => {
-      await this.performCleanup()
-    }, this.CLEANUP_INTERVAL)
+    const pollingService = PollingService.getInstance()
+    pollingService.register(
+      this.cleanupTaskId,
+      () => this.performCleanup(),
+      { interval: this.CLEANUP_INTERVAL, unit: 'milliseconds' },
+    )
+    pollingService.start()
   }
 
   /**
    * Stop periodic cleanup
    */
   stopCleanup(): void {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
-      this.cleanupTimer = null
-    }
+    PollingService.getInstance().unregister(this.cleanupTaskId)
   }
 
   private async performCleanup(): Promise<void> {

@@ -1,3 +1,6 @@
+import type { ITuffTransport } from '../../transport'
+import type { StorageUpdateNotification } from '../../transport/events/types'
+import { StorageEvents } from '../../transport/events'
 import type { IStorageChannel } from './base-storage'
 
 /**
@@ -11,6 +14,7 @@ export type StorageSubscriptionCallback = (data: any) => void
  */
 class StorageSubscriptionManager {
   private channel: IStorageChannel | null = null
+  private transport: ITuffTransport | null = null
   private subscribers = new Map<string, Set<StorageSubscriptionCallback>>()
   private channelListenerRegistered = false
   private pendingUpdates = new Map<string, NodeJS.Timeout>()
@@ -19,22 +23,48 @@ class StorageSubscriptionManager {
   /**
    * Initialize the subscription manager with a channel
    */
-  init(channel: IStorageChannel): void {
-    this.channel = channel
+  init(channel?: IStorageChannel, transport?: ITuffTransport): void {
+    if (channel) {
+      this.channel = channel
+    }
+    if (transport) {
+      this.transport = transport
+    }
 
     if (!this.channelListenerRegistered) {
-      // Listen to storage:update events from main process
-      this.channel.regChannel('storage:update', ({ data }) => {
-        const { name, version } = data as { name: string, version?: number }
-        // Only handle update if version is newer or unknown
-        const currentVersion = this.configVersions.get(name) ?? 0
-        if (version === undefined || version > currentVersion) {
-          if (version !== undefined) {
-            this.configVersions.set(name, version)
+      if (this.transport) {
+        this.transport
+          .stream(StorageEvents.app.updated, undefined, {
+            onData: (payload: StorageUpdateNotification) => {
+              const { key, version } = payload
+              const currentVersion = this.configVersions.get(key) ?? 0
+              if (version === undefined || version > currentVersion) {
+                if (version !== undefined) {
+                  this.configVersions.set(key, version)
+                }
+                this.handleStorageUpdate(key)
+              }
+            },
+          })
+          .catch((error) => {
+            console.error('[StorageSubscription] Failed to subscribe to storage updates:', error)
+          })
+      }
+
+      if (this.channel) {
+        // Listen to storage:update events from main process
+        this.channel.regChannel('storage:update', ({ data }) => {
+          const { name, version } = data as { name: string, version?: number }
+          // Only handle update if version is newer or unknown
+          const currentVersion = this.configVersions.get(name) ?? 0
+          if (version === undefined || version > currentVersion) {
+            if (version !== undefined) {
+              this.configVersions.set(name, version)
+            }
+            this.handleStorageUpdate(name)
           }
-          this.handleStorageUpdate(name)
-        }
-      })
+        })
+      }
       this.channelListenerRegistered = true
     }
   }
@@ -74,6 +104,22 @@ class StorageSubscriptionManager {
         }
       }
     }
+    else if (this.transport) {
+      this.transport
+        .send(StorageEvents.app.get, { key: configName })
+        .then((data) => {
+          if (!data) return
+          try {
+            callback(data)
+          }
+          catch (error) {
+            console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
+          }
+        })
+        .catch((error) => {
+          console.error(`[StorageSubscription] Failed to load "${configName}":`, error)
+        })
+    }
 
     // Return unsubscribe function
     return () => {
@@ -106,7 +152,7 @@ class StorageSubscriptionManager {
       return
     }
 
-    if (!this.channel) {
+    if (!this.channel && !this.transport) {
       return
     }
 
@@ -117,24 +163,33 @@ class StorageSubscriptionManager {
     }
 
     const timer = setTimeout(async () => {
-      // Fetch latest data
-      const data = await this.channel!.send('storage:get', configName)
-      if (!data) {
-        this.pendingUpdates.delete(configName)
-        return
+      try {
+        // Fetch latest data
+        const data = this.channel
+          ? await this.channel.send('storage:get', configName)
+          : await this.transport!.send(StorageEvents.app.get, { key: configName })
+
+        if (!data) {
+          this.pendingUpdates.delete(configName)
+          return
+        }
+
+        // Notify all subscribers
+        callbacks.forEach((callback) => {
+          try {
+            callback(data)
+          }
+          catch (error) {
+            console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
+          }
+        })
       }
-
-      // Notify all subscribers
-      callbacks.forEach((callback) => {
-        try {
-          callback(data)
-        }
-        catch (error) {
-          console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
-        }
-      })
-
-      this.pendingUpdates.delete(configName)
+      catch (error) {
+        console.error(`[StorageSubscription] Failed to reload "${configName}":`, error)
+      }
+      finally {
+        this.pendingUpdates.delete(configName)
+      }
     }, 50) // 50ms debounce window
 
     this.pendingUpdates.set(configName, timer)
@@ -166,8 +221,8 @@ const subscriptionManager = new StorageSubscriptionManager()
  *
  * @param channel - The storage channel
  */
-export function initStorageSubscription(channel: IStorageChannel): void {
-  subscriptionManager.init(channel)
+export function initStorageSubscription(channel?: IStorageChannel, transport?: ITuffTransport): void {
+  subscriptionManager.init(channel, transport)
 }
 
 /**

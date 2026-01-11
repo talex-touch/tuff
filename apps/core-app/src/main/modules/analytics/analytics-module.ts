@@ -35,6 +35,7 @@ import { getStartupAnalytics } from '.'
 import { setIpcTracer } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
 import { setPerfSummaryReporter, type PerfSummary } from '../../utils/perf-monitor'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { getConfig } from '../storage'
@@ -51,6 +52,9 @@ const MESSAGE_REPORT_MAX_DELAY_MS = 5 * 60_000
 const MESSAGE_REPORT_MAX_QUEUE = 120
 const MESSAGE_REPORT_BATCH_SIZE = 10
 const MESSAGE_REPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+const ANALYTICS_CLEANUP_TASK_ID = 'analytics.cleanup'
+
+const pollingService = PollingService.getInstance()
 
 type QueuedMessageReport = {
   key: string
@@ -70,7 +74,6 @@ export class AnalyticsModule extends BaseModule {
   private core!: AnalyticsCore
   private sampler!: SystemSampler
   private dbStore?: DbStore
-  private cleanupTimer?: NodeJS.Timeout
   private messageStore?: AnalyticsMessageStore
   private messageReportQueue: QueuedMessageReport[] = []
   private messageReportIndex = new Map<string, QueuedMessageReport>()
@@ -119,10 +122,7 @@ export class AnalyticsModule extends BaseModule {
   onDestroy(): MaybePromise<void> {
     this.sampler.stop()
     setIpcTracer(null)
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
-      this.cleanupTimer = undefined
-    }
+    pollingService.unregister(ANALYTICS_CLEANUP_TASK_ID)
     if (this.messageReportTimer) {
       clearTimeout(this.messageReportTimer)
       this.messageReportTimer = null
@@ -671,7 +671,12 @@ export class AnalyticsModule extends BaseModule {
       })
 
     run()
-    this.cleanupTimer = setInterval(run, 60 * 60 * 1000)
+    pollingService.register(
+      ANALYTICS_CLEANUP_TASK_ID,
+      () => run(),
+      { interval: 60 * 60 * 1000, unit: 'milliseconds' },
+    )
+    pollingService.start()
   }
 
   recordSearchMetrics(totalDurationMs: number, providerTimings: Record<string, number>): void {

@@ -6,6 +6,7 @@ import { ItemRebuilder } from './item-rebuilder'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import * as schema from '../../../../db/schema'
 import { desc, sql } from 'drizzle-orm'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -19,7 +20,8 @@ export class RecommendationEngine {
 
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
-  private refreshTimer: NodeJS.Timeout | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly refreshTaskId = 'recommendation.refresh'
 
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
@@ -30,21 +32,26 @@ export class RecommendationEngine {
 
   /** Start background refresh timer */
   private startBackgroundRefresh(): void {
-    this.refreshTimer = setInterval(async () => {
-      try {
-        await this.recommend({ forceRefresh: true })
-      } catch (error) {
-        console.error('[RecommendationEngine] Background refresh failed', error)
-      }
-    }, this.REFRESH_INTERVAL_MS)
+    if (this.pollingService.isRegistered(this.refreshTaskId)) {
+      this.pollingService.unregister(this.refreshTaskId)
+    }
+    this.pollingService.register(
+      this.refreshTaskId,
+      async () => {
+        try {
+          await this.recommend({ forceRefresh: true })
+        } catch (error) {
+          console.error('[RecommendationEngine] Background refresh failed', error)
+        }
+      },
+      { interval: this.REFRESH_INTERVAL_MS, unit: 'milliseconds' },
+    )
+    this.pollingService.start()
   }
 
   /** Stop background refresh timer */
   public stopBackgroundRefresh(): void {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer)
-      this.refreshTimer = null
-    }
+    this.pollingService.unregister(this.refreshTaskId)
   }
 
   /** Generate recommendation list */

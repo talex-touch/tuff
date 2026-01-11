@@ -5,6 +5,7 @@ import * as schema from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
 import { TimeStatsAggregator } from './time-stats-aggregator'
 import { sleep } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 const log = createLogger('UsageSummaryService')
 
@@ -65,7 +66,8 @@ const DEFAULT_CONFIG: SummaryConfig = {
 /** Service for periodically aggregating usage logs and cleaning up old data */
 export class UsageSummaryService {
   private config: SummaryConfig
-  private summaryTimer: NodeJS.Timeout | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly summaryTaskId = 'usage-summary.run'
   private timeStatsAggregator: TimeStatsAggregator
   private isRunning = false
   private stats = {
@@ -98,18 +100,21 @@ export class UsageSummaryService {
       log.error('Initial summary failed', { error })
     })
 
-    this.summaryTimer = setInterval(() => {
-      this.runSummary().catch((error) => {
+    if (this.pollingService.isRegistered(this.summaryTaskId)) {
+      this.pollingService.unregister(this.summaryTaskId)
+    }
+    this.pollingService.register(
+      this.summaryTaskId,
+      () => this.runSummary().catch((error) => {
         log.error('Scheduled summary failed', { error })
-      })
-    }, this.config.summaryInterval)
+      }),
+      { interval: this.config.summaryInterval, unit: 'milliseconds' },
+    )
+    this.pollingService.start()
   }
 
   stop(): void {
-    if (this.summaryTimer) {
-      clearInterval(this.summaryTimer)
-      this.summaryTimer = null
-    }
+    this.pollingService.unregister(this.summaryTaskId)
     this.isRunning = false
     log.info('Usage summary service stopped', { meta: this.stats })
   }

@@ -2,9 +2,12 @@ import type { Ref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode } from '../types'
 import { DataCode } from '@talex-touch/utils'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
 export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<string>): void {
   console.log('useChannel', boxOptions)
+  const transport = useTuffTransport()
 
   touchChannel.regChannel('core-box:set-input-visibility', ({ data }: any) => {
     const { visible } = data
@@ -13,9 +16,20 @@ export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<str
     }
   })
 
+  transport.on(CoreBoxEvents.input.setVisibility, ({ visible }) => {
+    if (boxOptions) {
+      boxOptions.inputVisible = visible
+    }
+  })
+
   touchChannel.regChannel('core-box:request-input-value', ({ reply }: any) => {
     const input = searchVal?.value || ''
     reply(DataCode.SUCCESS, { input })
+  })
+
+  transport.on(CoreBoxEvents.input.requestValue, () => {
+    const input = searchVal?.value || ''
+    return { input }
   })
 
   touchChannel.regChannel('core-box:clear-items', ({ data }: any) => {

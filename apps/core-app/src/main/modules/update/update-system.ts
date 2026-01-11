@@ -11,6 +11,7 @@ import {
   DownloadModule,
   DownloadPriority,
 } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { app, shell } from 'electron'
 import axios from 'axios'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -79,6 +80,7 @@ export class UpdateSystem {
   private currentVersion: VersionInfo
   private downloadCenterModule: any
   private notificationService: any
+  private readonly pollingService = PollingService.getInstance()
 
   /** Channel priority for version comparison (lower = more stable) */
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
@@ -225,16 +227,21 @@ export class UpdateSystem {
    */
   private setupDownloadCompletionListener(taskId: string, version: string): void {
     // Listen for download completion event
-    const checkInterval = setInterval(() => {
+    const pollTaskId = `update-system.download.${taskId}`
+    if (this.pollingService.isRegistered(pollTaskId)) {
+      this.pollingService.unregister(pollTaskId)
+    }
+
+    this.pollingService.register(pollTaskId, () => {
       const task = this.downloadCenterModule.getTaskStatus(taskId)
 
       if (!task) {
-        clearInterval(checkInterval)
+        this.pollingService.unregister(pollTaskId)
         return
       }
 
       if (task.status === 'completed') {
-        clearInterval(checkInterval)
+        this.pollingService.unregister(pollTaskId)
 
         // Show update download complete notification
         if (this.notificationService) {
@@ -242,9 +249,10 @@ export class UpdateSystem {
         }
       }
       else if (task.status === 'failed' || task.status === 'cancelled') {
-        clearInterval(checkInterval)
+        this.pollingService.unregister(pollTaskId)
       }
-    }, 1000)
+    }, { interval: 1, unit: 'seconds' })
+    this.pollingService.start()
   }
 
   /**

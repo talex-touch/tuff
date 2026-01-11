@@ -1,6 +1,14 @@
 import type { UnwrapNestedRefs, WatchHandle } from 'vue'
 import type { ITouchClientChannel } from '../../channel'
+import type { ITuffTransport } from '../../transport'
+import type {
+  StorageGetVersionedResponse,
+  StorageSaveRequest,
+  StorageSaveResult,
+  StorageUpdateNotification,
+} from '../../transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
+import { StorageEvents } from '../../transport/events'
 import {
   reactive,
 
@@ -29,6 +37,7 @@ export interface IStorageChannel extends ITouchClientChannel {
 }
 
 let channel: IStorageChannel | null = null
+let transport: ITuffTransport | null = null
 
 /**
  * Initializes the global channel for communication.
@@ -47,6 +56,13 @@ let channel: IStorageChannel | null = null
  */
 export function initStorageChannel(c: IStorageChannel): void {
   channel = c
+}
+
+/**
+ * Initializes the global TuffTransport for storage operations.
+ */
+export function initStorageTransport(t: ITuffTransport): void {
+  transport = t
 }
 
 /**
@@ -116,11 +132,7 @@ export function createStorageProxy<T extends object>(key: string, factory: () =>
 /**
  * Save result from main process
  */
-export interface SaveResult {
-  success: boolean
-  version: number
-  conflict?: boolean
-}
+export type SaveResult = StorageSaveResult
 
 /**
  * A reactive storage utility with optional auto-save and update subscriptions.
@@ -146,7 +158,7 @@ export class TouchStorage<T extends object> {
 
   /**
    * Creates a new reactive storage instance.
-   * IMPORTANT: `initStorageChannel()` must be called before creating any TouchStorage instances.
+   * IMPORTANT: `initStorageChannel()` or `initStorageTransport()` must be called before creating any TouchStorage instances.
    *
    * @param qName Globally unique name for the instance
    * @param initData Initial data to populate the storage
@@ -156,7 +168,7 @@ export class TouchStorage<T extends object> {
    *
    * @example
    * ```ts
-   * // First initialize the channel
+   * // First initialize the channel or transport
    * initStorageChannel(touchChannel);
    *
    * // Then create storage instances
@@ -164,10 +176,10 @@ export class TouchStorage<T extends object> {
    * ```
    */
   constructor(qName: string, initData: T, onUpdate?: () => void) {
-    if (!channel) {
+    if (!channel && !transport) {
       throw new Error(
         `TouchStorage: Cannot create storage "${qName}" before channel is initialized. `
-        + 'Please call initStorageChannel() first.',
+        + 'Please call initStorageChannel() or initStorageTransport() first.',
       )
     }
 
@@ -200,31 +212,24 @@ export class TouchStorage<T extends object> {
 
     this.#channelInitialized = true
 
-    // Try to get versioned data first, fallback to legacy
-    const versionedResult = channel!.sendSync('storage:get-versioned', this.#qualifiedName) as { data: Partial<T>, version: number } | null
+    // Try to get versioned data synchronously first, fallback to async load.
+    const versionedResult = this.#getVersionedSync()
     if (versionedResult) {
       this.#currentVersion = versionedResult.version
-      this.assignData(versionedResult.data, true, true)
+      this.assignData(versionedResult.data as Partial<T>, true, true)
     }
     else {
-      const result = channel!.sendSync('storage:get', this.#qualifiedName)
-      const parsed = result ? (result as Partial<T>) : {}
-      this.#currentVersion = 1
-      this.assignData(parsed, true, true)
+      const result = this.#getSync()
+      if (result) {
+        this.#currentVersion = Math.max(this.#currentVersion, 1)
+        this.assignData(result as Partial<T>, true, true)
+      }
+      else {
+        void this.#loadFromRemoteWithVersion()
+      }
     }
 
-    // Register update listener - only triggered for OTHER windows' changes
-    // (source window is excluded by main process)
-    channel!.regChannel('storage:update', ({ data }) => {
-      const { name, version } = data as { name: string, version?: number }
-
-      if (name === this.#qualifiedName) {
-        // Only reload if remote version is newer
-        if (version === undefined || version > this.#currentVersion) {
-          this.#loadFromRemoteWithVersion()
-        }
-      }
-    })
+    this.#registerUpdateListener()
 
     // Start auto-save watcher AFTER initial data load
     if (this.#autoSave && !this.#autoSaveStopHandle) {
@@ -232,20 +237,116 @@ export class TouchStorage<T extends object> {
     }
   }
 
+  private #getVersionedSync(): StorageGetVersionedResponse | null {
+    if (!channel) {
+      return null
+    }
+    return channel.sendSync('storage:get-versioned', this.#qualifiedName) as StorageGetVersionedResponse | null
+  }
+
+  private #getSync(): Partial<T> | null {
+    if (!channel) {
+      return null
+    }
+    const result = channel.sendSync('storage:get', this.#qualifiedName)
+    return result ? (result as Partial<T>) : null
+  }
+
+  private async #getVersionedAsync(): Promise<StorageGetVersionedResponse | null> {
+    if (transport) {
+      return await transport.send(StorageEvents.app.getVersioned, { key: this.#qualifiedName })
+    }
+    if (channel) {
+      return await channel.send('storage:get-versioned', this.#qualifiedName) as StorageGetVersionedResponse | null
+    }
+    return null
+  }
+
+  private async #getAsync(): Promise<Partial<T>> {
+    if (transport) {
+      const data = await transport.send(StorageEvents.app.get, { key: this.#qualifiedName })
+      return (data as Partial<T>) ?? {}
+    }
+    if (channel) {
+      const result = await channel.send('storage:get', this.#qualifiedName)
+      return result ? (result as Partial<T>) : {}
+    }
+    return {}
+  }
+
+  private async #saveRemote(request: StorageSaveRequest): Promise<SaveResult> {
+    if (transport) {
+      return await transport.send(StorageEvents.app.save, request)
+    }
+    if (channel) {
+      return await channel.send('storage:save', request) as SaveResult
+    }
+    return { success: false, version: 0 }
+  }
+
+  private #registerUpdateListener(): void {
+    if (transport) {
+      transport.stream(StorageEvents.app.updated, undefined, {
+        onData: (payload: StorageUpdateNotification) => {
+          const { key, version } = payload
+          if (key !== this.#qualifiedName) {
+            return
+          }
+
+          if (version === undefined || version > this.#currentVersion) {
+            void this.#loadFromRemoteWithVersion()
+          }
+        },
+      }).catch((error) => {
+        console.error('[TouchStorage] Failed to subscribe to storage updates:', error)
+      })
+      return
+    }
+
+    if (!channel) {
+      return
+    }
+
+    // Register update listener - only triggered for OTHER windows' changes
+    // (source window is excluded by main process)
+    channel.regChannel('storage:update', ({ data }) => {
+      const { name, version } = data as { name: string, version?: number }
+
+      if (name === this.#qualifiedName) {
+        // Only reload if remote version is newer
+        if (version === undefined || version > this.#currentVersion) {
+          void this.#loadFromRemoteWithVersion()
+        }
+      }
+    })
+  }
+
   /**
    * Load from remote and update version
    * @private
    */
-  #loadFromRemoteWithVersion(): void {
-    if (!channel)
+  async #loadFromRemoteWithVersion(): Promise<void> {
+    if (!channel && !transport) {
       return
+    }
 
-    const versionedResult = channel.sendSync('storage:get-versioned', this.#qualifiedName) as { data: Partial<T>, version: number } | null
-    if (versionedResult && versionedResult.version > this.#currentVersion) {
-      this.#currentVersion = versionedResult.version
-      // Mark as remote update to skip auto-save
+    const versionedResult = await this.#getVersionedAsync()
+    if (versionedResult) {
+      if (versionedResult.version > this.#currentVersion) {
+        this.#currentVersion = versionedResult.version
+        // Mark as remote update to skip auto-save
+        this.#isRemoteUpdate = true
+        this.assignData(versionedResult.data as Partial<T>, true, true)
+        this.#isRemoteUpdate = false
+      }
+      return
+    }
+
+    const result = await this.#getAsync()
+    if (Object.keys(result || {}).length > 0) {
+      this.#currentVersion = Math.max(this.#currentVersion, 1)
       this.#isRemoteUpdate = true
-      this.assignData(versionedResult.data, true, true)
+      this.assignData(result as Partial<T>, true, true)
       this.#isRemoteUpdate = false
     }
   }
@@ -286,7 +387,7 @@ export class TouchStorage<T extends object> {
    * ```
    */
   saveToRemote = useDebounceFn(async (options?: { force?: boolean }): Promise<void> => {
-    if (!channel) {
+    if (!channel && !transport) {
       throw new Error('TouchStorage: channel not initialized')
     }
 
@@ -299,12 +400,12 @@ export class TouchStorage<T extends object> {
       return
     }
 
-    const result = await channel.send('storage:save', {
+    const result = await this.#saveRemote({
       key: this.#qualifiedName,
       content: JSON.stringify(this.data),
       clear: false,
       version: this.#currentVersion,
-    }) as SaveResult
+    })
 
     if (result.success) {
       this.#currentVersion = result.version
@@ -312,7 +413,7 @@ export class TouchStorage<T extends object> {
     else if (result.conflict) {
       // Conflict detected - reload from remote
       console.warn(`[TouchStorage] Conflict detected for "${this.#qualifiedName}", reloading...`)
-      this.#loadFromRemoteWithVersion()
+      void this.#loadFromRemoteWithVersion()
     }
   }, 300)
 
@@ -476,13 +577,19 @@ export class TouchStorage<T extends object> {
    * ```
    */
   async reloadFromRemote(): Promise<this> {
-    if (!channel) {
+    if (!channel && !transport) {
       throw new Error('TouchStorage: channel not initialized')
     }
 
-    const result = await channel.send('storage:reload', this.#qualifiedName)
-    const parsed = result ? (result as Partial<T>) : {}
-    this.assignData(parsed, true)
+    const versionedResult = await this.#getVersionedAsync()
+    if (versionedResult) {
+      this.#currentVersion = versionedResult.version
+      this.assignData(versionedResult.data as Partial<T>, true)
+      return this
+    }
+
+    const parsed = await this.#getAsync()
+    this.assignData(parsed as Partial<T>, true)
 
     return this
   }
@@ -499,12 +606,12 @@ export class TouchStorage<T extends object> {
    * ```
    */
   loadFromRemote(): this {
-    if (!channel) {
+    if (!channel && !transport) {
       // Channel not initialized yet, data will be loaded when channel is ready
       return this
     }
 
-    this.#loadFromRemoteWithVersion()
+    void this.#loadFromRemoteWithVersion()
     return this
   }
 

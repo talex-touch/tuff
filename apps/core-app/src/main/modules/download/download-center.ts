@@ -6,6 +6,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { desc, eq } from 'drizzle-orm'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import { BaseModule } from '../abstract-base-module'
@@ -66,7 +67,9 @@ export class DownloadCenterModule extends BaseModule {
   // Configuration and state
   private config!: DownloadConfig // Download configuration
   private isRunning = false // Module running state
-  private progressUpdateInterval: NodeJS.Timeout | null = null
+  private readonly pollingService = PollingService.getInstance()
+  private readonly networkMonitorTaskId = 'download-center.network-monitor'
+  private readonly progressUpdateTaskId = 'download-center.progress-update'
 
   // Performance optimizations
   private taskCache: Map<string, DownloadTask> = new Map() // In-memory task cache
@@ -134,10 +137,8 @@ export class DownloadCenterModule extends BaseModule {
   async onDestroy(_ctx: ModuleDestroyContext<any>): Promise<void> {
     this.isRunning = false
 
-    // Stop progress update interval
-    if (this.progressUpdateInterval) {
-      clearInterval(this.progressUpdateInterval)
-    }
+    this.pollingService.unregister(this.networkMonitorTaskId)
+    this.pollingService.unregister(this.progressUpdateTaskId)
 
     // Stop all download workers
     // Workers will naturally stop when isRunning is false and task scheduler exits
@@ -1159,15 +1160,23 @@ export class DownloadCenterModule extends BaseModule {
     })
 
     // 定期更新网络状态
-    setInterval(async () => {
-      const status = await this.networkMonitor.monitorNetwork()
-      this.priorityCalculator.setNetworkStatus(status)
+    if (this.pollingService.isRegistered(this.networkMonitorTaskId)) {
+      this.pollingService.unregister(this.networkMonitorTaskId)
+    }
+    this.pollingService.register(
+      this.networkMonitorTaskId,
+      async () => {
+        const status = await this.networkMonitor.monitorNetwork()
+        this.priorityCalculator.setNetworkStatus(status)
 
-      // 根据网络状况调整并发数
-      if (this.config.concurrency.autoAdjust) {
-        this.concurrencyAdjuster.adjustConcurrency()
-      }
-    }, 30000) // 每30秒检查一次
+        // 根据网络状况调整并发数
+        if (this.config.concurrency.autoAdjust) {
+          this.concurrencyAdjuster.adjustConcurrency()
+        }
+      },
+      { interval: 30, unit: 'seconds' },
+    )
+    this.pollingService.start()
   }
 
   // 启动任务调度器
@@ -1175,9 +1184,15 @@ export class DownloadCenterModule extends BaseModule {
     this.isRunning = true
 
     // 启动进度更新定时器
-    this.progressUpdateInterval = setInterval(() => {
-      this.updateProgress()
-    }, 1000) // 每秒更新一次进度
+    if (this.pollingService.isRegistered(this.progressUpdateTaskId)) {
+      this.pollingService.unregister(this.progressUpdateTaskId)
+    }
+    this.pollingService.register(
+      this.progressUpdateTaskId,
+      () => this.updateProgress(),
+      { interval: 1, unit: 'seconds' },
+    )
+    this.pollingService.start()
 
     // 启动任务调度循环
     this.scheduleTasks()

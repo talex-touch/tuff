@@ -3,6 +3,7 @@ import type { LogItem } from '../log/types'
 import fs from 'node:fs'
 import path from 'node:path'
 import { structuredStrictStringify } from '@talex-touch/utils'
+import { PollingService } from '../../common/utils/polling'
 
 /**
  * PluginLoggerManager is responsible for managing and writing logs for a specific plugin.
@@ -14,7 +15,8 @@ export class PluginLoggerManager {
   private readonly pluginInfoPath: string
   private readonly sessionStart: string
   private buffer: LogItem[] = []
-  private flushInterval: NodeJS.Timeout
+  private readonly pollingService = PollingService.getInstance()
+  private readonly flushTaskId: string
   private onLogAppend?: (log: LogItem) => void
 
   /**
@@ -33,9 +35,15 @@ export class PluginLoggerManager {
     this.pluginLogDir = path.resolve(baseDir, 'logs', sessionFolder)
     this.sessionLogPath = path.resolve(this.pluginLogDir, 'session.log')
     this.pluginInfoPath = path.resolve(this.pluginLogDir, 'touch-plugin.info')
+    this.flushTaskId = `plugin-logger.flush.${pluginInfo.name}.${Date.now()}`
 
     this.ensureLogEnvironment(true)
-    this.flushInterval = setInterval(() => this.flush(), 5000)
+    this.pollingService.register(
+      this.flushTaskId,
+      () => this.flush(),
+      { interval: 5, unit: 'seconds' },
+    )
+    this.pollingService.start()
   }
 
   /**
@@ -89,7 +97,7 @@ export class PluginLoggerManager {
    * Stops the flush interval and ensures remaining logs are written.
    */
   destroy(): void {
-    clearInterval(this.flushInterval)
+    this.pollingService.unregister(this.flushTaskId)
     this.flush()
   }
 

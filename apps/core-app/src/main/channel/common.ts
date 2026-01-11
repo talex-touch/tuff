@@ -11,6 +11,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { BrowserWindow, powerMonitor, shell } from 'electron'
 import packageJson from '../../../package.json'
@@ -24,6 +25,8 @@ import { buildVerificationModule } from '../modules/build-verification'
 import { activeAppService } from '../modules/system/active-app'
 
 const execFileAsync = promisify(execFile)
+const BATTERY_POLL_TASK_ID = 'common-channel.battery'
+const pollingService = PollingService.getInstance()
 
 type BatteryStatusPayload = {
   onBattery: boolean
@@ -84,7 +87,6 @@ export class CommonChannelModule extends BaseModule {
   static key: symbol = Symbol.for('CommonChannel')
   name: ModuleKey = CommonChannelModule.key
 
-  private batteryPollTimer?: NodeJS.Timeout
   private channel: ReturnType<typeof genTouchChannel> | null = null
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
@@ -121,16 +123,20 @@ export class CommonChannelModule extends BaseModule {
 
     // Smart polling management
     const startPolling = () => {
-      if (this.batteryPollTimer) return
+      if (pollingService.isRegistered(BATTERY_POLL_TASK_ID)) {
+        return
+      }
       // Poll every 2 minutes when on battery to save resources
-      this.batteryPollTimer = setInterval(() => void broadcastBatteryStatus(), 120_000)
+      pollingService.register(
+        BATTERY_POLL_TASK_ID,
+        () => broadcastBatteryStatus(),
+        { interval: 120_000, unit: 'milliseconds' }
+      )
+      pollingService.start()
     }
 
     const stopPolling = () => {
-      if (this.batteryPollTimer) {
-        clearInterval(this.batteryPollTimer)
-        this.batteryPollTimer = undefined
-      }
+      pollingService.unregister(BATTERY_POLL_TASK_ID)
     }
 
     // Start battery status broadcast (best-effort)
