@@ -7,6 +7,7 @@ import type {
   PluginAnalyticsSDK,
   PluginStats,
 } from './types'
+import { hasWindow } from '../env'
 import { useTuffTransport } from '../transport'
 import { AppEvents } from '../transport/events'
 
@@ -126,7 +127,7 @@ export function createPluginAnalyticsClient(options?: {
 }
 
 function resolveRuntimePluginVersion(): string | undefined {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return undefined
   const plugin = (window as any).$plugin as { version?: unknown } | undefined
   return typeof plugin?.version === 'string' ? plugin.version : undefined

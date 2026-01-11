@@ -1,4 +1,5 @@
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import { hasWindow } from '@talex-touch/utils/env'
 import type { IPluginRendererChannel, PluginChannelHandler } from './types'
 import { genChannel } from '../channel'
 
@@ -14,7 +15,7 @@ let cachedWindowChannel: ITouchClientChannel | null = null
  * @param errorMessage - Optional custom error message when the channel is unavailable
  */
 export function ensureRendererChannel(errorMessage = DEFAULT_CHANNEL_ERROR): ITouchClientChannel {
-  const globalWindow = typeof window === 'undefined' ? undefined : window
+  const globalWindow = hasWindow() ? window : undefined
   const channel = globalWindow?.$channel ?? cachedWindowChannel
 
   if (!channel) {

@@ -40,6 +40,9 @@ const _appSettingOriginData = {
   searchEngine: {
     logsEnabled: false,
   },
+  diagnostics: {
+    verboseLogs: false,
+  },
   recommendation: {
     enabled: true,
     maxItems: 10,

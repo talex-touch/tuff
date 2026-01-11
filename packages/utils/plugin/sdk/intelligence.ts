@@ -3,6 +3,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
 } from '../../types/intelligence'
+import { hasWindow } from '../../env'
 import { ensureRendererChannel } from './channel'
 
 export interface IntelligenceChatOptions {
@@ -26,7 +27,7 @@ export interface IntelligenceSDK {
 }
 
 function resolveSdkApi(): number | undefined {
-  const globalWindow = typeof window === 'undefined' ? undefined : (window as any)
+  const globalWindow = hasWindow() ? (window as any) : undefined
   const sdkapi = globalWindow?.$plugin?.sdkapi
   return typeof sdkapi === 'number' ? sdkapi : undefined
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ElProgress, ElTabPane, ElTabs } from 'element-plus'
+import { ElMessageBox, ElProgress, ElTabPane, ElTabs } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { appSetting } from '~/modules/channel/storage'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface ActiveAppInfo {
@@ -205,6 +206,49 @@ const overallProgress = computed(() => {
   const stageProgress = (progress / 100) * stageInfo.weight
   return Math.min(100, stageInfo.start + stageProgress)
 })
+
+const verboseWarningDismissed = ref(false)
+const verboseLogsEnabled = computed({
+  get: () => appSetting?.diagnostics?.verboseLogs === true,
+  set: (value: boolean) => {
+    if (!appSetting.diagnostics) {
+      appSetting.diagnostics = { verboseLogs: value }
+      ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
+      return
+    }
+    appSetting.diagnostics.verboseLogs = value
+    ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
+  },
+})
+
+async function requestVerboseLogs(): Promise<void> {
+  if (verboseLogsEnabled.value) {
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '启用详细日志会增加 CPU / 内存 / 磁盘占用，并可能记录路径等敏感信息。建议仅在排查问题时短时开启。',
+      '启用详细日志',
+      {
+        confirmButtonText: '启用',
+        cancelButtonText: '暂不',
+        type: 'warning',
+      },
+    )
+    verboseLogsEnabled.value = true
+    verboseWarningDismissed.value = true
+  } catch {
+    // user canceled
+  }
+}
+
+async function toggleVerboseLogs(): Promise<void> {
+  if (verboseLogsEnabled.value) {
+    verboseLogsEnabled.value = false
+    return
+  }
+  await requestVerboseLogs()
+}
 
 function getStageText(stage: string): string {
   switch (stage) {
@@ -423,6 +467,14 @@ watch(limit, () => {
   load().catch(() => void 0)
 })
 
+watch(
+  verboseLogsEnabled,
+  (value) => {
+    ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   load().catch(() => void 0)
   setupIndexingProgressListener()
@@ -457,6 +509,12 @@ onUnmounted(() => {
               </option>
             </select>
           </div>
+          <div class="control-group">
+            <label class="control-label">LOGS</label>
+            <button class="debug-btn debug-btn--compact" type="button" @click="toggleVerboseLogs">
+              {{ verboseLogsEnabled ? 'VERBOSE ON' : 'VERBOSE OFF' }}
+            </button>
+          </div>
           <button class="debug-btn" type="button" :disabled="loading" @click="load">
             <span v-if="loading" class="loading-dot" />
             <span v-else class="refresh-symbol">⟳</span>
@@ -465,6 +523,23 @@ onUnmounted(() => {
         </div>
       </div>
     </header>
+
+    <div v-if="!verboseLogsEnabled && !verboseWarningDismissed" class="warning-panel">
+      <div class="warning-header">
+        注意
+      </div>
+      <div class="warning-content">
+        启用详细日志会增加 CPU、内存与磁盘占用，并可能记录路径等敏感信息。建议仅在排查问题时短时开启。
+      </div>
+      <div class="warning-actions">
+        <button class="warning-btn" type="button" @click="requestVerboseLogs">
+          开启详细日志
+        </button>
+        <button class="warning-btn warning-btn--ghost" type="button" @click="verboseWarningDismissed = true">
+          仅查看
+        </button>
+      </div>
+    </div>
 
     <div v-if="error" class="error-panel">
       <div class="error-header">
@@ -1108,6 +1183,12 @@ onUnmounted(() => {
   border-radius: 2px;
 }
 
+.debug-btn--compact {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.6px;
+}
+
 .debug-btn:hover:not(:disabled) {
   background: #111111;
   border-color: #555555;
@@ -1147,6 +1228,64 @@ onUnmounted(() => {
   border: 1px solid #ff0000;
   border-radius: 2px;
   overflow: hidden;
+}
+
+.warning-panel {
+  margin: 1rem 2rem;
+  background: #111111;
+  border: 1px solid #f59e0b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.warning-header {
+  background: #f59e0b;
+  color: #000000;
+  padding: 0.5rem 1rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+.warning-content {
+  padding: 0.9rem 1rem 0.6rem;
+  color: #fcd34d;
+  line-height: 1.6;
+  font-size: 0.85rem;
+}
+
+.warning-actions {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0 1rem 1rem;
+}
+
+.warning-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.9rem;
+  border-radius: 2px;
+  border: 1px solid #f59e0b;
+  background: #000000;
+  color: #fcd34d;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.warning-btn:hover {
+  background: #1a1200;
+}
+
+.warning-btn--ghost {
+  border-color: #333333;
+  color: #ffffff;
+}
+
+.warning-btn--ghost:hover {
+  background: #111111;
 }
 
 .error-header {

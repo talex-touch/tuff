@@ -14,6 +14,9 @@ function readGlobalEnv(): Record<string, string | undefined> {
       if (typeof v === 'string') {
         record[k] = v
       }
+      else if (typeof v === 'number' || typeof v === 'boolean') {
+        record[k] = String(v)
+      }
     }
   }
 
@@ -23,6 +26,9 @@ function readGlobalEnv(): Record<string, string | undefined> {
       if (typeof v === 'string') {
         record[k] = v
       }
+      else if (typeof v === 'number' || typeof v === 'boolean') {
+        record[k] = String(v)
+      }
     }
   }
 
@@ -31,7 +37,16 @@ function readGlobalEnv(): Record<string, string | undefined> {
 
 export function setRuntimeEnv(env: Record<string, string | undefined>): void {
   const g: any = globalThis as any
-  g.__TUFF_ENV = { ...(g.__TUFF_ENV || {}), ...env }
+  const normalized: Record<string, string | undefined> = {}
+  for (const [k, v] of Object.entries(env ?? {})) {
+    if (typeof v === 'string') {
+      normalized[k] = v
+    }
+    else if (typeof v === 'number' || typeof v === 'boolean') {
+      normalized[k] = String(v)
+    }
+  }
+  g.__TUFF_ENV = { ...(g.__TUFF_ENV || {}), ...normalized }
 }
 
 export function getEnv(key: string): string | undefined {
@@ -48,6 +63,66 @@ export function getBooleanEnv(key: string, fallback = false): boolean {
   if (raw === '1' || raw === 'true') return true
   if (raw === '0' || raw === 'false') return false
   return fallback
+}
+
+export function hasWindow(): boolean {
+  return typeof window !== 'undefined'
+}
+
+export function hasDocument(): boolean {
+  return typeof document !== 'undefined'
+}
+
+export function hasNavigator(): boolean {
+  return typeof navigator !== 'undefined'
+}
+
+export function isBrowserRuntime(): boolean {
+  return hasWindow() && hasDocument()
+}
+
+export function isNodeRuntime(): boolean {
+  return typeof process !== 'undefined'
+    && Boolean((process as any)?.versions?.node)
+}
+
+export function isElectronRuntime(): boolean {
+  return isNodeRuntime()
+    && Boolean((process as any)?.versions?.electron)
+}
+
+export function isElectronRenderer(): boolean {
+  return isElectronRuntime()
+    && (process as any)?.type === 'renderer'
+}
+
+export function isElectronMain(): boolean {
+  return isElectronRuntime()
+    && ((process as any)?.type === 'browser' || !(process as any)?.type)
+}
+
+export function isDevEnv(): boolean {
+  const nodeEnv = getEnv('NODE_ENV')
+  if (nodeEnv) {
+    return nodeEnv === 'development' || nodeEnv === 'test'
+  }
+  const mode = getEnv('MODE') || getEnv('VITE_MODE')
+  if (mode) {
+    return mode === 'development'
+  }
+  return getBooleanEnv('DEV', false)
+}
+
+export function isProdEnv(): boolean {
+  const nodeEnv = getEnv('NODE_ENV')
+  if (nodeEnv) {
+    return nodeEnv === 'production'
+  }
+  const mode = getEnv('MODE') || getEnv('VITE_MODE')
+  if (mode) {
+    return mode === 'production'
+  }
+  return getBooleanEnv('PROD', false)
 }
 
 export function normalizeBaseUrl(input: string): string {

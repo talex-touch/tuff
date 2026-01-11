@@ -192,11 +192,16 @@ export class PerfMonitor {
     this.pushIncident(incident)
 
     const message = `${eventName} handler took ${formatDuration(durationMs)}`
+    const contexts = getPerfContextSnapshot(2)
     if (severity === 'error') {
-      ipcPerfLog.error(message, { meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs) }) })
+      ipcPerfLog.error(message, {
+        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts }),
+      })
     }
     else {
-      ipcPerfLog.warn(message, { meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs) }) })
+      ipcPerfLog.warn(message, {
+        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts }),
+      })
     }
     this.lastSlowIpc = {
       kind: 'ipc.handler.slow',

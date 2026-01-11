@@ -9,6 +9,7 @@ import {
   ChannelType,
   DataCode,
 } from '../channel'
+import { hasWindow } from '../env'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 
@@ -16,7 +17,7 @@ let cachedIpcRenderer: IpcRenderer | null = null
 
 // 使用惰性解析避免在打包阶段静态引入 electron
 function resolveIpcRenderer(): IpcRenderer | null {
-  if (typeof window !== 'undefined') {
+  if (hasWindow()) {
     const bridge = (window as any)?.electron
     if (bridge?.ipcRenderer)
       return bridge.ipcRenderer as IpcRenderer

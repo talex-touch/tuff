@@ -8,6 +8,7 @@
  */
 
 import type { FileScanOptions } from './file-scan-constants'
+import { hasWindow } from '../env'
 import {
   BASE_BLACKLISTED_DIRS,
   BLACKLISTED_EXTENSIONS,
@@ -21,7 +22,7 @@ import {
 } from './file-scan-constants'
 
 const path = (() => {
-  if (typeof window === 'undefined') {
+  if (!hasWindow()) {
     return require('node:path')
   }
   try {
