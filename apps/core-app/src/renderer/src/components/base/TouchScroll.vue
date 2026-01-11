@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ElScrollbar } from 'element-plus'
+import { hasWindow } from '@talex-touch/utils/env'
 
 defineOptions({
   name: 'TouchScroll',
@@ -25,7 +26,7 @@ const nativeScrollRef = ref<HTMLElement | null>(null)
 const elScrollRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
 
 const isDarwin = computed(() => {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return false
 
   return window.$initInfo.platform === 'darwin'

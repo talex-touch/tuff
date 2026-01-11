@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasNavigator, isNodeRuntime } from '@talex-touch/utils/env'
 import { useVModel } from '@vueuse/core'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import FlatInput from './FlatInput.vue'
@@ -13,9 +14,9 @@ const emits = defineEmits<{
 const model = useVModel(props, 'modelValue', emits)
 
 const platform
-  = typeof process !== 'undefined' && process?.platform
+  = isNodeRuntime() && process?.platform
     ? process.platform
-    : typeof navigator !== 'undefined'
+    : hasNavigator()
       ? navigator.platform.toLowerCase()
       : ''
 const isMac = platform === 'darwin' || platform.includes('mac')

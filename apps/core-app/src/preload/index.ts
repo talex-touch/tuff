@@ -4,6 +4,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { electronAPI } from '@electron-toolkit/preload'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { hasWindow } from '@talex-touch/utils/env'
 import {
 
   PRELOAD_LOADING_CHANNEL,
@@ -442,7 +443,7 @@ function useLoading(options: LoadingOptions) {
 
   const setupColorSchemeWatcher = () => {
     clearColorSchemeListener()
-    if (typeof window.matchMedia !== 'function') {
+    if (!hasWindow() || typeof window.matchMedia !== 'function') {
       container.dataset.theme = 'dark'
       return
     }

@@ -2,6 +2,7 @@ import type { IBoxOptions } from '..'
 import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChannel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 
@@ -220,7 +221,7 @@ export function useClipboard(
           clipboardOptions.lastClearedTimestamp = null
 
           // Only trigger search if CoreBox is visible (document is visible)
-          if (changed && document.visibilityState === 'visible') {
+          if (changed && hasDocument() && document.visibilityState === 'visible') {
             onPasteCallback?.()
           }
         }
@@ -233,7 +234,7 @@ export function useClipboard(
   }
 
   // Initialize after component is mounted
-  if (typeof window !== 'undefined') {
+  if (hasWindow()) {
     // Check if TouchChannel is available
     if (window.$channel || window.touchChannel) {
       initClipboardChannel()

@@ -8,6 +8,7 @@
  * - Sidebar with plugin metadata
  */
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import { hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -59,7 +60,7 @@ let channelLoadFailed = false
 
 async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
   if (rendererChannel) return rendererChannel
-  if (channelLoadFailed || typeof window === 'undefined' || !window.process?.type) return undefined
+  if (channelLoadFailed || !isElectronRenderer()) return undefined
 
   try {
     const module = await import('~/modules/channel/channel-core')
@@ -93,12 +94,16 @@ watch(notFound, (isNotFound) => {
 })
 
 onMounted(() => {
-  window?.addEventListener('keydown', handleKeydown)
+  if (hasWindow()) {
+    window.addEventListener('keydown', handleKeydown)
+  }
   void loadOfficialPlugins()
 })
 
 onBeforeUnmount(() => {
-  window?.removeEventListener('keydown', handleKeydown)
+  if (hasWindow()) {
+    window.removeEventListener('keydown', handleKeydown)
+  }
 })
 </script>
 

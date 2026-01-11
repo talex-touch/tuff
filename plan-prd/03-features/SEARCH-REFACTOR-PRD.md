@@ -49,6 +49,18 @@
 5. **超时阈值需要分层**  
    统一 300ms 对“app/plugin”等快速源是合理的，但对文件/URL 可能过短。建议对 provider 设分层超时、并带“partial ready”状态在 UI 上提示。
 
+6. **IPC/渲染链路放大**  
+   搜索过程中会频繁触发 IPC 与 UI 更新（query → provider → rerank → render）。若每次输入都进行完整排序与布局计算，容易形成主线程阻塞与 event-loop lag。建议：
+   - 输入节流（如 60~120ms）
+   - 排序与去重放入 worker 或 idle
+   - UI 端分段渲染 / 预览延迟
+
+7. **缓存与索引命中率**  
+   搜索频次高但命中范围相对稳定（应用、常用文件、历史记录），可以预热并缓存：
+   - 应用列表/常用文件的轻量索引
+   - 最近查询结果短期缓存（带 query hash）
+   - 结果排序的特征向量缓存（减少重复计算）
+
 ## 2. 目标
 
 ### 2.1 核心目标
@@ -251,7 +263,6 @@ async function executeSearch(query: TuffQuery): Promise<SearchResult> {
 - 搜索结果卡顿
 - 窗口动画不流畅
 - 排序不符合预期
-
 
 
 

@@ -1,5 +1,6 @@
 <script lang="ts" name="TuffGroupBlock" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import { hasWindow } from '@talex-touch/utils/env'
 import gsap from 'gsap'
 import { computed, onMounted, ref, watch } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -49,7 +50,7 @@ const defaultIcon = computed(() => toIcon(props.defaultIcon))
 const activeIcon = computed(() => toIcon(props.activeIcon))
 
 function readStoredExpand(): boolean | null {
-  if (typeof window === 'undefined' || !props.memoryName) return null
+  if (!hasWindow() || !props.memoryName) return null
   try {
     const raw = localStorage.getItem(`${STORAGE_PREFIX}${props.memoryName}`)
     if (!raw) return null
@@ -75,7 +76,7 @@ const headerIcon = computed(() => {
 })
 
 function persistState(state: boolean) {
-  if (typeof window === 'undefined' || !props.memoryName) return
+  if (!hasWindow() || !props.memoryName) return
   try {
     localStorage.setItem(`${STORAGE_PREFIX}${props.memoryName}`, JSON.stringify({ expand: state }))
     storedExpand.value = state

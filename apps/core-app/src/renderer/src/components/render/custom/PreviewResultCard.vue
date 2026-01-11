@@ -1,6 +1,7 @@
 <script setup lang="ts" name="PreviewResultCard">
 import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps<{
@@ -13,7 +14,7 @@ const emit = defineEmits<{
   (e: 'copy-primary'): void
 }>()
 
-const historyVisible = ref(typeof window !== 'undefined' ? !!window.__coreboxHistoryVisible : false)
+const historyVisible = ref(hasWindow() ? !!window.__coreboxHistoryVisible : false)
 const HISTORY_VISIBILITY_EVENT = 'corebox:history-visibility-change'
 
 function handleHistoryVisibility(event: Event): void {
@@ -22,11 +23,15 @@ function handleHistoryVisibility(event: Event): void {
 }
 
 onMounted(() => {
-  window.addEventListener(HISTORY_VISIBILITY_EVENT, handleHistoryVisibility)
+  if (hasWindow()) {
+    window.addEventListener(HISTORY_VISIBILITY_EVENT, handleHistoryVisibility)
+  }
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener(HISTORY_VISIBILITY_EVENT, handleHistoryVisibility)
+  if (hasWindow()) {
+    window.removeEventListener(HISTORY_VISIBILITY_EVENT, handleHistoryVisibility)
+  }
 })
 
 const resolvedPayload = computed<PreviewCardPayload | undefined>(() => {

@@ -71,12 +71,25 @@
 - `packages/utils/common/utils/file.ts`
 - `packages/utils/common/file-scan-utils.ts`
 
+### 4.3 Core-app 首批迁移（环境判断）
+
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/views/base/Market.vue`
+- `apps/core-app/src/renderer/src/views/base/MarketDetail.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboard.ts`
+- `apps/core-app/src/renderer/src/modules/layout/useSecondaryNavigation.ts`
+- `apps/core-app/src/renderer/src/modules/lang/useLanguage.ts`
+- `apps/core-app/src/renderer/src/components/tuff/TuffGroupBlock.vue`
+- `apps/core-app/src/renderer/src/components/base/input/FlatKeyInput.vue`
+- `apps/core-app/src/renderer/src/components/base/effect/GlassSurface.vue`
+- `apps/core-app/src/renderer/src/components/render/custom/PreviewResultCard.vue`
+- `apps/core-app/src/renderer/src/components/base/TouchScroll.vue`
+
 ## 5. 建议继续迁移的重点区域
 
 ### 5.1 Renderer / UI
 
-- `apps/core-app/src/renderer/src/modules/lang/useLanguage.ts`
-- `apps/core-app/src/renderer/src/components/base/effect/GlassSurface.vue`
+- `apps/core-app/src/renderer/src/components/base/input/FlatKeyInput.vue`（剩余平台判断/设备能力可继续抽象）
 - `packages/tuffex/packages/components/*`
 
 ### 5.2 SDK / 插件工具
@@ -95,4 +108,3 @@
 2. **编码约束**：后续可加 ESLint 规则或 lint 检查拦截重复判断。
 3. **文档化**：将 env 与 runtime 判断约定写入工程规范。
 4. **灰度切换**：先在 utils + core-app 主链路迁移，保持风险可控。
-
