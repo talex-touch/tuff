@@ -1559,7 +1559,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
 
       await this._setLastScanTime(Date.now())
-    })
+    }, 'AppProvider.mdlsUpdateScan')
   }
 
   private async _getPendingDeletions(): Promise<Map<string, PendingDeletionEntry>> {

@@ -21,6 +21,17 @@ export class PollingService {
   private timerId: NodeJS.Timeout | null = null
   private isRunning = false
   private quitListenerCleanup?: () => void
+  private activeTasks = new Set<string>()
+  private taskStats = new Map<
+    string,
+    {
+      count: number
+      lastStartAt: number
+      lastEndAt: number
+      lastDurationMs: number
+      maxDurationMs: number
+    }
+  >()
 
   private constructor() {
     // Private constructor to enforce singleton pattern
@@ -229,11 +240,31 @@ export class PollingService {
     if (tasksToRun.length > 0) {
       // console.debug(`[PollingService] Executing ${tasksToRun.length} tasks.`);
       for (const task of tasksToRun) {
+        const startAt = Date.now()
+        this.activeTasks.add(task.id)
         try {
           await task.callback()
         }
         catch (error) {
           console.error(`[PollingService] Error executing task '${task.id}':`, error)
+        }
+        finally {
+          const endAt = Date.now()
+          const durationMs = Math.max(0, endAt - startAt)
+          const stats = this.taskStats.get(task.id) ?? {
+            count: 0,
+            lastStartAt: 0,
+            lastEndAt: 0,
+            lastDurationMs: 0,
+            maxDurationMs: 0,
+          }
+          stats.count += 1
+          stats.lastStartAt = startAt
+          stats.lastEndAt = endAt
+          stats.lastDurationMs = durationMs
+          stats.maxDurationMs = Math.max(stats.maxDurationMs, durationMs)
+          this.taskStats.set(task.id, stats)
+          this.activeTasks.delete(task.id)
         }
         // Update next run time based on its last scheduled run time, not 'now'.
         // This prevents drift if a task takes a long time to execute.
@@ -242,6 +273,33 @@ export class PollingService {
     }
 
     this._reschedule()
+  }
+
+  public getDiagnostics(): {
+    activeTasks: string[]
+    recentTasks: Array<{
+      id: string
+      lastDurationMs: number
+      lastEndAt: number
+      count: number
+      maxDurationMs: number
+    }>
+  } {
+    const recentTasks = Array.from(this.taskStats.entries())
+      .map(([id, stat]) => ({
+        id,
+        lastDurationMs: stat.lastDurationMs,
+        lastEndAt: stat.lastEndAt,
+        count: stat.count,
+        maxDurationMs: stat.maxDurationMs,
+      }))
+      .sort((a, b) => b.lastEndAt - a.lastEndAt)
+      .slice(0, 6)
+
+    return {
+      activeTasks: Array.from(this.activeTasks),
+      recentTasks,
+    }
   }
 }
 

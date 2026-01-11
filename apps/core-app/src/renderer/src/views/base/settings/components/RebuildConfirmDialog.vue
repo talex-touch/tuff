@@ -1,16 +1,32 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, inject } from 'vue'
+import { computed, ref, onMounted, onUnmounted, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 
 const props = defineProps<{
   onConfirm: () => void
   onCancel?: () => void
+  battery?: { level: number; charging: boolean } | null
+  minBattery?: number
+  criticalBattery?: number
+  showCriticalWarning?: boolean
 }>()
 
 const destroy = inject('destroy') as () => void
 const { t } = useI18n()
 const countdown = ref(3)
+const minBatteryValue = computed(() => props.minBattery ?? 60)
+const criticalBatteryValue = computed(() => props.criticalBattery ?? 15)
+const batteryHint = computed(() => {
+  if (!props.battery) return ''
+  return t('settings.settingFileIndex.batteryStatus', {
+    level: props.battery.level
+  })
+})
+const isBatteryCritical = computed(() => {
+  if (!props.battery) return false
+  return props.battery.level < criticalBatteryValue.value
+})
 let timer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
@@ -53,7 +69,24 @@ const close = () => {
     <div class="dialog-content">
       <div class="warning-item">
         <div class="i-carbon-battery-full text-16px" />
-        <span>{{ t('settings.settingFileIndex.warningBatterySimple') }}</span>
+        <span>
+          {{ t('settings.settingFileIndex.warningBatterySimple', {
+            min: minBatteryValue,
+            critical: criticalBatteryValue,
+            hint: batteryHint
+          }) }}
+        </span>
+      </div>
+      <div
+        v-if="showCriticalWarning || isBatteryCritical"
+        class="warning-item warning-critical"
+      >
+        <div class="i-carbon-warning-alt text-16px" />
+        <span>
+          {{ t('settings.settingFileIndex.warningBatteryCritical', {
+            critical: criticalBatteryValue
+          }) }}
+        </span>
       </div>
       <div class="warning-item">
         <div class="i-carbon-time text-16px" />
@@ -127,6 +160,10 @@ const close = () => {
   gap: 8px;
   font-size: 14px;
   color: var(--el-text-color-regular);
+}
+
+.warning-critical {
+  color: var(--el-color-danger);
 }
 
 .dialog-footer {

@@ -165,6 +165,7 @@ import { MetaOverlayEvents } from './meta-overlay'
 import type {
   FileIndexBatteryStatus,
   FileIndexProgress,
+  FileIndexRebuildRequest,
   FileIndexRebuildResult,
   FileIndexStats,
   FileIndexStatus,
@@ -309,7 +310,7 @@ export const AppEvents = {
     rebuild: defineEvent('app')
       .module('file-index')
       .event('rebuild')
-      .define<void, FileIndexRebuildResult>(),
+      .define<FileIndexRebuildRequest | void, FileIndexRebuildResult>(),
 
     /**
      * Get current battery status (for indexing throttling UI).

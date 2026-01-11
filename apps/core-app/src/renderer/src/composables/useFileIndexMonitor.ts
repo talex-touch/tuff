@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import type { FileIndexRebuildRequest, FileIndexRebuildResult } from '@talex-touch/utils/transport/events/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 
@@ -58,18 +59,23 @@ export function useFileIndexMonitor() {
   /**
    * 手动触发重建索引
    */
-  const handleRebuild = async () => {
+  const handleRebuild = async (
+    request?: FileIndexRebuildRequest,
+  ): Promise<FileIndexRebuildResult> => {
     try {
       console.log('[FileIndexMonitor] Triggering manual index rebuild...')
-      const result = await transport.send(AppEvents.fileIndex.rebuild)
-      
+      const result = await transport.send(AppEvents.fileIndex.rebuild, request)
+
+      if (result?.requiresConfirm) {
+        console.log('[FileIndexMonitor] Rebuild requires confirmation before proceeding')
+        return result
+      }
       if (result?.success) {
         console.log('[FileIndexMonitor] Rebuild triggered successfully')
-        return true
-      } else {
-        console.error('[FileIndexMonitor] Rebuild failed:', result?.error)
-        throw new Error(result?.error || 'Rebuild failed')
+        return result
       }
+      console.error('[FileIndexMonitor] Rebuild failed:', result?.error)
+      throw new Error(result?.error || 'Rebuild failed')
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to trigger rebuild:', error)
       throw error
