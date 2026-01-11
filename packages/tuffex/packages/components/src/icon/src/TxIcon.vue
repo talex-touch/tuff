@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
-import type { TxIconSource } from './types'
+import { computed, inject, ref, watch } from 'vue'
+import type { TxIconConfig, TxIconSource } from './types'
+import { TX_ICON_CONFIG_KEY } from './types'
 
 defineOptions({
   name: 'TuffIcon',
@@ -13,7 +14,12 @@ const props = withDefaults(
     alt?: string
     size?: number
     empty?: string
+    /** Preserve the original color of the svg icon (default: false = use currentColor mask) */
     colorful?: boolean
+    /** Override injected URL resolver for this instance */
+    urlResolver?: TxIconConfig['urlResolver']
+    /** Override injected SVG fetcher for this instance */
+    svgFetcher?: TxIconConfig['svgFetcher']
   }>(),
   {
     icon: null,
@@ -22,8 +28,16 @@ const props = withDefaults(
     size: undefined,
     empty: '',
     colorful: false,
+    urlResolver: undefined,
+    svgFetcher: undefined,
   },
 )
+
+const injectedConfig = inject(TX_ICON_CONFIG_KEY, {})
+
+const urlResolver = computed(() => props.urlResolver ?? injectedConfig.urlResolver)
+const svgFetcher = computed(() => props.svgFetcher ?? injectedConfig.svgFetcher)
+const fileProtocol = computed(() => injectedConfig.fileProtocol ?? '')
 
 const builtinIcons = {
   'chevron-down': {
@@ -32,11 +46,11 @@ const builtinIcons = {
   },
   close: {
     viewBox: '0 0 24 24',
-    path: 'M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z',
+    path: 'M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.954.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z',
   },
   search: {
     viewBox: '0 0 24 24',
-    path: 'M10 2a8 8 0 105.293 14.293l4.707 4.707 1.414-1.414-4.707-4.707A8 8 0 0010 2zm0 2a6 6 0 110 12 6 6 0 010-12z',
+    path: 'M10 2a8 8 0 105.293 14.293l4.7074.707 1.414-1.414-4.707-4.707A8 8 0 0010 2zm0 2a6 6 0 11012 6 6 0 010-12z',
   },
   user: {
     viewBox: '0 0 24 24',
@@ -44,7 +58,7 @@ const builtinIcons = {
   },
   star: {
     viewBox: '0 0 24 24',
-    path: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z',
+    path: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 29.19 8.6229.24l5.46 4.73L5.82 21z',
   },
   'star-half': {
     viewBox: '0 0 24 24',
@@ -75,13 +89,39 @@ const isError = computed(() => safeIcon.value.status === 'error')
 const isAddressable = computed(() => safeIcon.value.type === 'url' || safeIcon.value.type === 'file')
 
 const resolvedUrl = computed(() => {
-  return safeIcon.value.value
+  const icon = safeIcon.value
+  const rawValue = icon.value
+
+  if (!isAddressable.value || !rawValue)
+    return rawValue
+
+  // Use custom resolver if provided
+  if (urlResolver.value) {
+    return urlResolver.value(rawValue, icon.type as'url' | 'file')
+  }
+
+  // Default resolution: add file protocol for'file' type
+  if (icon.type === 'file' && fileProtocol.value) {
+    return `${fileProtocol.value}${rawValue}`
+  }
+
+  // For 'url' type with absolute local paths (not API paths)
+  if (icon.type === 'url' && rawValue.startsWith('/') && !rawValue.startsWith('/api/') && fileProtocol.value) {
+    return `${fileProtocol.value}${rawValue}`
+  }
+
+  return rawValue
 })
 
 const isSvg = computed(() => {
   const v = resolvedUrl.value
   return typeof v === 'string' && v.toLowerCase().endsWith('.svg')
 })
+
+// colorful logic aligned with core-app:
+// colorful=true -> render as <img> (preserve original colors)
+// colorful=false -> render as mask (use currentColor)
+const shouldUseMask = computed(() => isSvg.value && !props.colorful)
 
 const builtin = computed(() => {
   if (safeIcon.value.type !== 'builtin')
@@ -97,27 +137,35 @@ const svgDataUrl = computed(() => {
 
 async function fetchSvg(url: string) {
   try {
-    const res = await fetch(url)
-    if (!res.ok) {
-      svgContent.value = ''
-      return
+    let content: string
+    if (svgFetcher.value) {
+      content = await svgFetcher.value(url)
     }
-    svgContent.value = await res.text()
-  } catch {
+    else {
+      const res = await fetch(url)
+      if (!res.ok) {
+        svgContent.value = ''
+        return
+      }
+      content = await res.text()
+    }
+    svgContent.value = content
+  }
+  catch {
     svgContent.value = ''
   }
 }
 
 watch(
-  () => ({ url: resolvedUrl.value, isSvg: isSvg.value, colorful: props.colorful, type: safeIcon.value.type }),
+  () => ({ url: resolvedUrl.value, shouldUseMask: shouldUseMask.value, type: safeIcon.value.type }),
   (v) => {
-    if (v.type === 'url' && v.isSvg && !v.colorful && v.url) {
+    // Fetch SVG content only when using mask mode (not colorful)
+    if (isAddressable.value && v.shouldUseMask && v.url) {
       fetchSvg(v.url)
       return
     }
     svgContent.value = ''
-  },
-  { immediate: true },
+  },{ immediate: true },
 )
 </script>
 
@@ -130,8 +178,7 @@ watch(
     :data-icon-value="safeIcon.value"
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
-    <span v-if="!safeIcon.value" class="tuff-icon__empty">
-      <slot name="empty">
+    <span v-if="!safeIcon.value" class="tuff-icon__empty"><slot name="empty">
         <img v-if="empty" :alt="alt" :src="empty" />
       </slot>
     </span>
@@ -161,9 +208,11 @@ watch(
     </span>
 
     <template v-else-if="isAddressable">
-      <template v-if="isSvg && !colorful && svgContent">
+      <!-- Mask mode: use currentColor (colorful=false) -->
+      <template v-if="shouldUseMask && svgContent">
         <span class="tuff-icon__svg-mask" :style="{ WebkitMaskImage: `url('${svgDataUrl}')`, maskImage: `url('${svgDataUrl}')` }" />
       </template>
+      <!-- Colorful mode: render as img (colorful=true) -->
       <template v-else>
         <img :alt="alt" :src="resolvedUrl" />
       </template>

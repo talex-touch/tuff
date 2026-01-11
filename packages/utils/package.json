@@ -18,6 +18,9 @@
   "main": "index.ts",
   "module": "./index.ts",
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "publish": "npm publish --access public"
   },
   "peerDependencies": {
@@ -28,5 +31,9 @@
     "@vueuse/core": "^13.6.0",
     "path-browserify": "^1.0.1",
     "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.2.4",
+    "vitest": "^3.2.4"
   }
 }

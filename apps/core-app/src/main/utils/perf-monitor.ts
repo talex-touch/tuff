@@ -291,7 +291,12 @@ export class PerfMonitor {
     const message = `Event loop lag ${formatDuration(lagMs)}`
     const contexts = getPerfContextSnapshot(3)
     const pollingDiagnostics = pollingService.getDiagnostics()
-    const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4)
+    const pollingActive = pollingDiagnostics.activeTasks
+      .slice(0, 4)
+      .map(task => ({
+        id: task.id,
+        ageMs: Math.round(task.ageMs),
+      }))
     const pollingRecent = pollingDiagnostics.recentTasks
       .sort((a, b) => b.lastDurationMs - a.lastDurationMs)
       .slice(0, 3)

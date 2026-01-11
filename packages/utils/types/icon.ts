@@ -12,8 +12,9 @@
  * - url: Remote URL (http/https) or Data URL (data:image/...)
  * - file: Local file path (relative to plugin root directory)
  * - class: Class name (e.g., "i-ri-rocket-line")
+ * - builtin: Built-in icons (e.g., "chevron-down", "close", "search")
  */
-export type TuffIconType = 'emoji' | 'url' | 'file' | 'class'
+export type TuffIconType = 'emoji' | 'url' | 'file' | 'class' | 'builtin'
 
 /**
  * Icon status enumeration

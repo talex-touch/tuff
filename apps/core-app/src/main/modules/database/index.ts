@@ -217,6 +217,7 @@ export class DatabaseModule extends BaseModule {
 
       await this.ensureKeywordMappingsProviderColumn()
       await this.ensureRecommendationTables()
+      await this.ensureAnalyticsTables()
 
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
@@ -314,6 +315,53 @@ export class DatabaseModule extends BaseModule {
     }
     catch (error) {
       dbLog.warn('Failed to ensure recommendation tables', { error })
+    }
+  }
+
+  private async ensureAnalyticsTables(): Promise<void> {
+    if (!this.client) {
+      return
+    }
+
+    try {
+      const tableCheck = await this.client.execute(
+        'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=\'analytics_snapshots\' LIMIT 1',
+      )
+
+      if (tableCheck.rows.length === 0) {
+        dbLog.info('Creating missing table `analytics_snapshots`')
+        await this.client.execute(`
+          CREATE TABLE analytics_snapshots (
+            id integer PRIMARY KEY AUTOINCREMENT,
+            window_type text NOT NULL,
+            timestamp integer NOT NULL,
+            metrics text NOT NULL,
+            created_at integer DEFAULT (unixepoch())
+          )
+        `)
+      } else {
+        const columnCheck = await this.client.execute(
+          'SELECT 1 FROM pragma_table_info(\'analytics_snapshots\') WHERE name = \'created_at\' LIMIT 1',
+        )
+        if (columnCheck.rows.length === 0) {
+          dbLog.info('Adding missing column `analytics_snapshots.created_at`')
+          await this.client.execute(
+            'ALTER TABLE analytics_snapshots ADD COLUMN created_at integer DEFAULT (unixepoch())',
+          )
+        }
+      }
+
+      const indexCheck = await this.client.execute(
+        'SELECT 1 FROM sqlite_master WHERE type=\'index\' AND name=\'idx_analytics_snapshots_window_time\' LIMIT 1',
+      )
+      if (indexCheck.rows.length === 0) {
+        dbLog.info('Creating missing index `idx_analytics_snapshots_window_time`')
+        await this.client.execute(
+          'CREATE INDEX idx_analytics_snapshots_window_time ON analytics_snapshots (window_type, timestamp)',
+        )
+      }
+    } catch (error) {
+      dbLog.warn('Failed to ensure analytics snapshot table', { error })
     }
   }
 

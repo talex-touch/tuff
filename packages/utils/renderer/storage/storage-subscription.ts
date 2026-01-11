@@ -19,6 +19,7 @@ class StorageSubscriptionManager {
   private channelListenerRegistered = false
   private pendingUpdates = new Map<string, NodeJS.Timeout>()
   private configVersions = new Map<string, number>()
+  private cachedData = new Map<string, unknown>()
 
   /**
    * Initialize the subscription manager with a channel
@@ -92,23 +93,38 @@ class StorageSubscriptionManager {
 
     this.subscribers.get(configName)!.add(callback)
 
-    // Immediately load and call with current data
-    if (this.channel) {
-      const currentData = this.channel.sendSync('storage:get', configName)
-      if (currentData) {
-        try {
-          callback(currentData)
-        }
-        catch (error) {
-          console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
-        }
+    const cached = this.cachedData.get(configName)
+    if (cached !== undefined) {
+      try {
+        callback(cached)
       }
+      catch (error) {
+        console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
+      }
+    }
+    else if (this.channel) {
+      this.channel
+        .send('storage:get', configName)
+        .then((data) => {
+          if (data === undefined || data === null) return
+          this.cachedData.set(configName, data)
+          try {
+            callback(data)
+          }
+          catch (error) {
+            console.error(`[StorageSubscription] Callback error for "${configName}":`, error)
+          }
+        })
+        .catch((error) => {
+          console.error(`[StorageSubscription] Failed to load "${configName}":`, error)
+        })
     }
     else if (this.transport) {
       this.transport
         .send(StorageEvents.app.get, { key: configName })
         .then((data) => {
-          if (!data) return
+          if (data === undefined || data === null) return
+          this.cachedData.set(configName, data)
           try {
             callback(data)
           }
@@ -138,6 +154,7 @@ class StorageSubscriptionManager {
       callbacks.delete(callback)
       if (callbacks.size === 0) {
         this.subscribers.delete(configName)
+        this.cachedData.delete(configName)
       }
     }
   }
@@ -169,10 +186,12 @@ class StorageSubscriptionManager {
           ? await this.channel.send('storage:get', configName)
           : await this.transport!.send(StorageEvents.app.get, { key: configName })
 
-        if (!data) {
+        if (data === undefined || data === null) {
           this.pendingUpdates.delete(configName)
           return
         }
+
+        this.cachedData.set(configName, data)
 
         // Notify all subscribers
         callbacks.forEach((callback) => {
@@ -209,6 +228,7 @@ class StorageSubscriptionManager {
    */
   clear(): void {
     this.subscribers.clear()
+    this.cachedData.clear()
   }
 }
 

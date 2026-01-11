@@ -18,6 +18,7 @@ import crypto from 'node:crypto'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
+import { performance } from 'node:perf_hooks'
 import { DataCode } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm'
@@ -33,7 +34,9 @@ import { windowManager } from './box-tool/core-box/window'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { activeAppService } from './system/active-app'
+import { appTaskGate } from '../service/app-task-gate'
 import { createLogger } from '../utils/logger'
+import { enterPerfContext } from '../utils/perf-context'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -108,11 +111,41 @@ const execFileAsync = promisify(execFile)
 const IMAGE_HASH_SIZE = 24
 
 class ClipboardHelper {
-  private lastText: string = clipboard.readText()
+  private lastText: string = ''
   public lastFormats: string[] = []
   public lastChangeHash: string = ''
-  private lastImageHash: string = this.getImageHash(clipboard.readImage())
-  private lastFiles: string[] = this.readClipboardFiles()
+  private lastImageHash: string = ''
+  private lastFiles: string[] = []
+  private bootstrapped = false
+
+  public bootstrap(): void {
+    if (this.bootstrapped) {
+      return
+    }
+    this.bootstrapped = true
+    try {
+      this.lastText = clipboard.readText()
+    } catch {
+      this.lastText = ''
+    }
+    try {
+      this.lastFormats = clipboard.availableFormats()
+    } catch {
+      this.lastFormats = []
+    }
+    const formatsKey = this.lastFormats.slice().sort().join(',')
+    this.lastChangeHash = `${formatsKey}:${this.lastText.substring(0, 100)}`
+    try {
+      this.lastImageHash = this.getImageHash(clipboard.readImage())
+    } catch {
+      this.lastImageHash = ''
+    }
+    try {
+      this.lastFiles = this.readClipboardFiles()
+    } catch {
+      this.lastFiles = []
+    }
+  }
 
   private getImageHash(image: NativeImage): string {
     if (!image || image.isEmpty())
@@ -337,6 +370,13 @@ export class ClipboardModule extends BaseModule {
   private isDestroyed = false
   private clipboardHelper?: ClipboardHelper
   private db?: LibSQLDatabase<typeof schema>
+  private monitoringStarted = false
+  private ipcHandlersRegistered = false
+  private clipboardCheckCooldownUntil = 0
+  private activeAppCache:
+    | { value: Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null; fetchedAt: number }
+    | null = null
+  private readonly activeAppCacheTtlMs = 2000
 
   static key: symbol = Symbol.for('Clipboard')
   name: ModuleKey = ClipboardModule.key
@@ -398,13 +438,26 @@ export class ClipboardModule extends BaseModule {
   private async loadInitialCache() {
     if (!this.db) return
 
-    const rows = await this.db
-      .select()
-      .from(clipboardHistory)
-      .orderBy(desc(clipboardHistory.timestamp))
-      .limit(CACHE_MAX_COUNT)
+    const dispose = enterPerfContext('Clipboard.loadInitialCache', { limit: CACHE_MAX_COUNT })
+    const startAt = performance.now()
+    try {
+      await appTaskGate.waitForIdle()
+      const rows = await this.db
+        .select()
+        .from(clipboardHistory)
+        .orderBy(desc(clipboardHistory.timestamp))
+        .limit(CACHE_MAX_COUNT)
 
-    this.memoryCache = await this.hydrateWithMeta(rows)
+      this.memoryCache = await this.hydrateWithMeta(rows)
+    } finally {
+      const duration = performance.now() - startAt
+      if (duration > 200) {
+        clipboardLog.warn('Clipboard cache hydrate slow', {
+          meta: { durationMs: Math.round(duration) }
+        })
+      }
+      dispose()
+    }
   }
 
   private updateMemoryCache(item: IClipboardItem) {
@@ -655,6 +708,25 @@ export class ClipboardModule extends BaseModule {
     return JSON.stringify({ ...base, ...patch })
   }
 
+  private async getActiveAppSnapshot(): Promise<
+    Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null
+  > {
+    const now = Date.now()
+    if (this.activeAppCache && now - this.activeAppCache.fetchedAt < this.activeAppCacheTtlMs) {
+      return this.activeAppCache.value
+    }
+
+    try {
+      const activeApp = await activeAppService.getActiveApp()
+      this.activeAppCache = { value: activeApp, fetchedAt: now }
+      return activeApp
+    } catch (error) {
+      clipboardLog.error('Failed to resolve active app info', { error })
+      this.activeAppCache = { value: null, fetchedAt: now }
+      return null
+    }
+  }
+
   private handleMetaPatch = (clipboardId: number, patch: Record<string, unknown>): void => {
     const index = this.memoryCache.findIndex((entry) => entry.id === clipboardId)
     if (index === -1) return
@@ -759,6 +831,13 @@ export class ClipboardModule extends BaseModule {
   }
 
   private startClipboardMonitoring(): void {
+    if (!this.clipboardHelper) {
+      return
+    }
+    if (!this.monitoringStarted) {
+      this.clipboardHelper.bootstrap()
+      this.monitoringStarted = true
+    }
     if (pollingService.isRegistered(CLIPBOARD_POLL_TASK_ID)) {
       pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
     }
@@ -775,111 +854,128 @@ export class ClipboardModule extends BaseModule {
     if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
     }
+    if (appTaskGate.isActive()) {
+      return
+    }
+    const now = Date.now()
+    if (now < this.clipboardCheckCooldownUntil) {
+      return
+    }
+    await this.checkClipboardInternal()
+  }
 
-    const helper = this.clipboardHelper
-    const formats = clipboard.availableFormats()
-    if (formats.length === 0) {
+  private async checkClipboardInternal(): Promise<void> {
+    if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
     }
 
-    // Fast-path change detection: Skip processing if nothing changed
-    const formatsKey = formats.sort().join(',')
-    if (helper.lastFormats.length > 0 && helper.lastFormats.sort().join(',') === formatsKey) {
-      // Formats haven't changed, do a quick sanity check on text/files
-      const quickText = clipboard.readText()
-      const quickHash = `${formatsKey}:${quickText.substring(0, 100)}`
-
-      if (helper.lastChangeHash === quickHash) {
-        // Nothing changed, skip processing
+    const dispose = enterPerfContext('Clipboard.check', { task: 'poll' })
+    const startAt = performance.now()
+    try {
+      const helper = this.clipboardHelper
+      helper.bootstrap()
+      const formats = clipboard.availableFormats()
+      if (formats.length === 0) {
         return
       }
-      helper.lastChangeHash = quickHash
-    } else {
-      // Formats changed, update and continue
-      helper.lastFormats = formats
-      helper.lastChangeHash = `${formatsKey}:${clipboard.readText().substring(0, 100)}`
-    }
 
-    const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
-    let item: Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'> | null = null
+      // Fast-path change detection: Skip processing if nothing changed
+      const formatsKey = formats.sort().join(',')
+      if (helper.lastFormats.length > 0 && helper.lastFormats.sort().join(',') === formatsKey) {
+        // Formats haven't changed, do a quick sanity check on text/files
+        const quickText = clipboard.readText()
+        const quickHash = `${formatsKey}:${quickText.substring(0, 100)}`
 
-    // Priority: FILES (with image) > IMAGE > FILES (no image) > TEXT
-    // Check for files first to handle video files with thumbnails correctly
-    if (includesAny(formats, FILE_URL_FORMATS)) {
-      const files = helper.readClipboardFiles()
-      if (helper.didFilesChange(files)) {
-        const serialized = JSON.stringify(files)
-        let thumbnail: string | undefined
-        let imageSize: { width: number; height: number } | undefined
+        if (helper.lastChangeHash === quickHash) {
+          // Nothing changed, skip processing
+          return
+        }
+        helper.lastChangeHash = quickHash
+      } else {
+        // Formats changed, update and continue
+        helper.lastFormats = formats
+        helper.lastChangeHash = `${formatsKey}:${clipboard.readText().substring(0, 100)}`
+      }
 
-        // Check if there's an associated image (e.g., video thumbnail)
-        if (includesAny(formats, IMAGE_FORMATS)) {
-          const image = clipboard.readImage()
-          if (!image.isEmpty()) {
-            helper.primeImage(image)
-            imageSize = image.getSize()
-            thumbnail = image.resize({ width: 128 }).toDataURL()
-            clipboardLog.info('File with thumbnail detected', {
-              meta: { width: imageSize.width, height: imageSize.height }
-            })
+      const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
+      let item: Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'> | null = null
+
+      // Priority: FILES (with image) > IMAGE > FILES (no image) > TEXT
+      // Check for files first to handle video files with thumbnails correctly
+      if (includesAny(formats, FILE_URL_FORMATS)) {
+        const files = helper.readClipboardFiles()
+        if (helper.didFilesChange(files)) {
+          const serialized = JSON.stringify(files)
+          let thumbnail: string | undefined
+          let imageSize: { width: number; height: number } | undefined
+
+          // Check if there's an associated image (e.g., video thumbnail)
+          if (includesAny(formats, IMAGE_FORMATS)) {
+            const image = clipboard.readImage()
+            if (!image.isEmpty()) {
+              helper.primeImage(image)
+              imageSize = image.getSize()
+              thumbnail = image.resize({ width: 128 }).toDataURL()
+              clipboardLog.info('File with thumbnail detected', {
+                meta: { width: imageSize.width, height: imageSize.height }
+              })
+            } else {
+              helper.primeImage(null)
+            }
           } else {
             helper.primeImage(null)
           }
-        } else {
-          helper.primeImage(null)
-        }
 
-        helper.markText('')
-        metaEntries.push({ key: 'file_count', value: files.length })
-        metaEntries.push({ key: 'has_sidecar_image', value: Boolean(thumbnail) })
-        if (imageSize) {
-          metaEntries.push({ key: 'image_size', value: imageSize })
-        }
-        item = {
-          type: 'files',
-          content: serialized,
-          thumbnail
+          helper.markText('')
+          metaEntries.push({ key: 'file_count', value: files.length })
+          metaEntries.push({ key: 'has_sidecar_image', value: Boolean(thumbnail) })
+          if (imageSize) {
+            metaEntries.push({ key: 'image_size', value: imageSize })
+          }
+          item = {
+            type: 'files',
+            content: serialized,
+            thumbnail
+          }
         }
       }
-    }
 
-    // Check for standalone image (only if no files detected)
-    if (!item && includesAny(formats, IMAGE_FORMATS)) {
-      const image = clipboard.readImage()
-      if (helper.didImageChange(image)) {
-        helper.markText('')
-        const size = image.getSize()
-        metaEntries.push({ key: 'image_size', value: size })
-        item = {
-          type: 'image',
-          content: image.toDataURL(),
-          thumbnail: image.resize({ width: 128 }).toDataURL()
+      // Check for standalone image (only if no files detected)
+      if (!item && includesAny(formats, IMAGE_FORMATS)) {
+        const image = clipboard.readImage()
+        if (helper.didImageChange(image)) {
+          helper.markText('')
+          const size = image.getSize()
+          metaEntries.push({ key: 'image_size', value: size })
+          item = {
+            type: 'image',
+            content: image.toDataURL(),
+            thumbnail: image.resize({ width: 128 }).toDataURL()
+          }
         }
       }
-    }
 
-    if (!item && includesAny(formats, TEXT_FORMATS)) {
-      const text = clipboard.readText()
-      if (helper.didTextChange(text)) {
-        const html = clipboard.readHTML()
-        metaEntries.push({ key: 'text_length', value: text.length })
-        if (html) {
-          metaEntries.push({ key: 'html_length', value: html.length })
-        }
-        item = {
-          type: 'text',
-          content: text,
-          rawContent: html || null
+      if (!item && includesAny(formats, TEXT_FORMATS)) {
+        const text = clipboard.readText()
+        if (helper.didTextChange(text)) {
+          const html = clipboard.readHTML()
+          metaEntries.push({ key: 'text_length', value: text.length })
+          if (html) {
+            metaEntries.push({ key: 'html_length', value: html.length })
+          }
+          item = {
+            type: 'text',
+            content: text,
+            rawContent: html || null
+          }
         }
       }
-    }
 
-    if (!item) {
-      return
-    }
+      if (!item) {
+        return
+      }
 
-    try {
-      const activeApp = await activeAppService.getActiveApp()
+      const activeApp = await this.getActiveAppSnapshot()
       if (activeApp) {
         item.sourceApp = activeApp.bundleId || activeApp.identifier || activeApp.displayName || null
 
@@ -899,61 +995,85 @@ export class ClipboardModule extends BaseModule {
 
         metaEntries.push({ key: 'source', value: activeAppMeta })
       }
-    } catch (error) {
-      clipboardLog.error('Failed to resolve active app info', { error })
-    }
 
-    const metaObject: Record<string, unknown> = {}
-    for (const { key, value } of metaEntries) {
-      if (value === undefined) continue
-      metaObject[key] = value
-    }
-
-    const metadataPayload = Object.keys(metaObject).length > 0 ? JSON.stringify(metaObject) : null
-    const record = {
-      ...item,
-      metadata: metadataPayload,
-      timestamp: new Date()
-    }
-
-    const inserted = await this.db.insert(clipboardHistory).values(record).returning()
-    if (inserted.length === 0) {
-      return
-    }
-
-    const persisted = inserted[0] as IClipboardItem
-    persisted.meta = metaObject
-
-    if (persisted.id) {
-      await this.persistMetaEntries(persisted.id, metaObject)
-      await ocrService.enqueueFromClipboard({
-        clipboardId: persisted.id,
-        item: persisted,
-        formats
-      })
-    }
-
-    this.updateMemoryCache(persisted)
-    this.notifyTransportChange()
-
-    const touchChannel = genTouchChannel()
-    for (const win of windowManager.windows) {
-      if (!win.window.isDestroyed()) {
-        touchChannel.sendToMain(win.window, 'clipboard:new-item', persisted)
+      const metaObject: Record<string, unknown> = {}
+      for (const { key, value } of metaEntries) {
+        if (value === undefined) continue
+        metaObject[key] = value
       }
-    }
 
-    const activePlugin = windowManager.getAttachedPlugin()
-    if (activePlugin?._uniqueChannelKey && windowManager.shouldForwardClipboardChange(persisted.type)) {
-      touchChannel
-        .sendToPlugin(activePlugin.name, 'core-box:clipboard-change', { item: persisted })
-        .catch((error) => {
-          clipboardLog.warn('Failed to notify plugin UI view about clipboard change', { error })
+      const metadataPayload = Object.keys(metaObject).length > 0 ? JSON.stringify(metaObject) : null
+      const record = {
+        ...item,
+        metadata: metadataPayload,
+        timestamp: new Date()
+      }
+
+      const persistContext = enterPerfContext('Clipboard.persist', { type: item.type })
+      const persistStart = performance.now()
+      const inserted = await this.db.insert(clipboardHistory).values(record).returning()
+      const persistDuration = performance.now() - persistStart
+      if (persistDuration > 200) {
+        clipboardLog.warn('Clipboard persist slow', {
+          meta: { durationMs: Math.round(persistDuration), type: item.type }
         })
+      }
+      persistContext()
+      if (inserted.length === 0) {
+        return
+      }
+
+      const persisted = inserted[0] as IClipboardItem
+      persisted.meta = metaObject
+
+      if (persisted.id) {
+        await this.persistMetaEntries(persisted.id, metaObject)
+        setImmediate(() => {
+          ocrService.enqueueFromClipboard({
+            clipboardId: persisted.id!,
+            item: persisted,
+            formats
+          }).catch((error) => {
+            clipboardLog.warn('Failed to enqueue clipboard OCR', { error })
+          })
+        })
+      }
+
+      this.updateMemoryCache(persisted)
+      this.notifyTransportChange()
+
+      const touchChannel = genTouchChannel()
+      for (const win of windowManager.windows) {
+        if (!win.window.isDestroyed()) {
+          touchChannel.sendToMain(win.window, 'clipboard:new-item', persisted)
+        }
+      }
+
+      const activePlugin = windowManager.getAttachedPlugin()
+      if (activePlugin?._uniqueChannelKey && windowManager.shouldForwardClipboardChange(persisted.type)) {
+        touchChannel
+          .sendToPlugin(activePlugin.name, 'core-box:clipboard-change', { item: persisted })
+          .catch((error) => {
+            clipboardLog.warn('Failed to notify plugin UI view about clipboard change', { error })
+          })
+      }
+    } finally {
+      const duration = performance.now() - startAt
+      if (duration > 500) {
+        this.clipboardCheckCooldownUntil = Date.now() + 2000
+      }
+      if (duration > 200) {
+        clipboardLog.warn('Clipboard check slow', { meta: { durationMs: Math.round(duration) } })
+      }
+      dispose()
     }
   }
 
   private registerIpcHandlers(): void {
+    if (this.ipcHandlersRegistered) {
+      return
+    }
+    this.ipcHandlersRegistered = true
     const touchChannel = genTouchChannel()
 
     const registerHandlers = (type: ChannelType) => {
@@ -1451,17 +1571,23 @@ export class ClipboardModule extends BaseModule {
     this.transportDisposers = []
     this.transportChangeListeners.clear()
     this.transport = null
+    this.monitoringStarted = false
+    this.ipcHandlersRegistered = false
+    this.activeAppCache = null
   }
 
   onInit(): MaybePromise<void> {
     this.db = databaseModule.getDb()
     this.clipboardHelper = new ClipboardHelper()
-    this.startClipboardMonitoring()
-    this.loadInitialCache()
     this.registerTransportHandlers()
     setImmediate(() => {
-      ocrService
-        .start()
+      this.startClipboardMonitoring()
+      void this.loadInitialCache()
+    })
+    setImmediate(() => {
+      appTaskGate
+        .waitForIdle()
+        .then(() => ocrService.start())
         .catch((error) => clipboardLog.error('Failed to start OCR service', { error }))
     })
     ocrService.registerClipboardMetaListener(this.handleMetaPatch)

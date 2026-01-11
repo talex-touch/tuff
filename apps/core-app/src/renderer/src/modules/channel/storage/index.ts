@@ -36,7 +36,23 @@ export class StorageManager {
   account: AccountStorage
 
   constructor() {
-    this.account = reactive(new AccountStorage(touchChannel.sendSync('storage:get', 'account.ini')))
+    this.account = reactive(new AccountStorage())
+    void this.loadAccountFromStorage()
+  }
+
+  private async loadAccountFromStorage(): Promise<void> {
+    const startAt = performance.now()
+    try {
+      const data = await touchChannel.send('storage:get', 'account.ini')
+      this.account.analyzeFromObj(data)
+    } catch (error) {
+      console.warn('[StorageManager] Failed to load account storage:', error)
+    } finally {
+      const duration = performance.now() - startAt
+      if (duration > 200) {
+        console.warn(`[StorageManager] account.ini load took ${duration.toFixed(1)}ms`)
+      }
+    }
   }
 
   /**

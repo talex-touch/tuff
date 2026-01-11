@@ -1,5 +1,7 @@
 import { parentPort } from 'node:worker_threads'
+import { performance } from 'node:perf_hooks'
 import extractFileIcon from 'extract-file-icon'
+import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
 
 type IconRequest = {
   type: 'extract'
@@ -17,6 +19,31 @@ type IconErrorMessage = {
   type: 'error'
   taskId: string
   error: string
+}
+
+function buildMetricsPayload(): WorkerMetricsPayload {
+  const memory = process.memoryUsage()
+  const eventLoop = typeof performance.eventLoopUtilization === 'function'
+    ? performance.eventLoopUtilization()
+    : null
+  return {
+    timestamp: Date.now(),
+    memory: {
+      rss: memory.rss,
+      heapUsed: memory.heapUsed,
+      heapTotal: memory.heapTotal,
+      external: memory.external,
+      arrayBuffers: memory.arrayBuffers ?? 0,
+    },
+    cpuUsage: process.cpuUsage(),
+    eventLoop: eventLoop
+      ? {
+          active: eventLoop.active,
+          idle: eventLoop.idle,
+          utilization: eventLoop.utilization,
+        }
+      : null,
+  }
 }
 
 const queue: IconRequest[] = []
@@ -53,8 +80,19 @@ async function processQueue(): Promise<void> {
   }
 }
 
-parentPort?.on('message', (payload: IconRequest) => {
-  if (!payload || payload.type !== 'extract') {
+parentPort?.on('message', (payload: IconRequest | WorkerMetricsRequest) => {
+  if (!payload) {
+    return
+  }
+  if (payload.type === 'metrics') {
+    parentPort?.postMessage({
+      type: 'metrics',
+      requestId: payload.requestId,
+      metrics: buildMetricsPayload(),
+    } satisfies WorkerMetricsResponse)
+    return
+  }
+  if (payload.type !== 'extract') {
     return
   }
   queue.push(payload)

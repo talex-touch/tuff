@@ -1,6 +1,8 @@
 import type { FileScanOptions, ScannedFileInfo } from '@talex-touch/utils/common/file-scan-utils'
 import { parentPort } from 'node:worker_threads'
+import { performance } from 'node:perf_hooks'
 import { scanDirectory } from '@talex-touch/utils/common/file-scan-utils'
+import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
 
 type FileScanRequest = {
   type: 'scan'
@@ -27,6 +29,31 @@ type FileScanErrorMessage = {
   type: 'error'
   taskId: string
   error: string
+}
+
+function buildMetricsPayload(): WorkerMetricsPayload {
+  const memory = process.memoryUsage()
+  const eventLoop = typeof performance.eventLoopUtilization === 'function'
+    ? performance.eventLoopUtilization()
+    : null
+  return {
+    timestamp: Date.now(),
+    memory: {
+      rss: memory.rss,
+      heapUsed: memory.heapUsed,
+      heapTotal: memory.heapTotal,
+      external: memory.external,
+      arrayBuffers: memory.arrayBuffers ?? 0,
+    },
+    cpuUsage: process.cpuUsage(),
+    eventLoop: eventLoop
+      ? {
+          active: eventLoop.active,
+          idle: eventLoop.idle,
+          utilization: eventLoop.utilization,
+        }
+      : null,
+  }
 }
 
 const queue: FileScanRequest[] = []
@@ -80,8 +107,19 @@ async function processQueue(): Promise<void> {
   }
 }
 
-parentPort?.on('message', (payload: FileScanRequest) => {
-  if (!payload || payload.type !== 'scan') {
+parentPort?.on('message', (payload: FileScanRequest | WorkerMetricsRequest) => {
+  if (!payload) {
+    return
+  }
+  if (payload.type === 'metrics') {
+    parentPort?.postMessage({
+      type: 'metrics',
+      requestId: payload.requestId,
+      metrics: buildMetricsPayload(),
+    } satisfies WorkerMetricsResponse)
+    return
+  }
+  if (payload.type !== 'scan') {
     return
   }
   queue.push(payload)

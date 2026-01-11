@@ -37,7 +37,7 @@
     "build:vite": "vite build",
     "component:create": "esno ./utils/create/index.ts",
     "comp:create": "esno ./utils/createComponent/index.ts",
-    "dev": "vitepress dev docs --port 8000 --host",
+    "dev": "vitepress dev docs --port 8000--host",
     "docs:dev": "vitepress dev docs --port 8000 --host",
     "docs:new": "esno ./utils/createVitepressComp/index.ts",
     "docs:build": "vitepress build docs"
@@ -62,6 +62,9 @@
     "v-wave": "^3.0.4"
   },
   "devDependencies": {
+    "@iconify-json/carbon": "^1.2.8",
+    "@iconify-json/ri": "^1.2.6",
+    "@iconify-json/simple-icons": "^1.2.23",
     "@types/gulp": "^4.0.17",
     "@types/gulp-autoprefixer": "^0.0.37",
     "@types/gulp-sass": "^5.0.4",
@@ -78,6 +81,7 @@
     "sucrase": "^3.35.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.0",
+    "unocss": "^66.3.3",
     "vite": "^6.0.0",
     "vite-plugin-dts": "^4.3.0",
     "vitepress": "^1.5.0",
