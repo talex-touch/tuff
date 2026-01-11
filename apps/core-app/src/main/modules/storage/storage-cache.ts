@@ -17,6 +17,7 @@ export class StorageCache {
   private dirtySet = new Set<string>()
   private lastAccessTime = new Map<string, number>()
   private invalidatedSet = new Set<string>()
+  private serializedCache = new Map<string, string>()
 
   /**
    * Get configuration from cache
@@ -30,6 +31,18 @@ export class StorageCache {
       this.lastAccessTime.set(name, Date.now())
       // Return deep copy to prevent external code from mutating cache
       return structuredClone(entry.data)
+    }
+    return undefined
+  }
+
+  /**
+   * Get configuration reference for internal use (no deep copy).
+   */
+  getRaw(name: string): object | undefined {
+    const entry = this.cache.get(name)
+    if (entry) {
+      this.lastAccessTime.set(name, Date.now())
+      return entry.data
     }
     return undefined
   }
@@ -74,12 +87,22 @@ export class StorageCache {
    * @param incrementVersion - Whether to increment version (default: true)
    * @returns The new version number
    */
-  set(name: string, data: object, incrementVersion: boolean = true): number {
+  set(
+    name: string,
+    data: object,
+    incrementVersion: boolean = true,
+    serialized?: string,
+  ): number {
     const currentVersion = this.cache.get(name)?.version ?? 0
     const newVersion = incrementVersion ? currentVersion + 1 : currentVersion
     this.cache.set(name, { data, version: newVersion })
     this.dirtySet.add(name)
     this.lastAccessTime.set(name, Date.now())
+    if (serialized !== undefined) {
+      this.serializedCache.set(name, serialized)
+    } else {
+      this.serializedCache.delete(name)
+    }
     return newVersion
   }
 
@@ -89,9 +112,14 @@ export class StorageCache {
    * @param data - Configuration data
    * @param version - Specific version to set
    */
-  setWithVersion(name: string, data: object, version: number): void {
+  setWithVersion(name: string, data: object, version: number, serialized?: string): void {
     this.cache.set(name, { data, version })
     this.lastAccessTime.set(name, Date.now())
+    if (serialized !== undefined) {
+      this.serializedCache.set(name, serialized)
+    } else {
+      this.serializedCache.delete(name)
+    }
   }
 
   /**
@@ -101,12 +129,17 @@ export class StorageCache {
    * @param version - Version to compare
    * @returns true if set succeeded, false if rejected due to older version
    */
-  setIfNewer(name: string, data: object, version: number): boolean {
+  setIfNewer(name: string, data: object, version: number, serialized?: string): boolean {
     const currentVersion = this.cache.get(name)?.version ?? 0
     if (version > currentVersion) {
       this.cache.set(name, { data, version })
       this.dirtySet.add(name)
       this.lastAccessTime.set(name, Date.now())
+      if (serialized !== undefined) {
+        this.serializedCache.set(name, serialized)
+      } else {
+        this.serializedCache.delete(name)
+      }
       return true
     }
     return false
@@ -136,6 +169,22 @@ export class StorageCache {
   }
 
   /**
+   * Get cached serialized content if available.
+   */
+  getSerialized(name: string): string | undefined {
+    return this.serializedCache.get(name)
+  }
+
+  /**
+   * Set serialized content without mutating version.
+   */
+  setSerialized(name: string, serialized: string): void {
+    if (this.cache.has(name)) {
+      this.serializedCache.set(name, serialized)
+    }
+  }
+
+  /**
    * Check if configuration is dirty
    */
   isDirty(name: string): boolean {
@@ -149,6 +198,7 @@ export class StorageCache {
     this.cache.delete(name)
     this.dirtySet.delete(name)
     this.lastAccessTime.delete(name)
+    this.serializedCache.delete(name)
   }
 
   /**
@@ -172,6 +222,7 @@ export class StorageCache {
     this.cache.clear()
     this.dirtySet.clear()
     this.lastAccessTime.clear()
+    this.serializedCache.clear()
   }
 
   /**

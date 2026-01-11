@@ -30,6 +30,24 @@
 
 ---
 
+## 0. Port / 子端口模型（新增）
+
+TuffTransport 抽象为“传输核心 + Port”。Port 是在同一传输层之上的**逻辑通道**，用于隔离不同能力域（如 storage、corebox、plugin、worker）。
+
+```
+TuffTransport
+  ├─ port('storage')     // 配置/订阅
+  ├─ port('corebox')     // 搜索/渲染
+  └─ port('plugin:xxx')  // 插件隔离
+```
+
+**要点：**
+- Port 只负责 `onMessage/onStream` 与路由规则，不关心 IPC 实现细节。
+- 具体传输（Main/Renderer/Plugin/Worker）由 impl 层负责，Port 作为协议层统一收敛。
+- Port 支持独立生命周期（注册/销毁），便于模块卸载时自动清理事件与流。
+
+---
+
 ## 1. 事件系统设计
 
 ### 为什么不用字符串？

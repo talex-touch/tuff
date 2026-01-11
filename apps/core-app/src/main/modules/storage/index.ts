@@ -201,10 +201,9 @@ export class StorageModule extends BaseModule {
         if (!request?.key || typeof request.key !== 'string') {
           return
         }
-        const content = JSON.stringify(request.value ?? {})
         this.saveConfig(
           request.key,
-          content,
+          request.value ?? {},
           false,
           false,
           context?.sender?.id,
@@ -218,13 +217,13 @@ export class StorageModule extends BaseModule {
         if (!request?.key || typeof request.key !== 'string') {
           return { success: false, version: 0 }
         }
-        const content = typeof request.content === 'string'
+        const payload = typeof request.content === 'string'
           ? request.content
-          : JSON.stringify(request.value ?? {})
+          : request.value
 
         return this.saveConfig(
           request.key,
-          content,
+          payload,
           request.clear,
           request.force,
           context?.sender?.id,
@@ -286,12 +285,14 @@ export class StorageModule extends BaseModule {
     const p = path.resolve(this.filePath!, name)
     let file = {}
 
+    let serialized: string | undefined
     if (fse.existsSync(p)) {
       try {
         const content = fse.readFileSync(p, 'utf-8')
         // 只有当内容不是空字符串时才解析
         if (content.length > 0) {
           file = JSON.parse(content)
+          serialized = content
         }
       }
       catch (error) {
@@ -300,7 +301,7 @@ export class StorageModule extends BaseModule {
     }
 
     // Use setWithVersion for initial load (version 1, not dirty)
-    this.cache.setWithVersion(name, file, 1)
+    this.cache.setWithVersion(name, file, 1, serialized)
 
     // Return through cache.get() to ensure deep copy protection
     return this.cache.get(name)!
@@ -334,17 +335,18 @@ export class StorageModule extends BaseModule {
     const filePath = path.resolve(this.filePath, name)
     let file = {}
 
+    let serialized: string | undefined
     try {
       const content = fse.readFileSync(filePath, 'utf-8')
       if (content.length > 0) {
         file = JSON.parse(content)
+        serialized = content
       }
-    }
-    catch (error) {
+    } catch (error) {
       storageLog.error(`Failed to reload config ${name}`, { error })
     }
 
-    this.cache.set(name, file)
+    this.cache.set(name, file, true, serialized)
     this.cache.clearDirty(name)
     this.cache.clearInvalidated(name)
 
@@ -380,7 +382,7 @@ export class StorageModule extends BaseModule {
    */
   saveConfig(
     name: string,
-    content?: string,
+    payload?: string | unknown,
     clear?: boolean,
     force?: boolean,
     sourceWebContentsId?: number,
@@ -391,15 +393,34 @@ export class StorageModule extends BaseModule {
 
     this.frequencyMonitor.trackSave(name)
 
-    const configData = content ?? JSON.stringify(this.cache.get(name) ?? {})
-
     if (clear) {
       this.cache.evict(name)
       return { success: true, version: 0 }
     }
 
-    const parsed = JSON.parse(configData)
     const currentVersion = this.cache.getVersion(name)
+    let parsed: unknown = undefined
+    let serialized: string | undefined
+
+    if (typeof payload === 'string') {
+      if (payload.length > 0) {
+        try {
+          parsed = JSON.parse(payload)
+        } catch (error) {
+          storageLog.error(`Failed to parse config payload for ${name}`, { error })
+          return { success: false, version: currentVersion }
+        }
+        serialized = payload
+      } else {
+        parsed = {}
+        serialized = '{}'
+      }
+    } else if (payload !== undefined) {
+      parsed = payload
+    } else {
+      const cached = this.cache.getRaw(name)
+      parsed = cached === undefined ? {} : cached
+    }
 
     // Conflict detection: if client has older version, reject the save
     if (clientVersion !== undefined && clientVersion < currentVersion) {
@@ -409,7 +430,11 @@ export class StorageModule extends BaseModule {
 
     // Smart deduplication: check if content actually changed (unless force=true)
     if (!force) {
-      const cachedData = this.cache.get(name)
+      const cachedData = this.cache.getRaw(name)
+      const cachedSerialized = serialized ? this.cache.getSerialized(name) : undefined
+      if (serialized && cachedSerialized && cachedSerialized === serialized) {
+        return { success: true, version: currentVersion }
+      }
       if (cachedData && JSON.stringify(cachedData) === JSON.stringify(parsed)) {
         // Content hasn't changed, skip save but return current version
         return { success: true, version: currentVersion }
@@ -417,7 +442,7 @@ export class StorageModule extends BaseModule {
     }
 
     // Set new data and get new version
-    const newVersion = this.cache.set(name, parsed)
+    const newVersion = this.cache.set(name, parsed as object, true, serialized)
 
     // Broadcast update to other windows (exclude source)
     setImmediate(() => {
@@ -438,13 +463,17 @@ export class StorageModule extends BaseModule {
       throw new Error(`Config path not found!`)
     }
 
-    const data = this.cache.get(name)
-    if (!data) {
+    const data = this.cache.getRaw(name)
+    if (data === undefined) {
       storageLog.warn(`Attempted to save non-existent config: ${name}`)
       return
     }
 
-    const configData = JSON.stringify(data)
+    const cachedSerialized = this.cache.getSerialized(name)
+    const configData = cachedSerialized ?? JSON.stringify(data)
+    if (!cachedSerialized) {
+      this.cache.setSerialized(name, configData)
+    }
     const p = path.join(this.filePath, name)
 
     fse.ensureFileSync(p)
@@ -563,7 +592,14 @@ export class StorageModule extends BaseModule {
     channel.regChannel(ChannelType.MAIN, 'storage:save', ({ data, header }) => {
       if (!data || typeof data !== 'object')
         return { success: false, version: 0 }
-      const { key, content, clear, force, version: clientVersion } = data
+      const { key, content, value, clear, force, version: clientVersion } = data as {
+        key?: string
+        content?: string
+        value?: unknown
+        clear?: boolean
+        force?: boolean
+        version?: number
+      }
       if (typeof key !== 'string')
         return { success: false, version: 0 }
 
@@ -571,7 +607,8 @@ export class StorageModule extends BaseModule {
       const sender = header?.event?.sender
       const sourceWebContentsId = sender && 'id' in sender ? sender.id : undefined
 
-      return this.saveConfig(key, content, clear, force, sourceWebContentsId, clientVersion)
+      const payload = typeof content === 'string' ? content : value
+      return this.saveConfig(key, payload, clear, force, sourceWebContentsId, clientVersion)
     })
 
     // Reload config from disk
@@ -593,22 +630,35 @@ export class StorageModule extends BaseModule {
     channel.regChannel(ChannelType.MAIN, 'storage:save-sync', ({ data, header }) => {
       if (!data || typeof data !== 'object')
         return { success: false, version: 0 }
-      const { key, content, clear, force, version: clientVersion } = data
+      const { key, content, value, clear, force, version: clientVersion } = data as {
+        key?: string
+        content?: string
+        value?: unknown
+        clear?: boolean
+        force?: boolean
+        version?: number
+      }
       if (typeof key !== 'string')
         return { success: false, version: 0 }
 
       const sender = header?.event?.sender
       const sourceWebContentsId = sender && 'id' in sender ? sender.id : undefined
-      const result = this.saveConfig(key, content, clear, force, sourceWebContentsId, clientVersion)
+      const payload = typeof content === 'string' ? content : value
+      const result = this.saveConfig(key, payload, clear, force, sourceWebContentsId, clientVersion)
 
       // Immediately persist to disk for sync save
       if (result.success && !clear) {
         try {
-          const data = this.cache.get(key)
-          if (data) {
+          const data = this.cache.getRaw(key)
+          if (data !== undefined) {
             const p = path.join(this.filePath!, key)
             fse.ensureFileSync(p)
-            fse.writeFileSync(p, JSON.stringify(data), 'utf-8')
+            const cachedSerialized = this.cache.getSerialized(key)
+            const configData = cachedSerialized ?? JSON.stringify(data)
+            if (!cachedSerialized) {
+              this.cache.setSerialized(key, configData)
+            }
+            fse.writeFileSync(p, configData, 'utf-8')
           }
         } catch (err) {
           storageLog.error(`Failed to persist ${key} synchronously`, { error: err })

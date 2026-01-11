@@ -30,6 +30,24 @@ This document provides a deep dive into TuffTransport's architecture, explaining
 
 ---
 
+## 0. Port / Sub-port Model (New)
+
+TuffTransport is modeled as “transport core + ports”. A port is a **logical channel** layered on top of the same transport, used to isolate domains (storage, corebox, plugin, worker, etc.).
+
+```
+TuffTransport
+  ├─ port('storage')     // config/subscription
+  ├─ port('corebox')     // search/render
+  └─ port('plugin:xxx')  // plugin isolation
+```
+
+**Key points:**
+- Ports only handle `onMessage/onStream` and routing rules, not the IPC implementation.
+- Actual transport (Main/Renderer/Plugin/Worker) is handled by the impl layer; ports provide a unified protocol surface.
+- Ports have independent lifecycles, making cleanup on module unload reliable.
+
+---
+
 ## 1. Event System Design
 
 ### Why Not Strings?

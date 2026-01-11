@@ -1,7 +1,7 @@
 import { storages } from '@talex-touch/utils/renderer'
 import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 import { openersStorage } from '@talex-touch/utils/renderer/storage/openers'
-import { reactive, unref } from 'vue'
+import { reactive, toRaw, unref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { AccountStorage } from '~/modules/channel/storage/accounter'
 import '~/modules/channel/storage/base'
@@ -55,7 +55,7 @@ export class StorageManager {
   async _save(name: string, data: object, clear: boolean = false): Promise<void> {
     await touchChannel.send('storage:save', {
       key: name,
-      content: JSON.stringify(unref(data)),
+      value: toRaw(unref(data) as object),
       clear,
     })
   }
