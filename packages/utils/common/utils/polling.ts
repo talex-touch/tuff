@@ -21,7 +21,7 @@ export class PollingService {
   private timerId: NodeJS.Timeout | null = null
   private isRunning = false
   private quitListenerCleanup?: () => void
-  private activeTasks = new Set<string>()
+  private activeTasks = new Map<string, number>()
   private taskStats = new Map<
     string,
     {
@@ -241,7 +241,7 @@ export class PollingService {
       // console.debug(`[PollingService] Executing ${tasksToRun.length} tasks.`);
       for (const task of tasksToRun) {
         const startAt = Date.now()
-        this.activeTasks.add(task.id)
+        this.activeTasks.set(task.id, startAt)
         try {
           await task.callback()
         }
@@ -276,7 +276,7 @@ export class PollingService {
   }
 
   public getDiagnostics(): {
-    activeTasks: string[]
+    activeTasks: Array<{ id: string, startedAt: number, ageMs: number }>
     recentTasks: Array<{
       id: string
       lastDurationMs: number
@@ -285,6 +285,15 @@ export class PollingService {
       maxDurationMs: number
     }>
   } {
+    const now = Date.now()
+    const activeTasks = Array.from(this.activeTasks.entries())
+      .map(([id, startedAt]) => ({
+        id,
+        startedAt,
+        ageMs: Math.max(0, now - startedAt),
+      }))
+      .sort((a, b) => b.ageMs - a.ageMs)
+      .slice(0, 6)
     const recentTasks = Array.from(this.taskStats.entries())
       .map(([id, stat]) => ({
         id,
@@ -297,7 +306,7 @@ export class PollingService {
       .slice(0, 6)
 
     return {
-      activeTasks: Array.from(this.activeTasks),
+      activeTasks,
       recentTasks,
     }
   }

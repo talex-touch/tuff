@@ -39,7 +39,7 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { app, powerMonitor, shell } from 'electron'
 import extractFileIcon from 'extract-file-icon'
 import plist from 'plist'
@@ -82,6 +82,7 @@ import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import type { IndexWorkerFile } from './workers/file-index-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { IconWorkerClient } from './workers/icon-worker-client'
+import type { WorkerStatusSnapshot } from './workers/worker-status'
 
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
@@ -2399,7 +2400,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           sample: reconciliationPaths.slice(0, 3).join(', ')
         })
         this.emitIndexingProgress('reconciliation', 0, reconciliationPaths.length)
+        await appTaskGate.waitForIdle()
+        const dbContext = enterPerfContext('FileProvider.reconciliation.db', {
+          paths: reconciliationPaths.length
+        })
         const dbReadStart = performance.now()
+        const pathFilters = reconciliationPaths.map(targetPath =>
+          sql`${filesSchema.path} LIKE ${`${targetPath}%`}`
+        )
+        const pathWhere = pathFilters.length > 0 ? or(...pathFilters) : undefined
         const dbFiles = await db
           .select({
             id: filesSchema.id,
@@ -2407,18 +2416,27 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             mtime: filesSchema.mtime
           })
           .from(filesSchema)
-          .where(eq(filesSchema.type, 'file'))
+          .where(
+            pathWhere
+              ? and(eq(filesSchema.type, 'file'), pathWhere)
+              : eq(filesSchema.type, 'file')
+          )
         this.logDebug('Loaded DB file records for reconciliation', {
           count: dbFiles.length,
           duration: formatDuration(performance.now() - dbReadStart)
         })
+        dbContext()
 
         const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
 
+        const diskContext = enterPerfContext('FileProvider.reconciliation.disk', {
+          paths: reconciliationPaths.length
+        })
         const diskScanStart = performance.now()
         const diskFiles: ScannedFileInfo[] = []
         let reconciledPaths = 0
         for (const dir of reconciliationPaths) {
+          await appTaskGate.waitForIdle()
           const scanned = await this.scanDirectoryWithWorker(dir, excludePathsSet)
           for (const scannedFile of scanned) {
             diskFiles.push(scannedFile)
@@ -2431,20 +2449,38 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           files: diskFiles.length,
           duration: formatDuration(performance.now() - diskScanStart)
         })
+        diskContext()
 
-        const diskPayload: ReconcileDiskFile[] = diskFiles.map((file) => ({
-          path: file.path,
-          name: file.name,
-          extension: file.extension,
-          size: file.size,
-          mtime: this.toTimestamp(file.mtime) ?? 0,
-          ctime: this.toTimestamp(file.ctime) ?? 0
-        }))
-        const dbPayload: ReconcileDbFile[] = dbFiles.map((file) => ({
-          id: file.id,
-          path: file.path,
-          mtime: this.toTimestamp(file.mtime) ?? 0
-        }))
+        const diskPayload: ReconcileDiskFile[] = []
+        const dbPayload: ReconcileDbFile[] = []
+        const mapYieldInterval = 5000
+        for (let i = 0; i < diskFiles.length; i++) {
+          const file = diskFiles[i]
+          diskPayload.push({
+            path: file.path,
+            name: file.name,
+            extension: file.extension,
+            size: file.size,
+            mtime: this.toTimestamp(file.mtime) ?? 0,
+            ctime: this.toTimestamp(file.ctime) ?? 0
+          })
+          if (i > 0 && i % mapYieldInterval === 0) {
+            await yieldToEventLoop()
+            await appTaskGate.waitForIdle()
+          }
+        }
+        for (let i = 0; i < dbFiles.length; i++) {
+          const file = dbFiles[i]
+          dbPayload.push({
+            id: file.id,
+            path: file.path,
+            mtime: this.toTimestamp(file.mtime) ?? 0
+          })
+          if (i > 0 && i % mapYieldInterval === 0) {
+            await yieldToEventLoop()
+            await appTaskGate.waitForIdle()
+          }
+        }
 
         let reconcileResult: {
           filesToAdd: ReconcileDiskFile[]
@@ -2487,11 +2523,31 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           this.logInfo('Removing files missing from disk', {
             count: deletedFileIds.length
           })
-          await db.delete(filesSchema).where(inArray(filesSchema.id, deletedFileIds))
+          const deleteChunks: number[][] = []
+          const deleteChunkSize = 500
+          for (let i = 0; i < deletedFileIds.length; i += deleteChunkSize) {
+            deleteChunks.push(deletedFileIds.slice(i, i + deleteChunkSize))
+          }
+          for (const chunk of deleteChunks) {
+            await appTaskGate.waitForIdle()
+            await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
+          }
+
           const deletedIdSet = new Set(deletedFileIds)
-          await this.searchIndex?.removeItems(
-            dbFiles.filter((file) => deletedIdSet.has(file.id)).map((file) => file.path)
-          )
+          const removedPaths = dbFiles
+            .filter((file) => deletedIdSet.has(file.id))
+            .map((file) => file.path)
+          if (removedPaths.length > 0) {
+            const pathChunks: string[][] = []
+            const pathChunkSize = 500
+            for (let i = 0; i < removedPaths.length; i += pathChunkSize) {
+              pathChunks.push(removedPaths.slice(i, i + pathChunkSize))
+            }
+            for (const chunk of pathChunks) {
+              await appTaskGate.waitForIdle()
+              await this.searchIndex?.removeItems(chunk)
+            }
+          }
         }
 
         if (filesToUpdate.length > 0) {
@@ -2611,6 +2667,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await runAdaptiveTaskQueue(
       chunks,
       async (chunk) => {
+        await appTaskGate.waitForIdle()
         const chunkStart = performance.now()
 
         const updatePromises = chunk.map((file) =>
@@ -3325,6 +3382,35 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     return { summary, entries }
+  }
+
+  public async getWorkerStatusSnapshot(): Promise<{
+    summary: { total: number; busy: number; idle: number; offline: number }
+    workers: WorkerStatusSnapshot[]
+  }> {
+    const workers = await Promise.all([
+      this.fileScanWorker.getStatus(),
+      this.fileIndexWorker.getStatus(),
+      this.reconcileWorker.getStatus(),
+      this.iconWorker.getStatus(),
+    ])
+
+    const summary = workers.reduce(
+      (acc, worker) => {
+        acc.total += 1
+        if (worker.state === 'busy') {
+          acc.busy += 1
+        } else if (worker.state === 'idle') {
+          acc.idle += 1
+        } else {
+          acc.offline += 1
+        }
+        return acc
+      },
+      { total: 0, busy: 0, idle: 0, offline: 0 },
+    )
+
+    return { summary, workers }
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {

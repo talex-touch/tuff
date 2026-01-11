@@ -6,12 +6,15 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import { createLogger } from '../../utils/logger'
+import { enterPerfContext } from '../../utils/perf-context'
+import { appTaskGate } from '../../service/app-task-gate'
 import { BaseModule } from '../abstract-base-module'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
@@ -286,18 +289,30 @@ export class StorageModule extends BaseModule {
     let file = {}
 
     let serialized: string | undefined
-    if (fse.existsSync(p)) {
-      try {
-        const content = fse.readFileSync(p, 'utf-8')
-        // 只有当内容不是空字符串时才解析
-        if (content.length > 0) {
-          file = JSON.parse(content)
-          serialized = content
+    const disposeLoad = enterPerfContext(`Storage.load:${name}`, { source: 'disk' })
+    const loadStart = performance.now()
+    try {
+      if (fse.existsSync(p)) {
+        try {
+          const content = fse.readFileSync(p, 'utf-8')
+          // 只有当内容不是空字符串时才解析
+          if (content.length > 0) {
+            file = JSON.parse(content)
+            serialized = content
+          }
+        }
+        catch (error) {
+          storageLog.error(`Failed to parse config ${name}`, { error })
         }
       }
-      catch (error) {
-        storageLog.error(`Failed to parse config ${name}`, { error })
+    } finally {
+      const duration = performance.now() - loadStart
+      if (duration > 200) {
+        storageLog.warn(`Slow config load for ${name}`, {
+          meta: { durationMs: Math.round(duration) }
+        })
       }
+      disposeLoad()
     }
 
     // Use setWithVersion for initial load (version 1, not dirty)
@@ -336,6 +351,8 @@ export class StorageModule extends BaseModule {
     let file = {}
 
     let serialized: string | undefined
+    const disposeReload = enterPerfContext(`Storage.reload:${name}`, { source: 'disk' })
+    const reloadStart = performance.now()
     try {
       const content = fse.readFileSync(filePath, 'utf-8')
       if (content.length > 0) {
@@ -344,6 +361,14 @@ export class StorageModule extends BaseModule {
       }
     } catch (error) {
       storageLog.error(`Failed to reload config ${name}`, { error })
+    } finally {
+      const duration = performance.now() - reloadStart
+      if (duration > 200) {
+        storageLog.warn(`Slow config reload for ${name}`, {
+          meta: { durationMs: Math.round(duration) }
+        })
+      }
+      disposeReload()
     }
 
     this.cache.set(name, file, true, serialized)
@@ -463,6 +488,8 @@ export class StorageModule extends BaseModule {
       throw new Error(`Config path not found!`)
     }
 
+    await appTaskGate.waitForIdle()
+
     const data = this.cache.getRaw(name)
     if (data === undefined) {
       storageLog.warn(`Attempted to save non-existent config: ${name}`)
@@ -476,8 +503,22 @@ export class StorageModule extends BaseModule {
     }
     const p = path.join(this.filePath, name)
 
-    fse.ensureFileSync(p)
-    await fse.writeFile(p, configData, 'utf-8')
+    const disposePersist = enterPerfContext(`Storage.persist:${name}`, {
+      bytes: configData.length
+    })
+    const persistStart = performance.now()
+    try {
+      fse.ensureFileSync(p)
+      await fse.writeFile(p, configData, 'utf-8')
+    } finally {
+      const duration = performance.now() - persistStart
+      if (duration > 200) {
+        storageLog.warn(`Slow config persist for ${name}`, {
+          meta: { durationMs: Math.round(duration) }
+        })
+      }
+      disposePersist()
+    }
   }
 
   /**

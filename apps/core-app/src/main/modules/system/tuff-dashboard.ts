@@ -83,12 +83,13 @@ export class TuffDashboardModule extends BaseModule {
   }
 
   private async buildSnapshot(limit: number) {
-    const [indexing, ocr, configOverview, logs, applications] = await Promise.all([
+    const [indexing, ocr, configOverview, logs, applications, workers] = await Promise.all([
       this.buildIndexingSection(limit),
       ocrService.getDashboardSnapshot(Math.min(limit, 100)),
       this.buildConfigOverview(Math.min(limit, 100)),
       this.buildLogOverview(Math.min(limit, 20)),
       this.buildApplicationSection(),
+      this.buildWorkerSection(),
     ])
 
     return {
@@ -100,6 +101,7 @@ export class TuffDashboardModule extends BaseModule {
       config: configOverview,
       logs,
       applications,
+      workers,
     }
   }
 
@@ -119,8 +121,8 @@ export class TuffDashboardModule extends BaseModule {
 
   private async buildApplicationSection() {
     const activeApp = await activeAppService.getActiveApp(false)
-    const metrics = app
-      .getAppMetrics()
+    const rawMetrics = app.getAppMetrics()
+    const metrics = rawMetrics
       .slice(0, 10)
       .map(metric => ({
         pid: metric.pid,
@@ -130,6 +132,15 @@ export class TuffDashboardModule extends BaseModule {
         created: metric.creationTime ? this.toIso(metric.creationTime) : null,
       }))
 
+    const totals = rawMetrics.reduce(
+      (acc, metric) => {
+        acc.cpu += metric.cpu?.percentCPUUsage ?? 0
+        acc.memory += metric.memory?.workingSetSize ?? 0
+        return acc
+      },
+      { cpu: 0, memory: 0 },
+    )
+
     return {
       activeApp: activeApp
         ? {
@@ -137,6 +148,11 @@ export class TuffDashboardModule extends BaseModule {
             lastUpdated: this.toIso(activeApp.lastUpdated),
           }
         : null,
+      summary: {
+        cpu: totals.cpu,
+        memory: totals.memory,
+        processCount: rawMetrics.length,
+      },
       metrics,
     }
   }
@@ -261,6 +277,19 @@ export class TuffDashboardModule extends BaseModule {
       directory: logsDir,
       userDataDir,
       recentFiles,
+    }
+  }
+
+  private async buildWorkerSection() {
+    try {
+      return await fileProvider.getWorkerStatusSnapshot()
+    }
+    catch (error) {
+      dashboardLog.warn('Failed to load worker status snapshot', { error })
+      return {
+        summary: { total: 0, busy: 0, idle: 0, offline: 0 },
+        workers: [],
+      }
     }
   }
 

@@ -9,13 +9,7 @@ import type {
 } from '../../transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
 import { StorageEvents } from '../../transport/events'
-import {
-  reactive,
-  toRaw,
-
-  watch,
-
-} from 'vue'
+import { reactive, toRaw, watch } from 'vue'
 
 /**
  * Interface representing the external communication channel.
@@ -35,6 +29,12 @@ export interface IStorageChannel extends ITouchClientChannel {
    * @param payload Event payload
    */
   sendSync: (event: string, payload: unknown) => unknown
+}
+
+export type StorageInitMode = 'auto' | 'sync' | 'async'
+
+export interface TouchStorageOptions {
+  initMode?: StorageInitMode
 }
 
 let channel: IStorageChannel | null = null
@@ -142,6 +142,7 @@ export type SaveResult = StorageSaveResult
  */
 export class TouchStorage<T extends object> {
   readonly #qualifiedName: string
+  #initMode: StorageInitMode
   #autoSave = false
   #autoSaveStopHandle?: WatchHandle
   #assigning = false
@@ -151,6 +152,10 @@ export class TouchStorage<T extends object> {
   #skipNextWatchTrigger = false
   #currentVersion = 0
   #isRemoteUpdate = false
+  #hydrated = false
+  #pendingSave = false
+  #localDirty = false
+  #lastSyncedSnapshot: T | null = null
 
   /**
    * The reactive data exposed to users.
@@ -176,7 +181,12 @@ export class TouchStorage<T extends object> {
    * const settings = new TouchStorage('settings', { darkMode: false });
    * ```
    */
-  constructor(qName: string, initData: T, onUpdate?: () => void) {
+  constructor(
+    qName: string,
+    initData: T,
+    onUpdate?: () => void,
+    options?: TouchStorageOptions,
+  ) {
     if (!channel && !transport) {
       throw new Error(
         `TouchStorage: Cannot create storage "${qName}" before channel is initialized. `
@@ -189,8 +199,10 @@ export class TouchStorage<T extends object> {
     }
 
     this.#qualifiedName = qName
+    this.#initMode = options?.initMode ?? 'auto'
     this.originalData = initData
     this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>
+    this.#lastSyncedSnapshot = cloneValue(initData) as T
 
     if (onUpdate)
       this._onUpdate.push(onUpdate)
@@ -213,21 +225,37 @@ export class TouchStorage<T extends object> {
 
     this.#channelInitialized = true
 
-    // Try to get versioned data synchronously first, fallback to async load.
-    const versionedResult = this.#getVersionedSync()
-    if (versionedResult) {
-      this.#currentVersion = versionedResult.version
-      this.assignData(versionedResult.data as Partial<T>, true, true)
-    }
-    else {
-      const result = this.#getSync()
-      if (result) {
-        this.#currentVersion = Math.max(this.#currentVersion, 1)
-        this.assignData(result as Partial<T>, true, true)
+    const shouldSync = this.#initMode === 'sync'
+      || (this.#initMode === 'auto' && !transport)
+
+    if (shouldSync) {
+      // Try to get versioned data synchronously first, fallback to async load.
+      const versionedResult = this.#getVersionedSync()
+      if (versionedResult) {
+        this.#currentVersion = versionedResult.version
+        this.#isRemoteUpdate = true
+        this.assignData(versionedResult.data as Partial<T>, true, true)
+        this.#isRemoteUpdate = false
+        this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+        this.#hydrated = true
       }
       else {
-        void this.#loadFromRemoteWithVersion()
+        const result = this.#getSync()
+        if (result) {
+          this.#currentVersion = Math.max(this.#currentVersion, 1)
+          this.#isRemoteUpdate = true
+          this.assignData(result as Partial<T>, true, true)
+          this.#isRemoteUpdate = false
+          this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+          this.#hydrated = true
+        }
+        else {
+          void this.#loadFromRemoteWithVersion()
+        }
       }
+    }
+    else {
+      void this.#loadFromRemoteWithVersion()
     }
 
     this.#registerUpdateListener()
@@ -333,22 +361,46 @@ export class TouchStorage<T extends object> {
 
     const versionedResult = await this.#getVersionedAsync()
     if (versionedResult) {
-      if (versionedResult.version > this.#currentVersion) {
+      const shouldApply = versionedResult.version > this.#currentVersion || !this.#hydrated
+      if (shouldApply) {
+        const patch = this.#localDirty
+          ? buildPatch(this.#lastSyncedSnapshot ?? {}, toRaw(this.data))
+          : null
+        const patchHasChanges = Boolean(patch && (patch.set.length > 0 || patch.unset.length > 0))
+        const remoteData = (versionedResult.data ?? {}) as Partial<T>
+
         this.#currentVersion = versionedResult.version
-        // Mark as remote update to skip auto-save
         this.#isRemoteUpdate = true
-        this.assignData(versionedResult.data as Partial<T>, true, true)
+        this.assignData(remoteData, true, true)
+        if (patchHasChanges && patch) {
+          this.#applyPatchSilently(patch)
+          this.#localDirty = true
+        }
+        else {
+          this.#localDirty = false
+        }
         this.#isRemoteUpdate = false
+
+        this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+        this.#hydrated = true
+        if (this.#pendingSave || patchHasChanges) {
+          this.#pendingSave = false
+          void this.saveToRemote({ force: true })
+        }
       }
       return
     }
 
     const result = await this.#getAsync()
-    if (Object.keys(result || {}).length > 0) {
-      this.#currentVersion = Math.max(this.#currentVersion, 1)
-      this.#isRemoteUpdate = true
-      this.assignData(result as Partial<T>, true, true)
-      this.#isRemoteUpdate = false
+    this.#currentVersion = Math.max(this.#currentVersion, 1)
+    this.#isRemoteUpdate = true
+    this.assignData(result as Partial<T>, true, true)
+    this.#isRemoteUpdate = false
+    this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+    this.#hydrated = true
+    if (this.#pendingSave) {
+      this.#pendingSave = false
+      void this.saveToRemote({ force: true })
     }
   }
 
@@ -400,6 +452,11 @@ export class TouchStorage<T extends object> {
     if (this.#isRemoteUpdate) {
       return
     }
+    if (!this.#hydrated) {
+      this.#pendingSave = true
+      this.#localDirty = true
+      return
+    }
 
     const result = await this.#saveRemote({
       key: this.#qualifiedName,
@@ -410,6 +467,8 @@ export class TouchStorage<T extends object> {
 
     if (result.success) {
       this.#currentVersion = result.version
+      this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+      this.#localDirty = false
     }
     else if (result.conflict) {
       // Conflict detected - reload from remote
@@ -462,6 +521,7 @@ export class TouchStorage<T extends object> {
   }
 
   #runAutoSavePipeline(options?: { force?: boolean }): void {
+    this.#localDirty = true
     this._onUpdate.forEach((fn) => {
       try {
         fn()
@@ -472,6 +532,32 @@ export class TouchStorage<T extends object> {
     })
 
     this.saveToRemote(options)
+  }
+
+  #applyPatchSilently(patch: StoragePatch): void {
+    if (patch.set.length === 0 && patch.unset.length === 0) {
+      return
+    }
+
+    if (this.#autoSave) {
+      this.#assigning = true
+    }
+
+    applyPatch(this.data as Record<string, unknown>, patch)
+
+    if (this.#autoSave) {
+      this.#skipNextWatchTrigger = true
+      const resetAssigning = () => {
+        this.#assigning = false
+      }
+
+      if (typeof queueMicrotask === 'function') {
+        queueMicrotask(resetAssigning)
+      }
+      else {
+        Promise.resolve().then(resetAssigning)
+      }
+    }
   }
 
   /**
@@ -585,12 +671,20 @@ export class TouchStorage<T extends object> {
     const versionedResult = await this.#getVersionedAsync()
     if (versionedResult) {
       this.#currentVersion = versionedResult.version
-      this.assignData(versionedResult.data as Partial<T>, true)
+      this.#isRemoteUpdate = true
+      this.assignData(versionedResult.data as Partial<T>, true, true)
+      this.#isRemoteUpdate = false
+      this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+      this.#hydrated = true
       return this
     }
 
     const parsed = await this.#getAsync()
-    this.assignData(parsed as Partial<T>, true)
+    this.#isRemoteUpdate = true
+    this.assignData(parsed as Partial<T>, true, true)
+    this.#isRemoteUpdate = false
+    this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+    this.#hydrated = true
 
     return this
   }
@@ -670,5 +764,153 @@ export class TouchStorage<T extends object> {
   set(newData: T): this {
     this.assignData(newData as Partial<T>)
     return this
+  }
+}
+
+type StoragePatch = {
+  set: Array<{ path: string[], value: unknown }>
+  unset: Array<string[]>
+}
+
+function buildPatch(base: unknown, current: unknown): StoragePatch {
+  const patch: StoragePatch = { set: [], unset: [] }
+  walkDiff(base, current, [], patch)
+  return patch
+}
+
+function walkDiff(base: unknown, current: unknown, path: string[], patch: StoragePatch): void {
+  if (isPlainObject(base) && isPlainObject(current)) {
+    const baseKeys = Object.keys(base)
+    const currentKeys = Object.keys(current)
+    const currentSet = new Set(currentKeys)
+
+    for (const key of baseKeys) {
+      if (!currentSet.has(key) || (current as Record<string, unknown>)[key] === undefined) {
+        patch.unset.push([...path, key])
+      }
+    }
+
+    for (const key of currentKeys) {
+      const currentValue = (current as Record<string, unknown>)[key]
+      if (currentValue === undefined) {
+        continue
+      }
+      if (!(key in (base as Record<string, unknown>))) {
+        patch.set.push({ path: [...path, key], value: cloneValue(currentValue) })
+        continue
+      }
+      walkDiff((base as Record<string, unknown>)[key], currentValue, [...path, key], patch)
+    }
+    return
+  }
+
+  if (isEqual(base, current)) {
+    return
+  }
+
+  if (path.length > 0) {
+    patch.set.push({ path: [...path], value: cloneValue(current) })
+  }
+}
+
+function applyPatch(target: Record<string, unknown>, patch: StoragePatch): Record<string, unknown> {
+  for (const path of patch.unset) {
+    unsetByPath(target, path)
+  }
+  for (const entry of patch.set) {
+    setByPath(target, entry.path, cloneValue(entry.value))
+  }
+  return target
+}
+
+function setByPath(target: Record<string, unknown>, path: string[], value: unknown): void {
+  if (path.length === 0) {
+    return
+  }
+  let cursor: Record<string, unknown> = target
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i]
+    const next = cursor[key]
+    if (!isPlainObject(next)) {
+      cursor[key] = {}
+    }
+    cursor = cursor[key] as Record<string, unknown>
+  }
+  cursor[path[path.length - 1]] = value
+}
+
+function unsetByPath(target: Record<string, unknown>, path: string[]): void {
+  if (path.length === 0) {
+    return
+  }
+  let cursor: Record<string, unknown> = target
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i]
+    const next = cursor[key]
+    if (!isPlainObject(next)) {
+      return
+    }
+    cursor = next as Record<string, unknown>
+  }
+  delete cursor[path[path.length - 1]]
+}
+
+function isEqual(left: unknown, right: unknown): boolean {
+  if (left === right) {
+    return true
+  }
+  if (left instanceof Date && right instanceof Date) {
+    return left.getTime() === right.getTime()
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) {
+      return false
+    }
+    for (let i = 0; i < left.length; i++) {
+      if (!isEqual(left[i], right[i])) {
+        return false
+      }
+    }
+    return true
+  }
+  if (isPlainObject(left) && isPlainObject(right)) {
+    const leftKeys = Object.keys(left)
+    const rightKeys = Object.keys(right)
+    if (leftKeys.length !== rightKeys.length) {
+      return false
+    }
+    for (const key of leftKeys) {
+      if (!isEqual(left[key], right[key])) {
+        return false
+      }
+    }
+    return true
+  }
+  return false
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  if (Array.isArray(value)) {
+    return false
+  }
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+function cloneValue<T>(value: T): T {
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value)
+    } catch {
+      // fall through
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as T
+  } catch {
+    return value
   }
 }

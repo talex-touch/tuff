@@ -338,6 +338,64 @@ const text = resolveI18nMessage('$i18n:devServer.disconnected')
 
 **翻译文件位置**: `packages/utils/i18n/locales/`
 
+### TuffIcon 组件(tuffex)
+
+**统一图标组件**，位于 `packages/tuffex/packages/components/src/icon/`:
+
+**图标类型** (`TuffIconType`):
+- `emoji` - Emoji 字符（如 "🚀"）
+- `class` - CSS 类名（如 "i-ri-star-line"）
+- `url` - 远程 URL 或Data URL
+- `file` - 本地文件路径
+- `builtin` - 内置图标（chevron-down, close, search, user, star, star-half）
+
+**核心特性**:
+- 支持自定义 URL 解析器（通过 provide/inject 或 prop）
+- 支持自定义 SVG 加载器（含 retry逻辑）
+- colorful 模式：`true` = 保留原色，`false` = 使用 currentColor
+
+**Electron 应用配置** (core-app):
+```typescript
+// App.vue 或根组件
+import { provide } from 'vue'
+import { TX_ICON_CONFIG_KEY } from '@user-pkg/tuffex'
+
+provide(TX_ICON_CONFIG_KEY, {
+  fileProtocol: 'tfile://',
+  urlResolver: (url, type) => {
+    if (type === 'file') return `tfile://${url}`
+    if (type === 'url' && url.startsWith('/') && !url.startsWith('/api/')) {
+      return `tfile://${url}`
+    }
+    return url
+  },
+  svgFetcher: async (url) => {
+    // 使用 useSvgContent 的 retry 逻辑
+    const response = await fetch(url)
+    return await response.text()
+  }
+})
+```
+
+**使用示例**:
+```vue
+<template>
+  <!-- 使用 icon prop -->
+  <TuffIcon :icon="{ type: 'class', value: 'i-ri-home-line' }" />
+  <TuffIcon :icon="{ type: 'emoji', value: '🚀' }" :size="24" />
+  <TuffIcon :icon="{ type: 'file', value: '/path/to/icon.svg' }" colorful />
+  
+  <!-- 使用 name简写 -->
+  <TuffIcon name="i-ri-star-line" />
+  <TuffIcon name="chevron-down" /> <!-- 内置图标 -->
+</template>
+```
+
+**关键文件**:
+- 组件: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- 类型: `packages/tuffex/packages/components/src/icon/src/types.ts`
+- 文档: `packages/tuffex/docs/icons/index.md`
+
 ### 统一 LogLevel
 
 **单一日志级别定义**（位于 `packages/utils/base/log-level.ts`）:

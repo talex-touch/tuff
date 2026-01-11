@@ -1,5 +1,6 @@
 import type { App } from 'vue'
 import TuffIcon from './src/TxIcon.vue'
+import { TX_ICON_CONFIG_KEY } from './src/types'
 
 TuffIcon.install = (app: App) => {
   app.component('TuffIcon', TuffIcon)
@@ -7,6 +8,13 @@ TuffIcon.install = (app: App) => {
 }
 
 const TxIcon = TuffIcon
-export { TuffIcon, TxIcon }
-export type { TxIconSource, TxIconType, TxIconStatus } from './src/types'
+export { TuffIcon, TxIcon, TX_ICON_CONFIG_KEY }
+export type {
+  TxIconSource,
+  TxIconType,
+  TxIconStatus,
+  TxIconConfig,
+  TxIconUrlResolver,
+  TxIconSvgFetcher,
+} from './src/types'
 export default TuffIcon

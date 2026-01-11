@@ -52,7 +52,7 @@ export class AccountStorage {
   eller?: Eller
   token?: Token
 
-  constructor(data: string) {
+  constructor(data?: any) {
     // console.log( data )
     this.analyzeFromObj(data)
   }

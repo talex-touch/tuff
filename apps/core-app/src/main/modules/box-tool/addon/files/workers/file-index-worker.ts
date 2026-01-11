@@ -2,6 +2,7 @@ import type { Client } from '@libsql/client'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { SearchIndexItem, SearchIndexKeyword } from '../../../search-engine/search-index-service'
 import { parentPort } from 'node:worker_threads'
+import { performance } from 'node:perf_hooks'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createClient } from '@libsql/client'
@@ -17,6 +18,7 @@ import {
   getTypeTagsForExtension,
   KEYWORD_MAP,
 } from '../constants'
+import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
 
 type IndexFilePayload = {
   id: number
@@ -49,6 +51,31 @@ type IndexErrorMessage = {
   type: 'error'
   taskId: string
   error: string
+}
+
+function buildMetricsPayload(): WorkerMetricsPayload {
+  const memory = process.memoryUsage()
+  const eventLoop = typeof performance.eventLoopUtilization === 'function'
+    ? performance.eventLoopUtilization()
+    : null
+  return {
+    timestamp: Date.now(),
+    memory: {
+      rss: memory.rss,
+      heapUsed: memory.heapUsed,
+      heapTotal: memory.heapTotal,
+      external: memory.external,
+      arrayBuffers: memory.arrayBuffers ?? 0,
+    },
+    cpuUsage: process.cpuUsage(),
+    eventLoop: eventLoop
+      ? {
+          active: eventLoop.active,
+          idle: eventLoop.idle,
+          utilization: eventLoop.utilization,
+        }
+      : null,
+  }
 }
 
 const MAX_CONTENT_LENGTH = 200_000
@@ -321,8 +348,19 @@ async function processQueue(): Promise<void> {
   }
 }
 
-parentPort?.on('message', (payload: IndexRequest) => {
-  if (!payload || payload.type !== 'index') {
+parentPort?.on('message', (payload: IndexRequest | WorkerMetricsRequest) => {
+  if (!payload) {
+    return
+  }
+  if (payload.type === 'metrics') {
+    parentPort?.postMessage({
+      type: 'metrics',
+      requestId: payload.requestId,
+      metrics: buildMetricsPayload(),
+    } satisfies WorkerMetricsResponse)
+    return
+  }
+  if (payload.type !== 'index') {
     return
   }
   queue.push(payload)

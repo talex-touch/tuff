@@ -103,12 +103,60 @@ interface TuffDashboardSnapshot {
   }
   applications: {
     activeApp: ActiveAppInfo | null
+    summary: {
+      cpu: number
+      memory: number
+      processCount: number
+    }
     metrics: Array<{
       pid: number
       type: string
       cpu: number | null
       memory: number | null
       created: string | null
+    }>
+  }
+  workers: {
+    summary: {
+      total: number
+      busy: number
+      idle: number
+      offline: number
+    }
+    workers: Array<{
+      name: string
+      threadId: number | null
+      state: 'offline' | 'idle' | 'busy'
+      pending: number
+      lastTask: {
+        id: string
+        startedAt: string | null
+        finishedAt: string | null
+        durationMs: number | null
+        error: string | null
+      } | null
+      lastError: string | null
+      uptimeMs: number | null
+      metrics: {
+        capturedAt: number
+        memory: {
+          rss: number
+          heapUsed: number
+          heapTotal: number
+          external: number
+          arrayBuffers: number
+        }
+        cpu: {
+          user: number
+          system: number
+          percent: number | null
+        }
+        eventLoop: {
+          active: number
+          idle: number
+          utilization: number
+        } | null
+      } | null
     }>
   }
 }
@@ -253,6 +301,13 @@ function formatDuration(seconds: number): string {
   return `${hrs}h ${mins}m ${secs}s`
 }
 
+function formatDurationMs(milliseconds: number | null): string {
+  if (milliseconds === null || !Number.isFinite(milliseconds)) {
+    return 'N/A'
+  }
+  return formatDuration(Math.floor(milliseconds / 1000))
+}
+
 function formatBytes(value: number | null): string {
   if (value === null || value === undefined || value < 0)
     return 'N/A'
@@ -264,10 +319,41 @@ function formatBytes(value: number | null): string {
   return `${num.toFixed(num >= 10 ? 0 : 1)} ${units[order]}`
 }
 
+function formatPercent(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) {
+    return 'N/A'
+  }
+  return `${value.toFixed(1)}%`
+}
+
 function formatProgress(value: number | null): string {
   if (value === null || value < 0)
     return 'N/A'
   return `${(value * 100).toFixed(1)}%`
+}
+
+function formatTaskSummary(task: TuffDashboardSnapshot['workers']['workers'][number]['lastTask']): string {
+  if (!task) {
+    return 'N/A'
+  }
+  const parts: string[] = [task.id]
+  if (task.durationMs !== null) {
+    parts.push(`${task.durationMs}ms`)
+  }
+  if (task.finishedAt) {
+    parts.push(formatDateTime(task.finishedAt))
+  }
+  if (task.error) {
+    parts.push(`ERR: ${truncate(task.error, 24)}`)
+  }
+  return parts.join(' | ')
+}
+
+function formatEventLoop(value: TuffDashboardSnapshot['workers']['workers'][number]['metrics']): string {
+  if (!value?.eventLoop) {
+    return 'N/A'
+  }
+  return `${(value.eventLoop.utilization * 100).toFixed(1)}%`
 }
 
 function truncate(value: string, max = 32): string {
@@ -460,6 +546,28 @@ onUnmounted(() => {
               </div>
             </section>
 
+            <section class="debug-section">
+              <div class="section-header">
+                <h2 class="section-title">
+                  [APP_METRICS_SUMMARY]
+                </h2>
+              </div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-key">CPU_TOTAL:</span>
+                  <span class="info-value">{{ formatPercent(snapshot.applications.summary.cpu) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-key">MEMORY_TOTAL:</span>
+                  <span class="info-value">{{ formatBytes(snapshot.applications.summary.memory) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-key">PROCESS_COUNT:</span>
+                  <span class="info-value">{{ snapshot.applications.summary.processCount }}</span>
+                </div>
+              </div>
+            </section>
+
             <!-- Active Application -->
             <section class="debug-section">
               <div class="section-header">
@@ -508,6 +616,86 @@ onUnmounted(() => {
               </div>
               <div v-else class="no-data">
                 <span class="no-data-text">NO_ACTIVE_APPLICATION_DETECTED</span>
+              </div>
+            </section>
+
+            <section class="debug-section">
+              <div class="section-header">
+                <h2 class="section-title">
+                  [WORKER_STATUS]
+                </h2>
+              </div>
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-key">TOTAL:</span>
+                  <span class="stat-value">{{ snapshot.workers.summary.total }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-key">BUSY:</span>
+                  <span class="stat-value">{{ snapshot.workers.summary.busy }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-key">IDLE:</span>
+                  <span class="stat-value">{{ snapshot.workers.summary.idle }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-key">OFFLINE:</span>
+                  <span class="stat-value">{{ snapshot.workers.summary.offline }}</span>
+                </div>
+              </div>
+
+              <div class="table-section">
+                <div class="table-header">
+                  WORKERS
+                </div>
+                <div class="table-container">
+                  <table class="debug-table">
+                    <thead>
+                      <tr>
+                        <th>NAME</th>
+                        <th>STATE</th>
+                        <th>THREAD</th>
+                        <th>PENDING</th>
+                        <th>CPU</th>
+                        <th>RSS</th>
+                        <th>HEAP</th>
+                        <th>ELU</th>
+                        <th>UPTIME</th>
+                        <th>LAST_TASK</th>
+                        <th>LAST_ERROR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="worker in snapshot.workers.workers" :key="worker.name">
+                        <td>{{ worker.name }}</td>
+                        <td>
+                          <span class="status-tag" :class="`status-${worker.state}`">
+                            {{ worker.state }}
+                          </span>
+                        </td>
+                        <td>{{ worker.threadId ?? 'N/A' }}</td>
+                        <td>{{ worker.pending }}</td>
+                        <td>{{ formatPercent(worker.metrics?.cpu.percent ?? null) }}</td>
+                        <td>{{ formatBytes(worker.metrics?.memory.rss ?? null) }}</td>
+                        <td>{{ formatBytes(worker.metrics?.memory.heapUsed ?? null) }}</td>
+                        <td>{{ formatEventLoop(worker.metrics) }}</td>
+                        <td>{{ formatDurationMs(worker.uptimeMs) }}</td>
+                        <td>{{ formatTaskSummary(worker.lastTask) }}</td>
+                        <td>
+                          <span v-if="worker.lastError" class="error-text">
+                            {{ truncate(worker.lastError, 40) }}
+                          </span>
+                          <span v-else class="no-error">NONE</span>
+                        </td>
+                      </tr>
+                      <tr v-if="!snapshot.workers.workers.length">
+                        <td colspan="11" class="empty-row">
+                          NO_WORKERS
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </section>
           </div>
@@ -1264,6 +1452,21 @@ onUnmounted(() => {
   background: #000000;
   color: #888888;
   border: 1px solid #888888;
+}
+.status-idle {
+  background: #000000;
+  color: #00c853;
+  border: 1px solid #00c853;
+}
+.status-busy {
+  background: #000000;
+  color: #ffb300;
+  border: 1px solid #ffb300;
+}
+.status-offline {
+  background: #000000;
+  color: #777777;
+  border: 1px solid #555555;
 }
 
 .error-text {

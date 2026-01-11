@@ -1,5 +1,6 @@
 import DefaultTheme from 'vitepress/theme'
 import type { Theme } from 'vitepress'
+import 'virtual:uno.css'
 import './style/index.scss'
 import '../../../packages/components/style/index.scss'
 
@@ -97,6 +98,7 @@ import {
 
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
+import IconPreview from './components/IconPreview.vue'
 import GradualBlurAnimatedDemo from './components/demos/GradualBlurAnimatedDemo.vue'
 import ScrollBasicDemo from './components/demos/ScrollBasicDemo.vue'
 import ScrollHorizontalDemo from './components/demos/ScrollHorizontalDemo.vue'

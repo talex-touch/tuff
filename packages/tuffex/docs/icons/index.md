@@ -124,24 +124,89 @@ TouchX UI 提供了丰富的图标库，涵盖了各种使用场景。所有图�
 ```vue
 <template>
   <TxIcon name="home" />
+  <!-- 或使用 icon prop -->
+  <TuffIcon :icon="{ type: 'class', value: 'i-ri-home-line' }" />
 </template>
 ```
 
-### 自定义尺寸和颜色
+### 图标类型
+
+TuffIcon 支持多种图标类型：
+
+```vue
+<script setup>
+import { TuffIcon } from '@user-pkg/tuffex'
+</script>
+
+<template>
+  <!-- Emoji 图标 -->
+  <TuffIcon :icon="{ type: 'emoji', value: '🚀' }" />
+  <!-- UnoCSS/Iconify 类名 -->
+  <TuffIcon :icon="{ type: 'class', value: 'i-ri-star-line' }" />
+  
+  <!-- 远程 URL -->
+  <TuffIcon :icon="{ type: 'url', value: 'https://example.com/icon.svg' }" />
+  
+  <!-- 本地文件 -->
+  <TuffIcon :icon="{ type: 'file', value: '/path/to/icon.svg' }" />
+  
+  <!-- 内置图标 -->
+  <TuffIcon name="chevron-down" />
+  <TuffIcon name="close" />
+  <TuffIcon name="search" />
+</template>
+```
+
+### 自定义尺寸
 ```vue
 <template>
-  <TxIcon 
-    name="star" 
-    size="large" 
-    color="primary" 
+  <TuffIcon :icon="{ type: 'class', value: 'i-ri-star-line' }" :size="24" />
+  <TuffIcon :icon="{ type: 'class', value: 'i-ri-star-line' }" :size="32" />
+  <TuffIcon :icon="{ type: 'class', value: 'i-ri-star-line' }" :size="48" />
+</template>
+```
+
+### SVG 颜色模式
+
+对于 SVG 图标，`colorful` prop 控制渲染方式：
+
+```vue
+<template>
+  <!-- colorful=false (默认): 使用 CSS mask，继承 currentColor -->
+  <TuffIcon
+    :icon="{ type: 'url', value: '/icon.svg' }"
+    :colorful="false"class="text-blue-500"
+  />
+  
+  <!-- colorful=true: 保留原始 SVG 颜色 -->
+  <TuffIcon
+    :icon="{ type: 'url', value: '/colored-icon.svg' }"
+    :colorful="true"
   />
 </template>
 ```
 
-### 动画效果
+### 加载状态
+
+图标支持 loading 和 error 状态：
+
 ```vue
 <template>
-  <TxIcon name="loading" spin />
+  <TuffIcon :icon="{ type: 'url', value: '...', status: 'loading' }" />
+  <TuffIcon :icon="{ type: 'url', value: '...', status: 'error' }" />
+</template>
+```
+
+### 空图标占位
+
+当图标为空时显示占位图：
+
+```vue
+<template>
+  <TuffIcon :icon="null" empty="/placeholder.png" alt="默认图标"><template #empty>
+      <span>暂无图标</span>
+    </template>
+  </TuffIcon>
 </template>
 ```
 
@@ -153,13 +218,135 @@ TouchX UI 提供了丰富的图标库，涵盖了各种使用场景。所有图�
 2. **关键词搜索** - 使用图标名称或功能关键词
 3. **视觉搜索** - 根据图标外观特征查找
 
+## 高级配置
+
+### URL 解析器和SVG Fetcher
+
+TuffIcon 支持通过 provide/inject 配置全局 URL 解析和 SVG 加载逻辑。
+
+#### 类型定义
+
+```typescript
+import type { InjectionKey } from 'vue'
+
+// URL 解析器
+type TxIconUrlResolver = (url: string, type: 'url' | 'file') => string
+
+// SVG 加载器
+type TxIconSvgFetcher = (url: string) => Promise<string>
+
+// 配置接口
+interface TxIconConfig {
+  urlResolver?: TxIconUrlResolver
+  svgFetcher?: TxIconSvgFetcherfileProtocol?: string
+}
+
+// Injection Key
+const TX_ICON_CONFIG_KEY: InjectionKey<TxIconConfig>
+```
+
+#### Electron 应用配置示例
+
+在 Electron 应用中，需要处理本地文件路径（如 `tfile://` 协议）：
+
+```vue
+<!-- App.vue -->
+<script setup lang="ts">
+import { provide } from 'vue'
+import { TX_ICON_CONFIG_KEY } from '@user-pkg/tuffex'
+
+// 配置全局 TuffIcon
+provide(TX_ICON_CONFIG_KEY, {
+  // 默认文件协议前缀
+  fileProtocol: 'tfile://',
+  
+  // 自定义 URL 解析器
+  urlResolver: (url: string, type: 'url' | 'file') => {
+    // file 类型添加 tfile:// 协议
+    if (type === 'file') {
+      return `tfile://${url}`
+    }
+    // url 类型：本地绝对路径（非 API 路径）也添加协议
+    if (type === 'url' && url.startsWith('/') && !url.startsWith('/api/')) {
+      return `tfile://${url}`
+    }
+    
+    return url
+  },
+  
+  // 自定义 SVG 加载器（带重试逻辑）
+  svgFetcher: async (url: string) => {
+    const maxRetries = 3
+    let lastError: Error | null = null
+    
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return await response.text()
+      } catch (e) {
+        lastError = e as Error
+        await new Promise(r => setTimeout(r, 100 * (i + 1)))
+      }
+    }
+    
+    throw lastError
+  }
+})
+</script>
+```
+
+#### 组件级覆盖
+
+可以在单个组件上覆盖全局配置：
+
+```vue
+<template>
+  <TuffIcon
+    :icon="{ type: 'file', value: '/custom/path/icon.svg' }"
+    :url-resolver="customResolver"
+    :svg-fetcher="customFetcher"
+  />
+</template>
+
+<script setup>
+const customResolver = (url, type) => `custom-protocol://${url}`
+const customFetcher = async (url) => {
+  // 自定义加载逻辑
+  return await myCustomLoader(url)
+}
+</script>
+```
+
+### Web 应用配置示例
+
+在普通 Web 应用中，通常不需要特殊的URL 解析：
+
+```vue
+<script setup lang="ts">
+import { provide } from 'vue'
+import { TX_ICON_CONFIG_KEY } from '@user-pkg/tuffex'
+
+provide(TX_ICON_CONFIG_KEY, {
+  // 可选：添加 CDN 前缀
+  urlResolver: (url, type) => {
+    if (type === 'file') {
+      return `/assets/icons${url}`
+    }
+    return url
+  }
+})
+</script>
+```
+
 ## 自定义图标
 
 如果内置图标不能满足您的需求，您可以：
 
-1. **添加 SVG 图标** - 直接在组件中使用 SVG
-2. **注册自定义图标** - 将图标注册到图标库中
-3. **图标字体** - 使用第三方图标字体
+1. **使用 UnoCSS 图标** - 通过 `i-` 前缀使用 Iconify 图标
+2. **添加 SVG 图标** - 使用 `type: 'url'` 或 `type: 'file'`
+3. **注册内置图标** -扩展 builtinIcons 对象
+4. **使用Emoji** - 直接使用 `type: 'emoji'`
 
 详细使用方法请参考 [Icon 组件文档](/guide/components/icon)。
 

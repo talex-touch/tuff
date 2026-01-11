@@ -1,4 +1,6 @@
 import { parentPort } from 'node:worker_threads'
+import { performance } from 'node:perf_hooks'
+import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
 
 type ReconcileDiskFile = {
   path: string
@@ -39,6 +41,31 @@ type ReconcileErrorMessage = {
   type: 'error'
   taskId: string
   error: string
+}
+
+function buildMetricsPayload(): WorkerMetricsPayload {
+  const memory = process.memoryUsage()
+  const eventLoop = typeof performance.eventLoopUtilization === 'function'
+    ? performance.eventLoopUtilization()
+    : null
+  return {
+    timestamp: Date.now(),
+    memory: {
+      rss: memory.rss,
+      heapUsed: memory.heapUsed,
+      heapTotal: memory.heapTotal,
+      external: memory.external,
+      arrayBuffers: memory.arrayBuffers ?? 0,
+    },
+    cpuUsage: process.cpuUsage(),
+    eventLoop: eventLoop
+      ? {
+          active: eventLoop.active,
+          idle: eventLoop.idle,
+          utilization: eventLoop.utilization,
+        }
+      : null,
+  }
 }
 
 const queue: ReconcileRequest[] = []
@@ -116,8 +143,19 @@ async function processQueue(): Promise<void> {
   }
 }
 
-parentPort?.on('message', (payload: ReconcileRequest) => {
-  if (!payload || payload.type !== 'reconcile') {
+parentPort?.on('message', (payload: ReconcileRequest | WorkerMetricsRequest) => {
+  if (!payload) {
+    return
+  }
+  if (payload.type === 'metrics') {
+    parentPort?.postMessage({
+      type: 'metrics',
+      requestId: payload.requestId,
+      metrics: buildMetricsPayload(),
+    } satisfies WorkerMetricsResponse)
+    return
+  }
+  if (payload.type !== 'reconcile') {
     return
   }
   queue.push(payload)
