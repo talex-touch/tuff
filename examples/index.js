@@ -4,8 +4,10 @@
  * 简单的插件通信SDK - 通过 IFeatureLifeCycle 接口与主应用通信
  */
 
+import { hasWindow } from '@talex-touch/utils/env'
+
 // 检查运行环境
-if (typeof window === 'undefined') {
+if (!hasWindow()) {
   throw new TypeError('[Plugin SDK] This SDK must run in a browser environment')
 }
 

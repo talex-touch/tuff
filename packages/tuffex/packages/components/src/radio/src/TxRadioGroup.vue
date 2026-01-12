@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TxRadioGroupProps, TxRadioIndicatorVariant, TxRadioValue } from './types'
+import { hasWindow } from '../../../../utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
 import { TxGlassSurface } from '../../glass-surface'
 
@@ -96,7 +97,7 @@ let cleanupDarkMode: (() => void) | undefined
  * Sync prefers-color-scheme and return cleanup handler.
  */
 function updateDarkMode(): (() => void) | undefined {
-  if (typeof window === 'undefined') {
+  if (!hasWindow()) {
     return
   }
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')

@@ -314,7 +314,7 @@ let touchChannel: ITouchClientChannel | null = null
 
 export function genChannel(): ITouchClientChannel {
   if (!touchChannel) {
-    if (typeof window === 'undefined' || !(window as any)?.$plugin?.name) {
+    if (!hasWindow() || !(window as any)?.$plugin?.name) {
       throw new Error('TouchChannel cannot be initialized outside plugin renderer context')
     }
 

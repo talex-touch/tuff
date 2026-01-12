@@ -1,3 +1,5 @@
+import { hasDocument } from '../../env'
+
 /**
  * Delays execution for a given amount of milliseconds.
  *
@@ -100,7 +102,7 @@ export function structuredStrictStringify(value: unknown): string {
       return 'null'
     if (Array.isArray(val))
       return 'Array'
-    if (typeof Document !== 'undefined') {
+    if (hasDocument()) {
       if (val instanceof Node)
         return 'DOMNode'
     }

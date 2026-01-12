@@ -1,3 +1,4 @@
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 type ScrollTriggerClass = typeof import('gsap/ScrollTrigger')['ScrollTrigger']
@@ -57,7 +58,7 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
   }
 
   const resolveBodyTargetBackground = () => {
-    if (typeof document === 'undefined')
+    if (!hasDocument())
       return '#181818'
     const root = document.documentElement
     const prefersDark = root.classList.contains('dark')
@@ -121,7 +122,7 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
       state.followingElements = followingElements
 
       state.headerElement = state.headerElement ?? document.querySelector<HTMLElement>('[data-role="main-header"]')
-      const bodyElement = typeof document !== 'undefined' ? document.body : null
+      const bodyElement = hasDocument() ? document.body : null
 
       if (bodyElement) {
         state.bodyFinalBackground = resolveBodyTargetBackground()
@@ -217,7 +218,7 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
               backgroundColor: finalBackground,
               yPercent: 0,
             })
-            if (typeof document !== 'undefined' && finalBackground) {
+            if (hasDocument() && finalBackground) {
               state.gsapInstance?.set(document.body, { backgroundColor: finalBackground })
               state.bodyFinalBackground = finalBackground
             }
@@ -228,7 +229,7 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
             applyHeroState('animating')
             const finalBackground = resolveBodyTargetBackground()
             state.bodyFinalBackground = finalBackground
-            if (typeof document !== 'undefined')
+            if (hasDocument())
               state.gsapInstance?.set(document.body, { backgroundColor: '#000' })
             state.gsapInstance?.set(heroEl, {
               height: viewportHeight,
@@ -430,7 +431,7 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
     if (!import.meta.client)
       return
 
-    if (typeof document !== 'undefined') {
+    if (hasDocument()) {
       const body = document.body
       if (!state.bodyOriginalBackground)
         state.bodyOriginalBackground = body.style.backgroundColor || ''
@@ -452,11 +453,15 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
 
     applyHeroState('expanded')
     await buildTimeline()
-    window.addEventListener('resize', handleResize, { passive: true })
+    if (hasWindow()) {
+      window.addEventListener('resize', handleResize, { passive: true })
+    }
   })
 
   onBeforeUnmount(() => {
-    window.removeEventListener('resize', handleResize)
+    if (hasWindow()) {
+      window.removeEventListener('resize', handleResize)
+    }
     if (state.resizeRaf) {
       cancelAnimationFrame(state.resizeRaf)
       state.resizeRaf = null
@@ -479,7 +484,7 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
       state.gsapInstance.set(state.headerElement, { clearProps: 'opacity,transform,pointerEvents' })
       state.headerElement.dataset.state = 'visible'
     }
-    if (typeof document !== 'undefined' && state.bodyOriginalBackground !== null)
+    if (hasDocument() && state.bodyOriginalBackground !== null)
       document.body.style.backgroundColor = state.bodyOriginalBackground
   })
 

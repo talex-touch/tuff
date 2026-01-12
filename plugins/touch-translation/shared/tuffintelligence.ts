@@ -1,6 +1,7 @@
 import type { IntelligenceTranslatePayload } from '@talex-touch/utils'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence'
 import { intelligence } from '@talex-touch/utils/plugin/sdk'
+import { hasWindow } from '@talex-touch/utils/env'
 
 export interface TuffIntelligenceTranslateResponse {
   text: string
@@ -9,7 +10,7 @@ export interface TuffIntelligenceTranslateResponse {
 }
 
 export async function tuffIntelligenceTranslate(payload: IntelligenceTranslatePayload): Promise<TuffIntelligenceTranslateResponse> {
-  const hasRendererChannel = typeof window !== 'undefined' && Boolean((window as any)?.$channel)
+  const hasRendererChannel = hasWindow() && Boolean((window as any)?.$channel)
 
   const response = hasRendererChannel
     ? await intelligence.invoke<string>('text.translate', payload)

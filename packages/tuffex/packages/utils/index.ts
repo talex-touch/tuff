@@ -1,5 +1,6 @@
 export * from './withInstall'
 export * from './vibrate'
+export * from './env'
 export * from './dialog-manager'
 export * from './toast'
 export * from './animation/auto-resize'

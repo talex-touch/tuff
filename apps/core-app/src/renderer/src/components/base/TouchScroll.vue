@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElScrollbar } from 'element-plus'
+import { TouchScroll as TuffTouchScroll } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 
 defineOptions({
@@ -21,9 +21,7 @@ const emit = defineEmits<{
   scroll: [scrollInfo: { scrollTop: number, scrollLeft: number }]
 }>()
 
-const scrollContainer = ref<HTMLElement | null>(null)
-const nativeScrollRef = ref<HTMLElement | null>(null)
-const elScrollRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
+const scrollRef = ref<InstanceType<typeof TuffTouchScroll> | null>(null)
 
 const isDarwin = computed(() => {
   if (!hasWindow())
@@ -36,71 +34,14 @@ const useNative = computed(() => {
   return props.native || isDarwin.value
 })
 
-function handleScroll(event: Event | { scrollTop: number, scrollLeft: number }) {
-  let scrollInfo = {
-    scrollTop: 0,
-    scrollLeft: 0,
-  }
-
-  if (event instanceof Event) {
-    const target = event.target as HTMLElement
-    scrollInfo = {
-      scrollTop: target.scrollTop,
-      scrollLeft: target.scrollLeft,
-    }
-  }
-  else {
-    scrollInfo = {
-      scrollTop: event.scrollTop,
-      scrollLeft: event.scrollLeft,
-    }
-  }
-
-  emit('scroll', scrollInfo)
-}
-
 defineExpose({
-  nativeScrollRef,
-  elScrollRef,
-  scrollTo(x: number, y: number) {
-    if (useNative.value) {
-      if (nativeScrollRef.value) {
-        nativeScrollRef.value.scrollTo(x, y)
-      }
-    }
-    else {
-      if (elScrollRef.value && elScrollRef.value.scrollTo) {
-        elScrollRef.value.scrollTo(x, y)
-      }
-    }
+  nativeScrollRef: computed(() => (scrollRef.value as any)?.nativeScrollRef ?? null),
+  elScrollRef: undefined,
+  scrollTo(x: number, y: number, time?: number) {
+    ;(scrollRef.value as any)?.scrollTo?.(x, y, time)
   },
   getScrollInfo() {
-    if (useNative.value) {
-      if (nativeScrollRef.value) {
-        return {
-          scrollTop: nativeScrollRef.value.scrollTop,
-          scrollLeft: nativeScrollRef.value.scrollLeft,
-          scrollHeight: nativeScrollRef.value.scrollHeight,
-          scrollWidth: nativeScrollRef.value.scrollWidth,
-          clientHeight: nativeScrollRef.value.clientHeight,
-          clientWidth: nativeScrollRef.value.clientWidth,
-        }
-      }
-    }
-    else {
-      if (elScrollRef.value && (elScrollRef.value as any).wrapRef) {
-        const wrap = (elScrollRef.value as any).wrapRef
-        return {
-          scrollTop: wrap.scrollTop,
-          scrollLeft: wrap.scrollLeft,
-          scrollHeight: wrap.scrollHeight,
-          scrollWidth: wrap.scrollWidth,
-          clientHeight: wrap.clientHeight,
-          clientWidth: wrap.clientWidth,
-        }
-      }
-    }
-    return {
+    return (scrollRef.value as any)?.getScrollInfo?.() ?? {
       scrollTop: 0,
       scrollLeft: 0,
       scrollHeight: 0,
@@ -109,37 +50,29 @@ defineExpose({
       clientWidth: 0,
     }
   },
+  refresh() {
+    ;(scrollRef.value as any)?.refresh?.()
+  },
 })
 </script>
 
 <template>
-  <div ref="scrollContainer" class="touch-scroll" :class="{ 'native-scroll': useNative }">
-    <template v-if="useNative">
-      <div
-        ref="nativeScrollRef"
-        class="native-scroll-wrapper"
-        @scroll="handleScroll"
-      >
-        <slot name="header" />
-
-        <div class="py-2 pl-2 pr-3" :style="noPadding ? 'padding: 0 !important' : ''">
-          <slot />
-        </div>
-      </div>
+  <TuffTouchScroll
+    ref="scrollRef"
+    class="touch-scroll"
+    v-bind="$attrs"
+    :no-padding="noPadding"
+    :native="useNative"
+    @scroll="(info) => emit('scroll', info)"
+  >
+    <template #header>
+      <slot name="header" />
     </template>
-    <template v-else>
-      <div class="el-scroll-container">
-        <ElScrollbar
-          ref="elScrollRef"
-          v-bind="$attrs"
-          class="el-scroll-wrapper w-full"
-          @scroll="handleScroll"
-        >
-          <slot />
-        </ElScrollbar>
-      </div>
+    <template #footer>
+      <slot name="footer" />
     </template>
-  </div>
+    <slot />
+  </TuffTouchScroll>
 </template>
 
 <style lang="scss" scoped>
@@ -147,30 +80,5 @@ defineExpose({
   width: 100%;
   height: 100%;
   position: relative;
-}
-
-.native-scroll-wrapper {
-  :deep(> header, .header) {
-    z-index: var(--touch-scroll-z-index, 100);
-    position: sticky;
-
-    top: 0;
-
-    backdrop-filter: blur(18px) saturate(180%);
-    border-bottom: 1px solid var(--el-border-color-light);
-  }
-  width: 100%;
-  height: 100%;
-  overflow: scroll;
-}
-
-.el-scroll-container {
-  width: 100%;
-  height: 100%;
-}
-
-.el-scroll-wrapper {
-  width: 100%;
-  height: 100%;
 }
 </style>

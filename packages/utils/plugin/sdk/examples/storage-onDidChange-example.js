@@ -1,3 +1,5 @@
+import { hasWindow } from '@talex-touch/utils/env'
+
 /**
  * Storage onDidChange 示例
  * 展示如何使用 storage.onDidChange 监听存储文件变化
@@ -189,7 +191,7 @@ window.storageOnDidChangeExample = {
 }
 
 // 自动运行示例（可选）
-if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+if (hasWindow() && window.location.hostname === 'localhost') {
   console.log('[Auto] Setting up storage listeners...')
 
   // 设置配置监听

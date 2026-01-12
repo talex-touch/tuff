@@ -14,6 +14,7 @@ import type {
   FlowPayloadType
 } from '../../types/flow'
 import { FlowIPCChannel } from '../../types/flow'
+import { hasWindow } from '../../env'
 
 /**
  * Flow transfer handler function type
@@ -138,7 +139,7 @@ export function createFlowSDK(
   let hasRegisteredHandler = false
 
   // Listen for session updates
-  if (typeof window !== 'undefined') {
+  if (hasWindow()) {
     window.addEventListener('message', (event) => {
       if (event.data?.type === FlowIPCChannel.SESSION_UPDATE) {
         const update = event.data.payload as FlowSessionUpdate
@@ -258,7 +259,7 @@ export function createFlowSDK(
         })
 
         // Listen for incoming flow transfers
-        if (typeof window !== 'undefined') {
+        if (hasWindow()) {
           window.addEventListener('message', (event) => {
             if (event.data?.type === FlowIPCChannel.DELIVER && event.data?.targetPluginId === pluginId) {
               const { payload, sessionId, senderId, senderName } = event.data

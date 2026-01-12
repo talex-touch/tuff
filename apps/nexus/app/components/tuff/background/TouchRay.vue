@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { Mesh, Program, Renderer, Triangle } from 'ogl'
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 
@@ -88,7 +89,7 @@ const resizeTimeoutRef = ref<number | null>(null)
 const rgbColor = computed<[number, number, number]>(() => hexToRgb(props.raysColor))
 const pulsatingValue = computed<number>(() => props.pulsating ? 1.0 : 0.0)
 const devicePixelRatio = computed<number>(() => {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return 1
   return Math.min(window.devicePixelRatio || 1, 2)
 })
@@ -133,7 +134,7 @@ const debouncedUpdatePlacement = (() => {
     if (timeoutId !== null) {
       clearTimeout(timeoutId)
     }
-    if (typeof window === 'undefined') {
+    if (!hasWindow()) {
       updateFn()
       timeoutId = null
       return
@@ -501,7 +502,7 @@ watch(
 watch(
   () => props.followMouse,
   (newFollowMouse: boolean): void => {
-    if (typeof window === 'undefined')
+    if (!hasWindow())
       return
 
     if (newFollowMouse) {
@@ -534,7 +535,7 @@ onUnmounted((): void => {
     mouseThrottleId = null
   }
 
-  if (typeof window !== 'undefined') {
+  if (hasWindow()) {
     window.removeEventListener('mousemove', handleMouseMove)
   }
 })

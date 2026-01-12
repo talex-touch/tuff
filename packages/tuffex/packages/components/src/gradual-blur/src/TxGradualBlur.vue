@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '../../../../utils/env'
 import type { CSSProperties, StyleValue } from 'vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { GradualBlurProps } from './types'
@@ -134,7 +135,7 @@ function debounce<T extends (...a: any[]) => void>(fn: T, wait: number) {
 
 function updateResponsiveDimensions() {
   if (!config.value.responsive) return
-  if (typeof window === 'undefined') return
+  if (!hasWindow()) return
 
   const width = window.innerWidth
   const currentConfig = config.value

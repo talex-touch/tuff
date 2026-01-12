@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { gsap } from 'gsap'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -156,7 +157,7 @@ function playExit(target: HTMLElement) {
 }
 
 function setupMotionPreference() {
-  if (typeof window === 'undefined' || !('matchMedia' in window))
+  if (!hasWindow() || !('matchMedia' in window))
     return
 
   const media = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -191,7 +192,7 @@ const intersectionHandler: IntersectionObserverCallback = (entries) => {
 }
 
 function initObserver(target: HTMLElement | null) {
-  if (!target || typeof window === 'undefined')
+  if (!target || !hasWindow())
     return
 
   if (!('IntersectionObserver' in window)) {

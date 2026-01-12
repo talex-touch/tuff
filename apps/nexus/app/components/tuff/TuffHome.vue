@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import TuffLandingAggregation from './landing/TuffLandingAggregation.vue'
 import TuffLandingAiOverview from './landing/TuffLandingAiOverview.vue'
@@ -91,7 +92,7 @@ onMounted(async () => {
 
   await nextTick()
 
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
 
   const container = smoothScrollContainerRef.value
