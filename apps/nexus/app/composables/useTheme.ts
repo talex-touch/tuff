@@ -1,7 +1,5 @@
 import { useColorMode } from '#imports'
-
-const hasWindow = typeof window !== 'undefined'
-const hasDocument = typeof document !== 'undefined'
+import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 
 export function useTheme() {
   const color = useColorMode()
@@ -23,7 +21,7 @@ export function useTheme() {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const isAppearanceTransition = !prefersReducedMotion
       // @ts-expect-error: Transition API
-      && typeof document.startViewTransition === 'function'
+      && ('startViewTransition' in document)
 
     if (!isAppearanceTransition || !event) {
       applyPreference(mode)

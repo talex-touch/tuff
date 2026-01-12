@@ -443,7 +443,7 @@ function useLoading(options: LoadingOptions) {
 
   const setupColorSchemeWatcher = () => {
     clearColorSchemeListener()
-    if (!hasWindow() || typeof window.matchMedia !== 'function') {
+    if (!hasWindow() || !window.matchMedia) {
       container.dataset.theme = 'dark'
       return
     }

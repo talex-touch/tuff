@@ -1,3 +1,5 @@
+import { hasWindow } from '@talex-touch/utils/env'
+
 /**
  * 完整通信示例
  * 展示插件间通信的完整流程
@@ -151,7 +153,7 @@ window.completeCommunicationExample = {
 }
 
 // 自动运行示例（可选）
-if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+if (hasWindow() && window.location.hostname === 'localhost') {
   console.log('[Auto] Running communication examples...')
 
   // 延迟执行，确保SDK已初始化

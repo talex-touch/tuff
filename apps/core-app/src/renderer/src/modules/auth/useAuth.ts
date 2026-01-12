@@ -21,13 +21,81 @@ let isInitialized = false
 let activeConsumers = 0
 
 const NEXUS_URL_LOCAL = 'http://localhost:3200'
+const DEV_AUTH_STORAGE_KEY = 'tuff-dev-auth-user'
+
+function isLocalAuthMode(): boolean {
+  return import.meta.env.DEV && appSetting?.dev?.authServer === 'local'
+}
 
 function getNexusUrl(): string {
   // In dev mode, check appSetting for auth server preference
-  if (import.meta.env.DEV && appSetting?.dev?.authServer === 'local') {
+  if (isLocalAuthMode()) {
     return NEXUS_URL_LOCAL
   }
   return getTuffBaseUrl()
+}
+
+function buildLocalUser(token?: string): ClerkUser {
+  const now = new Date().toISOString()
+  const tokenHint = token ? token.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) : 'local'
+  return {
+    id: `dev-${tokenHint || 'local'}`,
+    emailAddresses: [{ emailAddress: 'dev@local', id: 'dev-email' }],
+    firstName: 'Dev',
+    lastName: 'Local',
+    username: 'dev-local',
+    imageUrl: '',
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function readLocalAuthUser(): ClerkUser | null {
+  if (!isLocalAuthMode())
+    return null
+  try {
+    const raw = localStorage.getItem(DEV_AUTH_STORAGE_KEY)
+    if (!raw)
+      return null
+    const parsed = JSON.parse(raw)
+    if (parsed?.user?.id)
+      return parsed.user as ClerkUser
+  }
+  catch (error) {
+    console.warn('[useAuth] Failed to read local auth cache', error)
+  }
+  return null
+}
+
+function writeLocalAuthUser(user: ClerkUser, token?: string): void {
+  if (!isLocalAuthMode())
+    return
+  try {
+    localStorage.setItem(DEV_AUTH_STORAGE_KEY, JSON.stringify({ user, token: token ?? null }))
+  }
+  catch (error) {
+    console.warn('[useAuth] Failed to persist local auth cache', error)
+  }
+}
+
+function clearLocalAuthUser(): void {
+  if (!isLocalAuthMode())
+    return
+  try {
+    localStorage.removeItem(DEV_AUTH_STORAGE_KEY)
+  }
+  catch (error) {
+    console.warn('[useAuth] Failed to clear local auth cache', error)
+  }
+}
+
+function applyLocalAuth(token?: string): void {
+  const user = buildLocalUser(token)
+  authState.isLoaded = true
+  authState.isSignedIn = true
+  authState.user = user
+  authState.sessionId = token ?? `dev-session-${user.id}`
+  writeLocalAuthUser(user, token)
 }
 
 // Pending browser login state
@@ -182,6 +250,24 @@ async function initializeAuth() {
     return
 
   try {
+    if (isLocalAuthMode()) {
+      const cachedUser = readLocalAuthUser()
+      if (cachedUser) {
+        authState.isLoaded = true
+        authState.isSignedIn = true
+        authState.user = cachedUser
+        authState.sessionId = `dev-session-${cachedUser.id}`
+      }
+      else {
+        authState.isLoaded = true
+        authState.isSignedIn = false
+        authState.user = null
+        authState.sessionId = null
+      }
+      isInitialized = true
+      return
+    }
+
     const { initializeClerk } = useClerkProvider()
     const clerk = await initializeClerk()
 
@@ -211,6 +297,11 @@ async function initializeAuth() {
 }
 
 async function signIn() {
+  if (isLocalAuthMode()) {
+    applyLocalAuth()
+    return
+  }
+
   const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
@@ -236,6 +327,11 @@ async function signIn() {
 }
 
 async function signUp() {
+  if (isLocalAuthMode()) {
+    applyLocalAuth()
+    return
+  }
+
   const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
@@ -261,6 +357,15 @@ async function signUp() {
 }
 
 async function signOut() {
+  if (isLocalAuthMode()) {
+    authState.isLoaded = true
+    authState.isSignedIn = false
+    authState.user = null
+    authState.sessionId = null
+    clearLocalAuthUser()
+    return
+  }
+
   const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (!clerk) {
@@ -291,6 +396,8 @@ async function signOut() {
 }
 
 function checkAuthStatus() {
+  if (isLocalAuthMode())
+    return
   const { getClerk } = useClerkProvider()
   const clerk = getClerk()
   if (clerk) {
@@ -419,7 +526,27 @@ async function login(options: LoginOptions = {}): Promise<LoginResult> {
     }
   }
 
-  const result = await loginWithClerk()
+  const result = isLocalAuthMode()
+    ? await (async () => {
+        authLoadingState.isLoggingIn = true
+        authLoadingState.loginProgress = 0
+        authLoadingState.loginTimeRemaining = 0
+        try {
+          applyLocalAuth()
+          authLoadingState.loginProgress = 100
+          return {
+            success: true,
+            user: currentUser.value,
+          }
+        }
+        catch (error) {
+          return { success: false, error }
+        }
+        finally {
+          authLoadingState.isLoggingIn = false
+        }
+      })()
+    : await loginWithClerk()
 
   if (result.success) {
     onSuccess?.(result.user)
@@ -498,6 +625,22 @@ async function handleExternalAuthCallback(token: string): Promise<void> {
   }
 
   try {
+    if (isLocalAuthMode()) {
+      applyLocalAuth(token)
+      authLoadingState.loginProgress = 100
+      toast.success('登录成功')
+
+      if (pendingBrowserLogin.value) {
+        clearTimeout(pendingBrowserLogin.value.timeoutId)
+        pendingBrowserLogin.value.resolve({
+          success: true,
+          user: currentUser.value,
+        })
+        pendingBrowserLogin.value = null
+      }
+      return
+    }
+
     // Use the token to authenticate with Clerk
     const { getClerk } = useClerkProvider()
     const clerk = getClerk()

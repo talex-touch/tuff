@@ -1,3 +1,5 @@
+import { hasNavigator, hasWindow } from './env'
+
 /**
  * 震动类型定义
  */
@@ -83,7 +85,7 @@ export function useAutoVibrate(duration: number[], options: VibrateOptions = {})
   
   try {
     // 检查是否在浏览器环境
-    if (typeof window === 'undefined') {
+    if (!hasWindow()) {
       if (!silent) {
         console.warn('Vibrate API is not available in non-browser environment')
       }
@@ -113,7 +115,7 @@ export function useAutoVibrate(duration: number[], options: VibrateOptions = {})
  */
 export function stopVibrate() {
   try {
-    if (typeof window !== 'undefined' && window.navigator.vibrate) {
+    if (hasWindow() && window.navigator.vibrate) {
       window.navigator.vibrate(0)
       return true
     }
@@ -127,9 +129,9 @@ export function stopVibrate() {
  * 检查是否支持震动 API
  */
 export function isVibrateSupported(): boolean {
-  return typeof window !== 'undefined' && 
-         typeof window.navigator !== 'undefined' && 
-         typeof window.navigator.vibrate === 'function'
+  return hasWindow()
+    && hasNavigator()
+    && typeof navigator.vibrate === 'function'
 }
 
 /**

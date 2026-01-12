@@ -142,7 +142,7 @@ function handleClose(event: MouseEvent): void {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border-radius: 999px;
+  border-radius: 8px;
   color: var(--tx-tag-color, var(--tx-color-primary));
   background: var(--tx-tag-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tx-tag-border, color-mix(in srgb, currentColor 32%, transparent));
@@ -189,11 +189,11 @@ function handleClose(event: MouseEvent): void {
   }
 
   &--sm {
-    padding: 2px 8px;
+    padding: 4px 6px;
   }
 
   &--md {
-    padding: 4px 12px;
+    padding: 5px 8px;
     font-size: 12px;
 
     .tx-tag__icon {

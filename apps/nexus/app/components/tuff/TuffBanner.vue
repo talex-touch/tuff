@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 
@@ -138,7 +139,7 @@ function resizeCanvas() {
     return
   const canvas = canvasRef.value
   const rect = canvas.getBoundingClientRect()
-  const ratio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  const ratio = hasWindow() ? (window.devicePixelRatio || 1) : 1
 
   canvas.width = rect.width * ratio
   canvas.height = rect.height * ratio
@@ -295,7 +296,7 @@ function onWindowResize() {
 
 onMounted(() => {
   initWebGL()
-  if (typeof window !== 'undefined') {
+  if (hasWindow()) {
     window.addEventListener('resize', onWindowResize)
   }
 })
@@ -304,7 +305,7 @@ onUnmounted(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)
   }
-  if (typeof window !== 'undefined') {
+  if (hasWindow()) {
     window.removeEventListener('resize', onWindowResize)
   }
 })

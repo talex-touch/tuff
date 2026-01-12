@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { hasNavigator } from '@talex-touch/utils/env'
 
 export type ReleaseChannel = 'RELEASE' | 'BETA' | 'SNAPSHOT'
 export type ReleaseStatus = 'draft' | 'published' | 'archived'
@@ -151,7 +152,7 @@ export function useReleases() {
 }
 
 export function detectPlatform(): AssetPlatform {
-  if (typeof navigator === 'undefined')
+  if (!hasNavigator())
     return 'darwin'
 
   const ua = navigator.userAgent.toLowerCase()
@@ -165,7 +166,7 @@ export function detectPlatform(): AssetPlatform {
 }
 
 export function detectArch(): AssetArch {
-  if (typeof navigator === 'undefined')
+  if (!hasNavigator())
     return 'arm64'
 
   // Try to detect ARM architecture

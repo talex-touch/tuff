@@ -9,10 +9,11 @@ sider_text="侧边栏名称"
 请访问：`/components/context-menu`
 
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/tuffex'
 import { onMounted } from 'vue'
 
 onMounted(() => {
-  if (typeof window !== 'undefined')
+  if (hasWindow())
     window.location.replace('/components/context-menu')
 })
 </script>

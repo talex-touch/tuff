@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '../../../../utils/env'
 import { nextTick, onMounted, ref, watch } from 'vue'
 import type { GroupBlockProps, GroupBlockEmits } from './types'
 
@@ -22,7 +23,7 @@ const emit = defineEmits<GroupBlockEmits>()
 const STORAGE_PREFIX = 'tx-group-block-storage-'
 
 function readStoredExpand(): boolean | null {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return null
   if (!props.memoryName)
     return null
@@ -41,7 +42,7 @@ function readStoredExpand(): boolean | null {
 }
 
 function persistState(state: boolean): void {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   if (!props.memoryName)
     return

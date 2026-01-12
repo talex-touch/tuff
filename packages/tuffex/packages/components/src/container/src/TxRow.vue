@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '../../../../utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 defineOptions({ name: 'TxRow' })
@@ -22,7 +23,7 @@ const props = withDefaults(
   },
 )
 
-const width = ref<number>(typeof window === 'undefined' ? 1024 : window.innerWidth)
+const width = ref<number>(hasWindow() ? window.innerWidth : 1024)
 
 function getBp(w: number): Breakpoint {
   if (w < 640) return 'xs'
@@ -40,15 +41,21 @@ function resolveGutter(g: Gutter): number {
 }
 
 function onResize() {
+  if (!hasWindow())
+    return
   width.value = window.innerWidth
 }
 
 onMounted(() => {
-  window.addEventListener('resize', onResize, { passive: true })
+  if (hasWindow()) {
+    window.addEventListener('resize', onResize, { passive: true })
+  }
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', onResize)
+  if (hasWindow()) {
+    window.removeEventListener('resize', onResize)
+  }
 })
 
 const gutterPx = computed(() => resolveGutter(props.gutter as any))

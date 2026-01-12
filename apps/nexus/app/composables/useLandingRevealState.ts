@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
 import { useState } from '#imports'
 import { onBeforeUnmount } from 'vue'
 
@@ -17,7 +18,7 @@ const DEFAULT_TIMINGS: LandingRevealTimings = {
 }
 
 function isClient() {
-  return typeof window !== 'undefined'
+  return hasWindow()
 }
 
 function schedule(timers: Ref<number[]>, delay: number, callback: () => void) {

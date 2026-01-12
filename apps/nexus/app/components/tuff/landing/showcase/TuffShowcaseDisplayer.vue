@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TuffShowcaseSearch from './TuffShowcaseSearch.vue'
@@ -58,17 +59,15 @@ function now() {
 }
 
 function scheduleFrame(cb: FrameRequestCallback): FrameHandle {
-  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function')
+  if (hasWindow() && window.requestAnimationFrame)
     return window.requestAnimationFrame(cb)
   return setTimeout(() => cb(now()), 16)
 }
 
 function cancelFrame(handle: FrameHandle) {
-  if (
-    typeof window !== 'undefined'
-    && typeof window.cancelAnimationFrame === 'function'
-    && typeof handle === 'number'
-  ) {
+  if (hasWindow()
+    && window.cancelAnimationFrame
+    && typeof handle === 'number') {
     window.cancelAnimationFrame(handle)
     return
   }

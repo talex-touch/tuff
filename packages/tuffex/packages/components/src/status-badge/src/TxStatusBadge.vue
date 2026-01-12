@@ -132,7 +132,7 @@ function handleClick(event: MouseEvent): void {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border-radius: 999px;
+  border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
   color: var(--tx-status-color, var(--tx-text-color-primary));
