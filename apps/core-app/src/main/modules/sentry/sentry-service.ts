@@ -19,7 +19,6 @@ import { innerRootPath } from '../../core/precore'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
-import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
 import { databaseModule } from '../database'
 import { storageModule } from '../storage'
@@ -1046,6 +1045,7 @@ export class SentryServiceModule extends BaseModule {
   }
 
   private recordTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
+    void meta
     const now = Date.now()
     const throttleWindow = 10 * 60 * 1000
     if (this.lastTelemetryFailureAt && now - this.lastTelemetryFailureAt < throttleWindow) {
@@ -1056,17 +1056,6 @@ export class SentryServiceModule extends BaseModule {
     this.lastTelemetryFailureMessage = message
     this.schedulePersistTelemetryStats()
 
-    try {
-      getAnalyticsMessageStore().add({
-        source: 'sentry',
-        severity: 'warn',
-        title: 'Telemetry sync failed',
-        message,
-        meta
-      })
-    } catch {
-      // ignore message store failures
-    }
     return true
   }
 

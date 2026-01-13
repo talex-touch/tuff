@@ -1,0 +1,554 @@
+# Project Issues & Cleanup Candidates
+
+## Scope
+- Focus: i18n cleanup (core-app renderer i18n + utils $i18n message system).
+- Method: string-literal scan of `apps/core-app/src/renderer` code for Vue i18n key usage, plus symbol scan for `*Keys` usage in `packages/utils/i18n/message-keys.ts`.
+- Notes:
+  - The unused lists are **candidates**: dynamic key usage (e.g., computed keys) will not be detected.
+  - Doc-only means key appears only in `.md` files, not in renderer code.
+
+## Summary
+- Core app renderer i18n keys: 1525 total, 1096 used, 19 doc-only, 410 unused candidates.
+- Utils $i18n message keys:
+  - Used groups: `DevServerKeys`, `FlowTransferKeys`.
+  - Unused groups: `PluginKeys`, `WidgetKeys`, `SystemKeys`, `PermissionKeys`.
+- Unused i18n file: `apps/core-app/src/renderer/src/locales/*/download-migration.json` (no references).
+
+## Issues
+
+### i18n-unused: Core app renderer i18n keys (candidates)
+- Scope: `apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- Evidence: keys not found as string-literals in renderer code.
+- Candidates (unused in code):
+  - account.enter
+  - account.next
+  - account.remoteFail
+  - base.last_step
+  - base.step
+  - base.touchCaptcha.fail
+  - base.touchCaptcha.instruction
+  - base.touchCaptcha.title
+  - common.add
+  - common.delete
+  - common.edit
+  - common.error
+  - common.info
+  - common.open
+  - common.remove
+  - common.warning
+  - coreBox.intelligence.hotkey
+  - coreBox.intelligence.suggestionAction
+  - coreBox.intelligence.suggestionDesc
+  - coreBox.intelligence.suggestionTitle
+  - coreBox.sourceTypes.app
+  - coreBox.sourceTypes.application
+  - coreBox.sourceTypes.command
+  - coreBox.sourceTypes.data
+  - coreBox.sourceTypes.feature
+  - coreBox.sourceTypes.file
+  - coreBox.sourceTypes.plugin
+  - coreBox.sourceTypes.service
+  - coreBox.sourceTypes.system
+  - coreBox.sourceTypes.web
+  - download.cancelled
+  - download.completed_at
+  - download.error.checksum
+  - download.error.disk_full
+  - download.error.network
+  - download.error.permission
+  - download.error.timeout
+  - download.error.unknown
+  - download.folder_shown
+  - download.open_settings
+  - download.paused
+  - download.pending
+  - download.progress
+  - download.remaining
+  - download.resume_failed
+  - download.retry_all
+  - download.settings
+  - download.status.cancelled
+  - download.status.completed
+  - download.status.downloading
+  - download.status.failed
+  - download.status.paused
+  - download.status.pending
+  - download.task_resumed
+  - download.view_all
+  - downloadErrors.invalid_url
+  - email.correct
+  - email.enter
+  - emailVerify.content
+  - emailVerify.title
+  - error.server
+  - flatNavBar.dashboard
+  - intelligence.addCustomProvider
+  - intelligence.addModelPlaceholder
+  - intelligence.addProvider
+  - intelligence.advancedConfig
+  - intelligence.apiConfig
+  - intelligence.apiKey
+  - intelligence.apiKeyPlaceholder
+  - intelligence.audit.viewLogs
+  - intelligence.baseUrl
+  - intelligence.baseUrlPlaceholder
+  - intelligence.builtinProviders
+  - intelligence.compatible
+  - intelligence.config.advanced.description
+  - intelligence.config.advanced.priorityPlaceholder
+  - intelligence.config.api.testModelPlaceholder
+  - intelligence.config.model.instructionsPlaceholder
+  - intelligence.customCompatible
+  - intelligence.customProviders
+  - intelligence.disabled.message
+  - intelligence.enabled
+  - intelligence.global.cacheExpirationPlaceholder
+  - intelligence.list.providersCount
+  - intelligence.modelConfig
+  - intelligence.models
+  - intelligence.priority.label
+  - intelligence.providerName
+  - intelligence.providerNamePlaceholder
+  - intelligence.providerType
+  - intelligence.rateLimit
+  - intelligence.requestsPerMinute
+  - intelligence.test.button
+  - intelligence.test.error.message
+  - intelligence.test.error.title
+  - intelligence.test.latency
+  - intelligence.test.success.message
+  - intelligence.test.success.title
+  - intelligence.test.testing
+  - intelligence.testErrorMessage
+  - intelligence.testSuccessMessage
+  - intelligence.timeout
+  - intelligence.tokensPerMinute
+  - intelligence.unlimited
+  - layoutSection.layouts.flat
+  - layoutSection.layouts.simple
+  - market.detailDialog.backToMarket
+  - market.detailDialog.download
+  - market.detailDialog.notFound
+  - market.detailDialog.notFoundDesc
+  - market.detailDialog.viewDocs
+  - market.installing
+  - market.lastUpdated
+  - market.officialBadge
+  - market.subtitle
+  - market.tags.all
+  - market.tags.enhancement
+  - market.tags.feature
+  - market.tags.productivity
+  - market.tags.tools
+  - market.tags.ui
+  - market.tags.ux
+  - market.title
+  - market.updates.checkFailed
+  - market.updates.checking
+  - market.updates.noUpdates
+  - market.upgradeAvailable
+  - notifications.downloadFailedBody
+  - notifications.updateAvailableBody
+  - notifications.updateReadyBody
+  - plugin.actions.history
+  - plugin.details.copyPluginId
+  - plugin.details.description
+  - plugin.details.disabled
+  - plugin.details.enabled
+  - plugin.details.openInExplorer
+  - plugin.openFolder
+  - plugin.opening
+  - router.appSettings
+  - router.application
+  - router.plugin
+  - router.pluginMarket
+  - router.storagable
+  - router.styles
+  - router.theme
+  - settingAbout.rating.excellent
+  - settingAbout.rating.fair
+  - settingAbout.rating.good
+  - settingAbout.rating.poor
+  - settingAbout.systemInfoPlaceholder
+  - settingAbout.tabs.app
+  - settingAbout.tabs.system
+  - settingHeader.initTime
+  - settingHeader.version
+  - settingTools.shortcutLabels.core_box_aiQuickCall
+  - settingTools.shortcutLabels.core_box_toggle
+  - settingTools.shortcutLabels.flow_detach_to_divisionbox
+  - settingTools.shortcutLabels.flow_transfer_to_plugin
+  - settings.intelligence.addBinding
+  - settings.intelligence.addCustomProvider
+  - settings.intelligence.addFirstModel
+  - settings.intelligence.addModelPlaceholder
+  - settings.intelligence.addProvider
+  - settings.intelligence.advancedConfig
+  - settings.intelligence.apiConfig
+  - settings.intelligence.apiKey
+  - settings.intelligence.apiKeyPlaceholder
+  - settings.intelligence.baseUrl
+  - settings.intelligence.baseUrlPlaceholder
+  - settings.intelligence.builtinPrompts
+  - settings.intelligence.builtinProviders
+  - settings.intelligence.capabilitiesSection
+  - settings.intelligence.capabilityConfigDesc
+  - settings.intelligence.capabilityConfigTitle
+  - settings.intelligence.capabilityPageDesc
+  - settings.intelligence.capabilityPageTitle
+  - settings.intelligence.capabilityPromptLabel
+  - settings.intelligence.capabilityProviderLabel
+  - settings.intelligence.capabilityProvidersTotal
+  - settings.intelligence.capabilitySearchClear
+  - settings.intelligence.capabilitySearchLabel
+  - settings.intelligence.capabilityStat
+  - settings.intelligence.capabilityTestHint
+  - settings.intelligence.channelPageDesc
+  - settings.intelligence.channelPageTitle
+  - settings.intelligence.channelsSection
+  - settings.intelligence.compatible
+  - settings.intelligence.createNewPrompt
+  - settings.intelligence.customCompatible
+  - settings.intelligence.customPrompts
+  - settings.intelligence.customProviders
+  - settings.intelligence.disabled
+  - settings.intelligence.dragToReorder
+  - settings.intelligence.enabled
+  - settings.intelligence.futureCenterDesc
+  - settings.intelligence.futureCenterTitle
+  - settings.intelligence.futureCloudSync
+  - settings.intelligence.futureDownload
+  - settings.intelligence.futureTargetShare
+  - settings.intelligence.instructions
+  - settings.intelligence.instructionsPlaceholder
+  - settings.intelligence.landing.capabilities.cta
+  - settings.intelligence.landing.channels.cta
+  - settings.intelligence.landing.future.cta
+  - settings.intelligence.landing.prompts.cta
+  - settings.intelligence.logsSection
+  - settings.intelligence.managePrompts
+  - settings.intelligence.modelConfig
+  - settings.intelligence.modelOrder
+  - settings.intelligence.modelSelection
+  - settings.intelligence.models
+  - settings.intelligence.noModelsConfigured
+  - settings.intelligence.noProvider
+  - settings.intelligence.pageTitle
+  - settings.intelligence.priority
+  - settings.intelligence.priorityHigh
+  - settings.intelligence.priorityLow
+  - settings.intelligence.priorityMedium
+  - settings.intelligence.promptContentPlaceholder
+  - settings.intelligence.promptEditorLabel
+  - settings.intelligence.promptEditorPlaceholder
+  - settings.intelligence.promptMetaCreated
+  - settings.intelligence.promptMetaUpdated
+  - settings.intelligence.promptSearchLabel
+  - settings.intelligence.promptSelectedHint
+  - settings.intelligence.providerName
+  - settings.intelligence.providerNamePlaceholder
+  - settings.intelligence.providerSelection
+  - settings.intelligence.providerStat
+  - settings.intelligence.providerType
+  - settings.intelligence.rateLimit
+  - settings.intelligence.removeBinding
+  - settings.intelligence.requestsPerMinute
+  - settings.intelligence.selectPrompt
+  - settings.intelligence.test
+  - settings.intelligence.testErrorMessage
+  - settings.intelligence.testModel
+  - settings.intelligence.testSuccessMessage
+  - settings.intelligence.timeout
+  - settings.intelligence.tokensPerMinute
+  - settings.intelligence.unlimited
+  - settings.settingAISDK.addModelPlaceholder
+  - settings.settingAISDK.advancedConfig
+  - settings.settingAISDK.apiConfig
+  - settings.settingAISDK.apiKey
+  - settings.settingAISDK.apiKeyDesc
+  - settings.settingAISDK.apiKeyPlaceholder
+  - settings.settingAISDK.baseUrl
+  - settings.settingAISDK.baseUrlDesc
+  - settings.settingAISDK.baseUrlPlaceholder
+  - settings.settingAISDK.cacheExpiration
+  - settings.settingAISDK.cacheExpirationDesc
+  - settings.settingAISDK.defaultModel
+  - settings.settingAISDK.defaultModelDesc
+  - settings.settingAISDK.enableAudit
+  - settings.settingAISDK.enableAuditDesc
+  - settings.settingAISDK.enableCache
+  - settings.settingAISDK.enableCacheDesc
+  - settings.settingAISDK.enableProvider
+  - settings.settingAISDK.enableProviderDesc
+  - settings.settingAISDK.globalSettings
+  - settings.settingAISDK.groupDesc
+  - settings.settingAISDK.groupTitle
+  - settings.settingAISDK.instructions
+  - settings.settingAISDK.instructionsDesc
+  - settings.settingAISDK.instructionsPlaceholder
+  - settings.settingAISDK.latency
+  - settings.settingAISDK.modelConfig
+  - settings.settingAISDK.models
+  - settings.settingAISDK.modelsDesc
+  - settings.settingAISDK.priority
+  - settings.settingAISDK.priorityDesc
+  - settings.settingAISDK.priorityHigh
+  - settings.settingAISDK.priorityLow
+  - settings.settingAISDK.priorityMedium
+  - settings.settingAISDK.promptVariablesLabel
+  - settings.settingAISDK.promptVariablesPlaceholder
+  - settings.settingAISDK.rateLimit
+  - settings.settingAISDK.requestsPerDay
+  - settings.settingAISDK.requestsPerDayDesc
+  - settings.settingAISDK.requestsPerMinute
+  - settings.settingAISDK.requestsPerMinuteDesc
+  - settings.settingAISDK.selectModel
+  - settings.settingAISDK.selectProvider
+  - settings.settingAISDK.test
+  - settings.settingAISDK.testCapability
+  - settings.settingAISDK.testErrorMessage
+  - settings.settingAISDK.testFailed
+  - settings.settingAISDK.testSuccess
+  - settings.settingAISDK.testSuccessMessage
+  - settings.settingAISDK.testing
+  - settings.settingAISDK.timeout
+  - settings.settingAISDK.timeoutDesc
+  - settings.settingAISDK.timeoutPlaceholder
+  - settings.settingAISDK.tokensPerDay
+  - settings.settingAISDK.tokensPerDayDesc
+  - settings.settingAISDK.tokensPerMinute
+  - settings.settingAISDK.tokensPerMinuteDesc
+  - settings.settingAISDK.unlimited
+  - settings.settingAISDK.userMessageLabel
+  - settings.settingAISDK.userMessagePlaceholder
+  - settings.settingFileIndex.warningAlert
+  - settings.settingFileIndex.warningBattery
+  - settings.settingFileIndex.warningConfirm
+  - settings.settingFileIndex.warningIdle
+  - settings.settingFileIndex.warningPerformance
+  - settings.settingFileIndex.warningSearch
+  - settings.setup.fileIndexing
+  - settings.setup.indexingStage.cleanup
+  - settings.setup.indexingStage.completed
+  - settings.setup.indexingStage.idle
+  - settings.setup.indexingStage.indexing
+  - settings.setup.indexingStage.reconciliation
+  - settings.setup.indexingStage.scanning
+  - settings.setup.tabs.permissions
+  - settings.setup.tabs.settings
+  - settings.updateModal.publishedAt
+  - settings.updateModal.remindLater
+  - settings.updateModal.skip
+  - settings.updateModal.title
+  - settings.updateModal.updateNow
+  - setupPermissions.requiredPermission
+  - sign.fail
+  - signSucceed.loginContent
+  - signSucceed.loginTitle
+  - signSucceed.registerContent
+  - signSucceed.registerTitle
+  - signSucceed.startButton
+  - signView.copyright
+  - tagSection.copiedFiles
+  - tagSection.copiedHtml
+  - tagSection.copiedImage
+  - tagSection.copiedText
+  - textPreview.fileSize
+  - themePreference.Filter
+  - themePreference.Mica
+  - themeStyle.defaultTip
+  - themeStyle.filterTip
+  - themeStyle.folder
+  - themeStyle.micaTip
+  - tray.about
+  - tray.checkUpdate
+  - tray.checkUpdateAvailable
+  - tray.clipboardHistory
+  - tray.downloadCenter
+  - tray.downloadCenterWithCount
+  - tray.hideWindow
+  - tray.openCoreBox
+  - tray.openDataDir
+  - tray.quit
+  - tray.restart
+  - tray.settings
+  - tray.showWindow
+  - tray.terminal
+  - tray.tooltip
+  - tray.version
+  - tray.viewLogs
+  - tray.visitWebsite
+  - update.auto_check
+  - update.auto_download
+  - update.channel_beta
+  - update.channel_release
+  - update.channel_snapshot
+  - update.check_failed
+  - update.check_frequency
+  - update.check_now
+  - update.checking
+  - update.checking_update
+  - update.checksum_failed
+  - update.checksum_verified
+  - update.clear_ignored
+  - update.current
+  - update.custom_url
+  - update.download_failed
+  - update.download_progress
+  - update.download_size
+  - update.frequency_daily
+  - update.frequency_never
+  - update.frequency_startup
+  - update.frequency_weekly
+  - update.ignored_versions
+  - update.install_failed
+  - update.install_success
+  - update.installing
+  - update.last_checked
+  - update.latest
+  - update.no_update_available
+  - update.notify_on_available
+  - update.notify_on_downloaded
+  - update.release_date
+  - update.restart_later
+  - update.restart_now
+  - update.restart_required
+  - update.restart_to_update
+  - update.retry_download
+  - update.skip_version
+  - update.source_custom
+  - update.source_github
+  - update.source_official
+  - update.up_to_date
+  - update.update_available
+  - update.update_channel
+  - update.update_downloaded
+  - update.update_installed
+  - update.update_notification
+  - update.update_settings
+  - update.update_source
+  - update.verify_checksum
+  - update.version_info
+  - update.view_release_notes
+
+- Doc-only (only referenced in `.md`):
+  - downloadErrors.cancelled
+  - downloadErrors.checksum_error
+  - downloadErrors.disk_space_error
+  - downloadErrors.file_not_found
+  - downloadErrors.network_error
+  - downloadErrors.permission_error
+  - downloadErrors.timeout_error
+  - downloadErrors.unknown_error
+  - notifications.downloadComplete
+  - notifications.downloadCompleteBody
+  - notifications.downloadFailed
+  - notifications.updateAvailable
+  - notifications.updateReady
+  - timeUnits.days
+  - timeUnits.daysAgo
+  - timeUnits.hours
+  - timeUnits.hoursAgo
+  - timeUnits.justNow
+  - timeUnits.minutesAgo
+
+### i18n-unused: message-keys groups unused in runtime
+- Scope: `packages/utils/i18n/message-keys.ts`
+- Evidence: `DevServerKeys` and `FlowTransferKeys` are referenced in runtime code; others are not.
+- Unused groups (no `*Keys.` references found in code):
+  - PluginKeys (8 keys)
+  - WidgetKeys (4 keys)
+  - SystemKeys (4 keys)
+  - PermissionKeys (58 keys)
+
+#### PluginKeys
+- plugin.loadFailed
+- plugin.manifestInvalid
+- plugin.dependencyMissing
+- plugin.versionMismatch
+- plugin.permissionDenied
+- plugin.sdkVersionMissing
+- plugin.sdkVersionOutdated
+- plugin.permissionMissing
+
+#### WidgetKeys
+- widget.compileFailed
+- widget.unsupportedType
+- widget.invalidDependency
+- widget.loadFailed
+
+#### SystemKeys
+- system.networkError
+- system.timeout
+- system.unknownError
+- system.operationCancelled
+
+#### PermissionKeys
+- permission.category.fs
+- permission.category.clipboard
+- permission.category.network
+- permission.category.system
+- permission.category.ai
+- permission.category.storage
+- permission.category.window
+- permission.risk.low
+- permission.risk.medium
+- permission.risk.high
+- permission.fs.read.name
+- permission.fs.read.desc
+- permission.fs.write.name
+- permission.fs.write.desc
+- permission.fs.execute.name
+- permission.fs.execute.desc
+- permission.clipboard.read.name
+- permission.clipboard.read.desc
+- permission.clipboard.write.name
+- permission.clipboard.write.desc
+- permission.network.local.name
+- permission.network.local.desc
+- permission.network.internet.name
+- permission.network.internet.desc
+- permission.network.download.name
+- permission.network.download.desc
+- permission.system.shell.name
+- permission.system.shell.desc
+- permission.system.notification.name
+- permission.system.notification.desc
+- permission.system.tray.name
+- permission.system.tray.desc
+- permission.ai.basic.name
+- permission.ai.basic.desc
+- permission.ai.advanced.name
+- permission.ai.advanced.desc
+- permission.ai.agents.name
+- permission.ai.agents.desc
+- permission.storage.plugin.name
+- permission.storage.plugin.desc
+- permission.storage.shared.name
+- permission.storage.shared.desc
+- permission.window.create.name
+- permission.window.create.desc
+- permission.window.capture.name
+- permission.window.capture.desc
+- permission.grant
+- permission.revoke
+- permission.granted
+- permission.denied
+- permission.required
+- permission.optional
+- permission.allowOnce
+- permission.allowAlways
+- permission.requestTitle
+- permission.requestDesc
+- permission.enforcementDisabled
+- permission.legacyPluginWarning
+
+### i18n-unused: unreferenced locale files
+- `apps/core-app/src/renderer/src/locales/zh-CN/download-migration.json`
+- `apps/core-app/src/renderer/src/locales/en/download-migration.json`
+- Evidence: no references to `download-migration` in the codebase.
+
+### i18n-duplicate: download.status key overwritten
+- Scope: `apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- Evidence: `download.status` defined both as a string and as an object; later definition overwrites the earlier one.
+- Recommendation: split into `download.statusLabel` + `download.statusMap` (or similar) to avoid silent override.

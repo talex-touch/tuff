@@ -1,6 +1,10 @@
 import { createError, readBody } from 'h3'
 import { getPluginBySlug } from '../../utils/pluginsStore'
 
+function buildMarketDownloadUrl(slug: string, version: string): string {
+  return `/api/market/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+}
+
 interface InstalledPlugin {
   slug: string
   version: string
@@ -48,7 +52,7 @@ export default defineEventHandler(async (event) => {
       currentVersion: installed.version,
       latestVersion: latest.version,
       hasUpdate,
-      downloadUrl: hasUpdate ? latest.packageUrl : undefined,
+      downloadUrl: hasUpdate ? buildMarketDownloadUrl(plugin.slug, latest.version) : undefined,
       changelog: hasUpdate ? (latest.changelog ?? undefined) : undefined,
     })
   }

@@ -23,6 +23,33 @@ let hasLoggedPluginsDb = false
 let hasLoggedPluginsFallback = false
 let hasLoggedShaFallback = false
 
+// region debug [DBG-nexus-coreapp-planprd-2026-01-12]
+const DBG_SID = 'DBG-nexus-coreapp-planprd-2026-01-12'
+const DBG_ENABLED = process.env.TALEX_WORKFLOW_DEBUG === DBG_SID
+const DBG_LOG_PATH = '.workflow/.debug/DBG-nexus-coreapp-planprd-2026-01-12/debug.log'
+
+async function dbgLog(
+  hid: string,
+  loc: string,
+  msg: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  if (!DBG_ENABLED)
+    return
+
+  try {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    fs.mkdirSync(path.dirname(DBG_LOG_PATH), { recursive: true })
+    fs.appendFileSync(
+      DBG_LOG_PATH,
+      `${JSON.stringify({ sid: DBG_SID, hid, loc, msg, data, ts: Date.now() })}\n`,
+    )
+  }
+  catch {}
+}
+// endregion
+
 export type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
 export type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 export type PluginVersionStatus = 'pending' | 'approved' | 'rejected'
@@ -1690,7 +1717,16 @@ export async function incrementPluginInstalls(event: H3Event, pluginId: string):
       SELECT installs FROM ${PLUGINS_TABLE} WHERE id = ?1;
     `).bind(pluginId).first<{ installs: number }>()
 
-    return Number(row?.installs ?? 0)
+    const installs = Number(row?.installs ?? 0)
+    // region debug [H2]
+    await dbgLog(
+      'H2',
+      'nexus/server/utils/pluginsStore.ts:incrementPluginInstalls',
+      'increment installs (d1)',
+      { pluginId, hasDb: true, installs },
+    )
+    // endregion
+    return installs
   }
 
   const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
@@ -1705,6 +1741,14 @@ export async function incrementPluginInstalls(event: H3Event, pluginId: string):
   }
   await writeCollection(PLUGINS_KEY, plugins)
 
+  // region debug [H2]
+  await dbgLog(
+    'H2',
+    'nexus/server/utils/pluginsStore.ts:incrementPluginInstalls',
+    'increment installs (fallback)',
+    { pluginId, hasDb: false, installs: plugins[index].installs },
+  )
+  // endregion
   return plugins[index].installs
 }
 

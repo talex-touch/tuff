@@ -25,6 +25,12 @@ export function useSearch(
   boxOptions: IBoxOptions,
   clipboardOptions?: IClipboardOptions
 ): IUseSearch {
+  const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
+  const logDebug = (...args: unknown[]) => {
+    if (!shouldLog())
+      return
+    console.debug(...args)
+  }
   const searchVal = ref('')
   const select = ref(-1)
 
@@ -44,7 +50,7 @@ export function useSearch(
     })
 
     const result = Array.from(itemsMap.values())
-    console.debug('[useSearch] res computed:', {
+    logDebug('[useSearch] res computed:', {
       boxItemsCount: boxItems.value.length,
       searchResultsCount: searchResults.value.length,
       totalCount: result.length
@@ -292,7 +298,7 @@ export function useSearch(
 
       const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, { query })
 
-      console.debug('[useSearch] Search result received:', {
+      logDebug('[useSearch] Search result received:', {
         sessionId: initialResult.sessionId,
         itemCount: initialResult.items?.length || 0,
         hasActivate: !!initialResult.activate,
@@ -301,7 +307,7 @@ export function useSearch(
       })
 
       if (currentSequence !== searchSequence) {
-        console.debug('[useSearch] Discarding stale search result (sequence mismatch)')
+        logDebug('[useSearch] Discarding stale search result (sequence mismatch)')
         return
       }
 
@@ -319,7 +325,7 @@ export function useSearch(
       }
 
       searchResults.value = initialResult.items
-      console.debug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
+      logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
 
       boxOptions.layout = undefined
 

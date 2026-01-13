@@ -339,6 +339,26 @@ export class CommonChannelModule extends BaseModule {
     type OpenUrlDecision = 'skip' | 'open' | 'confirm'
 
     const shouldSkipPromptProtocols = new Set([APP_SCHEMA, FILE_SCHEMA])
+    const rendererBaseUrl = process.env.ELECTRON_RENDERER_URL
+    const rendererOrigin = (() => {
+      if (!rendererBaseUrl) return null
+      try {
+        return new URL(rendererBaseUrl).origin
+      } catch {
+        return null
+      }
+    })()
+
+    function isFrontendLocalUrl(parsed: URL): boolean {
+      if (!isLocalhostUrl(parsed.toString()))
+        return false
+
+      if (rendererOrigin && parsed.origin === rendererOrigin)
+        return true
+
+      const hash = parsed.hash || ''
+      return hash.startsWith('#/') || parsed.pathname.includes('/#/')
+    }
 
     function getOpenUrlDecision(url: string): OpenUrlDecision {
       if (!url || url.startsWith('/') || url.startsWith('#')) return 'skip'
@@ -357,7 +377,10 @@ export class CommonChannelModule extends BaseModule {
       if (protocol === 'file') return 'open'
 
       if ((protocol === 'http' || protocol === 'https') && isLocalhostUrl(url)) {
-        return 'open'
+        if (isFrontendLocalUrl(parsed)) {
+          return 'skip'
+        }
+        return 'confirm'
       }
 
       return 'confirm'

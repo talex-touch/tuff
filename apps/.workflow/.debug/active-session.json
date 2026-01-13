@@ -1,0 +1,5 @@
+{
+  "sid": "DBG-worker-channel-send-slow-tuff-2026-01-13",
+  "enabled": true,
+  "notes": "Workflow debug session for tuff:dashboard IPC slowness + route transition analysis."
+}

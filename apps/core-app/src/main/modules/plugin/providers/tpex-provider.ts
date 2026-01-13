@@ -13,6 +13,33 @@ import { downloadToTempFile } from './utils'
 
 const DEFAULT_TPEX_API = NEXUS_BASE_URL
 
+// region debug [DBG-nexus-coreapp-planprd-2026-01-12]
+const DBG_SID = 'DBG-nexus-coreapp-planprd-2026-01-12'
+const DBG_ENABLED = process.env.TALEX_WORKFLOW_DEBUG === DBG_SID
+const DBG_LOG_PATH = '.workflow/.debug/DBG-nexus-coreapp-planprd-2026-01-12/debug.log'
+
+async function dbgLog(
+  hid: string,
+  loc: string,
+  msg: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  if (!DBG_ENABLED)
+    return
+
+  try {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    fs.mkdirSync(path.dirname(DBG_LOG_PATH), { recursive: true })
+    fs.appendFileSync(
+      DBG_LOG_PATH,
+      `${JSON.stringify({ sid: DBG_SID, hid, loc, msg, data, ts: Date.now() })}\n`,
+    )
+  }
+  catch {}
+}
+// endregion
+
 /**
  * Get the primary tpexApi base URL from user-configured sources
  */
@@ -53,7 +80,17 @@ async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined
 }
 
 function isTpexFile(source: string): boolean {
-  return source.trim().toLowerCase().endsWith('.tpex')
+  const trimmed = source.trim()
+  if (trimmed.toLowerCase().endsWith('.tpex'))
+    return true
+
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.pathname.toLowerCase().endsWith('.tpex')
+  }
+  catch {
+    return false
+  }
 }
 
 function isRemote(source: string): boolean {
@@ -111,6 +148,20 @@ export class TpexPluginProvider implements PluginProvider {
     request: PluginInstallRequest,
     context?: PluginProviderContext,
   ): Promise<PluginInstallResult> {
+    // region debug [H1]
+    await dbgLog(
+      'H1',
+      'core-app/src/main/modules/plugin/providers/tpex-provider.ts:install',
+      'tpex.install entry',
+      {
+        source: request.source,
+        hintType: request.hintType,
+        isRemote: isRemote(request.source),
+        isTpexFile: isTpexFile(request.source),
+      },
+    )
+    // endregion
+
     this.log.info('Processing TPEX plugin resource', {
       meta: { source: request.source },
     })
@@ -128,6 +179,14 @@ export class TpexPluginProvider implements PluginProvider {
         this.log.debug('Detected remote TPEX resource, starting download', {
           meta: { url: request.source },
         })
+        // region debug [H1]
+        await dbgLog(
+          'H1',
+          'core-app/src/main/modules/plugin/providers/tpex-provider.ts:install',
+          'tpex.install remote download',
+          { url: request.source },
+        )
+        // endregion
         filePath = await downloadToTempFile(request.source, '.tpex', context?.downloadOptions)
       }
       else {
@@ -208,6 +267,14 @@ export class TpexPluginProvider implements PluginProvider {
     // Fetch plugin details from API
     const detailUrl = `${this.apiBase}/api/market/plugins/${slug}`
     this.log.debug('Fetching plugin details', { meta: { url: detailUrl } })
+    // region debug [H3]
+    await dbgLog(
+      'H3',
+      'core-app/src/main/modules/plugin/providers/tpex-provider.ts:installFromRegistry',
+      'tpex.registry fetch detail',
+      { detailUrl, slug, version: version ?? 'latest' },
+    )
+    // endregion
 
     const detailRes = await fetch(detailUrl)
     if (!detailRes.ok) {
@@ -241,6 +308,19 @@ export class TpexPluginProvider implements PluginProvider {
         size: targetVersion.packageSize,
       },
     })
+    // region debug [H1]
+    await dbgLog(
+      'H1',
+      'core-app/src/main/modules/plugin/providers/tpex-provider.ts:installFromRegistry',
+      'tpex.registry resolved package url',
+      {
+        slug,
+        selectedVersion: targetVersion.version,
+        apiPackageUrl: targetVersion.packageUrl,
+        downloadUrl,
+      },
+    )
+    // endregion
 
     // Use Node.js stream download instead of fetch + arrayBuffer
     const filePath = await downloadToTempFile(downloadUrl, '.tpex', context?.downloadOptions)

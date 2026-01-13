@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ElMessageBox, ElProgress, ElTabPane, ElTabs } from 'element-plus'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { touchChannel } from '~/modules/channel/channel-core'
+import { reportPerfToMain } from '~/modules/perf/perf-report'
 
 interface ActiveAppInfo {
   identifier: string | null
@@ -301,20 +302,52 @@ const ocrTimeline = computed(() => ({
 }))
 
 async function load(): Promise<void> {
+  const startedAt = performance.now()
   loading.value = true
   error.value = null
   try {
+    const fetchStartedAt = performance.now()
     const response = await touchChannel.send('tuff:dashboard', { limit: limit.value })
+    const fetchDurationMs = performance.now() - fetchStartedAt
+    reportPerfToMain({
+      kind: 'ui.details.fetch',
+      eventName: '/details:fetch',
+      durationMs: fetchDurationMs,
+      at: Date.now(),
+      meta: { limit: limit.value, channel: 'tuff:dashboard' },
+    })
     if (!response?.ok) {
       throw new Error(response?.error || 'Unknown dashboard error')
     }
     snapshot.value = response.snapshot as TuffDashboardSnapshot
+
+    const renderStartedAt = performance.now()
+    await nextTick()
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    const renderDurationMs = performance.now() - renderStartedAt
+    reportPerfToMain({
+      kind: 'ui.details.render',
+      eventName: '/details:render',
+      durationMs: renderDurationMs,
+      at: Date.now(),
+      meta: {
+        limit: limit.value,
+        snapshotGeneratedAt: snapshot.value?.generatedAt ?? null,
+      },
+    })
   }
   catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
   }
   finally {
     loading.value = false
+    reportPerfToMain({
+      kind: 'ui.details.total',
+      eventName: '/details:total',
+      durationMs: performance.now() - startedAt,
+      at: Date.now(),
+      meta: { limit: limit.value, ok: error.value === null },
+    })
   }
 }
 

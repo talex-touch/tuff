@@ -24,7 +24,7 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
       :class="{ blur: subRouterMode }"
       class="ViewTemplate-Wrapper transition-cubic absolute w-full h-full"
     >
-      <TouchScroll>
+      <TouchScroll no-padding class="ViewTemplate-Scroll">
         <div class="View-Container">
           <slot />
         </div>
@@ -69,6 +69,22 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
+  display: flex;
+  min-height: 0;
+}
+
+.ViewTemplate-Wrapper,
+.ViewTemplate-Router {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ViewTemplate-Scroll {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .ViewTemplate-Wrapper.blur {
@@ -92,8 +108,9 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
 .View-Container {
   position: relative;
 
-  height: 100%;
+  min-height: 100%;
   width: 100%;
+  padding: 12px 16px 20px;
 
   box-sizing: border-box;
 }

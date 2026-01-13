@@ -24,7 +24,7 @@
       "import": "./dist/es/index.js",
       "require": "./dist/lib/index.js"
     },
-    "./style.css": "./dist/style.css",
+    "./style.css": "./dist/es/components.css",
     "./utils": {
       "types": "./dist/es/utils/index.d.ts",
       "import": "./dist/es/utils/index.js",

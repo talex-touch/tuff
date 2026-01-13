@@ -19,8 +19,10 @@ import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { useMarketDetail } from '~/composables/market/useMarketDetail'
+import { useMarketRating } from '~/composables/market/useMarketRating'
 import { useMarketReadme } from '~/composables/market/useMarketReadme'
 import { usePluginVersionStatus } from '~/composables/market/usePluginVersionStatus'
+import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -49,6 +51,38 @@ const pluginStatus = usePluginStatus(activePlugin)
 const { detailMeta } = useMarketDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
 const { readmeContent, readmeLoading, readmeError } = useMarketReadme(readmeUrl, t)
+
+const canRate = computed(() => {
+  return activePlugin.value?.providerId === 'tuff-nexus' && activePlugin.value?.providerType === 'tpexApi'
+})
+
+const ratingSlug = computed(() => (canRate.value ? activePlugin.value?.id : undefined))
+
+const {
+  loading: ratingLoading,
+  submitting: ratingSubmitting,
+  error: ratingError,
+  average: ratingAverage,
+  count: ratingCount,
+  userRating,
+  submit: submitRating,
+} = useMarketRating(ratingSlug)
+
+const ratingErrorText = computed(() => {
+  const code = ratingError.value
+  if (!code) return null
+
+  if (code === 'NOT_AUTHENTICATED' || code === 'UNAUTHORIZED')
+    return t('market.rating.loginRequired', 'Login required to rate this plugin.')
+
+  if (code === 'INVALID_RATING')
+    return t('market.rating.invalid', 'Invalid rating value.')
+
+  if (code.startsWith('HTTP_ERROR_'))
+    return t('market.rating.httpError', 'Request failed.')
+
+  return code
+})
 
 /** Current installation task for this plugin */
 const installTask = computed(() =>
@@ -79,6 +113,28 @@ async function onInstall(): Promise<void> {
   // Check if this is an upgrade
   const isUpgrade = pluginStatus.value.hasUpgrade
   await handleInstall(activePlugin.value, channel, isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined)
+}
+
+async function onRatingChange(value: number): Promise<void> {
+  const previous = userRating.value
+  await submitRating(value)
+
+  if (ratingError.value === 'NOT_AUTHENTICATED' || ratingError.value === 'UNAUTHORIZED') {
+    userRating.value = previous
+    await forTouchTip(
+      t('market.rating.loginRequiredTitle', 'Login required'),
+      t('market.rating.loginRequired', 'Login required to rate this plugin.'),
+    )
+    return
+  }
+
+  if (ratingError.value) {
+    userRating.value = previous
+    await forTouchTip(
+      t('market.rating.submitFailedTitle', 'Rating failed'),
+      ratingErrorText.value ?? ratingError.value,
+    )
+  }
 }
 
 function goBack(): void {
@@ -161,6 +217,25 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="sidebar">
+          <div v-if="canRate" class="sidebar-card">
+            <h4>{{ t('market.rating.title', 'Rating') }}</h4>
+            <div class="rating-row">
+              <el-rate
+                v-model="userRating"
+                :disabled="ratingSubmitting"
+                @change="onRatingChange"
+              />
+              <span v-if="ratingAverage !== null" class="rating-meta">
+                {{ ratingAverage.toFixed(1) }} · {{ ratingCount }}
+              </span>
+              <span v-else-if="ratingLoading" class="rating-meta">
+                {{ t('market.rating.loading', 'Loading...') }}
+              </span>
+            </div>
+            <p v-if="ratingErrorText" class="rating-error">
+              {{ ratingErrorText }}
+            </p>
+          </div>
           <div class="sidebar-card">
             <h4>{{ t('market.detailDialog.information') }}</h4>
             <div class="meta-list">
@@ -235,6 +310,24 @@ onBeforeUnmount(() => {
   background: var(--el-bg-color-overlay);
   border-radius: 12px;
   padding: 1.5rem;
+}
+
+.rating-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.rating-meta {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.rating-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--el-color-danger);
 }
 
 .readme-state {

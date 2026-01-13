@@ -24,6 +24,7 @@ import {
 } from '../../../core/eventbus/touch-event'
 import { createDbUtils } from '../../../db/utils'
 import { createLogger } from '../../../utils/logger'
+import { enterPerfContext } from '../../../utils/perf-context'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
@@ -507,6 +508,40 @@ export class SearchEngineCore
       let didResolveInitial = false
       let providersToSearch = this.getActiveProviders()
       let gatherController: IGatherController | null = null
+      const measurePreSort = async (items: TuffItem[]) => {
+        const timings = {
+          usageStatsDuration: 0,
+          completionDuration: 0,
+        }
+
+        const usageStatsStartedAt = performance.now()
+        const usageStatsContext = enterPerfContext('Search.usageStats', {
+          sessionId,
+          itemCount: items.length,
+        })
+        const usageStatsPromise = this._injectUsageStats(items).finally(() => {
+          timings.usageStatsDuration = performance.now() - usageStatsStartedAt
+          usageStatsContext()
+        })
+
+        let completionPromise = Promise.resolve()
+        if (this.queryCompletionService) {
+          const completionStartedAt = performance.now()
+          const completionContext = enterPerfContext('Search.completion', {
+            sessionId,
+            queryLength: (query.text || '').length,
+          })
+          completionPromise = this.queryCompletionService
+            .injectCompletionWeights(query.text || '', items)
+            .finally(() => {
+              timings.completionDuration = performance.now() - completionStartedAt
+              completionContext()
+            })
+        }
+
+        await Promise.all([usageStatsPromise, completionPromise])
+        return timings
+      }
 
       const finalizeWithError = (error: unknown): void => {
         searchEngineLog.error('Search gather pipeline failed', {
@@ -624,11 +659,19 @@ export class SearchEngineCore
                 isFirstUpdate = false
                 const initialItems = update.newResults.flatMap((res) => res.items)
 
-                await this._injectUsageStats(initialItems)
-                await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
+                const { usageStatsDuration, completionDuration } = await measurePreSort(initialItems)
 
+                const sortingContext = enterPerfContext('Search.sort', {
+                  sessionId,
+                  itemCount: initialItems.length,
+                })
                 sortingStartTime.value = performance.now()
-                const { sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal)
+                let sortedItems: TuffItem[] = []
+                try {
+                  ({ sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal))
+                } finally {
+                  sortingContext()
+                }
                 const sortingDuration = performance.now() - sortingStartTime.value
 
                 this._updateActivationState(update.newResults)
@@ -647,6 +690,8 @@ export class SearchEngineCore
                   query,
                   totalDuration,
                   sortingDuration,
+                  usageStatsDuration,
+                  completionDuration,
                   sourceStats: update.sourceStats || [],
                   resultCount: sortedItems.length,
                   providerFilter
@@ -705,14 +750,19 @@ export class SearchEngineCore
             isFirstUpdate = false
             const initialItems = update.newResults.flatMap((res) => res.items)
 
-            // 批量获取使用统计并注入到 items 中
-            await this._injectUsageStats(initialItems)
+            const { usageStatsDuration, completionDuration } = await measurePreSort(initialItems)
 
-            // 注入查询完成权重
-            await this.queryCompletionService?.injectCompletionWeights(query.text || '', initialItems)
-
+            const sortingContext = enterPerfContext('Search.sort', {
+              sessionId,
+              itemCount: initialItems.length,
+            })
             sortingStartTime.value = performance.now()
-            const { sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal)
+            let sortedItems: TuffItem[] = []
+            try {
+              ({ sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal))
+            } finally {
+              sortingContext()
+            }
             const sortingDuration = performance.now() - sortingStartTime.value
 
             this._updateActivationState(update.newResults)
@@ -732,6 +782,8 @@ export class SearchEngineCore
               query,
               totalDuration,
               sortingDuration,
+              usageStatsDuration,
+              completionDuration,
               sourceStats: update.sourceStats || [],
               resultCount: sortedItems.length,
               providerFilter
@@ -765,9 +817,23 @@ export class SearchEngineCore
             const subsequentItems = update.newResults.flatMap((res) => res.items)
 
             // 批量获取使用统计并注入到 items 中
+            const usageStatsContext = enterPerfContext('Search.usageStats', {
+              sessionId,
+              itemCount: subsequentItems.length,
+            })
             await this._injectUsageStats(subsequentItems)
+            usageStatsContext()
 
-            const { sortedItems } = this.sorter.sort(subsequentItems, query, gatherController!.signal)
+            const sortingContext = enterPerfContext('Search.sort', {
+              sessionId,
+              itemCount: subsequentItems.length,
+            })
+            let sortedItems: TuffItem[] = []
+            try {
+              ({ sortedItems } = this.sorter.sort(subsequentItems, query, gatherController!.signal))
+            } finally {
+              sortingContext()
+            }
             this._updateActivationState(update.newResults)
             sendUpdateToFrontend(sortedItems)
           }
@@ -914,6 +980,8 @@ export class SearchEngineCore
     query,
     totalDuration,
     sortingDuration,
+    usageStatsDuration,
+    completionDuration,
     sourceStats,
     resultCount,
     providerFilter
@@ -922,6 +990,8 @@ export class SearchEngineCore
     query: TuffQuery
     totalDuration: number
     sortingDuration: number
+    usageStatsDuration?: number
+    completionDuration?: number
     sourceStats: Array<{
       providerId?: string
       provider?: string
@@ -1000,6 +1070,8 @@ export class SearchEngineCore
           metadata: {
             sessionId,
             sortingDuration: Math.round(sortingDuration),
+            usageStatsDuration: usageStatsDuration ? Math.round(usageStatsDuration) : undefined,
+            completionDuration: completionDuration ? Math.round(completionDuration) : undefined,
             queryLength,
             queryType,
             searchScene,

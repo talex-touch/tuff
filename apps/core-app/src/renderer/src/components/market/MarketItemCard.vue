@@ -5,6 +5,7 @@
  * Shows plugin icon, name, description and install button.
  * Delegates installation state logic to MarketInstallButton component.
  */
+import { TxStatusBadge, TxTag } from '@talex-touch/tuffex'
 import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 import { useI18n } from 'vue-i18n'
 import MarketIcon from '~/components/market/MarketIcon.vue'
@@ -67,21 +68,41 @@ function handleInstall(): void {
 </script>
 
 <template>
-  <div class="market-item-card" :class="{ 'official-provider': item.providerTrustLevel === 'official' }" @click="handleOpen">
-    <div class="market-item-content">
-      <MarketIcon
-        v-shared-element:plugin-market-icon
-        :item="item"
-        :view-transition-name="`market-icon-${item.id}`"
-      />
+  <div
+    class="market-item-card"
+    :class="{ 'official-provider': item.providerTrustLevel === 'official' }"
+    @click="handleOpen"
+  >
+    <div flex="~ col gap-2" p-4>
+      <div flex="~ items-center gap-4">
+        <MarketIcon
+          v-shared-element:plugin-market-icon
+          :item="item"
+          :view-transition-name="`market-icon-${item.id}`"
+        />
 
-      <div class="market-item-info">
-        <div class="market-item-header">
+        <div flex="~ col">
           <h3 class="market-item-title" :style="{ viewTransitionName: `market-title-${item.id}` }">
             {{ item.name || 'Unnamed Plugin' }}
           </h3>
-          <i v-if="item.official" class="i-ri-verified-badge-fill official-badge" title="Official Plugin" />
+          <div class="text-xs op-60 w-full" flex="~ items-center gap-1">
+            <p flex="~ items-center gap-1 max-w-[65%] truncate">
+              <i
+                v-if="item.official"
+                class="i-ri-verified-badge-fill block official-badge"
+                title="Official Plugin"
+              />
+              <span>{{ item.author }}</span>
+            </p>
+            <p>·</p>
+            <p class="text-xs op-60 flex-shrink-0">
+              <span>{{ item.version }}</span>
+            </p>
+          </div>
         </div>
+      </div>
+
+      <div class="text-sm">
         <p
           v-if="item.description"
           class="market-item-description"
@@ -94,8 +115,24 @@ function handleInstall(): void {
         </p>
       </div>
 
-      <div class="market-item-actions">
+      <div>
+        <TxStatusBadge v-if="item.category" icon="i-ri-file-2-line" :text="item.category" />
+        <TxTag v-for="tag in item.metadata?.badges" :key="tag" :label="tag" />
+      </div>
+
+      <div flex="~ items-center justify-between">
+        <div flex="~ items-center gap-4">
+          <p flex="~ items-center gap-1" class="text-sm op-60">
+            <i block class="i-ri-download-2-line" />
+            {{ item.downloads ?? 0 }}
+          </p>
+          <p flex="~ items-center gap-1" class="text-sm op-60">
+            <i block class="i-ri-star-fill" />
+            {{ item.rating ?? 0 }}
+          </p>
+        </div>
         <MarketInstallButton
+          class="max-w-[50%]"
           :plugin-name="item.name"
           :is-installed="isInstalled"
           :has-upgrade="hasUpgrade"
@@ -145,31 +182,6 @@ function handleInstall(): void {
   &:hover {
     border-color: rgba(var(--el-color-primary-rgb), 0.5);
   }
-}
-
-.market-item-content {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  box-sizing: border-box;
-}
-
-.market-item-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  height: 100%;
-}
-
-.market-item-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .market-item-title {

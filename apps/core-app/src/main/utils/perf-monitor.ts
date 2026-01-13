@@ -4,6 +4,7 @@ import { ipcMain } from 'electron'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { createLogger, formatDuration, type Primitive } from './logger'
 import { getPerfContextSnapshot } from './perf-context'
+import { appendWorkflowDebugLog } from './workflow-debug'
 
 export type RendererPerfReport = {
   kind:
@@ -11,6 +12,10 @@ export type RendererPerfReport = {
     | 'channel.send.slow'
     | 'channel.send.timeout'
     | 'channel.send.errorReply'
+    | 'ui.route.transition'
+    | 'ui.details.fetch'
+    | 'ui.details.render'
+    | 'ui.details.total'
   eventName: string
   durationMs: number
   at: number
@@ -209,6 +214,20 @@ export class PerfMonitor {
       durationMs,
       at: now,
     }
+
+    if (eventName === 'tuff:dashboard') {
+      appendWorkflowDebugLog({
+        hid: 'H1',
+        loc: 'perf-monitor.recordIpcHandler',
+        msg: 'ipc.handler.slow',
+        data: {
+          eventName,
+          durationMs,
+          severity,
+          ...meta,
+        },
+      })
+    }
   }
 
   recordIpcNoHandler(eventName: string, meta: Record<string, unknown>): void {
@@ -273,6 +292,23 @@ export class PerfMonitor {
       durationMs: report.durationMs,
       at: report.at,
     }
+
+    const isUiSignal = typeof report.kind === 'string' && report.kind.startsWith('ui.')
+    if (report.eventName === 'tuff:dashboard' || isUiSignal) {
+      appendWorkflowDebugLog({
+        hid: report.eventName === 'tuff:dashboard' ? 'H2' : 'H6',
+        loc: 'perf-monitor.recordRendererReport',
+        msg: report.kind,
+        data: {
+          eventName: report.eventName,
+          durationMs: report.durationMs,
+          at: report.at,
+          payloadPreview: report.payloadPreview,
+          stack: report.stack,
+          ...report.meta,
+        },
+      })
+    }
   }
 
   private recordEventLoopLag(lagMs: number, severity: 'warn' | 'error'): void {
@@ -331,6 +367,20 @@ export class PerfMonitor {
     else {
       loopPerfLog.warn(message, { meta })
     }
+
+    appendWorkflowDebugLog({
+      hid: 'H4',
+      loc: 'perf-monitor.recordEventLoopLag',
+      msg: 'event_loop.lag',
+      data: {
+        lagMs,
+        severity,
+        contexts,
+        pollingActive,
+        pollingRecent,
+        lastSlowIpc,
+      },
+    })
   }
 
   private pushIncident(incident: PerfIncident): void {

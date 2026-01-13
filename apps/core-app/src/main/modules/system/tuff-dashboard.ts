@@ -6,6 +6,7 @@ import type * as schema from '../../db/schema'
 import { readdir, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { desc, sql } from 'drizzle-orm'
 import { app } from 'electron'
@@ -17,6 +18,7 @@ import { databaseModule } from '../database'
 import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
 import { createLogger } from '../../utils/logger'
+import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
 
 const dashboardLog = createLogger('TuffDashboard')
 
@@ -40,11 +42,19 @@ export class TuffDashboardModule extends BaseModule {
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const channel = genTouchChannel()
 
-    channel.regChannel(ChannelType.MAIN, 'tuff:dashboard', async ({ reply, data }) => {
+    channel.regChannel(ChannelType.MAIN, 'tuff:dashboard', async ({ reply, data, sync }) => {
+      const requestId = typeof sync?.id === 'string' ? sync.id : null
+      const requestStartedAt = performance.now()
       try {
         const options: TuffDashboardOptions = (data ?? {}) as TuffDashboardOptions
         const limit = typeof options.limit === 'number' && options.limit > 0 ? options.limit : 50
-        const snapshot = await this.buildSnapshot(limit)
+        appendWorkflowDebugLog({
+          hid: 'H1',
+          loc: 'tuff-dashboard.handler',
+          msg: 'request.start',
+          data: { requestId, limit },
+        })
+        const snapshot = await this.buildSnapshot(limit, requestId)
         reply(DataCode.SUCCESS, {
           ok: true,
           snapshot,
@@ -55,6 +65,17 @@ export class TuffDashboardModule extends BaseModule {
         reply(DataCode.ERROR, {
           ok: false,
           error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      finally {
+        appendWorkflowDebugLog({
+          hid: 'H1',
+          loc: 'tuff-dashboard.handler',
+          msg: 'request.end',
+          data: {
+            requestId,
+            durationMs: performance.now() - requestStartedAt,
+          },
         })
       }
     })
@@ -82,15 +103,26 @@ export class TuffDashboardModule extends BaseModule {
     return null
   }
 
-  private async buildSnapshot(limit: number) {
+  private async buildSnapshot(limit: number, requestId: string | null) {
+    const startedAt = performance.now()
     const [indexing, ocr, configOverview, logs, applications, workers] = await Promise.all([
-      this.buildIndexingSection(limit),
-      ocrService.getDashboardSnapshot(Math.min(limit, 100)),
-      this.buildConfigOverview(Math.min(limit, 100)),
-      this.buildLogOverview(Math.min(limit, 20)),
-      this.buildApplicationSection(),
-      this.buildWorkerSection(),
+      this.buildIndexingSection(limit, requestId),
+      this.buildOcrSection(Math.min(limit, 100), requestId),
+      this.buildConfigOverview(Math.min(limit, 100), requestId),
+      this.buildLogOverview(Math.min(limit, 20), requestId),
+      this.buildApplicationSection(requestId),
+      this.buildWorkerSection(requestId),
     ])
+    appendWorkflowDebugLog({
+      hid: 'H1',
+      loc: 'tuff-dashboard.buildSnapshot',
+      msg: 'snapshot.built',
+      data: {
+        requestId,
+        limit,
+        durationMs: performance.now() - startedAt,
+      },
+    })
 
     return {
       panelName: '详细信息',
@@ -119,7 +151,8 @@ export class TuffDashboardModule extends BaseModule {
     }
   }
 
-  private async buildApplicationSection() {
+  private async buildApplicationSection(requestId: string | null) {
+    const startedAt = performance.now()
     const activeApp = await activeAppService.getActiveApp(false)
     const rawMetrics = app.getAppMetrics()
     const metrics = rawMetrics
@@ -141,7 +174,7 @@ export class TuffDashboardModule extends BaseModule {
       { cpu: 0, memory: 0 },
     )
 
-    return {
+    const section = {
       activeApp: activeApp
         ? {
             ...activeApp,
@@ -155,9 +188,24 @@ export class TuffDashboardModule extends BaseModule {
       },
       metrics,
     }
+
+    appendWorkflowDebugLog({
+      hid: 'H1',
+      loc: 'tuff-dashboard.buildApplicationSection',
+      msg: 'section.timing',
+      data: {
+        requestId,
+        section: 'applications',
+        durationMs: performance.now() - startedAt,
+        metricsCount: rawMetrics.length,
+      },
+    })
+
+    return section
   }
 
-  private async buildIndexingSection(limit: number) {
+  private async buildIndexingSection(limit: number, requestId: string | null) {
+    const startedAt = performance.now()
     const db = this.ensureDb()
 
     const [progress, scanRows] = await Promise.all([
@@ -184,22 +232,68 @@ export class TuffDashboardModule extends BaseModule {
       lastError: entry.lastError,
     }))
 
-    return {
+    const section = {
       summary: progress.summary,
       watchedPaths: fileProvider.getWatchedPaths(),
       entries,
       scanProgress: scanOverview,
     }
+
+    appendWorkflowDebugLog({
+      hid: 'H1',
+      loc: 'tuff-dashboard.buildIndexingSection',
+      msg: 'section.timing',
+      data: {
+        requestId,
+        section: 'indexing',
+        durationMs: performance.now() - startedAt,
+        entriesCount: entries.length,
+        scanProgressCount: scanOverview.length,
+      },
+    })
+
+    return section
   }
 
-  private async buildConfigOverview(limit: number) {
+  private async buildOcrSection(limit: number, requestId: string | null) {
+    const startedAt = performance.now()
+    const snapshot = await ocrService.getDashboardSnapshot(limit)
+    appendWorkflowDebugLog({
+      hid: 'H1',
+      loc: 'tuff-dashboard.buildOcrSection',
+      msg: 'section.timing',
+      data: {
+        requestId,
+        section: 'ocr',
+        durationMs: performance.now() - startedAt,
+        jobsCount: snapshot?.jobs?.length ?? null,
+      },
+    })
+    return snapshot
+  }
+
+  private async buildConfigOverview(limit: number, requestId: string | null) {
+    const startedAt = performance.now()
     const db = this.ensureDb()
 
     if (!db) {
-      return {
+      const section = {
         total: 0,
         entries: [] as Array<{ key: string, value: unknown }>,
       }
+      appendWorkflowDebugLog({
+        hid: 'H1',
+        loc: 'tuff-dashboard.buildConfigOverview',
+        msg: 'section.timing',
+        data: {
+          requestId,
+          section: 'config',
+          durationMs: performance.now() - startedAt,
+          entriesCount: 0,
+          databaseReady: false,
+        },
+      })
+      return section
     }
 
     const [rows, totalRow] = await Promise.all([
@@ -226,20 +320,39 @@ export class TuffDashboardModule extends BaseModule {
       }
     })
 
-    return {
+    const section = {
       total: totalRow.length > 0 ? Number(totalRow[0].total ?? 0) : entries.length,
       entries,
     }
+
+    appendWorkflowDebugLog({
+      hid: 'H1',
+      loc: 'tuff-dashboard.buildConfigOverview',
+      msg: 'section.timing',
+      data: {
+        requestId,
+        section: 'config',
+        durationMs: performance.now() - startedAt,
+        entriesCount: entries.length,
+        databaseReady: true,
+      },
+    })
+
+    return section
   }
 
-  private async buildLogOverview(limit: number) {
+  private async buildLogOverview(limit: number, requestId: string | null) {
+    const startedAt = performance.now()
     const logsDir = app.getPath('logs')
     const userDataDir = app.getPath('userData')
     let recentFiles: Array<{ name: string, size: number, updatedAt: string | null }> = []
 
     try {
+      const readDirStartedAt = performance.now()
       const dirents = await readdir(logsDir, { withFileTypes: true })
+      const readDirDurationMs = performance.now() - readDirStartedAt
       const files = dirents.filter(dirent => dirent.isFile())
+      const statStartedAt = performance.now()
       const detailed = await Promise.all(
         files.map(async (file) => {
           const fullPath = path.join(logsDir, file.name)
@@ -257,6 +370,7 @@ export class TuffDashboardModule extends BaseModule {
           }
         }),
       )
+      const statDurationMs = performance.now() - statStartedAt
       recentFiles = detailed
         .filter(
           (entry): entry is { name: string, size: number, updatedAt: string | null } =>
@@ -268,24 +382,78 @@ export class TuffDashboardModule extends BaseModule {
           return right - left
         })
         .slice(0, limit)
+
+      appendWorkflowDebugLog({
+        hid: 'H5',
+        loc: 'tuff-dashboard.buildLogOverview',
+        msg: 'logs.scan',
+        data: {
+          requestId,
+          limit,
+          logsDir,
+          direntsCount: dirents.length,
+          filesCount: files.length,
+          recentFilesCount: recentFiles.length,
+          readDirDurationMs,
+          statDurationMs,
+        },
+      })
     }
     catch (error) {
       dashboardLog.warn('Failed to read logs directory', { error, meta: { dir: logsDir } })
     }
 
-    return {
+    const section = {
       directory: logsDir,
       userDataDir,
       recentFiles,
     }
+
+    appendWorkflowDebugLog({
+      hid: 'H1',
+      loc: 'tuff-dashboard.buildLogOverview',
+      msg: 'section.timing',
+      data: {
+        requestId,
+        section: 'logs',
+        durationMs: performance.now() - startedAt,
+        recentFilesCount: recentFiles.length,
+      },
+    })
+
+    return section
   }
 
-  private async buildWorkerSection() {
+  private async buildWorkerSection(requestId: string | null) {
+    const startedAt = performance.now()
     try {
-      return await fileProvider.getWorkerStatusSnapshot()
+      const snapshot = await fileProvider.getWorkerStatusSnapshot()
+      appendWorkflowDebugLog({
+        hid: 'H1',
+        loc: 'tuff-dashboard.buildWorkerSection',
+        msg: 'section.timing',
+        data: {
+          requestId,
+          section: 'workers',
+          durationMs: performance.now() - startedAt,
+          workersCount: snapshot.workers.length,
+        },
+      })
+      return snapshot
     }
     catch (error) {
       dashboardLog.warn('Failed to load worker status snapshot', { error })
+      appendWorkflowDebugLog({
+        hid: 'H1',
+        loc: 'tuff-dashboard.buildWorkerSection',
+        msg: 'section.error',
+        data: {
+          requestId,
+          section: 'workers',
+          durationMs: performance.now() - startedAt,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
       return {
         summary: { total: 0, busy: 0, idle: 0, offline: 0 },
         workers: [],
