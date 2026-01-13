@@ -2,17 +2,21 @@ import { createError } from 'h3'
 import type { DashboardPluginVersion } from '../../../utils/pluginsStore'
 import { getPluginBySlug } from '../../../utils/pluginsStore'
 
+function buildMarketDownloadUrl(slug: string, version: string): string {
+  return `/api/market/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+}
+
 /**
  * Clean version object for market API response
  */
-function cleanVersionForMarket(version: DashboardPluginVersion) {
+function cleanVersionForMarket(slug: string, version: DashboardPluginVersion) {
   return {
     id: version.id,
     pluginId: version.pluginId,
     channel: version.channel,
     version: version.version,
     signature: version.signature,
-    packageUrl: version.packageUrl,
+    packageUrl: buildMarketDownloadUrl(slug, version.version),
     packageSize: version.packageSize,
     manifest: version.manifest,
     changelog: version.changelog,
@@ -54,8 +58,8 @@ export default defineEventHandler(async (event) => {
       iconUrl: plugin.iconUrl,
       createdAt: plugin.createdAt,
       updatedAt: plugin.updatedAt,
-      latestVersion: latest ? cleanVersionForMarket(latest) : null,
-      versions: versions.map(cleanVersionForMarket),
+      latestVersion: latest ? cleanVersionForMarket(plugin.slug, latest) : null,
+      versions: versions.map(version => cleanVersionForMarket(plugin.slug, version)),
       // Use relative path for readme URL
       readmeUrl: plugin.readmeMarkdown ? `/api/market/plugins/${plugin.slug}/readme` : null,
     },

@@ -1,6 +1,10 @@
 import { createError } from 'h3'
 import { getPluginBySlug } from '../../../../utils/pluginsStore'
 
+function buildMarketDownloadUrl(slug: string, version: string): string {
+  return `/api/market/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+}
+
 export default defineEventHandler(async (event) => {
   const slug = event.context.params?.slug
 
@@ -19,7 +23,7 @@ export default defineEventHandler(async (event) => {
     id: v.id,
     version: v.version,
     channel: v.channel,
-    packageUrl: v.packageUrl,
+    packageUrl: buildMarketDownloadUrl(plugin.slug, v.version),
     packageSize: v.packageSize,
     changelog: v.changelog,
     createdAt: v.createdAt,

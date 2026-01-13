@@ -18,7 +18,6 @@ import process from 'node:process'
 import { getBooleanEnv, getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
-import { getAnalyticsMessageStore } from './message-store'
 import { ReportQueueStore } from './report-queue-store'
 import { databaseModule } from '../database'
 import { getConfig, saveConfig } from '../storage'
@@ -27,6 +26,7 @@ import { getOrCreateTelemetryClientId } from './telemetry-client'
 const analyticsLog = createLogger('StartupAnalytics')
 const REPORT_QUEUE_FILE = 'startup-analytics-report-queue.json'
 const REPORT_QUEUE_MAX_AGE = 14 * 24 * 60 * 60 * 1000
+const REPORT_QUEUE_MAX_COUNT = 120
 const REPORT_QUEUE_BACKOFF_BASE_MS = 30_000
 const REPORT_QUEUE_BACKOFF_MAX_MS = 10 * 60_000
 
@@ -36,7 +36,6 @@ type FileReportQueueItem = {
   createdAt: number
   retryCount?: number
   lastAttemptAt?: number
-  lastError?: string
 }
 
 /**
@@ -240,7 +239,20 @@ export class StartupAnalytics {
   }
 
   private saveReportQueue(queue: FileReportQueueItem[]): void {
-    const pruned = queue.filter(item => Date.now() - item.createdAt <= REPORT_QUEUE_MAX_AGE)
+    const now = Date.now()
+    const cutoff = now - REPORT_QUEUE_MAX_AGE
+    const pruned = queue
+      .filter(item => item.createdAt >= cutoff)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(-REPORT_QUEUE_MAX_COUNT)
+      .map(item => ({
+        payload: item.payload,
+        endpoint: item.endpoint,
+        createdAt: item.createdAt,
+        retryCount: item.retryCount,
+        lastAttemptAt: item.lastAttemptAt,
+      }))
+
     saveConfig(REPORT_QUEUE_FILE, JSON.stringify(pruned, null, 2))
   }
 
@@ -268,7 +280,11 @@ export class StartupAnalytics {
     if (!queue.length)
       return
 
-    const freshQueue = queue.filter(item => Date.now() - item.createdAt <= REPORT_QUEUE_MAX_AGE)
+    const cutoff = Date.now() - REPORT_QUEUE_MAX_AGE
+    const freshQueue = queue
+      .filter(item => item.createdAt >= cutoff)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(-REPORT_QUEUE_MAX_COUNT)
     const remaining: typeof freshQueue = []
     let attempted = 0
     let succeeded = 0
@@ -303,7 +319,6 @@ export class StartupAnalytics {
           ...item,
           retryCount: (item.retryCount ?? 0) + 1,
           lastAttemptAt: Date.now(),
-          lastError: errorMessage,
         })
       }
     }
@@ -332,7 +347,14 @@ export class StartupAnalytics {
 
   private async flushQueuedReportsFromDb(store: ReportQueueStore, endpoint: string): Promise<void> {
     const cutoff = Date.now() - REPORT_QUEUE_MAX_AGE
-    const items = await store.list(cutoff)
+    const allItems = await store.list(cutoff)
+    if (allItems.length > REPORT_QUEUE_MAX_COUNT) {
+      const dropCount = allItems.length - REPORT_QUEUE_MAX_COUNT
+      const dropped = allItems.slice(0, dropCount)
+      await Promise.allSettled(dropped.map(item => store.remove(item.id)))
+    }
+
+    const items = allItems.slice(-REPORT_QUEUE_MAX_COUNT)
     if (!items.length)
       return
 
@@ -364,7 +386,7 @@ export class StartupAnalytics {
       }
       catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        await store.markAttempt(item.id, errorMessage)
+        await store.markAttempt(item.id)
         firstError ||= errorMessage
       }
     }
@@ -486,18 +508,6 @@ export class StartupAnalytics {
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       analyticsLog.error('Failed to report metrics', { meta: { error: errorMessage } })
-      try {
-        getAnalyticsMessageStore().add({
-          source: 'analytics',
-          severity: 'error',
-          title: 'Analytics report failed',
-          message: errorMessage,
-          meta: { endpoint: url },
-        })
-      }
-      catch {
-        // ignore message store failures
-      }
       try {
         const payload = {
           eventType: 'visit',

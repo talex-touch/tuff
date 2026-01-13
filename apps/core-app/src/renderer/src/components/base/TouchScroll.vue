@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { TouchScroll as TuffTouchScroll } from '@talex-touch/tuffex'
-import { hasWindow } from '@talex-touch/utils/env'
+import { TxScroll as TuffTouchScroll } from '@talex-touch/tuffex'
 
 defineOptions({
-  name: 'TouchScroll',
+  name: 'TouchScroll'
 })
 
 const props = withDefaults(
@@ -13,25 +12,35 @@ const props = withDefaults(
   }>(),
   {
     noPadding: false,
-    native: false,
-  },
+    native: false
+  }
 )
 
 const emit = defineEmits<{
-  scroll: [scrollInfo: { scrollTop: number, scrollLeft: number }]
+  scroll: [scrollInfo: { scrollTop: number; scrollLeft: number }]
 }>()
 
+const attrs = useAttrs()
 const scrollRef = ref<InstanceType<typeof TuffTouchScroll> | null>(null)
 
-const isDarwin = computed(() => {
-  if (!hasWindow())
-    return false
-
-  return window.$initInfo.platform === 'darwin'
+const useNative = computed(() => {
+  return props.native
 })
 
-const useNative = computed(() => {
-  return props.native || isDarwin.value
+const isMacLike = typeof navigator !== 'undefined'
+  && (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
+
+const resolvedBScrollOptions = computed(() => {
+  const raw = (attrs as any)?.options
+  const options = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+
+  if (!isMacLike)
+    return options
+
+  if (Object.prototype.hasOwnProperty.call(options, 'useTransition'))
+    return options
+
+  return { ...options, useTransition: false }
 })
 
 defineExpose({
@@ -41,18 +50,20 @@ defineExpose({
     ;(scrollRef.value as any)?.scrollTo?.(x, y, time)
   },
   getScrollInfo() {
-    return (scrollRef.value as any)?.getScrollInfo?.() ?? {
-      scrollTop: 0,
-      scrollLeft: 0,
-      scrollHeight: 0,
-      scrollWidth: 0,
-      clientHeight: 0,
-      clientWidth: 0,
-    }
+    return (
+      (scrollRef.value as any)?.getScrollInfo?.() ?? {
+        scrollTop: 0,
+        scrollLeft: 0,
+        scrollHeight: 0,
+        scrollWidth: 0,
+        clientHeight: 0,
+        clientWidth: 0
+      }
+    )
   },
   refresh() {
     ;(scrollRef.value as any)?.refresh?.()
-  },
+  }
 })
 </script>
 
@@ -63,6 +74,7 @@ defineExpose({
     v-bind="$attrs"
     :no-padding="noPadding"
     :native="useNative"
+    :options="resolvedBScrollOptions"
     @scroll="(info) => emit('scroll', info)"
   >
     <template #header>
@@ -80,5 +92,7 @@ defineExpose({
   width: 100%;
   height: 100%;
   position: relative;
+  min-height: 0;
+  flex: 1;
 }
 </style>

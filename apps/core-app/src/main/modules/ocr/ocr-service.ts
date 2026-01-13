@@ -23,6 +23,7 @@ import {
   ocrJobs,
   ocrResults,
 } from '../../db/schema'
+import { withSqliteRetry } from '../../db/sqlite-retry'
 import { ensureAiConfigLoaded, getCapabilityOptions, getCapabilityPrompt } from '../ai/intelligence-config'
 import { ai } from '../ai/intelligence-sdk'
 import { windowManager } from '../box-tool/core-box/window'
@@ -348,16 +349,20 @@ class OcrService {
       }
     }
 
-    await this.db.insert(ocrJobs).values({
-      clipboardId,
-      status: 'pending',
-      attempts: 0,
-      payloadHash: payloadHash ?? null,
-      meta: JSON.stringify({
-        source,
-        options,
-      }),
-    })
+    await withSqliteRetry(
+      () =>
+        this.db!.insert(ocrJobs).values({
+          clipboardId,
+          status: 'pending',
+          attempts: 0,
+          payloadHash: payloadHash ?? null,
+          meta: JSON.stringify({
+            source,
+            options,
+          }),
+        }),
+      { label: 'ocr.jobs.enqueue' },
+    )
 
     const initialMeta: Record<string, unknown> = {
       ocr_status: 'pending',
@@ -567,14 +572,18 @@ class OcrService {
 
         const attemptCount = (job.attempts ?? 0) + 1
 
-        await this.db
-          .update(ocrJobs)
-          .set({
-            status: 'processing',
-            attempts: attemptCount,
-            startedAt: new Date(),
-          })
-          .where(eq(ocrJobs.id, job.id))
+        await withSqliteRetry(
+          () =>
+            this.db!
+              .update(ocrJobs)
+              .set({
+                status: 'processing',
+                attempts: attemptCount,
+                startedAt: new Date(),
+              })
+              .where(eq(ocrJobs.id, job.id)),
+          { label: 'ocr.jobs.start' },
+        )
 
         job.attempts = attemptCount
 
@@ -687,14 +696,18 @@ class OcrService {
     // 记录最后尝试时间到内存 Map
     this.lastAttemptMap.set(job.id, Date.now())
 
-    await this.db
-      .update(ocrJobs)
-      .set({
-        status: 'pending',
-        lastError: reason,
-        startedAt: null,
-      })
-      .where(eq(ocrJobs.id, job.id))
+    await withSqliteRetry(
+      () =>
+        this.db!
+          .update(ocrJobs)
+          .set({
+            status: 'pending',
+            lastError: reason,
+            startedAt: null,
+          })
+          .where(eq(ocrJobs.id, job.id)),
+      { label: 'ocr.jobs.defer' },
+    )
 
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
@@ -771,19 +784,27 @@ class OcrService {
       usage: invocation.usage,
     }
 
-    await this.db.insert(ocrResults).values({
-      jobId,
-      text: result.text,
-      confidence: result.confidence ?? null,
-      language: result.language ?? null,
-      checksum: job.payloadHash ?? null,
-      extra: JSON.stringify(extra),
-    })
+    await withSqliteRetry(
+      () =>
+        this.db!.insert(ocrResults).values({
+          jobId,
+          text: result.text,
+          confidence: result.confidence ?? null,
+          language: result.language ?? null,
+          checksum: job.payloadHash ?? null,
+          extra: JSON.stringify(extra),
+        }),
+      { label: 'ocr.results.insert' },
+    )
 
-    await this.db
-      .update(ocrJobs)
-      .set({ status: 'completed', finishedAt: new Date(), lastError: null })
-      .where(eq(ocrJobs.id, jobId))
+    await withSqliteRetry(
+      () =>
+        this.db!
+          .update(ocrJobs)
+          .set({ status: 'completed', finishedAt: new Date(), lastError: null })
+          .where(eq(ocrJobs.id, jobId)),
+      { label: 'ocr.jobs.complete' },
+    )
 
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
@@ -884,14 +905,18 @@ class OcrService {
     const attempts = job.attempts ?? 0
     const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'pending'
 
-    await this.db
-      .update(ocrJobs)
-      .set({
-        status,
-        lastError: reason,
-        finishedAt: status === 'failed' ? new Date() : null,
-      })
-      .where(eq(ocrJobs.id, jobId))
+    await withSqliteRetry(
+      () =>
+        this.db!
+          .update(ocrJobs)
+          .set({
+            status,
+            lastError: reason,
+            finishedAt: status === 'failed' ? new Date() : null,
+          })
+          .where(eq(ocrJobs.id, jobId)),
+      { label: 'ocr.jobs.fail' },
+    )
 
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
@@ -943,7 +968,10 @@ class OcrService {
     }))
 
     if (insertValues.length > 0) {
-      await this.db.insert(clipboardHistoryMeta).values(insertValues)
+      await withSqliteRetry(
+        () => this.db!.insert(clipboardHistoryMeta).values(insertValues),
+        { label: 'ocr.clipboard.meta' },
+      )
     }
 
     const existing = await this.db
@@ -964,10 +992,14 @@ class OcrService {
       }
 
       const merged = { ...base, ...patch }
-      await this.db
-        .update(clipboardHistory)
-        .set({ metadata: JSON.stringify(merged) })
-        .where(eq(clipboardHistory.id, clipboardId))
+      await withSqliteRetry(
+        () =>
+          this.db!
+            .update(clipboardHistory)
+            .set({ metadata: JSON.stringify(merged) })
+            .where(eq(clipboardHistory.id, clipboardId)),
+        { label: 'ocr.clipboard.merge' },
+      )
     }
 
     this.broadcastMetaUpdate(clipboardId, patch)
@@ -1000,13 +1032,17 @@ class OcrService {
     if (!this.db)
       return
     const serialized = JSON.stringify(value ?? null)
-    await this.db
-      .insert(config)
-      .values({ key, value: serialized })
-      .onConflictDoUpdate({
-        target: config.key,
-        set: { value: serialized },
-      })
+    await withSqliteRetry(
+      () =>
+        this.db!
+          .insert(config)
+          .values({ key, value: serialized })
+          .onConflictDoUpdate({
+            target: config.key,
+            set: { value: serialized },
+          }),
+      { label: 'ocr.config' },
+    )
   }
 }
 

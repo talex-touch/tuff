@@ -14,6 +14,7 @@ import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { ipcMain } from 'electron'
 import { WindowManager } from '../modules/box-tool/core-box/window'
 import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
+import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 let perfReportListenerRegistered = false
@@ -226,7 +227,32 @@ class TouchChannel implements ITouchChannel {
             rData.header.uniqueKey = rawData.header.uniqueKey
           }
 
-          const finalData = JSON.parse(structuredStrictStringify(rData))
+          let finalData: unknown
+          if (rawData.name === 'tuff:dashboard') {
+            const encodeStartedAt = performance.now()
+            const encoded = structuredStrictStringify(rData)
+            const encodeDurationMs = performance.now() - encodeStartedAt
+            const parseStartedAt = performance.now()
+            finalData = JSON.parse(encoded)
+            const parseDurationMs = performance.now() - parseStartedAt
+
+            appendWorkflowDebugLog({
+              hid: 'H3',
+              loc: 'channel-core.reply',
+              msg: 'reply.serialize',
+              data: {
+                eventName: rawData.name,
+                requestId: rawData.sync?.id ?? null,
+                code,
+                encodeDurationMs,
+                parseDurationMs,
+                bytes: Buffer.byteLength(encoded, 'utf8'),
+              },
+            })
+          }
+          else {
+            finalData = JSON.parse(structuredStrictStringify(rData))
+          }
 
           if (rawData.sync) {
             try {

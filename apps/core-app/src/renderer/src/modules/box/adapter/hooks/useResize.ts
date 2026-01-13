@@ -30,13 +30,15 @@ function calculateDesiredHeight(resultCount: number): number {
   if (!scrollRoot)
     return MIN_HEIGHT
 
-  const nativeWrap = scrollRoot.querySelector('.native-scroll-wrapper') as HTMLElement | null
-  const elWrap = scrollRoot.querySelector('.el-scroll-wrapper .el-scrollbar__wrap') as HTMLElement | null
-  const wrap = nativeWrap ?? elWrap
+  const nativeWrap = scrollRoot.querySelector('.native-scroll-wrapper, .tx-scroll__native') as HTMLElement | null
+  const legacyElWrap = scrollRoot.querySelector('.el-scroll-wrapper .el-scrollbar__wrap') as HTMLElement | null
+  const txWrapper = scrollRoot.querySelector('.tx-scroll__wrapper') as HTMLElement | null
+  const txContent = scrollRoot.querySelector('.tx-scroll__content') as HTMLElement | null
+  const wrap = nativeWrap ?? legacyElWrap ?? txWrapper ?? txContent
   if (!wrap)
     return MIN_HEIGHT
 
-  const scrollHeight = wrap.scrollHeight
+  const scrollHeight = txContent?.scrollHeight ?? wrap.scrollHeight
   const clientHeight = wrap.clientHeight
   const extraBuffer = scrollHeight > clientHeight ? SCROLLBAR_WIDTH_ESTIMATE : 0
 

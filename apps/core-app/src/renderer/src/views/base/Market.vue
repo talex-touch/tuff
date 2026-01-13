@@ -16,37 +16,30 @@ import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 
 const router = useRouter()
 
-// Market data management
 const { plugins: marketPlugins, stats: providerStats, loading, loadMarketPlugins } = useMarketData()
 
-// Category management
-const { tags: _tags, tagInd: _tagInd, selectedTag, updateCategoryTags } = useMarketCategories(marketPlugins)
+const { selectedTag, updateCategoryTags } = useMarketCategories(marketPlugins)
 
-// Installation management
 const { handleInstall } = useMarketInstall()
 
-// Plugin version status (for checking installed plugins and upgrade availability)
 const { installedPluginNames, installedPluginVersions } = usePluginVersionStatus()
 
-// UI state
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const viewType = ref<'grid' | 'list'>('grid')
 const searchKey = ref('')
 const sourcesState = marketSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
 
-// Provider stats
 const providerStatsComputed = computed(() => {
   const stats = providerStats.value
   return {
     total: stats.length,
-    success: stats.filter(s => s.success).length,
-    failed: stats.filter(s => !s.success).length,
+    success: stats.filter((s) => s.success).length,
+    failed: stats.filter((s) => !s.success).length,
     totalPlugins: stats.reduce((sum, s) => sum + s.itemCount, 0)
   }
 })
 
-// Renderer channel
 let rendererChannel: ITouchClientChannel | undefined
 let channelLoadFailed = false
 
@@ -65,7 +58,6 @@ async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
   }
 }
 
-// Filtered plugins based on category and search
 const displayedPlugins = computed(() => {
   const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
   const normalizedKey = searchKey.value.trim().toLowerCase()
@@ -87,17 +79,19 @@ const displayedPlugins = computed(() => {
   })
 })
 
-
 function handleSearch(query: string): void {
   searchKey.value = query
 }
 
 async function onInstall(plugin: MarketPluginListItem): Promise<void> {
   const channel = await getRendererChannel()
-  // Check if this is an upgrade
   const installedVersion = installedPluginVersions.value.get(plugin.name)
   const isUpgrade = Boolean(installedVersion && plugin.version)
-  await handleInstall(plugin, channel, isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined)
+  await handleInstall(
+    plugin,
+    channel,
+    isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined
+  )
 }
 
 function openPluginDetail(plugin: MarketPluginListItem): void {
@@ -150,7 +144,5 @@ onMounted(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  padding: 1.5rem;
-  background: var(--el-bg-color);
 }
 </style>

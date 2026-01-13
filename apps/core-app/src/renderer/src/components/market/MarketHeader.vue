@@ -1,4 +1,5 @@
 <script setup lang="ts" name="MarketHeader">
+import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
 import type { MarketProviderResultMeta } from '@talex-touch/utils/market'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,7 +28,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// Error details drawer state
 const showErrorDrawer = ref(false)
 
 function handleSearch(query: string): void {
@@ -39,20 +39,56 @@ function openErrorDetails(): void {
 }
 
 const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
+const tabs = defineModel<'market' | 'installed'>('tabs', { default: 'market' })
 </script>
 
 <template>
-  <div flex="~ col" gap-3 pb-3 border-b="1 solid [var(--el-border-color-lighter)]">
-    <div flex items-center justify-between gap-4>
-      <div flex="~ col" gap-1>
-        <h2 m-0 text-xl font-700 tracking-tight text="[var(--el-text-color-primary)]">
-          {{ t('market.title') }}
-        </h2>
-        <span text-sm op-70 text="[var(--el-text-color-regular)]">
-          {{ t('market.subtitle') }}
-        </span>
-      </div>
+  <div flex="~ col" border-b="1 solid [var(--el-border-color-lighter)]">
+    <div
+      flex="~ justify-between items-center"
+      border-b="1 solid [var(--el-border-color-lighter)]"
+      p="x-4 y-2"
+      bg="[var(--el-bg-color-page)]"
+      class="fake-background"
+      style="--fake-opacity: 0.5"
+    >
+      <TxRadioGroup v-model="tabs" glass>
+        <TxRadio value="market" label="Market" />
+        <TxRadio value="installed" label="Installed" />
+      </TxRadioGroup>
 
+      <div flex items-center gap-2>
+        <div flex items-center gap-2 text-xs>
+          <span op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
+            {{ sourcesCount }} {{ t('market.sources') }}
+          </span>
+          <span
+            v-if="providerStats"
+            class="provider-status"
+            :class="{ clickable: providerStats.failed > 0 }"
+            @click="providerStats.failed > 0 && openErrorDetails()"
+          >
+            <span class="status-success">
+              <i class="i-ri-check-line" />
+              {{ providerStats.success }}
+            </span>
+            <span
+              v-if="providerStats.failed > 0"
+              class="status-failed"
+              :title="t('market.clickToViewErrors')"
+            >
+              <i class="i-ri-close-line" />
+              {{ providerStats.failed }}
+            </span>
+          </span>
+        </div>
+        <FlatButton mini @click="emit('open-source-editor')">
+          <div class="i-carbon-list" />
+        </FlatButton>
+      </div>
+    </div>
+
+    <div flex items-center justify-between gap-4 px-4 py-2>
       <div flex items-center gap-3>
         <FlatCompletion
           :fetch="() => []"
@@ -60,40 +96,19 @@ const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
           class="search-input"
           @search="handleSearch"
         />
-
-        <div flex items-center gap-2>
-          <FlatButton mini @click="emit('open-source-editor')">
-            <div class="i-carbon-list" />
-          </FlatButton>
-          <div flex items-center gap-2 text-xs>
-            <span op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
-              {{ sourcesCount }} {{ t('market.sources') }}
-            </span>
-            <span v-if="providerStats" class="provider-status" :class="{ clickable: providerStats.failed > 0 }" @click="providerStats.failed > 0 && openErrorDetails()">
-              <span class="status-success">
-                <i class="i-ri-check-line" />
-                {{ providerStats.success }}
-              </span>
-              <span v-if="providerStats.failed > 0" class="status-failed" :title="t('market.clickToViewErrors')">
-                <i class="i-ri-close-line" />
-                {{ providerStats.failed }}
-              </span>
-            </span>
-          </div>
-        </div>
       </div>
-    </div>
 
-    <div flex items-center justify-end gap-2>
-      <TLabelSelect v-model="viewType">
-        <TLabelSelectItem value="grid" icon="i-carbon-table-split" />
-        <TLabelSelectItem value="list" icon="i-carbon-list-boxes" />
-      </TLabelSelect>
+      <div flex items-center gap-2>
+        <TLabelSelect v-model="viewType">
+          <TLabelSelectItem value="grid" icon="i-carbon-table-split" />
+          <TLabelSelectItem value="list" icon="i-carbon-list-boxes" />
+        </TLabelSelect>
 
-      <FlatButton mini :disabled="loading" @click="emit('refresh')">
-        <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" text-base />
-        <span>{{ loading ? t('market.loading') : t('market.refresh') }}</span>
-      </FlatButton>
+        <FlatButton mini :disabled="loading" @click="emit('refresh')">
+          <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" text-base />
+          <span>{{ loading ? t('market.loading') : t('market.refresh') }}</span>
+        </FlatButton>
+      </div>
     </div>
   </div>
 

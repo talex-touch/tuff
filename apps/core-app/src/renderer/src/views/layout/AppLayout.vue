@@ -4,6 +4,7 @@ import DynamicLayout from '~/components/layout/DynamicLayout.vue'
 import LayoutBackButton from '~/components/layout/LayoutBackButton.vue'
 import { useSecondaryNavigation } from '~/modules/layout/useSecondaryNavigation'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
+import { reportPerfToMain } from '~/modules/perf/perf-report'
 
 const mica = computed(() => themeStyle.value.theme.window === 'Mica')
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)
@@ -11,6 +12,33 @@ const contrast = computed(() => themeStyle.value.theme.addon.contrast)
 const { canNavigateBack, navigateBack } = useSecondaryNavigation({
   debugLabel: 'AppLayout',
 })
+
+const routeTransitionStartedAt = new Map<string, number>()
+
+function onRouteEnterStart(fullPath: string): void {
+  routeTransitionStartedAt.set(fullPath, performance.now())
+}
+
+function onRouteEnterEnd(fullPath: string): void {
+  const startedAt = routeTransitionStartedAt.get(fullPath)
+  if (startedAt === undefined) {
+    return
+  }
+  routeTransitionStartedAt.delete(fullPath)
+
+  const durationMs = performance.now() - startedAt
+  if (durationMs < 500 && fullPath !== '/details') {
+    return
+  }
+
+  reportPerfToMain({
+    kind: 'ui.route.transition',
+    eventName: fullPath,
+    durationMs,
+    at: Date.now(),
+    meta: { transition: 'route-slide', phase: 'enter' },
+  })
+}
 
 onMounted(() => {
   triggerThemeTransition(
@@ -29,7 +57,12 @@ onMounted(() => {
     <DynamicLayout>
       <template #view>
         <router-view v-slot="{ Component, route }">
-          <transition name="route-slide" appear>
+          <transition
+            name="route-slide"
+            appear
+            @before-enter="() => onRouteEnterStart(route.fullPath)"
+            @after-enter="() => onRouteEnterEnd(route.fullPath)"
+          >
             <component :is="Component" v-if="Component" :key="route.fullPath" />
           </transition>
         </router-view>
@@ -66,9 +99,11 @@ onMounted(() => {
   left: 0;
 
   width: var(--nav-width, 30px);
+  min-width: var(--nav-width, 30px);
+  max-width: var(--nav-width, 30px);
   // height: 100%;
 
-  flex: 1;
+  flex: 0 0 var(--nav-width, 30px);
   // flex-shrink: 0;
 
   box-sizing: border-box;
@@ -127,6 +162,8 @@ onMounted(() => {
 
   flex: 1;
   height: calc(100% - var(--ctr-height, 40px));
+  min-height: 0;
+  min-width: 0;
 
   overflow: hidden;
 }

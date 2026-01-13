@@ -120,6 +120,10 @@ let wheelCleanup: (() => void) | null = null
 let refreshTimer: number | null = null
 
 let wheelIndicatorTimer: number | null = null
+let wheelEndTimer: number | null = null
+let wheelApplyRaf: number | null = null
+let wheelTargetX: number | null = null
+let wheelTargetY: number | null = null
 const isWheeling = ref(false)
 
 let nativeTouchStartY: number | null = null
@@ -203,6 +207,14 @@ async function initBetterScroll() {
       }
     : false
 
+  const optionsFromProps = props.options ?? {}
+  const hasUseTransitionOverride = Object.prototype.hasOwnProperty.call(optionsFromProps, 'useTransition')
+  const shouldDisableTransitionByDefault = !hasUseTransitionOverride
+    && props.wheel
+    && props.bounce
+    && typeof navigator !== 'undefined'
+    && (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
+
   bs = new BScroll(wrapperRef.value, {
     scrollX: isScrollXEnabled.value,
     scrollY: isScrollYEnabled.value,
@@ -213,7 +225,8 @@ async function initBetterScroll() {
     scrollbar: scrollbarOption,
     pullDownRefresh: pullDownOption,
     pullUpLoad: pullUpOption,
-    ...props.options,
+    ...(shouldDisableTransitionByDefault ? { useTransition: false } : {}),
+    ...optionsFromProps,
   })
 
   bs.on('scroll', (pos: { x: number, y: number }) => {
@@ -235,6 +248,46 @@ async function initBetterScroll() {
   scheduleRefresh()
 
   const el = wrapperRef.value
+  const RESISTANCE_FACTOR = 0.35
+  const applyDeltaWithResistance = (base: number, delta: number, min: number, max: number, overshoot: number) => {
+    const next = base + delta
+    if (overshoot <= 0)
+      return Math.max(min, Math.min(max, next))
+
+    if (next > max) {
+      const damped = base > max
+        ? base + delta * RESISTANCE_FACTOR
+        : max + (delta - (max - base)) * RESISTANCE_FACTOR
+      return Math.min(max + overshoot, damped)
+    }
+
+    if (next < min) {
+      const damped = base < min
+        ? base + delta * RESISTANCE_FACTOR
+        : min + (delta - (min - base)) * RESISTANCE_FACTOR
+      return Math.max(min - overshoot, damped)
+    }
+
+    return next
+  }
+
+  const requestWheelApply = () => {
+    if (wheelApplyRaf !== null)
+      return
+
+    wheelApplyRaf = window.requestAnimationFrame(() => {
+      wheelApplyRaf = null
+      if (!bs)
+        return
+
+      const x = wheelTargetX ?? (typeof bs.x === 'number' ? bs.x : 0)
+      const y = wheelTargetY ?? (typeof bs.y === 'number' ? bs.y : 0)
+      if ((bs as any).pending)
+        ;(bs as any)?.stop?.()
+      bs.scrollTo(x, y, 0)
+    })
+  }
+
   const onWheel = (e: WheelEvent) => {
     if (!bs)
       return
@@ -246,10 +299,13 @@ async function initBetterScroll() {
     if (e.ctrlKey)
       return
 
-    const currX = typeof bs.x === 'number' ? bs.x : 0
-    const currY = typeof bs.y === 'number' ? bs.y : 0
     const maxX = typeof (bs as any).maxScrollX === 'number' ? (bs as any).maxScrollX : -Infinity
     const maxY = typeof (bs as any).maxScrollY === 'number' ? (bs as any).maxScrollY : -Infinity
+    const canScrollXNow = isScrollXEnabled.value && maxX < 0
+    const canScrollYNow = isScrollYEnabled.value && maxY < 0
+
+    const currX = typeof bs.x === 'number' ? bs.x : 0
+    const currY = typeof bs.y === 'number' ? bs.y : 0
 
     const dx = typeof e.deltaX === 'number' ? e.deltaX : 0
     const dy = typeof e.deltaY === 'number' ? e.deltaY : 0
@@ -273,6 +329,35 @@ async function initBetterScroll() {
     if (effDx === 0 && effDy === 0)
       return
 
+    const absDelta = Math.max(Math.abs(effDx), Math.abs(effDy))
+    const isPixelMode = typeof e.deltaMode !== 'number' || e.deltaMode === 0
+    const isOutXNow = isScrollXEnabled.value && (currX > 0 || currX < maxX)
+    const isOutYNow = isScrollYEnabled.value && (currY > 0 || currY < maxY)
+    const shouldBlockScrollChaining = !props.scrollChaining && (
+      (effDx !== 0 && canScrollXNow)
+      || (effDy !== 0 && canScrollYNow)
+    )
+
+    const shouldIgnoreTailWheel = (bs as any).pending
+      && props.bounce
+      && isPixelMode
+      && absDelta < 12
+      && (isOutXNow || isOutYNow)
+    if (shouldIgnoreTailWheel) {
+      if (shouldBlockScrollChaining) {
+        if (e.cancelable)
+          e.preventDefault()
+        e.stopPropagation()
+      }
+      return
+    }
+
+    if ((bs as any).pending)
+      ;(bs as any)?.stop?.()
+
+    const currXAfterStop = typeof bs.x === 'number' ? bs.x : currX
+    const currYAfterStop = typeof bs.y === 'number' ? bs.y : currY
+
     isWheeling.value = true
     wheelIndicatorTimer && window.clearTimeout(wheelIndicatorTimer)
     wheelIndicatorTimer = window.setTimeout(() => {
@@ -280,19 +365,15 @@ async function initBetterScroll() {
       wheelIndicatorTimer = null
     }, 520)
 
+    const baseX = wheelTargetX ?? currXAfterStop
+    const baseY = wheelTargetY ?? currYAfterStop
+
     const overshoot = props.bounce ? 60 : 0
-    const nextX = Math.max(maxX - overshoot, Math.min(0 + overshoot, currX - effDx))
-    const nextY = Math.max(maxY - overshoot, Math.min(0 + overshoot, currY - effDy))
-
-    const willMoveX = isScrollXEnabled.value && effDx !== 0 && nextX !== currX
-    const willMoveY = isScrollYEnabled.value && effDy !== 0 && nextY !== currY
-
-    const canScrollXNow = isScrollXEnabled.value && maxX < 0
-    const canScrollYNow = isScrollYEnabled.value && maxY < 0
-    const shouldBlockScrollChaining = !props.scrollChaining && (
-      (effDx !== 0 && canScrollXNow)
-      || (effDy !== 0 && canScrollYNow)
-    )
+    const deltaX = isScrollXEnabled.value ? -effDx : 0
+    const deltaY = isScrollYEnabled.value ? -effDy : 0
+    const nextX = isScrollXEnabled.value ? applyDeltaWithResistance(baseX, deltaX, maxX, 0, overshoot) : baseX
+    const nextY = isScrollYEnabled.value ? applyDeltaWithResistance(baseY, deltaY, maxY, 0, overshoot) : baseY
+    const willMove = nextX !== baseX || nextY !== baseY
 
     if (shouldBlockScrollChaining) {
       if (e.cancelable)
@@ -300,12 +381,50 @@ async function initBetterScroll() {
       e.stopPropagation()
     }
 
-    if (!willMoveX && !willMoveY)
+    const wheelEndDelay = isPixelMode ? 48 : (absDelta < 40 ? 120 : 160)
+    const isOutXBase = isScrollXEnabled.value && (baseX > 0 || baseX < maxX)
+    const isOutYBase = isScrollYEnabled.value && (baseY > 0 || baseY < maxY)
+    const shouldRefreshWheelEndTimer = !(isOutXBase || isOutYBase) || willMove
+    if (wheelEndTimer !== null && shouldRefreshWheelEndTimer) {
+      window.clearTimeout(wheelEndTimer)
+      wheelEndTimer = null
+    }
+    if (wheelEndTimer === null) {
+      wheelEndTimer = window.setTimeout(() => {
+        wheelEndTimer = null
+        wheelTargetX = null
+        wheelTargetY = null
+        if (!bs)
+          return
+        if (!props.bounce)
+          return
+
+        const currentMaxX = typeof (bs as any).maxScrollX === 'number' ? (bs as any).maxScrollX : -Infinity
+        const currentMaxY = typeof (bs as any).maxScrollY === 'number' ? (bs as any).maxScrollY : -Infinity
+        const xNow = typeof (bs as any).x === 'number' ? (bs as any).x : 0
+        const yNow = typeof (bs as any).y === 'number' ? (bs as any).y : 0
+
+        const isOutX = isScrollXEnabled.value && (xNow > 0 || xNow < currentMaxX)
+        const isOutY = isScrollYEnabled.value && (yNow > 0 || yNow < currentMaxY)
+        if (!isOutX && !isOutY)
+          return
+
+        ;(bs as any)?.resetPosition?.(420)
+      }, wheelEndDelay)
+    }
+
+    if (!willMove)
       return
 
-    if (e.cancelable)
-      e.preventDefault()
-    bs.scrollTo(willMoveX ? nextX : currX, willMoveY ? nextY : currY, 0)
+    wheelTargetX = nextX
+    wheelTargetY = nextY
+
+    if (!shouldBlockScrollChaining) {
+      if (e.cancelable)
+        e.preventDefault()
+    }
+
+    requestWheelApply()
   }
 
   el.addEventListener('wheel', onWheel, { passive: false })
@@ -318,6 +437,14 @@ function destroyBetterScroll() {
 
   wheelIndicatorTimer && window.clearTimeout(wheelIndicatorTimer)
   wheelIndicatorTimer = null
+
+  wheelEndTimer && window.clearTimeout(wheelEndTimer)
+  wheelEndTimer = null
+  wheelApplyRaf && window.cancelAnimationFrame(wheelApplyRaf)
+  wheelApplyRaf = null
+  wheelTargetX = null
+  wheelTargetY = null
+
   isWheeling.value = false
 
   if (mo) {
@@ -654,6 +781,8 @@ watch(
   pointer-events: auto;
   min-height: var(--tx-scrollbar-min-size);
   min-width: var(--tx-scrollbar-min-size);
+  border-radius: 999px;
+  background-color: rgba(0, 0, 0, 0.35);
 }
 
 .tx-scroll__wrapper--always-visible :deep(.bscroll-vertical-scrollbar),

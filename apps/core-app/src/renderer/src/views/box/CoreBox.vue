@@ -600,10 +600,11 @@ div.CoreBoxRes {
 
   flex-direction: row;
 
-  top: 60px;
+  top: 64px;
 
   width: 100%;
-  height: calc(100% - 60px);
+  height: calc(100% - 64px);
+  overflow: hidden;
 
   border-radius: 0 0 8px 8px;
   border-top: 1px solid var(--el-border-color);
@@ -629,6 +630,7 @@ div.CoreBoxRes {
     width: 100%;
     display: flex;
     flex-direction: column;
+    min-height: 0;
   }
 }
 
@@ -648,10 +650,11 @@ div.CoreBoxRes {
 
   .CoreBoxRes-ScrollContent {
     width: 100%;
+    padding: 8px 12px 16px;
   }
 
   .CoreBoxRes-ScrollContent.has-footer {
-    padding-bottom: 44px;
+    padding-bottom: 72px;
   }
 
 // Result switch animation (list <-> grid, or new results)

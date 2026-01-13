@@ -7,6 +7,7 @@ import type {
 
 import type { IpcRendererEvent } from 'electron'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { reportPerfToMain } from '~/modules/perf/perf-report'
 
 // Use preload-exposed ipcRenderer via electron-toolkit
 const ipcRenderer = window.electron.ipcRenderer
@@ -14,29 +15,6 @@ const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const CHANNEL_SENDSYNC_WARN_MS = 80
 const CHANNEL_SEND_WARN_MS = 500
 const CHANNEL_SEND_ERROR_MS = 2_000
-const PERF_REPORT_CHANNEL = 'touch:perf-report'
-
-type PerfReport = {
-  kind:
-    | 'channel.sendSync.slow'
-    | 'channel.send.slow'
-    | 'channel.send.timeout'
-    | 'channel.send.errorReply'
-  eventName: string
-  durationMs: number
-  at: number
-  payloadPreview?: string
-  stack?: string
-  meta?: Record<string, unknown>
-}
-
-function reportPerfToMain(report: PerfReport): void {
-  try {
-    ipcRenderer.send(PERF_REPORT_CHANNEL, report)
-  } catch {
-    // ignore perf reporting failures
-  }
-}
 
 class TouchChannel implements ITouchClientChannel {
   channelMap: Map<string, ((data: StandardChannelData) => any)[]> = new Map()
@@ -230,17 +208,17 @@ class TouchChannel implements ITouchClientChannel {
           payloadPreview: this.formatPayloadPreview(arg),
           stack
         })
-        reportPerfToMain({
-          kind: 'channel.send.timeout',
-          eventName,
-          durationMs: timeoutMs,
-          at: Date.now(),
-          payloadPreview: this.formatPayloadPreview(arg),
-          stack,
-          meta: { timeoutMs }
-        })
-        reject(error)
-      }, timeoutMs)
+      reportPerfToMain({
+        kind: 'channel.send.timeout',
+        eventName,
+        durationMs: timeoutMs,
+        at: Date.now(),
+        payloadPreview: this.formatPayloadPreview(arg),
+        stack,
+        meta: { timeoutMs, syncId: uniqueId }
+      })
+      reject(error)
+    }, timeoutMs)
 
       this.pendingMap.set(uniqueId, (res) => {
         clearTimeout(timeoutHandle)
@@ -259,7 +237,7 @@ class TouchChannel implements ITouchClientChannel {
             at: Date.now(),
             payloadPreview: this.formatPayloadPreview(arg),
             stack,
-            meta: { threshold: CHANNEL_SEND_ERROR_MS }
+            meta: { threshold: CHANNEL_SEND_ERROR_MS, syncId: uniqueId }
           })
         } else if (duration >= CHANNEL_SEND_WARN_MS) {
           console.warn(`[Channel][send][slow] "${eventName}" took ${duration.toFixed(1)}ms`, {
@@ -273,7 +251,7 @@ class TouchChannel implements ITouchClientChannel {
             at: Date.now(),
             payloadPreview: this.formatPayloadPreview(arg),
             stack,
-            meta: { threshold: CHANNEL_SEND_WARN_MS }
+            meta: { threshold: CHANNEL_SEND_WARN_MS, syncId: uniqueId }
           })
         }
 
@@ -291,7 +269,8 @@ class TouchChannel implements ITouchClientChannel {
             payloadPreview: this.formatPayloadPreview(arg),
             stack,
             meta: {
-              replyPreview: this.formatPayloadPreview(res.data)
+              replyPreview: this.formatPayloadPreview(res.data),
+              syncId: uniqueId
             }
           })
         }

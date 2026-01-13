@@ -8,7 +8,6 @@ import SettingFileIndex from './SettingFileIndex.vue'
 import SettingEverything from './SettingEverything.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
-import SettingMessages from './SettingMessages.vue'
 import SettingSentry from './SettingSentry.vue'
 import SettingSetup from './SettingSetup.vue'
 import SettingTools from './SettingTools.vue'
@@ -16,7 +15,6 @@ import SettingUpdate from './SettingUpdate.vue'
 import SettingUser from './SettingUser.vue'
 
 const isWindows = computed(() => window.electron?.process?.platform === 'win32')
-const isDev = import.meta.env.DEV
 </script>
 
 <template>
@@ -41,8 +39,6 @@ const isDev = import.meta.env.DEV
       <SettingUpdate />
 
       <SettingSentry />
-
-      <SettingMessages v-if="isDev" />
 
       <!-- <SettingStorage /> -->
 
@@ -89,7 +85,8 @@ const isDev = import.meta.env.DEV
 .AppSettings-Container {
   position: relative;
 
-  height: 100%;
+  min-height: 100%;
+  padding-bottom: 24px;
   width: 100%;
 }
 </style>
