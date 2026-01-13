@@ -3,10 +3,13 @@ export type RendererPerfReportKind =
   | 'channel.send.slow'
   | 'channel.send.timeout'
   | 'channel.send.errorReply'
+  | 'ui.route.navigate'
+  | 'ui.route.render'
   | 'ui.route.transition'
   | 'ui.details.fetch'
   | 'ui.details.render'
   | 'ui.details.total'
+  | 'ui.component.load'
 
 export type RendererPerfReport = {
   kind: RendererPerfReportKind

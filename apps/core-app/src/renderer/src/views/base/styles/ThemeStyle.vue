@@ -20,6 +20,17 @@ import WindowSectionVue from './WindowSection.vue'
 const { t } = useI18n()
 
 const styleValue = ref(0)
+type RouteTransitionStyle = 'slide' | 'fade' | 'zoom'
+
+const routeTransitionStyle = computed({
+  get: () => themeStyle.value.theme.transition?.route ?? 'slide',
+  set: (val: RouteTransitionStyle) => {
+    if (!themeStyle.value.theme.transition) {
+      themeStyle.value.theme.transition = { route: 'slide' as RouteTransitionStyle }
+    }
+    themeStyle.value.theme.transition.route = val
+  },
+})
 
 // Background source mapping: 0=bing, 1=custom, 2=none
 const bgSourceValue = computed({
@@ -315,6 +326,25 @@ function clearBackgroundImage() {
           <ThemePreviewIcon variant="transition" :active="active" />
         </template>
       </TuffBlockSwitch>
+
+      <TuffBlockSelect
+        v-model="routeTransitionStyle"
+        :title="t('themeStyle.routeTransition', '页面切换动效')"
+        :description="t('themeStyle.routeTransitionDesc', '控制应用页面路由切换动画（可能影响性能）。')"
+      >
+        <template #icon="{ active }">
+          <ThemePreviewIcon variant="transition" :active="active" />
+        </template>
+        <TSelectItem model-value="slide" name="slide">
+          {{ t('themeStyle.routeTransitionSlide', '滑动') }}
+        </TSelectItem>
+        <TSelectItem model-value="fade" name="fade">
+          {{ t('themeStyle.routeTransitionFade', '淡入淡出') }}
+        </TSelectItem>
+        <TSelectItem model-value="zoom" name="zoom">
+          {{ t('themeStyle.routeTransitionZoom', '缩放') }}
+        </TSelectItem>
+      </TuffBlockSelect>
 
       <!-- CoreBox window resize animation switch (Beta) -->
       <TuffBlockSwitch

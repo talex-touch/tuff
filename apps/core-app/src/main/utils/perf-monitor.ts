@@ -5,6 +5,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { createLogger, formatDuration, type Primitive } from './logger'
 import { getPerfContextSnapshot } from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
+import { getSentryService } from '../modules/sentry/sentry-service'
 
 export type RendererPerfReport = {
   kind:
@@ -12,10 +13,13 @@ export type RendererPerfReport = {
     | 'channel.send.slow'
     | 'channel.send.timeout'
     | 'channel.send.errorReply'
+    | 'ui.route.navigate'
+    | 'ui.route.render'
     | 'ui.route.transition'
     | 'ui.details.fetch'
     | 'ui.details.render'
     | 'ui.details.total'
+    | 'ui.component.load'
   eventName: string
   durationMs: number
   at: number
@@ -63,6 +67,30 @@ const PERF_REPORT_CHANNEL = 'touch:perf-report'
 
 const IPC_WARN_MS = 200
 const IPC_ERROR_MS = 1_000
+
+const UI_DEFAULT_WARN_MS = 250
+const UI_DEFAULT_ERROR_MS = 1_500
+
+function resolveUiThreshold(kind: RendererPerfReport['kind']): { warn: number, error: number } {
+  switch (kind) {
+    case 'ui.component.load':
+      return { warn: 150, error: 1_000 }
+    case 'ui.route.navigate':
+      return { warn: 200, error: 1_000 }
+    case 'ui.route.transition':
+      return { warn: 300, error: 1_200 }
+    case 'ui.route.render':
+      return { warn: 350, error: 1_500 }
+    case 'ui.details.fetch':
+      return { warn: 500, error: 2_000 }
+    case 'ui.details.render':
+      return { warn: 200, error: 1_200 }
+    case 'ui.details.total':
+      return { warn: 700, error: 2_000 }
+    default:
+      return { warn: UI_DEFAULT_WARN_MS, error: UI_DEFAULT_ERROR_MS }
+  }
+}
 
 const LOOP_LAG_WARN_MS = 200
 const LOOP_LAG_ERROR_MS = 2_000
@@ -113,6 +141,56 @@ function toLogMeta(meta: Record<string, unknown> | undefined): Record<string, Pr
     }
   }
   return safe
+}
+
+function shouldSendToNexus(incident: PerfIncident): boolean {
+  if (incident.severity === 'error') {
+    return true
+  }
+  if (!incident.durationMs) {
+    return false
+  }
+  switch (incident.kind) {
+    case 'ui.component.load':
+      return incident.durationMs >= 300
+    case 'ui.route.navigate':
+      return incident.durationMs >= 400
+    case 'ui.route.transition':
+      return incident.durationMs >= 600
+    case 'ui.route.render':
+      return incident.durationMs >= 700
+    case 'ui.details.fetch':
+    case 'ui.details.total':
+      return incident.durationMs >= 1_000
+    default:
+      return false
+  }
+}
+
+function queueNexusPerformance(incident: PerfIncident): void {
+  if (!shouldSendToNexus(incident)) {
+    return
+  }
+  try {
+    const sentryService = getSentryService()
+    if (!sentryService.isTelemetryEnabled()) {
+      return
+    }
+    sentryService.queueNexusTelemetry({
+      eventType: 'performance',
+      metadata: {
+        kind: incident.kind,
+        severity: incident.severity,
+        eventName: incident.eventName,
+        durationMs: typeof incident.durationMs === 'number' ? Math.round(incident.durationMs) : undefined,
+        direction: incident.direction,
+        meta: incident.meta ? toLogMeta(incident.meta) : undefined,
+      },
+    })
+  }
+  catch {
+    // ignore nexus telemetry failures
+  }
 }
 
 export class PerfMonitor {
@@ -195,6 +273,7 @@ export class PerfMonitor {
       meta,
     }
     this.pushIncident(incident)
+    queueNexusPerformance(incident)
 
     const message = `${eventName} handler took ${formatDuration(durationMs)}`
     const contexts = getPerfContextSnapshot(2)
@@ -247,14 +326,25 @@ export class PerfMonitor {
   }
 
   recordRendererReport(report: RendererPerfReport): void {
+    const isUiSignal = typeof report.kind === 'string' && report.kind.startsWith('ui.')
+    const thresholds = isUiSignal
+      ? resolveUiThreshold(report.kind)
+      : { warn: IPC_WARN_MS, error: IPC_ERROR_MS }
+
     const severity = report.kind === 'channel.send.timeout'
       ? 'error'
-      : report.durationMs >= IPC_ERROR_MS
+      : report.durationMs >= thresholds.error
         ? 'error'
-        : 'warn'
+        : report.durationMs >= thresholds.warn
+          ? 'warn'
+          : null
 
     const key = `renderer:${report.kind}:${report.eventName}`
     this.updateAggregate(key, report.at, report.durationMs, severity)
+
+    if (!severity) {
+      return
+    }
 
     const incident: PerfIncident = {
       kind: report.kind,
@@ -268,6 +358,7 @@ export class PerfMonitor {
       stack: report.stack,
     }
     this.pushIncident(incident)
+    queueNexusPerformance(incident)
 
     const message = `[renderer] ${report.eventName} ${report.kind} ${formatDuration(report.durationMs)}`
     const logOptions = {
@@ -293,7 +384,6 @@ export class PerfMonitor {
       at: report.at,
     }
 
-    const isUiSignal = typeof report.kind === 'string' && report.kind.startsWith('ui.')
     if (report.eventName === 'tuff:dashboard' || isUiSignal) {
       appendWorkflowDebugLog({
         hid: report.eventName === 'tuff:dashboard' ? 'H2' : 'H6',

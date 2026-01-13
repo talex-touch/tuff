@@ -36,7 +36,8 @@ interface ScanProgressItem {
 interface OcrSource {
   type: 'file' | 'data-url'
   filePath?: string
-  dataUrl?: string
+  dataUrlLength?: number | null
+  dataUrlPreview?: string | null
 }
 
 interface OcrResultSnippet {
@@ -445,6 +446,32 @@ function formatStatus(status?: string | null): string {
   return status.toUpperCase()
 }
 
+function getWorkerStateIcon(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
+  if (worker.state === 'busy')
+    return 'i-ri-loader-4-line'
+  if (worker.state === 'idle')
+    return 'i-ri-checkbox-circle-line'
+  if (worker.lastError)
+    return 'i-ri-error-warning-line'
+  return 'i-ri-pause-circle-line'
+}
+
+function getWorkerStateHint(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
+  if (worker.state === 'busy')
+    return 'Worker 正在处理任务。'
+  if (worker.state === 'idle')
+    return 'Worker 已就绪。'
+  if (worker.lastError)
+    return 'Worker 已离线：发生异常并退出，将在下次任务触发时按需重启。'
+  return 'Worker 按需启动：未触发任务时不会创建线程，因此显示为 offline。'
+}
+
+function getWorkerStateLabel(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
+  if (worker.state !== 'offline')
+    return worker.state
+  return worker.lastError ? 'offline (crashed)' : 'offline (lazy)'
+}
+
 function formatEvent(entry: Record<string, unknown> | null): string {
   if (!entry)
     return 'N/A'
@@ -475,7 +502,7 @@ function sourceLabel(job: OcrJobEntry): string {
       : 'FILE_SOURCE'
   }
   if (job.source.type === 'data-url') {
-    const length = job.source.dataUrl?.length ?? 0
+    const length = job.source.dataUrlLength ?? 0
     return `DATA_URL (${length.toLocaleString()} chars)`
   }
   return 'UNKNOWN'
@@ -733,6 +760,9 @@ onUnmounted(() => {
                   [WORKER_STATUS]
                 </h2>
               </div>
+              <p class="section-hint">
+                OFFLINE 并不一定是错误：文件索引 Worker 默认按需启动；若 LAST_ERROR 不为空，表示 Worker 曾异常退出并会在下一次任务触发时重启。
+              </p>
               <div class="stats-grid">
                 <div class="stat-item">
                   <span class="stat-key">TOTAL:</span>
@@ -777,8 +807,13 @@ onUnmounted(() => {
                       <tr v-for="worker in snapshot.workers.workers" :key="worker.name">
                         <td>{{ worker.name }}</td>
                         <td>
-                          <span class="status-tag" :class="`status-${worker.state}`">
-                            {{ worker.state }}
+                          <span
+                            class="status-tag"
+                            :class="`status-${worker.state}`"
+                            :title="getWorkerStateHint(worker)"
+                          >
+                            <span class="status-icon" :class="getWorkerStateIcon(worker)" />
+                            {{ getWorkerStateLabel(worker) }}
                           </span>
                         </td>
                         <td>{{ worker.threadId ?? 'N/A' }}</td>
@@ -792,6 +827,9 @@ onUnmounted(() => {
                         <td>
                           <span v-if="worker.lastError" class="error-text">
                             {{ truncate(worker.lastError, 40) }}
+                          </span>
+                          <span v-else-if="worker.state === 'offline'" class="no-error">
+                            NOT_STARTED
                           </span>
                           <span v-else class="no-error">NONE</span>
                         </td>
@@ -1591,6 +1629,13 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
+.section-hint {
+  margin: 0.25rem 0 0.75rem;
+  color: #888888;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
 .status-tag {
   padding: 0.125rem 0.5rem;
   border-radius: 2px;
@@ -1598,6 +1643,16 @@ onUnmounted(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.status-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
 .status-completed {

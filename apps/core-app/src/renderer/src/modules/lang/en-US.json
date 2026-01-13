@@ -182,7 +182,12 @@
     "listItemStagger": "List Item Animation",
     "listItemStaggerDesc": "Staggered entrance animation for search result items.",
     "resultTransition": "Result Transition",
-    "resultTransitionDesc": "Transition animation when search results change."
+    "resultTransitionDesc": "Transition animation when search results change.",
+    "routeTransition": "Route Transition",
+    "routeTransitionDesc": "Controls page route transition animations (may impact performance).",
+    "routeTransitionSlide": "Slide",
+    "routeTransitionFade": "Fade",
+    "routeTransitionZoom": "Zoom"
   },
   "layoutSection": {
     "title": "Layouts",

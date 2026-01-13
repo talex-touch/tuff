@@ -245,10 +245,30 @@ class OcrService {
         }
       }
 
-      const source = parsedMeta?.source
+      const rawSource = parsedMeta?.source as Record<string, unknown> | undefined
       const options = parsedMeta?.options
 
-      if (source?.type === 'file' && typeof source.filePath === 'string') {
+      const source = (() => {
+        if (!rawSource || typeof rawSource !== 'object') {
+          return null
+        }
+        const type = typeof rawSource.type === 'string' ? rawSource.type : null
+        if (type === 'file') {
+          const filePath = typeof rawSource.filePath === 'string' ? rawSource.filePath : null
+          return { type: 'file', filePath }
+        }
+        if (type === 'data-url') {
+          const dataUrl = typeof rawSource.dataUrl === 'string' ? rawSource.dataUrl : ''
+          return {
+            type: 'data-url',
+            dataUrlLength: dataUrl.length,
+            dataUrlPreview: dataUrl.length > 0 ? `${dataUrl.slice(0, 64)}…` : null,
+          }
+        }
+        return null
+      })()
+
+      if (source?.type === 'file' && typeof source.filePath === 'string' && source.filePath.length > 0) {
         fileSources.add(source.filePath)
       }
       else if (source?.type === 'data-url') {

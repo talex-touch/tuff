@@ -9,6 +9,18 @@ import { reportPerfToMain } from '~/modules/perf/perf-report'
 const mica = computed(() => themeStyle.value.theme.window === 'Mica')
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)
 const contrast = computed(() => themeStyle.value.theme.addon.contrast)
+const routeTransitionStyle = computed(() => themeStyle.value.theme.transition?.route ?? 'slide')
+const routeTransitionName = computed(() => {
+  switch (routeTransitionStyle.value) {
+    case 'fade':
+      return 'route-fade'
+    case 'zoom':
+      return 'route-zoom'
+    case 'slide':
+    default:
+      return 'route-slide'
+  }
+})
 const { canNavigateBack, navigateBack } = useSecondaryNavigation({
   debugLabel: 'AppLayout',
 })
@@ -36,7 +48,7 @@ function onRouteEnterEnd(fullPath: string): void {
     eventName: fullPath,
     durationMs,
     at: Date.now(),
-    meta: { transition: 'route-slide', phase: 'enter' },
+    meta: { transition: routeTransitionName.value, style: routeTransitionStyle.value, phase: 'enter' },
   })
 }
 
@@ -58,7 +70,7 @@ onMounted(() => {
       <template #view>
         <router-view v-slot="{ Component, route }">
           <transition
-            name="route-slide"
+            :name="routeTransitionName"
             appear
             @before-enter="() => onRouteEnterStart(route.fullPath)"
             @after-enter="() => onRouteEnterEnd(route.fullPath)"
@@ -131,9 +143,13 @@ onMounted(() => {
 }
 
 .route-slide-enter-active,
-.route-slide-leave-active {
-  position: absolute;
-  inset: 0;
+.route-slide-leave-active,
+.route-fade-enter-active,
+.route-fade-leave-active,
+.route-zoom-enter-active,
+.route-zoom-leave-active {
+  position: absolute !important;
+  inset: 0 !important;
   width: 100%;
   height: 100%;
   transition:
@@ -141,6 +157,18 @@ onMounted(() => {
     transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1),
     filter 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
   will-change: transform, opacity;
+}
+
+.route-slide-enter-active,
+.route-fade-enter-active,
+.route-zoom-enter-active {
+  z-index: 2;
+}
+
+.route-slide-leave-active,
+.route-fade-leave-active,
+.route-zoom-leave-active {
+  z-index: 1;
   pointer-events: none;
 }
 
@@ -154,6 +182,26 @@ onMounted(() => {
   opacity: 0;
   transform: translate3d(-40px, 0, 0) scale(0.92);
   filter: brightness(0.85);
+}
+
+.route-fade-enter-from {
+  opacity: 0;
+}
+
+.route-fade-leave-to {
+  opacity: 0;
+}
+
+.route-zoom-enter-from {
+  opacity: 0;
+  transform: scale(0.98);
+  filter: blur(2px);
+}
+
+.route-zoom-leave-to {
+  opacity: 0;
+  transform: scale(1.02);
+  filter: blur(2px);
 }
 
 .AppLayout-Main {

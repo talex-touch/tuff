@@ -16,6 +16,9 @@ interface IThemeStyle {
       contrast: boolean
       coloring: boolean
     }
+    transition: {
+      route: 'slide' | 'fade' | 'zoom'
+    }
   }
 }
 
@@ -32,6 +35,9 @@ const defaultThemeStyle: IThemeStyle = {
     addon: {
       contrast: false,
       coloring: false,
+    },
+    transition: {
+      route: 'slide',
     },
   },
 }
