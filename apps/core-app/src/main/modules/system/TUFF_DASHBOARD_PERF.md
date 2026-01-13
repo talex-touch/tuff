@@ -42,11 +42,23 @@
 ### 4) UI：路由过渡动画与页面渲染
 
 - 过渡动画：`core-app/src/renderer/src/views/layout/AppLayout.vue`
-  - 记录 `route-slide` enter 实际耗时（>500ms 或 `/details` 强制记录）
+  - 记录路由 enter 实际耗时（>500ms 或 `/details` 强制记录）
 - 详细信息页：`core-app/src/renderer/src/views/base/LingPan.vue`
   - 记录 fetch 耗时（等待 `tuff:dashboard`）
   - 记录 render 耗时（`nextTick + rAF` 后认为 DOM 已完成一次绘制）
   - 记录总耗时（load 全链路）
+
+### 5) 路由/组件加载耗时（重点页面）
+
+- 路由与组件加载：`core-app/src/renderer/src/base/router.ts`
+  - `ui.component.load`：路由组件动态 import 耗时（仅记录 >150ms）
+  - `ui.route.navigate`：导航确认耗时（beforeEach → afterEach，>200ms）
+  - `ui.route.render`：近似首帧耗时（afterEach → nextTick + rAF，>350ms）
+
+### 6) Nexus 性能上报（落地）
+
+- 主进程：`core-app/src/main/utils/perf-monitor.ts`
+  - 会把部分 `ui.*` 与 `ipc.handler.slow` 事件以 `eventType=performance` 写入 `SentryService.queueNexusTelemetry(...)`（内置阈值筛选，避免刷屏/刷量）
 
 ---
 
@@ -98,6 +110,11 @@
 - 降低 snapshot 体积：减少 `config` 大对象、限制 `logs` 数量、移除不必要字段
 - 避免在主线程做大 JSON stringify（必要时改为更轻量的数据结构或流式）
 
+已验证案例（2026-01-13）：
+- `tuff:dashboard` reply payload 约 75MB（`H3.bytes≈75,778,298`），序列化约 141ms + 解析约 68ms
+- 根因是 OCR Dashboard 快照包含 `source.type=data-url` 的完整 `dataUrl`（base64），会指数级放大 payload
+- 已修复：`core-app/src/main/modules/ocr/ocr-service.ts` 的 Dashboard 快照对 data-url 仅保留 `dataUrlLength/dataUrlPreview`，不再返回原始 `dataUrl`
+
 ### H4：主进程事件循环卡顿导致所有耗时被放大
 
 证据：
@@ -141,3 +158,6 @@
 3) `H6 ui.route.transition` + `ui.details.render/total`：
 - 过渡动画耗时异常通常意味着主线程被长任务打断（不是 CSS 写得慢）
 
+补充：Worker OFFLINE 语义
+- 「详细信息」里的 file-* / icon Worker 默认是按需启动（lazy），未触发任务时线程不会创建，因此显示 `offline (lazy)` 并不代表错误
+- 如果 `LAST_ERROR` 不为空，则表示 Worker 曾异常退出（crashed），会在下一次任务触发时自动重启

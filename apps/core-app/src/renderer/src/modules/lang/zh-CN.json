@@ -182,7 +182,12 @@
     "listItemStagger": "列表入场动画",
     "listItemStaggerDesc": "搜索结果列表项依次入场的交错动画效果。",
     "resultTransition": "结果切换动画",
-    "resultTransitionDesc": "搜索结果变化时的过渡动画效果。"
+    "resultTransitionDesc": "搜索结果变化时的过渡动画效果。",
+    "routeTransition": "页面切换动效",
+    "routeTransitionDesc": "控制应用页面路由切换动画（可能影响性能）。",
+    "routeTransitionSlide": "滑动",
+    "routeTransitionFade": "淡入淡出",
+    "routeTransitionZoom": "缩放"
   },
   "layoutSection": {
     "title": "布局样式",

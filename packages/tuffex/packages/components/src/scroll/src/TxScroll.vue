@@ -333,26 +333,31 @@ async function initBetterScroll() {
     const isPixelMode = typeof e.deltaMode !== 'number' || e.deltaMode === 0
     const isOutXNow = isScrollXEnabled.value && (currX > 0 || currX < maxX)
     const isOutYNow = isScrollYEnabled.value && (currY > 0 || currY < maxY)
+    const deltaXNow = isScrollXEnabled.value ? -effDx : 0
+    const deltaYNow = isScrollYEnabled.value ? -effDy : 0
     const shouldBlockScrollChaining = !props.scrollChaining && (
       (effDx !== 0 && canScrollXNow)
       || (effDy !== 0 && canScrollYNow)
     )
 
-    const shouldIgnoreTailWheel = (bs as any).pending
-      && props.bounce
+    const isBouncing = Boolean((bs as any).pending)
+    const isPushingFurtherOutXNow = isOutXNow
+      && ((currX > 0 && deltaXNow > 0) || (currX < maxX && deltaXNow < 0))
+    const isPushingFurtherOutYNow = isOutYNow
+      && ((currY > 0 && deltaYNow > 0) || (currY < maxY && deltaYNow < 0))
+    const shouldIgnoreWhileBouncing = props.bounce
       && isPixelMode
-      && absDelta < 12
-      && (isOutXNow || isOutYNow)
-    if (shouldIgnoreTailWheel) {
-      if (shouldBlockScrollChaining) {
-        if (e.cancelable)
-          e.preventDefault()
+      && isBouncing
+      && (isPushingFurtherOutXNow || isPushingFurtherOutYNow)
+    if (shouldIgnoreWhileBouncing) {
+      if (e.cancelable)
+        e.preventDefault()
+      if (shouldBlockScrollChaining)
         e.stopPropagation()
-      }
       return
     }
 
-    if ((bs as any).pending)
+    if (isBouncing)
       ;(bs as any)?.stop?.()
 
     const currXAfterStop = typeof bs.x === 'number' ? bs.x : currX
@@ -369,8 +374,39 @@ async function initBetterScroll() {
     const baseY = wheelTargetY ?? currYAfterStop
 
     const overshoot = props.bounce ? 60 : 0
-    const deltaX = isScrollXEnabled.value ? -effDx : 0
-    const deltaY = isScrollYEnabled.value ? -effDy : 0
+    const isOutXBase = isScrollXEnabled.value && (baseX > 0 || baseX < maxX)
+    const isOutYBase = isScrollYEnabled.value && (baseY > 0 || baseY < maxY)
+
+    const OUT_OF_BOUNDS_TAIL_THRESHOLD = overshoot
+    const OUT_OF_BOUNDS_NEAR_LIMIT_RATIO = 0.85
+
+    let deltaX = deltaXNow
+    let deltaY = deltaYNow
+    const isPushingFurtherOutX = isOutXBase && ((baseX > 0 && deltaX > 0) || (baseX < maxX && deltaX < 0))
+    const isPushingFurtherOutY = isOutYBase && ((baseY > 0 && deltaY > 0) || (baseY < maxY && deltaY < 0))
+
+    if (props.bounce && isPixelMode && absDelta < OUT_OF_BOUNDS_TAIL_THRESHOLD) {
+      if (isPushingFurtherOutX)
+        deltaX = 0
+      if (isPushingFurtherOutY)
+        deltaY = 0
+    }
+
+    if (props.bounce && overshoot > 0) {
+      const isNearLimitX = isPushingFurtherOutX && (
+        (baseX > 0 && baseX >= overshoot * OUT_OF_BOUNDS_NEAR_LIMIT_RATIO)
+        || (baseX < maxX && baseX <= maxX - overshoot * OUT_OF_BOUNDS_NEAR_LIMIT_RATIO)
+      )
+      const isNearLimitY = isPushingFurtherOutY && (
+        (baseY > 0 && baseY >= overshoot * OUT_OF_BOUNDS_NEAR_LIMIT_RATIO)
+        || (baseY < maxY && baseY <= maxY - overshoot * OUT_OF_BOUNDS_NEAR_LIMIT_RATIO)
+      )
+      if (isNearLimitX)
+        deltaX = 0
+      if (isNearLimitY)
+        deltaY = 0
+    }
+
     const nextX = isScrollXEnabled.value ? applyDeltaWithResistance(baseX, deltaX, maxX, 0, overshoot) : baseX
     const nextY = isScrollYEnabled.value ? applyDeltaWithResistance(baseY, deltaY, maxY, 0, overshoot) : baseY
     const willMove = nextX !== baseX || nextY !== baseY
@@ -382,8 +418,6 @@ async function initBetterScroll() {
     }
 
     const wheelEndDelay = isPixelMode ? 48 : (absDelta < 40 ? 120 : 160)
-    const isOutXBase = isScrollXEnabled.value && (baseX > 0 || baseX < maxX)
-    const isOutYBase = isScrollYEnabled.value && (baseY > 0 || baseY < maxY)
     const shouldRefreshWheelEndTimer = !(isOutXBase || isOutYBase) || willMove
     if (wheelEndTimer !== null && shouldRefreshWheelEndTimer) {
       window.clearTimeout(wheelEndTimer)
