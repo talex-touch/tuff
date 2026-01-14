@@ -15,6 +15,7 @@ import generatorInformation from './generator-information'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+const workspaceRoot = path.resolve(__dirname, '..', '..')
 const basePath = path.join(__dirname, 'src')
 const rendererPath = path.join(basePath, 'renderer', 'src')
 
@@ -104,6 +105,12 @@ export default defineConfig({
           replacement: `${path.join(rendererPath, 'assets')}/`
         }
       ]
+    },
+    server: {
+      fs: {
+        // workspace packages (pnpm symlinks) may resolve outside renderer root
+        allow: [workspaceRoot]
+      }
     },
     define: {
       __VUE_OPTIONS_API__: true,
