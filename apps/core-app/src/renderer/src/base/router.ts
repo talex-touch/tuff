@@ -41,17 +41,16 @@ function withRouteComponentPerf(
     }
     finally {
       const durationMs = performance.now() - startedAt
-      if (durationMs < ROUTE_COMPONENT_LOAD_WARN_MS) {
-        return
+      if (durationMs >= ROUTE_COMPONENT_LOAD_WARN_MS) {
+        reportPerfToMain({
+          kind: 'ui.component.load',
+          eventName: label,
+          durationMs,
+          at: Date.now(),
+          stack,
+          meta: { category: 'route-component' },
+        })
       }
-      reportPerfToMain({
-        kind: 'ui.component.load',
-        eventName: label,
-        durationMs,
-        at: Date.now(),
-        stack,
-        meta: { category: 'route-component' },
-      })
     }
   }
 }
