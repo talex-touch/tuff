@@ -262,7 +262,6 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
   const getPluginList = (): Array<object> => {
     logInfo('getPluginList called.')
     const list = new Array<object>()
-    const isDevEnv = !app.isPackaged
 
     try {
       for (const plugin of plugins.values()) {
@@ -278,13 +277,6 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
           PluginStatus[(plugin as TouchPlugin).status],
         )
         const json = (plugin as TouchPlugin).toJSONObject() as any
-        if ((plugin as any).internal) {
-          if (!isDevEnv) {
-            logDebug('Skipping internal plugin from list in production', pluginTag(plugin.name))
-            continue
-          }
-          json.internal = true
-        }
         list.push(json)
       }
 
@@ -393,16 +385,20 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
   }
 
   const enablePlugin = async (pluginName: string, skipPermissionCheck = false): Promise<boolean> => {
-    const plugin = plugins.get(pluginName)
-    if (!plugin)
-      return false
+    let plugin = plugins.get(pluginName)
+    if (!plugin) return false
 
     if (plugin.status === PluginStatus.LOAD_FAILED) {
-      pluginLog.info('Attempting to re-enable failed plugin, reloading', {
+      pluginLog.info('Attempting to enable failed plugin, reloading first', {
         meta: { plugin: pluginName },
       })
+
       await reloadPlugin(pluginName)
-      return enabledPlugins.has(pluginName)
+
+      plugin = plugins.get(pluginName)
+      if (!plugin || plugin.status !== PluginStatus.DISABLED) {
+        return false
+      }
     }
 
     // Check permissions on first enable (if plugin declares permissions)
@@ -821,7 +817,7 @@ function createPluginModuleInternal(pluginPath: string): IPluginManager {
       return
     }
 
-    ;(pluginInstance as any).internal = true
+    pluginInstance.meta = { ...(pluginInstance.meta ?? {}), internal: true }
 
     plugins.set(pluginName, pluginInstance)
     INTERNAL_PLUGIN_NAMES.add(pluginName)
@@ -1207,7 +1203,7 @@ export class PluginModule extends BaseModule {
     const result: PluginWithSource[] = []
 
     for (const [name, plugin] of manager.plugins) {
-      if ((plugin as any).internal) continue
+      if (plugin.meta?.internal) continue
 
       try {
         const sourceData = await manager.dbUtils.getPluginData(name, 'install_source')

@@ -1,5 +1,8 @@
 <script lang="ts" name="PluginEmptyState" setup>
+import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -13,11 +16,11 @@ import FlatButton from '~/components/base/button/FlatButton.vue'
     </div>
     <div class="max-w-96">
       <p class="text-[var(--el-text-color-regular)] opacity-80 mb-6">
-        Choose a plugin to view details
+        {{ t('plugin.emptyState.message') }}
       </p>
       <FlatButton class="cta-button text-sm" @click="() => $router.push('/market')">
         <i class="i-ri-store-line" />
-        Explore Market
+        {{ t('plugin.emptyState.exploreMarket') }}
       </FlatButton>
     </div>
   </div>

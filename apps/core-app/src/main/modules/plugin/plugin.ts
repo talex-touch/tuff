@@ -9,6 +9,7 @@ import type {
   IPluginFeature,
   ITargetFeatureLifeCycle,
   ITouchPlugin,
+  PluginMeta,
   PluginIssue
 } from '@talex-touch/utils/plugin'
 import type { TouchWindow } from '../../core/touch-window'
@@ -86,6 +87,8 @@ export class TouchPlugin implements ITouchPlugin {
   icon: ITuffIcon
   logger: PluginLogger
   platforms: IPlatform
+  category?: string
+  meta?: PluginMeta
   features: PluginFeature[]
   issues: PluginIssue[]
   _uniqueChannelKey: string
@@ -144,6 +147,8 @@ export class TouchPlugin implements ITouchPlugin {
       readme: this.readme,
       version: this.version,
       desc: this.desc,
+      category: this.category,
+      meta: this.meta,
       icon: {
         type: this.icon.type,
         value: this.icon.value,

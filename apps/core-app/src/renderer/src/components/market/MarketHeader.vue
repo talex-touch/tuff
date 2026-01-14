@@ -53,11 +53,11 @@ const tabs = defineModel<'market' | 'installed'>('tabs', { default: 'market' })
       style="--fake-opacity: 0.5"
     >
       <TxRadioGroup v-model="tabs" glass>
-        <TxRadio value="market" label="Market" />
-        <TxRadio value="installed" label="Installed" />
+        <TxRadio value="market" :label="t('flatNavBar.market')" />
+        <TxRadio value="installed" :label="t('market.installed')" />
       </TxRadioGroup>
 
-      <div flex items-center gap-2>
+      <div v-if="tabs === 'market'" flex items-center gap-2>
         <div flex items-center gap-2 text-xs>
           <span op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
             {{ sourcesCount }} {{ t('market.sources') }}
@@ -88,7 +88,7 @@ const tabs = defineModel<'market' | 'installed'>('tabs', { default: 'market' })
       </div>
     </div>
 
-    <div flex items-center justify-between gap-4 px-4 py-2>
+    <div v-if="tabs === 'market'" flex items-center justify-between gap-4 px-4 py-2>
       <div flex items-center gap-3>
         <FlatCompletion
           :fetch="() => []"

@@ -83,6 +83,8 @@
       "app": "Application",
       "system": "System"
     },
+    "developerMode": "Developer Mode",
+    "developerModeDesc": "Show internal plugins and advanced options (use with care)",
     "systemInfoPlaceholder": "System information is only available in development mode"
   },
   "settingLanguage": {
@@ -252,17 +254,25 @@
     "upgradeAvailable": "Update available",
     "officialBadge": "Official",
     "lastUpdated": "Last updated {time}",
-    "categories": {
-      "title": "Categories",
-      "all": "All",
-      "productivity": "Productivity",
-      "development": "Development",
-      "utilities": "Utilities",
-      "design": "Design",
-      "media": "Media",
-      "writing": "Writing",
-      "dev": "Dev"
-    },
+	    "categories": {
+	      "title": "Categories",
+	      "all": "All",
+	      "productivity": "Productivity",
+	      "development": "Development",
+	      "utilities": "Utilities",
+	      "design": "Design",
+	      "media": "Media",
+	      "writing": "Writing",
+	      "dev": "Dev",
+	      "uncategorized": "Uncategorized",
+	      "creativity": "Creativity",
+	      "ai": "AI",
+	      "automation": "Automation",
+	      "communication": "Communication",
+	      "analytics": "Analytics",
+	      "education": "Education",
+	      "finance": "Finance"
+	    },
     "tags": {
       "all": "All",
       "feature": "Feature",
@@ -336,13 +346,17 @@
     "errorDetails": "Provider Status",
     "clickToViewErrors": "Click to view error details",
     "statusSuccess": "Success",
-    "statusFailed": "Failed",
-    "plugins": "plugins",
-    "noProviderData": "No provider data available"
-  },
+	    "statusFailed": "Failed",
+	    "plugins": "plugins",
+	    "noProviderData": "No provider data available"
+	  },
   "plugin": {
     "opening": "Opening...",
     "openFolder": "Open Folder",
+    "emptyState": {
+      "message": "Choose a plugin to view details",
+      "exploreMarket": "Explore Market"
+    },
     "actions": {
       "history": "History",
       "openFolder": "Open Folder",
@@ -357,6 +371,13 @@
     "badges": {
       "dev": "Dev",
       "version": "v{version}"
+    },
+    "navTree": {
+      "groupCount": "{count} plugins in this category",
+      "badges": {
+        "error": "{count} error(s): {message}",
+        "warning": "{count} warning(s): {message}"
+      }
     },
     "status": {
       "disabled": "Plugin disabled, click to enable.",

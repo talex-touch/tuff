@@ -11,9 +11,11 @@ import { toast } from 'vue-sonner'
 import OSIcon from '~/components/icon/OSIcon.vue'
 // Import UI components
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 import { touchChannel } from '~/modules/channel/channel-core'
+import { appSetting } from '~/modules/channel/storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { getBuildInfo } from '~/utils/build-info'
 
@@ -26,6 +28,15 @@ const sui = ref(window.$startupInfo)
 const dev = ref(false)
 const performanceSummary = ref<any>(null)
 const showPerformanceDetails = ref(false)
+
+const developerMode = computed({
+  get: () => Boolean(appSetting?.dev?.developerMode),
+  set: (val: boolean) => {
+    if (appSetting?.dev) {
+      appSetting.dev.developerMode = val
+    }
+  },
+})
 
 onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
@@ -123,6 +134,14 @@ async function openAppFolder() {
     active-icon="i-carbon-app-switcher"
     memory-name="setting-about"
   >
+    <TuffBlockSwitch
+      v-model="developerMode"
+      :title="t('settingAbout.developerMode')"
+      :description="t('settingAbout.developerModeDesc')"
+      default-icon="i-carbon-development"
+      active-icon="i-carbon-development"
+    />
+
     <TuffBlockLine :title="t('settingAbout.version')">
       <template #description>
         {{ versionStr }}

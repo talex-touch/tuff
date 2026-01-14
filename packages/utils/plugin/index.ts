@@ -33,6 +33,14 @@ export interface PluginIssue {
   timestamp?: number
 }
 
+export interface PluginMeta {
+  /**
+   * Internal plugins are created in code (no manifest / scanning).
+   * They should be hidden in UI unless developer mode is enabled.
+   */
+  internal?: boolean
+}
+
 export interface DevServerHealthCheckResult {
   healthy: boolean
   version?: string
@@ -72,9 +80,9 @@ export interface IPluginDev {
  * SDK API version for plugin compatibility checking.
  * Format: YYMMDD (e.g., 251212 = 2025-12-12)
  *
- * Plugins with sdkapi < CURRENT_SDK_VERSION will:
- * - Skip permission enforcement
- * - Show compatibility warning to users
+ * Rules:
+ * - Not declared or < PERMISSION_ENFORCEMENT_MIN_VERSION: legacy mode (permissions bypassed)
+ * - >= PERMISSION_ENFORCEMENT_MIN_VERSION: permissions enforced
  */
 export type SdkApiVersion = number
 
@@ -82,6 +90,12 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   dev: IPluginDev
   pluginPath: string
   logger: IPluginLogger<any>
+  /**
+   * Category id synced with Nexus (e.g., 'utilities', 'productivity').
+   * Used for UI grouping and marketplace filtering.
+   */
+  category?: string
+  meta?: PluginMeta
   features: IPluginFeature[]
   issues: PluginIssue[]
   divisionBoxConfig?: import('../types/division-box').ManifestDivisionBoxConfig
@@ -433,6 +447,10 @@ export interface IManifest {
    * Plugins without this field or with version < 251212 will bypass permission enforcement.
    */
   sdkapi?: SdkApiVersion
+  /**
+   * Category id synced with Nexus (e.g., 'utilities', 'productivity').
+   */
+  category?: string
   /**
    * Short description of the plugin's functionality.
    */

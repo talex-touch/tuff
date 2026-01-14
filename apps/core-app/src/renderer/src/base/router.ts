@@ -69,6 +69,14 @@ const routes: any = [
     }
   },
   {
+    path: '/market/installed',
+    name: 'Installed Plugins',
+    component: withRouteComponentPerf('/market/installed', () => import('../views/base/Market.vue')),
+    meta: {
+      index: 2
+    }
+  },
+  {
     path: '/market/:id',
     name: 'Market Detail',
     component: withRouteComponentPerf('/market/:id', () => import('../views/base/MarketDetail.vue')),
@@ -78,9 +86,9 @@ const routes: any = [
     }
   },
   {
-    path: '/plugin',
+    path: '/plugin/:name?',
     name: 'Plugin',
-    component: withRouteComponentPerf('/plugin', () => import('../views/base/Plugin.vue')),
+    component: withRouteComponentPerf('/plugin/:name?', () => import('../views/base/PluginDetail.vue')),
     meta: {
       index: 3
     }

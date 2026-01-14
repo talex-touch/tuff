@@ -1,5 +1,10 @@
 import type { IPluginDev, IPluginFeature, SdkApiVersion } from '@talex-touch/utils/plugin'
-import { checkSdkCompatibility, CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
+import {
+  CATEGORY_REQUIRED_MIN_VERSION,
+  checkSdkCompatibility,
+  CURRENT_SDK_VERSION,
+  resolveSdkApiVersion
+} from '@talex-touch/utils/plugin'
 import type { ManifestPermissions, ManifestPermissionReasons } from '@talex-touch/utils/permission'
 import { parseManifestPermissions, generatePermissionIssue, getPluginPermissionStatus } from '@talex-touch/utils/permission'
 import type { TuffIconType } from '@talex-touch/utils/types/icon'
@@ -19,6 +24,10 @@ interface PluginManifest {
   name: string
   version: string
   description: string
+  /**
+   * Category id synced with Nexus (e.g., 'utilities', 'productivity').
+   */
+  category?: string
   icon: {
     type: TuffIconType
     value: string
@@ -94,8 +103,14 @@ abstract class BasePluginLoader {
     this.touchPlugin.dev = pluginInfo.dev || { enable: false, address: '', source: false }
     this.touchPlugin.platforms = pluginInfo.platforms || {}
 
-    // SDK version compatibility check
-    this.touchPlugin.sdkapi = pluginInfo.sdkapi
+    // Category (for UI grouping)
+    this.touchPlugin.category = typeof pluginInfo.category === 'string' && pluginInfo.category.trim()
+      ? pluginInfo.category.trim()
+      : undefined
+
+    // SDK version compatibility check (with graceful fallback)
+    const resolvedSdkapi = resolveSdkApiVersion((pluginInfo as any)?.sdkapi)
+    this.touchPlugin.sdkapi = resolvedSdkapi
     const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
     if (sdkCompat.warning) {
       this.touchPlugin.issues.push({
@@ -106,8 +121,34 @@ abstract class BasePluginLoader {
         suggestion: sdkCompat.suggestion,
         meta: {
           declaredVersion: pluginInfo.sdkapi,
+          resolvedVersion: resolvedSdkapi,
           currentVersion: CURRENT_SDK_VERSION,
           enforcePermissions: sdkCompat.enforcePermissions,
+        },
+        timestamp: Date.now(),
+      })
+    }
+
+    // Require category for sdkapi >= 260114 (legacy/invalid sdkapi will fallback and bypass)
+    if (
+      resolvedSdkapi !== undefined
+      && resolvedSdkapi >= CATEGORY_REQUIRED_MIN_VERSION
+      && !this.touchPlugin.category
+    ) {
+      this.touchPlugin.logger.error(
+        `[PluginLoader] Missing required manifest.json.category (sdkapi >= ${CATEGORY_REQUIRED_MIN_VERSION})`,
+        { declaredSdkapi: pluginInfo.sdkapi, resolvedSdkapi },
+      )
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: `Missing required "category" in manifest.json (required when sdkapi >= ${CATEGORY_REQUIRED_MIN_VERSION}).`,
+        source: 'manifest.json',
+        code: 'CATEGORY_MISSING',
+        suggestion: 'Add a category id (synced with Nexus), e.g. "category": "utilities".',
+        meta: {
+          requiredMinSdk: CATEGORY_REQUIRED_MIN_VERSION,
+          resolvedSdkapi,
+          declaredSdkapi: pluginInfo.sdkapi,
         },
         timestamp: Date.now(),
       })
@@ -129,7 +170,7 @@ abstract class BasePluginLoader {
     // Generate permission status (granted permissions will be loaded by PermissionModule)
     const permissionStatus = getPluginPermissionStatus(
       this.pluginName,
-      pluginInfo.sdkapi,
+      resolvedSdkapi,
       { required: parsedPermissions.required, optional: parsedPermissions.optional },
       [] // No grants loaded yet at this stage
     )

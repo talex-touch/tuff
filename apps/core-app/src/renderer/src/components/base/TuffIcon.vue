@@ -1,5 +1,6 @@
 <script lang="ts" name="TuffIcon" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useSvgContent } from '~/modules/hooks/useSvgContent'
 
 const props = defineProps<{
@@ -15,13 +16,24 @@ const safeIcon = computed<ITuffIcon>(() => {
   return (props.icon ?? { type: 'emoji', value: '' }) as ITuffIcon
 })
 
+const isElectron = isElectronRenderer()
+
 const loading = computed(() => safeIcon.value.status === 'loading')
-const error = computed(() => safeIcon.value.status === 'error')
+const unsupported = computed(() => {
+  if (isElectron) return false
+  if (safeIcon.value.type === 'file') return true
+  if (safeIcon.value.type === 'url' && safeIcon.value.value?.startsWith('tfile:')) return true
+  return false
+})
+const error = computed(() => safeIcon.value.status === 'error' || unsupported.value)
 
 const addressable = computed(() => safeIcon.value.type === 'url' || safeIcon.value.type === 'file')
 
 const url = computed(() => {
   if (safeIcon.value.type === 'file') {
+    if (!isElectron) {
+      return ''
+    }
     const targetPath = `tfile://${safeIcon.value.value}`
     // console.log('fileable', props, props.icon.value, '=', targetPath)
     // File paths are absolute (e.g., "/Users/..."), so tfile://${path} gives tfile:///Users/...
@@ -29,12 +41,19 @@ const url = computed(() => {
   }
 
   if (safeIcon.value.type === 'url') {
-    const urlPath = safeIcon.value.value
+    let urlPath = safeIcon.value.value
+    if (urlPath.startsWith('i-/api/')) {
+      urlPath = urlPath.slice(2) // => '/api/...'
+    }
     // Only use tfile:// for local file paths (absolute paths starting with /)
     // but NOT for API paths like /api/... which should be HTTP URLs
-    if (urlPath.startsWith('/') && !urlPath.startsWith('/api/')) {
+    if (isElectron && urlPath.startsWith('/') && !urlPath.startsWith('/api/')) {
       return `tfile://${urlPath}`
     }
+    if (!isElectron && urlPath.startsWith('tfile:')) {
+      return ''
+    }
+    return urlPath
   }
 
   return safeIcon.value.value
@@ -100,7 +119,7 @@ watch(
       <i :class="safeIcon.value" />
     </span>
 
-    <template v-else-if="addressable">
+    <template v-else-if="addressable && url">
       <template v-if="isSvg && colorful">
         <i class="TuffIcon-Svg colorful" :alt="alt" :style="{ '--un-icon': `url('${dataurl}')` }" />
       </template>
