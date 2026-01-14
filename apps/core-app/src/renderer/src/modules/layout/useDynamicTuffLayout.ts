@@ -16,35 +16,31 @@ function getCurrentLayoutName(): string {
 }
 
 function setCurrentLayoutName(layoutName: string): void {
-  if (!layoutsDefinition[layoutName])
-    return
+  if (!layoutsDefinition[layoutName]) return
   try {
     appSettings?.data && (appSettings.data.layout = layoutName)
-  }
-  catch {
+  } catch {
     // appSettings not initialized
   }
 }
 
 async function loadLayoutComponent(
   layoutName: string,
-  forceReload = false,
+  forceReload = false
 ): Promise<Component | null> {
   if (!forceReload && componentCache.has(layoutName)) {
     return componentCache.get(layoutName)!
   }
 
   const config = layoutsDefinition[layoutName]
-  if (!config)
-    return null
+  if (!config) return null
 
   try {
     const module = await config.component
     const component = module.default
     componentCache.set(layoutName, component)
     return component
-  }
-  catch (error) {
+  } catch (error) {
     console.error(`Failed to load layout "${layoutName}":`, error)
     return null
   }
@@ -68,15 +64,15 @@ export function useDynamicTuffLayout(): {
   const isLoading = ref(false)
 
   const availableLayouts = computed<Record<string, LayoutConfig>>(() => ({
-    ...layoutsDefinition,
+    ...layoutsDefinition
   }))
 
   const currentLayout = computed<LayoutConfig | undefined>(
-    () => layoutsDefinition[currentLayoutName.value],
+    () => layoutsDefinition[currentLayoutName.value]
   )
 
   const currentLayoutDisplayName = computed(
-    () => currentLayout.value?.displayName || currentLayoutName.value,
+    () => currentLayout.value?.displayName || currentLayoutName.value
   )
 
   async function loadLayout(layoutName?: string): Promise<void> {
@@ -93,19 +89,16 @@ export function useDynamicTuffLayout(): {
       if (component) {
         currentLayoutName.value = layoutToLoad
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error(`Failed to load layout "${layoutToLoad}":`, error)
       layoutComponent.value = null
-    }
-    finally {
+    } finally {
       isLoading.value = false
     }
   }
 
   async function switchLayout(layoutName: string): Promise<void> {
-    if (layoutName === currentLayoutName.value)
-      return
+    if (layoutName === currentLayoutName.value) return
 
     layoutComponent.value = null
     setCurrentLayoutName(layoutName)
@@ -120,13 +113,12 @@ export function useDynamicTuffLayout(): {
       if (newLayout && newLayout !== currentLayoutName.value && layoutsDefinition[newLayout]) {
         currentLayoutName.value = newLayout
         loadLayout(newLayout)
-      }
-      else if (!layoutComponent.value) {
+      } else if (!layoutComponent.value) {
         currentLayoutName.value = newLayout
         loadLayout(newLayout)
       }
     },
-    { immediate: true },
+    { immediate: true }
   )
 
   return {
@@ -137,7 +129,7 @@ export function useDynamicTuffLayout(): {
     isLoading,
     availableLayouts,
     loadLayout,
-    switchLayout,
+    switchLayout
   }
 }
 

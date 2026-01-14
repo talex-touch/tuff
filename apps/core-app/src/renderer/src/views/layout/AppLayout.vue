@@ -22,7 +22,7 @@ const routeTransitionName = computed(() => {
   }
 })
 const { canNavigateBack, navigateBack } = useSecondaryNavigation({
-  debugLabel: 'AppLayout',
+  debugLabel: 'AppLayout'
 })
 
 const routeTransitionStartedAt = new Map<string, number>()
@@ -48,7 +48,11 @@ function onRouteEnterEnd(fullPath: string): void {
     eventName: fullPath,
     durationMs,
     at: Date.now(),
-    meta: { transition: routeTransitionName.value, style: routeTransitionStyle.value, phase: 'enter' },
+    meta: {
+      transition: routeTransitionName.value,
+      style: routeTransitionStyle.value,
+      phase: 'enter'
+    }
   })
 }
 
@@ -59,7 +63,7 @@ onMounted(() => {
       ? 'auto'
       : themeStyle.value.theme.style.dark
         ? 'dark'
-        : 'light',
+        : 'light'
   )
 })
 </script>
@@ -90,6 +94,9 @@ onMounted(() => {
       </template>
       <template #navbar>
         <slot name="navbar" />
+      </template>
+      <template #plugins>
+        <slot name="plugins" />
       </template>
     </DynamicLayout>
   </div>

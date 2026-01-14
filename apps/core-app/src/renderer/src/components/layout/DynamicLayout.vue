@@ -30,6 +30,9 @@ const { layoutComponent, isLoading, currentLayoutName } = useDynamicTuffLayout()
         <template #navbar>
           <slot name="navbar" />
         </template>
+        <template #plugins>
+          <slot name="plugins" />
+        </template>
       </component>
     </transition>
   </div>

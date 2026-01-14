@@ -23,11 +23,7 @@ const beginner = ref(false)
 
 captureAppContext()
 capturePlatformWarningContext()
-
-// Initialize permission startup listener
 usePermissionStartup()
-
-// Initialize global battery optimizer
 useGlobalBatteryOptimizer()
 
 /**
@@ -91,6 +87,9 @@ async function init(): Promise<void> {
           />
           <TouchMenuItem route="/styles" :name="t('flatNavBar.style')" icon="i-ri-paint-line" />
         </TouchMenu>
+      </template>
+      <template #plugins>
+        <PluginNavTree />
       </template>
     </AppLayout>
 

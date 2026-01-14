@@ -35,6 +35,9 @@ const isWindows = process.platform === 'win32'
       <div class="AppLayout-Aside fake-background">
         <SimpleNavBar>
           <slot name="navbar" />
+          <template #plugins>
+            <slot name="plugins" />
+          </template>
         </SimpleNavBar>
 
         <div class="AppLayout-IconFooter">

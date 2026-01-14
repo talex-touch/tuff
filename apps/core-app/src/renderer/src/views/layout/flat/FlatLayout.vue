@@ -31,6 +31,9 @@ const isDisplayMode = computed(() => props.display)
       <div class="AppLayout-Aside fake-background">
         <FlatNavBar>
           <slot name="navbar" />
+          <template #plugins>
+            <slot name="plugins" />
+          </template>
         </FlatNavBar>
 
         <div class="AppLayout-IconFooter">
