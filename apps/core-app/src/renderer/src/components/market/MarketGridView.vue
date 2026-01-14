@@ -132,7 +132,7 @@ watch(
 </script>
 
 <template>
-  <div class="market-grid-view">
+  <div class="market-grid-view p-4">
     <div v-if="loading" class="market-loading">
       <i class="i-ri-loader-4-line animate-spin" />
       <span>{{ t('market.loading') }}</span>
@@ -179,7 +179,6 @@ watch(
 .market-grid-view {
   flex: 1;
   overflow: auto;
-  padding: 0.5rem 0;
 }
 
 .market-loading {
