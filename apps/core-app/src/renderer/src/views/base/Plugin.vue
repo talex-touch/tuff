@@ -9,11 +9,17 @@ import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 import PluginInfo from '~/components/plugin/PluginInfo.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
+import { appSetting } from '~/modules/channel/storage'
 import PluginNew from './plugin/PluginNew.vue'
 
 const { t } = useI18n()
 
 const { plugins, curSelect, selectPlugin } = usePluginSelection()
+const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
+const visiblePlugins = computed(() => {
+  if (developerMode.value) return plugins.value
+  return plugins.value.filter(p => !p.meta?.internal)
+})
 
 const drawerVisible = ref(false)
 const touchSdk = useTouchSDK()
@@ -26,7 +32,7 @@ const loadingStates = ref({
 
 // Running plugins (status 3 or 4)
 const runningPlugins = computed(() =>
-  plugins.value.filter((plugin) => plugin.status === 3 || plugin.status === 4)
+  visiblePlugins.value.filter((plugin) => plugin.status === 3 || plugin.status === 4)
 )
 
 // Filtered plugins based on search query
@@ -40,9 +46,9 @@ const filteredRunningPlugins = computed(() => {
 })
 
 const filteredAllPlugins = computed(() => {
-  if (!searchQuery.value.trim()) return plugins.value
+  if (!searchQuery.value.trim()) return visiblePlugins.value
   const query = searchQuery.value.toLowerCase()
-  return plugins.value.filter(
+  return visiblePlugins.value.filter(
     (plugin) =>
       plugin.name.toLowerCase().includes(query) || plugin.desc?.toLowerCase().includes(query)
   )

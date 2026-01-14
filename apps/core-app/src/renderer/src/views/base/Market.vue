@@ -2,8 +2,8 @@
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useToggle } from '@vueuse/core'
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import MarketGridView from '~/components/market/MarketGridView.vue'
 import MarketHeader from '~/components/market/MarketHeader.vue'
 import { useMarketCategories } from '~/composables/market/useMarketCategories'
@@ -15,6 +15,7 @@ import { marketSourcesStorage } from '~/modules/storage/market-sources'
 import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 const { plugins: marketPlugins, stats: providerStats, loading, loadMarketPlugins } = useMarketData()
 
@@ -26,9 +27,12 @@ const { installedPluginNames, installedPluginVersions } = usePluginVersionStatus
 
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const viewType = ref<'grid' | 'list'>('grid')
+const tabs = ref<'market' | 'installed'>('market')
 const searchKey = ref('')
 const sourcesState = marketSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
+
+const PluginInstalled = defineAsyncComponent(() => import('~/views/base/Plugin.vue'))
 
 const providerStatsComputed = computed(() => {
   const stats = providerStats.value
@@ -98,6 +102,30 @@ function openPluginDetail(plugin: MarketPluginListItem): void {
   router.push({ path: `/market/${plugin.id}`, query: { provider: plugin.providerId } })
 }
 
+function resolveMarketTab(pathname: string): 'market' | 'installed' {
+  return pathname === '/market/installed' ? 'installed' : 'market'
+}
+
+watch(
+  () => route.path,
+  (pathname) => {
+    const nextTab = resolveMarketTab(pathname)
+    if (tabs.value !== nextTab) {
+      tabs.value = nextTab
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => tabs.value,
+  (next) => {
+    const current = resolveMarketTab(route.path)
+    if (next === current) return
+    router.push(next === 'installed' ? '/market/installed' : '/market')
+  },
+)
+
 watch(
   () => marketPlugins.value,
   () => {
@@ -114,6 +142,7 @@ onMounted(() => {
 <template>
   <div class="market-container">
     <MarketHeader
+      v-model:tabs="tabs"
       v-model:view-type="viewType"
       :loading="loading"
       :sources-count="sourcesCount"
@@ -125,6 +154,7 @@ onMounted(() => {
     />
 
     <MarketGridView
+      v-if="tabs === 'market'"
       :plugins="displayedPlugins"
       :view-type="viewType"
       :loading="loading"
@@ -133,6 +163,7 @@ onMounted(() => {
       @install="onInstall"
       @open-detail="openPluginDetail"
     />
+    <PluginInstalled v-else class="flex-1 min-h-0" />
   </div>
 
   <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />

@@ -97,7 +97,8 @@ async function configureManifest(
       description: `${config.name} - A Tuff plugin`,
       author: '',
       main: 'index.js',
-      sdkapi: 251212,
+      sdkapi: 260114,
+      category: 'utilities',
       features: [
         {
           id: 'main',

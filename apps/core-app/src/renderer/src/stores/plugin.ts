@@ -2,6 +2,7 @@ import type { ITouchPlugin } from '@talex-touch/utils'
 import type { PluginStateEvent } from '@talex-touch/utils/plugin/sdk/types'
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
+import { toast } from 'vue-sonner'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 
 /**
@@ -9,6 +10,19 @@ import { pluginSDK } from '~/modules/sdk/plugin-sdk'
  */
 export const usePluginStore = defineStore('plugin', () => {
   const plugins = reactive(new Map<string, ITouchPlugin>())
+  const notifiedCategoryMissing = new Set<string>()
+
+  function maybeNotifyPluginIssues(plugin: ITouchPlugin): void {
+    const hasCategoryMissing = plugin.issues?.some(issue => issue.code === 'CATEGORY_MISSING')
+    if (!hasCategoryMissing) return
+
+    if (notifiedCategoryMissing.has(plugin.name)) return
+    notifiedCategoryMissing.add(plugin.name)
+
+    toast.error(`插件「${plugin.name}」缺少分类字段 category，已拒绝启动`, {
+      description: '请在 manifest.json 补充 "category": "utilities"（sdkapi >= 260114 必填）。',
+    })
+  }
 
   /**
    * Set or update a plugin in the store
@@ -16,6 +30,7 @@ export const usePluginStore = defineStore('plugin', () => {
    */
   function setPlugin(plugin: ITouchPlugin): void {
     plugins.set(plugin.name, reactive(plugin))
+    maybeNotifyPluginIssues(plugin)
   }
 
   /**

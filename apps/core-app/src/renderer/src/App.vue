@@ -78,7 +78,6 @@ async function init(): Promise<void> {
             :name="t('flatNavBar.market')"
             icon="i-ri-quill-pen-line"
           />
-          <TouchMenuItem route="/plugin" :name="t('flatNavBar.plugin')" icon="i-ri-plug-2-line" />
           <TouchMenuItem
             v-if="appSetting.dashboard.enable"
             route="/details"

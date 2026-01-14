@@ -83,6 +83,8 @@
       "app": "应用信息",
       "system": "系统信息"
     },
+    "developerMode": "开发者模式",
+    "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
   },
   "settingLanguage": {
@@ -252,17 +254,25 @@
     "upgradeAvailable": "有新版本",
     "officialBadge": "官方",
     "lastUpdated": "上次更新 {time}",
-    "categories": {
-      "title": "分类",
-      "all": "全部",
-      "productivity": "生产力",
-      "development": "开发",
-      "utilities": "实用工具",
-      "design": "设计",
-      "media": "媒体",
-      "writing": "写作",
-      "dev": "开发"
-    },
+	    "categories": {
+	      "title": "分类",
+	      "all": "全部",
+	      "productivity": "生产力",
+	      "development": "开发",
+	      "utilities": "实用工具",
+	      "design": "设计",
+	      "media": "媒体",
+	      "writing": "写作",
+	      "dev": "开发",
+	      "uncategorized": "未分类",
+	      "creativity": "创意",
+	      "ai": "AI",
+	      "automation": "自动化",
+	      "communication": "沟通",
+	      "analytics": "分析",
+	      "education": "教育",
+	      "finance": "财务"
+	    },
     "tags": {
       "all": "全部",
       "feature": "功能",
@@ -336,13 +346,17 @@
     "errorDetails": "数据源状态",
     "clickToViewErrors": "点击查看错误详情",
     "statusSuccess": "成功",
-    "statusFailed": "失败",
-    "plugins": "个插件",
-    "noProviderData": "暂无数据源信息"
-  },
+	    "statusFailed": "失败",
+	    "plugins": "个插件",
+	    "noProviderData": "暂无数据源信息"
+	  },
   "plugin": {
     "opening": "打开中...",
     "openFolder": "打开文件夹",
+    "emptyState": {
+      "message": "选择一个插件查看详情",
+      "exploreMarket": "浏览市场"
+    },
     "actions": {
       "history": "历史记录",
       "openFolder": "打开文件夹",
@@ -357,6 +371,13 @@
     "badges": {
       "dev": "开发模式",
       "version": "v{version}"
+    },
+    "navTree": {
+      "groupCount": "该分类下 {count} 个插件",
+      "badges": {
+        "error": "错误 {count} 个：{message}",
+        "warning": "警告 {count} 个：{message}"
+      }
     },
     "status": {
       "disabled": "插件已禁用，点击开启。",

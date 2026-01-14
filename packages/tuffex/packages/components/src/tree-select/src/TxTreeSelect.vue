@@ -5,6 +5,7 @@ import TuffInput from '../../input/src/TxInput.vue'
 import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
 import TxTag from '../../tag/src/TxTag.vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
+import TxTransition from '../../transition/src/TxTransition.vue'
 import type { TreeSelectEmits, TreeSelectKey, TreeSelectNode, TreeSelectProps, TreeSelectValue } from './types'
 
 defineOptions({ name: 'TxTreeSelect' })
@@ -271,7 +272,8 @@ defineExpose({
         <TuffInput v-model="query" placeholder="Search" clearable />
       </div>
 
-      <div class="tx-tree-select__list">
+    <div class="tx-tree-select__list">
+      <TxTransition group preset="slide-fade" tag="div" :appear="false" :duration="160">
         <TxCardItem
           v-for="item in flatItems"
           :key="item.node.key"
@@ -321,6 +323,7 @@ defineExpose({
             </slot>
           </template>
         </TxCardItem>
+      </TxTransition>
 
         <div v-if="!flatItems.length" class="tx-tree-select__empty">No results</div>
       </div>
@@ -434,6 +437,12 @@ defineExpose({
   flex: 1;
   min-height: 0;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tx-tree-select__list :deep(.tx-transition > div) {
   display: flex;
   flex-direction: column;
   gap: 2px;

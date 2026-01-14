@@ -7,7 +7,8 @@
 | `name` | string | 是 | 显示名称，支持本地化 |
 | `description` | string | 否 | 简短介绍 |
 | `version` | string | 是 | 语义化版本 |
-| `sdkapi` | number | **推荐** | SDK API 版本，格式 YYMMDD（如 251212） |
+| `sdkapi` | number | **推荐** | SDK API 版本，格式 YYMMDD（如 260114） |
+| `category` | string | 条件必填 | 分类 ID（与 Nexus 同步，如 `utilities`、`productivity`），用于 UI 分组（`sdkapi >= 260114` 必填） |
 | `entry` | string | 是 | init 入口文件路径 |
 | `preload` | string | 否 | 渲染层预加载脚本 |
 | `dev.enable` | boolean | 否 | 开发模式热重载 |
@@ -20,9 +21,12 @@
 
 `sdkapi` 字段用于声明插件兼容的 SDK API 版本。格式为 `YYMMDD`（年月日）。
 
-- **当前版本**: `251212` (2025-12-12)
+- **当前版本**: `260114` (2026-01-14)
 - **未声明或低于 251212**: 跳过权限校验，但会提示用户插件使用旧版 SDK
-- **等于或高于 251212**: 启用完整权限校验
+- **251212 ~ 260113**: 启用完整权限校验
+- **等于或高于 260114**: 在 251212 基础上，要求声明 `category`（用于 UI 分组）
+
+自 `260114` 起：建议补充 `category` 以参与 UI 分组展示；当 `sdkapi >= 260114` 且缺失 `category` 时，插件将被拒绝启动并在列表中标记问题。
 
 建议新插件始终声明最新的 `sdkapi` 版本以获得完整的权限保护。
 
@@ -76,7 +80,8 @@
   },
   "description": "快速记录与同步待办",
   "version": "1.3.0",
-  "sdkapi": 251212,
+  "sdkapi": 260114,
+  "category": "utilities",
   "entry": "init/index.ts",
   "features": [
     {

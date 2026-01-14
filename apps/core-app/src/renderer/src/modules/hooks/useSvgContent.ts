@@ -1,5 +1,6 @@
 import type { RetrierOptions } from '@talex-touch/utils'
 import { createRetrier } from '@talex-touch/utils'
+import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 
@@ -25,26 +26,41 @@ export function useSvgContent(
     fetchSvgContent()
   }
 
+  function normalizeSource(source: unknown): string {
+    const raw = typeof source === 'string' ? source.trim() : ''
+    if (!raw) return ''
+    if (raw.startsWith('i-/api/')) return raw.slice(2) // => '/api/...'
+    return raw
+  }
+
+  function isApiSource(source: string): boolean {
+    return source.startsWith('/api/')
+  }
+
   function isLocalSource(source: string): boolean {
     if (!source) return false
     if (source.startsWith('file:') || source.startsWith('tfile:')) return true
-    if (source.startsWith('/')) return true
+    if (source.startsWith('/') && !isApiSource(source)) return true
     if (source.startsWith('\\\\')) return true
     return /^[a-zA-Z]:[\\/]/.test(source)
   }
 
   async function doFetch(): Promise<string> {
-    let targetUrl = url.value
+    let targetUrl = normalizeSource(url.value)
+    if (!targetUrl) return ''
 
     if (isLocalSource(targetUrl)) {
+      if (!isElectronRenderer()) {
+        return ''
+      }
       return await transport.send(AppEvents.system.readFile, { source: targetUrl })
     }
 
     try {
       new URL(targetUrl)
     } catch (_e) {
-      // Don't add tfile:// for API paths - these should use HTTP
-      if (!targetUrl.startsWith('tfile://') && !targetUrl.startsWith('/api/')) {
+      // Only use tfile:// fallback in Electron; browsers don't support it.
+      if (isElectronRenderer() && !targetUrl.startsWith('tfile://') && !isApiSource(targetUrl)) {
         targetUrl = `tfile://${targetUrl}`
       }
     }

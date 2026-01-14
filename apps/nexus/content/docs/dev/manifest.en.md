@@ -7,7 +7,8 @@
 | `name` | string or map | ✓ | Display name, supports locales |
 | `description` | string |  | Short summary |
 | `version` | string | ✓ | SemVer |
-| `sdkapi` | number | **Recommended** | SDK API version, format YYMMDD (e.g., 251212) |
+| `sdkapi` | number | **Recommended** | SDK API version, format YYMMDD (e.g., 260114) |
+| `category` | string | Conditional | Category id synced with Nexus (e.g., `utilities`, `productivity`) (required when `sdkapi >= 260114`) |
 | `entry` | string | ✓ | Path to init entry |
 | `preload` | string |  | Renderer preload file |
 | `dev.enable` | boolean |  | Enable hot reload |
@@ -20,9 +21,10 @@
 
 The `sdkapi` field declares the SDK API version the plugin is compatible with. Format is `YYMMDD` (year-month-day).
 
-- **Current version**: `251212` (2025-12-12)
+- **Current version**: `260114` (2026-01-14)
 - **Not declared or below 251212**: Permission checks are bypassed, but users will see a warning about legacy SDK
-- **Equal to or above 251212**: Full permission enforcement enabled
+- **251212 ~ 260113**: Full permission enforcement enabled
+- **Equal to or above 260114**: Requires `category` for UI grouping (in addition to 251212 baseline)
 
 New plugins should always declare the latest `sdkapi` version for complete permission protection.
 
@@ -76,7 +78,8 @@ The permission system controls plugin access to sensitive APIs. See [Permission 
   },
   "description": "Capture and sync todos",
   "version": "1.3.0",
-  "sdkapi": 251212,
+  "sdkapi": 260114,
+  "category": "utilities",
   "entry": "init/index.ts",
   "features": [
     {
