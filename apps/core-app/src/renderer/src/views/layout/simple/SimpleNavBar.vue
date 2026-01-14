@@ -3,6 +3,7 @@
 <template>
   <ul class="SimpleNavBar-Home">
     <slot />
+    <slot name="plugins" />
   </ul>
 </template>
 

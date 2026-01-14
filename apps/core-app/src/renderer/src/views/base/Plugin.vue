@@ -26,7 +26,7 @@ const loadingStates = ref({
 
 // Running plugins (status 3 or 4)
 const runningPlugins = computed(() =>
-  plugins.value.filter(plugin => plugin.status === 3 || plugin.status === 4),
+  plugins.value.filter((plugin) => plugin.status === 3 || plugin.status === 4)
 )
 
 // Filtered plugins based on search query
@@ -34,7 +34,8 @@ const filteredRunningPlugins = computed(() => {
   if (!searchQuery.value.trim()) return runningPlugins.value
   const query = searchQuery.value.toLowerCase()
   return runningPlugins.value.filter(
-    plugin => plugin.name.toLowerCase().includes(query) || plugin.desc?.toLowerCase().includes(query),
+    (plugin) =>
+      plugin.name.toLowerCase().includes(query) || plugin.desc?.toLowerCase().includes(query)
   )
 })
 
@@ -42,7 +43,8 @@ const filteredAllPlugins = computed(() => {
   if (!searchQuery.value.trim()) return plugins.value
   const query = searchQuery.value.toLowerCase()
   return plugins.value.filter(
-    plugin => plugin.name.toLowerCase().includes(query) || plugin.desc?.toLowerCase().includes(query),
+    (plugin) =>
+      plugin.name.toLowerCase().includes(query) || plugin.desc?.toLowerCase().includes(query)
   )
 })
 
@@ -98,10 +100,7 @@ async function handleOpenPluginFolder(): Promise<void> {
     <!-- Footer with actions -->
     <template #footer>
       <div class="flex gap-2">
-        <FlatButton
-          class="action-btn add-btn flex-1"
-          @click="drawerVisible = true"
-        >
+        <FlatButton class="action-btn add-btn flex-1" @click="drawerVisible = true">
           <i class="i-ri-add-line" />
           <span>{{ t('plugin.add', 'Add') }}</span>
         </FlatButton>
@@ -168,8 +167,12 @@ async function handleOpenPluginFolder(): Promise<void> {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin {

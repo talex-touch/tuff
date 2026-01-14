@@ -3,6 +3,7 @@
 <template>
   <ul class="FlatNavBar-Home">
     <slot />
+    <slot name="plugins" />
   </ul>
 </template>
 
