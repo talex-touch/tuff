@@ -9,6 +9,7 @@ import { BrowserWindow } from 'electron'
 import { TouchWindow } from '../../core/touch-window'
 import { DivisionBoxWindowOption } from '../../config/default'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
+import { devProcessManager } from '../../utils/dev-process-manager'
 
 const LOG_PREFIX = '[DivisionBox Pool]'
 const IS_WINDOWS = process.platform === 'win32'
@@ -46,6 +47,8 @@ export class DivisionBoxWindowPool {
   /** Whether a fill operation is in progress */
   private filling: boolean = false
 
+  private destroyed: boolean = false
+
   private constructor() {}
 
   static getInstance(): DivisionBoxWindowPool {
@@ -60,6 +63,8 @@ export class DivisionBoxWindowPool {
    * Should be called after app is ready
    */
   async initialize(): Promise<void> {
+    this.destroyed = false
+
     if (IS_WINDOWS) {
       console.log(LOG_PREFIX, 'Skip pre-warm on Windows (pool disabled)')
       return
@@ -88,6 +93,10 @@ export class DivisionBoxWindowPool {
       return
     }
 
+    if (this.destroyed || devProcessManager.isShuttingDownProcess()) {
+      return
+    }
+
     // Prevent concurrent fills
     if (this.filling) return
     this.filling = true
@@ -105,6 +114,10 @@ export class DivisionBoxWindowPool {
       console.log(LOG_PREFIX, `Filling pool (need ${needed}, have ${this.pool.length})`)
       
       for (let i = 0; i < needed; i++) {
+        if (this.destroyed || devProcessManager.isShuttingDownProcess()) {
+          break
+        }
+
         // Check if we've hit the max limit (pool + active)
         if (this.getTotalWindowCount() >= MAX_DIVISION_BOX_INSTANCES) {
           console.log(LOG_PREFIX, `Max instances reached (${MAX_DIVISION_BOX_INSTANCES})`)
@@ -128,6 +141,10 @@ export class DivisionBoxWindowPool {
    * Create a pre-warmed window for the pool
    */
   private async createPooledWindow(): Promise<PooledWindow> {
+    if (this.destroyed || devProcessManager.isShuttingDownProcess()) {
+      throw new Error('DivisionBox window pool is shutting down')
+    }
+
     console.log(LOG_PREFIX, 'Creating new window...')
     
     const touchWindow = new TouchWindow({
@@ -164,7 +181,9 @@ export class DivisionBoxWindowPool {
       this.activeWindows.delete(touchWindow.window)
       
       // Refill pool after a delay
-      setTimeout(() => this.fillPool(), 1000)
+      if (!this.destroyed && !devProcessManager.isShuttingDownProcess()) {
+        setTimeout(() => this.fillPool(), 1000)
+      }
     })
     
     return {
@@ -217,7 +236,9 @@ export class DivisionBoxWindowPool {
     console.log(LOG_PREFIX, `Active: ${this.activeWindows.size}/${MAX_DIVISION_BOX_INSTANCES}`)
 
     // Refill pool in background (with delay to avoid blocking)
-    setTimeout(() => this.fillPool(), 500)
+    if (!this.destroyed && !devProcessManager.isShuttingDownProcess()) {
+      setTimeout(() => this.fillPool(), 500)
+    }
 
     return touchWindow
   }
@@ -232,7 +253,9 @@ export class DivisionBoxWindowPool {
     }
     
     // Refill pool
-    setTimeout(() => this.fillPool(), 500)
+    if (!this.destroyed && !devProcessManager.isShuttingDownProcess()) {
+      setTimeout(() => this.fillPool(), 500)
+    }
   }
 
   /**
@@ -270,6 +293,8 @@ export class DivisionBoxWindowPool {
    * Cleanup all windows
    */
   destroy(): void {
+    this.destroyed = true
+
     // Destroy pooled windows
     for (const pooled of this.pool) {
       if (!pooled.touchWindow.window.isDestroyed()) {

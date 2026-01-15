@@ -2,6 +2,7 @@
 import type { Component } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
 import { defineComponent, onMounted, provide, ref } from 'vue'
+import TouchScroll from '../TouchScroll.vue'
 
 interface Props {
   close: () => void
@@ -15,7 +16,7 @@ const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
   comp: undefined,
-  render: undefined,
+  render: undefined
 })
 
 const isClosing = ref(false)
@@ -24,7 +25,7 @@ const renderComp = ref<Component | null>(null)
 onMounted(() => {
   if (props.render) {
     renderComp.value = defineComponent({
-      render: props.render,
+      render: props.render
     })
   }
 })
@@ -57,16 +58,18 @@ provide('destroy', destroy)
         <p v-if="title" id="dialog-title" class="text-1.5rem font-600 text-center">
           {{ title }}
         </p>
-        <div
+        <TouchScroll
           id="dialog-content"
-          class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px overflow-hidden overflow-y-auto box-border"
+          native
+          no-padding
+          class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px box-border"
         >
           <span
             class="w-full block text-center my-1rem leading-1.25rem"
             style="position: relative; height: 100%"
             v-html="message"
           />
-        </div>
+        </TouchScroll>
         <div
           v-wave
           class="TPopperDialog-Confirm absolute w-[calc(100%-40px)] h-30px leading-30px bottom-1.5rem cursor-pointer select-none text-center rounded-5px"

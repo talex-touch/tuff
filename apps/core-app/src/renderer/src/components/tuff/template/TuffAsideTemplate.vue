@@ -1,4 +1,5 @@
 <script setup lang="ts" name="TuffAsideTemplate">
+import { TxGradualBlur } from '@talex-touch/tuffex'
 import TuffAsideSearchBar from './TuffAsideSearchBar.vue'
 
 const props = withDefaults(
@@ -18,8 +19,8 @@ const props = withDefaults(
     searchId: 'tuff-aside-template-search',
     searchable: true,
     clearLabel: 'Clear search',
-    mainAriaLive: 'polite' as const,
-  },
+    mainAriaLive: 'polite' as const
+  }
 )
 
 const emit = defineEmits<{
@@ -71,6 +72,8 @@ const emit = defineEmits<{
     </aside>
 
     <section class="TuffAsideTemplate-Main" :aria-live="props.mainAriaLive">
+      <TxGradualBlur position="top" height="72px" :strength="1.4" :opacity="0.9" :z-index="20" />
+      <TxGradualBlur position="bottom" height="72px" :strength="1.4" :opacity="0.9" :z-index="20" />
       <Transition name="fade-slide" mode="out-in">
         <slot name="main" />
       </Transition>
@@ -130,6 +133,7 @@ const emit = defineEmits<{
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .fade-slide-enter-active,
