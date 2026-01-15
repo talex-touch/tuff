@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { IFeatureCommand, ITouchPlugin } from '@talex-touch/utils/plugin'
 import { useI18n } from 'vue-i18n'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
@@ -260,10 +261,12 @@ function handleDrawerClose(): void {
               <div class="mt-3">
                 <ElCollapse>
                   <ElCollapseItem :title="t('plugin.features.drawer.viewJson')" :name="index">
-                    <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4 overflow-x-auto">
-                      <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
-                        JSON.stringify(command, null, 2)
-                      }}</pre>
+                    <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4">
+                      <TouchScroll native no-padding direction="horizontal">
+                        <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
+                          JSON.stringify(command, null, 2)
+                        }}</pre>
+                      </TouchScroll>
                     </div>
                   </ElCollapseItem>
                 </ElCollapse>
@@ -280,10 +283,12 @@ function handleDrawerClose(): void {
           </h3>
           <ElCollapse>
             <ElCollapseItem :title="t('plugin.features.drawer.viewFullJson')" name="feature-json">
-              <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4 overflow-x-auto">
-                <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
-                  JSON.stringify(selectedFeature, null, 2)
-                }}</pre>
+              <div class="bg-[var(--el-bg-color-page)] rounded-lg p-4">
+                <TouchScroll native no-padding direction="horizontal">
+                  <pre class="text-xs text-[var(--el-text-color-secondary)]">{{
+                    JSON.stringify(selectedFeature, null, 2)
+                  }}</pre>
+                </TouchScroll>
               </div>
             </ElCollapseItem>
           </ElCollapse>

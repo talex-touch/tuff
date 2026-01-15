@@ -4,7 +4,7 @@ import type { VNode } from 'vue'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { ElMessageBox, ElPopover } from 'element-plus'
-import { computed, ref, useSlots, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, ref, useSlots, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
@@ -47,6 +47,10 @@ const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type
 
 const isAppDev = computed(() => window.$startupInfo?.isDev === true)
 
+const COMPACT_SCROLL_TOP = 24
+const isCompactHeader = ref(false)
+let scrollRafId: number | null = null
+
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
 const tabItems = computed(() => {
@@ -64,6 +68,17 @@ watchEffect(() => {
       tabsModel.value = { [issuesTabIndex + 1]: 'Issues' }
     }
   }
+})
+
+function handleTabsScroll(info: { scrollTop: number; scrollLeft: number }) {
+  if (scrollRafId != null) cancelAnimationFrame(scrollRafId)
+  scrollRafId = requestAnimationFrame(() => {
+    isCompactHeader.value = info.scrollTop > COMPACT_SCROLL_TOP
+  })
+}
+
+onBeforeUnmount(() => {
+  if (scrollRafId != null) cancelAnimationFrame(scrollRafId)
 })
 
 // Status mapping
@@ -152,12 +167,10 @@ async function handleUninstallPlugin(): Promise<void> {
 
 <template>
   <div
-    class="plugin-info-root h-full flex flex-col bg-gray-50 dark:bg-gray-900 relative"
-    :class="{ 'has-error-glow': hasErrors }"
+    class="plugin-info-root h-full flex flex-col relative"
+    :class="{ 'has-error-glow': hasErrors, 'is-compact': isCompactHeader }"
   >
-    <div
-      class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
-    >
+    <div class="PluginInfo-Header flex items-center justify-between p-4">
       <div class="flex items-center gap-3">
         <div class="relative">
           <TuffIcon
@@ -165,7 +178,7 @@ async function handleUninstallPlugin(): Promise<void> {
             :empty="DefaultIcon"
             :alt="plugin.name"
             :icon="plugin.icon"
-            :size="48"
+            :size="isCompactHeader ? 28 : 48"
           />
           <div
             class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
@@ -174,13 +187,16 @@ async function handleUninstallPlugin(): Promise<void> {
         </div>
 
         <div class="min-w-0 flex-1">
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
+          <h1 class="PluginInfo-Name text-lg font-semibold text-gray-900 dark:text-white truncate">
             {{ plugin.name }}
           </h1>
-          <p class="text-sm text-gray-600 dark:text-gray-400 truncate max-w-full">
+          <p
+            v-show="!isCompactHeader"
+            class="PluginInfo-Desc text-sm text-gray-600 dark:text-gray-400 truncate max-w-full"
+          >
             {{ plugin.desc }}
           </p>
-          <div class="flex gap-2 mt-1">
+          <div v-show="!isCompactHeader" class="PluginInfo-Badges flex gap-2 mt-1">
             <span
               v-if="plugin.dev?.enable"
               class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded"
@@ -198,77 +214,85 @@ async function handleUninstallPlugin(): Promise<void> {
         </div>
       </div>
 
-      <ElPopover
-        placement="bottom-end"
-        :width="200"
-        trigger="click"
-        popper-class="plugin-actions-popover"
-      >
-        <template #reference>
-          <button
-            class="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-          >
-            <i class="i-ri-more-2-line text-xl text-gray-600 dark:text-gray-400" />
-          </button>
-        </template>
-        <div class="plugin-actions-menu">
-          <div
-            class="action-item"
-            :class="{ disabled: loadingStates.reload }"
-            @click="handleReloadPlugin"
-          >
-            <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
-            <i v-else class="i-ri-loader-4-line animate-spin" />
-            <span>{{
-              loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
-            }}</span>
+      <div class="flex items-center gap-2">
+        <PluginStatus
+          v-if="isCompactHeader"
+          class="PluginInfo-CompactStatus"
+          :plugin="plugin"
+          :shrink="true"
+        />
+        <ElPopover
+          placement="bottom-end"
+          :width="200"
+          trigger="click"
+          popper-class="plugin-actions-popover"
+        >
+          <template #reference>
+            <button
+              class="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+            >
+              <i class="i-ri-more-2-line text-xl text-gray-600 dark:text-gray-400" />
+            </button>
+          </template>
+          <div class="plugin-actions-menu">
+            <div
+              class="action-item"
+              :class="{ disabled: loadingStates.reload }"
+              @click="handleReloadPlugin"
+            >
+              <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
+              <i v-else class="i-ri-loader-4-line animate-spin" />
+              <span>{{
+                loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
+              }}</span>
+            </div>
+            <div
+              class="action-item"
+              :class="{ disabled: loadingStates.openFolder }"
+              @click="handleOpenPluginFolder"
+            >
+              <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
+              <i v-else class="i-ri-loader-4-line animate-spin" />
+              <span>{{
+                loadingStates.openFolder
+                  ? t('plugin.actions.opening')
+                  : t('plugin.actions.openFolder')
+              }}</span>
+            </div>
+            <div
+              v-if="plugin.dev?.enable || isAppDev"
+              class="action-item"
+              :class="{ disabled: loadingStates.openDevTools }"
+              @click="handleOpenDevTools"
+            >
+              <i v-if="!loadingStates.openDevTools" class="i-ri-bug-line" />
+              <i v-else class="i-ri-loader-4-line animate-spin" />
+              <span>{{ t('plugin.actions.openDevTools') }}</span>
+            </div>
+            <div
+              class="action-item danger"
+              :class="{ disabled: loadingStates.uninstall }"
+              @click="handleUninstallPlugin"
+            >
+              <i v-if="!loadingStates.uninstall" class="i-ri-delete-bin-6-line" />
+              <i v-else class="i-ri-loader-4-line animate-spin" />
+              <span>{{
+                loadingStates.uninstall
+                  ? t('plugin.actions.uninstalling')
+                  : t('plugin.actions.uninstall')
+              }}</span>
+            </div>
           </div>
-          <div
-            class="action-item"
-            :class="{ disabled: loadingStates.openFolder }"
-            @click="handleOpenPluginFolder"
-          >
-            <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
-            <i v-else class="i-ri-loader-4-line animate-spin" />
-            <span>{{
-              loadingStates.openFolder
-                ? t('plugin.actions.opening')
-                : t('plugin.actions.openFolder')
-            }}</span>
-          </div>
-          <div
-            v-if="plugin.dev?.enable || isAppDev"
-            class="action-item"
-            :class="{ disabled: loadingStates.openDevTools }"
-            @click="handleOpenDevTools"
-          >
-            <i v-if="!loadingStates.openDevTools" class="i-ri-bug-line" />
-            <i v-else class="i-ri-loader-4-line animate-spin" />
-            <span>{{ t('plugin.actions.openDevTools') }}</span>
-          </div>
-          <div
-            class="action-item danger"
-            :class="{ disabled: loadingStates.uninstall }"
-            @click="handleUninstallPlugin"
-          >
-            <i v-if="!loadingStates.uninstall" class="i-ri-delete-bin-6-line" />
-            <i v-else class="i-ri-loader-4-line animate-spin" />
-            <span>{{
-              loadingStates.uninstall
-                ? t('plugin.actions.uninstalling')
-                : t('plugin.actions.uninstall')
-            }}</span>
-          </div>
-        </div>
-      </ElPopover>
+        </ElPopover>
+      </div>
     </div>
 
     <!-- Status Section -->
-    <PluginStatus :plugin="plugin" :shrink="false" />
+    <PluginStatus v-show="!isCompactHeader" :plugin="plugin" :shrink="false" />
 
     <!-- Tabs Section -->
     <div class="flex-1 overflow-hidden">
-      <TvTabs v-model="tabsModel">
+      <TvTabs v-model="tabsModel" @scroll="handleTabsScroll">
         <TvTabItem icon="dashboard-line" name="Overview" :label="t('plugin.tabs.overview')">
           <PluginOverview :plugin="plugin" />
         </TvTabItem>
@@ -279,16 +303,20 @@ async function handleUninstallPlugin(): Promise<void> {
               :class="{ 'text-red-500': hasErrors, 'text-yellow-500': !hasErrors }"
             />
           </template>
-          <PluginIssues :plugin="plugin" />
+          <PluginIssues :plugin="plugin" @scroll="handleTabsScroll" />
         </TvTabItem>
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
         </TvTabItem>
-        <TvTabItem icon="shield-keyhole-line" name="Permissions" :label="t('plugin.tabs.permissions')">
+        <TvTabItem
+          icon="shield-keyhole-line"
+          name="Permissions"
+          :label="t('plugin.tabs.permissions')"
+        >
           <PluginPermissions :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
-          <PluginStorage :plugin="plugin" />
+          <PluginStorage :plugin="plugin" @scroll="handleTabsScroll" />
         </TvTabItem>
         <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
           <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
@@ -302,6 +330,28 @@ async function handleUninstallPlugin(): Promise<void> {
 </template>
 
 <style lang="scss" scoped>
+.PluginInfo-Header {
+  transition: padding 0.2s ease;
+}
+
+.PluginInfo-CompactStatus {
+  :deep(.PluginStatus-Container) {
+    border-bottom: 0;
+    padding: 0;
+    opacity: 1;
+  }
+}
+
+.plugin-info-root.is-compact {
+  .PluginInfo-Header {
+    padding: 0.375rem 0.75rem;
+  }
+
+  .PluginInfo-Name {
+    font-size: 0.95rem;
+  }
+}
+
 .plugin-actions-menu {
   display: flex;
   flex-direction: column;

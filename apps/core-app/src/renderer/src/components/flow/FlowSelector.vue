@@ -9,6 +9,7 @@ import type { FlowTargetInfo, FlowPayload } from '@talex-touch/utils'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface Props {
@@ -38,10 +39,11 @@ const filteredTargets = computed(() => {
   }
 
   const query = searchQuery.value.toLowerCase()
-  return targets.value.filter(target =>
-    target.name.toLowerCase().includes(query) ||
-    target.description?.toLowerCase().includes(query) ||
-    target.pluginName?.toLowerCase().includes(query)
+  return targets.value.filter(
+    (target) =>
+      target.name.toLowerCase().includes(query) ||
+      target.description?.toLowerCase().includes(query) ||
+      target.pluginName?.toLowerCase().includes(query)
   )
 })
 
@@ -106,16 +108,19 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
-watch(() => props.visible, (visible) => {
-  if (visible) {
-    loadTargets()
-    selectedIndex.value = 0
-    searchQuery.value = ''
-    requestAnimationFrame(() => {
-      inputRef.value?.focus()
-    })
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible) {
+      loadTargets()
+      selectedIndex.value = 0
+      searchQuery.value = ''
+      requestAnimationFrame(() => {
+        inputRef.value?.focus()
+      })
+    }
   }
-})
+)
 
 watch(searchQuery, () => {
   selectedIndex.value = 0
@@ -156,10 +161,7 @@ function getPayloadPreview(): string {
         class="FlowSelector fixed inset-0 z-[9999] flex items-center justify-center"
       >
         <!-- Backdrop -->
-        <div
-          class="absolute inset-0 bg-black/40 backdrop-blur-sm"
-          @click="handleClose"
-        />
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="handleClose" />
 
         <!-- Panel -->
         <div
@@ -202,77 +204,85 @@ function getPayloadPreview(): string {
           </div>
 
           <!-- Target List -->
-          <div class="flex-1 overflow-y-auto p-2">
-            <div v-if="loading" class="flex items-center justify-center py-8">
-              <i class="ri:loader-4-line animate-spin text-2xl text-[var(--el-text-color-secondary)]" />
-            </div>
+          <TouchScroll native no-padding class="flex-1 min-h-0">
+            <div class="p-2">
+              <div v-if="loading" class="flex items-center justify-center py-8">
+                <i
+                  class="ri:loader-4-line animate-spin text-2xl text-[var(--el-text-color-secondary)]"
+                />
+              </div>
 
-            <div v-else-if="filteredTargets.length === 0" class="text-center py-8">
-              <i class="ri:inbox-line text-4xl text-[var(--el-text-color-placeholder)]" />
-              <p class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
-                {{ t('flow.noTargets', '没有可用的目标') }}
-              </p>
-            </div>
+              <div v-else-if="filteredTargets.length === 0" class="text-center py-8">
+                <i class="ri:inbox-line text-4xl text-[var(--el-text-color-placeholder)]" />
+                <p class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+                  {{ t('flow.noTargets', '没有可用的目标') }}
+                </p>
+              </div>
 
-            <div v-else class="space-y-1">
-              <button
-                v-for="(target, index) in filteredTargets"
-                :key="target.fullId"
-                class="FlowTargetItem w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors"
-                :class="{
-                  'bg-[var(--el-color-primary-light-9)]': index === selectedIndex,
-                  'hover:bg-[var(--el-fill-color-light)]': index !== selectedIndex
-                }"
-                @click="handleSelect(target)"
-                @mouseenter="selectedIndex = index"
-              >
-                <!-- Icon -->
-                <div class="w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--el-fill-color)]">
-                  <TuffIcon
-                    v-if="target.icon"
-                    :icon="{ type: 'class', value: target.icon }"
-                    :size="24"
-                  />
-                  <i v-else class="ri:apps-line text-xl text-[var(--el-text-color-secondary)]" />
-                </div>
+              <div v-else class="space-y-1">
+                <button
+                  v-for="(target, index) in filteredTargets"
+                  :key="target.fullId"
+                  class="FlowTargetItem w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors"
+                  :class="{
+                    'bg-[var(--el-color-primary-light-9)]': index === selectedIndex,
+                    'hover:bg-[var(--el-fill-color-light)]': index !== selectedIndex
+                  }"
+                  @click="handleSelect(target)"
+                  @mouseenter="selectedIndex = index"
+                >
+                  <!-- Icon -->
+                  <div
+                    class="w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--el-fill-color)]"
+                  >
+                    <TuffIcon
+                      v-if="target.icon"
+                      :icon="{ type: 'class', value: target.icon }"
+                      :size="24"
+                    />
+                    <i v-else class="ri:apps-line text-xl text-[var(--el-text-color-secondary)]" />
+                  </div>
 
-                <!-- Info -->
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium text-[var(--el-text-color-primary)] truncate">
-                      {{ target.name }}
-                    </span>
-                    <span
-                      v-if="target.pluginName"
-                      class="text-xs text-[var(--el-text-color-placeholder)] truncate"
+                  <!-- Info -->
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-[var(--el-text-color-primary)] truncate">
+                        {{ target.name }}
+                      </span>
+                      <span
+                        v-if="target.pluginName"
+                        class="text-xs text-[var(--el-text-color-placeholder)] truncate"
+                      >
+                        · {{ target.pluginName }}
+                      </span>
+                    </div>
+                    <p
+                      v-if="target.description"
+                      class="text-xs text-[var(--el-text-color-secondary)] truncate mt-0.5"
                     >
-                      · {{ target.pluginName }}
+                      {{ target.description }}
+                    </p>
+                  </div>
+
+                  <!-- Supported Types -->
+                  <div class="flex gap-1">
+                    <span
+                      v-for="type in target.supportedTypes.slice(0, 3)"
+                      :key="type"
+                      class="px-1.5 py-0.5 text-[10px] rounded bg-[var(--el-fill-color)] text-[var(--el-text-color-secondary)]"
+                    >
+                      {{ type }}
                     </span>
                   </div>
-                  <p
-                    v-if="target.description"
-                    class="text-xs text-[var(--el-text-color-secondary)] truncate mt-0.5"
-                  >
-                    {{ target.description }}
-                  </p>
-                </div>
-
-                <!-- Supported Types -->
-                <div class="flex gap-1">
-                  <span
-                    v-for="type in target.supportedTypes.slice(0, 3)"
-                    :key="type"
-                    class="px-1.5 py-0.5 text-[10px] rounded bg-[var(--el-fill-color)] text-[var(--el-text-color-secondary)]"
-                  >
-                    {{ type }}
-                  </span>
-                </div>
-              </button>
+                </button>
+              </div>
             </div>
-          </div>
+          </TouchScroll>
 
           <!-- Footer -->
-          <div class="px-4 py-3 border-t border-[var(--el-border-color)] flex items-center justify-between">
+          <div
+            class="px-4 py-3 border-t border-[var(--el-border-color)] flex items-center justify-between"
+          >
             <div class="text-xs text-[var(--el-text-color-placeholder)]">
               <kbd class="px-1.5 py-0.5 rounded bg-[var(--el-fill-color)]">↑↓</kbd>
               {{ t('flow.navigate', '导航') }}
@@ -307,7 +317,9 @@ function getPayloadPreview(): string {
 
 .flow-selector-enter-active .relative,
 .flow-selector-leave-active .relative {
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .flow-selector-enter-from .relative,

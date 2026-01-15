@@ -1,4 +1,5 @@
 <script lang="ts" name="View" setup>
+import { TxGradualBlur } from '@talex-touch/tuffex'
 import { useRoute, useRouter } from 'vue-router'
 import TouchScroll from '../TouchScroll.vue'
 
@@ -24,6 +25,8 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
       :class="{ blur: subRouterMode }"
       class="ViewTemplate-Wrapper transition-cubic absolute w-full h-full"
     >
+      <TxGradualBlur position="top" height="24px" :strength="1.4" :opacity="0.9" :z-index="20" />
+      <TxGradualBlur position="bottom" height="24px" :strength="1.4" :opacity="0.9" :z-index="20" />
       <TouchScroll no-padding class="ViewTemplate-Scroll">
         <div class="View-Container">
           <slot />

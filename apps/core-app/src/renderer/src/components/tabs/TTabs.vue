@@ -1,6 +1,6 @@
 <script lang="ts">
-import { ElScrollbar } from 'element-plus'
 import { defineComponent, h, nextTick, ref } from 'vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import TTabHeader from '~/components/tabs/TTabHeader.vue'
 import TTabItem from '~/components/tabs/TTabItem.vue'
 
@@ -166,7 +166,15 @@ export default defineComponent({
         activeNode.value.children?.default?.(),
       )
 
-      const scrollableContent = h(ElScrollbar, {}, () => contentWrapper)
+      const scrollableContent = h(
+        TouchScroll,
+        {
+          noPadding: true,
+        },
+        {
+          default: () => contentWrapper,
+        },
+      )
 
       if (tabHeader) {
         return [
@@ -212,19 +220,6 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
-.el-scrollbar {
-  :deep(.el-scrollbar__view) {
-    min-height: 100%;
-  }
-
-  //padding: 0 10px;
-
-  width: 100%;
-  height: 100%;
-
-  //box-sizing: border-box;
-}
-
 .TTabs-ContentWrapper {
   margin-bottom: 15px;
   padding: 15px 10px 0 10px;
@@ -239,11 +234,13 @@ export default defineComponent({
 .TTabs-SelectSlot {
   position: relative;
   display: flex;
-  justify-content: center;
-  align-items: center;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
 
   width: 100%;
   height: 100%;
+  min-height: 0;
 }
 
 .TTabs-Header {
@@ -372,7 +369,11 @@ export default defineComponent({
     position: relative;
     padding: 10px 8px;
 
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    min-width: 0;
+    min-height: 0;
 
     box-sizing: border-box;
   }

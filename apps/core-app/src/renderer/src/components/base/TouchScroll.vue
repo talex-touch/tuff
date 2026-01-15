@@ -93,6 +93,8 @@ defineExpose({
   height: 100%;
   position: relative;
   min-height: 0;
+  min-width: 0;
   flex: 1;
+  align-self: stretch;
 }
 </style>

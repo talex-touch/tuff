@@ -343,18 +343,21 @@ async function initBetterScroll() {
     const isOutYNow = isScrollYEnabled.value && (currY > 0 || currY < maxY)
     const deltaXNow = isScrollXEnabled.value ? -effDx : 0
     const deltaYNow = isScrollYEnabled.value ? -effDy : 0
+    const willScrollX = deltaXNow !== 0 && canScrollXNow
+    const willScrollY = deltaYNow !== 0 && canScrollYNow
+
+    if (!willScrollX && !willScrollY)
+      return
+
     const absDelta = Math.max(Math.abs(deltaXNow), Math.abs(deltaYNow))
-    const shouldBlockScrollChaining = !props.scrollChaining && (
-      (effDx !== 0 && canScrollXNow)
-      || (effDy !== 0 && canScrollYNow)
-    )
+    const shouldBlockScrollChaining = !props.scrollChaining && (willScrollX || willScrollY)
 
     if (props.bounce && isPixelMode) {
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
       if (now < bounceGuardUntil) {
-        const isPushingOutX = isScrollXEnabled.value
+        const isPushingOutX = willScrollX
           && ((currX >= 0 && deltaXNow > 0) || (currX <= maxX && deltaXNow < 0))
-        const isPushingOutY = isScrollYEnabled.value
+        const isPushingOutY = willScrollY
           && ((currY >= 0 && deltaYNow > 0) || (currY <= maxY && deltaYNow < 0))
 
         if (isPushingOutX || isPushingOutY) {
@@ -368,9 +371,9 @@ async function initBetterScroll() {
     }
 
     const isBouncing = Boolean((bs as any).pending)
-    const isPushingFurtherOutXNow = isOutXNow
+    const isPushingFurtherOutXNow = willScrollX && isOutXNow
       && ((currX > 0 && deltaXNow > 0) || (currX < maxX && deltaXNow < 0))
-    const isPushingFurtherOutYNow = isOutYNow
+    const isPushingFurtherOutYNow = willScrollY && isOutYNow
       && ((currY > 0 && deltaYNow > 0) || (currY < maxY && deltaYNow < 0))
     const shouldIgnoreWhileBouncing = props.bounce
       && isPixelMode
@@ -415,8 +418,8 @@ async function initBetterScroll() {
 
     const OUT_OF_BOUNDS_NEAR_LIMIT_RATIO = 0.85
 
-    let deltaX = deltaXNow
-    let deltaY = deltaYNow
+    let deltaX = willScrollX ? deltaXNow : 0
+    let deltaY = willScrollY ? deltaYNow : 0
     const isPushingFurtherOutX = isOutXBase && ((baseX > 0 && deltaX > 0) || (baseX < maxX && deltaX < 0))
     const isPushingFurtherOutY = isOutYBase && ((baseY > 0 && deltaY > 0) || (baseY < maxY && deltaY < 0))
 

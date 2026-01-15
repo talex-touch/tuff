@@ -4,6 +4,7 @@ import { ElPopover } from 'element-plus'
 import { computed } from 'vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
 
 const props = defineProps<{
@@ -33,7 +34,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
           class="i-ri-error-warning-line issue-badge absolute top-1.5 right-1.5 text-red-500/80 text-xl z-10 cursor-help"
         />
       </template>
-      <div class="issues-list max-h-60 overflow-y-auto">
+      <TouchScroll native no-padding class="issues-list h-60">
         <div
           v-for="(issue, index) in plugin.issues"
           :key="index"
@@ -59,7 +60,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
             </p>
           </div>
         </div>
-      </div>
+      </TouchScroll>
     </ElPopover>
 
     <TuffIcon

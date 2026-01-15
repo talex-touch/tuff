@@ -5,11 +5,16 @@ import { ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import StatCard from '../../base/card/StatCard.vue'
 
 // Props
 const props = defineProps<{
   plugin: ITouchPlugin
+}>()
+
+const emit = defineEmits<{
+  (event: 'scroll', info: { scrollTop: number; scrollLeft: number }): void
 }>()
 
 // Composables
@@ -335,30 +340,32 @@ onMounted(() => {
         <el-empty :description="t('plugin.storage.empty')" />
       </div>
 
-      <div v-else class="flex-1 overflow-auto space-y-2">
-        <div
-          v-for="file in fileList"
-          :key="file.path"
-          class="flex items-center gap-3 px-3 py-3 bg-[var(--el-fill-color-light)] hover:bg-[var(--el-fill-color)] rounded-lg cursor-pointer transition-colors"
-        >
-          <i
-            class="text-2xl"
-            :class="getFileIcon(file.name)"
-            :style="{ color: getFileColor(file.name) }"
-          />
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-[var(--el-text-color-primary)] truncate">
-              {{ file.name }}
+      <TouchScroll v-else no-padding class="flex-1" @scroll="emit('scroll', $event)">
+        <div class="space-y-2">
+          <div
+            v-for="file in fileList"
+            :key="file.path"
+            class="flex items-center gap-3 px-3 py-3 bg-[var(--el-fill-color-light)] hover:bg-[var(--el-fill-color)] rounded-lg cursor-pointer transition-colors"
+          >
+            <i
+              class="text-2xl"
+              :class="getFileIcon(file.name)"
+              :style="{ color: getFileColor(file.name) }"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-[var(--el-text-color-primary)] truncate">
+                {{ file.name }}
+              </div>
+              <div class="text-xs text-[var(--el-text-color-secondary)]">
+                {{ formatDate(file.modified) }}
+              </div>
             </div>
-            <div class="text-xs text-[var(--el-text-color-secondary)]">
-              {{ formatDate(file.modified) }}
+            <div class="text-sm text-[var(--el-text-color-secondary)]">
+              {{ formatSize(file.size) }}
             </div>
-          </div>
-          <div class="text-sm text-[var(--el-text-color-secondary)]">
-            {{ formatSize(file.size) }}
           </div>
         </div>
-      </div>
+      </TouchScroll>
     </div>
   </div>
 </template>

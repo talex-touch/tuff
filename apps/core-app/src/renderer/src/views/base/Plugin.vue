@@ -4,6 +4,7 @@ import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 import PluginInfo from '~/components/plugin/PluginInfo.vue'
@@ -124,9 +125,9 @@ async function handleOpenPluginFolder(): Promise<void> {
     <!-- Main Content -->
     <template #main>
       <div v-if="curSelect" :key="curSelect.name" class="h-full flex flex-col">
-        <div class="flex-1 overflow-auto p-0">
+        <TouchScroll no-padding class="flex-1">
           <PluginInfo :plugin="curSelect" />
-        </div>
+        </TouchScroll>
       </div>
       <PluginEmptyState v-else />
     </template>

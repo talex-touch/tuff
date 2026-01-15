@@ -1,6 +1,5 @@
 <script lang="ts">
 import type { Component, VNode } from 'vue'
-import { ElScrollbar } from 'element-plus'
 import {
 
   defineComponent,
@@ -12,6 +11,7 @@ import {
   useSlots,
 
 } from 'vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 
 export default defineComponent({
@@ -22,7 +22,7 @@ export default defineComponent({
       default: () => ({}),
     },
   },
-  emits: ['update:modelValue'],
+  emits: ['update:modelValue', 'scroll'],
   setup(props, { emit }) {
     // 状态管理
     const activeNodes = reactive<Record<string, any>>({ ...props.modelValue })
@@ -320,7 +320,16 @@ export default defineComponent({
             {
               class: 'TvTabs-Main',
             },
-            h(ElScrollbar, {}, () => getSelectSlotContent()),
+            h(
+              TouchScroll,
+              {
+                noPadding: true,
+                onScroll: (info: { scrollTop: number; scrollLeft: number }) => emit('scroll', info),
+              },
+              {
+                default: () => getSelectSlotContent(),
+              },
+            ),
           ),
         ],
       )
@@ -375,9 +384,16 @@ export default defineComponent({
   align-items: flex-start;
   width: 100%;
   height: 100%;
+  flex: 1;
+  min-height: 0;
   padding: 1.5rem;
   box-sizing: border-box;
-  overflow-y: auto;
+}
+
+.TvTabs-Main :deep(.tx-scroll__content) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .TvTabs-Header {
