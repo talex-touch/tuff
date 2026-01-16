@@ -21,6 +21,7 @@ const router = useRouter()
 const route = useRoute()
 
 const { plugins, curSelect, selectPlugin } = usePluginSelection()
+const isPluginRoute = computed(() => route.path.startsWith('/plugin'))
 
 const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
 const visiblePlugins = computed(() => {
@@ -219,7 +220,7 @@ function getIssueTitle(plugin: ITouchPlugin): string | undefined {
                 :key="plugin.name"
                 type="button"
                 class="PluginNavTree-Item"
-                :class="{ active: curSelect?.name === plugin.name }"
+                :class="{ active: isPluginRoute && curSelect?.name === plugin.name }"
                 @click="handleSelectPlugin(plugin)"
               >
                 <TuffIcon
