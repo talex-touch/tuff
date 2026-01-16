@@ -12,6 +12,8 @@ export interface TxRadioGroupProps {
   glass?: boolean
   /** 启用模糊效果（仅 button 类型有效，比玻璃更轻量） */
   blur?: boolean
+  /** 指示器动画到位后再触发 v-model 更新（仅 button 类型有效） */
+  updateOnSettled?: boolean
   /** 弹簧刚度，值越大速度越快（默认 85） */
   stiffness?: number
   /** 弹簧阻尼，值越小越Q弹（默认 10） */
