@@ -11,6 +11,7 @@ import {
   useSlots,
 
 } from 'vue'
+import { TxGradualBlur } from '@talex-touch/tuffex'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 
@@ -320,16 +321,36 @@ export default defineComponent({
             {
               class: 'TvTabs-Main',
             },
-            h(
-              TouchScroll,
-              {
-                noPadding: true,
-                onScroll: (info: { scrollTop: number; scrollLeft: number }) => emit('scroll', info),
-              },
-              {
-                default: () => getSelectSlotContent(),
-              },
-            ),
+            [
+              h('div', { class: 'TvTabs-BlurTop' }, [
+                h(TxGradualBlur as any, {
+                  position: 'top',
+                  height: '24px',
+                  strength: 1.4,
+                  opacity: 0.9,
+                  zIndex: 1,
+                }),
+              ]),
+              h('div', { class: 'TvTabs-BlurBottom' }, [
+                h(TxGradualBlur as any, {
+                  position: 'bottom',
+                  height: '24px',
+                  strength: 1.4,
+                  opacity: 0.9,
+                  zIndex: 1,
+                }),
+              ]),
+              h(
+                TouchScroll,
+                {
+                  noPadding: true,
+                  onScroll: (info: { scrollTop: number; scrollLeft: number }) => emit('scroll', info),
+                },
+                {
+                  default: () => getSelectSlotContent(),
+                },
+              ),
+            ],
           ),
         ],
       )
@@ -339,6 +360,26 @@ export default defineComponent({
 </script>
 
 <style lang="scss" scoped>
+.TvTabs-BlurTop {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.TvTabs-BlurBottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  pointer-events: none;
+  z-index: 20;
+}
+
 .TvTabs-TabGroup {
   .TvTabs-TabGroup-Name {
     z-index: 1;

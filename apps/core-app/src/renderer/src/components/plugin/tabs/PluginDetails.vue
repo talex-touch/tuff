@@ -40,6 +40,11 @@ const pluginPaths = ref<{
   tempPath: string
 } | null>(null)
 
+// Manifest data
+const manifestData = ref<Record<string, unknown> | null>(null)
+const manifestLoading = ref(false)
+const manifestError = ref<string | null>(null)
+
 // Performance data
 const performanceData = ref<{
   storage: {
@@ -84,6 +89,68 @@ async function loadPerformance(): Promise<void> {
   performanceData.value = await pluginSDK.getPerformance(plugin.value.name)
 }
 
+function pickString(key: string): string {
+  const value = manifestData.value?.[key]
+  if (typeof value !== 'string')
+    return ''
+  return value
+}
+
+function pickStringArray(value: unknown): string[] {
+  if (!Array.isArray(value))
+    return []
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+}
+
+const manifestSummary = computed(() => {
+  const description = pickString('description') || pickString('desc') || plugin.value.desc || ''
+  const id = pickString('id') || pickString('pluginId')
+  const author = pickString('author')
+  const main = pickString('main')
+  const category = pickString('category') || (plugin.value as any)?.category || ''
+
+  const rawFeatures = manifestData.value?.features
+  const featureCount = Array.isArray(rawFeatures) ? rawFeatures.length : (plugin.value as any)?.features?.length ?? 0
+
+  const rawPermissions = manifestData.value?.permissions
+  let required: string[] = []
+  let optional: string[] = []
+
+  if (Array.isArray(rawPermissions)) {
+    required = pickStringArray(rawPermissions)
+  }
+  else if (rawPermissions && typeof rawPermissions === 'object') {
+    const obj = rawPermissions as Record<string, unknown>
+    required = pickStringArray(obj.required)
+    optional = pickStringArray(obj.optional)
+  }
+
+  return {
+    id,
+    author,
+    category,
+    description,
+    main,
+    featureCount,
+    permissions: { required, optional },
+  }
+})
+
+async function loadManifest(): Promise<void> {
+  manifestLoading.value = true
+  try {
+    manifestData.value = await pluginSDK.getManifest(plugin.value.name)
+    manifestError.value = null
+  }
+  catch (error) {
+    manifestData.value = null
+    manifestError.value = error instanceof Error ? error.message : String(error)
+  }
+  finally {
+    manifestLoading.value = false
+  }
+}
+
 // Save dev settings
 async function saveDevSettings(): Promise<void> {
   if (isSaving.value) return
@@ -107,6 +174,7 @@ async function saveDevSettings(): Promise<void> {
     if (success) {
       ElMessage.success(t('plugin.details.saveSuccess'))
       hasChanges.value = false
+      loadManifest()
     } else {
       ElMessage.error(t('plugin.details.saveError'))
     }
@@ -161,6 +229,7 @@ onMounted(() => {
   initDevSettings()
   loadPaths()
   loadPerformance()
+  loadManifest()
 })
 
 // Re-initialize when plugin changes
@@ -168,6 +237,7 @@ watch(() => plugin.value.name, () => {
   initDevSettings()
   loadPaths()
   loadPerformance()
+  loadManifest()
 })
 </script>
 
@@ -176,7 +246,7 @@ watch(() => plugin.value.name, () => {
     <!-- 1. Basic Information -->
     <TuffGroupBlock
       :name="t('plugin.details.basicInfo')"
-      :description="plugin.desc || t('plugin.details.noDescription')"
+      :description="manifestSummary.description || t('plugin.details.noDescription')"
       default-icon="i-carbon-information"
       active-icon="i-carbon-information-filled"
       memory-name="plugin-details-basic"
@@ -210,6 +280,67 @@ watch(() => plugin.value.name, () => {
           >
             {{ plugin.dev?.enable ? t('plugin.details.development') : t('plugin.details.production') }}
           </span>
+        </template>
+      </TuffBlockLine>
+
+      <TuffBlockSlot
+        title="manifest.json"
+        description="插件清单（只读展示）"
+        default-icon="i-carbon-document"
+      >
+        <FlatButton :disabled="manifestLoading" @click="loadManifest">
+          <i v-if="manifestLoading" class="i-ri-loader-4-line animate-spin" />
+          <i v-else class="i-ri-refresh-line" />
+          <span>{{ manifestLoading ? '刷新中...' : '刷新' }}</span>
+        </FlatButton>
+      </TuffBlockSlot>
+
+      <TuffBlockLine v-if="manifestSummary.id" title="ID">
+        <template #description>
+          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{ manifestSummary.id }}</code>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine v-if="manifestSummary.author" title="Author">
+        <template #description>
+          <span class="text-sm">{{ manifestSummary.author }}</span>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine v-if="manifestSummary.category" title="Category">
+        <template #description>
+          <span class="text-sm">{{ manifestSummary.category }}</span>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine title="Description" :description="manifestSummary.description || '--'" />
+      <TuffBlockLine v-if="manifestSummary.main" title="Main">
+        <template #description>
+          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{ manifestSummary.main }}</code>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine title="Features">
+        <template #description>
+          <span class="text-sm font-semibold">{{ manifestSummary.featureCount }}</span>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine
+        v-if="manifestSummary.permissions.required.length || manifestSummary.permissions.optional.length"
+        title="Permissions"
+      >
+        <template #description>
+          <div class="flex flex-col gap-1">
+            <div v-if="manifestSummary.permissions.required.length">
+              <span class="text-[var(--el-color-danger)] font-semibold">Required</span>：
+              <span>{{ manifestSummary.permissions.required.join(', ') }}</span>
+            </div>
+            <div v-if="manifestSummary.permissions.optional.length">
+              <span class="text-[var(--el-color-warning)] font-semibold">Optional</span>：
+              <span>{{ manifestSummary.permissions.optional.join(', ') }}</span>
+            </div>
+          </div>
+        </template>
+      </TuffBlockLine>
+      <TuffBlockLine v-if="manifestError" title="Error">
+        <template #description>
+          <span class="text-[var(--el-color-danger)] text-xs">{{ manifestError }}</span>
         </template>
       </TuffBlockLine>
     </TuffGroupBlock>
