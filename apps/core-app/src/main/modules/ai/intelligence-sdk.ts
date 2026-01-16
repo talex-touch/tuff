@@ -31,6 +31,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceKeywordsExtractPayload,
   IntelligenceKeywordsExtractResult,
+  IntelligenceMessage,
   IntelligenceProviderConfig,
   IntelligenceProviderManagerAdapter,
   IntelligenceRAGQueryPayload,
@@ -48,25 +49,87 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
-  IntelligenceMessage,
 } from '@talex-touch/utils'
+import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
+import { stdout } from 'node:process'
+import { format } from 'node:util'
 import { PromptTemplate } from '@langchain/core/prompts'
 import chalk from 'chalk'
+import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
-import { type IntelligenceAuditLogEntry, intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
 
 const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
-const logInfo = (...args: any[]) => console.log(INTELLIGENCE_TAG, ...args)
+const logInfo = (...args: any[]) => stdout.write(`${format(INTELLIGENCE_TAG, ...args)}\n`)
 const logWarn = (...args: any[]) => console.warn(INTELLIGENCE_TAG, ...args)
 const logError = (...args: any[]) => console.error(INTELLIGENCE_TAG, ...args)
 
+const MAX_EMBEDDING_TOTAL_CHARS = 32_000
+const EMBEDDING_CHUNK_CHARS = 2_000
+const MAX_EMBEDDING_CHUNKS = 16
+
+function normalizeEmbeddingText(input: string | string[]): string {
+  if (Array.isArray(input)) {
+    return input.filter(Boolean).join('\n')
+  }
+  return input
+}
+
+function chunkText(text: string): { chunks: string[], truncated: boolean } {
+  const normalized = text.trim()
+  const limited = normalized.length > MAX_EMBEDDING_TOTAL_CHARS
+    ? normalized.slice(0, MAX_EMBEDDING_TOTAL_CHARS)
+    : normalized
+
+  const chunks: string[] = []
+  for (let i = 0; i < limited.length; i += EMBEDDING_CHUNK_CHARS) {
+    chunks.push(limited.slice(i, i + EMBEDDING_CHUNK_CHARS))
+    if (chunks.length >= MAX_EMBEDDING_CHUNKS)
+      break
+  }
+
+  const truncated = limited.length !== normalized.length || chunks.join('').length !== limited.length
+  return { chunks: chunks.length > 0 ? chunks : [''], truncated }
+}
+
+function averageEmbeddings(vectors: number[][], weights: number[]): number[] {
+  if (vectors.length === 0)
+    return []
+
+  const dim = vectors[0]?.length ?? 0
+  if (dim === 0)
+    return []
+
+  const sum = Array.from({ length: dim }, () => 0)
+  let weightSum = 0
+  for (let i = 0; i < vectors.length; i++) {
+    const vec = vectors[i]
+    const w = weights[i] ?? 1
+    if (!vec || vec.length !== dim)
+      throw new Error('[Intelligence] Embedding vectors dimension mismatch')
+    for (let j = 0; j < dim; j++) {
+      sum[j] += (vec[j] ?? 0) * w
+    }
+    weightSum += w
+  }
+
+  if (weightSum <= 0)
+    return sum
+
+  for (let j = 0; j < dim; j++) {
+    sum[j] /= weightSum
+  }
+  return sum
+}
+
 function extractMustacheVariables(template: string): string[] {
   const vars = new Set<string>()
-  const regex = /{{\s*([a-zA-Z0-9_\.]+)\s*}}/g
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(template))) {
+  const regex = /\{\{\s*([\w.]+)\s*\}\}/g
+  while (true) {
+    const match = regex.exec(template)
+    if (!match)
+      break
     if (match[1])
       vars.add(match[1])
   }
@@ -180,6 +243,10 @@ export class AiSDK {
     }
 
     const runtimeOptions: IntelligenceInvokeOptions = { ...options }
+    runtimeOptions.metadata = {
+      ...(runtimeOptions.metadata ?? {}),
+      capabilityId,
+    }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
     const configuredProviders
       = capabilityRouting?.providers
@@ -217,14 +284,25 @@ export class AiSDK {
       capability.supportedProviders.includes(config.type),
     )
 
-    const availableProviders = typeFilteredProviders.filter((config) => {
+    const accessFilteredProviders = typeFilteredProviders.filter((config) => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
         return true
       }
       return runtimeOptions.allowedProviderIds.includes(config.id)
     })
 
+    const missingKeyProviders = accessFilteredProviders
+      .filter(config => config.type !== 'local' && !config.apiKey)
+      .map(config => config.id)
+
+    const availableProviders = accessFilteredProviders.filter(config => !(config.type !== 'local' && !config.apiKey))
+
     if (availableProviders.length === 0) {
+      if (missingKeyProviders.length > 0) {
+        throw new Error(
+          `[Intelligence] No enabled providers for ${capabilityId}: missing API key for ${missingKeyProviders.join(', ')}`,
+        )
+      }
       throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
     }
 
@@ -243,6 +321,59 @@ export class AiSDK {
     let result: IntelligenceInvokeResult<T>
     const startTime = Date.now()
 
+    const invokeEmbeddingWithGovernance = async (
+      embeddingProvider: { embedding: (p: IntelligenceEmbeddingPayload, o: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<number[]>> },
+    ): Promise<IntelligenceInvokeResult<number[]>> => {
+      const embeddingPayload = payload as IntelligenceEmbeddingPayload
+      const rawText = normalizeEmbeddingText(embeddingPayload.text)
+      if (!rawText || !rawText.trim()) {
+        throw new Error('[Intelligence] Embedding text is required')
+      }
+
+      const { chunks, truncated } = chunkText(rawText)
+      const vectors: number[][] = []
+      const weights: number[] = []
+      let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      let latency = 0
+      let model = ''
+      let traceId = ''
+      let providerName = ''
+
+      for (const chunk of chunks) {
+        const res = await embeddingProvider.embedding(
+          {
+            ...embeddingPayload,
+            text: chunk,
+          },
+          runtimeOptions,
+        )
+        vectors.push(res.result)
+        weights.push(Math.max(1, chunk.length))
+        usage = {
+          promptTokens: usage.promptTokens + (res.usage?.promptTokens ?? 0),
+          completionTokens: usage.completionTokens + (res.usage?.completionTokens ?? 0),
+          totalTokens: usage.totalTokens + (res.usage?.totalTokens ?? 0),
+        }
+        latency += res.latency ?? 0
+        if (!model)
+          model = res.model
+        if (!traceId)
+          traceId = res.traceId
+        if (!providerName)
+          providerName = res.provider
+      }
+
+      const aggregated = averageEmbeddings(vectors, weights)
+      return {
+        result: aggregated,
+        usage,
+        model,
+        latency,
+        traceId: traceId ? `${traceId}-chunked-${chunks.length}${truncated ? '-truncated' : ''}` : intelligenceAuditLogger.generateTraceId(),
+        provider: providerName,
+      }
+    }
+
     const promptTemplate = (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
     const promptVariables = options.metadata?.promptVariables as Record<string, any> | undefined
     const applyPromptTemplate = (messages: IntelligenceMessage[], template?: string) => {
@@ -254,7 +385,6 @@ export class AiSDK {
     }
 
     try {
-
       switch (capability.type) {
         // Core text capabilities
         case 'chat':
@@ -278,7 +408,7 @@ export class AiSDK {
           }
           break
         case 'embedding':
-          result = await provider.embedding(payload as IntelligenceEmbeddingPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = await invokeEmbeddingWithGovernance(provider as any) as IntelligenceInvokeResult<T>
           break
         case 'translate':
           result = await provider.translate(payload as IntelligenceTranslatePayload, runtimeOptions) as IntelligenceInvokeResult<T>
@@ -420,7 +550,7 @@ export class AiSDK {
                 result = await fallbackProvider.chat(payload as IntelligenceChatPayload, runtimeOptions) as IntelligenceInvokeResult<T>
                 break
               case 'embedding':
-                result = await fallbackProvider.embedding(payload as IntelligenceEmbeddingPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+                result = await invokeEmbeddingWithGovernance(fallbackProvider as any) as IntelligenceInvokeResult<T>
                 break
               case 'translate':
                 result = await fallbackProvider.translate(payload as IntelligenceTranslatePayload, runtimeOptions) as IntelligenceInvokeResult<T>

@@ -6,6 +6,7 @@
 import type { ITuffTransport, ITuffTransportMain } from '../types'
 import { TuffRendererTransport } from './renderer-transport'
 import { TuffMainTransport } from './main-transport'
+import { createPluginTuffTransport } from './plugin-transport'
 
 // Singleton instance for renderer transport
 let rendererTransportInstance: ITuffTransport | null = null
@@ -54,6 +55,8 @@ export function createTuffRendererTransport(module?: string): ITuffTransport {
   // For now, we create a new instance
   return new TuffRendererTransport()
 }
+
+export { createPluginTuffTransport }
 
 /**
  * Gets the TuffTransportMain instance for the main process.

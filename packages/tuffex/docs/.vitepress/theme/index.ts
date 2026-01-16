@@ -47,6 +47,7 @@ import {
   TxGlassSurface,
   TxGradualBlur,
   TxGradientBorder,
+  TxGlowText,
   TxGridLayout,
   TxLayoutSkeleton,
   TxStatCard,
@@ -176,6 +177,7 @@ export default {
     app.component('TxGlassSurface', TxGlassSurface)
     app.component('TxGradualBlur', TxGradualBlur)
     app.component('TxGradientBorder', TxGradientBorder)
+    app.component('TxGlowText', TxGlowText)
     app.component('TxGridLayout', TxGridLayout)
     app.component('TxLayoutSkeleton', TxLayoutSkeleton)
     app.component('TxStatCard', TxStatCard)

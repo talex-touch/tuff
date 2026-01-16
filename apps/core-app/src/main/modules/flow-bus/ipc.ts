@@ -4,15 +4,9 @@
  * Registers IPC handlers for Flow operations.
  */
 
-import { BrowserWindow } from 'electron'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import type { ITouchChannel, StandardChannelData } from '@talex-touch/utils/channel'
-import {
-  FlowIPCChannel,
-  type FlowPayload,
-  type FlowDispatchOptions,
-  type FlowPayloadType
-} from '@talex-touch/utils'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
+import { FlowEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
 import { flowSessionManager } from './session-manager'
 
@@ -24,6 +18,8 @@ import { flowSessionManager } from './session-manager'
 export class FlowBusIPC {
   private channel: ITouchChannel
   private unregisterFunctions: Array<() => void> = []
+  private transportDisposers: Array<() => void> = []
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor(channel: ITouchChannel) {
     this.channel = channel
@@ -33,53 +29,7 @@ export class FlowBusIPC {
    * Registers all IPC handlers
    */
   registerHandlers(): void {
-    // flow:dispatch - Dispatch a flow payload
-    const unregDispatch = this.channel.regChannel(
-      ChannelType.MAIN,
-      FlowIPCChannel.DISPATCH,
-      this.handleDispatch.bind(this)
-    )
-    this.unregisterFunctions.push(unregDispatch)
-
-    // flow:get-targets - Get available targets
-    const unregGetTargets = this.channel.regChannel(
-      ChannelType.MAIN,
-      FlowIPCChannel.GET_TARGETS,
-      this.handleGetTargets.bind(this)
-    )
-    this.unregisterFunctions.push(unregGetTargets)
-
-    // flow:cancel - Cancel a session
-    const unregCancel = this.channel.regChannel(
-      ChannelType.MAIN,
-      FlowIPCChannel.CANCEL,
-      this.handleCancel.bind(this)
-    )
-    this.unregisterFunctions.push(unregCancel)
-
-    // flow:acknowledge - Acknowledge a session
-    const unregAcknowledge = this.channel.regChannel(
-      ChannelType.MAIN,
-      FlowIPCChannel.ACKNOWLEDGE,
-      this.handleAcknowledge.bind(this)
-    )
-    this.unregisterFunctions.push(unregAcknowledge)
-
-    // flow:report-error - Report error from target
-    const unregReportError = this.channel.regChannel(
-      ChannelType.MAIN,
-      FlowIPCChannel.REPORT_ERROR,
-      this.handleReportError.bind(this)
-    )
-    this.unregisterFunctions.push(unregReportError)
-
-    // flow:select-target - User selected a target (from UI)
-    const unregSelectTarget = this.channel.regChannel(
-      ChannelType.MAIN,
-      'flow:select-target',
-      this.handleSelectTarget.bind(this)
-    )
-    this.unregisterFunctions.push(unregSelectTarget)
+    this.registerTransportHandlers()
 
     // Subscribe to session updates for broadcasting
     const unsubscribe = flowSessionManager.addGlobalListener((update) => {
@@ -87,7 +37,90 @@ export class FlowBusIPC {
     })
     this.unregisterFunctions.push(unsubscribe)
 
-    console.log('[FlowBusIPC] All IPC handlers registered')
+    console.log('[FlowBusIPC] All transport handlers registered')
+  }
+
+  private registerTransportHandlers(): void {
+    const channel = this.channel as any
+    const transport = getTuffTransportMain(
+      channel,
+      channel?.keyManager ?? channel,
+    )
+
+    this.transport = transport
+
+    const enforce = (context: any, eventName: string, sdkapi?: number) => {
+      const pluginId = context?.plugin?.name
+      if (!pluginId) {
+        return
+      }
+      const perm = getPermissionModule()
+      if (!perm) {
+        return
+      }
+      perm.enforcePermission(pluginId, eventName, sdkapi)
+    }
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.dispatch, async (payload: any, context: any) => {
+        enforce(context, 'flow:bus:dispatch', payload?._sdkapi)
+        return await flowBus.dispatch(payload.senderId, payload.payload, payload.options)
+          .then((result) => ({ success: result.state !== 'FAILED', data: result }))
+          .catch((error: any) => ({ success: false, error: { message: error instanceof Error ? error.message : 'Unknown error' } }))
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.getTargets, async (payload: any, context: any) => {
+        enforce(context, 'flow:bus:get-targets', payload?._sdkapi)
+        const targets = flowBus.getAvailableTargets(payload?.payloadType)
+        return { success: true, data: targets }
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.cancel, async (payload: any, context: any) => {
+        enforce(context, 'flow:bus:cancel', payload?._sdkapi)
+        const success = flowBus.cancel(payload.sessionId)
+        return { success, data: { cancelled: success } }
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.acknowledge, async (payload: any, context: any) => {
+        enforce(context, 'flow:bus:acknowledge', payload?._sdkapi)
+        const success = flowBus.acknowledge(payload.sessionId, payload.ackPayload)
+        return { success, data: { acknowledged: success } }
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.reportError, async (payload: any, context: any) => {
+        enforce(context, 'flow:bus:report-error', payload?._sdkapi)
+        const success = flowBus.reportError(payload.sessionId, payload.message || 'Unknown error')
+        return { success, data: { reported: success } }
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.selectTarget, async (payload: any, context: any) => {
+        enforce(context, 'flow:bus:select-target', payload?._sdkapi)
+        const { sessionId, targetId } = payload as { sessionId: string; targetId: string | null }
+
+        if (!sessionId) {
+          return {
+            success: false,
+            error: { message: 'sessionId is required' },
+          }
+        }
+
+        flowBus.resolveTargetSelection(sessionId, targetId)
+        return {
+          success: true,
+          data: { resolved: true },
+        }
+      }),
+    )
   }
 
   /**
@@ -96,213 +129,39 @@ export class FlowBusIPC {
   unregisterHandlers(): void {
     this.unregisterFunctions.forEach(unregister => unregister())
     this.unregisterFunctions = []
+
+    this.transportDisposers.forEach((dispose) => {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    })
+    this.transportDisposers = []
+
     console.log('[FlowBusIPC] All IPC handlers unregistered')
-  }
-
-  /**
-   * Handles flow:dispatch
-   */
-  private async handleDispatch(data: StandardChannelData): Promise<void> {
-    try {
-      const { senderId, payload, options } = data.data as {
-        senderId: string
-        payload: FlowPayload
-        options?: FlowDispatchOptions
-      }
-
-      if (!senderId) {
-        data.reply(DataCode.ERROR, {
-          success: false,
-          error: { message: 'senderId is required' }
-        })
-        return
-      }
-
-      if (!payload) {
-        data.reply(DataCode.ERROR, {
-          success: false,
-          error: { message: 'payload is required' }
-        })
-        return
-      }
-
-      const result = await flowBus.dispatch(senderId, payload, options)
-
-      data.reply(DataCode.SUCCESS, {
-        success: result.state !== 'FAILED',
-        data: result
-      })
-    } catch (error) {
-      console.error('[FlowBusIPC] Error in handleDispatch:', error)
-      data.reply(DataCode.ERROR, {
-        success: false,
-        error: { message: error instanceof Error ? error.message : 'Unknown error' }
-      })
-    }
-  }
-
-  /**
-   * Handles flow:get-targets
-   */
-  private async handleGetTargets(data: StandardChannelData): Promise<void> {
-    try {
-      const { payloadType } = (data.data || {}) as { payloadType?: FlowPayloadType }
-
-      const targets = flowBus.getAvailableTargets(payloadType)
-
-      data.reply(DataCode.SUCCESS, {
-        success: true,
-        data: targets
-      })
-    } catch (error) {
-      console.error('[FlowBusIPC] Error in handleGetTargets:', error)
-      data.reply(DataCode.ERROR, {
-        success: false,
-        error: { message: error instanceof Error ? error.message : 'Unknown error' }
-      })
-    }
-  }
-
-  /**
-   * Handles flow:cancel
-   */
-  private async handleCancel(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId } = data.data as { sessionId: string }
-
-      if (!sessionId) {
-        data.reply(DataCode.ERROR, {
-          success: false,
-          error: { message: 'sessionId is required' }
-        })
-        return
-      }
-
-      const success = flowBus.cancel(sessionId)
-
-      data.reply(DataCode.SUCCESS, {
-        success,
-        data: { cancelled: success }
-      })
-    } catch (error) {
-      console.error('[FlowBusIPC] Error in handleCancel:', error)
-      data.reply(DataCode.ERROR, {
-        success: false,
-        error: { message: error instanceof Error ? error.message : 'Unknown error' }
-      })
-    }
-  }
-
-  /**
-   * Handles flow:acknowledge
-   */
-  private async handleAcknowledge(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId, ackPayload } = data.data as {
-        sessionId: string
-        ackPayload?: any
-      }
-
-      if (!sessionId) {
-        data.reply(DataCode.ERROR, {
-          success: false,
-          error: { message: 'sessionId is required' }
-        })
-        return
-      }
-
-      const success = flowBus.acknowledge(sessionId, ackPayload)
-
-      data.reply(DataCode.SUCCESS, {
-        success,
-        data: { acknowledged: success }
-      })
-    } catch (error) {
-      console.error('[FlowBusIPC] Error in handleAcknowledge:', error)
-      data.reply(DataCode.ERROR, {
-        success: false,
-        error: { message: error instanceof Error ? error.message : 'Unknown error' }
-      })
-    }
-  }
-
-  /**
-   * Handles flow:report-error
-   */
-  private async handleReportError(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId, message } = data.data as {
-        sessionId: string
-        message: string
-      }
-
-      if (!sessionId) {
-        data.reply(DataCode.ERROR, {
-          success: false,
-          error: { message: 'sessionId is required' }
-        })
-        return
-      }
-
-      const success = flowBus.reportError(sessionId, message || 'Unknown error')
-
-      data.reply(DataCode.SUCCESS, {
-        success,
-        data: { reported: success }
-      })
-    } catch (error) {
-      console.error('[FlowBusIPC] Error in handleReportError:', error)
-      data.reply(DataCode.ERROR, {
-        success: false,
-        error: { message: error instanceof Error ? error.message : 'Unknown error' }
-      })
-    }
-  }
-
-  /**
-   * Handles flow:select-target (from UI)
-   */
-  private async handleSelectTarget(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId, targetId } = data.data as {
-        sessionId: string
-        targetId: string | null
-      }
-
-      if (!sessionId) {
-        data.reply(DataCode.ERROR, {
-          success: false,
-          error: { message: 'sessionId is required' }
-        })
-        return
-      }
-
-      flowBus.resolveTargetSelection(sessionId, targetId)
-
-      data.reply(DataCode.SUCCESS, {
-        success: true,
-        data: { resolved: true }
-      })
-    } catch (error) {
-      console.error('[FlowBusIPC] Error in handleSelectTarget:', error)
-      data.reply(DataCode.ERROR, {
-        success: false,
-        error: { message: error instanceof Error ? error.message : 'Unknown error' }
-      })
-    }
   }
 
   /**
    * Broadcasts session update to all windows
    */
   private broadcastSessionUpdate(update: import('@talex-touch/utils').FlowSessionUpdate): void {
-    const windows = BrowserWindow.getAllWindows()
-
-    for (const window of windows) {
+    if (this.transport) {
       try {
-        this.channel.sendToMain(window, FlowIPCChannel.SESSION_UPDATE, update)
-      } catch (error) {
-        console.error('[FlowBusIPC] Error broadcasting session update:', error)
+        this.transport.broadcast(FlowEvents.sessionUpdate, update)
+      } catch {
+        // ignore
+      }
+
+      const session = flowBus.getSession(update.sessionId)
+      const senderId = session?.senderId
+      const targetPluginId = session?.targetPluginId
+
+      if (senderId) {
+        this.transport.sendToPlugin(senderId, FlowEvents.sessionUpdate, update).catch(() => {})
+      }
+      if (targetPluginId) {
+        this.transport.sendToPlugin(targetPluginId, FlowEvents.sessionUpdate, update).catch(() => {})
       }
     }
   }

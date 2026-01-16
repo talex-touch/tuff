@@ -105,9 +105,14 @@ export class UsageSummaryService {
     }
     this.pollingService.register(
       this.summaryTaskId,
-      () => this.runSummary().catch((error) => {
-        log.error('Scheduled summary failed', { error })
-      }),
+      async () => {
+        try {
+          await this.runSummary()
+        }
+        catch (error) {
+          log.error('Scheduled summary failed', { error })
+        }
+      },
       { interval: this.config.summaryInterval, unit: 'milliseconds' },
     )
     this.pollingService.start()

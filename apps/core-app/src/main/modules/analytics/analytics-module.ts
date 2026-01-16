@@ -100,12 +100,13 @@ export class AnalyticsModule extends BaseModule {
     }
     setPerfSummaryReporter(summary => this.handlePerfSummary(summary))
 
+    const channel = ((ctx.app as any)?.channel ?? ($app as any)?.channel) as any
     this.transport = getTuffTransportMain(
-      ctx.app.channel as any,
-      (ctx.app.channel as any)?.keyManager ?? ctx.app.channel,
+      channel,
+      (channel as any)?.keyManager ?? channel,
     )
 
-    setIpcTracer((eventName, durationMs, success) => {
+    setIpcTracer((_eventName, durationMs, success) => {
       this.core.trackIPC(durationMs, success)
     })
 

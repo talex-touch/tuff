@@ -359,6 +359,11 @@
     },
     "actions": {
       "history": "History",
+      "run": "Run",
+      "running": "Running",
+      "stop": "Stop",
+      "reconnect": "Reconnect",
+      "reconnecting": "Reconnecting...",
       "openFolder": "Open Folder",
       "opening": "Opening...",
       "reload": "Reload",

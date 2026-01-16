@@ -10,7 +10,8 @@ import type { IUseSearch } from '../types'
 import type { IClipboardOptions } from './types'
 import { TuffInputType } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
+import type { ActivationState } from '@talex-touch/utils/transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
@@ -76,6 +77,27 @@ export function useSearch(
   const MAX_TEXT_INPUT_LENGTH = 2000
   const MAX_HTML_INPUT_LENGTH = 5000
   const MIN_TEXT_ATTACHMENT_LENGTH = 80
+
+  function toActivations(state: ActivationState | null | undefined): IProviderActivate[] | null {
+    const ids = state?.activeProviders
+    if (!ids || ids.length === 0) {
+      return null
+    }
+    const result: IProviderActivate[] = []
+    for (const id of ids) {
+      if (typeof id !== 'string' || id.length === 0) continue
+      if (id.startsWith('plugin-features:')) {
+        const pluginName = id.substring('plugin-features:'.length)
+        result.push({
+          id: 'plugin-features',
+          meta: pluginName ? { pluginName } : undefined,
+        })
+      } else {
+        result.push({ id })
+      }
+    }
+    return result.length > 0 ? result : null
+  }
 
   function safeSerializeMetadata(meta: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined {
     if (!meta) return undefined
@@ -164,11 +186,11 @@ export function useSearch(
     })
 
     if (windowState.divisionBox?.sessionId) {
-      touchChannel.send('division-box:input-change', {
+      transport.send(DivisionBoxEvents.inputChange, {
         sessionId: windowState.divisionBox.sessionId,
         input: searchVal.value,
-        query
-      })
+        query,
+      }).catch(() => {})
     }
   }
 
@@ -440,21 +462,24 @@ export function useSearch(
     }
 
     select.value = -1
+
+    await handleSearch()
   }
 
   async function deactivateProvider(providerId?: string): Promise<boolean> {
     if (!providerId) {
       const newState = await transport.send(CoreBoxEvents.provider.deactivateAll)
-      activeActivations.value = newState
+      activeActivations.value = toActivations(newState)
       searchVal.value = ''
       await handleSearch()
       return true
     }
 
     const newState = await transport.send(CoreBoxEvents.provider.deactivate, { id: providerId })
-    activeActivations.value = newState
+    const mapped = toActivations(newState)
+    activeActivations.value = mapped
 
-    if (!newState || newState.length === 0) {
+    if (!mapped || mapped.length === 0) {
       searchVal.value = ''
     }
 
@@ -464,7 +489,7 @@ export function useSearch(
 
   async function deactivateAllProviders(): Promise<void> {
     const newState = await transport.send(CoreBoxEvents.provider.deactivateAll)
-    activeActivations.value = newState
+    activeActivations.value = toActivations(newState)
     searchVal.value = ''
 
     if (boxOptions.mode === BoxMode.FEATURE) {

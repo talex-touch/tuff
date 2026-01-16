@@ -6,10 +6,12 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import type {
   AllowClipboardRequest,
+  ActivationState,
   DeactivateProviderRequest,
   EnterUIModeRequest,
   ExpandOptions,
   GetProviderDetailsRequest,
+  ProviderDetail,
   SetInputRequest,
   SetInputVisibilityRequest,
 } from '@talex-touch/utils/transport/events/types'
@@ -238,26 +240,28 @@ export class IpcManager {
         }
 
         const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
-        const nativeProviderDetails = nativeProviders.map((p) => ({
+        const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
           id: p.id,
-          name: p.name,
-          icon: p.icon
+          name: p.name ?? p.id,
+          icon: p.icon as any,
         }))
 
         const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
         const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
 
-        const pluginDetails = pluginIdsToFetch
-          .map((id) => {
+        const pluginDetails: ProviderDetail[] = pluginIdsToFetch
+          .map((id): ProviderDetail | null => {
             const plugin = pluginModule.pluginManager!.plugins.get(id)
-            if (!plugin) return null
+            if (!plugin) {
+              return null
+            }
             return {
               id: plugin.name,
               name: plugin.name,
-              icon: plugin.icon
+              icon: plugin.icon as any,
             }
           })
-          .filter((p): p is { id: string; name: string; icon: any } => !!p)
+          .filter((p): p is ProviderDetail => p !== null)
 
         const allDetails = [...nativeProviderDetails, ...pluginDetails]
         reply(DataCode.SUCCESS, allDetails)
@@ -714,7 +718,14 @@ export class IpcManager {
         }
 
         searchEngineCore.deactivateProvider(id)
-        return searchEngineCore.getActivationState()
+        const activeProviders = (searchEngineCore.getActivationState() ?? []).map((activation: any) => {
+          if (activation?.id === 'plugin-features' && activation?.meta?.pluginName) {
+            return `${activation.id}:${activation.meta.pluginName}`
+          }
+          return String(activation?.id ?? '')
+        }).filter(Boolean)
+
+        return { activeProviders } satisfies ActivationState
       }),
     )
 
@@ -723,7 +734,7 @@ export class IpcManager {
         const boxItemManager = getBoxItemManager()
         boxItemManager.clear()
         searchEngineCore.deactivateProviders()
-        return searchEngineCore.getActivationState()
+        return { activeProviders: [] } satisfies ActivationState
       }),
     )
 
@@ -735,26 +746,26 @@ export class IpcManager {
         }
 
         const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
-        const nativeProviderDetails = nativeProviders.map((p) => ({
+        const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
           id: p.id,
-          name: p.name,
-          icon: p.icon
+          name: p.name ?? p.id,
+          icon: p.icon as any,
         }))
 
         const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
         const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
 
-        const pluginDetails = pluginIdsToFetch
-          .map((id) => {
+        const pluginDetails: ProviderDetail[] = pluginIdsToFetch
+          .map((id): ProviderDetail | null => {
             const plugin = pluginModule.pluginManager!.plugins.get(id)
             if (!plugin) return null
             return {
               id: plugin.name,
               name: plugin.name,
-              icon: plugin.icon
+              icon: plugin.icon as any,
             }
           })
-          .filter((p): p is { id: string; name: string; icon: any } => !!p)
+          .filter((p): p is ProviderDetail => p !== null)
 
         return [...nativeProviderDetails, ...pluginDetails]
       }),

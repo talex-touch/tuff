@@ -1,10 +1,11 @@
 <script lang="ts" name="PluginNavTree" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
+import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { TxTransition, TxTransitionSmoothSize } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import StatusIcon from '~/components/base/StatusIcon.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 
@@ -166,6 +167,24 @@ function getIssueTitle(plugin: ITouchPlugin): string | undefined {
 
   return undefined
 }
+
+type PluginIndicatorTone = 'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'
+
+function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
+  if (plugin.status === EPluginStatus.LOADING) return 'loading'
+  if (plugin.status === EPluginStatus.LOAD_FAILED || plugin.status === EPluginStatus.CRASHED) return 'error'
+  if (plugin.status === EPluginStatus.DEV_RECONNECTING) return 'loading'
+
+  const issues = plugin.issues ?? []
+  if (issues.some(issue => issue.type === 'error')) return 'error'
+  if (issues.some(issue => issue.type === 'warning')) return 'warning'
+
+  if (plugin.status === EPluginStatus.DEV_DISCONNECTED) return 'warning'
+  if (plugin.status === EPluginStatus.DISABLED || plugin.status === EPluginStatus.DISABLING) return 'info'
+  if (plugin.status === EPluginStatus.ACTIVE || plugin.status === EPluginStatus.ENABLED || plugin.status === EPluginStatus.LOADED) return 'success'
+
+  return 'none'
+}
 </script>
 
 <template>
@@ -223,12 +242,13 @@ function getIssueTitle(plugin: ITouchPlugin): string | undefined {
                 :class="{ active: isPluginRoute && curSelect?.name === plugin.name }"
                 @click="handleSelectPlugin(plugin)"
               >
-                <TuffIcon
+                <StatusIcon
                   class="PluginNavTree-ItemIcon"
                   :icon="plugin.icon"
                   :alt="plugin.name"
                   :size="18"
                   colorful
+                  :tone="resolveIndicatorTone(plugin)"
                 />
                 <span class="PluginNavTree-ItemName">
                   {{ plugin.name }}

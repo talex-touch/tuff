@@ -85,6 +85,13 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'window:open', permissions: ['window.create'] },
   { pattern: 'window:capture', permissions: ['window.capture'] },
   { pattern: 'screen:capture', permissions: ['window.capture'] },
+
+  // Flow Transfer APIs
+  { pattern: 'flow:native:*', permissions: ['network.internet'] },
+  { pattern: 'flow:*', permissions: ['storage.shared'] },
+
+  // DivisionBox APIs
+  { pattern: 'division-box:*', permissions: ['window.create'] },
 ]
 
 /**

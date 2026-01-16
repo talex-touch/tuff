@@ -146,6 +146,55 @@ import type {
   StorageUpdateNotification,
 } from './types/storage'
 
+import type {
+  FlowAcknowledgeRequest,
+  FlowAcknowledgeResponse,
+  FlowCancelResponse,
+  FlowDeliverPayload,
+  FlowDispatchRequest,
+  FlowDispatchResponse,
+  FlowGetTargetsRequest,
+  FlowGetTargetsResponse,
+  FlowNativeShareRequest,
+  FlowNativeShareResponse,
+  FlowRegisterTargetsRequest,
+  FlowReportErrorRequest,
+  FlowReportErrorResponse,
+  FlowSelectTargetRequest,
+  FlowSelectTargetResponse,
+  FlowSessionUpdatePayload,
+  FlowSetPluginEnabledRequest,
+  FlowSetPluginHandlerRequest,
+  FlowUnregisterTargetsRequest,
+} from './types/flow'
+
+import type {
+  DivisionBoxCloseRequest,
+  DivisionBoxCloseResponse,
+  DivisionBoxFlowTriggerRequest,
+  DivisionBoxFlowTriggerResponse,
+  DivisionBoxGetActiveSessionsRequest,
+  DivisionBoxGetActiveSessionsResponse,
+  DivisionBoxGetWindowStateRequest,
+  DivisionBoxGetWindowStateResponse,
+  DivisionBoxGetStateRequest,
+  DivisionBoxGetStateResponse,
+  DivisionBoxInputChangeRequest,
+  DivisionBoxInputChangeResponse,
+  DivisionBoxOpenRequest,
+  DivisionBoxOpenResponse,
+  DivisionBoxSetOpacityRequest,
+  DivisionBoxSetOpacityResponse,
+  DivisionBoxSessionDestroyedPayload,
+  DivisionBoxStateChangedPayload,
+  DivisionBoxToggleDevToolsRequest,
+  DivisionBoxToggleDevToolsResponse,
+  DivisionBoxTogglePinRequest,
+  DivisionBoxTogglePinResponse,
+  DivisionBoxUpdateStateRequest,
+  DivisionBoxUpdateStateResponse,
+} from './types/division-box'
+
 // ============================================================================
 // Clipboard Events
 // ============================================================================
@@ -425,17 +474,17 @@ export const AppEvents = {
       getStats: defineEvent('app')
         .module('analytics')
         .event('sdk.get-stats')
-        .define<{ pluginName?: string }, PluginStats>(),
+        .define<{ pluginName?: string, pluginVersion?: string }, PluginStats>(),
 
       getFeatureStats: defineEvent('app')
         .module('analytics')
         .event('sdk.get-feature-stats')
-        .define<{ pluginName?: string, featureId: string }, FeatureStats>(),
+        .define<{ pluginName?: string, pluginVersion?: string, featureId: string }, FeatureStats>(),
 
       getTopFeatures: defineEvent('app')
         .module('analytics')
         .event('sdk.get-top-features')
-        .define<{ pluginName?: string, limit?: number }, Array<{ id: string, count: number }>>(),
+        .define<{ pluginName?: string, pluginVersion?: string, limit?: number }, Array<{ id: string, count: number }>>(),
 
       incrementCounter: defineEvent('app')
         .module('analytics')
@@ -487,6 +536,158 @@ export const AppEvents = {
       .event('report')
       .define<ReportMetricsRequest, ReportMetricsResponse>(),
   },
+} as const
+
+// ============================================================================
+// Flow Events
+// ============================================================================
+
+export const FlowEvents = {
+  dispatch: defineEvent('flow')
+    .module('bus')
+    .event('dispatch')
+    .define<FlowDispatchRequest, FlowDispatchResponse>(),
+
+  getTargets: defineEvent('flow')
+    .module('bus')
+    .event('get-targets')
+    .define<FlowGetTargetsRequest, FlowGetTargetsResponse>(),
+
+  cancel: defineEvent('flow')
+    .module('bus')
+    .event('cancel')
+    .define<{ sessionId: string; _sdkapi?: number }, FlowCancelResponse>(),
+
+  acknowledge: defineEvent('flow')
+    .module('bus')
+    .event('acknowledge')
+    .define<FlowAcknowledgeRequest, FlowAcknowledgeResponse>(),
+
+  reportError: defineEvent('flow')
+    .module('bus')
+    .event('report-error')
+    .define<FlowReportErrorRequest, FlowReportErrorResponse>(),
+
+  selectTarget: defineEvent('flow')
+    .module('bus')
+    .event('select-target')
+    .define<FlowSelectTargetRequest, FlowSelectTargetResponse>(),
+
+  sessionUpdate: defineEvent('flow')
+    .module('session')
+    .event('update')
+    .define<FlowSessionUpdatePayload, void>(),
+
+  deliver: defineEvent('flow')
+    .module('session')
+    .event('deliver')
+    .define<FlowDeliverPayload, void>(),
+
+  triggerTransfer: defineEvent('flow')
+    .module('ui')
+    .event('trigger-transfer')
+    .define<void, void>(),
+
+  triggerDetach: defineEvent('flow')
+    .module('ui')
+    .event('trigger-detach')
+    .define<void, void>(),
+
+  registerTargets: defineEvent('flow')
+    .module('plugin')
+    .event('register-targets')
+    .define<FlowRegisterTargetsRequest, { success: boolean }>(),
+
+  unregisterTargets: defineEvent('flow')
+    .module('plugin')
+    .event('unregister-targets')
+    .define<FlowUnregisterTargetsRequest, { success: boolean }>(),
+
+  setPluginEnabled: defineEvent('flow')
+    .module('plugin')
+    .event('set-plugin-enabled')
+    .define<FlowSetPluginEnabledRequest, { success: boolean }>(),
+
+  setPluginHandler: defineEvent('flow')
+    .module('plugin')
+    .event('set-plugin-handler')
+    .define<FlowSetPluginHandlerRequest, { success: boolean }>(),
+
+  nativeShare: defineEvent('flow')
+    .module('native')
+    .event('share')
+    .define<FlowNativeShareRequest, FlowNativeShareResponse>(),
+} as const
+
+// ============================================================================
+// DivisionBox Events
+// ============================================================================
+
+export const DivisionBoxEvents = {
+  open: defineEvent('division-box')
+    .module('session')
+    .event('open')
+    .define<DivisionBoxOpenRequest, DivisionBoxOpenResponse>(),
+
+  close: defineEvent('division-box')
+    .module('session')
+    .event('close')
+    .define<DivisionBoxCloseRequest, DivisionBoxCloseResponse>(),
+
+  getState: defineEvent('division-box')
+    .module('session')
+    .event('get-state')
+    .define<DivisionBoxGetStateRequest, DivisionBoxGetStateResponse>(),
+
+  updateState: defineEvent('division-box')
+    .module('session')
+    .event('update-state')
+    .define<DivisionBoxUpdateStateRequest, DivisionBoxUpdateStateResponse>(),
+
+  getActiveSessions: defineEvent('division-box')
+    .module('session')
+    .event('get-active-sessions')
+    .define<DivisionBoxGetActiveSessionsRequest, DivisionBoxGetActiveSessionsResponse>(),
+
+  stateChanged: defineEvent('division-box')
+    .module('session')
+    .event('state-changed')
+    .define<DivisionBoxStateChangedPayload, void>(),
+
+  sessionDestroyed: defineEvent('division-box')
+    .module('session')
+    .event('session-destroyed')
+    .define<DivisionBoxSessionDestroyedPayload, void>(),
+
+  togglePin: defineEvent('division-box')
+    .module('window')
+    .event('toggle-pin')
+    .define<DivisionBoxTogglePinRequest, DivisionBoxTogglePinResponse>(),
+
+  setOpacity: defineEvent('division-box')
+    .module('window')
+    .event('set-opacity')
+    .define<DivisionBoxSetOpacityRequest, DivisionBoxSetOpacityResponse>(),
+
+  toggleDevTools: defineEvent('division-box')
+    .module('window')
+    .event('toggle-devtools')
+    .define<DivisionBoxToggleDevToolsRequest, DivisionBoxToggleDevToolsResponse>(),
+
+  getWindowState: defineEvent('division-box')
+    .module('window')
+    .event('get-window-state')
+    .define<DivisionBoxGetWindowStateRequest, DivisionBoxGetWindowStateResponse>(),
+
+  inputChange: defineEvent('division-box')
+    .module('ui')
+    .event('input-change')
+    .define<DivisionBoxInputChangeRequest, DivisionBoxInputChangeResponse>(),
+
+  flowTrigger: defineEvent('division-box')
+    .module('flow')
+    .event('trigger')
+    .define<DivisionBoxFlowTriggerRequest, DivisionBoxFlowTriggerResponse>(),
 } as const
 
 /**
@@ -1107,6 +1308,8 @@ export const TuffEvents = {
   boxItem: BoxItemEvents,
   clipboard: ClipboardEvents,
   metaOverlay: MetaOverlayEvents,
+  flow: FlowEvents,
+  divisionBox: DivisionBoxEvents,
 } as const
 
 // Export MetaOverlayEvents separately for convenience

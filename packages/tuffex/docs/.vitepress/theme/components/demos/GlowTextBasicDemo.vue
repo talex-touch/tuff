@@ -1,0 +1,11 @@
+<template>
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <TxGlowText style="font-size: 20px; font-weight: 700;">
+      GlowText
+    </TxGlowText>
+
+    <TxGlowText :angle="-15" :band-size="26" :duration-ms="1100" color="rgba(99, 102, 241, 0.9)" style="font-size: 14px;">
+      Sweep highlight over text
+    </TxGlowText>
+  </div>
+</template>

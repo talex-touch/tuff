@@ -91,42 +91,12 @@ export interface SetInputVisibilityRequest {
 /**
  * Input type for Tuff queries.
  */
-export enum TuffInputType {
-  Text = 0,
-  Image = 1,
-  Files = 2,
-  Html = 3,
-}
+export { TuffInputType } from '../../../core-box/tuff/tuff-dsl'
 
-/**
- * Input item in a Tuff query.
- */
-export interface TuffInput {
-  /**
-   * Type of input.
-   */
-  type: TuffInputType
-
-  /**
-   * Input content (format depends on type).
-   */
-  content: string
-}
-
-/**
- * Query object for CoreBox search.
- */
-export interface TuffQuery {
-  /**
-   * Text query string.
-   */
-  text: string
-
-  /**
-   * Additional inputs (clipboard data, etc.).
-   */
-  inputs?: TuffInput[]
-}
+export type {
+  TuffQuery,
+  TuffQueryInput as TuffInput,
+} from '../../../core-box/tuff/tuff-dsl'
 
 /**
  * Single search result item.
@@ -289,35 +259,7 @@ export interface TuffSection {
   collapsed?: boolean
 }
 
-/**
- * Complete search result from CoreBox.
- */
-export interface TuffSearchResult {
-  /**
-   * Search result items.
-   */
-  items: TuffSearchResultItem[]
-
-  /**
-   * Active provider IDs.
-   */
-  providers: string[]
-
-  /**
-   * Container layout configuration.
-   */
-  containerLayout?: TuffContainerLayout
-
-  /**
-   * Search ID for cancellation.
-   */
-  searchId?: string
-
-  /**
-   * Whether more results are available.
-   */
-  hasMore?: boolean
-}
+export type { TuffSearchResult } from '../../../core-box/tuff/tuff-dsl'
 
 /**
  * Request to cancel a search.

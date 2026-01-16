@@ -19,7 +19,12 @@ const props = defineProps<MarketIconProps>()
 const iconUrl = computed(() => {
   if (!props.item) return null
   const fromProp = typeof props.item.iconUrl === 'string' ? props.item.iconUrl.trim() : ''
-  return fromProp || null
+  if (fromProp) return fromProp
+
+  const icon = typeof props.item.icon === 'string' ? props.item.icon.trim() : ''
+  if (/^https?:\/\//i.test(icon)) return icon
+
+  return null
 })
 
 const iconClass = computed(() => {

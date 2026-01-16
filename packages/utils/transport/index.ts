@@ -99,6 +99,7 @@ export {
 export {
   useTuffTransport,
   createTuffRendererTransport,
+  createPluginTuffTransport,
   getTuffTransportMain,
 } from './sdk'
 

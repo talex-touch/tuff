@@ -2,6 +2,15 @@
 
 DivisionBox 是一个轻量级的子窗口系统，基于 `WebContentsView` 实现，用于承载插件 UI、系统工具和调试界面。
 
+## Scope
+
+本文档描述 **当前已落地** 的 DivisionBox 基础能力（open/close/state）。
+
+- 不包含：多视图并行、复杂 Dock 布局等高级能力。
+- “生命周期事件对插件开放”将统一收敛到 `DivisionBoxSDK`（后续补齐）。
+
+> 权限说明：DivisionBox 相关能力目前**尚未接入权限中心**（Permission Center），后续会补齐权限门控与用户授权流程。
+
 ## 核心概念
 
 ### 生命周期状态
@@ -43,8 +52,20 @@ interface DivisionBoxConfig {
   /** 关联的插件 ID */
   pluginId?: string
   
-  /** 初始状态数据 */
-  initialState?: Record<string, any>
+  /** Header 配置（可选） */
+  header?: {
+    show: boolean
+    title?: string
+    icon?: string
+  }
+
+  /** CoreBox 头部 UI 控制（可选） */
+  ui?: {
+    showInput?: boolean
+    inputPlaceholder?: string
+    showResults?: boolean
+    initialInput?: string
+  }
 }
 ```
 
@@ -86,8 +107,9 @@ async function closeDivisionBox(sessionId: string) {
   await touchChannel.send('division-box:close', {
     sessionId,
     options: {
-      force: false,
-      saveState: true
+      delay: 0,
+      animation: false,
+      force: false
     }
   })
 }
@@ -171,10 +193,7 @@ const { sessionId } = await divisionBox.open({
   keepAlive: true,
   header: {
     show: true,
-    title: 'Custom Title',
-    actions: [
-      { label: 'Refresh', icon: 'ri:refresh-line', onClick: () => {} }
-    ]
+    title: 'Custom Title'
   }
 })
 ```
@@ -200,6 +219,9 @@ await divisionBox.close(sessionId, { force: true })
 #### `onStateChange(handler)`
 
 监听状态变化。
+
+> 当前 SDK 提供的是“状态变化”回调。后续将把 DivisionBox 的完整生命周期事件
+> （prepare/attach/active/inactive/detach/destroy）以更稳定的事件模型对插件开放。
 
 ```typescript
 const unsubscribe = divisionBox.onStateChange((data) => {
@@ -272,10 +294,7 @@ function onFeatureTriggered(featureId: string, query: TuffQuery) {
     // 打开 DivisionBox 显示 Flow 数据
     divisionBox.open({
       url: `/viewer.html?sessionId=${flowData.sessionId}`,
-      title: '查看数据',
-      initialState: {
-        flowPayload: flowData.payload
-      }
+      title: '查看数据'
     })
   }
 }
@@ -295,16 +314,13 @@ function onFeatureTriggered(featureId: string, query: TuffQuery) {
 
 ## 资源限制
 
-- 最大同时活跃会话数：10
-- 每个会话最大视图数：5
-- keepAlive 会话缓存数：20
-- keepAlive 超时时间：5 分钟
+- 资源限制与缓存策略以主进程实现为准（`apps/core-app/src/main/modules/division-box/`）。
 
 ## 最佳实践
 
 1. **使用 keepAlive**：对于频繁使用的面板，启用 `keepAlive` 提升响应速度
 2. **合理设置大小**：根据内容选择合适的 `size`
-3. **保存状态**：关闭时使用 `saveState: true` 保存用户数据
+3. **保存状态**：使用 `updateState/getState` 保存用户数据
 4. **监听状态变化**：及时响应 `inactive` 状态，释放不必要的资源
 5. **处理销毁事件**：监听 `session-destroyed` 清理相关资源
 

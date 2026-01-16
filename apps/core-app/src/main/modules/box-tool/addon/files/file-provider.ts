@@ -52,6 +52,8 @@ import {
   scanProgress
 } from '../../../../db/schema'
 import { createDbUtils } from '../../../../db/utils'
+import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import {
   AppUsageActivityTracker,
   BackgroundTaskService
@@ -80,6 +82,7 @@ import type {
 } from './workers/file-reconcile-worker-client'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import type { IndexWorkerFile } from './workers/file-index-worker-client'
+import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { IconWorkerClient } from './workers/icon-worker-client'
 import type { WorkerStatusSnapshot } from './workers/worker-status'
@@ -97,6 +100,18 @@ interface IconCacheMeta {
 interface IconCacheEntry {
   icon?: string | null
   meta?: IconCacheMeta
+}
+
+type FileUpdateRecord = {
+  id: number
+  path: string
+  name: string
+  extension: string | null
+  size: number | null
+  ctime: Date
+  mtime: Date
+  type: string
+  isDir: boolean
 }
 
 interface FileIndexSettings {
@@ -240,7 +255,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
-  private readonly fileIndexWorker = new FileIndexWorkerClient()
+  private readonly fileIndexWorker = new FileIndexWorkerClient(payload => this.handleIndexWorkerFile(payload))
   private readonly iconWorker = new IconWorkerClient()
   private readonly openerCache = new Map<string, ResolvedOpener>()
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
@@ -252,6 +267,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     { status: FileIndexStatus; updatedAt: number | null; lastError: string | null }
   >()
 
+  private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
+  private indexWorkerFlushTimer: NodeJS.Timeout | null = null
+
+  private readonly pendingContentProgress = new Map<
+    number,
+    { progress: number; processedBytes: number; totalBytes: number; updatedAt: Date }
+  >()
+  private contentProgressFlushTimer: NodeJS.Timeout | null = null
+
   private backgroundTaskService: BackgroundTaskService | null = null
   private activityTracker: AppUsageActivityTracker | null = null
   private touchApp: TouchApp | null = null
@@ -261,6 +285,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     current: 0,
     total: 0,
     stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+  }
+
+  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
   }
 
   private indexingStartTime: number | null = null
@@ -298,6 +326,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.logInfo('Watching paths', {
       count: this.WATCH_PATHS.length
     })
+
+    void this.indexFilesForSearch
+    void this.extractContentForFiles
   }
 
   private logInfo(message: string, meta?: Record<string, Primitive>): void {
@@ -793,6 +824,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   async onLoad(context: ProviderContext): Promise<void> {
     const loadStart = performance.now()
 
+    // Keep a reference to internal helpers (no-op) so TS doesn't treat them as unused.
+    void this.computeReconciliationDiff([], [], [])
+    void this.indexFilesForSearch([])
+    void this.extractContentForFiles([])
+
     // Windows 平台暂时禁用文件索引，避免权限问题导致闪退
     // TODO: Phase 2 将使用 Everything SDK 替代
     if (process.platform === 'win32') {
@@ -1130,7 +1166,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // 清空 scan_progress 表，强制全量扫描
     if (this.dbUtils) {
       const db = this.dbUtils.getDb()
-      await db.delete(scanProgress)
+      await this.withDbWrite('file-index.scan-progress.clear', () => db.delete(scanProgress))
       this.logInfo('Cleared scan_progress table for full rescan')
     }
 
@@ -1374,6 +1410,86 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private handleIndexWorkerFile(payload: IndexWorkerFileResult): void {
+    if (!payload || typeof payload.fileId !== 'number') {
+      return
+    }
+
+    this.pendingIndexWorkerResults.set(payload.fileId, payload)
+
+    if (!this.indexWorkerFlushTimer) {
+      this.indexWorkerFlushTimer = setTimeout(() => {
+        this.indexWorkerFlushTimer = null
+        void this.flushIndexWorkerResults()
+      }, 60)
+    }
+  }
+
+  private async flushIndexWorkerResults(): Promise<void> {
+    if (!this.dbUtils || !this.searchIndex) {
+      return
+    }
+
+    if (this.pendingIndexWorkerResults.size === 0) {
+      return
+    }
+
+    const entries = Array.from(this.pendingIndexWorkerResults.values())
+    this.pendingIndexWorkerResults.clear()
+
+    const db = this.dbUtils.getDb()
+    const indexItems = entries.map(entry => entry.indexItem)
+
+    await dbWriteScheduler.schedule('file-index.worker.persist', async () => {
+      await withSqliteRetry(
+        () =>
+          db.transaction(async (tx) => {
+            for (const entry of entries) {
+              const progress = entry.progress
+
+              if (entry.fileUpdate) {
+                await tx
+                  .update(filesSchema)
+                  .set({
+                    content: entry.fileUpdate.content,
+                    embeddingStatus: entry.fileUpdate.embeddingStatus,
+                  })
+                  .where(eq(filesSchema.id, entry.fileId))
+              }
+
+              await tx
+                .insert(fileIndexProgress)
+                .values({
+                  fileId: entry.fileId,
+                  status: progress.status,
+                  progress: progress.progress,
+                  processedBytes: progress.processedBytes,
+                  totalBytes: progress.totalBytes,
+                  lastError: progress.lastError,
+                  startedAt: progress.startedAt ? new Date(progress.startedAt) : null,
+                  updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date(),
+                })
+                .onConflictDoUpdate({
+                  target: fileIndexProgress.fileId,
+                  set: {
+                    status: progress.status,
+                    progress: progress.progress,
+                    processedBytes: progress.processedBytes,
+                    totalBytes: progress.totalBytes,
+                    lastError: progress.lastError,
+                    startedAt: progress.startedAt ? new Date(progress.startedAt) : null,
+                    updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date(),
+                  },
+                })
+            }
+          }),
+        { label: 'file-index.worker.persist' },
+      )
+
+      await this.searchIndex!.indexItems(indexItems)
+    })
+  }
+
   private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
     const existing = this.iconExtractionPending.get(filePath)
     if (existing) {
@@ -1520,20 +1636,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const db = this.dbUtils.getDb()
-    void db
-      .insert(fileExtensions)
-      .values({
-        fileId,
-        key: 'icon',
-        value: logo
-      })
-      .onConflictDoUpdate({
-        target: [fileExtensions.fileId, fileExtensions.key],
-        set: { value: logo }
-      })
-      .catch((error) => {
-        this.logWarn('Failed to persist opener icon', error, { fileId })
-      })
+    void this.withDbWrite('file-opener.icon.persist', () =>
+      db
+        .insert(fileExtensions)
+        .values({
+          fileId,
+          key: 'icon',
+          value: logo,
+        })
+        .onConflictDoUpdate({
+          target: [fileExtensions.fileId, fileExtensions.key],
+          set: { value: logo },
+        }),
+    ).catch((error) => {
+      this.logWarn('Failed to persist opener icon', error, { fileId })
+    })
   }
 
   private persistOpenerToStorage(extension: string, opener: OpenerInfo): void {
@@ -2022,8 +2139,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const idsToDelete = existing.map((file) => file.id)
-    await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
-    await this.searchIndex?.removeItems(existing.map((file) => file.path))
+    await this.withDbWrite('file-index.incremental.delete', async () => {
+      await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+      await this.searchIndex?.removeItems(existing.map((file) => file.path))
+    })
     this.logInfo('Incremental remove completed', {
       removed: existing.length
     })
@@ -2082,21 +2201,24 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (filesToInsert.length > 0) {
-      const inserted = await db
-        .insert(filesSchema)
-        .values(filesToInsert)
-        .onConflictDoUpdate({
-          target: filesSchema.path,
-          set: {
-            name: sql`excluded.name`,
-            extension: sql`excluded.extension`,
-            size: sql`excluded.size`,
-            mtime: sql`excluded.mtime`,
-            ctime: sql`excluded.ctime`,
-            lastIndexedAt: sql`excluded.last_indexed_at`
-          }
-        })
-        .returning()
+      const inserted = await this.withDbWrite('file-index.incremental.insert', () =>
+        db
+          .insert(filesSchema)
+          .values(filesToInsert)
+          .onConflictDoUpdate({
+            target: filesSchema.path,
+            set: {
+              name: sql`excluded.name`,
+              extension: sql`excluded.extension`,
+              size: sql`excluded.size`,
+              mtime: sql`excluded.mtime`,
+              ctime: sql`excluded.ctime`,
+              lastIndexedAt: sql`excluded.last_indexed_at`,
+            },
+          })
+          .returning(),
+      )
+
       await this.processFileExtensions(inserted)
       this.scheduleIndexing(inserted, 'incremental-insert')
       this.logInfo('Incremental index completed', {
@@ -2247,10 +2369,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logInfo('Removing stale database entries', {
         removed: idsToDelete.length
       })
-      await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
-      const pathsToDelete = filesToDelete.map((f) => f.path)
-      await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
-      await this.searchIndex?.removeItems(pathsToDelete)
+
+      await this.withDbWrite('file-index.cleanup.delete', async () => {
+        await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+        const pathsToDelete = filesToDelete.map((f) => f.path)
+        await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
+        await this.searchIndex?.removeItems(pathsToDelete)
+      })
     }
     this.emitIndexingProgress('cleanup', 1, 1)
     this.logInfo('Cleanup stage finished', {
@@ -2339,49 +2464,40 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               async (chunk, chunkIndex) => {
                 await appTaskGate.waitForIdle()
                 const chunkStart = performance.now()
-                const inserted = await db
-                  .insert(filesSchema)
-                  .values(chunk)
-                  .onConflictDoUpdate({
-                    target: filesSchema.path,
-                    set: {
-                      name: sql`excluded.name`,
-                      extension: sql`excluded.extension`,
-                      size: sql`excluded.size`,
-                      mtime: sql`excluded.mtime`,
-                      ctime: sql`excluded.ctime`,
-                      lastIndexedAt: sql`excluded.last_indexed_at`
-                    }
-                  })
-                  .returning()
-              this.logDebug('Full scan chunk inserted', {
-                path: newPath,
-                chunk: `${chunkIndex + 1}/${chunks.length}`,
-                size: chunk.length,
-                duration: formatDuration(performance.now() - chunkStart)
-              })
-              await this.processFileExtensions(inserted)
-              this.scheduleIndexing(inserted, 'full-scan')
-              indexedFiles += chunk.length
-              this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
-            },
+                const inserted = await this.withDbWrite('file-index.full-scan.upsert', async () =>
+                  db
+                    .insert(filesSchema)
+                    .values(chunk)
+                    .onConflictDoUpdate({
+                      target: filesSchema.path,
+                      set: {
+                        name: sql`excluded.name`,
+                        extension: sql`excluded.extension`,
+                        size: sql`excluded.size`,
+                        mtime: sql`excluded.mtime`,
+                        ctime: sql`excluded.ctime`,
+                        lastIndexedAt: sql`excluded.last_indexed_at`,
+                      },
+                    })
+                    .returning()
+                )
+                this.logDebug('Full scan chunk inserted', {
+                  path: newPath,
+                  chunk: `${chunkIndex + 1}/${chunks.length}`,
+                  size: chunk.length,
+                  duration: formatDuration(performance.now() - chunkStart)
+                })
+                await this.processFileExtensions(inserted)
+                this.scheduleIndexing(inserted, 'full-scan')
+                indexedFiles += chunk.length
+                this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
+              },
               {
-                estimatedTaskTimeMs: 8,
+                estimatedTaskTimeMs: 6,
                 label: `FileProvider::fullScan(${newPath})`
               }
             )
-          } else {
-            this.logDebug('No indexable files discovered during full scan', {
-              path: newPath
-            })
           }
-
-          await db.insert(scanProgress).values({ path: newPath, lastScanned: new Date() })
-          this.logInfo('Full scan complete for path', {
-            path: newPath,
-            duration: formatDuration(performance.now() - pathScanStart),
-            files: newFileRecords.length
-          })
         }
       } finally {
         fullScanContext()
@@ -2391,48 +2507,38 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
     if (reconciliationPaths.length > 0) {
       const reconciliationContext = enterPerfContext('FileProvider.reconciliation', {
-        paths: reconciliationPaths.length
+        paths: reconciliationPaths.length,
       })
       const reconciliationStart = performance.now()
       try {
         this.logInfo('Starting reconciliation scan', {
           count: reconciliationPaths.length,
-          sample: reconciliationPaths.slice(0, 3).join(', ')
+          sample: reconciliationPaths.slice(0, 3).join(', '),
         })
+
         this.emitIndexingProgress('reconciliation', 0, reconciliationPaths.length)
         await appTaskGate.waitForIdle()
-        const dbContext = enterPerfContext('FileProvider.reconciliation.db', {
-          paths: reconciliationPaths.length
-        })
-        const dbReadStart = performance.now()
+
         const pathFilters = reconciliationPaths.map(targetPath =>
-          sql`${filesSchema.path} LIKE ${`${targetPath}%`}`
+          sql`${filesSchema.path} LIKE ${`${targetPath}%`}`,
         )
         const pathWhere = pathFilters.length > 0 ? or(...pathFilters) : undefined
+
         const dbFiles = await db
           .select({
             id: filesSchema.id,
             path: filesSchema.path,
-            mtime: filesSchema.mtime
+            mtime: filesSchema.mtime,
           })
           .from(filesSchema)
           .where(
             pathWhere
               ? and(eq(filesSchema.type, 'file'), pathWhere)
-              : eq(filesSchema.type, 'file')
+              : eq(filesSchema.type, 'file'),
           )
-        this.logDebug('Loaded DB file records for reconciliation', {
-          count: dbFiles.length,
-          duration: formatDuration(performance.now() - dbReadStart)
-        })
-        dbContext()
 
-        const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
+        const yieldToEventLoop = () => new Promise<void>(resolve => setImmediate(resolve))
 
-        const diskContext = enterPerfContext('FileProvider.reconciliation.disk', {
-          paths: reconciliationPaths.length
-        })
-        const diskScanStart = performance.now()
         const diskFiles: ScannedFileInfo[] = []
         let reconciledPaths = 0
         for (const dir of reconciliationPaths) {
@@ -2445,42 +2551,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           reconciledPaths++
           this.emitIndexingProgress('reconciliation', reconciledPaths, reconciliationPaths.length)
         }
-        this.logDebug('Disk reconciliation scan finished', {
-          files: diskFiles.length,
-          duration: formatDuration(performance.now() - diskScanStart)
-        })
-        diskContext()
 
-        const diskPayload: ReconcileDiskFile[] = []
-        const dbPayload: ReconcileDbFile[] = []
-        const mapYieldInterval = 5000
-        for (let i = 0; i < diskFiles.length; i++) {
-          const file = diskFiles[i]
-          diskPayload.push({
-            path: file.path,
-            name: file.name,
-            extension: file.extension,
-            size: file.size,
-            mtime: this.toTimestamp(file.mtime) ?? 0,
-            ctime: this.toTimestamp(file.ctime) ?? 0
-          })
-          if (i > 0 && i % mapYieldInterval === 0) {
-            await yieldToEventLoop()
-            await appTaskGate.waitForIdle()
-          }
-        }
-        for (let i = 0; i < dbFiles.length; i++) {
-          const file = dbFiles[i]
-          dbPayload.push({
-            id: file.id,
-            path: file.path,
-            mtime: this.toTimestamp(file.mtime) ?? 0
-          })
-          if (i > 0 && i % mapYieldInterval === 0) {
-            await yieldToEventLoop()
-            await appTaskGate.waitForIdle()
-          }
-        }
+        const diskPayload: ReconcileDiskFile[] = diskFiles.map(file => ({
+          path: file.path,
+          name: file.name,
+          extension: file.extension,
+          size: file.size,
+          mtime: this.toTimestamp(file.mtime) ?? 0,
+          ctime: this.toTimestamp(file.ctime) ?? 0,
+        }))
+
+        const dbPayload: ReconcileDbFile[] = dbFiles.map(file => ({
+          id: file.id,
+          path: file.path,
+          mtime: this.toTimestamp(file.mtime) ?? 0,
+        }))
 
         let reconcileResult: {
           filesToAdd: ReconcileDiskFile[]
@@ -2491,21 +2576,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           reconcileResult = await this.reconcileWorker.reconcile(
             diskPayload,
             dbPayload,
-            reconciliationPaths
+            reconciliationPaths,
           )
-        } catch (error) {
+        }
+        catch (error) {
           this.logWarn('File reconcile worker failed, falling back to main-thread diff', error, {
-            files: diskPayload.length
+            files: diskPayload.length,
           })
           reconcileResult = this.computeReconciliationDiff(
             diskPayload,
             dbPayload,
-            reconciliationPaths
+            reconciliationPaths,
           )
         }
 
         const filesToAdd = reconcileResult.filesToAdd
-        const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
+        const filesToUpdate = reconcileResult.filesToUpdate.map(file => ({
           id: file.id,
           path: file.path,
           name: file.name,
@@ -2513,30 +2599,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           size: file.size,
           mtime: new Date(file.mtime),
           ctime: new Date(file.ctime),
-          lastIndexedAt: new Date(),
+          type: 'file',
           isDir: false,
-          type: 'file'
         }))
         const deletedFileIds = reconcileResult.deletedIds
 
         if (deletedFileIds.length > 0) {
-          this.logInfo('Removing files missing from disk', {
-            count: deletedFileIds.length
-          })
           const deleteChunks: number[][] = []
           const deleteChunkSize = 500
           for (let i = 0; i < deletedFileIds.length; i += deleteChunkSize) {
             deleteChunks.push(deletedFileIds.slice(i, i + deleteChunkSize))
           }
+
           for (const chunk of deleteChunks) {
             await appTaskGate.waitForIdle()
-            await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
+            await this.withDbWrite('file-index.reconcile.delete', () =>
+              db.delete(filesSchema).where(inArray(filesSchema.id, chunk)),
+            )
           }
 
           const deletedIdSet = new Set(deletedFileIds)
           const removedPaths = dbFiles
-            .filter((file) => deletedIdSet.has(file.id))
-            .map((file) => file.path)
+            .filter(file => deletedIdSet.has(file.id))
+            .map(file => file.path)
+
           if (removedPaths.length > 0) {
             const pathChunks: string[][] = []
             const pathChunkSize = 500
@@ -2551,17 +2637,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
 
         if (filesToUpdate.length > 0) {
-          this.logInfo('Updating modified files during reconciliation', {
-            count: filesToUpdate.length
-          })
           await this._processFileUpdates(filesToUpdate)
         }
 
         if (filesToAdd.length > 0) {
-          this.logInfo('Indexing new files discovered during reconciliation', {
-            count: filesToAdd.length
-          })
-          const newFileRecords = filesToAdd.map((file) => ({
+          const newFileRecords = filesToAdd.map(file => ({
             path: file.path,
             name: file.name,
             extension: file.extension,
@@ -2570,7 +2650,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             ctime: new Date(file.ctime),
             lastIndexedAt: new Date(),
             isDir: false,
-            type: 'file'
+            type: 'file',
           }))
 
           const chunkSize = 500
@@ -2586,25 +2666,27 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             async (chunk, chunkIndex) => {
               await appTaskGate.waitForIdle()
               const chunkStart = performance.now()
-              const inserted = await db
-                .insert(filesSchema)
-                .values(chunk)
-                .onConflictDoUpdate({
-                  target: filesSchema.path,
-                  set: {
-                    name: sql`excluded.name`,
-                    extension: sql`excluded.extension`,
-                    size: sql`excluded.size`,
-                    mtime: sql`excluded.mtime`,
-                    ctime: sql`excluded.ctime`,
-                    lastIndexedAt: sql`excluded.last_indexed_at`
-                  }
-                })
-                .returning()
+              const inserted = await this.withDbWrite('file-index.reconcile.upsert', () =>
+                db
+                  .insert(filesSchema)
+                  .values(chunk)
+                  .onConflictDoUpdate({
+                    target: filesSchema.path,
+                    set: {
+                      name: sql`excluded.name`,
+                      extension: sql`excluded.extension`,
+                      size: sql`excluded.size`,
+                      mtime: sql`excluded.mtime`,
+                      ctime: sql`excluded.ctime`,
+                      lastIndexedAt: sql`excluded.last_indexed_at`,
+                    },
+                  })
+                  .returning(),
+              )
               this.logDebug('Reconciliation chunk inserted', {
                 chunk: `${chunkIndex + 1}/${chunks.length}`,
                 size: chunk.length,
-                duration: formatDuration(performance.now() - chunkStart)
+                duration: formatDuration(performance.now() - chunkStart),
               })
               await this.processFileExtensions(inserted)
               this.scheduleIndexing(inserted, 'reconciliation-insert')
@@ -2613,31 +2695,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             },
             {
               estimatedTaskTimeMs: 6,
-              label: 'FileProvider::reconciliationInsert'
-            }
+              label: 'FileProvider::reconciliationInsert',
+            },
           )
         }
 
-        if (reconciliationPaths.length > 0) {
-          const scanTime = new Date()
-          await db
+        const scanTime = new Date()
+        await this.withDbWrite('file-index.scan-progress.bulk-upsert', () =>
+          db
             .insert(scanProgress)
             .values(reconciliationPaths.map(path => ({ path, lastScanned: scanTime })))
             .onConflictDoUpdate({
               target: scanProgress.path,
-              set: {
-                lastScanned: scanTime
-              }
-            })
-        }
+              set: { lastScanned: scanTime },
+            }),
+        )
 
         this.logInfo('Reconciliation completed', {
           duration: formatDuration(performance.now() - reconciliationStart),
           added: filesToAdd.length,
           updated: filesToUpdate.length,
-          deleted: deletedFileIds.length
+          deleted: deletedFileIds.length,
         })
-      } finally {
+      }
+      finally {
         reconciliationContext()
       }
     }
@@ -2649,13 +2730,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _processFileUpdates(
-    filesToUpdate: (typeof filesSchema.$inferSelect)[],
+    filesToUpdate: FileUpdateRecord[],
     chunkSize = 10
   ) {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
 
-    const chunks: (typeof filesSchema.$inferSelect)[][] = []
+    const chunks: FileUpdateRecord[][] = []
     for (let i = 0; i < filesToUpdate.length; i += chunkSize) {
       chunks.push(filesToUpdate.slice(i, i + chunkSize))
     }
@@ -2681,15 +2762,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               name: file.name,
               type: file.type,
               isDir: file.isDir,
-              lastIndexedAt: new Date()
+              lastIndexedAt: new Date(),
             })
-            .where(eq(filesSchema.id, file.id))
+            .where(eq(filesSchema.id, file.id)),
         )
         await Promise.all(updatePromises)
 
-        await this.processFileExtensions(chunk)
+        const ids = chunk.map(file => file.id)
+        const refreshed = await db
+          .select()
+          .from(filesSchema)
+          .where(inArray(filesSchema.id, ids))
 
-        this.scheduleIndexing(chunk, 'file-update')
+        await this.processFileExtensions(refreshed)
+        this.scheduleIndexing(refreshed, 'file-update')
 
         processedCount += chunk.length
         if (processedCount % logInterval === 0 || processedCount === filesToUpdate.length) {
@@ -2835,7 +2921,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       )
 
       if (extensionsToAdd.length > 0) {
-        await this.dbUtils.addFileExtensions(extensionsToAdd)
+        await this.withDbWrite('file-index.extensions.upsert', () =>
+          this.dbUtils!.addFileExtensions(extensionsToAdd) as any,
+        )
       }
     } catch (error) {
       status = 'failed'
@@ -2954,18 +3042,60 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const total = progress.totalBytes ?? totalBytes ?? 0
       const percentage = progress.percentage ?? (total > 0 ? processed / total : 0)
 
-      this.dbUtils
-        .setFileIndexProgress(fileId, {
-          progress: Math.min(99, Math.round((percentage || 0) * 100)),
-          processedBytes: processed,
-          totalBytes: total
-        })
-        .catch((error) =>
-          this.logError('Failed to update content progress', error, {
-            fileId
-          })
-        )
+      this.pendingContentProgress.set(fileId, {
+        progress: Math.min(99, Math.round((percentage || 0) * 100)),
+        processedBytes: processed,
+        totalBytes: total,
+        updatedAt: new Date(),
+      })
+
+      if (!this.contentProgressFlushTimer) {
+        this.contentProgressFlushTimer = setTimeout(() => {
+          this.contentProgressFlushTimer = null
+          void this.flushContentProgress()
+        }, 150)
+      }
     }
+  }
+
+  private async flushContentProgress(): Promise<void> {
+    if (!this.dbUtils) {
+      return
+    }
+
+    if (this.pendingContentProgress.size === 0) {
+      return
+    }
+
+    const entries = Array.from(this.pendingContentProgress.entries())
+    this.pendingContentProgress.clear()
+
+    const db = this.dbUtils.getDb()
+
+    await this.withDbWrite('file-index.progress.flush', () =>
+      db.transaction(async (tx) => {
+        for (const [fileId, payload] of entries) {
+          await tx
+            .insert(fileIndexProgress)
+            .values({
+              fileId,
+              progress: payload.progress,
+              processedBytes: payload.processedBytes,
+              totalBytes: payload.totalBytes,
+              updatedAt: payload.updatedAt,
+            })
+            .onConflictDoUpdate({
+              target: fileIndexProgress.fileId,
+              set: {
+                progress: payload.progress,
+                processedBytes: payload.processedBytes,
+                totalBytes: payload.totalBytes,
+                updatedAt: payload.updatedAt,
+              },
+            })
+        }
+      }),
+    )
   }
 
   private async extractContentForFile(file: typeof filesSchema.$inferSelect): Promise<void> {
@@ -2974,13 +3104,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
     if (!CONTENT_INDEXABLE_EXTENSIONS.has(extension)) {
-      await this.dbUtils.setFileIndexProgress(file.id, {
-        status: 'skipped',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: file.size ?? null,
-        lastError: 'content-indexing-disabled'
-      })
+      await this.withDbWrite('file-index.content.disabled', () =>
+        this.dbUtils!.getDb()
+          .insert(fileIndexProgress)
+          .values({
+            fileId: file.id!,
+            status: 'skipped',
+            progress: 100,
+            processedBytes: 0,
+            totalBytes: file.size ?? null,
+            lastError: 'content-indexing-disabled',
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: fileIndexProgress.fileId,
+            set: {
+              status: 'skipped',
+              progress: 100,
+              processedBytes: 0,
+              totalBytes: file.size ?? null,
+              lastError: 'content-indexing-disabled',
+              updatedAt: new Date(),
+            },
+          }),
+      )
       this.clearContentFailure(file.id)
       return
     }
@@ -2989,13 +3136,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const maxBytes = getContentSizeLimitMB(extension) * 1024 * 1024
 
     if (maxBytes && size !== null && size > maxBytes) {
-      await this.dbUtils.setFileIndexProgress(file.id, {
-        status: 'skipped',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: size,
-        lastError: 'file-too-large'
-      })
+      await this.withDbWrite('file-index.content.too-large', () =>
+        this.dbUtils!.getDb()
+          .insert(fileIndexProgress)
+          .values({
+            fileId: file.id!,
+            status: 'skipped',
+            progress: 100,
+            processedBytes: 0,
+            totalBytes: size,
+            lastError: 'file-too-large',
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: fileIndexProgress.fileId,
+            set: {
+              status: 'skipped',
+              progress: 100,
+              processedBytes: 0,
+              totalBytes: size,
+              lastError: 'file-too-large',
+              updatedAt: new Date(),
+            },
+          }),
+      )
       this.clearContentFailure(file.id)
       file.content = null
       return
@@ -3006,14 +3170,32 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    await this.dbUtils.setFileIndexProgress(file.id, {
-      status: 'processing',
-      progress: 5,
-      processedBytes: 0,
-      totalBytes: size ?? null,
-      startedAt: new Date(),
-      lastError: null
-    })
+    await this.withDbWrite('file-index.content.start', () =>
+      this.dbUtils!.getDb()
+        .insert(fileIndexProgress)
+        .values({
+          fileId: file.id!,
+          status: 'processing',
+          progress: 5,
+          processedBytes: 0,
+          totalBytes: size ?? null,
+          startedAt: new Date(),
+          lastError: null,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: fileIndexProgress.fileId,
+          set: {
+            status: 'processing',
+            progress: 5,
+            processedBytes: 0,
+            totalBytes: size ?? null,
+            startedAt: new Date(),
+            lastError: null,
+            updatedAt: new Date(),
+          },
+        }),
+    )
     this.clearContentFailure(file.id)
 
     const progressReporter = this.createProgressReporter(file.id, size)
@@ -3033,26 +3215,60 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logError('Parser threw while processing file', error, {
         path: file.path
       })
-      await this.dbUtils.setFileIndexProgress(file.id, {
-        status: 'failed',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: size ?? null,
-        lastError: error instanceof Error ? error.message : 'parser-error'
-      })
+      await this.withDbWrite('file-index.content.parser-error', () =>
+        this.dbUtils!.getDb()
+          .insert(fileIndexProgress)
+          .values({
+            fileId: file.id!,
+            status: 'failed',
+            progress: 100,
+            processedBytes: 0,
+            totalBytes: size ?? null,
+            lastError: error instanceof Error ? error.message : 'parser-error',
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: fileIndexProgress.fileId,
+            set: {
+              status: 'failed',
+              progress: 100,
+              processedBytes: 0,
+              totalBytes: size ?? null,
+              lastError: error instanceof Error ? error.message : 'parser-error',
+              updatedAt: new Date(),
+            },
+          }),
+      )
       this.recordContentFailure(file.id, error instanceof Error ? error.message : 'parser-error')
       file.content = null
       return
     }
 
     if (!result) {
-      await this.dbUtils.setFileIndexProgress(file.id, {
-        status: 'skipped',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: size ?? null,
-        lastError: 'parser-not-found'
-      })
+      await this.withDbWrite('file-index.content.parser-not-found', () =>
+        this.dbUtils!.getDb()
+          .insert(fileIndexProgress)
+          .values({
+            fileId: file.id!,
+            status: 'skipped',
+            progress: 100,
+            processedBytes: 0,
+            totalBytes: size ?? null,
+            lastError: 'parser-not-found',
+            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: fileIndexProgress.fileId,
+            set: {
+              status: 'skipped',
+              progress: 100,
+              processedBytes: 0,
+              totalBytes: size ?? null,
+              lastError: 'parser-not-found',
+              updatedAt: new Date(),
+            },
+          }),
+      )
       this.clearContentFailure(file.id)
       file.content = null
       return
@@ -3082,14 +3298,43 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           ? `${rawContent.slice(0, MAX_CONTENT_LENGTH)}\n...[truncated]`
           : rawContent
 
-      await db
-        .update(filesSchema)
-        .set({
-          content: trimmedContent,
-          embeddingStatus:
-            result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
-        })
-        .where(eq(filesSchema.id, fileId))
+      const embeddingStatus =
+        result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
+
+      await this.withDbWrite('file-index.content.success', () =>
+        db.transaction(async (tx) => {
+          await tx
+            .update(filesSchema)
+            .set({
+              content: trimmedContent,
+              embeddingStatus,
+            })
+            .where(eq(filesSchema.id, fileId))
+
+          await tx
+            .insert(fileIndexProgress)
+            .values({
+              fileId,
+              status: 'completed',
+              progress: 100,
+              processedBytes,
+              totalBytes,
+              lastError: null,
+              updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: fileIndexProgress.fileId,
+              set: {
+                status: 'completed',
+                progress: 100,
+                processedBytes,
+                totalBytes,
+                lastError: null,
+                updatedAt: new Date(),
+              },
+            })
+        }),
+      )
 
       file.content = trimmedContent
 
@@ -3101,14 +3346,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         })
       }
 
-      await this.dbUtils.setFileIndexProgress(fileId, {
-        status: 'completed',
-        progress: 100,
-        processedBytes,
-        totalBytes,
-        lastError: null,
-        updatedAt: new Date()
-      })
       this.clearContentFailure(fileId)
 
       this.logDebug('Content parsed for file', {
@@ -3128,19 +3365,43 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (result.status === 'skipped') {
-      await this.dbUtils.setFileIndexProgress(fileId, {
-        status: 'skipped',
-        ...progressPayload
-      })
+      await this.withDbWrite('file-index.content.skipped', () =>
+        db
+          .insert(fileIndexProgress)
+          .values({
+            fileId,
+            status: 'skipped',
+            ...progressPayload,
+          })
+          .onConflictDoUpdate({
+            target: fileIndexProgress.fileId,
+            set: {
+              status: 'skipped',
+              ...progressPayload,
+            },
+          }),
+      )
       this.clearContentFailure(fileId)
       file.content = null
       return
     }
 
-    await this.dbUtils.setFileIndexProgress(fileId, {
-      status: 'failed',
-      ...progressPayload
-    })
+    await this.withDbWrite('file-index.content.failed', () =>
+      db
+        .insert(fileIndexProgress)
+        .values({
+          fileId,
+          status: 'failed',
+          ...progressPayload,
+        })
+        .onConflictDoUpdate({
+          target: fileIndexProgress.fileId,
+          set: {
+            status: 'failed',
+            ...progressPayload,
+          },
+        }),
+    )
     this.recordContentFailure(fileId, result.reason ?? null)
     file.content = null
   }
@@ -3154,11 +3415,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const stats = await fs.stat(file.path)
       file.size = stats.size
       if (file.id && this.dbUtils) {
-        await this.dbUtils
-          .getDb()
-          .update(filesSchema)
-          .set({ size: stats.size })
-          .where(eq(filesSchema.id, file.id))
+        const db = this.dbUtils.getDb()
+        await this.withDbWrite('file-index.file-size.update', () =>
+          db
+            .update(filesSchema)
+            .set({ size: stats.size })
+            .where(eq(filesSchema.id, file.id!)),
+        )
       }
       return stats.size
     } catch (error) {

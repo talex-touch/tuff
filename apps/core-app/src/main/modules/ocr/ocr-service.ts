@@ -7,15 +7,17 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import type { IClipboardItem } from '../clipboard'
 
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import chalk from 'chalk'
 import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { genTouchChannel } from '../../core/channel-core'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import {
   clipboardHistory,
   clipboardHistoryMeta,
@@ -40,7 +42,7 @@ interface AgentJobPayload {
   clipboardId: number | null
   payloadHash: string | null
   source: {
-    type: 'data-url' | 'file'
+    type: 'data-url' | 'file' | 'clipboard'
     dataUrl?: string
     filePath?: string
   }
@@ -55,6 +57,13 @@ const PROCESS_INTERVAL_SECONDS = 5
 const MAX_ATTEMPTS = 3
 const WORKER_CONCURRENCY = 1
 
+const MAX_OCR_IMAGE_BYTES = 8 * 1024 * 1024
+const MAX_OCR_RESULT_RAW_CHARS = 2000
+const MAX_OCR_META_TEXT_CHARS = 8000
+const MAX_OCR_BLOCKS = 120
+const MAX_OCR_TEXT_CHARS = 200_000
+const MAX_EMBEDDING_INPUT_CHARS = 8000
+
 // 重试延迟配置(秒)
 const RETRY_DELAYS = {
   'No enabled providers available': 3600, // 1小时
@@ -68,6 +77,43 @@ function dataUrlToHash(dataUrl: string): string {
 
 function fileHashKey(filePath: string): string {
   return createHash('sha256').update(filePath).digest('hex')
+}
+
+function estimateDataUrlBytes(dataUrl: string): number {
+  const prefixIndex = dataUrl.indexOf(',')
+  if (prefixIndex === -1) {
+    return Buffer.byteLength(dataUrl)
+  }
+  const prefix = dataUrl.slice(0, prefixIndex)
+  const payload = dataUrl.slice(prefixIndex + 1)
+  if (prefix.includes(';base64')) {
+    const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
+    return Math.max(0, Math.floor((payload.length * 3) / 4) - padding)
+  }
+  return Buffer.byteLength(payload)
+}
+
+function safeJsonStringify(value: unknown, maxChars: number): string {
+  try {
+    const seen = new WeakSet<object>()
+    const raw = JSON.stringify(value, (_key, val) => {
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val)) {
+          return '[Circular]'
+        }
+        seen.add(val)
+      }
+      return val
+    })
+    if (typeof raw !== 'string') {
+      return ''
+    }
+    return raw.length > maxChars ? `${raw.slice(0, Math.max(0, maxChars - 3))}...` : raw
+  }
+  catch {
+    const fallback = String(value)
+    return fallback.length > maxChars ? `${fallback.slice(0, Math.max(0, maxChars - 3))}...` : fallback
+  }
 }
 
 class OcrService {
@@ -106,6 +152,10 @@ class OcrService {
     )
 
     this.initialized = true
+  }
+
+  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
   }
 
   private registerChannels(): void {
@@ -345,7 +395,18 @@ class OcrService {
     if (!this.db)
       return
 
-    const jobInput = await this.buildJobPayload(payload)
+    let jobInput: Awaited<ReturnType<typeof this.buildJobPayload>>
+    try {
+      jobInput = await this.buildJobPayload(payload)
+    }
+    catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      await this.updateClipboardMeta(payload.clipboardId, {
+        ocr_status: 'failed',
+        ocr_last_error: reason,
+      })
+      return
+    }
     if (!jobInput) {
       return
     }
@@ -369,20 +430,17 @@ class OcrService {
       }
     }
 
-    await withSqliteRetry(
-      () =>
-        this.db!.insert(ocrJobs).values({
-          clipboardId,
-          status: 'pending',
-          attempts: 0,
-          payloadHash: payloadHash ?? null,
-          meta: JSON.stringify({
-            source,
-            options,
-          }),
+    await this.withDbWrite('ocr.jobs.enqueue', () =>
+      this.db!.insert(ocrJobs).values({
+        clipboardId,
+        status: 'pending',
+        attempts: 0,
+        payloadHash: payloadHash ?? null,
+        meta: JSON.stringify({
+          source,
+          options,
         }),
-      { label: 'ocr.jobs.enqueue' },
-    )
+      }))
 
     const initialMeta: Record<string, unknown> = {
       ocr_status: 'pending',
@@ -430,11 +488,15 @@ class OcrService {
     if (item.type === 'image') {
       if (!item.content)
         return null
+
+      const estimatedBytes = estimateDataUrlBytes(item.content)
+      if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
+        throw new Error(`[OCR] Image payload too large: ${estimatedBytes} > ${MAX_OCR_IMAGE_BYTES}`)
+      }
       return {
         clipboardId,
         source: {
-          type: 'data-url',
-          dataUrl: item.content,
+          type: 'clipboard',
         },
         options: {
           language: 'eng',
@@ -451,11 +513,15 @@ class OcrService {
           return null
         }
 
+        const stats = await stat(imagePath)
+        if (stats.size > MAX_OCR_IMAGE_BYTES) {
+          throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
+        }
+
         return {
           clipboardId,
           source: {
-            type: 'file',
-            filePath: imagePath,
+            type: 'clipboard',
           },
           options: {
             language: 'eng',
@@ -463,7 +529,10 @@ class OcrService {
           payloadHash: fileHashKey(imagePath),
         }
       }
-      catch {
+      catch (error) {
+        if (error instanceof Error && error.message.startsWith('[OCR]')) {
+          throw error
+        }
         return null
       }
     }
@@ -499,12 +568,75 @@ class OcrService {
 
   private async normalizeSourceForAgent(
     source: AgentJobPayload['source'],
+    clipboardId: number | null,
   ): Promise<IntelligenceVisionOcrPayload['source']> {
     if (source.type === 'data-url' && source.dataUrl) {
+      const estimatedBytes = estimateDataUrlBytes(source.dataUrl)
+      if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
+        throw new Error(`[OCR] Image payload too large: ${estimatedBytes} > ${MAX_OCR_IMAGE_BYTES}`)
+      }
       return { type: 'data-url', dataUrl: source.dataUrl }
     }
 
+    if (source.type === 'clipboard') {
+      if (!clipboardId) {
+        throw new Error('[OCR] Missing clipboardId for clipboard source')
+      }
+      if (!this.db) {
+        throw new Error('[OCR] Database not initialized')
+      }
+
+      const rows = await this.db
+        .select({ type: clipboardHistory.type, content: clipboardHistory.content })
+        .from(clipboardHistory)
+        .where(eq(clipboardHistory.id, clipboardId))
+        .limit(1)
+
+      if (rows.length === 0) {
+        throw new Error('[OCR] Clipboard record not found')
+      }
+
+      const record = rows[0]
+      if (record.type === 'image') {
+        const estimatedBytes = estimateDataUrlBytes(record.content)
+        if (estimatedBytes > MAX_OCR_IMAGE_BYTES) {
+          throw new Error(`[OCR] Image payload too large: ${estimatedBytes} > ${MAX_OCR_IMAGE_BYTES}`)
+        }
+        return { type: 'data-url', dataUrl: record.content }
+      }
+
+      if (record.type === 'files') {
+        let files: string[]
+        try {
+          files = JSON.parse(record.content) as string[]
+        }
+        catch {
+          throw new Error('[OCR] Invalid clipboard file list payload')
+        }
+        const imagePath = files.find(file => this.isImageFile(file))
+        if (!imagePath || !existsSync(imagePath)) {
+          throw new Error('[OCR] No image file found for clipboard payload')
+        }
+        const stats = await stat(imagePath)
+        if (stats.size > MAX_OCR_IMAGE_BYTES) {
+          throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
+        }
+        const buffer = await readFile(imagePath)
+        const mime = this.detectMimeType(imagePath)
+        return {
+          type: 'data-url',
+          dataUrl: `data:${mime};base64,${buffer.toString('base64')}`,
+        }
+      }
+
+      throw new Error('[OCR] Clipboard payload type not supported for OCR')
+    }
+
     if (source.type === 'file' && source.filePath) {
+      const stats = await stat(source.filePath)
+      if (stats.size > MAX_OCR_IMAGE_BYTES) {
+        throw new Error(`[OCR] Image file too large: ${stats.size} > ${MAX_OCR_IMAGE_BYTES}`)
+      }
       const buffer = await readFile(source.filePath)
       const mime = this.detectMimeType(source.filePath)
       return {
@@ -592,18 +724,16 @@ class OcrService {
 
         const attemptCount = (job.attempts ?? 0) + 1
 
-        await withSqliteRetry(
-          () =>
-            this.db!
-              .update(ocrJobs)
-              .set({
-                status: 'processing',
-                attempts: attemptCount,
-                startedAt: new Date(),
-              })
-              .where(eq(ocrJobs.id, job.id)),
-          { label: 'ocr.jobs.start' },
-        )
+        await this.withDbWrite('ocr.jobs.start', () =>
+          this.db!
+            .update(ocrJobs)
+            .set({
+              status: 'processing',
+              attempts: attemptCount,
+              startedAt: new Date(),
+              lastError: null,
+            })
+            .where(eq(ocrJobs.id, job.id!)))
 
         job.attempts = attemptCount
 
@@ -653,7 +783,7 @@ class OcrService {
     ensureAiConfigLoaded()
 
     const capabilityOptions = getCapabilityOptions('vision.ocr')
-    const normalizedSource = await this.normalizeSourceForAgent(parsed.source)
+    const normalizedSource = await this.normalizeSourceForAgent(parsed.source, job.clipboardId ?? null)
     const payload: IntelligenceVisionOcrPayload = {
       source: normalizedSource,
       language: parsed.options?.language,
@@ -716,18 +846,11 @@ class OcrService {
     // 记录最后尝试时间到内存 Map
     this.lastAttemptMap.set(job.id, Date.now())
 
-    await withSqliteRetry(
-      () =>
-        this.db!
-          .update(ocrJobs)
-          .set({
-            status: 'pending',
-            lastError: reason,
-            startedAt: null,
-          })
-          .where(eq(ocrJobs.id, job.id)),
-      { label: 'ocr.jobs.defer' },
-    )
+    await this.withDbWrite('ocr.jobs.retry', () =>
+      this.db!
+        .update(ocrJobs)
+        .set({ status: 'pending', lastError: reason, finishedAt: null })
+        .where(eq(ocrJobs.id, job.id!)))
 
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
@@ -748,7 +871,7 @@ class OcrService {
           ? `${delayMinutes}分钟`
           : `${delaySeconds}秒`
 
-    console.debug(
+    console.warn(
       chalk.gray(
         `[OCR] Job ${job.id} deferred (attempt ${currentAttempts}/${MAX_ATTEMPTS}): ${reason} (下次重试: ${delayDisplay}后)`,
       ),
@@ -788,48 +911,80 @@ class OcrService {
 
     const { result } = invocation
     const jobId = job.id!
+
+    const textHash = createHash('sha256').update(result.text).digest('hex')
+    const originalTextLength = result.text.length
+    const trimmedTextForDb = result.text.length > MAX_OCR_TEXT_CHARS
+      ? `${result.text.slice(0, Math.max(0, MAX_OCR_TEXT_CHARS - 3))}...`
+      : result.text
+    const textTruncated = trimmedTextForDb.length !== result.text.length
+
     const keywords = this.normalizeKeywords(result.keywords, result.text)
-    const summary = this.buildSummary(result.text)
-    const embedding = await this.generateEmbedding(result.text)
+    const summary = this.buildSummary(trimmedTextForDb)
+    const embedding = await this.generateEmbedding(trimmedTextForDb)
+
+    const trimmedTextForMeta = result.text.length > MAX_OCR_META_TEXT_CHARS
+      ? `${result.text.slice(0, Math.max(0, MAX_OCR_META_TEXT_CHARS - 3))}...`
+      : result.text
+
+    const blocks = Array.isArray(result.blocks)
+      ? result.blocks
+          .slice(0, MAX_OCR_BLOCKS)
+          .map((block) => {
+            const raw = typeof block === 'object' && block ? (block as any) : null
+            const text = typeof raw?.text === 'string' ? raw.text : ''
+            return {
+              ...raw,
+              text: text.length > 160 ? `${text.slice(0, 157)}...` : text,
+              children: undefined,
+            }
+          })
+      : undefined
+
+    let rawSnippet: string | undefined
+    let rawHash: string | undefined
+    if (result.raw != null) {
+      rawSnippet = safeJsonStringify(result.raw, MAX_OCR_RESULT_RAW_CHARS)
+      rawHash = createHash('sha256').update(rawSnippet).digest('hex')
+    }
 
     const extra = {
       keywords,
-      blocks: result.blocks,
+      blocks,
       summary,
       suggestions: result.suggestions,
-      raw: result.raw,
+      textHash,
+      originalTextLength,
+      textTruncated,
+      rawHash,
+      rawSnippet,
       embedding,
       provider: invocation.provider,
       model: invocation.model,
       usage: invocation.usage,
     }
 
-    await withSqliteRetry(
-      () =>
-        this.db!.insert(ocrResults).values({
+    await this.withDbWrite('ocr.persist.success', async () =>
+      this.db!.transaction(async (tx) => {
+        await tx.insert(ocrResults).values({
           jobId,
-          text: result.text,
+          text: trimmedTextForDb,
           confidence: result.confidence ?? null,
           language: result.language ?? null,
           checksum: job.payloadHash ?? null,
           extra: JSON.stringify(extra),
-        }),
-      { label: 'ocr.results.insert' },
-    )
+        })
 
-    await withSqliteRetry(
-      () =>
-        this.db!
+        await tx
           .update(ocrJobs)
           .set({ status: 'completed', finishedAt: new Date(), lastError: null })
-          .where(eq(ocrJobs.id, jobId)),
-      { label: 'ocr.jobs.complete' },
-    )
+          .where(eq(ocrJobs.id, jobId))
+      }))
 
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
         ocr_status: 'done',
-        ocr_text: result.text,
+        ocr_text: trimmedTextForMeta,
         ocr_confidence: result.confidence ?? null,
         ocr_language: result.language ?? null,
         ocr_checksum: job.payloadHash,
@@ -891,6 +1046,10 @@ class OcrService {
       return null
     }
 
+    const trimmedText = text.length > MAX_EMBEDDING_INPUT_CHARS
+      ? text.slice(0, MAX_EMBEDDING_INPUT_CHARS)
+      : text
+
     const capabilityOptions = getCapabilityOptions('embedding.generate')
     if (!capabilityOptions.allowedProviderIds?.length) {
       return null
@@ -898,7 +1057,7 @@ class OcrService {
 
     try {
       const response = await ai.embedding.generate(
-        { text },
+        { text: trimmedText },
         {
           modelPreference: capabilityOptions.modelPreference,
           allowedProviderIds: capabilityOptions.allowedProviderIds,
@@ -925,18 +1084,15 @@ class OcrService {
     const attempts = job.attempts ?? 0
     const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'pending'
 
-    await withSqliteRetry(
-      () =>
-        this.db!
-          .update(ocrJobs)
-          .set({
-            status,
-            lastError: reason,
-            finishedAt: status === 'failed' ? new Date() : null,
-          })
-          .where(eq(ocrJobs.id, jobId)),
-      { label: 'ocr.jobs.fail' },
-    )
+    await this.withDbWrite('ocr.jobs.fail', () =>
+      this.db!
+        .update(ocrJobs)
+        .set({
+          status,
+          lastError: reason,
+          finishedAt: status === 'failed' ? new Date() : null,
+        })
+        .where(eq(ocrJobs.id, jobId)))
 
     if (job.clipboardId) {
       await this.updateClipboardMeta(job.clipboardId, {
@@ -987,40 +1143,36 @@ class OcrService {
       value: JSON.stringify(value ?? null),
     }))
 
-    if (insertValues.length > 0) {
-      await withSqliteRetry(
-        () => this.db!.insert(clipboardHistoryMeta).values(insertValues),
-        { label: 'ocr.clipboard.meta' },
-      )
-    }
-
-    const existing = await this.db
-      .select({ metadata: clipboardHistory.metadata })
-      .from(clipboardHistory)
-      .where(eq(clipboardHistory.id, clipboardId))
-      .limit(1)
-
-    if (existing.length > 0) {
-      let base: Record<string, unknown> = {}
-      if (existing[0].metadata) {
-        try {
-          base = JSON.parse(existing[0].metadata)
+    await this.withDbWrite('ocr.clipboard.meta', async () =>
+      this.db!.transaction(async (tx) => {
+        if (insertValues.length > 0) {
+          await tx.insert(clipboardHistoryMeta).values(insertValues)
         }
-        catch {
-          base = {}
-        }
-      }
 
-      const merged = { ...base, ...patch }
-      await withSqliteRetry(
-        () =>
-          this.db!
+        const existing = await tx
+          .select({ metadata: clipboardHistory.metadata })
+          .from(clipboardHistory)
+          .where(eq(clipboardHistory.id, clipboardId))
+          .limit(1)
+
+        if (existing.length > 0) {
+          let base: Record<string, unknown> = {}
+          if (existing[0].metadata) {
+            try {
+              base = JSON.parse(existing[0].metadata)
+            }
+            catch {
+              base = {}
+            }
+          }
+
+          const merged = { ...base, ...patch }
+          await tx
             .update(clipboardHistory)
             .set({ metadata: JSON.stringify(merged) })
-            .where(eq(clipboardHistory.id, clipboardId)),
-        { label: 'ocr.clipboard.merge' },
-      )
-    }
+            .where(eq(clipboardHistory.id, clipboardId))
+        }
+      }))
 
     this.broadcastMetaUpdate(clipboardId, patch)
     this.clipboardMetaListener?.(clipboardId, patch)
@@ -1047,22 +1199,18 @@ class OcrService {
     }
   }
 
-
   private async upsertConfig(key: string, value: unknown): Promise<void> {
     if (!this.db)
       return
     const serialized = JSON.stringify(value ?? null)
-    await withSqliteRetry(
-      () =>
-        this.db!
-          .insert(config)
-          .values({ key, value: serialized })
-          .onConflictDoUpdate({
-            target: config.key,
-            set: { value: serialized },
-          }),
-      { label: 'ocr.config' },
-    )
+    await this.withDbWrite('ocr.config', () =>
+      this.db!
+        .insert(config)
+        .values({ key, value: serialized })
+        .onConflictDoUpdate({
+          target: config.key,
+          set: { value: serialized },
+        }))
   }
 }
 

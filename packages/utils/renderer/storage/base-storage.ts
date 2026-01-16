@@ -266,14 +266,14 @@ export class TouchStorage<T extends object> {
     }
   }
 
-  private #getVersionedSync(): StorageGetVersionedResponse | null {
+  #getVersionedSync(): StorageGetVersionedResponse | null {
     if (!channel) {
       return null
     }
     return channel.sendSync('storage:get-versioned', this.#qualifiedName) as StorageGetVersionedResponse | null
   }
 
-  private #getSync(): Partial<T> | null {
+  #getSync(): Partial<T> | null {
     if (!channel) {
       return null
     }
@@ -281,7 +281,7 @@ export class TouchStorage<T extends object> {
     return result ? (result as Partial<T>) : null
   }
 
-  private async #getVersionedAsync(): Promise<StorageGetVersionedResponse | null> {
+  async #getVersionedAsync(): Promise<StorageGetVersionedResponse | null> {
     if (transport) {
       return await transport.send(StorageEvents.app.getVersioned, { key: this.#qualifiedName })
     }
@@ -291,7 +291,7 @@ export class TouchStorage<T extends object> {
     return null
   }
 
-  private async #getAsync(): Promise<Partial<T>> {
+  async #getAsync(): Promise<Partial<T>> {
     if (transport) {
       const data = await transport.send(StorageEvents.app.get, { key: this.#qualifiedName })
       return (data as Partial<T>) ?? {}
@@ -303,7 +303,7 @@ export class TouchStorage<T extends object> {
     return {}
   }
 
-  private async #saveRemote(request: StorageSaveRequest): Promise<SaveResult> {
+  async #saveRemote(request: StorageSaveRequest): Promise<SaveResult> {
     if (transport) {
       return await transport.send(StorageEvents.app.save, request)
     }
@@ -313,7 +313,7 @@ export class TouchStorage<T extends object> {
     return { success: false, version: 0 }
   }
 
-  private #registerUpdateListener(): void {
+  #registerUpdateListener(): void {
     if (transport) {
       transport.stream(StorageEvents.app.updated, undefined, {
         onData: (payload: StorageUpdateNotification) => {

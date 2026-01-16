@@ -77,6 +77,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxGlassSurface 玻璃拟态](./glass-surface.md)** - 玻璃拟态容器
 - **[TxGradualBlur 渐变模糊](./gradual-blur.md)** - 渐变模糊遮罩
 - **[TxGradientBorder 渐变边框](./gradient-border.md)** - 动态渐变边框
+- **[TxGlowText 扫光](./glow-text.md)** - 高光扫过动效（文字/图片/卡片）
 
 ## 快速开始
 

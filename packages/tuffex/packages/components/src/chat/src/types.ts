@@ -51,8 +51,18 @@ export interface ChatComposerEmits {
 }
 
 export interface TypingIndicatorProps {
+  variant?: 'dots' | 'ai' | 'pure' | 'ring' | 'circle-dash' | 'bars'
   text?: string
   showText?: boolean
   size?: number
   gap?: number
+  loaderSize?: number
+  pureSize?: number
+  ringSize?: number
+  ringThickness?: number
+  circleDashSize?: number
+  circleDashThickness?: number
+  circleDashDashDeg?: number
+  circleDashGapDeg?: number
+  barsSize?: number
 }

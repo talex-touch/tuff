@@ -156,6 +156,7 @@ export default defineConfig({
             { text: '玻璃拟态 GlassSurface', link: '/components/glass-surface' },
             { text: '渐变模糊 GradualBlur', link: '/components/gradual-blur' },
             { text: '渐变边框 GradientBorder', link: '/components/gradient-border' },
+            { text: '扫光 GlowText', link: '/components/glow-text' },
           ],
         },],
 

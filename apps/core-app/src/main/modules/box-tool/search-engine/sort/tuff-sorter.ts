@@ -158,15 +158,25 @@ export const tuffSorter: ISortMiddleware = {
   sort: (items: TuffItem[], query: TuffQuery) => {
     const searchKey = query.text?.trim().toLowerCase()
 
+    const isPinnedItem = (item: TuffItem): boolean => {
+      const meta = item.meta as any
+      return Boolean(meta?.pinned?.isPinned)
+    }
+
     // Use the Schwartzian transform (decorate-sort-undecorate) for performance.
     // Decorate: Calculate the sort score for each item once.
     const decoratedItems = items.map((item) => ({
       item,
-      score: calculateSortScore(item, searchKey)
+      score: calculateSortScore(item, searchKey),
+      pinned: isPinnedItem(item)
     }))
 
     // Sort: The comparison function is now a simple number comparison.
-    decoratedItems.sort((a, b) => b.score - a.score)
+    decoratedItems.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1
+      if (!a.pinned && b.pinned) return 1
+      return b.score - a.score
+    })
 
     // Undecorate: Extract the sorted items.
     return decoratedItems.map((decorated) => decorated.item)

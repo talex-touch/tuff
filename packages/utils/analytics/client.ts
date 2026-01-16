@@ -45,7 +45,9 @@ export function createPluginAnalyticsClient(options?: {
     }
   }
 
-  const withDefaultPlugin = <T extends { pluginName?: string, pluginVersion?: string }>(payload: T): T => ({
+  const withDefaultPlugin = <T extends Record<string, any>>(
+    payload: T,
+  ): T & { pluginName?: string, pluginVersion?: string } => ({
     ...payload,
     pluginName: payload.pluginName ?? pluginName,
     pluginVersion: payload.pluginVersion ?? pluginVersion,

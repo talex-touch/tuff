@@ -1,9 +1,13 @@
 import type { IntelligenceAuditLog, IntelligenceUsageInfo } from '@talex-touch/utils'
 import type { SQL } from 'drizzle-orm'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type * as schema from '../../db/schema'
 import crypto from 'node:crypto'
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../db/sqlite-retry'
 import { databaseModule } from '../database'
 
 /**
@@ -88,8 +92,12 @@ export class IntelligenceAuditLogger {
     this.startFlushInterval()
   }
 
-  private getDb() {
+  private getDb(): LibSQLDatabase<typeof schema> {
     return databaseModule.getDb()
+  }
+
+  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
   }
 
   /**
@@ -152,30 +160,32 @@ export class IntelligenceAuditLogger {
     try {
       const db = this.getDb()
 
-      // Insert audit logs
-      await db.insert(intelligenceAuditLogs).values(
-        logsToFlush.map(log => ({
-          traceId: log.traceId,
-          timestamp: log.timestamp,
-          capabilityId: log.capabilityId,
-          provider: log.provider,
-          model: log.model,
-          promptHash: log.promptHash,
-          caller: log.caller,
-          userId: log.userId,
-          promptTokens: log.usage.promptTokens,
-          completionTokens: log.usage.completionTokens,
-          totalTokens: log.usage.totalTokens,
-          estimatedCost: log.estimatedCost,
-          latency: log.latency,
-          success: log.success,
-          error: log.error,
-          metadata: log.metadata ? JSON.stringify(log.metadata) : null,
-        })),
-      )
+      await this.withDbWrite('intelligence.audit.flush', async () => {
+        await db.transaction(async (tx) => {
+          await tx.insert(intelligenceAuditLogs).values(
+            logsToFlush.map(log => ({
+              traceId: log.traceId,
+              timestamp: log.timestamp,
+              capabilityId: log.capabilityId,
+              provider: log.provider,
+              model: log.model,
+              promptHash: log.promptHash,
+              caller: log.caller,
+              userId: log.userId,
+              promptTokens: log.usage.promptTokens,
+              completionTokens: log.usage.completionTokens,
+              totalTokens: log.usage.totalTokens,
+              estimatedCost: log.estimatedCost,
+              latency: log.latency,
+              success: log.success,
+              error: log.error,
+              metadata: log.metadata ? JSON.stringify(log.metadata) : null,
+            })),
+          )
 
-      // Update usage stats
-      await this.updateUsageStats(logsToFlush)
+          await this.updateUsageStats(tx, logsToFlush)
+        })
+      })
     }
     catch (error) {
       console.error('[AuditLogger] Failed to flush logs:', error)
@@ -187,8 +197,10 @@ export class IntelligenceAuditLogger {
   /**
    * Update usage statistics based on audit logs
    */
-  private async updateUsageStats(logs: IntelligenceAuditLogEntry[]): Promise<void> {
-    const db = this.getDb()
+  private async updateUsageStats(
+    db: any,
+    logs: IntelligenceAuditLogEntry[],
+  ): Promise<void> {
 
     // Group logs by caller and period
     const stats = new Map<string, IntelligenceUsageSummary>()
@@ -261,7 +273,7 @@ export class IntelligenceAuditLogger {
             callerId: caller,
             callerType: callerTypeValue,
             period: fullPeriod,
-            periodType: periodType as 'minute' | 'day' | 'month',
+            periodType: periodType as any,
             requestCount: stat.requestCount,
             successCount: stat.successCount,
             failureCount: stat.failureCount,
@@ -270,6 +282,7 @@ export class IntelligenceAuditLogger {
             completionTokens: stat.completionTokens,
             totalCost: stat.totalCost,
             avgLatency: stat.avgLatency,
+            updatedAt: new Date(),
           })
         }
       }

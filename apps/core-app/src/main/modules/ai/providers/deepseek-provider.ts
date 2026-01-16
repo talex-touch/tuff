@@ -30,11 +30,17 @@ export class DeepSeekProvider extends IntelligenceProvider {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-chat'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions',
+    })
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-chat',
+        model,
         messages: payload.messages,
         temperature: payload.temperature,
         max_tokens: payload.maxTokens,
@@ -80,11 +86,17 @@ export class DeepSeekProvider extends IntelligenceProvider {
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-chat'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions (stream)',
+    })
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-chat',
+        model,
         messages: payload.messages,
         temperature: payload.temperature,
         max_tokens: payload.maxTokens,

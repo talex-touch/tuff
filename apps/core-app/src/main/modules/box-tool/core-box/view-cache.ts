@@ -12,6 +12,8 @@ interface CachedView {
   url: string
   lastUsedAt: number
   usageCount: number
+  webContentsId: number
+  dispose: (() => void) | null
 }
 
 interface ViewCacheConfig {
@@ -61,11 +63,61 @@ export class ViewCacheManager {
     return webContents as Electron.WebContents
   }
 
-  private isViewAlive(view: WebContentsView | null | undefined): boolean {
-    const webContents = this.getWebContents(view)
+  private isCachedAlive(cached: CachedView | null | undefined): boolean {
+    if (!cached)
+      return false
+
+    const webContents = this.getWebContents(cached.view)
     if (!webContents)
       return false
+
+    if (webContents.id !== cached.webContentsId)
+      return false
+
     return !webContents.isDestroyed()
+  }
+
+  private attachLifecycle(key: string, webContents: Electron.WebContents): () => void {
+    const onDestroyed = () => {
+      this.removeEntry(key, { close: false })
+    }
+
+    const onRenderGone = () => {
+      this.removeEntry(key, { close: false })
+    }
+
+    webContents.once('destroyed', onDestroyed)
+    ;(webContents as any).once?.('render-process-gone', onRenderGone)
+
+    return () => {
+      webContents.removeListener('destroyed', onDestroyed)
+      ;(webContents as any).removeListener?.('render-process-gone', onRenderGone)
+    }
+  }
+
+  private removeEntry(key: string, options: { close: boolean } = { close: true }): void {
+    const cached = this.cache.get(key)
+    if (!cached)
+      return
+
+    try {
+      cached.dispose?.()
+    }
+    finally {
+      cached.dispose = null
+    }
+
+    const webContents = this.getWebContents(cached.view)
+    if (options.close && webContents && !webContents.isDestroyed()) {
+      try {
+        webContents.close()
+      }
+      catch {
+        log.warn(`Failed to close view: ${key}`)
+      }
+    }
+
+    this.cache.delete(key)
   }
 
   public get(plugin: TouchPlugin, feature?: IPluginFeature): CachedView | null {
@@ -74,8 +126,8 @@ export class ViewCacheManager {
 
     if (!cached) return null
 
-    if (!this.isViewAlive(cached.view)) {
-      this.cache.delete(key)
+    if (!this.isCachedAlive(cached)) {
+      this.removeEntry(key, { close: false })
       return null
     }
 
@@ -93,9 +145,19 @@ export class ViewCacheManager {
   ): void {
     const key = this.getCacheKey(plugin, feature)
 
+    const webContents = this.getWebContents(view)
+    if (!webContents) {
+      log.warn(`Skip caching view without valid webContents: ${key}`)
+      return
+    }
+
+    this.removeEntry(key, { close: true })
+
     if (this.cache.size >= this.config.maxCachedViews) {
       this.evictLRU()
     }
+
+    const dispose = this.attachLifecycle(key, webContents)
 
     this.cache.set(key, {
       view,
@@ -103,7 +165,9 @@ export class ViewCacheManager {
       feature,
       url,
       lastUsedAt: Date.now(),
-      usageCount: 1
+      usageCount: 1,
+      webContentsId: webContents.id,
+      dispose,
     })
 
     log.debug(`Cached view: ${key} (total: ${this.cache.size})`)
@@ -111,20 +175,8 @@ export class ViewCacheManager {
 
   public release(plugin: TouchPlugin, feature?: IPluginFeature): void {
     const key = this.getCacheKey(plugin, feature)
-    const cached = this.cache.get(key)
-
-    if (cached) {
-      const webContents = this.getWebContents(cached.view)
-      if (webContents && !webContents.isDestroyed()) {
-        try {
-          webContents.close()
-        } catch (e) {
-          log.warn(`Failed to close view: ${key}`)
-        }
-      }
-      this.cache.delete(key)
-      log.debug(`Released view: ${key}`)
-    }
+    this.removeEntry(key, { close: true })
+    log.debug(`Released view: ${key}`)
   }
 
   public releasePlugin(pluginName: string): void {
@@ -133,35 +185,16 @@ export class ViewCacheManager {
     if (keys.length === 0) return
 
     for (const key of keys) {
-      const cached = this.cache.get(key)
-      if (!cached) continue
-
-      const webContents = this.getWebContents(cached.view)
-      if (webContents && !webContents.isDestroyed()) {
-        try {
-          webContents.close()
-        } catch (e) {
-          log.warn(`Failed to close view during releasePlugin: ${key}`)
-        }
-      }
-
-      this.cache.delete(key)
+      this.removeEntry(key, { close: true })
       log.debug(`Released view during releasePlugin: ${key}`)
     }
   }
 
   public clear(): void {
-    for (const [key, cached] of this.cache) {
-      const webContents = this.getWebContents(cached.view)
-      if (webContents && !webContents.isDestroyed()) {
-        try {
-          webContents.close()
-        } catch (e) {
-          log.warn(`Failed to close view during clear: ${key}`)
-        }
-      }
+    const keys = Array.from(this.cache.keys())
+    for (const key of keys) {
+      this.removeEntry(key, { close: true })
     }
-    this.cache.clear()
     log.debug('Cache cleared')
   }
 
@@ -181,8 +214,8 @@ export class ViewCacheManager {
       if (cached.plugin.name !== pluginName)
         continue
 
-      if (!this.isViewAlive(cached.view)) {
-        this.cache.delete(key)
+      if (!this.isCachedAlive(cached)) {
+        this.removeEntry(key, { close: false })
         continue
       }
 
@@ -202,16 +235,8 @@ export class ViewCacheManager {
     }
 
     if (oldest) {
-      const [key, cached] = oldest
-      const webContents = this.getWebContents(cached.view)
-      if (webContents && !webContents.isDestroyed()) {
-        try {
-          webContents.close()
-        } catch (e) {
-          log.warn(`Failed to close evicted view: ${key}`)
-        }
-      }
-      this.cache.delete(key)
+      const [key] = oldest
+      this.removeEntry(key, { close: true })
       log.debug(`Evicted LRU view: ${key}`)
     }
   }
@@ -222,15 +247,7 @@ export class ViewCacheManager {
 
     for (const [key, cached] of this.cache) {
       if (now - cached.lastUsedAt > staleThreshold) {
-        const webContents = this.getWebContents(cached.view)
-        if (webContents && !webContents.isDestroyed()) {
-          try {
-            webContents.close()
-          } catch (e) {
-            log.warn(`Failed to close stale view: ${key}`)
-          }
-        }
-        this.cache.delete(key)
+        this.removeEntry(key, { close: true })
         log.debug(`Cleaned stale view: ${key}`)
       }
     }

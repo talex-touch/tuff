@@ -44,7 +44,8 @@ export class StorageLRUManager {
    * Start periodic cleanup
    */
   startCleanup(): void {
-    if (this.cleanupTimer) {
+    const pollingService = PollingService.getInstance()
+    if (pollingService.isRegistered(this.cleanupTaskId)) {
       return
     }
 
@@ -52,7 +53,6 @@ export class StorageLRUManager {
       chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`),
     )
 
-    const pollingService = PollingService.getInstance()
     pollingService.register(
       this.cleanupTaskId,
       () => this.performCleanup(),

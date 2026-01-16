@@ -2,6 +2,31 @@ import { Worker } from 'node:worker_threads'
 import path from 'node:path'
 import { fileProviderLog } from '../../../../../utils/logger'
 import type { WorkerMetricsPayload, WorkerMetricsResponse, WorkerStatusSnapshot, WorkerTaskSnapshot } from './worker-status'
+import type { SearchIndexItem } from '../../../search-engine/search-index-service'
+
+export type IndexWorkerProgressUpdate = {
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped'
+  progress: number
+  processedBytes: number | null
+  totalBytes: number | null
+  lastError: string | null
+  startedAt?: string
+  updatedAt?: string
+}
+
+export type IndexWorkerFileUpdate = {
+  content: string | null
+  embeddingStatus: 'pending' | 'completed'
+}
+
+export type IndexWorkerFileResult = {
+  type: 'file'
+  taskId: string
+  fileId: number
+  progress: IndexWorkerProgressUpdate
+  fileUpdate: IndexWorkerFileUpdate | null
+  indexItem: SearchIndexItem
+}
 
 export type IndexWorkerFile = {
   id: number
@@ -28,9 +53,11 @@ type PendingMetrics = {
 type WorkerMessage =
   | { type: 'done'; taskId: string; processed: number; failed: number }
   | { type: 'error'; taskId: string; error: string }
+  | IndexWorkerFileResult
   | WorkerMetricsResponse
 
 export class FileIndexWorkerClient {
+  private readonly onFile?: (payload: IndexWorkerFileResult) => void
   private worker: Worker | null = null
   private pending = new Map<string, PendingIndex>()
   private metricsPending = new Map<string, PendingMetrics>()
@@ -38,6 +65,10 @@ export class FileIndexWorkerClient {
   private lastTask: WorkerTaskSnapshot | null = null
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null = null
+
+  constructor(onFile?: (payload: IndexWorkerFileResult) => void) {
+    this.onFile = onFile
+  }
 
   async indexFiles(
     dbPath: string,
@@ -115,6 +146,11 @@ export class FileIndexWorkerClient {
       clearTimeout(pending.timeout)
       pending.resolve(message.metrics)
       this.metricsPending.delete(message.requestId)
+      return
+    }
+
+    if (message.type === 'file') {
+      this.onFile?.(message)
       return
     }
 
