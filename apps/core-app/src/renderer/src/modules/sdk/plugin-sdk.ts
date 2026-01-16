@@ -451,6 +451,37 @@ class PluginSDK {
     }
   }
 
+  /**
+   * Get plugin runtime stats (workers/memory/uptime)
+   * @param name - Plugin name
+   */
+  async getRuntimeStats(name: string): Promise<{
+    startedAt: number
+    uptimeMs: number
+    requestCount: number
+    lastActiveAt: number
+    workers: {
+      threadCount: number
+      uiProcessCount: number
+      windowCount: number
+      cachedViewCount: number
+      divisionBoxViewCount: number
+    }
+    usage: {
+      memoryBytes: number
+      cpuPercent: number
+    }
+  } | null> {
+    try {
+      const response = await touchChannel.send('plugin:api:get-runtime-stats', { name })
+      return response
+    }
+    catch (error) {
+      console.error('[PluginSDK] Failed to get plugin runtime stats:', error)
+      return null
+    }
+  }
+
   // ============================================
   // Subscription APIs
   // ============================================

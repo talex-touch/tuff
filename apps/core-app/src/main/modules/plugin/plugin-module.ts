@@ -39,9 +39,11 @@ import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
 import { PluginInstaller } from './plugin-installer'
 import { createPluginLoader } from './plugin-loaders'
+import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 
 import { LocalPluginProvider } from './providers/local-provider'
 import { getPermissionModule } from '../permission'
+import { viewCacheManager } from '../box-tool/core-box/view-cache'
 
 const pluginLog = createLogger('PluginModule')
 const devWatcherLog = pluginLog.child('DevWatcher')
@@ -2514,6 +2516,133 @@ export class PluginModule extends BaseModule {
       }
       catch (error) {
         console.error('Error in plugin:api:get-performance handler:', error)
+        return reply(DataCode.ERROR, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
+
+    /**
+     * Get plugin runtime stats (workers/memory/uptime)
+     */
+    touchChannel.regChannel(ChannelType.MAIN, 'plugin:api:get-runtime-stats', async ({ data, reply }) => {
+      try {
+        const { name } = data
+        if (!name) {
+          return reply(DataCode.ERROR, { error: 'Plugin name is required' })
+        }
+
+        const plugin = manager.plugins.get(name) as TouchPlugin
+        if (!plugin) {
+          return reply(DataCode.ERROR, { error: `Plugin ${name} not found` })
+        }
+
+        const now = Date.now()
+        const startedAt = plugin._runtimeStats?.startedAt ?? 0
+        const lastActiveAt = plugin._runtimeStats?.lastActiveAt ?? plugin._performanceMetrics?.lastActiveTime ?? 0
+
+        const cachedViews = viewCacheManager.getCachedViewsByPlugin(name)
+        const webContentsList: Electron.WebContents[] = []
+
+        const getViewWebContents = (view: unknown): Electron.WebContents | null => {
+          const webContents = (view as any)?.webContents
+          if (!webContents)
+            return null
+          if (typeof webContents.isDestroyed !== 'function')
+            return null
+          return webContents as Electron.WebContents
+        }
+
+        for (const win of plugin._windows.values()) {
+          if (!win.window.isDestroyed()) {
+            webContentsList.push(win.window.webContents)
+          }
+        }
+
+        for (const view of cachedViews) {
+          const webContents = getViewWebContents(view)
+          if (!webContents || webContents.isDestroyed())
+            continue
+          webContentsList.push(webContents)
+        }
+
+        let divisionBoxViewCount = 0
+        try {
+          const { DivisionBoxManager } = await import('../division-box/manager')
+          const divisionBoxManager = DivisionBoxManager.getInstance()
+          const sessions = divisionBoxManager.getActiveSessions()
+          for (const session of sessions) {
+            const attached = session.getAttachedPlugin()
+            if (attached?.name !== name)
+              continue
+            const view = session.getUIView()
+            const webContents = getViewWebContents(view)
+            if (!webContents || webContents.isDestroyed())
+              continue
+            divisionBoxViewCount += 1
+            webContentsList.push(webContents)
+          }
+        }
+        catch {
+          // ignore: DivisionBox is optional for plugins
+        }
+
+        const webContentsMap = new Map<number, Electron.WebContents>()
+        for (const webContents of webContentsList) {
+          if (webContents.isDestroyed())
+            continue
+          webContentsMap.set(webContents.id, webContents)
+        }
+
+        const webContents = Array.from(webContentsMap.values())
+
+        const appMetrics = app.getAppMetrics()
+        const metricByPid = new Map<number, Electron.ProcessMetric>()
+        appMetrics.forEach((metric) => {
+          metricByPid.set(metric.pid, metric as Electron.ProcessMetric)
+        })
+
+        let memoryBytes = 0
+        let cpuPercent = 0
+        for (const wc of webContents) {
+          const pid = typeof (wc as any).getOSProcessId === 'function' ? (wc as any).getOSProcessId() : 0
+          if (!pid)
+            continue
+          const metric = metricByPid.get(pid)
+          if (!metric)
+            continue
+
+          const workingSetSizeKb = (metric as any).memory?.workingSetSize
+          if (typeof workingSetSizeKb === 'number') {
+            memoryBytes += workingSetSizeKb * 1024
+          }
+
+          const percentCpu = (metric as any).cpu?.percentCPUUsage
+          if (typeof percentCpu === 'number') {
+            cpuPercent += percentCpu
+          }
+        }
+
+        return reply(DataCode.SUCCESS, {
+          startedAt,
+          uptimeMs: startedAt > 0 ? now - startedAt : 0,
+          requestCount: plugin._runtimeStats?.requestCount ?? 0,
+          lastActiveAt,
+          workers: {
+            threadCount: pluginRuntimeTracker.getWorkerCount(name),
+            uiProcessCount: webContents.length,
+            windowCount: plugin._windows.size,
+            cachedViewCount: cachedViews.length,
+            divisionBoxViewCount,
+          },
+          usage: {
+            memoryBytes,
+            cpuPercent,
+          },
+        })
+      }
+      catch (error) {
+        console.error('Error in plugin:api:get-runtime-stats handler:', error)
         return reply(DataCode.ERROR, {
           error: error instanceof Error ? error.message : 'Unknown error',
         })

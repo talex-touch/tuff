@@ -4,7 +4,7 @@ import type { VNode } from 'vue'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { ElMessageBox, ElPopover } from 'element-plus'
-import { computed, onBeforeUnmount, ref, useSlots, watchEffect } from 'vue'
+import { computed, ref, useSlots, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
@@ -28,7 +28,6 @@ const props = defineProps<{
 
 // SDK and state
 const touchSdk = useTouchSDK()
-const pluginLogsRef = ref<InstanceType<typeof PluginLogs> | null>(null)
 const { t } = useI18n()
 
 // Tabs state
@@ -47,12 +46,6 @@ const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type
 
 const isAppDev = computed(() => window.$startupInfo?.isDev === true)
 
-const COMPACT_SCROLL_ENTER = 32
-const COMPACT_SCROLL_LEAVE = 12
-const isCompactHeader = ref(false)
-let scrollRafId: number | null = null
-const lastInnerScrollAt = ref(0)
-
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
 const tabItems = computed(() => {
@@ -70,30 +63,6 @@ watchEffect(() => {
       tabsModel.value = { [issuesTabIndex + 1]: 'Issues' }
     }
   }
-})
-
-function handleTabsScroll(
-  info: { scrollTop: number; scrollLeft: number },
-  source: 'tabs' | 'inner' = 'tabs',
-) {
-  if (scrollRafId != null) cancelAnimationFrame(scrollRafId)
-  scrollRafId = requestAnimationFrame(() => {
-    const now = performance.now()
-    if (source === 'inner') lastInnerScrollAt.value = now
-    if (source === 'tabs' && now - lastInnerScrollAt.value < 120) return
-
-    const scrollTop = Math.max(0, info.scrollTop)
-    if (!isCompactHeader.value) {
-      if (scrollTop > COMPACT_SCROLL_ENTER) isCompactHeader.value = true
-      return
-    }
-
-    if (scrollTop < COMPACT_SCROLL_LEAVE) isCompactHeader.value = false
-  })
-}
-
-onBeforeUnmount(() => {
-  if (scrollRafId != null) cancelAnimationFrame(scrollRafId)
 })
 
 // Status mapping
@@ -183,59 +152,47 @@ async function handleUninstallPlugin(): Promise<void> {
 <template>
   <div
     class="plugin-info-root h-full flex flex-col relative"
-    :class="{ 'has-error-glow': hasErrors, 'is-compact': isCompactHeader }"
+    :class="{ 'has-error-glow': hasErrors }"
   >
-    <div class="PluginInfo-Header flex items-center justify-between p-4">
-      <div class="flex items-center gap-3">
+    <div class="PluginInfo-Header flex items-center justify-between px-4 py-2">
+      <div class="flex items-center gap-2 min-w-0">
         <div class="relative">
           <TuffIcon
             colorful
             :empty="DefaultIcon"
             :alt="plugin.name"
             :icon="plugin.icon"
-            :size="isCompactHeader ? 28 : 48"
+            :size="32"
           />
           <div
-            class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-gray-800"
+            class="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-gray-800"
             :class="statusClass.indicator"
           />
         </div>
 
         <div class="min-w-0 flex-1">
-          <h1 class="PluginInfo-Name text-lg font-semibold text-gray-900 dark:text-white truncate">
-            {{ plugin.name }}
-          </h1>
-          <p
-            v-show="!isCompactHeader"
-            class="PluginInfo-Desc text-sm text-gray-600 dark:text-gray-400 truncate max-w-full"
-          >
-            {{ plugin.desc }}
-          </p>
-          <div v-show="!isCompactHeader" class="PluginInfo-Badges flex gap-2 mt-1">
+          <div class="PluginInfo-TitleRow flex items-center gap-2 min-w-0">
+            <h1
+              class="PluginInfo-Name text-base font-semibold text-gray-900 dark:text-white truncate"
+            >
+              {{ plugin.name }}
+            </h1>
+            <span class="PluginInfo-Version text-xs text-gray-600 dark:text-gray-400 flex-shrink-0">
+              v{{ plugin.version }}
+            </span>
             <span
               v-if="plugin.dev?.enable"
-              class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded"
+              class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded flex-shrink-0"
             >
               <i class="i-ri-code-line" />
               {{ t('plugin.badges.dev') }}
-            </span>
-            <span
-              class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded"
-            >
-              <i class="i-ri-price-tag-3-line" />
-              {{ t('plugin.badges.version', { version: plugin.version }) }}
             </span>
           </div>
         </div>
       </div>
 
       <div class="flex items-center gap-2">
-        <PluginStatus
-          v-if="isCompactHeader"
-          class="PluginInfo-CompactStatus"
-          :plugin="plugin"
-          :shrink="true"
-        />
+        <PluginStatus class="PluginInfo-CompactStatus" :plugin="plugin" :shrink="true" />
         <ElPopover
           placement="bottom-end"
           :width="200"
@@ -244,9 +201,9 @@ async function handleUninstallPlugin(): Promise<void> {
         >
           <template #reference>
             <button
-              class="flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+              class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
             >
-              <i class="i-ri-more-2-line text-xl text-gray-600 dark:text-gray-400" />
+              <i class="i-ri-more-2-line text-lg text-gray-600 dark:text-gray-400" />
             </button>
           </template>
           <div class="plugin-actions-menu">
@@ -302,16 +259,9 @@ async function handleUninstallPlugin(): Promise<void> {
       </div>
     </div>
 
-    <!-- Status Section -->
-    <PluginStatus v-show="!isCompactHeader" :plugin="plugin" :shrink="false" />
-
     <!-- Tabs Section -->
     <div class="flex-1 overflow-hidden">
-      <TvTabs
-        v-model="tabsModel"
-        :show-indicator="false"
-        @scroll="(info) => handleTabsScroll(info, 'tabs')"
-      >
+      <TvTabs v-model="tabsModel" :show-indicator="false">
         <TvTabItem icon="dashboard-line" name="Overview" :label="t('plugin.tabs.overview')">
           <PluginOverview :plugin="plugin" />
         </TvTabItem>
@@ -322,7 +272,7 @@ async function handleUninstallPlugin(): Promise<void> {
               :class="{ 'text-red-500': hasErrors, 'text-yellow-500': !hasErrors }"
             />
           </template>
-          <PluginIssues :plugin="plugin" @scroll="(info) => handleTabsScroll(info, 'inner')" />
+          <PluginIssues :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
@@ -335,7 +285,7 @@ async function handleUninstallPlugin(): Promise<void> {
           <PluginPermissions :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
-          <PluginStorage :plugin="plugin" @scroll="(info) => handleTabsScroll(info, 'inner')" />
+          <PluginStorage :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
           <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
@@ -349,25 +299,11 @@ async function handleUninstallPlugin(): Promise<void> {
 </template>
 
 <style lang="scss" scoped>
-.PluginInfo-Header {
-  transition: padding 0.2s ease;
-}
-
 .PluginInfo-CompactStatus {
   :deep(.PluginStatus-Container) {
     border-bottom: 0;
     padding: 0;
     opacity: 1;
-  }
-}
-
-.plugin-info-root.is-compact {
-  .PluginInfo-Header {
-    padding: 0.375rem 0.75rem;
-  }
-
-  .PluginInfo-Name {
-    font-size: 0.95rem;
   }
 }
 

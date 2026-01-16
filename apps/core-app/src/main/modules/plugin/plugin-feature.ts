@@ -12,6 +12,7 @@ import vm from 'node:vm'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
+import { createPluginRequire } from './runtime/plugin-require'
 
 /**
  * Create TuffItemBuilder with plugin context
@@ -42,7 +43,7 @@ export function loadPluginFeatureContextFromContent(
   const sandbox = {
     exports: {},
     module: { exports: {} },
-    require,
+    require: createPluginRequire(plugin.name),
     __dirname: plugin.pluginPath,
     __filename: 'index.js',
     ...context,

@@ -137,6 +137,12 @@ export class TouchPlugin implements ITouchPlugin {
     lastActiveTime: 0,
   }
 
+  _runtimeStats = {
+    startedAt: 0,
+    requestCount: 0,
+    lastActiveAt: 0,
+  }
+
   /**
    * Serialize plugin to JSON object
    * @returns Plain object representation of the plugin
@@ -251,6 +257,10 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   async triggerFeature(feature: IPluginFeature, query: any): Promise<boolean | void> {
+    this._runtimeStats.requestCount += 1
+    this._runtimeStats.lastActiveAt = Date.now()
+    this.markActive()
+
     if (this.featureControllers.has(feature.id)) {
       this.featureControllers.get(feature.id)?.abort()
     }
@@ -303,6 +313,10 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   triggerInputChanged(feature: IPluginFeature, query: any): void {
+    this._runtimeStats.requestCount += 1
+    this._runtimeStats.lastActiveAt = Date.now()
+    this.markActive()
+
     // Pass query (can be string for backward compatibility or TuffQuery object)
     this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
 
@@ -546,6 +560,11 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.ENABLED
     this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
 
+    const now = Date.now()
+    this._runtimeStats.startedAt = now
+    this._runtimeStats.requestCount = 0
+    this._runtimeStats.lastActiveAt = now
+
     this.pluginLifecycle?.onInit?.()
     genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:enabled', this.toJSONObject())
 
@@ -611,6 +630,8 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     genTouchChannel().revokeKey(this._uniqueChannelKey)
+
+    this._runtimeStats.startedAt = 0
 
     this.status = PluginStatus.DISABLED
     this.logger.debug('Plugin disable lifecycle completed.')

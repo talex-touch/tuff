@@ -5,6 +5,7 @@ import { useTouchSDK } from '@talex-touch/utils/renderer'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import PluginPerfCharts from '~/components/plugin/runtime/PluginPerfCharts.vue'
 import LogTerminal from '~/components/terminal/LogTerminal.vue'
 import { formatLogForTerminal } from '~/utils/log-formatter'
 
@@ -520,6 +521,8 @@ defineExpose({
         </button>
       </div>
     </header>
+
+    <PluginPerfCharts :plugin-name="plugin.name" />
 
     <section class="plugin-logs-terminal">
       <header class="terminal-header">
