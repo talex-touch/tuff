@@ -1,12 +1,24 @@
 <script name="TouchMenu" lang="ts" setup>
 import { sleep } from '@talex-touch/utils/common'
-import { nextTick, onMounted, provide, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 const pointer = ref<HTMLElement | null>(null)
+const router = useRouter()
+let removeGuard: (() => void) | undefined
 
 provide<(el: HTMLElement) => void>('changePointer', (el: HTMLElement) => {
   nextTick(() => fixPointer(el))
 })
+
+function hidePointer(): void {
+  const pointerEl = pointer.value
+  if (!pointerEl)
+    return
+
+  pointerEl.style.transition = 'opacity .25s'
+  pointerEl.style.opacity = '0'
+}
 
 async function fixPointer(targetEl: HTMLElement): Promise<void> {
   const pointerEl = pointer.value
@@ -65,11 +77,12 @@ async function fixPointer(targetEl: HTMLElement): Promise<void> {
 }
 
 onMounted(() => {
-  // 立即尝试设置indicator
   const setIndicator = () => {
     const dom = document.querySelector('.TouchMenuItem-Container.active')
     if (dom) {
       fixPointer(dom as HTMLElement)
+    } else {
+      hidePointer()
     }
   }
 
@@ -81,6 +94,15 @@ onMounted(() => {
 
   // 再次延迟执行，确保路由完全加载
   setTimeout(setIndicator, 500)
+
+  removeGuard = router.afterEach(async () => {
+    await nextTick()
+    setIndicator()
+  })
+})
+
+onBeforeUnmount(() => {
+  removeGuard?.()
 })
 </script>
 

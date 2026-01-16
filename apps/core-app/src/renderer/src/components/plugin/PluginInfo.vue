@@ -47,9 +47,11 @@ const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type
 
 const isAppDev = computed(() => window.$startupInfo?.isDev === true)
 
-const COMPACT_SCROLL_TOP = 24
+const COMPACT_SCROLL_ENTER = 32
+const COMPACT_SCROLL_LEAVE = 12
 const isCompactHeader = ref(false)
 let scrollRafId: number | null = null
+const lastInnerScrollAt = ref(0)
 
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
@@ -70,10 +72,23 @@ watchEffect(() => {
   }
 })
 
-function handleTabsScroll(info: { scrollTop: number; scrollLeft: number }) {
+function handleTabsScroll(
+  info: { scrollTop: number; scrollLeft: number },
+  source: 'tabs' | 'inner' = 'tabs',
+) {
   if (scrollRafId != null) cancelAnimationFrame(scrollRafId)
   scrollRafId = requestAnimationFrame(() => {
-    isCompactHeader.value = info.scrollTop > COMPACT_SCROLL_TOP
+    const now = performance.now()
+    if (source === 'inner') lastInnerScrollAt.value = now
+    if (source === 'tabs' && now - lastInnerScrollAt.value < 120) return
+
+    const scrollTop = Math.max(0, info.scrollTop)
+    if (!isCompactHeader.value) {
+      if (scrollTop > COMPACT_SCROLL_ENTER) isCompactHeader.value = true
+      return
+    }
+
+    if (scrollTop < COMPACT_SCROLL_LEAVE) isCompactHeader.value = false
   })
 }
 
@@ -292,7 +307,11 @@ async function handleUninstallPlugin(): Promise<void> {
 
     <!-- Tabs Section -->
     <div class="flex-1 overflow-hidden">
-      <TvTabs v-model="tabsModel" @scroll="handleTabsScroll">
+      <TvTabs
+        v-model="tabsModel"
+        :show-indicator="false"
+        @scroll="(info) => handleTabsScroll(info, 'tabs')"
+      >
         <TvTabItem icon="dashboard-line" name="Overview" :label="t('plugin.tabs.overview')">
           <PluginOverview :plugin="plugin" />
         </TvTabItem>
@@ -303,7 +322,7 @@ async function handleUninstallPlugin(): Promise<void> {
               :class="{ 'text-red-500': hasErrors, 'text-yellow-500': !hasErrors }"
             />
           </template>
-          <PluginIssues :plugin="plugin" @scroll="handleTabsScroll" />
+          <PluginIssues :plugin="plugin" @scroll="(info) => handleTabsScroll(info, 'inner')" />
         </TvTabItem>
         <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
           <PluginFeatures :plugin="plugin" />
@@ -316,7 +335,7 @@ async function handleUninstallPlugin(): Promise<void> {
           <PluginPermissions :plugin="plugin" />
         </TvTabItem>
         <TvTabItem icon="database-2-line" name="Storage" :label="t('plugin.tabs.storage')">
-          <PluginStorage :plugin="plugin" @scroll="handleTabsScroll" />
+          <PluginStorage :plugin="plugin" @scroll="(info) => handleTabsScroll(info, 'inner')" />
         </TvTabItem>
         <TvTabItem icon="file-text-line" name="Logs" :label="t('plugin.tabs.logs')">
           <PluginLogs ref="pluginLogsRef" :plugin="plugin" />
