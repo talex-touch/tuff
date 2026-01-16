@@ -325,7 +325,7 @@ export default defineComponent({
               h('div', { class: 'TvTabs-BlurTop' }, [
                 h(TxGradualBlur as any, {
                   position: 'top',
-                  height: '24px',
+                  height: '32px',
                   strength: 1.4,
                   opacity: 0.9,
                   zIndex: 1,
@@ -334,7 +334,7 @@ export default defineComponent({
               h('div', { class: 'TvTabs-BlurBottom' }, [
                 h(TxGradualBlur as any, {
                   position: 'bottom',
-                  height: '24px',
+                  height: '32px',
                   strength: 1.4,
                   opacity: 0.9,
                   zIndex: 1,
