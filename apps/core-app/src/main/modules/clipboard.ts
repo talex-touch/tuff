@@ -11,8 +11,8 @@ import type {
   ClipboardQueryRequest,
   ClipboardQueryResponse,
   ClipboardSetFavoriteRequest,
-  TuffInputType,
 } from '@talex-touch/utils/transport/events/types'
+import { TuffInputType } from '@talex-touch/utils/transport/events/types'
 import { execFile } from 'node:child_process'
 import crypto from 'node:crypto'
 import path from 'node:path'
@@ -486,11 +486,11 @@ export class ClipboardModule extends BaseModule {
       ? (item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp).getTime())
       : Date.now()
 
-    const type = item.type === 'image'
-      ? (1 as TuffInputType)
+    const type: TuffInputType = item.type === 'image'
+      ? TuffInputType.Image
       : item.type === 'files'
-        ? (2 as TuffInputType)
-        : (0 as TuffInputType)
+        ? TuffInputType.Files
+        : TuffInputType.Text
 
     return {
       id: item.id,

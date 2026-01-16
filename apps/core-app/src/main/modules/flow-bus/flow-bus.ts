@@ -48,7 +48,9 @@ export class FlowBus {
     // Start periodic cleanup
     this.pollingService.register(
       this.cleanupTaskId,
-      () => flowSessionManager.cleanup(),
+      () => {
+        void flowSessionManager.cleanup()
+      },
       { interval: 60, unit: 'seconds' },
     )
     this.pollingService.start()

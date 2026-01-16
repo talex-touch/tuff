@@ -1,5 +1,6 @@
 import type { IClipboardItem } from './types'
 import type { ClipboardItem, ClipboardChangePayload } from '@talex-touch/utils/transport/events'
+import { TuffInputType } from '@talex-touch/utils'
 import {
   getLatest as getLatestClipboardItem,
   apply as applyClipboardItem,
@@ -13,9 +14,9 @@ function convertClipboardItem(item: ClipboardItem | null): IClipboardItem | null
   if (!item) return null
 
   const type =
-    item.type === 1
+    item.type === TuffInputType.Image
       ? 'image'
-      : item.type === 2
+      : item.type === TuffInputType.Files
         ? 'files'
         : 'text'
 

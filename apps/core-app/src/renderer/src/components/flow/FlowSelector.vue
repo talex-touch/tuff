@@ -8,9 +8,10 @@
 import type { FlowTargetInfo, FlowPayload } from '@talex-touch/utils'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { FlowEvents } from '@talex-touch/utils/transport/events'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 
 interface Props {
   visible: boolean
@@ -26,6 +27,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const transport = useTuffTransport()
 
 const targets = ref<FlowTargetInfo[]>([])
 const loading = ref(false)
@@ -50,8 +53,8 @@ const filteredTargets = computed(() => {
 async function loadTargets(): Promise<void> {
   loading.value = true
   try {
-    const response = await touchChannel.send('flow:get-targets', {
-      payloadType: props.payload?.type
+    const response = await transport.send(FlowEvents.getTargets, {
+      payloadType: props.payload?.type,
     })
 
     if (response?.success) {

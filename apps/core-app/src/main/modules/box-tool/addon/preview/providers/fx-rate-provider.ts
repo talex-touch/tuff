@@ -136,7 +136,9 @@ export class FxRateProvider {
     }
     this.pollingService.register(
       this.refreshTaskId,
-      () => this.refresh(),
+      async () => {
+        await this.refresh()
+      },
       { interval: REFRESH_INTERVAL_MS, unit: 'milliseconds' },
     )
     this.pollingService.start()

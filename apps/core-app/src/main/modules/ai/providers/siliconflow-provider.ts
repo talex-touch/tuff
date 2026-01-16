@@ -37,8 +37,14 @@ export class SiliconflowProvider extends IntelligenceProvider {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions',
+    })
+
     const body = {
-      model: options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
+      model,
       messages: payload.messages,
       temperature: payload.temperature,
       max_tokens: payload.maxTokens,
@@ -73,8 +79,14 @@ export class SiliconflowProvider extends IntelligenceProvider {
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions (stream)',
+    })
+
     const body = {
-      model: options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
+      model,
       messages: payload.messages,
       temperature: payload.temperature,
       max_tokens: payload.maxTokens,
@@ -137,9 +149,15 @@ export class SiliconflowProvider extends IntelligenceProvider {
     const traceId = this.generateTraceId()
     const startTime = Date.now()
 
+    const model = payload.model || this.config.defaultModel || 'netease-youdao/bce-embedding-base_v1'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/embeddings',
+    })
+
     const body = {
       input: payload.text,
-      model: payload.model || this.config.defaultModel || 'netease-youdao/bce-embedding-base_v1',
+      model,
     }
 
     const data = await this.post<{ data: Array<{ embedding: number[] }>, usage?: any, model?: string }>(
@@ -194,8 +212,14 @@ export class SiliconflowProvider extends IntelligenceProvider {
     const prompt = payload.prompt || 'Extract all text from this image and return as structured JSON.'
     const modelFromBinding = options.modelPreference?.[0]
 
+    const model = modelFromBinding || this.config.defaultModel || DEFAULT_VISION_MODEL
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions (vision)',
+    })
+
     const body = {
-      model: modelFromBinding || this.config.defaultModel || DEFAULT_VISION_MODEL,
+      model,
       messages: [
         {
           role: 'system',

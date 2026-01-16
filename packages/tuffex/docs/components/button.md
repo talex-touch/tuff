@@ -96,6 +96,7 @@
 import { ref } from 'vue'
 
 const loading = ref(false)
+const splitLoading = ref(false)
 
 async function handleClick() {
   loading.value = true
@@ -103,6 +104,14 @@ async function handleClick() {
   setTimeout(() => {
     loading.value = false
   }, 3000)
+}
+
+async function handleRun() {
+  if (splitLoading.value) return
+  splitLoading.value = true
+  setTimeout(() => {
+    splitLoading.value = false
+  }, 1200)
 }
 </script>
 
@@ -133,6 +142,32 @@ async function handleClick() {
 ```
 
 :::
+
+## Split Button
+
+用于“主操作 + 更多操作”的组合按钮（例如 RUN + …）。
+
+<div class="group">
+  <TxSplitButton
+    variant="primary"
+    size="sm"
+    icon="i-ri-play-fill"
+    :loading="splitLoading"
+    @click="handleRun"
+  >
+    RUN
+    <template #menu="{ close }">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+          Settings
+        </TxButton>
+        <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+          Open Folder
+        </TxButton>
+      </div>
+    </template>
+  </TxSplitButton>
+</div>
 
 ## 不同尺寸
 

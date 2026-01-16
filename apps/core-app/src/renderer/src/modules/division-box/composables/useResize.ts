@@ -138,13 +138,7 @@ export function useResize(sessionId: string, initialSize: SizePreset) {
    */
   const saveDimensions = async () => {
     try {
-      // Save to session state via IPC
-      await window.electron.ipcRenderer.invoke(
-        'division-box:update-state',
-        sessionId,
-        'dimensions',
-        dimensions.value
-      )
+      await store.updateSessionState(sessionId, 'dimensions', dimensions.value)
     } catch (error) {
       console.error('Failed to save dimensions:', error)
     }

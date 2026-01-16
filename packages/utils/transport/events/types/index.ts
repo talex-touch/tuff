@@ -26,3 +26,9 @@ export * from './meta-overlay'
 
 // File index domain types
 export * from './file-index'
+
+// Flow domain types
+export * from './flow'
+
+// DivisionBox domain types
+export * from './division-box'

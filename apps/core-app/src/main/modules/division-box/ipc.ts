@@ -5,19 +5,18 @@
  * communication between main process and renderer processes.
  */
 
-import { BrowserWindow } from 'electron'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import type { ITouchChannel, StandardChannelData } from '@talex-touch/utils/channel'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
 import {
   DivisionBoxError,
   DivisionBoxErrorCode,
-  DivisionBoxIPCChannel,
   type DivisionBoxConfig,
   type CloseOptions,
   type IPCResponse,
   type SessionInfo,
   type StateChangeEvent
 } from '@talex-touch/utils'
+import { DivisionBoxEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getPermissionModule } from '../permission'
 import { DivisionBoxManager } from './manager'
 import { flowTriggerManager, type FlowPayload } from './flow-trigger'
 
@@ -124,7 +123,8 @@ function createErrorResponse(error: DivisionBoxError | Error | string): IPCRespo
 export class DivisionBoxIPC {
   private manager: DivisionBoxManager
   private channel: ITouchChannel
-  private unregisterFunctions: Array<() => void> = []
+  private transportDisposers: Array<() => void> = []
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   /**
    * Creates a new DivisionBoxIPC instance
@@ -147,475 +147,284 @@ export class DivisionBoxIPC {
    * - division-box:get-active-sessions
    */
   registerHandlers(): void {
-    // Register division-box:open handler
-    const unregOpen = this.channel.regChannel(
-      ChannelType.MAIN,
-      DivisionBoxIPCChannel.OPEN,
-      this.handleOpen.bind(this)
-    )
-    this.unregisterFunctions.push(unregOpen)
+    this.registerTransportHandlers()
 
-    // Register division-box:close handler
-    const unregClose = this.channel.regChannel(
-      ChannelType.MAIN,
-      DivisionBoxIPCChannel.CLOSE,
-      this.handleClose.bind(this)
-    )
-    this.unregisterFunctions.push(unregClose)
+    console.log('[DivisionBoxIPC] All transport handlers registered')
+  }
 
-    // Register division-box:get-state handler
-    const unregGetState = this.channel.regChannel(
-      ChannelType.MAIN,
-      DivisionBoxIPCChannel.GET_STATE,
-      this.handleGetState.bind(this)
-    )
-    this.unregisterFunctions.push(unregGetState)
+  private registerTransportHandlers(): void {
+    if (this.transport) {
+      return
+    }
 
-    // Register division-box:update-state handler
-    const unregUpdateState = this.channel.regChannel(
-      ChannelType.MAIN,
-      DivisionBoxIPCChannel.UPDATE_STATE,
-      this.handleUpdateState.bind(this)
+    const channel = this.channel as any
+    this.transport = getTuffTransportMain(
+      channel,
+      channel?.keyManager ?? channel,
     )
-    this.unregisterFunctions.push(unregUpdateState)
 
-    // Register division-box:get-active-sessions handler
-    const unregGetActiveSessions = this.channel.regChannel(
-      ChannelType.MAIN,
-      DivisionBoxIPCChannel.GET_ACTIVE_SESSIONS,
-      this.handleGetActiveSessions.bind(this)
+    const transport = this.transport
+
+    const enforce = (context: any, apiName: string, sdkapi?: number) => {
+      const pluginId = context?.plugin?.name
+      if (!pluginId) {
+        return
+      }
+      const perm = getPermissionModule()
+      if (!perm) {
+        return
+      }
+      perm.enforcePermission(pluginId, apiName, sdkapi)
+    }
+
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.open, async (payload: any, context: any) => {
+        enforce(context, 'division-box:session:open', payload?._sdkapi)
+        const config = payload as DivisionBoxConfig
+        const validation = validateConfig(config)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        const session = await this.manager.createSession(config, (event) => {
+          this.broadcastStateChanged(event)
+        })
+
+        const sessionInfo: SessionInfo = {
+          sessionId: session.sessionId,
+          state: session.getState(),
+          meta: session.meta,
+        }
+
+        return createSuccessResponse(sessionInfo)
+      }),
     )
-    this.unregisterFunctions.push(unregGetActiveSessions)
 
-    // Register division-box:flow-trigger handler
-    const unregFlowTrigger = this.channel.regChannel(
-      ChannelType.MAIN,
-      'division-box:flow-trigger',
-      this.handleFlowTrigger.bind(this)
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.close, async (payload: any, context: any) => {
+        enforce(context, 'division-box:session:close', payload?._sdkapi)
+        const { sessionId, options } = payload as { sessionId: string; options?: CloseOptions }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        await this.manager.destroySession(sessionId, options)
+        this.broadcastSessionDestroyed(sessionId)
+        return createSuccessResponse({ success: true })
+      }),
     )
-    this.unregisterFunctions.push(unregFlowTrigger)
 
-    // Register window control handlers
-    const unregTogglePin = this.channel.regChannel(
-      ChannelType.MAIN,
-      'division-box:toggle-pin',
-      this.handleTogglePin.bind(this)
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.getState, async (payload: any, context: any) => {
+        enforce(context, 'division-box:session:get-state', payload?._sdkapi)
+        const { sessionId, key } = payload as { sessionId: string; key?: string }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        const session = this.manager.getSession(sessionId)
+        if (!session) {
+          return createErrorResponse(
+            new DivisionBoxError(
+              DivisionBoxErrorCode.SESSION_NOT_FOUND,
+              `Session not found: ${sessionId}`,
+              sessionId,
+            ),
+          )
+        }
+
+        if (key && typeof key === 'string') {
+          return createSuccessResponse(session.getSessionState(key))
+        }
+
+        return createSuccessResponse({ state: session.getState() })
+      }),
     )
-    this.unregisterFunctions.push(unregTogglePin)
 
-    const unregSetOpacity = this.channel.regChannel(
-      ChannelType.MAIN,
-      'division-box:set-opacity',
-      this.handleSetOpacity.bind(this)
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.updateState, async (payload: any, context: any) => {
+        enforce(context, 'division-box:session:update-state', payload?._sdkapi)
+        const { sessionId, key, value } = payload as { sessionId: string; key: string; value: any }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        if (!key || typeof key !== 'string') {
+          return createErrorResponse('Invalid or missing key')
+        }
+
+        const session = this.manager.getSession(sessionId)
+        if (!session) {
+          return createErrorResponse(
+            new DivisionBoxError(
+              DivisionBoxErrorCode.SESSION_NOT_FOUND,
+              `Session not found: ${sessionId}`,
+              sessionId,
+            ),
+          )
+        }
+
+        session.setSessionState(key, value)
+        return createSuccessResponse({ success: true })
+      }),
     )
-    this.unregisterFunctions.push(unregSetOpacity)
 
-    const unregToggleDevTools = this.channel.regChannel(
-      ChannelType.MAIN,
-      'division-box:toggle-devtools',
-      this.handleToggleDevTools.bind(this)
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.getActiveSessions, async (payload: any, context: any) => {
+        enforce(context, 'division-box:session:get-active-sessions', payload?._sdkapi)
+        const sessions = this.manager.getActiveSessionsInfo()
+        return createSuccessResponse(sessions)
+      }),
     )
-    this.unregisterFunctions.push(unregToggleDevTools)
 
-    const unregGetWindowState = this.channel.regChannel(
-      ChannelType.MAIN,
-      'division-box:get-window-state',
-      this.handleGetWindowState.bind(this)
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.flowTrigger, async (payload: any, context: any) => {
+        enforce(context, 'division-box:flow:trigger', payload?._sdkapi)
+        const { targetId, payload: flowPayload } = payload as { targetId: string; payload: FlowPayload }
+
+        if (!targetId || typeof targetId !== 'string') {
+          return createErrorResponse('Invalid or missing targetId')
+        }
+
+        if (!flowPayload || typeof flowPayload !== 'object' || !flowPayload.type || !flowPayload.data) {
+          return createErrorResponse('Invalid or missing payload')
+        }
+
+        const sessionId = await flowTriggerManager.handleFlow(targetId, flowPayload)
+        return createSuccessResponse({ sessionId })
+      }),
     )
-    this.unregisterFunctions.push(unregGetWindowState)
 
-    const unregInputChange = this.channel.regChannel(
-      ChannelType.MAIN,
-      'division-box:input-change',
-      this.handleInputChange.bind(this)
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.togglePin, async (payload: any, context: any) => {
+        enforce(context, 'division-box:window:toggle-pin', payload?._sdkapi)
+        const { sessionId } = payload as { sessionId: string }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        const session = this.manager.getSession(sessionId)
+        if (!session) {
+          return createErrorResponse('Session not found')
+        }
+
+        const isPinned = session.toggleAlwaysOnTop()
+        return createSuccessResponse({ isPinned })
+      }),
     )
-    this.unregisterFunctions.push(unregInputChange)
 
-    console.log('[DivisionBoxIPC] All IPC handlers registered')
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.setOpacity, async (payload: any, context: any) => {
+        enforce(context, 'division-box:window:set-opacity', payload?._sdkapi)
+        const { sessionId, opacity } = payload as { sessionId: string; opacity: number }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        const session = this.manager.getSession(sessionId)
+        if (!session) {
+          return createErrorResponse('Session not found')
+        }
+
+        session.setOpacity(opacity)
+        return createSuccessResponse({ opacity: session.getOpacity() })
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.toggleDevTools, async (payload: any, context: any) => {
+        enforce(context, 'division-box:window:toggle-devtools', payload?._sdkapi)
+        const { sessionId } = payload as { sessionId: string }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        const session = this.manager.getSession(sessionId)
+        if (!session) {
+          return createErrorResponse('Session not found')
+        }
+
+        if (session.isDevToolsOpen()) {
+          session.closeDevTools()
+        } else {
+          session.openDevTools()
+        }
+
+        return createSuccessResponse({ isOpen: session.isDevToolsOpen() })
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.getWindowState, async (payload: any, context: any) => {
+        enforce(context, 'division-box:window:get-window-state', payload?._sdkapi)
+        const { sessionId } = payload as { sessionId: string }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        const session = this.manager.getSession(sessionId)
+        if (!session) {
+          return createErrorResponse('Session not found')
+        }
+
+        return createSuccessResponse({
+          isPinned: session.isAlwaysOnTop(),
+          opacity: session.getOpacity(),
+          isDevToolsOpen: session.isDevToolsOpen(),
+        })
+      }),
+    )
+
+    this.transportDisposers.push(
+      transport.on(DivisionBoxEvents.inputChange, async (payload: any, context: any) => {
+        enforce(context, 'division-box:ui:input-change', payload?._sdkapi)
+        const { sessionId, input, query } = payload as { sessionId: string; input: string; query: any }
+        const validation = validateSessionId(sessionId)
+        if (!validation.valid) {
+          return createErrorResponse(validation.error!)
+        }
+
+        const session = this.manager.getSession(sessionId)
+        if (!session) {
+          return createErrorResponse('Session not found')
+        }
+
+        const plugin = session.getAttachedPlugin()
+        if (plugin) {
+          this.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
+            input,
+            query,
+            source: 'division-box',
+          })
+        }
+
+        return createSuccessResponse({ received: true })
+      }),
+    )
   }
 
   /**
    * Unregisters all IPC handlers
    */
   unregisterHandlers(): void {
-    this.unregisterFunctions.forEach(unregister => unregister())
-    this.unregisterFunctions = []
+    for (const dispose of this.transportDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
+    this.transport = null
+
     console.log('[DivisionBoxIPC] All IPC handlers unregistered')
-  }
-
-  /**
-   * Handles division-box:open IPC message
-   * 
-   * Creates a new DivisionBox session with the provided configuration.
-   * 
-   * @param data - Channel data containing config
-   */
-  private async handleOpen(data: StandardChannelData): Promise<void> {
-    try {
-      const config = data.data as DivisionBoxConfig
-
-      // Validate configuration
-      const validation = validateConfig(config)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      // Create session with state change broadcast callback
-      const session = await this.manager.createSession(config, (event) => {
-        this.broadcastStateChanged(event)
-      })
-
-      // Prepare response
-      const sessionInfo: SessionInfo = {
-        sessionId: session.sessionId,
-        state: session.getState(),
-        meta: session.meta
-      }
-
-      data.reply(DataCode.SUCCESS, createSuccessResponse(sessionInfo))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleOpen:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:close IPC message
-   * 
-   * Closes and destroys a DivisionBox session.
-   * 
-   * @param data - Channel data containing sessionId and options
-   */
-  private async handleClose(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId, options } = data.data as { sessionId: string; options?: CloseOptions }
-
-      // Validate sessionId
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      // Destroy session
-      await this.manager.destroySession(sessionId, options)
-
-      // Broadcast session destroyed event
-      this.broadcastSessionDestroyed(sessionId)
-
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ success: true }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleClose:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:get-state IPC message
-   * 
-   * Retrieves the current state of a DivisionBox session.
-   * 
-   * @param data - Channel data containing sessionId
-   */
-  private async handleGetState(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId } = data.data as { sessionId: string }
-
-      // Validate sessionId
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      // Get session
-      const session = this.manager.getSession(sessionId)
-      if (!session) {
-        data.reply(
-          DataCode.ERROR,
-          createErrorResponse(
-            new DivisionBoxError(
-              DivisionBoxErrorCode.SESSION_NOT_FOUND,
-              `Session not found: ${sessionId}`,
-              sessionId
-            )
-          )
-        )
-        return
-      }
-
-      // Return state
-      const state = session.getState()
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ state }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleGetState:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:update-state IPC message
-   * 
-   * Updates the sessionState of a DivisionBox session.
-   * 
-   * @param data - Channel data containing sessionId, key, and value
-   */
-  private async handleUpdateState(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId, key, value } = data.data as {
-        sessionId: string
-        key: string
-        value: any
-      }
-
-      // Validate sessionId
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      // Validate key
-      if (!key || typeof key !== 'string') {
-        data.reply(DataCode.ERROR, createErrorResponse('Invalid or missing key'))
-        return
-      }
-
-      // Get session
-      const session = this.manager.getSession(sessionId)
-      if (!session) {
-        data.reply(
-          DataCode.ERROR,
-          createErrorResponse(
-            new DivisionBoxError(
-              DivisionBoxErrorCode.SESSION_NOT_FOUND,
-              `Session not found: ${sessionId}`,
-              sessionId
-            )
-          )
-        )
-        return
-      }
-
-      // Update session state
-      session.setSessionState(key, value)
-
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ success: true }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleUpdateState:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:get-active-sessions IPC message
-   * 
-   * Retrieves information about all active DivisionBox sessions.
-   * 
-   * @param data - Channel data
-   */
-  private async handleGetActiveSessions(data: StandardChannelData): Promise<void> {
-    try {
-      const sessions = this.manager.getActiveSessionsInfo()
-      data.reply(DataCode.SUCCESS, createSuccessResponse(sessions))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleGetActiveSessions:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:flow-trigger IPC message
-   * 
-   * Handles an incoming Flow payload and opens a DivisionBox.
-   * 
-   * @param data - Channel data containing targetId and payload
-   */
-  private async handleFlowTrigger(data: StandardChannelData): Promise<void> {
-    try {
-      const { targetId, payload } = data.data as {
-        targetId: string
-        payload: FlowPayload
-      }
-
-      // Validate targetId
-      if (!targetId || typeof targetId !== 'string') {
-        data.reply(DataCode.ERROR, createErrorResponse('Invalid or missing targetId'))
-        return
-      }
-
-      // Validate payload
-      if (!payload || typeof payload !== 'object' || !payload.type || !payload.data) {
-        data.reply(DataCode.ERROR, createErrorResponse('Invalid or missing payload'))
-        return
-      }
-
-      // Handle the flow
-      const sessionId = await flowTriggerManager.handleFlow(targetId, payload)
-
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ sessionId }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleFlowTrigger:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  // ==================== Window Control Handlers ====================
-
-  /**
-   * Handles division-box:toggle-pin IPC message
-   */
-  private async handleTogglePin(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId } = data.data as { sessionId: string }
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      const session = this.manager.getSession(sessionId)
-      if (!session) {
-        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
-        return
-      }
-
-      const isPinned = session.toggleAlwaysOnTop()
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ isPinned }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleTogglePin:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:set-opacity IPC message
-   */
-  private async handleSetOpacity(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId, opacity } = data.data as { sessionId: string; opacity: number }
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      const session = this.manager.getSession(sessionId)
-      if (!session) {
-        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
-        return
-      }
-
-      session.setOpacity(opacity)
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ opacity: session.getOpacity() }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleSetOpacity:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:toggle-devtools IPC message
-   */
-  private async handleToggleDevTools(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId } = data.data as { sessionId: string }
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      const session = this.manager.getSession(sessionId)
-      if (!session) {
-        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
-        return
-      }
-
-      if (session.isDevToolsOpen()) {
-        session.closeDevTools()
-      } else {
-        session.openDevTools()
-      }
-      
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ isOpen: session.isDevToolsOpen() }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleToggleDevTools:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:get-window-state IPC message
-   */
-  private async handleGetWindowState(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId } = data.data as { sessionId: string }
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      const session = this.manager.getSession(sessionId)
-      if (!session) {
-        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
-        return
-      }
-
-      const windowState = {
-        isPinned: session.isAlwaysOnTop(),
-        opacity: session.getOpacity(),
-        isDevToolsOpen: session.isDevToolsOpen()
-      }
-      
-      data.reply(DataCode.SUCCESS, createSuccessResponse(windowState))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleGetWindowState:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
-  }
-
-  /**
-   * Handles division-box:input-change IPC message
-   * Forwards input changes to the plugin UI view
-   */
-  private async handleInputChange(data: StandardChannelData): Promise<void> {
-    try {
-      const { sessionId, input, query } = data.data as { 
-        sessionId: string
-        input: string
-        query: any 
-      }
-      
-      const validation = validateSessionId(sessionId)
-      if (!validation.valid) {
-        data.reply(DataCode.ERROR, createErrorResponse(validation.error!))
-        return
-      }
-
-      const session = this.manager.getSession(sessionId)
-      if (!session) {
-        data.reply(DataCode.ERROR, createErrorResponse('Session not found'))
-        return
-      }
-
-      // Forward input to plugin via channel
-      const plugin = session.getAttachedPlugin()
-      if (plugin) {
-        this.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-          input,
-          query,
-          source: 'division-box'
-        })
-      }
-
-      data.reply(DataCode.SUCCESS, createSuccessResponse({ received: true }))
-    } catch (error) {
-      console.error('[DivisionBoxIPC] Error in handleInputChange:', error)
-      data.reply(DataCode.ERROR, createErrorResponse(error as Error))
-    }
   }
 
   /**
@@ -624,17 +433,13 @@ export class DivisionBoxIPC {
    * @param event - State change event data
    */
   private broadcastStateChanged(event: StateChangeEvent): void {
-    // Get all browser windows
-    const windows = BrowserWindow.getAllWindows()
-
-    // Send event to each window
-    windows.forEach(window => {
+    if (this.transport) {
       try {
-        this.channel.sendToMain(window, DivisionBoxIPCChannel.STATE_CHANGED, event)
-      } catch (error) {
-        console.error('[DivisionBoxIPC] Error broadcasting state change:', error)
+        this.transport.broadcast(DivisionBoxEvents.stateChanged, event)
+      } catch {
+        // ignore
       }
-    })
+    }
   }
 
   /**
@@ -643,17 +448,13 @@ export class DivisionBoxIPC {
    * @param sessionId - ID of the destroyed session
    */
   private broadcastSessionDestroyed(sessionId: string): void {
-    // Get all browser windows
-    const windows = BrowserWindow.getAllWindows()
-
-    // Send event to each window
-    windows.forEach(window => {
+    if (this.transport) {
       try {
-        this.channel.sendToMain(window, DivisionBoxIPCChannel.SESSION_DESTROYED, { sessionId })
-      } catch (error) {
-        console.error('[DivisionBoxIPC] Error broadcasting session destroyed:', error)
+        this.transport.broadcast(DivisionBoxEvents.sessionDestroyed, { sessionId })
+      } catch {
+        // ignore
       }
-    })
+    }
   }
 }
 

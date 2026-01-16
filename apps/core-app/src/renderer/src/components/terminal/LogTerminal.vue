@@ -1,5 +1,5 @@
 <script lang="ts" name="LogTerminal" setup>
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { Terminal } from 'xterm'
 import * as TerminalFit from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
@@ -18,8 +18,47 @@ const term = new Terminal({
   cursorBlink: true,
   disableStdin: true,
   fontSize: 12,
-  lineHeight: 1,
+  lineHeight: 1.2,
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  theme: {
+    background: '#020617',
+    foreground: '#e2e8f0',
+    cursor: '#94a3b8',
+    selectionBackground: 'rgba(148, 163, 184, 0.25)',
+  },
 })
+
+const fitAddon = new TerminalFit.FitAddon()
+let resizeObserver: ResizeObserver | null = null
+let opened = false
+let handleWindowResize: (() => void) | null = null
+
+function writeLogLine(log: unknown): void {
+  if (typeof log === 'string') {
+    term.writeln(log)
+    return
+  }
+  if (log instanceof Uint8Array) {
+    term.writeln(log)
+  }
+}
+
+function scheduleFit(): void {
+  window.requestAnimationFrame(() => {
+    try {
+      fitAddon.fit()
+    }
+    catch {
+      // ignore
+    }
+  })
+}
+
+function renderAll(logs: unknown[]): void {
+  term.reset()
+  logs.forEach(writeLogLine)
+  scheduleFit()
+}
 
 watch(
   () => props.logs,
@@ -27,21 +66,32 @@ watch(
     if (!term || !newLogs) {
       return
     }
-    // If the logs array is cleared, clear the terminal
-    if (newLogs.length === 0 && oldLogs && oldLogs.length > 0) {
-      term.clear()
+    if (!opened) {
       return
     }
 
-    // Find the new logs that were added
-    const newEntries = newLogs.slice(oldLogs?.length ?? 0)
-    newEntries.forEach((log) => {
-      if (typeof log === 'string') {
-        term.writeln(log)
-      } else if (log instanceof Uint8Array) {
-        term.writeln(log)
-      }
-    })
+    const oldLength = Array.isArray(oldLogs) ? oldLogs.length : 0
+    const shouldReset =
+      !Array.isArray(oldLogs)
+      || newLogs.length < oldLength
+      || (oldLength > 0 && newLogs.length > 0 && newLogs[0] !== oldLogs[0])
+      || (newLogs.length === oldLength
+        && newLogs.length > 0
+        && newLogs[newLogs.length - 1] !== oldLogs[oldLength - 1])
+
+    if (newLogs.length === 0) {
+      term.clear()
+      scheduleFit()
+      return
+    }
+
+    if (shouldReset) {
+      renderAll(newLogs)
+      return
+    }
+
+    newLogs.slice(oldLength).forEach(writeLogLine)
+    scheduleFit()
   },
   { deep: true },
 )
@@ -49,20 +99,46 @@ watch(
 onMounted(() => {
   term.open(terminal.value)
 
-  const fitAddon = new TerminalFit.FitAddon()
   term.loadAddon(fitAddon)
+  opened = true
 
   setTimeout(() => {
-    fitAddon.fit()
+    scheduleFit()
   }, 100)
 
-  term.focus()
+  if (Array.isArray(props.logs) && props.logs.length > 0) {
+    renderAll(props.logs)
+  }
+
+  // Intentionally avoid forcing focus to prevent stealing focus from other UI.
 
   // term.writeln('Hello from \x1B[1;3;31mxterm.js\x1B[0m $ ')
 
-  window.addEventListener('resize', () => {
-    fitAddon.fit()
-  })
+  handleWindowResize = (): void => scheduleFit()
+  window.addEventListener('resize', handleWindowResize)
+
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => scheduleFit())
+    if (terminal.value) {
+      resizeObserver.observe(terminal.value)
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (handleWindowResize) {
+    window.removeEventListener('resize', handleWindowResize)
+    handleWindowResize = null
+  }
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  opened = false
+  try {
+    term.dispose()
+  }
+  catch {
+    // ignore
+  }
 })
 </script>
 
@@ -74,17 +150,17 @@ onMounted(() => {
 .LogTerminal-Container {
   box-sizing: border-box;
   :deep(.xterm-viewport) {
-    background-color: #00000011 !important;
+    background-color: transparent !important;
 
     overflow: hidden;
     border-radius: 4px;
   }
   :deep(.xterm-screen) {
     .xterm-rows {
-      color: var(--el-text-color-primary) !important;
+      color: inherit !important;
     }
     .xterm-fg-8 {
-      color: var(--el-text-color-secondary) !important;
+      color: rgba(148, 163, 184, 0.95) !important;
     }
   }
   position: relative;

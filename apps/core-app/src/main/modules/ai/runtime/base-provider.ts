@@ -37,7 +37,6 @@ import type {
   IntelligenceKeywordsExtractResult,
   IntelligenceProviderAdapter,
   IntelligenceProviderConfig,
-  IntelligenceProviderType,
   IntelligenceRAGQueryPayload,
   IntelligenceRAGQueryResult,
   IntelligenceRerankPayload,
@@ -47,9 +46,9 @@ import type {
   IntelligenceSemanticSearchResult,
   IntelligenceSentimentAnalyzePayload,
   IntelligenceSentimentAnalyzeResult,
+  IntelligenceStreamChunk,
   IntelligenceSTTPayload,
   IntelligenceSTTResult,
-  IntelligenceStreamChunk,
   IntelligenceSummarizePayload,
   IntelligenceTranslatePayload,
   IntelligenceTTSPayload,
@@ -57,6 +56,8 @@ import type {
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
 } from '@talex-touch/utils'
+
+import { IntelligenceProviderType } from '@talex-touch/utils'
 
 export abstract class IntelligenceProvider implements IntelligenceProviderAdapter {
   abstract readonly type: IntelligenceProviderType
@@ -412,6 +413,61 @@ export abstract class IntelligenceProvider implements IntelligenceProviderAdapte
   protected validateApiKey(): void {
     if (!this.config.apiKey) {
       throw new Error(`[${this.type}] API key is required but not configured`)
+    }
+  }
+
+  protected validateModel(model: string, context?: { capabilityId?: string, endpoint?: string }): void {
+    const providerType = this.config.type
+    const capabilityHint = context?.capabilityId ? ` capability=${context.capabilityId}` : ''
+    const endpointHint = context?.endpoint ? ` endpoint=${context.endpoint}` : ''
+    const hint = `${capabilityHint}${endpointHint}`
+
+    if (providerType === IntelligenceProviderType.CUSTOM || providerType === IntelligenceProviderType.LOCAL) {
+      return
+    }
+
+    const normalized = typeof model === 'string' ? model.trim() : ''
+    if (!normalized) {
+      throw new Error(`[${this.type}] Model is required but missing${hint ? `.${hint}` : ''}`)
+    }
+
+    if (providerType === IntelligenceProviderType.ANTHROPIC) {
+      if (!normalized.startsWith('claude-')) {
+        throw new Error(
+          `[${this.type}] Incompatible model "${normalized}" for provider ${providerType}.${hint} Expected "claude-*". `
+          + `Fix by updating capability routing models or provider defaultModel.`,
+        )
+      }
+      return
+    }
+
+    if (providerType === IntelligenceProviderType.DEEPSEEK) {
+      if (!normalized.startsWith('deepseek-')) {
+        throw new Error(
+          `[${this.type}] Incompatible model "${normalized}" for provider ${providerType}.${hint} Expected "deepseek-*". `
+          + `Fix by updating capability routing models or provider defaultModel.`,
+        )
+      }
+      return
+    }
+
+    if (providerType === IntelligenceProviderType.OPENAI) {
+      if (normalized.startsWith('claude-') || normalized.startsWith('deepseek-')) {
+        throw new Error(
+          `[${this.type}] Incompatible model "${normalized}" for provider ${providerType}.${hint} `
+          + `Fix by selecting a provider matching this model family.`,
+        )
+      }
+      return
+    }
+
+    if (providerType === IntelligenceProviderType.SILICONFLOW) {
+      if (normalized.startsWith('claude-')) {
+        throw new Error(
+          `[${this.type}] Incompatible model "${normalized}" for provider ${providerType}.${hint} `
+          + `Fix by selecting Anthropic provider for "claude-*" models.`,
+        )
+      }
     }
   }
 

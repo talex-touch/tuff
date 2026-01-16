@@ -31,11 +31,17 @@ export class OpenAIProvider extends IntelligenceProvider {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o-mini'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions',
+    })
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o-mini',
+        model,
         messages: payload.messages,
         temperature: payload.temperature,
         max_tokens: payload.maxTokens,
@@ -80,11 +86,17 @@ export class OpenAIProvider extends IntelligenceProvider {
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o-mini'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions',
+    })
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o-mini',
+        model,
         messages: payload.messages,
         temperature: payload.temperature,
         max_tokens: payload.maxTokens,
@@ -145,11 +157,17 @@ export class OpenAIProvider extends IntelligenceProvider {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
+    const model = payload.model || this.config.defaultModel || 'text-embedding-3-small'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/embeddings',
+    })
+
     const response = await fetch(`${this.baseUrl}/embeddings`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: payload.model || this.config.defaultModel || 'text-embedding-3-small',
+        model,
         input: payload.text,
       }),
       signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
@@ -210,11 +228,17 @@ export class OpenAIProvider extends IntelligenceProvider {
     const imageDataUrl = await this.getImageData(payload.source)
     const prompt = payload.prompt || 'Extract all text from this image and return the result as JSON with fields: text (extracted text), keywords (array of key terms).'
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/chat/completions (vision)',
+    })
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o',
+        model,
         messages: [
           {
             role: 'system',

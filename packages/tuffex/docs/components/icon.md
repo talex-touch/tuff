@@ -119,6 +119,32 @@ import { TuffIcons } from '@talex-touch/utils'
 </template>
 ```
 
+## TxStatusIcon
+
+用于在图标右下角叠加状态指示器（如插件运行状态/健康状态）。
+
+<div class="group">
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="success" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="warning" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="error" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="info" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="loading" />
+</div>
+
+::: details Show Code
+
+```vue
+<template>
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="success" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="warning" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="error" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="info" />
+  <TxStatusIcon name="i-ri-translate-2" :size="22" tone="loading" />
+</template>
+```
+
+:::
+
 ## 图标集
 
 TuffEx 内置了以下图标集：

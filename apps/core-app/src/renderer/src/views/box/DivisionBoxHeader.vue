@@ -3,8 +3,9 @@ import type { IUseSearch } from '~/modules/box/adapter/types'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { windowState } from '~/modules/hooks/core-box'
 import BoxInput from './BoxInput.vue'
 import ActivatedProviders from './ActivatedProviders.vue'
@@ -32,6 +33,8 @@ const emit = defineEmits<Emits & {
 }>()
 const { t } = useI18n()
 
+const transport = useTuffTransport()
+
 const boxInputRef = ref()
 defineExpose({ boxInputRef })
 
@@ -53,22 +56,22 @@ const opacityIcon = computed(() => {
 async function handlePin(): Promise<void> {
   const sessionId = windowState.divisionBox?.sessionId
   if (!sessionId) return
-  const response = await touchChannel.send('division-box:toggle-pin', { sessionId })
-  if (response?.success) pinned.value = response.data.isPinned
+  const response = await transport.send(DivisionBoxEvents.togglePin, { sessionId })
+  if (response?.success && response.data) pinned.value = response.data.isPinned
 }
 
 async function handleOpacity(): Promise<void> {
   const sessionId = windowState.divisionBox?.sessionId
   if (!sessionId) return
   const nextOpacity = opacity.value >= 0.9 ? 0.8 : opacity.value >= 0.6 ? 0.5 : 1.0
-  const response = await touchChannel.send('division-box:set-opacity', { sessionId, opacity: nextOpacity })
-  if (response?.success) opacity.value = response.data.opacity
+  const response = await transport.send(DivisionBoxEvents.setOpacity, { sessionId, opacity: nextOpacity })
+  if (response?.success && response.data) opacity.value = response.data.opacity
 }
 
 async function handleDebug(): Promise<void> {
   const sessionId = windowState.divisionBox?.sessionId
   if (!sessionId) return
-  await touchChannel.send('division-box:toggle-devtools', { sessionId })
+  await transport.send(DivisionBoxEvents.toggleDevTools, { sessionId })
 }
 
 function handleSettings(): void {

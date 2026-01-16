@@ -89,7 +89,7 @@ export class TpexApiProvider extends BaseMarketProvider {
       description: entry.summary,
       category: entry.category,
       timestamp: entry.latestVersion?.createdAt || entry.updatedAt,
-      icon: entry.iconUrl ?? undefined,
+      iconUrl: entry.iconUrl ?? undefined,
       metadata: {
         installs: entry.installs,
         badges: entry.badges,

@@ -3,6 +3,8 @@ import type { LibSQLTransaction } from 'drizzle-orm/libsql/session'
 import { performance } from 'node:perf_hooks'
 import { eq, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
+import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { searchLogger } from './search-logger'
 
 const CHINESE_CHAR_REGEX = /[\u4E00-\u9FA5]/
@@ -52,15 +54,24 @@ export class SearchIndexService {
   async indexItems(items: SearchIndexItem[]): Promise<void> {
     if (items.length === 0) return
     const start = performance.now()
-    await this.ensureInitialized()
+
+    await dbWriteScheduler.schedule('search-index.ensure', () =>
+      withSqliteRetry(() => this.ensureInitialized(), { label: 'search-index.ensure' }),
+    )
 
     const preparedDocs = await Promise.all(items.map((item) => this.prepareDocument(item)))
 
-    await this.db.transaction(async (tx) => {
-      for (const doc of preparedDocs) {
-        await this.applyDocument(tx, doc)
-      }
-    })
+    await dbWriteScheduler.schedule('search-index.indexItems', () =>
+      withSqliteRetry(
+        () =>
+          this.db.transaction(async (tx) => {
+            for (const doc of preparedDocs) {
+              await this.applyDocument(tx, doc)
+            }
+          }),
+        { label: 'search-index.indexItems' },
+      ),
+    )
     console.debug(
       `[SearchIndexService] Indexed ${items.length} items in ${(performance.now() - start).toFixed(
         0
@@ -71,14 +82,21 @@ export class SearchIndexService {
   async removeItems(itemIds: string[]): Promise<void> {
     if (itemIds.length === 0) return
     const start = performance.now()
-    await this.ensureInitialized()
 
-    await this.db.transaction(async (tx) => {
-      for (const itemId of itemIds) {
-        await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
-        await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, itemId))
-      }
-    })
+    await dbWriteScheduler.schedule('search-index.removeItems', () =>
+      withSqliteRetry(
+        async () => {
+          await this.ensureInitialized()
+          await this.db.transaction(async (tx) => {
+            for (const itemId of itemIds) {
+              await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
+              await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, itemId))
+            }
+          })
+        },
+        { label: 'search-index.removeItems' },
+      ),
+    )
     console.debug(
       `[SearchIndexService] Removed ${itemIds.length} items in ${(
         performance.now() - start

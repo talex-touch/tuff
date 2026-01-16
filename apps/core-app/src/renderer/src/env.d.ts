@@ -1,14 +1,5 @@
 /// <reference types="vite/client" />
 
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
-import type { IArgMapperOptions } from '@talex-touch/utils/electron'
-import type { PreloadAPI } from '@talex-touch/utils/preload'
-import type { I18n } from 'vue-i18n'
-import type { StartupInfo } from '../../shared/types/startup-info'
-import type { ShortconApi } from './modules/channel/main/shortcon'
-import type { StorageManager } from './modules/channel/storage'
-import type { BaseNodeApi } from '~/modules/channel/main/node'
-
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
 
@@ -23,17 +14,48 @@ declare module 'talex-touch:information' {
 }
 
 declare global {
-  export interface IStartupInfo extends StartupInfo {}
+  export interface StartupPaths {
+    appDataPath: string
+    appPath: string
+    configPath: string
+    exePath: string
+    homePath: string
+    modulePath: string
+    pluginPath: string
+    rootPath: string
+    tempPath: string
+    userDataPath: string
+  }
+
+  export interface IStartupInfo {
+    id: number
+    version: string
+    path: StartupPaths
+    isPackaged: boolean
+    isDev: boolean
+    isRelease: boolean
+    platform: string
+    arch: string
+    platformWarning?: string
+    t: {
+      _s: number
+      s: number
+      e: number
+      p: number
+      h: number[]
+    }
+    appUpdate?: boolean
+  }
 
   export interface Window {
-    $argMapper: IArgMapperOptions
-    $nodeApi: BaseNodeApi
-    $shortconApi: ShortconApi
-    $storage: StorageManager
-    $channel: ITouchClientChannel
-    $i18n: I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
+    $argMapper: import('@talex-touch/utils/electron').IArgMapperOptions
+    $nodeApi: import('~/modules/channel/main/node').BaseNodeApi
+    $shortconApi: import('./modules/channel/main/shortcon').ShortconApi
+    $storage: import('./modules/channel/storage').StorageManager
+    $channel: import('@talex-touch/utils/channel').ITouchClientChannel
+    $i18n: import('vue-i18n').I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
     $startupInfo: IStartupInfo
-    api: PreloadAPI
+    api: import('@talex-touch/utils/preload').PreloadAPI
     ipcRenderer: {
       send: (channel: string, data: any) => void
       sendSync: (channel: string, data: any) => any
@@ -41,3 +63,5 @@ declare global {
     }
   }
 }
+
+export {}

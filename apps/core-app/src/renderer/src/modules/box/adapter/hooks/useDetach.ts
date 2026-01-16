@@ -2,7 +2,8 @@ import type { TuffItem } from '@talex-touch/utils'
 import { onBeforeUnmount, reactive, ref, type ComputedRef, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
 
 interface UseDetachOptions {
   searchVal: Ref<string>
@@ -41,6 +42,7 @@ function resolveIcon(item: TuffItem): string | undefined {
 export function useDetach(options: UseDetachOptions) {
   const { searchVal, res, boxOptions, isUIMode, activeActivations, deactivateProvider } = options
   const { t } = useI18n()
+  const transport = useTuffTransport()
 
   const flowVisible = ref(false)
   const flowPayload = ref<any>(null)
@@ -60,7 +62,7 @@ export function useDetach(options: UseDetachOptions) {
         pluginId: item.source?.id,
         ui: { showInput, initialInput: showInput ? searchVal.value : '' }
       }
-      const response = await touchChannel.send('division-box:open', config)
+      const response = await transport.send(DivisionBoxEvents.open, config)
       if (response?.success) {
         toast.success(t('corebox.detached', '已分离到独立窗口'))
       } else {
@@ -83,7 +85,7 @@ export function useDetach(options: UseDetachOptions) {
         pluginId: activation.id,
         ui: { showInput: true, initialInput: searchVal.value }
       }
-      const response = await touchChannel.send('division-box:open', config)
+      const response = await transport.send(DivisionBoxEvents.open, config)
       if (response?.success) {
         await deactivateProvider(activation.id)
         toast.success(t('corebox.detached', '已分离到独立窗口'))
@@ -114,7 +116,7 @@ export function useDetach(options: UseDetachOptions) {
   async function dispatchFlow(targetId: string): Promise<void> {
     if (!flowPayload.value) return
     try {
-      const response = await touchChannel.send('flow:dispatch', {
+      const response = await transport.send(FlowEvents.dispatch, {
         senderId: 'corebox',
         payload: flowPayload.value,
         options: { preferredTarget: targetId, skipSelector: true }
@@ -133,7 +135,7 @@ export function useDetach(options: UseDetachOptions) {
   }
 
   // Channel listeners
-  const unregDetach = touchChannel.regChannel('flow:trigger-detach', () => {
+  const unregDetach = transport.on(FlowEvents.triggerDetach, () => {
     if (isUIMode.value && activeActivations.value?.length) {
       detachUIMode(activeActivations.value[0])
       return
@@ -142,7 +144,7 @@ export function useDetach(options: UseDetachOptions) {
     if (currentItem) detachItem(currentItem)
   })
 
-  const unregFlow = touchChannel.regChannel('flow:trigger-transfer', () => {
+  const unregFlow = transport.on(FlowEvents.triggerTransfer, () => {
     const currentItem = res.value[boxOptions.focus]
     if (currentItem) openFlowSelector(currentItem)
   })

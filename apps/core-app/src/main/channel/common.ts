@@ -159,6 +159,7 @@ export class CommonChannelModule extends BaseModule {
   private channel: ReturnType<typeof genTouchChannel> | null = null
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
+  private batteryPollTimer: NodeJS.Timeout | undefined
 
   constructor() {
     super(CommonChannelModule.key, {

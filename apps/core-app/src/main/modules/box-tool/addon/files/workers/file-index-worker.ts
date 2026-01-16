@@ -1,17 +1,10 @@
-import type { Client } from '@libsql/client'
-import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { SearchIndexItem, SearchIndexKeyword } from '../../../search-engine/search-index-service'
+import type { FileParserResult } from '@talex-touch/utils/electron/file-parsers'
 import { parentPort } from 'node:worker_threads'
 import { performance } from 'node:perf_hooks'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { createClient } from '@libsql/client'
-import { eq } from 'drizzle-orm'
-import { drizzle } from 'drizzle-orm/libsql'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
-import * as schema from '../../../../../db/schema'
-import { createDbUtils } from '../../../../../db/utils'
-import { SearchIndexService } from '../../../search-engine/search-index-service'
 import {
   CONTENT_INDEXABLE_EXTENSIONS,
   getContentSizeLimitMB,
@@ -53,6 +46,30 @@ type IndexErrorMessage = {
   error: string
 }
 
+type IndexProgressUpdate = {
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped'
+  progress: number
+  processedBytes: number | null
+  totalBytes: number | null
+  lastError: string | null
+  startedAt?: string
+  updatedAt?: string
+}
+
+type IndexFileUpdate = {
+  content: string | null
+  embeddingStatus: 'pending' | 'completed'
+}
+
+type IndexFileResultMessage = {
+  type: 'file'
+  taskId: string
+  fileId: number
+  progress: IndexProgressUpdate
+  fileUpdate: IndexFileUpdate | null
+  indexItem: SearchIndexItem
+}
+
 function buildMetricsPayload(): WorkerMetricsPayload {
   const memory = process.memoryUsage()
   const eventLoop = typeof performance.eventLoopUtilization === 'function'
@@ -82,37 +99,6 @@ const MAX_CONTENT_LENGTH = 200_000
 
 const queue: IndexRequest[] = []
 let running = false
-
-let currentDbPath: string | null = null
-let client: Client | null = null
-let db: LibSQLDatabase<typeof schema> | null = null
-let dbUtils: ReturnType<typeof createDbUtils> | null = null
-let searchIndex: SearchIndexService | null = null
-
-async function ensureDb(dbPath: string): Promise<void> {
-  if (db && currentDbPath === dbPath) {
-    return
-  }
-
-  currentDbPath = dbPath
-  if (client) {
-    client.close()
-  }
-
-  client = createClient({ url: `file:${dbPath}` })
-  try {
-    await client.execute('PRAGMA journal_mode = WAL')
-    await client.execute('PRAGMA busy_timeout = 30000')
-    await client.execute('PRAGMA synchronous = NORMAL')
-    await client.execute('PRAGMA locking_mode = NORMAL')
-  } catch {
-    // ignore pragma failures in worker
-  }
-
-  db = drizzle(client, { schema })
-  dbUtils = createDbUtils(db)
-  searchIndex = new SearchIndexService(db)
-}
 
 async function ensureFileSize(file: IndexFilePayload): Promise<number | null> {
   if (typeof file.size === 'number' && file.size >= 0) {
@@ -162,23 +148,11 @@ function buildSearchIndexItem(
   }
 }
 
-async function updateProgress(
-  fileId: number,
-  payload: Partial<Omit<typeof schema.fileIndexProgress.$inferInsert, 'fileId'>>,
-): Promise<void> {
-  if (!dbUtils) {
-    return
-  }
-  await dbUtils.setFileIndexProgress(fileId, payload)
+function emitFileResult(message: IndexFileResultMessage): void {
+  parentPort?.postMessage(message)
 }
 
 async function handleIndexTask(task: IndexRequest): Promise<{ processed: number, failed: number }> {
-  await ensureDb(task.dbPath)
-  if (!db || !dbUtils || !searchIndex) {
-    throw new Error('Database not initialized in index worker')
-  }
-
-  const items: SearchIndexItem[] = []
   let failed = 0
 
   for (const file of task.files) {
@@ -188,40 +162,61 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
     let content: string | null = null
 
     if (!indexable) {
-      await updateProgress(file.id, {
-        status: 'skipped',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: size ?? null,
-        lastError: 'content-indexing-disabled',
+      emitFileResult({
+        type: 'file',
+        taskId: task.taskId,
+        fileId: file.id,
+        progress: {
+          status: 'skipped',
+          progress: 100,
+          processedBytes: 0,
+          totalBytes: size ?? null,
+          lastError: 'content-indexing-disabled',
+          updatedAt: new Date().toISOString(),
+        },
+        fileUpdate: null,
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
       })
-      items.push(buildSearchIndexItem(file, task.providerId, task.providerType))
       continue
     }
 
     const maxBytes = getContentSizeLimitMB(extension) * 1024 * 1024
     if (maxBytes && size !== null && size > maxBytes) {
-      await updateProgress(file.id, {
-        status: 'skipped',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: size,
-        lastError: 'file-too-large',
+      emitFileResult({
+        type: 'file',
+        taskId: task.taskId,
+        fileId: file.id,
+        progress: {
+          status: 'skipped',
+          progress: 100,
+          processedBytes: 0,
+          totalBytes: size,
+          lastError: 'file-too-large',
+          updatedAt: new Date().toISOString(),
+        },
+        fileUpdate: null,
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
       })
-      items.push(buildSearchIndexItem(file, task.providerId, task.providerType))
       continue
     }
 
-    await updateProgress(file.id, {
-      status: 'processing',
-      progress: 5,
-      processedBytes: 0,
-      totalBytes: size ?? null,
-      startedAt: new Date(),
-      lastError: null,
+    emitFileResult({
+      type: 'file',
+      taskId: task.taskId,
+      fileId: file.id,
+      progress: {
+        status: 'processing',
+        progress: 5,
+        processedBytes: 0,
+        totalBytes: size ?? null,
+        startedAt: new Date().toISOString(),
+        lastError: null,
+      },
+      fileUpdate: null,
+      indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
     })
 
-    let result = null
+    let result: FileParserResult | null = null
     try {
       result = await fileParserRegistry.parseWithBestParser({
         filePath: file.path,
@@ -231,26 +226,40 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
       })
     } catch (error) {
       failed += 1
-      await updateProgress(file.id, {
-        status: 'failed',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: size ?? null,
-        lastError: error instanceof Error ? error.message : 'parser-error',
+      emitFileResult({
+        type: 'file',
+        taskId: task.taskId,
+        fileId: file.id,
+        progress: {
+          status: 'failed',
+          progress: 100,
+          processedBytes: 0,
+          totalBytes: size ?? null,
+          lastError: error instanceof Error ? error.message : 'parser-error',
+          updatedAt: new Date().toISOString(),
+        },
+        fileUpdate: null,
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
       })
-      items.push(buildSearchIndexItem(file, task.providerId, task.providerType))
       continue
     }
 
     if (!result) {
-      await updateProgress(file.id, {
-        status: 'skipped',
-        progress: 100,
-        processedBytes: 0,
-        totalBytes: size ?? null,
-        lastError: 'parser-not-found',
+      emitFileResult({
+        type: 'file',
+        taskId: task.taskId,
+        fileId: file.id,
+        progress: {
+          status: 'skipped',
+          progress: 100,
+          processedBytes: 0,
+          totalBytes: size ?? null,
+          lastError: 'parser-not-found',
+          updatedAt: new Date().toISOString(),
+        },
+        fileUpdate: null,
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
       })
-      items.push(buildSearchIndexItem(file, task.providerId, task.providerType))
       continue
     }
 
@@ -264,53 +273,63 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
           ? `${rawContent.slice(0, MAX_CONTENT_LENGTH)}\n...[truncated]`
           : rawContent
       content = trimmedContent
-      await db
-        .update(schema.files)
-        .set({
-          content: trimmedContent,
-          embeddingStatus:
-            result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending',
-        })
-        .where(eq(schema.files.id, file.id))
-      await updateProgress(file.id, {
-        status: 'completed',
-        progress: 100,
-        processedBytes,
-        totalBytes,
-        lastError: null,
-        updatedAt: new Date(),
+      const embeddingStatus =
+        result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
+
+      emitFileResult({
+        type: 'file',
+        taskId: task.taskId,
+        fileId: file.id,
+        progress: {
+          status: 'completed',
+          progress: 100,
+          processedBytes,
+          totalBytes,
+          lastError: null,
+          updatedAt: new Date().toISOString(),
+        },
+        fileUpdate: { content: trimmedContent, embeddingStatus },
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, content),
       })
-      items.push(buildSearchIndexItem(file, task.providerId, task.providerType, content))
       continue
     }
 
     if (result.status === 'skipped') {
-      await updateProgress(file.id, {
-        status: 'skipped',
-        progress: 100,
-        processedBytes,
-        totalBytes,
-        lastError: result.reason ?? null,
-        updatedAt: new Date(),
+      emitFileResult({
+        type: 'file',
+        taskId: task.taskId,
+        fileId: file.id,
+        progress: {
+          status: 'skipped',
+          progress: 100,
+          processedBytes,
+          totalBytes,
+          lastError: result.reason ?? null,
+          updatedAt: new Date().toISOString(),
+        },
+        fileUpdate: null,
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
       })
-      items.push(buildSearchIndexItem(file, task.providerId, task.providerType))
       continue
     }
 
     failed += 1
-    await updateProgress(file.id, {
-      status: 'failed',
-      progress: 100,
-      processedBytes,
-      totalBytes,
-      lastError: result.reason ?? null,
-      updatedAt: new Date(),
-    })
-    items.push(buildSearchIndexItem(file, task.providerId, task.providerType))
-  }
 
-  if (items.length > 0) {
-    await searchIndex.indexItems(items)
+    emitFileResult({
+      type: 'file',
+      taskId: task.taskId,
+      fileId: file.id,
+      progress: {
+        status: 'failed',
+        progress: 100,
+        processedBytes,
+        totalBytes,
+        lastError: result.reason ?? null,
+        updatedAt: new Date().toISOString(),
+      },
+      fileUpdate: null,
+      indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+    })
   }
 
   return { processed: task.files.length, failed }

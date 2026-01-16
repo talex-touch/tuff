@@ -30,11 +30,17 @@ export class AnthropicProvider extends IntelligenceProvider {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/messages',
+    })
+
     const response = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022',
+        model,
         system: payload.messages.find(msg => msg.role === 'system')?.content,
         messages: payload.messages.filter(msg => msg.role !== 'system'),
         max_tokens: payload.maxTokens ?? 1024,
@@ -76,11 +82,17 @@ export class AnthropicProvider extends IntelligenceProvider {
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-haiku-20240307'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/messages (stream)',
+    })
+
     const response = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',
       headers: { ...this.headers, accept: 'text/event-stream' },
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-haiku-20240307',
+        model,
         system: payload.messages.find(msg => msg.role === 'system')?.content,
         messages: payload.messages.filter(msg => msg.role !== 'system'),
         max_tokens: payload.maxTokens ?? 1024,
@@ -166,11 +178,17 @@ export class AnthropicProvider extends IntelligenceProvider {
     const imageDataUrl = await this.getImageData(payload.source)
     const prompt = payload.prompt || 'Extract all text from this image and return the result as JSON with fields: text (extracted text), keywords (array of key terms).'
 
+    const model = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/messages (vision)',
+    })
+
     const response = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022',
+        model,
         max_tokens: 1000,
         messages: [
           {

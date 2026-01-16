@@ -179,13 +179,7 @@ export function useDrag(sessionId: string, initialX: number = 100, initialY: num
    */
   const savePosition = async () => {
     try {
-      // Save to session state via IPC
-      await window.electron.ipcRenderer.invoke(
-        'division-box:update-state',
-        sessionId,
-        'position',
-        position.value
-      )
+      await store.updateSessionState(sessionId, 'position', position.value)
     } catch (error) {
       console.error('Failed to save position:', error)
     }

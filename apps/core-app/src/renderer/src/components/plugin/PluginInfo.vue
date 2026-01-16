@@ -1,15 +1,15 @@
 <script lang="ts" name="PluginInfo" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { VNode } from 'vue'
+import { TxSplitButton } from '@talex-touch/tuffex'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useTouchSDK } from '@talex-touch/utils/renderer'
-import { ElMessageBox, ElPopover } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { computed, ref, useSlots, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
-import TuffIcon from '~/components/base/TuffIcon.vue'
-import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
+import StatusIcon from '~/components/base/StatusIcon.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
@@ -35,6 +35,7 @@ const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
 
 // Loading states
 const loadingStates = ref({
+  toggle: false,
   reload: false,
   openFolder: false,
   uninstall: false,
@@ -65,27 +66,32 @@ watchEffect(() => {
   }
 })
 
-// Status mapping
-const statusMap = {
-  [EPluginStatus.ACTIVE]: { indicator: 'bg-green-500' },
-  [EPluginStatus.ENABLED]: { indicator: 'bg-green-500' },
-  [EPluginStatus.DISABLED]: { indicator: 'bg-yellow-500' },
-  [EPluginStatus.CRASHED]: { indicator: 'bg-red-500' },
-  [EPluginStatus.LOAD_FAILED]: { indicator: 'bg-red-500' },
-  [EPluginStatus.LOADING]: { indicator: 'bg-blue-500' },
-  [EPluginStatus.DEV_DISCONNECTED]: { indicator: 'bg-orange-500' },
-  [EPluginStatus.DEV_RECONNECTING]: { indicator: 'bg-orange-500' }
-}
+type PluginIndicatorTone = 'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'
 
-const statusClass = computed(() => {
-  if (!props.plugin) return { indicator: 'bg-gray-400' }
-  return statusMap[props.plugin.status] ?? { indicator: 'bg-gray-400' }
+const indicatorTone = computed<PluginIndicatorTone>(() => {
+  const status = props.plugin.status
+
+  if (status === EPluginStatus.LOADING || status === EPluginStatus.DEV_RECONNECTING) return 'loading'
+  if (hasErrors.value) return 'error'
+  if (hasIssues.value) return 'warning'
+
+  if (status === EPluginStatus.LOAD_FAILED || status === EPluginStatus.CRASHED) return 'error'
+  if (status === EPluginStatus.DEV_DISCONNECTED) return 'warning'
+  if (status === EPluginStatus.DISABLED || status === EPluginStatus.DISABLING) return 'info'
+  if (status === EPluginStatus.ACTIVE || status === EPluginStatus.ENABLED || status === EPluginStatus.LOADED) return 'success'
+
+  return 'none'
 })
 
 async function handleReloadPlugin(): Promise<void> {
-  if (!props.plugin) return
+  if (!props.plugin || loadingStates.value.reload) return
 
-  await touchSdk.reloadPlugin(props.plugin.name)
+  loadingStates.value.reload = true
+  try {
+    await touchSdk.reloadPlugin(props.plugin.name)
+  } finally {
+    loadingStates.value.reload = false
+  }
 }
 
 async function handleOpenPluginFolder(): Promise<void> {
@@ -147,6 +153,93 @@ async function handleUninstallPlugin(): Promise<void> {
     loadingStates.value.uninstall = false
   }
 }
+
+type PrimaryAction = 'run' | 'stop' | 'reload' | 'reconnect' | 'none'
+
+const primaryAction = computed(() => {
+  const status = props.plugin.status
+
+  if (status === EPluginStatus.ENABLED) {
+    return {
+      action: 'stop' as const,
+      label: t('plugin.actions.stop'),
+      icon: 'i-ri-stop-fill',
+      disabled: loadingStates.value.toggle,
+      loading: loadingStates.value.toggle
+    }
+  }
+
+  if (status === EPluginStatus.LOAD_FAILED) {
+    return {
+      action: 'reload' as const,
+      label: t('plugin.actions.reload'),
+      icon: 'i-ri-refresh-line',
+      disabled: loadingStates.value.reload || loadingStates.value.toggle,
+      loading: loadingStates.value.reload || loadingStates.value.toggle
+    }
+  }
+
+  if (status === EPluginStatus.DEV_DISCONNECTED) {
+    return {
+      action: 'reconnect' as const,
+      label: t('plugin.actions.reconnect'),
+      icon: 'i-ri-plug-line',
+      disabled: loadingStates.value.toggle,
+      loading: loadingStates.value.toggle
+    }
+  }
+
+  if (
+    status === EPluginStatus.ACTIVE
+    || status === EPluginStatus.LOADING
+    || status === EPluginStatus.DISABLING
+    || status === EPluginStatus.DEV_RECONNECTING
+  ) {
+    return {
+      action: 'none' as const,
+      label: status === EPluginStatus.DEV_RECONNECTING
+        ? t('plugin.actions.reconnecting')
+        : t('plugin.actions.running'),
+      icon: 'i-ri-loader-4-line',
+      disabled: true,
+      loading: true
+    }
+  }
+
+  return {
+    action: 'run' as const,
+    label: t('plugin.actions.run'),
+    icon: 'i-ri-play-fill',
+    disabled: loadingStates.value.toggle,
+    loading: loadingStates.value.toggle
+  }
+})
+
+async function handlePrimaryAction(): Promise<void> {
+  if (!props.plugin || primaryAction.value.disabled) return
+
+  const pluginName = props.plugin.name
+  const action: PrimaryAction = primaryAction.value.action
+  if (action === 'none') return
+
+  loadingStates.value.toggle = true
+  try {
+    if (action === 'run') {
+      await pluginSDK.enable(pluginName)
+    } else if (action === 'stop') {
+      await pluginSDK.disable(pluginName)
+    } else if (action === 'reload') {
+      await handleReloadPlugin()
+    } else if (action === 'reconnect') {
+      await pluginSDK.reconnectDevServer(pluginName)
+    }
+  } catch (error) {
+    console.error(`[PluginInfo] Failed primary action "${action}" for plugin "${pluginName}":`, error)
+    toast.error(t('system.unknownError'))
+  } finally {
+    loadingStates.value.toggle = false
+  }
+}
 </script>
 
 <template>
@@ -157,16 +250,13 @@ async function handleUninstallPlugin(): Promise<void> {
     <div class="PluginInfo-Header flex items-center justify-between px-4 py-2">
       <div class="flex items-center gap-2 min-w-0">
         <div class="relative">
-          <TuffIcon
+          <StatusIcon
             colorful
             :empty="DefaultIcon"
             :alt="plugin.name"
             :icon="plugin.icon"
             :size="32"
-          />
-          <div
-            class="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-gray-800"
-            :class="statusClass.indicator"
+            :tone="indicatorTone"
           />
         </div>
 
@@ -192,70 +282,91 @@ async function handleUninstallPlugin(): Promise<void> {
       </div>
 
       <div class="flex items-center gap-2">
-        <PluginStatus class="PluginInfo-CompactStatus" :plugin="plugin" :shrink="true" />
-        <ElPopover
-          placement="bottom-end"
-          :width="200"
-          trigger="click"
-          popper-class="plugin-actions-popover"
+        <TxSplitButton
+          variant="primary"
+          size="sm"
+          :icon="primaryAction.icon"
+          :loading="primaryAction.loading"
+          :disabled="primaryAction.disabled"
+          @click="handlePrimaryAction"
         >
-          <template #reference>
-            <button
-              class="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-            >
-              <i class="i-ri-more-2-line text-lg text-gray-600 dark:text-gray-400" />
-            </button>
+          {{ primaryAction.label }}
+          <template #menu="{ close }">
+            <div class="plugin-actions-menu">
+              <div
+                class="action-item"
+                :class="{ disabled: loadingStates.reload }"
+                @click="
+                  () => {
+                    if (loadingStates.reload) return
+                    close()
+                    void handleReloadPlugin()
+                  }
+                "
+              >
+                <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
+                <i v-else class="i-ri-loader-4-line animate-spin" />
+                <span>{{
+                  loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
+                }}</span>
+              </div>
+              <div
+                class="action-item"
+                :class="{ disabled: loadingStates.openFolder }"
+                @click="
+                  () => {
+                    if (loadingStates.openFolder) return
+                    close()
+                    void handleOpenPluginFolder()
+                  }
+                "
+              >
+                <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
+                <i v-else class="i-ri-loader-4-line animate-spin" />
+                <span>{{
+                  loadingStates.openFolder
+                    ? t('plugin.actions.opening')
+                    : t('plugin.actions.openFolder')
+                }}</span>
+              </div>
+              <div
+                v-if="plugin.dev?.enable || isAppDev"
+                class="action-item"
+                :class="{ disabled: loadingStates.openDevTools }"
+                @click="
+                  () => {
+                    if (loadingStates.openDevTools) return
+                    close()
+                    void handleOpenDevTools()
+                  }
+                "
+              >
+                <i v-if="!loadingStates.openDevTools" class="i-ri-bug-line" />
+                <i v-else class="i-ri-loader-4-line animate-spin" />
+                <span>{{ t('plugin.actions.openDevTools') }}</span>
+              </div>
+              <div
+                class="action-item danger"
+                :class="{ disabled: loadingStates.uninstall }"
+                @click="
+                  () => {
+                    if (loadingStates.uninstall) return
+                    close()
+                    void handleUninstallPlugin()
+                  }
+                "
+              >
+                <i v-if="!loadingStates.uninstall" class="i-ri-delete-bin-6-line" />
+                <i v-else class="i-ri-loader-4-line animate-spin" />
+                <span>{{
+                  loadingStates.uninstall
+                    ? t('plugin.actions.uninstalling')
+                    : t('plugin.actions.uninstall')
+                }}</span>
+              </div>
+            </div>
           </template>
-          <div class="plugin-actions-menu">
-            <div
-              class="action-item"
-              :class="{ disabled: loadingStates.reload }"
-              @click="handleReloadPlugin"
-            >
-              <i v-if="!loadingStates.reload" class="i-ri-refresh-line" />
-              <i v-else class="i-ri-loader-4-line animate-spin" />
-              <span>{{
-                loadingStates.reload ? t('plugin.actions.reloading') : t('plugin.actions.reload')
-              }}</span>
-            </div>
-            <div
-              class="action-item"
-              :class="{ disabled: loadingStates.openFolder }"
-              @click="handleOpenPluginFolder"
-            >
-              <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
-              <i v-else class="i-ri-loader-4-line animate-spin" />
-              <span>{{
-                loadingStates.openFolder
-                  ? t('plugin.actions.opening')
-                  : t('plugin.actions.openFolder')
-              }}</span>
-            </div>
-            <div
-              v-if="plugin.dev?.enable || isAppDev"
-              class="action-item"
-              :class="{ disabled: loadingStates.openDevTools }"
-              @click="handleOpenDevTools"
-            >
-              <i v-if="!loadingStates.openDevTools" class="i-ri-bug-line" />
-              <i v-else class="i-ri-loader-4-line animate-spin" />
-              <span>{{ t('plugin.actions.openDevTools') }}</span>
-            </div>
-            <div
-              class="action-item danger"
-              :class="{ disabled: loadingStates.uninstall }"
-              @click="handleUninstallPlugin"
-            >
-              <i v-if="!loadingStates.uninstall" class="i-ri-delete-bin-6-line" />
-              <i v-else class="i-ri-loader-4-line animate-spin" />
-              <span>{{
-                loadingStates.uninstall
-                  ? t('plugin.actions.uninstalling')
-                  : t('plugin.actions.uninstall')
-              }}</span>
-            </div>
-          </div>
-        </ElPopover>
+        </TxSplitButton>
       </div>
     </div>
 
@@ -299,14 +410,6 @@ async function handleUninstallPlugin(): Promise<void> {
 </template>
 
 <style lang="scss" scoped>
-.PluginInfo-CompactStatus {
-  :deep(.PluginStatus-Container) {
-    border-bottom: 0;
-    padding: 0;
-    opacity: 1;
-  }
-}
-
 .plugin-actions-menu {
   display: flex;
   flex-direction: column;

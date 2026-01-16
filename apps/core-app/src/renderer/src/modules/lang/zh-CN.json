@@ -359,6 +359,11 @@
     },
     "actions": {
       "history": "历史记录",
+      "run": "运行",
+      "running": "运行中",
+      "stop": "停止",
+      "reconnect": "重连",
+      "reconnecting": "重连中...",
       "openFolder": "打开文件夹",
       "opening": "打开中...",
       "reload": "重新加载",

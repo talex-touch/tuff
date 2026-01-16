@@ -7,7 +7,6 @@
 
 import type { MaybePromise } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { genTouchApp } from '../../core'
 import { BaseModule } from '../abstract-base-module'
@@ -18,6 +17,9 @@ import { nativeShareService } from './native-share'
 import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 import { DivisionBoxManager } from '../division-box/manager'
+import { FlowEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getPermissionModule } from '../permission'
+import { flowBus } from './flow-bus'
 
 const LOG_PREFIX = '[FlowBus]'
 
@@ -36,6 +38,8 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('FlowBus')
 
   private ipc: FlowBusIPC | null = null
+  private transportDisposers: Array<() => void> = []
+  private flowDeliveryDisposers: Map<string, () => void> = new Map()
 
   constructor() {
     super(FlowBusModule.key, {
@@ -52,16 +56,109 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     // Initialize IPC handlers
     this.ipc = initializeFlowBusIPC(channel)
 
+    this.registerTransportHandlers(channel)
+
     // Register native share targets
     this.registerNativeShareTargets()
 
-    // Listen for plugin load/unload to register/unregister flow targets
+    // Deprecated (breaking change): plugin integration is now handled via TuffTransport handlers.
+    // Keep the call to avoid unused warnings; method is a no-op.
     this.setupPluginIntegration()
 
     // Register global shortcuts
     this.registerShortcuts()
 
     console.log('[FlowBusModule] Module initialized')
+  }
+
+  private registerTransportHandlers(channel: ITouchChannel): void {
+    const tx = getTuffTransportMain(
+      channel as any,
+      (channel as any)?.keyManager ?? channel,
+    )
+
+    const enforce = (context: any, apiName: string, sdkapi?: number) => {
+      const pluginId = context?.plugin?.name
+      if (!pluginId) {
+        return
+      }
+      const perm = getPermissionModule()
+      if (!perm) {
+        return
+      }
+      perm.enforcePermission(pluginId, apiName, sdkapi)
+    }
+
+    this.transportDisposers.push(
+      tx.on(FlowEvents.registerTargets, async (payload: any, context: any) => {
+        enforce(context, 'flow:plugin:register-targets', payload?._sdkapi)
+        const { pluginId, targets, pluginName, pluginIcon, isEnabled } = payload || {}
+        if (targets?.length) {
+          flowTargetRegistry.registerPluginTargets(pluginId, targets, {
+            pluginName,
+            pluginIcon,
+            isEnabled,
+          })
+        }
+        return { success: true }
+      }),
+    )
+
+    this.transportDisposers.push(
+      tx.on(FlowEvents.unregisterTargets, async (payload: any, context: any) => {
+        enforce(context, 'flow:plugin:unregister-targets', payload?._sdkapi)
+        flowTargetRegistry.unregisterPluginTargets(payload.pluginId)
+        return { success: true }
+      }),
+    )
+
+    this.transportDisposers.push(
+      tx.on(FlowEvents.setPluginEnabled, async (payload: any, context: any) => {
+        enforce(context, 'flow:plugin:set-plugin-enabled', payload?._sdkapi)
+        flowTargetRegistry.setPluginEnabled(payload.pluginId, payload.enabled)
+        return { success: true }
+      }),
+    )
+
+    this.transportDisposers.push(
+      tx.on(FlowEvents.setPluginHandler, async (payload: any, context: any) => {
+        enforce(context, 'flow:plugin:set-plugin-handler', payload?._sdkapi)
+        flowTargetRegistry.setPluginFlowHandler(payload.pluginId, payload.hasHandler)
+
+        const pluginId = payload.pluginId as string
+        const hasHandler = Boolean(payload.hasHandler)
+        if (pluginId) {
+          const existing = this.flowDeliveryDisposers.get(pluginId)
+          if (existing) {
+            existing()
+            this.flowDeliveryDisposers.delete(pluginId)
+          }
+
+          if (hasHandler) {
+            const dispose = flowBus.registerDeliveryHandler(pluginId, async (session) => {
+              await tx.sendToPlugin(pluginId, FlowEvents.deliver, {
+                sessionId: session.sessionId,
+                payload: session.payload,
+                senderId: session.senderId,
+              }).catch(() => {})
+            })
+            this.flowDeliveryDisposers.set(pluginId, dispose)
+          }
+        }
+        return { success: true }
+      }),
+    )
+
+    this.transportDisposers.push(
+      tx.on(FlowEvents.nativeShare, async (payload: any, context: any) => {
+        enforce(context, 'flow:native:share', payload?._sdkapi)
+        const options = nativeShareService.payloadToShareOptions(payload.payload)
+        if (payload.target) {
+          options.target = payload.target as any
+        }
+        return await nativeShareService.share(options)
+      }),
+    )
   }
 
   /**
@@ -96,7 +193,23 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       FLOW_SHORTCUT_IDS.DETACH,
       'CommandOrControl+D',
       () => {
-        this.triggerDetach()
+        if (coreBoxManager.isUIMode) {
+          this.triggerDetach()
+          return
+        }
+
+        const coreBoxWindow = getCoreBoxWindow()
+        if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+          console.warn('[FlowBusModule] CoreBox window not available for detach')
+          return
+        }
+
+        const tx = getTuffTransportMain(
+          genTouchApp().channel as any,
+          (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel,
+        )
+
+        tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined as any).catch(() => {})
       }
     )
 
@@ -202,7 +315,12 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       return
     }
 
-    genTouchApp().channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, 'flow:trigger-transfer', {})
+    const tx = getTuffTransportMain(
+      genTouchApp().channel as any,
+      (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel,
+    )
+
+    tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined as any).catch(() => {})
     console.log('[FlowBusModule] Triggered flow transfer shortcut')
   }
 
@@ -210,80 +328,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    * Sets up integration with plugin system
    */
   private setupPluginIntegration(): void {
-    const channel = genTouchApp().channel
-    
-    // Register channel to receive plugin flow target registrations
-    channel.regChannel(
-      ChannelType.MAIN,
-      'flow:register-targets',
-      (data) => {
-        const { pluginId, targets, pluginName, pluginIcon, isEnabled } = data.data as {
-          pluginId: string
-          targets: any[]
-          pluginName?: string
-          pluginIcon?: string
-          isEnabled?: boolean
-        }
-
-        if (targets?.length) {
-          flowTargetRegistry.registerPluginTargets(pluginId, targets, {
-            pluginName,
-            pluginIcon,
-            isEnabled
-          })
-        }
-
-        data.reply(DataCode.SUCCESS, { success: true })
-      }
-    )
-
-    // Register channel to unregister plugin targets
-    channel.regChannel(
-      ChannelType.MAIN,
-      'flow:unregister-targets',
-      (data) => {
-        const { pluginId } = data.data as { pluginId: string }
-        flowTargetRegistry.unregisterPluginTargets(pluginId)
-        data.reply(DataCode.SUCCESS, { success: true })
-      }
-    )
-
-    // Register channel to update plugin enabled state
-    channel.regChannel(
-      ChannelType.MAIN,
-      'flow:set-plugin-enabled',
-      (data) => {
-        const { pluginId, enabled } = data.data as { pluginId: string; enabled: boolean }
-        flowTargetRegistry.setPluginEnabled(pluginId, enabled)
-        data.reply(DataCode.SUCCESS, { success: true })
-      }
-    )
-
-    // Register channel for plugin to report flow handler status
-    channel.regChannel(
-      ChannelType.MAIN,
-      'flow:set-plugin-handler',
-      (data) => {
-        const { pluginId, hasHandler } = data.data as { pluginId: string; hasHandler: boolean }
-        flowTargetRegistry.setPluginFlowHandler(pluginId, hasHandler)
-        data.reply(DataCode.SUCCESS, { success: true })
-      }
-    )
-
-    // Register channel for native share
-    channel.regChannel(
-      ChannelType.MAIN,
-      'flow:native-share',
-      async (data) => {
-        const { payload, target } = data.data as { payload: any; target?: string }
-        const options = nativeShareService.payloadToShareOptions(payload)
-        if (target) {
-          options.target = target as any
-        }
-        const result = await nativeShareService.share(options)
-        data.reply(DataCode.SUCCESS, result)
-      }
-    )
+    return
   }
 
   /**
@@ -294,6 +339,24 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       this.ipc.unregisterHandlers()
       this.ipc = null
     }
+
+    for (const dispose of this.flowDeliveryDisposers.values()) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.flowDeliveryDisposers.clear()
+
+    for (const dispose of this.transportDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
 
     // Clear all targets
     flowTargetRegistry.clear()

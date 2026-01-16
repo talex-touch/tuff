@@ -6,6 +6,7 @@ import type {
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, asc, eq, gte, lt, lte } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
+import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { createLogger } from '../../../utils/logger'
@@ -26,16 +27,18 @@ export class DbStore {
       count: persistable.length,
     })
     try {
-      await withSqliteRetry(() =>
-        this.db.insert(schema.analyticsSnapshots).values(
-          persistable.map(snapshot => ({
-            windowType: snapshot.windowType,
-            timestamp: snapshot.timestamp,
-            metrics: JSON.stringify(snapshot.metrics),
-            createdAt,
-          })),
+      await dbWriteScheduler.schedule('analytics.snapshots', () =>
+        withSqliteRetry(() =>
+          this.db.insert(schema.analyticsSnapshots).values(
+            persistable.map(snapshot => ({
+              windowType: snapshot.windowType,
+              timestamp: snapshot.timestamp,
+              metrics: JSON.stringify(snapshot.metrics),
+              createdAt,
+            })),
+          ),
+          { label: 'analytics.snapshots' },
         ),
-        { label: 'analytics.snapshots' },
       )
     } catch (error) {
       log.error('Failed to save analytics snapshots', {
@@ -99,18 +102,20 @@ export class DbStore {
     metadata?: Record<string, unknown>
     timestamp: number
   }): Promise<void> {
-    await withSqliteRetry(
-      () =>
-        this.db.insert(schema.pluginAnalytics).values({
-          pluginName: payload.pluginName,
-          pluginVersion: payload.pluginVersion ?? null,
-          featureId: payload.featureId,
-          eventType: payload.eventType,
-          count: payload.count ?? 1,
-          metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
-          timestamp: payload.timestamp,
-        }),
-      { label: 'analytics.plugin' },
+    await dbWriteScheduler.schedule('analytics.plugin', () =>
+      withSqliteRetry(
+        () =>
+          this.db.insert(schema.pluginAnalytics).values({
+            pluginName: payload.pluginName,
+            pluginVersion: payload.pluginVersion ?? null,
+            featureId: payload.featureId,
+            eventType: payload.eventType,
+            count: payload.count ?? 1,
+            metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
+            timestamp: payload.timestamp,
+          }),
+        { label: 'analytics.plugin' },
+      ),
     )
   }
 }

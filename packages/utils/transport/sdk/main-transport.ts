@@ -60,7 +60,13 @@ export class TuffMainTransport implements ITuffTransportMain {
       }
     }
 
-    return this.channel.regChannel(ChannelType.MAIN, eventName, channelHandler)
+    const unregisterMain = this.channel.regChannel(ChannelType.MAIN, eventName, channelHandler)
+    const unregisterPlugin = this.channel.regChannel(ChannelType.PLUGIN, eventName, channelHandler)
+
+    return () => {
+      unregisterMain()
+      unregisterPlugin()
+    }
   }
 
   /**
@@ -157,12 +163,16 @@ export class TuffMainTransport implements ITuffTransportMain {
       streams.delete(streamId)
     }
 
-    const startCleanup = this.channel.regChannel(ChannelType.MAIN, startEventName, startHandler)
-    const cancelCleanup = this.channel.regChannel(ChannelType.MAIN, cancelEventName, cancelHandler)
+    const startCleanupMain = this.channel.regChannel(ChannelType.MAIN, startEventName, startHandler)
+    const cancelCleanupMain = this.channel.regChannel(ChannelType.MAIN, cancelEventName, cancelHandler)
+    const startCleanupPlugin = this.channel.regChannel(ChannelType.PLUGIN, startEventName, startHandler)
+    const cancelCleanupPlugin = this.channel.regChannel(ChannelType.PLUGIN, cancelEventName, cancelHandler)
 
     return () => {
-      startCleanup()
-      cancelCleanup()
+      startCleanupMain()
+      cancelCleanupMain()
+      startCleanupPlugin()
+      cancelCleanupPlugin()
     }
   }
 

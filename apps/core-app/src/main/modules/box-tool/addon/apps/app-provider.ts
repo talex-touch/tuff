@@ -1477,10 +1477,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
+    const dbUtils = this.dbUtils
+
     await appTaskGate.runAppTask(async () => {
       console.log(formatLog('AppProvider', 'Starting mdls update scan...', LogStyle.process))
 
-      const allDbApps = await this.dbUtils.getFilesByType('app')
+      const allDbApps = await dbUtils.getFilesByType('app')
       if (allDbApps.length === 0) {
         console.log(formatLog('AppProvider', 'No apps in DB, skipping mdls scan', LogStyle.info))
         return
@@ -1490,7 +1492,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       // 处理更新的 app
       if (updatedCount > 0 && updatedApps.length > 0) {
-        const db = this.dbUtils.getDb()
+        const db = dbUtils.getDb()
 
         for (const app of updatedApps) {
           await runWithSqliteBusyRetry(() =>
@@ -1516,7 +1518,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       // 处理删除的 app（文件不存在，从数据库中删除）
       if (deletedApps.length > 0) {
-        const db = this.dbUtils.getDb()
+        const db = dbUtils.getDb()
         console.log(
           formatLog(
             'AppProvider',
@@ -1527,7 +1529,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
         for (const app of deletedApps) {
           try {
-            const extensions = await this.dbUtils.getFileExtensions(app.id)
+            const extensions = await dbUtils.getFileExtensions(app.id)
             const itemId = extensions.find((e) => e.key === 'bundleId')?.value || app.path
 
             await db.transaction(async (tx) => {

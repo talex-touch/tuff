@@ -2,6 +2,16 @@
 
 Flow Transfer 是一个插件间数据流转系统，允许插件将结构化数据传递给其他插件进行处理。类似于移动端的"分享"功能，但更加强大和灵活。
 
+## Scope
+
+本文档描述 **当前已落地** 的 Flow Transfer 基础能力：
+
+- Sender：`dispatch()` + 选择目标面板
+- Target：`onFlowTransfer()` + `acknowledge()` / `reportError()`
+- Native Share：`nativeShare()`
+
+> 权限说明：Flow Transfer 相关能力目前**尚未接入权限中心**（Permission Center）。`PERMISSION_DENIED` 等错误码是预留语义，后续会接入权限门控与用户授权流程。
+
 > **v2.4.7 新特性**：
 > - 插件需要主动注册 `onFlowTransfer` 处理器才能接收 Flow 数据
 > - 支持调用系统原生 Share 功能（macOS AirDrop、邮件、信息等）
@@ -33,6 +43,11 @@ interface FlowPayload {
   }
 }
 ```
+
+> 当前实现说明：FlowTarget 的最终可用列表由主进程维护。
+> - Native share targets：由主进程在启动时注册。
+> - Plugin targets：当前通过主进程通道 `flow:register-targets` 注册（由运行时/加载器负责触发）。
+>   如果你发现 manifest 声明的 targets 没有出现在列表中，说明对应注册流程尚未覆盖到你的运行路径。
 
 ### Flow Target（流转目标）
 
@@ -73,14 +88,17 @@ Flow Transfer 提供两个全局快捷键（可在设置中自定义）：
 
 ### 在 manifest.json 中声明 Flow 能力
 
+Flow 的 manifest 配置结构以 `FlowManifestConfig` 为准：
+
+- `flowSender?: boolean`
+- `flowTargets?: FlowTarget[]`
+
 ```json
 {
   "name": "my-plugin",
   "version": "1.0.0",
   
-  "capabilities": {
-    "flowSender": true
-  },
+  "flowSender": true,
   
   "flowTargets": [
     {
@@ -334,6 +352,26 @@ interface FlowTargetInfo {
   adaptationHint?: string    // 适配提示（如"该插件尚未适配 Flow Transfer"）
 }
 ```
+
+## IPC 通道（实现对齐）
+
+以下通道是当前实现中使用到的关键事件名（详见主进程 `apps/core-app/src/main/modules/flow-bus/`）：
+
+- **`flow:dispatch`**：发起 flow
+- **`flow:get-targets`**：获取可用 targets
+- **`flow:cancel`**：取消 session
+- **`flow:acknowledge`**：ack
+- **`flow:report-error`**：上报错误
+- **`flow:session-update`**：广播 session 状态更新
+- **`flow:select-target`**：用户在选择面板选中 target（UI → 主进程）
+- **`flow:native-share`**：系统分享
+
+插件集成（主进程侧注册）：
+
+- **`flow:register-targets`**：注册 targets（plugin → 主进程）
+- **`flow:unregister-targets`**：卸载 targets
+- **`flow:set-plugin-enabled`**：更新 plugin enabled 状态
+- **`flow:set-plugin-handler`**：声明当前插件是否已注册 `onFlowTransfer` handler
 
 ---
 

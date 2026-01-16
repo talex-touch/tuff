@@ -7,7 +7,6 @@
 
 import type { MetaAction } from '../../transport/events/types/meta-overlay'
 import type { TuffItem } from '../../core-box/tuff/tuff-dsl'
-import { ensureRendererChannel } from './channel'
 import { MetaOverlayEvents } from '../../transport/events/meta-overlay'
 
 /**
@@ -186,7 +185,6 @@ export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
     },
 
     unregisterAll(): void {
-      const actionIds = Array.from(registeredActionIds)
       registeredActionIds.clear()
 
       void send(MetaOverlayEvents.action.unregister.toEventName(), {

@@ -120,9 +120,10 @@ export class StorageModule extends BaseModule {
 
     this.setupListeners()
 
+    const channel = ((app as any)?.channel ?? ($app as any)?.channel) as any
     this.transport = getTuffTransportMain(
-      app.channel as any,
-      (app.channel as any)?.keyManager ?? app.channel,
+      channel,
+      (channel as any)?.keyManager ?? channel,
     )
     this.registerTransportHandlers()
 

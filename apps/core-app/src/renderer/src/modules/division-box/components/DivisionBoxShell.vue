@@ -61,6 +61,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import DockHint from './DockHint.vue'
 import { useDrag } from '../composables/useDrag'
@@ -209,6 +211,7 @@ const getStateBadgeIcon = (state: string) => {
 
 // State change listener cleanup
 let stateChangeCleanup: (() => void) | null = null
+const transport = useTuffTransport()
 
 // Lifecycle
 onMounted(() => {
@@ -236,19 +239,19 @@ onMounted(() => {
       }
     }
   }
-  
-  window.electron.ipcRenderer.on('division-box:state-changed', handleStateChange)
-  
-  // Store cleanup function
-  stateChangeCleanup = () => {
-    window.electron.ipcRenderer.removeListener('division-box:state-changed', handleStateChange)
-  }
+
+  stateChangeCleanup = transport.on(DivisionBoxEvents.stateChanged, (event) => {
+    handleStateChange(null, event as any)
+  })
   
   // Request initial state from main process
-  window.electron.ipcRenderer.invoke('division-box:get-state', props.sessionId)
-    .then((state: string | null) => {
-      if (state) {
-        currentState.value = state
+  transport.send(DivisionBoxEvents.getState, { sessionId: props.sessionId })
+    .then((response) => {
+      if (response?.success) {
+        const state = (response.data as any)?.state
+        if (state) {
+          currentState.value = state
+        }
         if (state === 'active') {
           isLoading.value = false
         }

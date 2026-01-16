@@ -7,24 +7,34 @@ Intelligence SDK 提供插件访问 AI 能力的统一接口，支持多种 AI P
 ```typescript
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
 
-const { text, vision, code, isLoading, lastError } = useIntelligence()
+const { text, vision } = useIntelligence()
 
 // AI 对话
-const result = await text.chat({
+const chatRes = await text.chat({
   messages: [{ role: 'user', content: 'Hello!' }]
 })
+console.log(chatRes.result)
 
 // 翻译
-const translated = await text.translate({
+const translateRes = await text.translate({
   text: 'Hello World',
   targetLang: 'zh-CN'
 })
+console.log(translateRes.result)
 
 // OCR 识别
-const ocrResult = await vision.ocr({
+const ocrRes = await vision.ocr({
   source: { type: 'data-url', dataUrl: imageDataUrl }
 })
+console.log(ocrRes.result.text)
 ```
+
+## 延伸阅读
+
+- `/docs/dev/intelligence`（开发者专章）
+- `/docs/dev/intelligence/configuration`
+- `/docs/dev/intelligence/capabilities`
+- `/docs/dev/intelligence/troubleshooting`
 
 ---
 
@@ -38,6 +48,7 @@ const ocrResult = await vision.ocr({
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
 
 const intelligence = useIntelligence()
+void intelligence
 ```
 
 返回值包含以下属性和方法：
@@ -74,7 +85,7 @@ const result = await text.chat({
 })
 
 console.log(result.result) // 翻译结果
-console.log(result.usage)  // { promptTokens, completionTokens, totalTokens }
+console.log(result.usage) // { promptTokens, completionTokens, totalTokens }
 ```
 
 **Payload 参数**：
@@ -94,7 +105,7 @@ console.log(result.usage)  // { promptTokens, completionTokens, totalTokens }
 ```typescript
 const result = await text.translate({
   text: 'Hello World',
-  sourceLang: 'en',    // 可选，自动检测
+  sourceLang: 'en', // 可选，自动检测
   targetLang: 'zh-CN'
 })
 
@@ -109,8 +120,10 @@ console.log(result.result) // "你好世界"
 const result = await text.summarize({
   text: longArticle,
   maxLength: 200,
-  style: 'bullet-points'  // 'concise' | 'detailed' | 'bullet-points'
+  style: 'bullet-points' // 'concise' | 'detailed' | 'bullet-points'
 })
+
+console.log(result.result)
 ```
 
 ### `text.rewrite(payload, options?)`
@@ -120,9 +133,11 @@ const result = await text.summarize({
 ```typescript
 const result = await text.rewrite({
   text: '这个产品很好用',
-  style: 'formal',        // 'formal' | 'casual' | 'professional' | 'creative'
-  tone: 'authoritative'   // 'neutral' | 'friendly' | 'authoritative'
+  style: 'formal', // 'formal' | 'casual' | 'professional' | 'creative'
+  tone: 'authoritative' // 'neutral' | 'friendly' | 'authoritative'
 })
+
+console.log(result.result)
 ```
 
 ### `text.grammarCheck(payload, options?)`
@@ -135,6 +150,8 @@ const result = await text.grammarCheck({
   language: 'en',
   checkTypes: ['spelling', 'grammar', 'punctuation']
 })
+
+console.log(result.result)
 
 // result.result: {
 //   correctedText: 'I have an apple',
@@ -159,6 +176,8 @@ const result = await code.generate({
   includeComments: true
 })
 
+console.log(result.result)
+
 // result.result: {
 //   code: '...',
 //   explanation: '...',
@@ -179,6 +198,8 @@ const result = await code.explain({
   targetAudience: 'beginner'
 })
 
+console.log(result.result)
+
 // result.result: {
 //   explanation: '...',
 //   summary: '...',
@@ -198,6 +219,8 @@ const result = await code.review({
   focusAreas: ['security', 'performance', 'best-practices']
 })
 
+console.log(result.result)
+
 // result.result: {
 //   summary: '...',
 //   score: 75,
@@ -216,6 +239,8 @@ const result = await code.refactor({
   language: 'javascript',
   goals: ['readability', 'maintainability']
 })
+
+console.log(result.result)
 ```
 
 ### `code.debug(payload, options?)`
@@ -228,6 +253,8 @@ const result = await code.debug({
   error: 'TypeError: Cannot read property...',
   stackTrace: '...'
 })
+
+console.log(result.result)
 
 // result.result: {
 //   diagnosis: '...',
@@ -251,6 +278,8 @@ const result = await analysis.detectIntent({
   possibleIntents: ['book_flight', 'book_hotel', 'query_weather']
 })
 
+console.log(result.result)
+
 // result.result: {
 //   intent: 'book_flight',
 //   confidence: 0.95,
@@ -271,6 +300,8 @@ const result = await analysis.analyzeSentiment({
   granularity: 'document'
 })
 
+console.log(result.result)
+
 // result.result: {
 //   sentiment: 'positive',
 //   score: 0.9,
@@ -288,6 +319,8 @@ const result = await analysis.extractContent({
   text: '请联系张三，电话：13800138000，邮箱：zhangsan@example.com',
   extractTypes: ['people', 'phones', 'emails']
 })
+
+console.log(result.result)
 
 // result.result: {
 //   entities: {
@@ -308,6 +341,8 @@ const result = await analysis.extractKeywords({
   maxKeywords: 10,
   includeScores: true
 })
+
+console.log(result.result)
 ```
 
 ### `analysis.classify(payload, options?)`
@@ -320,6 +355,8 @@ const result = await analysis.classify({
   categories: ['科技', '体育', '娱乐', '财经'],
   multiLabel: false
 })
+
+console.log(result.result)
 
 // result.result: {
 //   predictions: [{ category: '科技', confidence: 0.95 }]
@@ -336,14 +373,16 @@ OCR 文字识别。
 
 ```typescript
 const result = await vision.ocr({
-  source: { 
-    type: 'data-url', 
-    dataUrl: 'data:image/png;base64,...' 
+  source: {
+    type: 'data-url',
+    dataUrl: 'data:image/png;base64,...'
   },
   language: 'zh-CN',
   includeLayout: true,
   includeKeywords: true
 })
+
+console.log(result.result.text)
 
 // result.result: {
 //   text: '识别的文字...',
@@ -358,13 +397,15 @@ const result = await vision.ocr({
 
 ```typescript
 // Data URL
-{ type: 'data-url', dataUrl: 'data:image/png;base64,...' }
+const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
 
 // 文件路径
-{ type: 'file', filePath: '/path/to/image.png' }
+const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
 
 // Base64
-{ type: 'base64', base64: '...' }
+const sourceBase64 = { type: 'base64', base64: '...' } as const
+
+console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
 ```
 
 ### `vision.caption(payload, options?)`
@@ -377,6 +418,8 @@ const result = await vision.caption({
   style: 'detailed',
   language: 'zh-CN'
 })
+
+console.log(result.result)
 
 // result.result: {
 //   caption: '图片描述...',
@@ -393,6 +436,8 @@ const result = await vision.analyze({
   source: { type: 'data-url', dataUrl: imageUrl },
   analysisTypes: ['objects', 'faces', 'colors', 'scene']
 })
+
+console.log(result.result)
 
 // result.result: {
 //   description: '...',
@@ -416,6 +461,8 @@ const result = await vision.generate({
   count: 1
 })
 
+console.log(result.result)
+
 // result.result: {
 //   images: [{ url: '...', revisedPrompt: '...' }]
 // }
@@ -436,6 +483,7 @@ const result = await embedding.generate({
 })
 
 // result.result: [0.123, -0.456, ...] // 向量数组
+console.log(result.result.length)
 ```
 
 ---
@@ -449,9 +497,11 @@ RAG 查询。
 ```typescript
 const result = await rag.query({
   query: '如何配置插件？',
-  documents: [...],
+  documents: [],
   topK: 5
 })
+
+console.log(result.result)
 ```
 
 ### `rag.semanticSearch(payload, options?)`
@@ -464,6 +514,8 @@ const result = await rag.semanticSearch({
   corpus: 'documentation',
   limit: 10
 })
+
+console.log(result.result)
 ```
 
 ### `rag.rerank(payload, options?)`
@@ -476,6 +528,8 @@ const result = await rag.rerank({
   documents: searchResults,
   topK: 5
 })
+
+console.log(result.result)
 ```
 
 ---
@@ -490,8 +544,10 @@ const result = await rag.rerank({
 const result = await agent.run({
   task: '帮我分析这份数据',
   tools: ['calculator', 'web_search'],
-  context: { data: [...] }
+  context: { data: [] }
 })
+
+console.log(result.result)
 ```
 
 ---
@@ -506,6 +562,8 @@ const result = await agent.run({
 const result = await invoke('text.chat', {
   messages: [{ role: 'user', content: 'Hello' }]
 })
+
+console.log(result.result)
 ```
 
 ---
@@ -516,15 +574,18 @@ const result = await invoke('text.chat', {
 
 ```typescript
 interface IntelligenceInvokeOptions {
-  strategy?: string           // 策略 ID
-  modelPreference?: string[]  // 优先模型列表
-  costCeiling?: number        // 成本上限
-  latencyTarget?: number      // 目标延迟 (ms)
-  timeout?: number            // 超时时间 (ms)
-  stream?: boolean            // 是否流式输出
+  strategy?: string // 策略 ID
+  modelPreference?: string[] // 优先模型列表
+  costCeiling?: number // 成本上限
+  latencyTarget?: number // 目标延迟 (ms)
+  timeout?: number // 超时时间 (ms)
+  stream?: boolean // 是否流式输出
   preferredProviderId?: string // 优先 Provider
   allowedProviderIds?: string[] // 允许的 Provider 列表
 }
+
+const _invokeOptions: IntelligenceInvokeOptions = {}
+void _invokeOptions
 ```
 
 ---
@@ -535,18 +596,21 @@ interface IntelligenceInvokeOptions {
 
 ```typescript
 interface IntelligenceInvokeResult<T> {
-  result: T                    // 结果数据
+  result: T // 结果数据
   usage: {
     promptTokens: number
     completionTokens: number
     totalTokens: number
     cost?: number
   }
-  model: string               // 使用的模型
-  latency: number             // 请求延迟 (ms)
-  traceId: string             // 追踪 ID
-  provider: string            // 使用的 Provider
+  model: string // 使用的模型
+  latency: number // 请求延迟 (ms)
+  traceId: string // 追踪 ID
+  provider: string // 使用的 Provider
 }
+
+const _invokeResult = {} as IntelligenceInvokeResult<string>
+void _invokeResult
 ```
 
 ---
@@ -556,21 +620,8 @@ interface IntelligenceInvokeResult<T> {
 ```typescript
 const { isLoading, lastError } = useIntelligence()
 
-// 监听加载状态
-watch(isLoading, (loading) => {
-  if (loading) {
-    showLoadingSpinner()
-  } else {
-    hideLoadingSpinner()
-  }
-})
-
-// 监听错误
-watch(lastError, (error) => {
-  if (error) {
-    showErrorToast(error)
-  }
-})
+watch(isLoading, loading => console.log('loading', loading))
+watch(lastError, error => console.log('error', error))
 ```
 
 ---
@@ -580,20 +631,24 @@ watch(lastError, (error) => {
 ### 翻译插件
 
 ```typescript
-import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk'
+import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
 
 const { text, isLoading } = useIntelligence()
 const clipboard = useClipboard()
+
+void isLoading
 
 async function translateAndPaste(content: string, targetLang: string) {
   const result = await text.translate({
     text: content,
     targetLang
   })
-  
+
   await clipboard.copyAndPaste({ text: result.result })
 }
+
+void translateAndPaste
 ```
 
 ### OCR 识别插件
@@ -608,12 +663,14 @@ async function recognizeText(imageDataUrl: string) {
     source: { type: 'data-url', dataUrl: imageDataUrl },
     includeKeywords: true
   })
-  
+
   return {
     text: result.result.text,
     keywords: result.result.keywords
   }
 }
+
+void recognizeText
 ```
 
 ---
@@ -629,6 +686,8 @@ enum IntelligenceProviderType {
   LOCAL = 'local',
   CUSTOM = 'custom'
 }
+
+void IntelligenceProviderType.OPENAI
 ```
 
 ---
@@ -652,4 +711,6 @@ enum IntelligenceCapabilityType {
   // 工作流
   WORKFLOW, AGENT
 }
+
+void IntelligenceCapabilityType.CHAT
 ```

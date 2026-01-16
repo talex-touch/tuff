@@ -13,8 +13,15 @@ import type {
   FlowSessionUpdate,
   FlowPayloadType
 } from '../../types/flow'
-import { FlowIPCChannel } from '../../types/flow'
 import { hasWindow } from '../../env'
+import { createPluginTuffTransport } from '../../transport'
+import { FlowEvents } from '../../transport/events'
+
+function resolveSdkApi(): number | undefined {
+  const globalWindow = hasWindow() ? (window as any) : undefined
+  const sdkapi = globalWindow?.$plugin?.sdkapi
+  return typeof sdkapi === 'number' ? sdkapi : undefined
+}
 
 /**
  * Flow transfer handler function type
@@ -138,24 +145,32 @@ export function createFlowSDK(
   const flowTransferHandlers = new Set<FlowTransferHandler>()
   let hasRegisteredHandler = false
 
-  // Listen for session updates
-  if (hasWindow()) {
-    window.addEventListener('message', (event) => {
-      if (event.data?.type === FlowIPCChannel.SESSION_UPDATE) {
-        const update = event.data.payload as FlowSessionUpdate
-        const listeners = sessionListeners.get(update.sessionId)
-        if (listeners) {
-          for (const listener of listeners) {
-            try {
-              listener(update)
-            } catch (error) {
-              console.error('[FlowSDK] Error in session listener:', error)
-            }
-          }
-        }
+  const transport = createPluginTuffTransport(channel as any)
+
+  transport.on(FlowEvents.sessionUpdate, (update) => {
+    const listeners = sessionListeners.get((update as any)?.sessionId)
+    if (!listeners) {
+      return
+    }
+    for (const listener of listeners) {
+      try {
+        listener(update as any)
+      } catch (error) {
+        console.error('[FlowSDK] Error in session listener:', error)
       }
-    })
-  }
+    }
+  })
+
+  transport.on(FlowEvents.deliver, (payload) => {
+    const { sessionId, payload: flowPayload, senderId, senderName } = payload as any
+    for (const h of flowTransferHandlers) {
+      try {
+        h(flowPayload, sessionId, { senderId, senderName })
+      } catch (error) {
+        console.error('[FlowSDK] Error in flow transfer handler:', error)
+      }
+    }
+  })
 
   return {
     async dispatch(payload: FlowPayload, options?: FlowDispatchOptions): Promise<FlowDispatchResult> {
@@ -168,22 +183,28 @@ export function createFlowSDK(
         }
       }
 
-      const response = await channel.send(FlowIPCChannel.DISPATCH, {
+      const response = await transport.send(FlowEvents.dispatch, {
         senderId: pluginId,
         payload: enrichedPayload,
-        options
+        options,
+        _sdkapi: resolveSdkApi(),
       })
 
       if (!response?.success) {
         throw new Error(response?.error?.message || 'Flow dispatch failed')
       }
 
+      if (!response.data) {
+        throw new Error('Flow dispatch failed')
+      }
+
       return response.data
     },
 
     async getAvailableTargets(payloadType?: FlowPayloadType): Promise<FlowTargetInfo[]> {
-      const response = await channel.send(FlowIPCChannel.GET_TARGETS, {
-        payloadType
+      const response = await transport.send(FlowEvents.getTargets, {
+        payloadType,
+        _sdkapi: resolveSdkApi(),
       })
 
       if (!response?.success) {
@@ -214,8 +235,9 @@ export function createFlowSDK(
     },
 
     async cancel(sessionId: string): Promise<void> {
-      const response = await channel.send(FlowIPCChannel.CANCEL, {
-        sessionId
+      const response = await transport.send(FlowEvents.cancel, {
+        sessionId,
+        _sdkapi: resolveSdkApi(),
       })
 
       if (!response?.success) {
@@ -224,9 +246,10 @@ export function createFlowSDK(
     },
 
     async acknowledge(sessionId: string, ackPayload?: any): Promise<void> {
-      const response = await channel.send(FlowIPCChannel.ACKNOWLEDGE, {
+      const response = await transport.send(FlowEvents.acknowledge, {
         sessionId,
-        ackPayload
+        ackPayload,
+        _sdkapi: resolveSdkApi(),
       })
 
       if (!response?.success) {
@@ -235,9 +258,10 @@ export function createFlowSDK(
     },
 
     async reportError(sessionId: string, message: string): Promise<void> {
-      const response = await channel.send(FlowIPCChannel.REPORT_ERROR, {
+      const response = await transport.send(FlowEvents.reportError, {
         sessionId,
-        message
+        message,
+        _sdkapi: resolveSdkApi(),
       })
 
       if (!response?.success) {
@@ -251,49 +275,38 @@ export function createFlowSDK(
       // Notify the system that this plugin has a flow handler
       if (!hasRegisteredHandler) {
         hasRegisteredHandler = true
-        channel.send('flow:set-plugin-handler', {
+        void transport.send(FlowEvents.setPluginHandler, {
           pluginId,
-          hasHandler: true
-        }).catch((err) => {
+          hasHandler: true,
+          _sdkapi: resolveSdkApi(),
+        }).catch((err: unknown) => {
           console.warn('[FlowSDK] Failed to register flow handler:', err)
         })
 
-        // Listen for incoming flow transfers
-        if (hasWindow()) {
-          window.addEventListener('message', (event) => {
-            if (event.data?.type === FlowIPCChannel.DELIVER && event.data?.targetPluginId === pluginId) {
-              const { payload, sessionId, senderId, senderName } = event.data
-              for (const h of flowTransferHandlers) {
-                try {
-                  h(payload, sessionId, { senderId, senderName })
-                } catch (error) {
-                  console.error('[FlowSDK] Error in flow transfer handler:', error)
-                }
-              }
-            }
-          })
-        }
+        void hasWindow
       }
 
       return () => {
         flowTransferHandlers.delete(handler)
         if (flowTransferHandlers.size === 0) {
           hasRegisteredHandler = false
-          channel.send('flow:set-plugin-handler', {
+          void transport.send(FlowEvents.setPluginHandler, {
             pluginId,
-            hasHandler: false
+            hasHandler: false,
+            _sdkapi: resolveSdkApi(),
           }).catch(() => {})
         }
       }
     },
 
     async nativeShare(payload: FlowPayload, target?: string): Promise<{ success: boolean; target?: string; error?: string }> {
-      const response = await channel.send('flow:native-share', {
+      const response = await transport.send(FlowEvents.nativeShare, {
         payload,
-        target
+        target,
+        _sdkapi: resolveSdkApi(),
       })
 
-      return response?.data || { success: false, error: 'Native share failed' }
+      return response || { success: false, error: 'Native share failed' }
     }
   }
 }

@@ -193,7 +193,9 @@ class PluginUpdateScheduler {
 
     PluginUpdateScheduler.pollingService.register(
       this.pollingTaskId,
-      () => this.checkForUpdates(),
+      async () => {
+        await this.checkForUpdates()
+      },
       { interval: this.checkIntervalMs, unit: 'milliseconds', initialDelayMs: 30_000 },
     )
     PluginUpdateScheduler.pollingService.start()

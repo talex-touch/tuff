@@ -7,24 +7,34 @@ The Intelligence SDK provides a unified interface for plugins to access AI capab
 ```typescript
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
 
-const { text, vision, code, isLoading, lastError } = useIntelligence()
+const { text, vision } = useIntelligence()
 
 // AI Chat
-const result = await text.chat({
+const chatRes = await text.chat({
   messages: [{ role: 'user', content: 'Hello!' }]
 })
+console.log(chatRes.result)
 
 // Translation
-const translated = await text.translate({
+const translateRes = await text.translate({
   text: 'Hello World',
   targetLang: 'zh-CN'
 })
+console.log(translateRes.result)
 
 // OCR
-const ocrResult = await vision.ocr({
+const ocrRes = await vision.ocr({
   source: { type: 'data-url', dataUrl: imageDataUrl }
 })
+console.log(ocrRes.result.text)
 ```
+
+## See also
+
+- `/docs/dev/intelligence` (Developer chapter)
+- `/docs/dev/intelligence/configuration`
+- `/docs/dev/intelligence/capabilities`
+- `/docs/dev/intelligence/troubleshooting`
 
 ---
 
@@ -38,6 +48,7 @@ Get Intelligence SDK instance (Vue Composable).
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
 
 const intelligence = useIntelligence()
+void intelligence
 ```
 
 Returns an object with the following properties and methods:
@@ -74,7 +85,7 @@ const result = await text.chat({
 })
 
 console.log(result.result) // Chat response
-console.log(result.usage)  // { promptTokens, completionTokens, totalTokens }
+console.log(result.usage) // { promptTokens, completionTokens, totalTokens }
 ```
 
 ### `text.translate(payload, options?)`
@@ -84,9 +95,10 @@ Text translation.
 ```typescript
 const result = await text.translate({
   text: 'Hello World',
-  sourceLang: 'en',    // Optional, auto-detect
+  sourceLang: 'en', // Optional, auto-detect
   targetLang: 'zh-CN'
 })
+console.log(result.result)
 ```
 
 ### `text.summarize(payload, options?)`
@@ -95,10 +107,11 @@ Text summarization.
 
 ```typescript
 const result = await text.summarize({
-  text: longArticle,
+  text: 'This is a long article',
   maxLength: 200,
-  style: 'bullet-points'  // 'concise' | 'detailed' | 'bullet-points'
+  style: 'bullet-points' // 'concise' | 'detailed' | 'bullet-points'
 })
+console.log(result.result)
 ```
 
 ### `text.rewrite(payload, options?)`
@@ -108,9 +121,10 @@ Text rewriting.
 ```typescript
 const result = await text.rewrite({
   text: 'This product is good',
-  style: 'formal',        // 'formal' | 'casual' | 'professional' | 'creative'
-  tone: 'authoritative'   // 'neutral' | 'friendly' | 'authoritative'
+  style: 'formal', // 'formal' | 'casual' | 'professional' | 'creative'
+  tone: 'authoritative' // 'neutral' | 'friendly' | 'authoritative'
 })
+console.log(result.result)
 ```
 
 ### `text.grammarCheck(payload, options?)`
@@ -118,11 +132,12 @@ const result = await text.rewrite({
 Grammar checking.
 
 ```typescript
-const result = await text.grammarCheck({
+const res = await text.grammarCheck({
   text: 'I has a apple',
   language: 'en',
   checkTypes: ['spelling', 'grammar', 'punctuation']
 })
+console.log(res.result)
 ```
 
 ---
@@ -134,12 +149,13 @@ const result = await text.grammarCheck({
 Code generation.
 
 ```typescript
-const result = await code.generate({
+const res = await code.generate({
   description: 'Implement a quicksort algorithm',
   language: 'typescript',
   includeTests: true,
   includeComments: true
 })
+console.log(res.result)
 ```
 
 ### `code.explain(payload, options?)`
@@ -147,12 +163,13 @@ const result = await code.generate({
 Code explanation.
 
 ```typescript
-const result = await code.explain({
+const res = await code.explain({
   code: 'const [a, b] = [b, a]',
   language: 'javascript',
   depth: 'detailed',
   targetAudience: 'beginner'
 })
+console.log(res.result)
 ```
 
 ### `code.review(payload, options?)`
@@ -160,11 +177,12 @@ const result = await code.explain({
 Code review.
 
 ```typescript
-const result = await code.review({
+const res = await code.review({
   code: myCode,
   language: 'typescript',
   focusAreas: ['security', 'performance', 'best-practices']
 })
+console.log(res.result)
 ```
 
 ### `code.refactor(payload, options?)`
@@ -172,11 +190,12 @@ const result = await code.review({
 Code refactoring.
 
 ```typescript
-const result = await code.refactor({
+const res = await code.refactor({
   code: legacyCode,
   language: 'javascript',
   goals: ['readability', 'maintainability']
 })
+console.log(res.result)
 ```
 
 ### `code.debug(payload, options?)`
@@ -184,11 +203,12 @@ const result = await code.refactor({
 Code debugging.
 
 ```typescript
-const result = await code.debug({
+const res = await code.debug({
   code: buggyCode,
   error: 'TypeError: Cannot read property...',
   stackTrace: '...'
 })
+console.log(res.result)
 ```
 
 ---
@@ -200,10 +220,11 @@ const result = await code.debug({
 Intent detection.
 
 ```typescript
-const result = await analysis.detectIntent({
+const res = await analysis.detectIntent({
   text: 'Book a flight to New York tomorrow',
   possibleIntents: ['book_flight', 'book_hotel', 'query_weather']
 })
+console.log(res.result)
 ```
 
 ### `analysis.analyzeSentiment(payload, options?)`
@@ -211,10 +232,11 @@ const result = await analysis.detectIntent({
 Sentiment analysis.
 
 ```typescript
-const result = await analysis.analyzeSentiment({
+const res = await analysis.analyzeSentiment({
   text: 'This product is amazing!',
   granularity: 'document'
 })
+console.log(res.result)
 ```
 
 ### `analysis.extractContent(payload, options?)`
@@ -222,10 +244,11 @@ const result = await analysis.analyzeSentiment({
 Content extraction.
 
 ```typescript
-const result = await analysis.extractContent({
+const res = await analysis.extractContent({
   text: 'Contact John at john@example.com or call 555-1234',
   extractTypes: ['people', 'phones', 'emails']
 })
+console.log(res.result)
 ```
 
 ### `analysis.extractKeywords(payload, options?)`
@@ -233,11 +256,12 @@ const result = await analysis.extractContent({
 Keyword extraction.
 
 ```typescript
-const result = await analysis.extractKeywords({
+const res = await analysis.extractKeywords({
   text: articleContent,
   maxKeywords: 10,
   includeScores: true
 })
+console.log(res.result)
 ```
 
 ### `analysis.classify(payload, options?)`
@@ -245,11 +269,12 @@ const result = await analysis.extractKeywords({
 Text classification.
 
 ```typescript
-const result = await analysis.classify({
+const res = await analysis.classify({
   text: 'Apple released a new iPhone',
   categories: ['Technology', 'Sports', 'Entertainment', 'Finance'],
   multiLabel: false
 })
+console.log(res.result)
 ```
 
 ---
@@ -261,28 +286,31 @@ const result = await analysis.classify({
 OCR text recognition.
 
 ```typescript
-const result = await vision.ocr({
-  source: { 
-    type: 'data-url', 
-    dataUrl: 'data:image/png;base64,...' 
+const res = await vision.ocr({
+  source: {
+    type: 'data-url',
+    dataUrl: 'data:image/png;base64,...'
   },
   language: 'en',
   includeLayout: true,
   includeKeywords: true
 })
+console.log(res.result.text)
 ```
 
 **Image Source Types**:
 
 ```typescript
 // Data URL
-{ type: 'data-url', dataUrl: 'data:image/png;base64,...' }
+const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
 
 // File path
-{ type: 'file', filePath: '/path/to/image.png' }
+const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
 
 // Base64
-{ type: 'base64', base64: '...' }
+const sourceBase64 = { type: 'base64', base64: '...' } as const
+
+console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
 ```
 
 ### `vision.caption(payload, options?)`
@@ -290,11 +318,12 @@ const result = await vision.ocr({
 Image captioning.
 
 ```typescript
-const result = await vision.caption({
+const res = await vision.caption({
   source: { type: 'data-url', dataUrl: imageUrl },
   style: 'detailed',
   language: 'en'
 })
+console.log(res.result)
 ```
 
 ### `vision.analyze(payload, options?)`
@@ -302,10 +331,11 @@ const result = await vision.caption({
 Image analysis.
 
 ```typescript
-const result = await vision.analyze({
+const res = await vision.analyze({
   source: { type: 'data-url', dataUrl: imageUrl },
   analysisTypes: ['objects', 'faces', 'colors', 'scene']
 })
+console.log(res.result)
 ```
 
 ### `vision.generate(payload, options?)`
@@ -313,13 +343,14 @@ const result = await vision.analyze({
 Image generation.
 
 ```typescript
-const result = await vision.generate({
+const res = await vision.generate({
   prompt: 'A cute cat sitting on a sofa',
   width: 1024,
   height: 1024,
   quality: 'hd',
   count: 1
 })
+console.log(res.result)
 ```
 
 ---
@@ -331,12 +362,12 @@ const result = await vision.generate({
 Generate text embeddings.
 
 ```typescript
-const result = await embedding.generate({
+const res = await embedding.generate({
   text: 'This is some text',
   model: 'text-embedding-3-small'
 })
 
-// result.result: [0.123, -0.456, ...] // Vector array
+console.log(res.result.length)
 ```
 
 ---
@@ -348,11 +379,12 @@ const result = await embedding.generate({
 RAG query.
 
 ```typescript
-const result = await rag.query({
+const res = await rag.query({
   query: 'How to configure plugins?',
-  documents: [...],
+  documents: [],
   topK: 5
 })
+console.log(res.result)
 ```
 
 ### `rag.semanticSearch(payload, options?)`
@@ -360,11 +392,12 @@ const result = await rag.query({
 Semantic search.
 
 ```typescript
-const result = await rag.semanticSearch({
+const res = await rag.semanticSearch({
   query: 'user interface design',
   corpus: 'documentation',
   limit: 10
 })
+console.log(res.result)
 ```
 
 ### `rag.rerank(payload, options?)`
@@ -372,11 +405,12 @@ const result = await rag.semanticSearch({
 Result reranking.
 
 ```typescript
-const result = await rag.rerank({
+const res = await rag.rerank({
   query: 'search query',
   documents: searchResults,
   topK: 5
 })
+console.log(res.result)
 ```
 
 ---
@@ -388,11 +422,12 @@ const result = await rag.rerank({
 Run an agent.
 
 ```typescript
-const result = await agent.run({
+const res = await agent.run({
   task: 'Analyze this data for me',
   tools: ['calculator', 'web_search'],
-  context: { data: [...] }
+  context: { data: [] }
 })
+console.log(res.result)
 ```
 
 ---
@@ -404,9 +439,10 @@ const result = await agent.run({
 Directly invoke any capability.
 
 ```typescript
-const result = await invoke('text.chat', {
+const res = await invoke('text.chat', {
   messages: [{ role: 'user', content: 'Hello' }]
 })
+console.log(res.result)
 ```
 
 ---
@@ -417,15 +453,18 @@ All methods support a second `options` parameter:
 
 ```typescript
 interface IntelligenceInvokeOptions {
-  strategy?: string           // Strategy ID
-  modelPreference?: string[]  // Preferred models list
-  costCeiling?: number        // Cost ceiling
-  latencyTarget?: number      // Target latency (ms)
-  timeout?: number            // Timeout (ms)
-  stream?: boolean            // Enable streaming
+  strategy?: string // Strategy ID
+  modelPreference?: string[] // Preferred models list
+  costCeiling?: number // Cost ceiling
+  latencyTarget?: number // Target latency (ms)
+  timeout?: number // Timeout (ms)
+  stream?: boolean // Enable streaming
   preferredProviderId?: string // Preferred Provider
   allowedProviderIds?: string[] // Allowed Provider list
 }
+
+const _invokeOptions: IntelligenceInvokeOptions = {}
+void _invokeOptions
 ```
 
 ---
@@ -436,18 +475,21 @@ All APIs return a unified response structure:
 
 ```typescript
 interface IntelligenceInvokeResult<T> {
-  result: T                    // Result data
+  result: T // Result data
   usage: {
     promptTokens: number
     completionTokens: number
     totalTokens: number
     cost?: number
   }
-  model: string               // Model used
-  latency: number             // Request latency (ms)
-  traceId: string             // Trace ID
-  provider: string            // Provider used
+  model: string // Model used
+  latency: number // Request latency (ms)
+  traceId: string // Trace ID
+  provider: string // Provider used
 }
+
+const _invokeResult = {} as IntelligenceInvokeResult<string>
+void _invokeResult
 ```
 
 ---
@@ -458,20 +500,10 @@ interface IntelligenceInvokeResult<T> {
 const { isLoading, lastError } = useIntelligence()
 
 // Watch loading state
-watch(isLoading, (loading) => {
-  if (loading) {
-    showLoadingSpinner()
-  } else {
-    hideLoadingSpinner()
-  }
-})
+watch(isLoading, loading => console.log('loading', loading))
 
 // Watch errors
-watch(lastError, (error) => {
-  if (error) {
-    showErrorToast(error)
-  }
-})
+watch(lastError, error => console.log('error', error))
 ```
 
 ---
@@ -487,6 +519,8 @@ enum IntelligenceProviderType {
   LOCAL = 'local',
   CUSTOM = 'custom'
 }
+
+void IntelligenceProviderType.OPENAI
 ```
 
 ---
@@ -510,4 +544,6 @@ enum IntelligenceCapabilityType {
   // Workflow
   WORKFLOW, AGENT
 }
+
+void IntelligenceCapabilityType.CHAT
 ```

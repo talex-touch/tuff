@@ -498,6 +498,7 @@ function createLegacySearchController(
   const { concurrency, coalesceGapMs, firstBatchGraceMs, debouncePushMs, taskTimeoutMs } = config
 
   return createGatherController(async (signal, resolve) => {
+    const startTime = performance.now()
     const allResults: TuffSearchResult[] = []
     const sourceStats: ExtendedSourceStat[] = []
     const taskQueue = [...providers]

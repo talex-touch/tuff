@@ -511,6 +511,7 @@ export class SearchEngineCore
       const measurePreSort = async (items: TuffItem[]) => {
         const timings = {
           usageStatsDuration: 0,
+          pinnedDuration: 0,
           completionDuration: 0,
         }
 
@@ -522,6 +523,16 @@ export class SearchEngineCore
         const usageStatsPromise = this._injectUsageStats(items).finally(() => {
           timings.usageStatsDuration = performance.now() - usageStatsStartedAt
           usageStatsContext()
+        })
+
+        const pinnedStartedAt = performance.now()
+        const pinnedContext = enterPerfContext('Search.pinned', {
+          sessionId,
+          itemCount: items.length,
+        })
+        const pinnedPromise = this._injectPinnedState(items).finally(() => {
+          timings.pinnedDuration = performance.now() - pinnedStartedAt
+          pinnedContext()
         })
 
         let completionPromise = Promise.resolve()
@@ -539,7 +550,7 @@ export class SearchEngineCore
             })
         }
 
-        await Promise.all([usageStatsPromise, completionPromise])
+        await Promise.all([usageStatsPromise, pinnedPromise, completionPromise])
         return timings
       }
 
@@ -824,6 +835,13 @@ export class SearchEngineCore
             await this._injectUsageStats(subsequentItems)
             usageStatsContext()
 
+            const pinnedContext = enterPerfContext('Search.pinned', {
+              sessionId,
+              itemCount: subsequentItems.length,
+            })
+            await this._injectPinnedState(subsequentItems)
+            pinnedContext()
+
             const sortingContext = enterPerfContext('Search.sort', {
               sessionId,
               itemCount: subsequentItems.length,
@@ -927,6 +945,49 @@ export class SearchEngineCore
     }
   }
 
+  /** Batch fetch pinned state and inject into items metadata before sorting */
+  private async _injectPinnedState(items: TuffItem[]): Promise<void> {
+    if (!this.dbUtils || items.length === 0) return
+
+    const start = performance.now()
+
+    try {
+      const pinnedRecords = await this.dbUtils.getAllPinnedItems()
+      if (pinnedRecords.length === 0) return
+
+      const pinnedSet = new Set(pinnedRecords.map((p) => `${p.sourceId}:${p.itemId}`))
+
+      let injectedCount = 0
+      for (const item of items) {
+        const meta = item.meta as any
+        const sourceId = meta?._originalSourceId ?? item.source.id
+        const itemId = meta?._originalItemId ?? item.id
+        const key = `${sourceId}:${itemId}`
+        const isPinned = pinnedSet.has(key)
+
+        if (isPinned) {
+          if (!item.meta) item.meta = {}
+          item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
+          injectedCount++
+        } else {
+          if (meta?.pinned?.isPinned) {
+            meta.pinned = undefined
+          }
+        }
+      }
+
+      if (searchLogger.isEnabled()) {
+        const duration = performance.now() - start
+        searchLogger.logSearchPhase(
+          'Pinned Injection',
+          `Injected ${injectedCount}/${items.length} pinned flags in ${duration.toFixed(2)}ms`
+        )
+      }
+    } catch (error) {
+      searchEngineLog.error('Failed to inject pinned state', { error })
+    }
+  }
+
   /** Record search result display stats for top 10 items */
   private async _recordSearchResults(sessionId: string, items: TuffItem[]): Promise<void> {
     if (!this.dbUtils || items.length === 0) return
@@ -1024,7 +1085,6 @@ export class SearchEngineCore
         ? query.inputs.map((input) => input.type).filter(Boolean)
         : ['text']
 
-      const { anonymous } = sentryService.getConfig()
       const queryLength = (query.text || '').length
       const queryType = query.type || 'text'
       const hasFilters = Boolean(query.filters?.kinds?.length || query.filters?.sources?.length || query.filters?.date_range)

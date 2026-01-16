@@ -10,8 +10,18 @@ import type {
   DivisionBoxConfig,
   DivisionBoxState,
   SessionInfo,
+  StateChangeEvent,
 } from '../../types/division-box'
 import { ensureRendererChannel } from './channel'
+import { createPluginTuffTransport } from '../../transport'
+import { DivisionBoxEvents } from '../../transport/events'
+import { hasWindow } from '../../env'
+
+function resolveSdkApi(): number | undefined {
+  const globalWindow = hasWindow() ? (window as any) : undefined
+  const sdkapi = globalWindow?.$plugin?.sdkapi
+  return typeof sdkapi === 'number' ? sdkapi : undefined
+}
 
 /**
  * State change event handler
@@ -20,6 +30,8 @@ export type StateChangeHandler = (data: {
   sessionId: string
   state: DivisionBoxState
 }) => void
+
+export type LifecycleChangeHandler = (event: StateChangeEvent) => void
 
 /**
  * DivisionBox SDK interface for plugins
@@ -114,6 +126,8 @@ export interface DivisionBoxSDK {
    */
   onStateChange(handler: StateChangeHandler): () => void
 
+  onLifecycleChange(handler: LifecycleChangeHandler): () => void
+
   /**
    * Updates session state data
    * 
@@ -162,6 +176,8 @@ export interface DivisionBoxSDK {
  */
 export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
   const stateChangeHandlers: Set<StateChangeHandler> = new Set()
+  const lifecycleChangeHandlers: Set<LifecycleChangeHandler> = new Set()
+  const transport = createPluginTuffTransport(channel)
 
   // Register listener for state change events from main process
   // The channel can be either IPluginChannelBridge (main process) or window.$channel (renderer)
@@ -169,41 +185,55 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     if (channel.onMain) {
       // Main process plugin context
       channel.onMain('division-box:state-changed', (event: any) => {
-        stateChangeHandlers.forEach(handler => handler(event.data || event))
+        const payload = (event?.data || event) as StateChangeEvent
+        lifecycleChangeHandlers.forEach(handler => handler(payload))
+        stateChangeHandlers.forEach(handler => handler({ sessionId: payload.sessionId, state: payload.newState }))
       })
     } else if (channel.on) {
       // Renderer process context
       channel.on('division-box:state-changed', (data: any) => {
-        stateChangeHandlers.forEach(handler => handler(data))
+        const payload = data as StateChangeEvent
+        lifecycleChangeHandlers.forEach(handler => handler(payload))
+        stateChangeHandlers.forEach(handler => handler({ sessionId: payload.sessionId, state: payload.newState }))
       })
+    }
+
+    try {
+      transport.on(DivisionBoxEvents.stateChanged, (payload: StateChangeEvent) => {
+        lifecycleChangeHandlers.forEach(handler => handler(payload))
+        stateChangeHandlers.forEach(handler => handler({ sessionId: payload.sessionId, state: payload.newState }))
+      })
+    } catch {
+      // ignore
     }
   }
 
   registerListener()
 
-  const send: (eventName: string, payload?: any) => Promise<any> =
-    typeof channel?.sendToMain === 'function'
-      ? channel.sendToMain.bind(channel)
-      : typeof channel?.send === 'function'
-        ? channel.send.bind(channel)
-        : (() => {
-            throw new Error('[DivisionBox SDK] Channel send function not available')
-          })()
-
   return {
     async open(config: DivisionBoxConfig): Promise<SessionInfo> {
-      // Send to main process
-      const result = await send('division-box:open', config)
+      const result = await transport.send(DivisionBoxEvents.open, {
+        ...(config as any),
+        _sdkapi: resolveSdkApi(),
+      })
       
       if (!result.success) {
         throw new Error(result.error?.message || 'Failed to open DivisionBox')
       }
-      
+
+      if (!result.data) {
+        throw new Error('Failed to open DivisionBox')
+      }
+
       return result.data
     },
 
     async close(sessionId: string, options?: CloseOptions): Promise<void> {
-      const result = await send('division-box:close', { sessionId, options })
+      const result = await transport.send(DivisionBoxEvents.close, {
+        sessionId,
+        options,
+        _sdkapi: resolveSdkApi(),
+      })
       
       if (!result.success) {
         throw new Error(result.error?.message || 'Failed to close DivisionBox')
@@ -218,11 +248,20 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
       }
     },
 
+    onLifecycleChange(handler: LifecycleChangeHandler): () => void {
+      lifecycleChangeHandlers.add(handler)
+
+      return () => {
+        lifecycleChangeHandlers.delete(handler)
+      }
+    },
+
     async updateState(sessionId: string, key: string, value: any): Promise<void> {
-      const result = await send('division-box:update-state', {
+      const result = await transport.send(DivisionBoxEvents.updateState, {
         sessionId,
         key,
-        value
+        value,
+        _sdkapi: resolveSdkApi(),
       })
       
       if (!result.success) {
@@ -231,9 +270,10 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     async getState(sessionId: string, key: string): Promise<any> {
-      const result = await send('division-box:get-state', {
+      const result = await transport.send(DivisionBoxEvents.getState, {
         sessionId,
-        key
+        key,
+        _sdkapi: resolveSdkApi(),
       })
       
       if (!result.success) {

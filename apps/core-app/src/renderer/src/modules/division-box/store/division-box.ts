@@ -8,14 +8,18 @@
  */
 
 import { defineStore } from 'pinia'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import type {
   SessionInfo,
   DivisionBoxConfig,
   CloseOptions,
-  DivisionBoxIPCChannel
 } from '@talex-touch/utils'
 import type { DivisionBoxStoreState } from '../types'
 import { divisionBoxStorage } from '~/modules/storage/division-box-storage'
+
+let disposeStateChanged: (() => void) | null = null
+let disposeSessionDestroyed: (() => void) | null = null
 
 export const useDivisionBoxStore = defineStore('divisionBox', {
   state: (): DivisionBoxStoreState => ({
@@ -58,10 +62,8 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
      */
     async openDivisionBox(config: DivisionBoxConfig): Promise<SessionInfo> {
       try {
-        const result = await window.electron.ipcRenderer.invoke(
-          'division-box:open' as DivisionBoxIPCChannel,
-          config
-        )
+        const transport = useTuffTransport()
+        const result = await transport.send(DivisionBoxEvents.open, config)
 
         if (result.success && result.data) {
           const sessionInfo: SessionInfo = result.data
@@ -82,11 +84,8 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
      */
     async closeDivisionBox(sessionId: string, options?: CloseOptions): Promise<void> {
       try {
-        const result = await window.electron.ipcRenderer.invoke(
-          'division-box:close' as DivisionBoxIPCChannel,
-          sessionId,
-          options
-        )
+        const transport = useTuffTransport()
+        const result = await transport.send(DivisionBoxEvents.close, { sessionId, options })
 
         if (result.success) {
           this.activeSessions.delete(sessionId)
@@ -104,12 +103,11 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
      */
     async updateSessionState(sessionId: string, key: string, value: any): Promise<void> {
       try {
-        await window.electron.ipcRenderer.invoke(
-          'division-box:update-state' as DivisionBoxIPCChannel,
-          sessionId,
-          key,
-          value
-        )
+        const transport = useTuffTransport()
+        const result = await transport.send(DivisionBoxEvents.updateState, { sessionId, key, value })
+        if (!result?.success) {
+          throw new Error(result?.error?.message || 'Failed to update session state')
+        }
       } catch (error) {
         console.error('Failed to update session state:', error)
         throw error
@@ -212,21 +210,18 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
      * Initialize IPC event listeners
      */
     initializeIPCListeners(): void {
-      // Listen for state changes
-      window.electron.ipcRenderer.on(
-        'division-box:state-changed' as DivisionBoxIPCChannel,
-        (_event: any, data: any) => {
-          this.handleStateChanged(data)
-        }
-      )
+      if (disposeStateChanged || disposeSessionDestroyed) {
+        return
+      }
 
-      // Listen for session destroyed
-      window.electron.ipcRenderer.on(
-        'division-box:session-destroyed' as DivisionBoxIPCChannel,
-        (_event: any, sessionId: string) => {
-          this.handleSessionDestroyed(sessionId)
-        }
-      )
+      const transport = useTuffTransport()
+      disposeStateChanged = transport.on(DivisionBoxEvents.stateChanged, (event) => {
+        this.handleStateChanged(event as any)
+      })
+
+      disposeSessionDestroyed = transport.on(DivisionBoxEvents.sessionDestroyed, (payload) => {
+        this.handleSessionDestroyed((payload as any)?.sessionId)
+      })
     }
   }
 })
