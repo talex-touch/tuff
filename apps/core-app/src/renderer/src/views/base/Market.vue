@@ -27,7 +27,7 @@ const { installedPluginNames, installedPluginVersions } = usePluginVersionStatus
 
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const viewType = ref<'grid' | 'list'>('grid')
-const tabs = ref<'market' | 'installed'>('market')
+const tabs = ref<'market' | 'installed'>(route.path === '/market/installed' ? 'installed' : 'market')
 const searchKey = ref('')
 const sourcesState = marketSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
@@ -102,30 +102,6 @@ function openPluginDetail(plugin: MarketPluginListItem): void {
   router.push({ path: `/market/${plugin.id}`, query: { provider: plugin.providerId } })
 }
 
-function resolveMarketTab(pathname: string): 'market' | 'installed' {
-  return pathname === '/market/installed' ? 'installed' : 'market'
-}
-
-watch(
-  () => route.path,
-  (pathname) => {
-    const nextTab = resolveMarketTab(pathname)
-    if (tabs.value !== nextTab) {
-      tabs.value = nextTab
-    }
-  },
-  { immediate: true },
-)
-
-watch(
-  () => tabs.value,
-  (next) => {
-    const current = resolveMarketTab(route.path)
-    if (next === current) return
-    router.push(next === 'installed' ? '/market/installed' : '/market')
-  },
-)
-
 watch(
   () => marketPlugins.value,
   () => {
@@ -153,17 +129,20 @@ onMounted(() => {
       @search="handleSearch"
     />
 
-    <MarketGridView
-      v-if="tabs === 'market'"
-      :plugins="displayedPlugins"
-      :view-type="viewType"
-      :loading="loading"
-      :installed-names="installedPluginNames"
-      :installed-versions="installedPluginVersions"
-      @install="onInstall"
-      @open-detail="openPluginDetail"
-    />
-    <PluginInstalled v-else class="flex-1 min-h-0" />
+    <Transition name="market-tabs" mode="out-in">
+      <MarketGridView
+        v-if="tabs === 'market'"
+        key="market"
+        :plugins="displayedPlugins"
+        :view-type="viewType"
+        :loading="loading"
+        :installed-names="installedPluginNames"
+        :installed-versions="installedPluginVersions"
+        @install="onInstall"
+        @open-detail="openPluginDetail"
+      />
+      <PluginInstalled v-else key="installed" class="flex-1 min-h-0" />
+    </Transition>
   </div>
 
   <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
@@ -175,5 +154,26 @@ onMounted(() => {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+}
+
+.market-tabs-enter-active,
+.market-tabs-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    filter 0.18s ease;
+  will-change: transform, opacity;
+}
+
+.market-tabs-enter-from {
+  opacity: 0;
+  transform: translateX(10px);
+  filter: blur(2px);
+}
+
+.market-tabs-leave-to {
+  opacity: 0;
+  transform: translateX(-10px);
+  filter: blur(2px);
 }
 </style>

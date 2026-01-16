@@ -24,7 +24,7 @@ const emit = defineEmits<{
   (e: 'change', v: TxRadioValue): void
 }>()
 
-const { disabled, type, glass } = toRefs(props)
+const { disabled, type } = toRefs(props)
 
 const resolvedIndicatorVariant = computed<TxRadioIndicatorVariant>(() => {
   const v = props.indicatorVariant
@@ -36,8 +36,6 @@ const resolvedIndicatorVariant = computed<TxRadioIndicatorVariant>(() => {
 
 const useGlassIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'glass')
 const useBlurIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'blur')
-const useOutlineIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'outline')
-const useSolidIndicator = computed(() => type.value === 'button' && resolvedIndicatorVariant.value === 'solid')
 
 const resolvedDirection = computed(() => {
   if (type.value === 'button') {
@@ -49,11 +47,75 @@ const resolvedDirection = computed(() => {
   return props.direction ?? 'column'
 })
 
-const model = computed({
-  get: () => props.modelValue,
+const updateModelOnSettled = computed(() => {
+  const enabled = props.updateOnSettled
+    ?? (resolvedIndicatorVariant.value === 'glass' || resolvedIndicatorVariant.value === 'blur')
+  return enabled && type.value === 'button'
+})
+const localModelValue = ref<TxRadioValue | undefined>(props.modelValue)
+const pendingModelValue = ref<TxRadioValue | null>(null)
+
+function emitModelValue(v: TxRadioValue) {
+  emit('update:modelValue', v)
+  emit('change', v)
+}
+
+function commitPendingModelValue() {
+  if (!updateModelOnSettled.value) {
+    return
+  }
+  const pending = pendingModelValue.value
+  if (pending == null) {
+    return
+  }
+  if (pending === props.modelValue) {
+    pendingModelValue.value = null
+    return
+  }
+  pendingModelValue.value = null
+  emitModelValue(pending)
+}
+
+watch(
+  updateModelOnSettled,
+  (enabled) => {
+    if (!enabled) {
+      pendingModelValue.value = null
+      localModelValue.value = props.modelValue
+      return
+    }
+    pendingModelValue.value = null
+    localModelValue.value = props.modelValue
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.modelValue,
+  (v) => {
+    if (!updateModelOnSettled.value) {
+      return
+    }
+    pendingModelValue.value = null
+    localModelValue.value = v
+  },
+)
+
+const model = computed<TxRadioValue | undefined>({
+  get: () => (updateModelOnSettled.value ? localModelValue.value : props.modelValue),
   set: (v) => {
-    emit('update:modelValue', v)
-    emit('change', v)
+    if (v == null) {
+      return
+    }
+    if (!updateModelOnSettled.value) {
+      emitModelValue(v)
+      return
+    }
+    if (localModelValue.value === v) {
+      return
+    }
+    localModelValue.value = v
+    pendingModelValue.value = v
   },
 })
 
@@ -240,8 +302,8 @@ const glassOpacity = computed(() => {
   if (!indicatorVisible.value) {
     return 0
   }
-  if (!motionActive.value && motionPhase.value === 'idle') {
-    return 0.9
+  if (!motionActive.value) {
+    return 0
   }
   if (motionPhase.value === 'emerge') {
     return 0.95
@@ -330,16 +392,16 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
 
-  const blurOpacity = motionActive.value ? 1 : 0.9
-
-  const blurPx = motionActive.value ? props.blurAmount : props.blurAmount * 0.85
+  const blurEnabled = motionActive.value
+  const blurOpacity = blurEnabled ? 1 : 0
+  const blurPx = blurEnabled ? props.blurAmount : 0
 
   return {
     opacity: `${blurOpacity}`,
     width: `${width}px`,
     height: `${height}px`,
-    backdropFilter: `blur(${blurPx}px)`,
-    WebkitBackdropFilter: `blur(${blurPx}px)`,
+    backdropFilter: blurEnabled ? `blur(${blurPx}px)` : 'none',
+    WebkitBackdropFilter: blurEnabled ? `blur(${blurPx}px)` : 'none',
     transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
   }
 })
@@ -384,10 +446,8 @@ const plainIndicatorStyle = computed<Record<string, string>>(() => {
   scaleX = Math.max(0, Math.min(2, scaleX))
   scaleY = Math.max(0, Math.min(2, scaleY))
 
-  const baseOpacity = (useGlassIndicator.value || useBlurIndicator.value) ? '0' : '1'
-
   return {
-    opacity: baseOpacity,
+    opacity: '1',
     width: `${width}px`,
     height: `${height}px`,
     transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
@@ -506,6 +566,7 @@ function stepMotion(ts: number) {
     if (settled) {
       currentRect.value = { ...t }
       velocity.value = { x: 0, y: 0, w: 0, h: 0 }
+      commitPendingModelValue()
       cancelMotionRaf()
       setMotionPhase('sink', 18)
       setTimeout(() => {
@@ -565,6 +626,7 @@ function stepMotion(ts: number) {
     currentRect.value = { ...t }
     velocity.value = { x: 0, y: 0, w: 0, h: 0 }
     impact.value = 0
+    commitPendingModelValue()
     cancelMotionRaf()
     setMotionPhase('sink', 32)
     setTimeout(() => {
@@ -783,7 +845,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.modelValue,
+  () => model.value,
   async () => {
     await nextTick()
     queueUpdateIndicator()
