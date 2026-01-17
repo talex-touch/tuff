@@ -7,8 +7,7 @@
  * - README content rendered from markdown
  * - Sidebar with plugin metadata
  */
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
-import { hasWindow, isElectronRenderer } from '@talex-touch/utils/env'
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -28,7 +27,11 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const { plugins: officialPlugins, loading, loadMarketPlugins: loadOfficialPlugins } = useMarketData()
+const {
+  plugins: officialPlugins,
+  loading,
+  loadMarketPlugins: loadOfficialPlugins
+} = useMarketData()
 const { handleInstall, getInstallTask } = useMarketInstall()
 
 // Plugin version status (for checking installed plugins and upgrade availability)
@@ -38,9 +41,11 @@ const pluginId = computed(() => route.params.id as string)
 const providerId = computed(() => route.query.provider as string | undefined)
 const activePlugin = computed<MarketPluginListItem | null>(() => {
   // Match by both id and providerId to distinguish plugins from different sources
-  return officialPlugins.value.find((p) =>
-    p.id === pluginId.value && (!providerId.value || p.providerId === providerId.value)
-  ) || null
+  return (
+    officialPlugins.value.find(
+      (p) => p.id === pluginId.value && (!providerId.value || p.providerId === providerId.value)
+    ) || null
+  )
 })
 
 const notFound = computed(() => !activePlugin.value && officialPlugins.value.length > 0)
@@ -53,7 +58,10 @@ const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
 const { readmeContent, readmeLoading, readmeError } = useMarketReadme(readmeUrl, t)
 
 const canRate = computed(() => {
-  return activePlugin.value?.providerId === 'tuff-nexus' && activePlugin.value?.providerType === 'tpexApi'
+  return (
+    activePlugin.value?.providerId === 'tuff-nexus' &&
+    activePlugin.value?.providerType === 'tpexApi'
+  )
 })
 
 const ratingSlug = computed(() => (canRate.value ? activePlugin.value?.id : undefined))
@@ -65,7 +73,7 @@ const {
   average: ratingAverage,
   count: ratingCount,
   userRating,
-  submit: submitRating,
+  submit: submitRating
 } = useMarketRating(ratingSlug)
 
 const ratingErrorText = computed(() => {
@@ -75,44 +83,28 @@ const ratingErrorText = computed(() => {
   if (code === 'NOT_AUTHENTICATED' || code === 'UNAUTHORIZED')
     return t('market.rating.loginRequired', 'Login required to rate this plugin.')
 
-  if (code === 'INVALID_RATING')
-    return t('market.rating.invalid', 'Invalid rating value.')
+  if (code === 'INVALID_RATING') return t('market.rating.invalid', 'Invalid rating value.')
 
-  if (code.startsWith('HTTP_ERROR_'))
-    return t('market.rating.httpError', 'Request failed.')
+  if (code.startsWith('HTTP_ERROR_')) return t('market.rating.httpError', 'Request failed.')
 
   return code
 })
 
 /** Current installation task for this plugin */
 const installTask = computed(() =>
-  activePlugin.value ? getInstallTask(activePlugin.value.id, activePlugin.value.providerId) : undefined
+  activePlugin.value
+    ? getInstallTask(activePlugin.value.id, activePlugin.value.providerId)
+    : undefined
 )
-
-let rendererChannel: ITouchClientChannel | undefined
-let channelLoadFailed = false
-
-async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
-  if (rendererChannel) return rendererChannel
-  if (channelLoadFailed || !isElectronRenderer()) return undefined
-
-  try {
-    const module = await import('~/modules/channel/channel-core')
-    rendererChannel = module.touchChannel as ITouchClientChannel
-    return rendererChannel
-  } catch (error) {
-    channelLoadFailed = true
-    console.warn('[MarketDetail] Failed to load channel-core module:', error)
-    return undefined
-  }
-}
 
 async function onInstall(): Promise<void> {
   if (!activePlugin.value) return
-  const channel = await getRendererChannel()
   // Check if this is an upgrade
   const isUpgrade = pluginStatus.value.hasUpgrade
-  await handleInstall(activePlugin.value, channel, isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined)
+  await handleInstall(
+    activePlugin.value,
+    isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined
+  )
 }
 
 async function onRatingChange(value: number): Promise<void> {
@@ -123,7 +115,7 @@ async function onRatingChange(value: number): Promise<void> {
     userRating.value = previous
     await forTouchTip(
       t('market.rating.loginRequiredTitle', 'Login required'),
-      t('market.rating.loginRequired', 'Login required to rate this plugin.'),
+      t('market.rating.loginRequired', 'Login required to rate this plugin.')
     )
     return
   }
@@ -132,7 +124,7 @@ async function onRatingChange(value: number): Promise<void> {
     userRating.value = previous
     await forTouchTip(
       t('market.rating.submitFailedTitle', 'Rating failed'),
-      ratingErrorText.value ?? ratingError.value,
+      ratingErrorText.value ?? ratingError.value
     )
   }
 }
@@ -168,7 +160,10 @@ onBeforeUnmount(() => {
     <MarketDetailSkeleton v-if="loading" />
 
     <div v-else-if="activePlugin" class="h-full flex flex-col gap-4 p-4">
-      <div class="detail-header" :class="{ 'official-provider': activePlugin.providerTrustLevel === 'official' }">
+      <div
+        class="detail-header"
+        :class="{ 'official-provider': activePlugin.providerTrustLevel === 'official' }"
+      >
         <div class="flex items-center gap-3 flex-1 min-w-0">
           <MarketIcon
             v-shared-element:plugin-market-icon
@@ -180,7 +175,11 @@ onBeforeUnmount(() => {
               <h3 :style="{ viewTransitionName: `market-title-${activePlugin.id}` }">
                 {{ activePlugin.name }}
               </h3>
-              <i v-if="activePlugin.official" class="i-ri-verified-badge-fill official-badge" title="Official Plugin" />
+              <i
+                v-if="activePlugin.official"
+                class="i-ri-verified-badge-fill official-badge"
+                title="Official Plugin"
+              />
             </div>
             <p v-if="activePlugin.description" class="text-sm opacity-70 mt-1">
               {{ activePlugin.description }}
@@ -209,6 +208,7 @@ onBeforeUnmount(() => {
             <i class="i-ri-error-warning-line" />
             <span>{{ readmeError }}</span>
           </div>
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <div v-else-if="readmeContent" class="readme-content" v-html="readmeContent" />
           <div v-else class="readme-state">
             <i class="i-ri-file-text-line" />
@@ -220,11 +220,7 @@ onBeforeUnmount(() => {
           <div v-if="canRate" class="sidebar-card">
             <h4>{{ t('market.rating.title', 'Rating') }}</h4>
             <div class="rating-row">
-              <el-rate
-                v-model="userRating"
-                :disabled="ratingSubmitting"
-                @change="onRatingChange"
-              />
+              <el-rate v-model="userRating" :disabled="ratingSubmitting" @change="onRatingChange" />
               <span v-if="ratingAverage !== null" class="rating-meta">
                 {{ ratingAverage.toFixed(1) }} · {{ ratingCount }}
               </span>
@@ -239,7 +235,12 @@ onBeforeUnmount(() => {
           <div class="sidebar-card">
             <h4>{{ t('market.detailDialog.information') }}</h4>
             <div class="meta-list">
-              <div v-for="meta in detailMeta" :key="meta.label" class="meta-item" :class="meta.highlight && `highlight-${meta.highlight}`">
+              <div
+                v-for="meta in detailMeta"
+                :key="meta.label"
+                class="meta-item"
+                :class="meta.highlight && `highlight-${meta.highlight}`"
+              >
                 <div class="meta-label">
                   <i :class="meta.icon" />
                   <span>{{ meta.label }}</span>

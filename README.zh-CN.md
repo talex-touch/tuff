@@ -94,7 +94,7 @@ Tuff 的操作非常简单直观，让用户可以轻松完成各种任务。您
 ## 📚 文档
 
 - **Docs Index**：`./docs/INDEX.md`
-- **项目 PRD / Plans**：`./plan-prd/README.md`
+- **项目 PRD / Plans**：`./docs/plan-prd/README.md`
 - **仓库 Docs**：`./docs/`
 - **贡献指南**：`./.github/docs/contribution/CONTRIBUTING.md`
 - **架构 / Agent 说明**：`./AGENTS.md`

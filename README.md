@@ -82,7 +82,7 @@ If you are looking for a cross-platform and beautifully designed desktop softwar
 ## 📚 Documentation
 
 - **Docs Index**: `./docs/INDEX.md`
-- **Project PRD / Plans**: `./plan-prd/README.md`
+- **Project PRD / Plans**: `./docs/plan-prd/README.md`
 - **Repository Docs**: `./docs/`
 - **Contribution Guide**: `./.github/docs/contribution/CONTRIBUTING.md`
 - **Architecture / Agent Notes**: `./AGENTS.md`

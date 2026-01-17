@@ -187,7 +187,9 @@ function handleDrawerClose(): void {
               </span>
               <span
                 class="text-sm bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded"
-                >{{ selectedFeature.type || t('plugin.features.drawer.standardType') }}</span
+                >{{
+                  selectedFeature.interaction?.type || t('plugin.features.drawer.standardType')
+                }}</span
               >
             </div>
             <div v-if="selectedFeature.acceptedInputTypes" class="flex justify-between items-start">

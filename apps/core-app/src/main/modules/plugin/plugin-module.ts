@@ -17,7 +17,7 @@ import { sleep } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
-import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { TouchWindow } from '../../core/touch-window'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { createDbUtils } from '../../db/utils'
@@ -43,6 +43,10 @@ import {
   PermissionEvents,
   PluginEvents
 } from '@talex-touch/utils/transport/events'
+import type {
+  PluginInstallSourceResponse,
+  PluginPerformanceGetPathsResponse
+} from '@talex-touch/utils/transport/events/types'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { databaseModule } from '../database'
 import { DevServerHealthMonitor } from './dev-server-monitor'
@@ -1183,10 +1187,12 @@ export class PluginModule extends BaseModule {
     registerBuiltInInternalPlugins(this.pluginManager)
 
     // Listen for permission granted events to retry enabling plugins
-    touchEventBus.on(TalexEvents.PERMISSION_GRANTED, async (event: PermissionGrantedEvent) => {
-      const { pluginId } = event
-      if (!pluginId) return
+    touchEventBus.on(TalexEvents.PERMISSION_GRANTED, (event) => {
+      if (!isRecord(event) || typeof event.pluginId !== 'string' || event.pluginId.length === 0) {
+        return
+      }
 
+      const pluginId = event.pluginId
       const manager = this.pluginManager
       if (!manager) return
 
@@ -1194,13 +1200,14 @@ export class PluginModule extends BaseModule {
       const pendingPlugins = (manager as IPluginManagerWithInternals).pendingPermissionPlugins
       const pending = pendingPlugins?.get(pluginId)
 
-      if (pending && pending.autoRetry) {
-        pluginLog.info(`Permission granted for ${pluginId}, retrying enable...`)
+      if (!pending?.autoRetry) return
 
-        // Remove from pending
-        pendingPlugins?.delete(pluginId)
+      pluginLog.info(`Permission granted for ${pluginId}, retrying enable...`)
 
-        // Retry enabling the plugin
+      // Remove from pending
+      pendingPlugins?.delete(pluginId)
+
+      void (async () => {
         try {
           const success = await manager.enablePlugin(pluginId)
           if (success) {
@@ -1211,7 +1218,7 @@ export class PluginModule extends BaseModule {
         } catch (error) {
           pluginLog.error(`Error enabling ${pluginId} after permission grant`, { error })
         }
-      }
+      })()
     })
   }
 
@@ -1281,21 +1288,24 @@ export class PluginModule extends BaseModule {
         const updates = await triggerUpdateCheck()
         return { updates, checkedAt: new Date().toISOString() }
       }),
-      transport.on(PluginEvents.install.source, async (data) => {
-        if (!installQueue) {
-          return { status: 'error', error: 'Install queue is not ready' }
+      transport.on(
+        PluginEvents.install.source,
+        async (data): Promise<PluginInstallSourceResponse> => {
+          if (!installQueue) {
+            return { status: 'error', error: 'Install queue is not ready' }
+          }
+          if (!isRecord(data) || typeof data.source !== 'string') {
+            return { status: 'error', error: 'Invalid install request' }
+          }
+          const request: PluginInstallRequest = {
+            source: data.source,
+            hintType: data.hintType as PluginInstallRequest['hintType'],
+            metadata: isRecord(data.metadata) ? data.metadata : undefined,
+            clientMetadata: isRecord(data.clientMetadata) ? data.clientMetadata : undefined
+          }
+          return await installQueue.enqueue(request)
         }
-        if (!isRecord(data) || typeof data.source !== 'string') {
-          return { status: 'error', error: 'Invalid install request' }
-        }
-        const request: PluginInstallRequest = {
-          source: data.source,
-          hintType: data.hintType as PluginInstallRequest['hintType'],
-          metadata: isRecord(data.metadata) ? data.metadata : undefined,
-          clientMetadata: isRecord(data.clientMetadata) ? data.clientMetadata : undefined
-        }
-        return await installQueue.enqueue(request)
-      }),
+      ),
       transport.on(PluginEvents.install.confirmResponse, async (response) => {
         if (!installQueue) {
           return
@@ -1520,7 +1530,7 @@ export class PluginModule extends BaseModule {
         try {
           const resolved = resolveTouchPlugin({}, context)
           if ('error' in resolved) {
-            return { error: resolved.error }
+            throw new Error(resolved.error)
           }
 
           return {
@@ -1529,10 +1539,10 @@ export class PluginModule extends BaseModule {
             configPath: resolved.plugin.getConfigPath(),
             logsPath: resolved.plugin.getLogsPath(),
             tempPath: resolved.plugin.getTempPath()
-          }
+          } satisfies PluginPerformanceGetPathsResponse
         } catch (error) {
           console.error('Error in plugin:performance:get-paths handler:', error)
-          return { error: error instanceof Error ? error.message : 'Unknown error' }
+          throw error instanceof Error ? error : new Error('Unknown error')
         }
       })
     )
@@ -2257,9 +2267,13 @@ export class PluginModule extends BaseModule {
       transport.on(MarketEvents.api.search, async (payload) => {
         try {
           const { searchPlugins } = await import('../../service/plugin-market.service')
+          const source =
+            payload?.source === 'tpex' || payload?.source === 'npm' || payload?.source === 'all'
+              ? payload.source
+              : undefined
           return await searchPlugins({
             keyword: payload?.keyword,
-            source: payload?.source,
+            source,
             category: payload?.category,
             limit: payload?.limit,
             offset: payload?.offset
@@ -2278,7 +2292,11 @@ export class PluginModule extends BaseModule {
       transport.on(MarketEvents.api.getPlugin, async (payload) => {
         try {
           const { getPluginDetails } = await import('../../service/plugin-market.service')
-          const plugin = await getPluginDetails(payload?.identifier, payload?.source)
+          const identifier = payload?.identifier
+          if (!identifier) return null
+          const source =
+            payload?.source === 'tpex' || payload?.source === 'npm' ? payload.source : undefined
+          const plugin = await getPluginDetails(identifier, source)
           return plugin ?? null
         } catch (error: unknown) {
           console.error('Get plugin details failed:', error)

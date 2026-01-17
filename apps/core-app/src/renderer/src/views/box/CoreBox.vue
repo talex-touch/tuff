@@ -312,9 +312,14 @@ watch(res, (newRes) => {
   lastResultIds = currentIds
 })
 
-function setItemRef(el: ItemRef | null, index: number): void {
-  if (el) {
+function setItemRef(el: Element | ComponentPublicInstance | null, index: number): void {
+  if (!el) return
+  if (el instanceof HTMLElement) {
     itemRefs.value[index] = el
+    return
+  }
+  if ('$el' in el) {
+    itemRefs.value[index] = el as ComponentPublicInstance
   }
 }
 

@@ -14,13 +14,13 @@
 
 ## 文档现状（索引）
 
-- 项目文档中心：`plan-prd/README.md`
-- PRD 提炼待办：`plan-prd/TODO.md`
-- UI/滚动专项待办（本次更新）：`todo.md`
-- 额外计划文档（散落）：`plans/`
-- 历史滚动复盘：`report.md`、`report-scroll-followup.md`
+- 项目文档中心：`docs/plan-prd/README.md`
+- PRD 提炼待办：`docs/plan-prd/TODO.md`
+- UI/滚动专项待办（本次更新）：`docs/engineering/todo.md`
+- 额外计划文档（原 `plans/` 已合并）：`docs/plan-prd/`
+- 历史滚动复盘：`docs/engineering/reports/report.md`、`docs/engineering/reports/report-scroll-followup.md`
 
-建议：`plan-prd/` 继续作为“唯一权威索引”，根目录 `todo.md` 保持“短周期工程 TODO（可执行）”，避免与 `plan-prd/TODO.md` 混杂。
+建议：`docs/plan-prd/` 继续作为“唯一权威索引”，工程 TODO 使用 `docs/engineering/todo.md` 保持“短周期工程 TODO（可执行）”，避免与 `docs/plan-prd/TODO.md` 混杂。
 
 ---
 
@@ -65,7 +65,7 @@
   - `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceAgentsPage.vue`
   - `apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`
 
-本次已迁移的 3 处（原 `todo.md` 标注的“未迁移”点）：
+本次已迁移的 3 处（原工程 TODO 标注的“未迁移”点）：
 - `apps/core-app/src/renderer/src/components/flow/FlowSelector.vue`
 - `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceAuditPage.vue`
 - `apps/core-app/src/renderer/src/components/base/dialog/TPopperDialog.vue`
@@ -99,7 +99,7 @@
 
 ## TODO/FIXME（代码内标注）
 
-已发现多处显式 TODO（主要集中在 AI/搜索/插件市场等模块），建议与 `plan-prd/TODO.md` 对齐，避免“代码 TODO 永久漂浮”：
+已发现多处显式 TODO（主要集中在 AI/搜索/插件市场等模块），建议与 `docs/plan-prd/TODO.md` 对齐，避免“代码 TODO 永久漂浮”：
 
 - `apps/core-app/src/main/modules/ai/agents/builtin/search-agent.ts`
 - `apps/core-app/src/main/service/agent-market.service.ts`
@@ -114,4 +114,3 @@
 2. **继续迁移 overflow 点**：优先从用户高频页面开始（Market、Intelligence、Plugin Logs）。
 3. **tuffex 开发流程固化**：要么补 alias，要么补“改动后自动构建 dist”的本地脚本/任务。
 4. **`v-html` 输入面收敛**：明确 `message` 来源；若来自插件/远端，增加消毒或限制渲染能力。
-

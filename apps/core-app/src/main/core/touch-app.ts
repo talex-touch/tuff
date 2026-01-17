@@ -129,7 +129,8 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     const appSettingsFromDisk = this.readAppSettingsConfigFromDisk()
 
-    this._startSilent = appSettingsFromDisk?.window?.startSilent === true
+    this._startSilent =
+      (appSettingsFromDisk as { window?: { startSilent?: boolean } }).window?.startSilent === true
     const initialBounds = this.resolveInitialMainWindowBounds(appSettingsFromDisk)
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {

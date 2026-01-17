@@ -378,6 +378,6 @@ strategyManager.register(new MyStrategy())
 
 ## 参考
 
-- [PRD 文档](../plan-prd/ai-power-generic-api-prd.md)
+- [PRD 文档](../02-architecture/intelligence-power-generic-api-prd.md)
 - [类型定义](../packages/utils/types/aisdk.ts)
 - [核心实现](../packages/utils/aisdk/)

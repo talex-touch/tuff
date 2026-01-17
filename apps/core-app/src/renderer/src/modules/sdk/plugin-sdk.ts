@@ -12,6 +12,7 @@ import type {
   PluginStateEvent,
   TriggerFeatureRequest
 } from '@talex-touch/utils/plugin/sdk/types'
+import type { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 
@@ -243,9 +244,21 @@ class PluginSDK {
     }
   ): Promise<boolean> {
     try {
+      const hintType = options?.hintType
+      const normalizedHintType =
+        hintType === 'github' ||
+        hintType === 'npm' ||
+        hintType === 'tpex' ||
+        hintType === 'file' ||
+        hintType === 'dev'
+          ? (hintType as PluginProviderType)
+          : undefined
+
       const response = await pluginTransportSdk.install({
         source,
-        ...options
+        hintType: normalizedHintType,
+        metadata: options?.metadata,
+        clientMetadata: options?.clientMetadata
       })
       return response?.success || false
     } catch (error) {

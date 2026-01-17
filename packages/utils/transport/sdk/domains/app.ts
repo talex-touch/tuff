@@ -35,7 +35,6 @@ export function createAppSdk(transport: ITuffTransport): AppSdk {
     showInFolder: (path) => transport.send(AppEvents.system.showInFolder, { path }),
     openApp: (options) => transport.send(AppEvents.system.openApp, options),
     executeCommand: (options) => transport.send(AppEvents.system.executeCommand, options as any),
-    readFile: (path) => transport.send(AppEvents.system.readFile, { path }),
+    readFile: (path) => transport.send(AppEvents.system.readFile, { source: path }),
   }
 }
-

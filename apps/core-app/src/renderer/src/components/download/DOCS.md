@@ -4,16 +4,15 @@
 
 本模块的详细文档已迁移到项目文档中心：
 
-### 组件文档
-- **[Update Prompt Dialog](../../../../../../plan-prd/04-implementation/components/UPDATE_PROMPT_DIALOG.md)** - 更新提示对话框组件
-- **[Implementation Summary](../../../../../../plan-prd/04-implementation/components/UPDATE_PROMPT_IMPLEMENTATION.md)** - 实现总结
-
 ### API 文档
-- **[Download Center API](../../../../../../plan-prd/03-features/download-update/DOWNLOAD_CENTER_API.md)** - 下载中心 API
+- **[Download Center Reference](../../../../../../../docs/plan-prd/03-features/download-update/DOWNLOAD_CENTER_REFERENCE.md)** - 统一下载中心参考文档
+
+### 性能文档
+- **[Performance Reference](../../../../../../../docs/plan-prd/04-implementation/performance/PERFORMANCE_REFERENCE.md)** - 性能参考
 
 ### 快速链接
-- 📖 [完整文档索引](../../../../../../plan-prd/README.md)
-- 🏗️ [项目架构](../../../../../../plan-prd/01-project/PROJECT_ANALYSIS.md)
+- 📖 [完整文档索引](../../../../../../../docs/plan-prd/README.md)
+- 🏗️ [项目架构](../../../../../../../CLAUDE.md)
 
 ## 代码位置
 

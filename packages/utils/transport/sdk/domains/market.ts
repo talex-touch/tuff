@@ -26,10 +26,10 @@ export function createMarketSdk(transport: ITuffTransport): MarketSdk {
     checkUpdates: async () => transport.send(MarketEvents.api.checkUpdates),
     search: async (request) => transport.send(MarketEvents.api.search, request),
     getPlugin: async (request) => transport.send(MarketEvents.api.getPlugin, request),
-    httpRequest: async (request) => transport.send(MarketEvents.api.httpRequest, request),
+    httpRequest: async <T = unknown>(request: MarketHttpRequest) =>
+      transport.send(MarketEvents.api.httpRequest, request) as Promise<MarketHttpRequestResponse<T>>,
     featured: async (payload) => transport.send(MarketEvents.api.featured, payload),
     npmList: async () => transport.send(MarketEvents.api.npmList),
     onUpdatesAvailable: (handler) => transport.on(MarketEvents.push.updatesAvailable, handler),
   }
 }
-

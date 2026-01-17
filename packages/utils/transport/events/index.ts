@@ -212,9 +212,12 @@ import type {
   PluginInstallProgressPayload,
   PluginInstallSourceRequest,
   PluginInstallSourceResponse,
+  PluginDevServerStatusRequest,
+  PluginDevServerStatusResponse,
   PluginLoadRequest,
   PluginLogEntry,
   PluginPushCrashedPayload,
+  PluginPushReloadPayload,
   PluginPushReloadReadmePayload,
   PluginPushStateChangedPayload,
   PluginPushStatusUpdatedPayload,
@@ -227,6 +230,7 @@ import type {
   PluginStorageFileDetailsRequest,
   PluginStorageFileRequest,
   PluginStorageListFilesRequest,
+  PluginStorageOpenInEditorRequest,
   PluginStorageOpenFolderRequest,
   PluginStorageSetFileRequest,
   PluginStorageStatsRequest,
@@ -289,6 +293,7 @@ import type {
   PermissionRevokeAllRequest,
   PermissionRevokeRequest,
   PermissionUpdatedPayload,
+  PermissionStartupRequestPayload,
 } from './types/permission'
 
 // ============================================================================

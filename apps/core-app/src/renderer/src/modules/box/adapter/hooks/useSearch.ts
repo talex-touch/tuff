@@ -643,7 +643,7 @@ export function useSearch(
 
     if (searchResult.value) {
       searchResult.value.activate = data.activate
-      searchResult.value.sources = data.sources
+      searchResult.value.sources = data.sources ?? []
     }
     activeActivations.value = data.activate || null
     loading.value = false

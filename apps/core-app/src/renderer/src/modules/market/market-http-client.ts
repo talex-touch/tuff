@@ -7,11 +7,5 @@ const marketSdk = createMarketSdk(useTuffTransport())
 export async function marketHttpRequest<T = unknown>(
   options: MarketHttpRequestOptions
 ): Promise<MarketHttpResponse<T>> {
-  const response = await marketSdk.httpRequest<T>(options)
-
-  if (response?.error) {
-    throw new Error(response.error)
-  }
-
-  return response as MarketHttpResponse<T>
+  return (await marketSdk.httpRequest<T>(options)) as MarketHttpResponse<T>
 }
