@@ -98,6 +98,31 @@ export type {
   TuffQueryInput as TuffInput,
 } from '../../../core-box/tuff/tuff-dsl'
 
+export interface CoreBoxSearchUpdatePayload {
+  searchId: string
+  items: unknown[]
+}
+
+export interface CoreBoxSearchEndPayload {
+  searchId: string
+  cancelled?: boolean
+  activate?: unknown
+  sources?: unknown[]
+}
+
+export interface CoreBoxNoResultsPayload {
+  shouldShrink?: boolean
+}
+
+export interface CoreBoxClearItemsPayload {
+  pluginName?: string
+}
+
+export interface CoreBoxExecuteRequest {
+  item: unknown
+  searchResult?: unknown
+}
+
 /**
  * Single search result item.
  */

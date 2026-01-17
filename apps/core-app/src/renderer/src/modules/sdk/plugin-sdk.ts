@@ -10,17 +10,30 @@ import type {
   InputChangedRequest,
   PluginFilters,
   PluginStateEvent,
-  TriggerFeatureRequest,
+  TriggerFeatureRequest
 } from '@talex-touch/utils/plugin/sdk/types'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 
 type PluginStateCallback = (event: PluginStateEvent) => void
 type PluginCallback = (plugin: ITouchPlugin) => void
+
+const transport = useTuffTransport()
+const pluginTransportSdk = createPluginSdk(transport)
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
 
 class PluginSDK {
   private subscribers: Set<PluginStateCallback> = new Set()
   private pluginSubscribers: Map<string, Set<PluginCallback>> = new Map()
   private initialized = false
+  private transportDisposers: Array<() => void> = []
 
   constructor() {
     this.initializeEventListener()
@@ -30,30 +43,65 @@ class PluginSDK {
    * Initialize the global state change event listener
    */
   private initializeEventListener(): void {
-    if (this.initialized)
-      return
+    if (this.initialized) return
 
-    touchChannel.regChannel('plugin:state-changed', (payload) => {
-      const event = payload.data as PluginStateEvent
+    this.transportDisposers.push(
+      pluginTransportSdk.onStateChanged((event) => {
+        this.subscribers.forEach((callback) => {
+          try {
+            callback(event)
+          } catch (error) {
+            console.error('[PluginSDK] Error in state change subscriber:', error)
+          }
+        })
 
-      this.subscribers.forEach((callback) => {
-        try {
-          callback(event)
-        }
-        catch (error) {
-          console.error('[PluginSDK] Error in state change subscriber:', error)
+        if (
+          event.type === 'added' ||
+          event.type === 'updated' ||
+          event.type === 'status-changed' ||
+          event.type === 'readme-updated'
+        ) {
+          const pluginName = event.type === 'added' ? event.plugin.name : event.name
+          const callbacks = this.pluginSubscribers.get(pluginName)
+
+          if (callbacks && callbacks.size > 0) {
+            this.get(pluginName)
+              .then((plugin) => {
+                if (plugin) {
+                  callbacks.forEach((callback) => {
+                    try {
+                      callback(plugin)
+                    } catch (error) {
+                      console.error('[PluginSDK] Error in plugin-specific subscriber:', error)
+                    }
+                  })
+                }
+              })
+              .catch((error) => {
+                console.error('[PluginSDK] Failed to fetch plugin data for subscribers:', error)
+              })
+          }
         }
       })
+    )
 
-      if (
-        event.type === 'added'
-        || event.type === 'updated'
-        || event.type === 'status-changed'
-        || event.type === 'readme-updated'
-      ) {
-        const pluginName = event.type === 'added' ? event.plugin.name : event.name
+    this.transportDisposers.push(
+      pluginTransportSdk.onStatusUpdated(({ plugin: pluginName, status }) => {
+        const event: PluginStateEvent = {
+          type: 'status-changed',
+          name: pluginName,
+          status
+        }
+
+        this.subscribers.forEach((callback) => {
+          try {
+            callback(event)
+          } catch (error) {
+            console.error('[PluginSDK] Error in status update subscriber:', error)
+          }
+        })
+
         const callbacks = this.pluginSubscribers.get(pluginName)
-
         if (callbacks && callbacks.size > 0) {
           this.get(pluginName)
             .then((plugin) => {
@@ -61,58 +109,21 @@ class PluginSDK {
                 callbacks.forEach((callback) => {
                   try {
                     callback(plugin)
-                  }
-                  catch (error) {
-                    console.error('[PluginSDK] Error in plugin-specific subscriber:', error)
+                  } catch (error) {
+                    console.error('[PluginSDK] Error in plugin-specific status subscriber:', error)
                   }
                 })
               }
             })
             .catch((error) => {
-              console.error('[PluginSDK] Failed to fetch plugin data for subscribers:', error)
+              console.error(
+                '[PluginSDK] Failed to fetch plugin data for status subscribers:',
+                error
+              )
             })
         }
-      }
-    })
-
-    touchChannel.regChannel('plugin-status-updated', (payload) => {
-      const { plugin: pluginName, status } = payload.data as { plugin: string, status: number }
-
-      const event: PluginStateEvent = {
-        type: 'status-changed',
-        name: pluginName,
-        status,
-      }
-
-      this.subscribers.forEach((callback) => {
-        try {
-          callback(event)
-        }
-        catch (error) {
-          console.error('[PluginSDK] Error in status update subscriber:', error)
-        }
       })
-
-      const callbacks = this.pluginSubscribers.get(pluginName)
-      if (callbacks && callbacks.size > 0) {
-        this.get(pluginName)
-          .then((plugin) => {
-            if (plugin) {
-              callbacks.forEach((callback) => {
-                try {
-                  callback(plugin)
-                }
-                catch (error) {
-                  console.error('[PluginSDK] Error in plugin-specific status subscriber:', error)
-                }
-              })
-            }
-          })
-          .catch((error) => {
-            console.error('[PluginSDK] Failed to fetch plugin data for status subscribers:', error)
-          })
-      }
-    })
+    )
 
     this.initialized = true
   }
@@ -126,10 +137,8 @@ class PluginSDK {
    */
   async list(filters?: PluginFilters): Promise<ITouchPlugin[]> {
     try {
-      const response = await touchChannel.send('plugin:api:list', { filters })
-      return response || []
-    }
-    catch (error) {
+      return await pluginTransportSdk.list({ filters })
+    } catch (error) {
       console.error('[PluginSDK] Failed to list plugins:', error)
       return []
     }
@@ -140,10 +149,8 @@ class PluginSDK {
    */
   async get(name: string): Promise<ITouchPlugin | null> {
     try {
-      const response = await touchChannel.send('plugin:api:get', { name })
-      return response
-    }
-    catch (error) {
+      return await pluginTransportSdk.get({ name })
+    } catch (error) {
       console.error('[PluginSDK] Failed to get plugin:', error)
       return null
     }
@@ -154,10 +161,8 @@ class PluginSDK {
    */
   async getStatus(name: string): Promise<number> {
     try {
-      const response = await touchChannel.send('plugin:api:get-status', { name })
-      return response
-    }
-    catch (error) {
+      return await pluginTransportSdk.getStatus({ name })
+    } catch (error) {
       console.error('[PluginSDK] Failed to get plugin status:', error)
       throw error
     }
@@ -172,10 +177,9 @@ class PluginSDK {
    */
   async enable(name: string): Promise<boolean> {
     try {
-      const response = await touchChannel.send('plugin:api:enable', { name })
+      const response = await pluginTransportSdk.enable({ name })
       return response?.success || false
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to enable plugin:', error)
       return false
     }
@@ -186,10 +190,9 @@ class PluginSDK {
    */
   async disable(name: string): Promise<boolean> {
     try {
-      const response = await touchChannel.send('plugin:api:disable', { name })
+      const response = await pluginTransportSdk.disable({ name })
       return response?.success || false
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to disable plugin:', error)
       return false
     }
@@ -200,10 +203,9 @@ class PluginSDK {
    */
   async reload(name: string): Promise<boolean> {
     try {
-      const response = await touchChannel.send('plugin:api:reload', { name })
+      const response = await pluginTransportSdk.reload({ name })
       return response?.success || false
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to reload plugin:', error)
       return false
     }
@@ -214,10 +216,9 @@ class PluginSDK {
    */
   async reconnectDevServer(name: string): Promise<boolean> {
     try {
-      const response = await touchChannel.send('plugin:reconnect-dev-server', { pluginName: name })
+      const response = await pluginTransportSdk.reconnectDevServer({ pluginName: name })
       return response?.success || false
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to reconnect dev server:', error)
       return false
     }
@@ -239,16 +240,15 @@ class PluginSDK {
       hintType?: string
       metadata?: Record<string, unknown>
       clientMetadata?: Record<string, unknown>
-    },
+    }
   ): Promise<boolean> {
     try {
-      const response = await touchChannel.send('plugin:api:install', {
+      const response = await pluginTransportSdk.install({
         source,
-        ...options,
+        ...options
       })
       return response?.success || false
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to install plugin:', error)
       return false
     }
@@ -259,10 +259,9 @@ class PluginSDK {
    */
   async uninstall(name: string): Promise<boolean> {
     try {
-      const response = await touchChannel.send('plugin:api:uninstall', { name })
+      const response = await pluginTransportSdk.uninstall({ name })
       return response?.success || false
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to uninstall plugin:', error)
       return false
     }
@@ -279,10 +278,8 @@ class PluginSDK {
    */
   async triggerFeature(request: TriggerFeatureRequest): Promise<unknown> {
     try {
-      const response = await touchChannel.send('plugin:api:trigger-feature', request)
-      return response
-    }
-    catch (error) {
+      return await pluginTransportSdk.triggerFeature(request)
+    } catch (error) {
       console.error('[PluginSDK] Failed to trigger feature:', error)
       throw error
     }
@@ -293,9 +290,8 @@ class PluginSDK {
    */
   async onInputChanged(request: InputChangedRequest): Promise<void> {
     try {
-      await touchChannel.send('plugin:api:feature-input-changed', request)
-    }
-    catch (error) {
+      await pluginTransportSdk.featureInputChanged(request)
+    } catch (error) {
       console.error('[PluginSDK] Failed to handle input changed:', error)
     }
   }
@@ -309,9 +305,8 @@ class PluginSDK {
    */
   async openFolder(name: string): Promise<void> {
     try {
-      await touchChannel.send('plugin:api:open-folder', { name })
-    }
-    catch (error) {
+      await pluginTransportSdk.openFolder({ name })
+    } catch (error) {
       console.error('[PluginSDK] Failed to open plugin folder:', error)
       throw error
     }
@@ -324,10 +319,9 @@ class PluginSDK {
    */
   async getOfficialList(force = false): Promise<unknown[]> {
     try {
-      const response = await touchChannel.send('plugin:api:get-official-list', { force })
+      const response = await pluginTransportSdk.getOfficialList({ force })
       return response?.plugins || []
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to get official plugin list:', error)
       return []
     }
@@ -344,10 +338,8 @@ class PluginSDK {
    */
   async getManifest(name: string): Promise<Record<string, unknown> | null> {
     try {
-      const response = await touchChannel.send('plugin:api:get-manifest', { name })
-      return response
-    }
-    catch (error) {
+      return await pluginTransportSdk.getManifest({ name })
+    } catch (error) {
       console.error('[PluginSDK] Failed to get plugin manifest:', error)
       return null
     }
@@ -363,17 +355,16 @@ class PluginSDK {
   async saveManifest(
     name: string,
     manifest: Record<string, unknown>,
-    reload = true,
+    reload = true
   ): Promise<boolean> {
     try {
-      const response = await touchChannel.send('plugin:api:save-manifest', {
+      const response = await pluginTransportSdk.saveManifest({
         name,
         manifest,
-        reload,
+        reload
       })
       return response?.success || false
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to save plugin manifest:', error)
       return false
     }
@@ -392,10 +383,8 @@ class PluginSDK {
     tempPath: string
   } | null> {
     try {
-      const response = await touchChannel.send('plugin:api:get-paths', { name })
-      return response
-    }
-    catch (error) {
+      return await pluginTransportSdk.getPaths({ name })
+    } catch (error) {
       console.error('[PluginSDK] Failed to get plugin paths:', error)
       return null
     }
@@ -409,13 +398,12 @@ class PluginSDK {
    */
   async openPath(
     name: string,
-    pathType: 'plugin' | 'data' | 'config' | 'logs' | 'temp',
-  ): Promise<{ success: boolean, path?: string }> {
+    pathType: 'plugin' | 'data' | 'config' | 'logs' | 'temp'
+  ): Promise<{ success: boolean; path?: string }> {
     try {
-      const response = await touchChannel.send('plugin:api:open-path', { name, pathType })
+      const response = await pluginTransportSdk.openPath({ name, pathType })
       return response || { success: false }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginSDK] Failed to open plugin path:', error)
       return { success: false }
     }
@@ -442,10 +430,53 @@ class PluginSDK {
     }
   } | null> {
     try {
-      const response = await touchChannel.send('plugin:api:get-performance', { name })
-      return response
-    }
-    catch (error) {
+      const response = await pluginTransportSdk.getPerformance({ name })
+      if (!isRecord(response)) {
+        return null
+      }
+
+      const storage = response.storage
+      const performance = response.performance
+
+      if (!isRecord(storage) || !isRecord(performance)) {
+        return null
+      }
+
+      if (
+        !isNumber(storage.totalSize) ||
+        !isNumber(storage.fileCount) ||
+        !isNumber(storage.dirCount) ||
+        !isNumber(storage.maxSize) ||
+        !isNumber(storage.usagePercent)
+      ) {
+        return null
+      }
+
+      if (
+        !isNumber(performance.loadTime) ||
+        !isNumber(performance.memoryUsage) ||
+        !isNumber(performance.cpuUsage) ||
+        !isNumber(performance.lastActiveTime)
+      ) {
+        return null
+      }
+
+      return response as {
+        storage: {
+          totalSize: number
+          fileCount: number
+          dirCount: number
+          maxSize: number
+          usagePercent: number
+        }
+        performance: {
+          loadTime: number
+          memoryUsage: number
+          cpuUsage: number
+          lastActiveTime: number
+        }
+      }
+    } catch (error) {
       console.error('[PluginSDK] Failed to get plugin performance:', error)
       return null
     }
@@ -473,10 +504,59 @@ class PluginSDK {
     }
   } | null> {
     try {
-      const response = await touchChannel.send('plugin:api:get-runtime-stats', { name })
-      return response
-    }
-    catch (error) {
+      const response = await pluginTransportSdk.getRuntimeStats({ name })
+      if (!isRecord(response)) {
+        return null
+      }
+
+      const workers = response.workers
+      const usage = response.usage
+
+      if (!isRecord(workers) || !isRecord(usage)) {
+        return null
+      }
+
+      if (
+        !isNumber(response.startedAt) ||
+        !isNumber(response.uptimeMs) ||
+        !isNumber(response.requestCount) ||
+        !isNumber(response.lastActiveAt)
+      ) {
+        return null
+      }
+
+      if (
+        !isNumber(workers.threadCount) ||
+        !isNumber(workers.uiProcessCount) ||
+        !isNumber(workers.windowCount) ||
+        !isNumber(workers.cachedViewCount) ||
+        !isNumber(workers.divisionBoxViewCount)
+      ) {
+        return null
+      }
+
+      if (!isNumber(usage.memoryBytes) || !isNumber(usage.cpuPercent)) {
+        return null
+      }
+
+      return response as {
+        startedAt: number
+        uptimeMs: number
+        requestCount: number
+        lastActiveAt: number
+        workers: {
+          threadCount: number
+          uiProcessCount: number
+          windowCount: number
+          cachedViewCount: number
+          divisionBoxViewCount: number
+        }
+        usage: {
+          memoryBytes: number
+          cpuPercent: number
+        }
+      }
+    } catch (error) {
       console.error('[PluginSDK] Failed to get plugin runtime stats:', error)
       return null
     }

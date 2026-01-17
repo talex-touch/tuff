@@ -1,4 +1,6 @@
-import { getTouchSDK } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createMarketSdk } from '@talex-touch/utils/transport/sdk/domains/market'
+import type { MarketUpdatesAvailablePayload } from '@talex-touch/utils/transport/events/types'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
@@ -14,33 +16,33 @@ export interface PluginUpdateInfo {
 
 export function usePluginUpdates() {
   const { t } = useI18n()
-  const touchSDK = getTouchSDK()
-  
+  const transport = useTuffTransport()
+  const marketSdk = createMarketSdk(transport)
+
   const availableUpdates = ref<PluginUpdateInfo[]>([])
   const lastCheckedAt = ref<number | null>(null)
   const isChecking = ref(false)
 
   let unsubscribe: (() => void) | null = null
 
-  function handleUpdatesAvailable(data: { updates: PluginUpdateInfo[] }) {
-    const updates = data.updates.filter(u => u.hasUpdate)
+  function handleUpdatesAvailable(data: MarketUpdatesAvailablePayload) {
+    const updates = (data.updates as unknown as PluginUpdateInfo[]).filter((u) => u.hasUpdate)
     availableUpdates.value = updates
 
     if (updates.length > 0) {
-      toast.info(
-        t('market.updates.available', { count: updates.length }),
-        {
-          description: updates.map(u => `${u.slug}: ${u.currentVersion} → ${u.latestVersion}`).join(', '),
-          duration: 8000,
-          action: {
-            label: t('market.updates.viewAll'),
-            onClick: () => {
-              // Navigate to market or updates page
-              window.location.hash = '#/market'
-            }
+      toast.info(t('market.updates.available', { count: updates.length }), {
+        description: updates
+          .map((u) => `${u.slug}: ${u.currentVersion} → ${u.latestVersion}`)
+          .join(', '),
+        duration: 8000,
+        action: {
+          label: t('market.updates.viewAll'),
+          onClick: () => {
+            // Navigate to market or updates page
+            window.location.hash = '#/market'
           }
         }
-      )
+      })
     }
   }
 
@@ -49,16 +51,11 @@ export function usePluginUpdates() {
 
     isChecking.value = true
     try {
-      const response = await touchSDK.rawChannel.send('market:check-updates')
-      
-      if (response?.code === 'SUCCESS' && response?.data?.updates) {
-        const updates = response.data.updates.filter((u: PluginUpdateInfo) => u.hasUpdate)
-        availableUpdates.value = updates
-        lastCheckedAt.value = Date.now()
-        return updates
-      }
-      
-      return []
+      const response = await marketSdk.checkUpdates()
+      const updates = (response?.updates || []).filter((u: PluginUpdateInfo) => u.hasUpdate)
+      availableUpdates.value = updates
+      lastCheckedAt.value = Date.now()
+      return updates
     } catch (error) {
       console.error('[PluginUpdates] Failed to check for updates:', error)
       return []
@@ -72,7 +69,7 @@ export function usePluginUpdates() {
   }
 
   onMounted(() => {
-    unsubscribe = touchSDK.onChannelEvent('market:updates-available', handleUpdatesAvailable)
+    unsubscribe = marketSdk.onUpdatesAvailable(handleUpdatesAvailable)
   })
 
   onUnmounted(() => {

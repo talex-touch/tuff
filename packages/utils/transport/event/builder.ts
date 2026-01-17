@@ -236,6 +236,50 @@ export class TuffActionBuilder<
  */
 export const defineEvent = TuffEventBuilder.namespace
 
+/**
+ * Defines a TuffEvent using a raw event name string.
+ *
+ * @remarks
+ * This is intended for incremental migrations from legacy IPC event names that
+ * don't follow the `namespace:module:action` convention yet.
+ *
+ * Prefer `defineEvent(namespace).module(module).event(action)` for new code.
+ */
+export function defineRawEvent<TRequest = void, TResponse = void>(
+  eventName: string,
+  options?: EventOptions,
+): TuffEvent<TRequest, TResponse, string, string, string> {
+  if (!eventName || typeof eventName !== 'string') {
+    throw new Error('[TuffEvent] Raw event name must be a non-empty string')
+  }
+
+  const parts = eventName.split(':')
+  const namespace = parts[0] || 'raw'
+  const module = parts.length >= 2 ? (parts[1] || 'raw') : 'raw'
+  const action = parts.length >= 3 ? (parts.slice(2).join(':') || 'raw') : 'raw'
+
+  const event: TuffEvent<TRequest, TResponse, string, string, string> = Object.freeze({
+    __brand: 'TuffEvent' as const,
+    namespace,
+    module,
+    action,
+    _batch: options?.batch,
+    _stream: options?.stream,
+    _request: undefined as unknown as TRequest,
+    _response: undefined as unknown as TResponse,
+
+    toString(): string {
+      return eventName
+    },
+
+    toEventName(): string {
+      return eventName
+    },
+  })
+
+  return event
+}
+
 // ============================================================================
 // Type Guards and Assertions
 // ============================================================================

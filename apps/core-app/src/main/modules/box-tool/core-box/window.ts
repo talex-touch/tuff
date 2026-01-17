@@ -13,6 +13,8 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { BoxWindowOption } from '../../../config/default'
 import { genTouchApp } from '../../../core'
 import { TouchWindow } from '../../../core/touch-window'
@@ -81,7 +83,7 @@ export class WindowManager {
   private currentAnimationTarget: Electron.Rectangle | null = null
   // Track last set bounds to avoid getBounds() latency issues
   private lastSetBounds: { height: number; y: number } | null = null
-  private customTopPercent: number | null = null  // Custom position offset (0-1)
+  private customTopPercent: number | null = null // Custom position offset (0-1)
   private readonly pollingService = PollingService.getInstance()
 
   private get touchApp(): TouchApp {
@@ -164,7 +166,7 @@ export class WindowManager {
     this.sendChannelMessageToUIView('core-box:input-change', {
       input: payload.input ?? payload.query.text,
       query: payload.query,
-      source: payload.source ?? 'ui-monitor',
+      source: payload.source ?? 'ui-monitor'
     })
   }
 
@@ -318,24 +320,28 @@ export class WindowManager {
 
     const browserWindow = window.window
     const rawBounds = browserWindow.getBounds()
-    
+
     // Skip if same target as current animation (prevent duplicate animations)
-    if (this.currentAnimationTarget &&
-        Math.abs(this.currentAnimationTarget.height - target.height) < 3) {
+    if (
+      this.currentAnimationTarget &&
+      Math.abs(this.currentAnimationTarget.height - target.height) < 3
+    ) {
       return
     }
-    
+
     // Use tracked bounds for start position (more accurate than getBounds)
     const startBounds = {
       ...rawBounds,
       height: this.lastSetBounds?.height ?? rawBounds.height,
-      y: this.lastSetBounds?.y ?? rawBounds.y,
+      y: this.lastSetBounds?.y ?? rawBounds.y
     }
 
     // Skip if already at target (within tolerance) - but only if no animation is in progress
-    if (!this.boundsAnimationTaskId &&
-        Math.abs(startBounds.height - target.height) < 3 &&
-        Math.abs(startBounds.y - target.y) < 3) {
+    if (
+      !this.boundsAnimationTaskId &&
+      Math.abs(startBounds.height - target.height) < 3 &&
+      Math.abs(startBounds.y - target.y) < 3
+    ) {
       return
     }
 
@@ -354,56 +360,60 @@ export class WindowManager {
 
     const taskId = 'core-box.window.bounds-animation'
     this.boundsAnimationTaskId = taskId
-    this.pollingService.register(taskId, () => {
-      if (token !== this.boundsAnimationToken || browserWindow.isDestroyed()) {
-        this.pollingService.unregister(taskId)
-        if (this.boundsAnimationTaskId === taskId) {
-          this.boundsAnimationTaskId = null
-        }
-        return
-      }
-
-      const elapsed = performance.now() - startTime
-      const progress = Math.min(elapsed / durationMs, 1)
-      const eased = easeOutQuart(progress)
-
-      const nextBounds: Electron.Rectangle = {
-        x: Math.round(lerp(startBounds.x, target.x, eased)),
-        y: Math.round(lerp(startBounds.y, target.y, eased)),
-        width: Math.round(lerp(startBounds.width, target.width, eased)),
-        height: Math.round(lerp(startBounds.height, target.height, eased)),
-      }
-
-      try {
-        browserWindow.setBounds(nextBounds, false)
-        // Track the last set bounds for accurate start position on next animation
-        this.lastSetBounds = { height: nextBounds.height, y: nextBounds.y }
-      } catch (error) {
-        coreBoxWindowLog.warn('Failed to animate window bounds', { error })
-        this.pollingService.unregister(taskId)
-        if (this.boundsAnimationTaskId === taskId) {
-          this.boundsAnimationTaskId = null
-        }
-        return
-      }
-
-      if (progress >= 1) {
-        this.pollingService.unregister(taskId)
-        if (this.boundsAnimationTaskId === taskId) {
-          this.boundsAnimationTaskId = null
-        }
-        this.currentAnimationTarget = null
-        try {
-          browserWindow.setBounds(target, false)
-          this.lastSetBounds = { height: target.height, y: target.y }
-          if (typeof options.minHeight === 'number') {
-            browserWindow.setMinimumSize(720, options.minHeight)
+    this.pollingService.register(
+      taskId,
+      () => {
+        if (token !== this.boundsAnimationToken || browserWindow.isDestroyed()) {
+          this.pollingService.unregister(taskId)
+          if (this.boundsAnimationTaskId === taskId) {
+            this.boundsAnimationTaskId = null
           }
-        } catch (error) {
-          coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
+          return
         }
-      }
-    }, { interval: 16, unit: 'milliseconds' })
+
+        const elapsed = performance.now() - startTime
+        const progress = Math.min(elapsed / durationMs, 1)
+        const eased = easeOutQuart(progress)
+
+        const nextBounds: Electron.Rectangle = {
+          x: Math.round(lerp(startBounds.x, target.x, eased)),
+          y: Math.round(lerp(startBounds.y, target.y, eased)),
+          width: Math.round(lerp(startBounds.width, target.width, eased)),
+          height: Math.round(lerp(startBounds.height, target.height, eased))
+        }
+
+        try {
+          browserWindow.setBounds(nextBounds, false)
+          // Track the last set bounds for accurate start position on next animation
+          this.lastSetBounds = { height: nextBounds.height, y: nextBounds.y }
+        } catch (error) {
+          coreBoxWindowLog.warn('Failed to animate window bounds', { error })
+          this.pollingService.unregister(taskId)
+          if (this.boundsAnimationTaskId === taskId) {
+            this.boundsAnimationTaskId = null
+          }
+          return
+        }
+
+        if (progress >= 1) {
+          this.pollingService.unregister(taskId)
+          if (this.boundsAnimationTaskId === taskId) {
+            this.boundsAnimationTaskId = null
+          }
+          this.currentAnimationTarget = null
+          try {
+            browserWindow.setBounds(target, false)
+            this.lastSetBounds = { height: target.height, y: target.y }
+            if (typeof options.minHeight === 'number') {
+              browserWindow.setMinimumSize(720, options.minHeight)
+            }
+          } catch (error) {
+            coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
+          }
+        }
+      },
+      { interval: 16, unit: 'milliseconds' }
+    )
     this.pollingService.start()
   }
 
@@ -484,7 +494,7 @@ export class WindowManager {
       x: left,
       y: top,
       width: windowWidth,
-      height: windowHeight,
+      height: windowHeight
     }
   }
 
@@ -753,12 +763,19 @@ export class WindowManager {
   }
 
   private syncViewCacheConfig(): void {
-    const settings = this.getAppSettingConfig() as any
-    const cfg = settings?.viewCache
+    type AppSettingWithViewCache = AppSetting & {
+      viewCache?: {
+        maxCachedViews?: number
+        hotCacheDurationMs?: number
+      }
+    }
+    const settings = this.getAppSettingConfig() as AppSettingWithViewCache
+    const cfg = settings.viewCache
     if (cfg && typeof cfg === 'object') {
       const patch: { maxCachedViews?: number; hotCacheDurationMs?: number } = {}
       if (typeof cfg.maxCachedViews === 'number') patch.maxCachedViews = cfg.maxCachedViews
-      if (typeof cfg.hotCacheDurationMs === 'number') patch.hotCacheDurationMs = cfg.hotCacheDurationMs
+      if (typeof cfg.hotCacheDurationMs === 'number')
+        patch.hotCacheDurationMs = cfg.hotCacheDurationMs
       viewCacheManager.updateConfig(patch)
       viewCacheManager.cleanupStale()
     }
@@ -944,19 +961,24 @@ export class WindowManager {
           this.uiView.webContents.focus()
 
           if (query) {
-            const normalizedQuery: TuffQuery = typeof query === 'string' ? { text: query } : { ...query }
-            void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-              input: normalizedQuery.text ?? '',
-              query: normalizedQuery,
-              source: 'cached',
-            }).catch(() => {})
+            const normalizedQuery: TuffQuery =
+              typeof query === 'string' ? { text: query } : { ...query }
+            void this.touchApp.channel
+              .sendToPlugin(plugin.name, 'core-box:input-change', {
+                input: normalizedQuery.text ?? '',
+                query: normalizedQuery,
+                source: 'cached'
+              })
+              .catch(() => {})
           }
 
-          void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:ui-resume', {
-            source: 'cache',
-            featureId: feature?.id,
-            url: cached.url,
-          }).catch(() => {})
+          void this.touchApp.channel
+            .sendToPlugin(plugin.name, 'core-box:ui-resume', {
+              source: 'cache',
+              featureId: feature?.id,
+              url: cached.url
+            })
+            .catch(() => {})
         }
 
         coreBoxWindowLog.info(`AttachUIView cache hit: ${plugin.name}`)
@@ -1361,7 +1383,9 @@ export class WindowManager {
     }
 
     metrics.total = performance.now() - startTime
-    coreBoxWindowLog.info(`AttachUIView metrics: preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`)
+    coreBoxWindowLog.info(
+      `AttachUIView metrics: preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`
+    )
 
     // Initial theme is now injected synchronously via preload ($tuffInitialData.theme)
     // No need to send via channel - data is available immediately when page scripts run
@@ -1394,24 +1418,28 @@ export class WindowManager {
         this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
           input: normalizedQuery.text ?? '',
           query: normalizedQuery,
-          source: 'initial',
+          source: 'initial'
         })
 
-        void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:ui-resume', {
-          source: 'attach',
-          featureId: feature?.id,
-          url: finalUrl,
-        }).catch(() => {})
+        void this.touchApp.channel
+          .sendToPlugin(plugin.name, 'core-box:ui-resume', {
+            source: 'attach',
+            featureId: feature?.id,
+            url: finalUrl
+          })
+          .catch(() => {})
       })
     }
 
     if (!query && plugin) {
       this.uiView.webContents.once('dom-ready', () => {
-        void this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:ui-resume', {
-          source: 'attach',
-          featureId: feature?.id,
-          url: finalUrl,
-        }).catch(() => {})
+        void this.touchApp.channel
+          .sendToPlugin(plugin.name, 'core-box:ui-resume', {
+            source: 'attach',
+            featureId: feature?.id,
+            url: finalUrl
+          })
+          .catch(() => {})
       })
     }
   }
@@ -1439,7 +1467,13 @@ export class WindowManager {
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
-          genTouchApp().channel.broadcastPlugin(plugin.name, 'plugin:lifecycle:inactive', {})
+          const channel = genTouchApp().channel
+          const keyManager =
+            (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+          const transport = getTuffTransportMain(channel, keyManager)
+          transport
+            .sendToPlugin(plugin.name, PluginEvents.lifecycleSignal.inactive, undefined)
+            .catch(() => {})
         }
       }
 
@@ -1456,8 +1490,13 @@ export class WindowManager {
         coreBoxWindowLog.warn('Cannot remove child view: current window is null or destroyed')
       }
 
-      const settings = this.getAppSettingConfig() as any
-      const cacheEnabled = (settings?.viewCache?.maxCachedViews ?? 0) > 0
+      type AppSettingWithViewCache = AppSetting & {
+        viewCache?: {
+          maxCachedViews?: number
+        }
+      }
+      const settings = this.getAppSettingConfig() as AppSettingWithViewCache
+      const cacheEnabled = (settings.viewCache?.maxCachedViews ?? 0) > 0
 
       if (!cacheEnabled || !this.attachedPlugin) {
         try {
@@ -1478,7 +1517,7 @@ export class WindowManager {
     }
   }
 
-  public sendToUIView(channel: string, ...args: any[]): void {
+  public sendToUIView(channel: string, ...args: unknown[]): void {
     if (this.uiView) {
       this.uiView.webContents.postMessage(channel, args)
     }
@@ -1490,7 +1529,7 @@ export class WindowManager {
    * @param eventName - The event name to send
    * @param data - Optional data payload
    */
-  public sendChannelMessageToUIView(eventName: string, data?: any): void {
+  public sendChannelMessageToUIView(eventName: string, data?: unknown): void {
     if (!this.attachedPlugin) {
       return
     }
@@ -1591,7 +1630,9 @@ export class WindowManager {
       view.webContents.focus()
     }
 
-    coreBoxWindowLog.info('UI view restored after failed transfer', { meta: { plugin: plugin.name } })
+    coreBoxWindowLog.info('UI view restored after failed transfer', {
+      meta: { plugin: plugin.name }
+    })
     return true
   }
 
@@ -1679,7 +1720,9 @@ export class WindowManager {
     metaKey: boolean
     repeat: boolean
   }): Array<'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'> {
-    const modifiers: Array<'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'> = []
+    const modifiers: Array<
+      'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'
+    > = []
     if (event.shiftKey) modifiers.push('shift')
     if (event.ctrlKey) modifiers.push('control')
     if (event.altKey) modifiers.push('alt')
@@ -1725,8 +1768,8 @@ export class WindowManager {
       return false
     }
 
-    const devtoolsAllowed = this.attachedPlugin.dev?.enable
-      || this.touchApp.version === TalexTouch.AppVersion.DEV
+    const devtoolsAllowed =
+      this.attachedPlugin.dev?.enable || this.touchApp.version === TalexTouch.AppVersion.DEV
     if (!devtoolsAllowed) {
       coreBoxWindowLog.warn(`DevTools blocked for non-dev plugin: ${pluginName}`)
       return false

@@ -1,5 +1,10 @@
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
+import type {
+  PluginInstallSourceRequest,
+  PluginInstallSourceResponse
+} from '@talex-touch/utils/transport/events/types'
 import { useI18n } from 'vue-i18n'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
@@ -21,6 +26,21 @@ export interface InstallOptions {
 export function useMarketInstall() {
   const { t } = useI18n()
   const installManager = useInstallManager()
+  const transport = useTuffTransport()
+  const pluginSdk = createPluginSdk(transport)
+
+  function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message
+    }
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = (error as { message?: unknown }).message
+      if (typeof message === 'string') {
+        return message
+      }
+    }
+    return 'UNKNOWN_ERROR'
+  }
 
   function getInstallTask(pluginId?: string, providerId?: string) {
     return installManager.getTaskByPluginId(pluginId, providerId)
@@ -113,18 +133,9 @@ export function useMarketInstall() {
 
   async function handleInstall(
     plugin: MarketPluginListItem,
-    channel: ITouchClientChannel | undefined,
     options?: InstallOptions
   ): Promise<void> {
     if (isPluginInstalling(plugin.id, plugin.providerId)) return
-
-    if (!channel) {
-      await forTouchTip(
-        t('market.installation.failureTitle'),
-        t('market.installation.browserNotSupported')
-      )
-      return
-    }
 
     try {
       // For upgrades, show upgrade confirmation
@@ -149,7 +160,7 @@ export function useMarketInstall() {
       // After user confirmation, mark as trusted to skip backend confirmation
       const isTrusted = plugin.trusted === true || true // User already confirmed
 
-      const payload: Record<string, unknown> = {
+      const payload: PluginInstallSourceRequest = {
         source: downloadUrl,
         metadata: {
           officialId: plugin.id,
@@ -172,7 +183,7 @@ export function useMarketInstall() {
         }
       }
 
-      const result: any = await channel.send('plugin:install-source', payload)
+      const result: PluginInstallSourceResponse = await pluginSdk.installFromSource(payload)
 
       if (result?.status === 'success') {
         const successTitle = options?.isUpgrade
@@ -187,11 +198,11 @@ export function useMarketInstall() {
         const reason = result?.message || 'INSTALL_FAILED'
         throw new Error(reason)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Market] Plugin install failed:', error)
 
       // Handle active UI error specially
-      const errorMessage = error?.message || 'UNKNOWN_ERROR'
+      const errorMessage = getErrorMessage(error)
       if (errorMessage.startsWith('PLUGIN_HAS_ACTIVE_UI:')) {
         const uiInfo = errorMessage.replace('PLUGIN_HAS_ACTIVE_UI:', '')
         await forTouchTip(

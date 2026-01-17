@@ -50,5 +50,7 @@ export default {
       ],
     ],
     'subject-empty': [2, 'never'],
+    'body-max-line-length': [0],
+    'footer-max-line-length': [0],
   },
 }
