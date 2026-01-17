@@ -105,6 +105,11 @@ watchEffect(() => {
   if (!route.path)
     return
 
+  // 仅当访问旧的语言前缀路径（如 /en/*、/zh/*）时进行兼容处理。
+  // 对于仅包含语言前缀的路径（/en、/en/、/zh、/zh/），避免被自动重定向到首页。
+  if (/^\/(en|zh)\/?$/i.test(route.path))
+    return
+
   // 移除语言前缀 /en 或 /zh
   const trimmed = route.path.replace(/^\/(en|zh)(?=\/|$)/i, '')
 

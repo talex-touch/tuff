@@ -25,12 +25,24 @@ const markerHeight = ref(0)
 const hasActive = ref(false)
 const navRef = ref<HTMLElement | null>(null)
 
+function normalizeHash(hash: string) {
+  const raw = hash.replace(/^#/, '')
+  if (!raw)
+    return ''
+  try {
+    return decodeURIComponent(raw)
+  }
+  catch {
+    return raw
+  }
+}
+
 function setActiveHash(hash?: string | null) {
   if (!hash) {
     activeHash.value = ''
     return
   }
-  activeHash.value = hash.replace(/^#/, '')
+  activeHash.value = normalizeHash(hash)
 }
 
 function updateMarker() {
@@ -39,27 +51,16 @@ function updateMarker() {
     return
   }
 
-  const activeLink = navRef.value.querySelector(`a[data-id="${activeHash.value}"]`) as HTMLElement
+  const links = navRef.value.querySelectorAll<HTMLElement>('a[data-id]')
+  const activeLink = Array.from(links).find(link => link.getAttribute('data-id') === activeHash.value)
   if (!activeLink) {
     hasActive.value = false
     return
   }
 
   hasActive.value = true
-  markerTop.value = activeLink.offsetTop + (activeLink.offsetHeight - 16) / 2 // Center 16px height marker or adjust
-  // Actually, let's match the link height or a fixed small height
-  // Design: 4px height rounded pill or full height line?
-  // The template used h-4 w-1 before.
-  // Let's use a dynamic height matching the link content or fixed.
-  // Template has `h-4` in previous design.
-  // Let's make it cover the text height roughly or be a small pill.
-  // Let's try to match the link's vertical center.
-  
-  // Let's use a fixed height marker like 20px or match the link height.
-  // The template has `height: ${markerHeight}px`.
-  // Let's set markerHeight to a fixed value like 16px (h-4) and center it.
   markerHeight.value = 16
-  markerTop.value = activeLink.offsetTop + (activeLink.offsetHeight - 16) / 2
+  markerTop.value = activeLink.offsetTop + (activeLink.offsetHeight - markerHeight.value) / 2
 }
 
 function scrollToHeading(id: string) {
@@ -193,6 +194,7 @@ watch(
       setTimeout(() => {
         refreshHeadingElements()
         updateActiveFromScroll()
+        setActiveHash(window.location.hash)
         updateMarker()
       }, 100)
     })

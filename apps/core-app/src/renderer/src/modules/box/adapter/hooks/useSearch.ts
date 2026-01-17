@@ -22,14 +22,25 @@ import { BoxMode } from '..'
 import { useResize } from './useResize'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 
+type SearchEndData = {
+  searchId: string
+  cancelled?: boolean
+  activate?: TuffSearchResult['activate']
+  sources?: TuffSearchResult['sources']
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object'
+}
+
 export function useSearch(
   boxOptions: IBoxOptions,
   clipboardOptions?: IClipboardOptions
 ): IUseSearch {
-  const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
+  const shouldLog = () =>
+    appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
   const logDebug = (...args: unknown[]) => {
-    if (!shouldLog())
-      return
+    if (!shouldLog()) return
     console.debug(...args)
   }
   const searchVal = ref('')
@@ -51,11 +62,6 @@ export function useSearch(
     })
 
     const result = Array.from(itemsMap.values())
-    logDebug('[useSearch] res computed:', {
-      boxItemsCount: boxItems.value.length,
-      searchResultsCount: searchResults.value.length,
-      totalCount: result.length
-    })
     return result
   })
 
@@ -66,7 +72,7 @@ export function useSearch(
   const currentSearchId = ref<string | null>(null)
   const transport = useTuffTransport()
 
-  const pendingSearchEndById = new Map<string, any>()
+  const pendingSearchEndById = new Map<string, SearchEndData>()
 
   const BASE_DEBOUNCE = 35
   const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
@@ -90,7 +96,7 @@ export function useSearch(
         const pluginName = id.substring('plugin-features:'.length)
         result.push({
           id: 'plugin-features',
-          meta: pluginName ? { pluginName } : undefined,
+          meta: pluginName ? { pluginName } : undefined
         })
       } else {
         result.push({ id })
@@ -99,7 +105,9 @@ export function useSearch(
     return result.length > 0 ? result : null
   }
 
-  function safeSerializeMetadata(meta: Record<string, unknown> | null | undefined): Record<string, unknown> | undefined {
+  function safeSerializeMetadata(
+    meta: Record<string, unknown> | null | undefined
+  ): Record<string, unknown> | undefined {
     if (!meta) return undefined
     try {
       const safe: Record<string, unknown> = {}
@@ -142,10 +150,7 @@ export function useSearch(
         content: clipboardOptions.last.content,
         metadata: safeSerializeMetadata(clipboardOptions.last.meta)
       })
-    } else if (
-      clipboardOptions?.last?.type === 'text' ||
-      clipboardOptions?.last?.type === 'html'
-    ) {
+    } else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
       const content = clipboardOptions.last.content ?? ''
       if (content.length >= MIN_TEXT_ATTACHMENT_LENGTH) {
         if (clipboardOptions.last.rawContent) {
@@ -186,11 +191,13 @@ export function useSearch(
     })
 
     if (windowState.divisionBox?.sessionId) {
-      transport.send(DivisionBoxEvents.inputChange, {
-        sessionId: windowState.divisionBox.sessionId,
-        input: searchVal.value,
-        query,
-      }).catch(() => {})
+      transport
+        .send(DivisionBoxEvents.inputChange, {
+          sessionId: windowState.divisionBox.sessionId,
+          input: searchVal.value,
+          query
+        })
+        .catch(() => {})
     }
   }
 
@@ -209,7 +216,6 @@ export function useSearch(
         applySearchEnd(pending)
       }
     }
-
   }
 
   async function executeSearch(): Promise<void> {
@@ -261,7 +267,9 @@ export function useSearch(
         const query: TuffQuery = { text: '', inputs }
         inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
 
-        const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, { query })
+        const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
+          query
+        })
         if (recommendationTimeoutId) {
           clearTimeout(recommendationTimeoutId)
           recommendationTimeoutId = null
@@ -318,7 +326,9 @@ export function useSearch(
         source: 'renderer'
       })
 
-      const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, { query })
+      const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
+        query
+      })
 
       logDebug('[useSearch] Search result received:', {
         sessionId: initialResult.sessionId,
@@ -350,7 +360,6 @@ export function useSearch(
       logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
 
       boxOptions.layout = undefined
-
     } catch (error) {
       console.error('Search initiation failed:', error)
       searchResults.value = []
@@ -380,9 +389,11 @@ export function useSearch(
 
     const isPluginFeature =
       itemToExecute.kind === 'feature' && itemToExecute.source?.type === 'plugin'
+    const metaRecord = isRecord(itemToExecute.meta) ? itemToExecute.meta : null
+    const intelligence =
+      metaRecord && isRecord(metaRecord.intelligence) ? metaRecord.intelligence : null
     const keepCoreBoxOpen =
-      (itemToExecute.meta as any)?.keepCoreBoxOpen === true ||
-      (itemToExecute.meta as any)?.intelligence?.keepCoreBoxOpen === true
+      metaRecord?.keepCoreBoxOpen === true || intelligence?.keepCoreBoxOpen === true
     const shouldRestoreAfterExecute =
       isPluginFeature || !appSetting.tools.autoHide || keepCoreBoxOpen
 
@@ -395,23 +406,29 @@ export function useSearch(
       boxOptions.data.feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
 
-      const featureMeta = itemToExecute.meta as any
-      const interaction = featureMeta?.interaction
-      const acceptedInputTypes = featureMeta?.extension?.acceptedInputTypes
-      const hasAcceptedInputTypes = acceptedInputTypes && acceptedInputTypes.length > 0
-      const allowInput = interaction?.allowInput === true
+      const interaction = (itemToExecute.meta as { interaction?: unknown } | null | undefined)
+        ?.interaction
+      const allowInput = isRecord(interaction) && interaction.allowInput === true
+
+      const acceptedInputTypes = (
+        itemToExecute.meta as { extension?: Record<string, unknown> } | null | undefined
+      )?.extension?.acceptedInputTypes
+      const hasAcceptedInputTypes =
+        Array.isArray(acceptedInputTypes) && acceptedInputTypes.length > 0
       const shouldShowInput = hasAcceptedInputTypes || allowInput
 
-      activeActivations.value = [{
-        id: 'plugin-features',
-        meta: {
-          pluginName: featureMeta?.pluginName,
-          featureId: featureMeta?.featureId,
-          feature: itemToExecute
-        },
-        hideResults: false,
-        showInput: shouldShowInput
-      }]
+      activeActivations.value = [
+        {
+          id: 'plugin-features',
+          meta: {
+            pluginName: itemToExecute.meta?.pluginName,
+            featureId: itemToExecute.meta?.featureId,
+            feature: itemToExecute
+          },
+          hideResults: false,
+          showInput: shouldShowInput
+        }
+      ]
     }
 
     searchResults.value = []
@@ -556,7 +573,8 @@ export function useSearch(
 
   watch(searchVal, (val) => {
     if (!val) {
-      ;(debouncedSearch as any).cancel?.()
+      const cancelable = debouncedSearch as unknown as { cancel?: () => void }
+      cancelable.cancel?.()
       void handleSearchImmediate()
       return
     }
@@ -601,20 +619,22 @@ export function useSearch(
   })
 
   touchChannel.regChannel('core-box:search-end', ({ data }) => {
-    if (!data?.searchId) return
+    if (!data || typeof data !== 'object') return
+    const payload = data as Partial<SearchEndData>
+    if (!payload.searchId) return
 
     if (!currentSearchId.value) {
-      pendingSearchEndById.set(data.searchId, data)
+      pendingSearchEndById.set(payload.searchId, payload as SearchEndData)
       return
     }
 
-    if (data.searchId === currentSearchId.value) {
-      applySearchEnd(data)
+    if (payload.searchId === currentSearchId.value) {
+      applySearchEnd(payload as SearchEndData)
       return
     }
   })
 
-  const applySearchEnd = (data: any): void => {
+  const applySearchEnd = (data: SearchEndData): void => {
     if (data.cancelled) {
       resetSearchState()
       activeActivations.value = null

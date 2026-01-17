@@ -1,20 +1,23 @@
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { app, BrowserWindow, dialog } from 'electron'
+import { app, BrowserWindow, dialog, screen } from 'electron'
 import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
 import { getStartupAnalytics } from '../modules/analytics'
+import { storageModule } from '../modules/storage'
 import { TalexTouch } from '../types'
 import { checkDirWithCreate, checkPlatformCompatibility } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
 import { genTouchChannel } from './channel-core'
 import {
-  AppStartEvent,
-  TalexEvents,
-  touchEventBus,
-} from './eventbus/touch-event'
+  getDisplayLayoutSignature,
+  normalizeBoundsToDisplays,
+  pickBestMainWindowBounds,
+  upsertMainWindowStateProfile
+} from './main-window-state'
+import { AppStartEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 import { ModuleManager } from './module-manager'
 import { innerRootPath } from './precore'
 import { TouchConfig } from './touch-config'
@@ -39,24 +42,66 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   private _startSilent = false
 
+  private mainWindowBoundsSaveTimer: NodeJS.Timeout | null = null
+
   /**
-   * Read startSilent config directly from file before StorageModule is initialized
+   * Read app-setting.ini directly from disk before StorageModule is initialized.
    */
-  private readStartSilentConfig(): boolean {
+  private readAppSettingsConfigFromDisk(): Record<string, unknown> {
     try {
       const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
       if (fse.existsSync(configPath)) {
         const content = fse.readFileSync(configPath, 'utf-8')
         if (content.length > 0) {
-          const config = JSON.parse(content)
-          return config?.window?.startSilent === true
+          const parsed: unknown = JSON.parse(content)
+          if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>
         }
       }
+    } catch (error) {
+      mainLog.warn('Failed to read app-setting.ini from disk', { error })
     }
-    catch (error) {
-      mainLog.warn('Failed to read startSilent config, defaulting to false', { error })
+    return {}
+  }
+
+  private resolveInitialMainWindowBounds(
+    appSettings: Record<string, unknown>
+  ): Electron.Rectangle | null {
+    try {
+      const displays = screen.getAllDisplays()
+      const primary = screen.getPrimaryDisplay()
+
+      const defaultSize = {
+        width: typeof MainWindowOption.width === 'number' ? MainWindowOption.width : 1100,
+        height: typeof MainWindowOption.height === 'number' ? MainWindowOption.height : 680
+      }
+      const minSize = {
+        width: typeof MainWindowOption.minWidth === 'number' ? MainWindowOption.minWidth : 0,
+        height: typeof MainWindowOption.minHeight === 'number' ? MainWindowOption.minHeight : 0
+      }
+
+      const layoutSignature = getDisplayLayoutSignature(displays)
+      const state = (appSettings as { window?: { mainWindowState?: unknown } }).window
+        ?.mainWindowState
+      const picked = pickBestMainWindowBounds(
+        state,
+        layoutSignature,
+        displays,
+        primary,
+        defaultSize,
+        minSize
+      )
+
+      if (picked.reason !== 'default') {
+        mainLog.debug('Restoring main window bounds', {
+          meta: { reason: picked.reason, layout: layoutSignature }
+        })
+      }
+
+      return picked.bounds as Electron.Rectangle
+    } catch (error) {
+      mainLog.warn('Failed to resolve initial main window bounds', { error })
+      return null
     }
-    return false
   }
 
   private async showFileNotFoundDialog(filePath: string, triedPaths: string[]): Promise<void> {
@@ -72,22 +117,25 @@ export class TouchApp implements TalexTouch.TouchApp {
       detail,
       buttons: ['OK'],
       defaultId: 0,
-      noLink: true,
+      noLink: true
     })
   }
 
   constructor(app: Electron.App) {
     mainLog.info('Running under application root', {
-      meta: { root: this.rootPath },
+      meta: { root: this.rootPath }
     })
     checkDirWithCreate(this.rootPath, true)
 
-    // Read startSilent config before creating window
-    this._startSilent = this.readStartSilentConfig()
+    const appSettingsFromDisk = this.readAppSettingsConfigFromDisk()
+
+    this._startSilent = appSettingsFromDisk?.window?.startSilent === true
+    const initialBounds = this.resolveInitialMainWindowBounds(appSettingsFromDisk)
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
       ...MainWindowOption,
       autoShow: !this._startSilent,
+      ...(initialBounds ?? {})
     }
 
     this.app = app
@@ -103,6 +151,7 @@ export class TouchApp implements TalexTouch.TouchApp {
     }
 
     this.window = new TouchWindow(_windowOptions)
+    this.registerMainWindowBoundsPersistence()
     this.channel = genTouchChannel(this)
     this.moduleManager = new ModuleManager(this, this.channel)
     this.config = new TouchConfig(this)
@@ -121,6 +170,57 @@ export class TouchApp implements TalexTouch.TouchApp {
     this.__init__().then(() => {
       mainLog.success('TouchApp runtime initialized')
     })
+  }
+
+  private registerMainWindowBoundsPersistence(): void {
+    const win = this.window.window
+
+    const scheduleSave = () => {
+      if (this.mainWindowBoundsSaveTimer) {
+        clearTimeout(this.mainWindowBoundsSaveTimer)
+      }
+
+      this.mainWindowBoundsSaveTimer = setTimeout(() => {
+        this.mainWindowBoundsSaveTimer = null
+        this.persistMainWindowBounds()
+      }, 320)
+    }
+
+    win.on('resize', scheduleSave)
+    win.on('move', scheduleSave)
+
+    touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
+      scheduleSave()
+    })
+  }
+
+  private persistMainWindowBounds(): void {
+    if (!storageModule.filePath) {
+      return
+    }
+
+    const win = this.window.window
+    if (win.isDestroyed()) return
+
+    const rawBounds = win.isMaximized() ? win.getNormalBounds() : win.getBounds()
+
+    const displays = screen.getAllDisplays()
+    const primary = screen.getPrimaryDisplay()
+    const minSize = {
+      width: typeof MainWindowOption.minWidth === 'number' ? MainWindowOption.minWidth : 0,
+      height: typeof MainWindowOption.minHeight === 'number' ? MainWindowOption.minHeight : 0
+    }
+
+    const layoutSignature = getDisplayLayoutSignature(displays)
+    const bounds = normalizeBoundsToDisplays(rawBounds, displays, primary, minSize)
+
+    try {
+      const appSettings = storageModule.getConfig('app-setting.ini') as Record<string, unknown>
+      upsertMainWindowStateProfile(appSettings, layoutSignature, bounds)
+      storageModule.saveConfig('app-setting.ini', appSettings, false, false)
+    } catch (error) {
+      mainLog.warn('Failed to persist main window bounds', { error })
+    }
   }
 
   async __init__(): Promise<void> {
@@ -151,7 +251,7 @@ export class TouchApp implements TalexTouch.TouchApp {
           readyTime: currentTime,
           domContentLoaded: undefined, // Will be set by renderer
           firstInteractive: undefined, // Will be set by renderer
-          loadEventEnd: undefined, // Will be set by renderer
+          loadEventEnd: undefined // Will be set by renderer
         })
       }
 
@@ -168,7 +268,7 @@ export class TouchApp implements TalexTouch.TouchApp {
           exePath: app.getPath('exe'),
           modulePath: path.join(this.rootPath, 'modules'),
           configPath: path.join(this.rootPath, 'config'),
-          pluginPath: path.join(this.rootPath, 'plugins'),
+          pluginPath: path.join(this.rootPath, 'plugins')
         },
         isPackaged: app.isPackaged,
         isDev: this.version === TalexTouch.AppVersion.DEV,
@@ -181,8 +281,8 @@ export class TouchApp implements TalexTouch.TouchApp {
           s: rendererStart,
           e: currentTime,
           p: process.uptime(),
-          h: process.hrtime(),
-        },
+          h: process.hrtime()
+        }
       }
     })
 
@@ -190,7 +290,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
       mainLog.info('Booting packaged build', {
-        meta: { appPath: app.getAppPath() },
+        meta: { appPath: app.getAppPath() }
       })
 
       // Try multiple paths for index.html
@@ -201,16 +301,16 @@ export class TouchApp implements TalexTouch.TouchApp {
         ...(process.resourcesPath
           ? [
               path.join(process.resourcesPath, 'app', 'renderer', 'index.html'),
-              path.join(process.resourcesPath, 'renderer', 'index.html'),
+              path.join(process.resourcesPath, 'renderer', 'index.html')
             ]
           : []),
         // Additional macOS-specific paths
         ...(process.platform === 'darwin'
           ? [
               path.resolve(appPath, '..', '..', '..', 'Resources', 'app', 'renderer', 'index.html'),
-              path.resolve(__dirname, '..', '..', 'renderer', 'index.html'),
+              path.resolve(__dirname, '..', '..', 'renderer', 'index.html')
             ]
-          : []),
+          : [])
       ]
 
       mainLog.info('Checking for index.html', {
@@ -218,8 +318,8 @@ export class TouchApp implements TalexTouch.TouchApp {
           __dirname: String(__dirname),
           appPath,
           resourcesPath: process.resourcesPath || 'N/A',
-          possiblePaths: possiblePaths.join(', '),
-        },
+          possiblePaths: possiblePaths.join(', ')
+        }
       })
 
       let url = possiblePaths[0]
@@ -228,7 +328,7 @@ export class TouchApp implements TalexTouch.TouchApp {
       for (const testPath of possiblePaths) {
         const exists = fse.existsSync(testPath)
         mainLog.debug(`Checking path: ${testPath}`, {
-          meta: { exists },
+          meta: { exists }
         })
 
         if (exists) {
@@ -256,8 +356,8 @@ export class TouchApp implements TalexTouch.TouchApp {
             triedPaths: possiblePaths.join(', '),
             appPath: app.getAppPath(),
             __dirname: String(__dirname),
-            resourcesPath: process.resourcesPath || 'N/A',
-          },
+            resourcesPath: process.resourcesPath || 'N/A'
+          }
         })
 
         await this.showFileNotFoundDialog(url, possiblePaths)
@@ -266,30 +366,27 @@ export class TouchApp implements TalexTouch.TouchApp {
 
       if (!startSilent) {
         this.window.window.show()
-      }
-      else {
+      } else {
         mainLog.info('Starting in silent mode (hidden to tray)')
       }
       mainLog.info('Loading renderer from file', {
-        meta: { url },
+        meta: { url }
       })
 
       try {
         await this.window.loadFile(url, {
-          devtools: this.version === TalexTouch.AppVersion.DEV,
+          devtools: this.version === TalexTouch.AppVersion.DEV
         })
-      }
-      catch (error) {
+      } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error)
         mainLog.error('Failed to load renderer file', {
-          meta: { url, error: errorMsg },
+          meta: { url, error: errorMsg }
         })
 
         await this.showFileNotFoundDialog(url, possiblePaths)
         throw error
       }
-    }
-    else {
+    } else {
       const url = process.env.ELECTRON_RENDERER_URL as string
       if (!url) {
         throw new Error('ELECTRON_RENDERER_URL is not set')
@@ -297,19 +394,18 @@ export class TouchApp implements TalexTouch.TouchApp {
 
       if (!startSilent) {
         this.window.window.show()
-      }
-      else {
+      } else {
         mainLog.info('Starting in silent mode (hidden to tray)')
       }
       mainLog.info('Loading renderer from dev server', {
-        meta: { url },
+        meta: { url }
       })
 
       await this.window.loadURL(url, { devtools: this.version === TalexTouch.AppVersion.DEV })
     }
 
     renderTimer.end('Renderer ready', {
-      meta: { mode: app.isPackaged ? 'file' : 'dev-server' },
+      meta: { mode: app.isPackaged ? 'file' : 'dev-server' }
     })
   }
 

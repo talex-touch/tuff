@@ -1,7 +1,10 @@
 <script setup lang="ts" name="CoreBox">
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { ITuffIcon, IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { StandardChannelData } from '@talex-touch/utils/channel'
 import type { IBoxOptions } from '../../modules/box/adapter'
+import type { ComponentPublicInstance } from 'vue'
+import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 
@@ -32,6 +35,10 @@ import PrefixPart from './PrefixPart.vue'
 import TagSection from './tag/TagSection.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object'
+}
+
 declare global {
   interface Window {
     __coreboxHistoryVisible?: boolean
@@ -50,7 +57,7 @@ const boxOptions = reactive<IBoxOptions>({
 })
 
 // Create shared clipboard state
-const clipboardOptions = reactive<any>({
+const clipboardOptions = reactive<IClipboardOptions>({
   last: null,
   detectedAt: null,
   lastClearedTimestamp: null
@@ -110,16 +117,22 @@ const completionDisplay = computed(() => {
   return completion
 })
 
+const shouldLog = () => appSetting.diagnostics?.verboseLogs === true
+const logDebug = (...args: unknown[]) => {
+  if (!shouldLog()) return
+  console.debug(...args)
+}
+
 // Check if CoreBox is in UI mode (plugin webcontent view attached)
 // Only hide results when hideResults is explicitly true (webcontent mode)
 // Push mode features should show results (hideResults: false or undefined)
 const isUIMode = computed(() => {
   if (!activeActivations.value?.length) return false
   // Check if any active provider has hideResults: true
-  const result = activeActivations.value.some(activation => activation.hideResults === true)
-  console.debug('[CoreBox] isUIMode computed:', {
+  const result = activeActivations.value.some((activation) => activation.hideResults === true)
+  logDebug('[CoreBox] isUIMode computed:', {
     activeActivationsCount: activeActivations.value.length,
-    activations: activeActivations.value.map(a => ({ id: a.id, hideResults: a.hideResults })),
+    activations: activeActivations.value.map((a) => ({ id: a.id, hideResults: a.hideResults })),
     isUIMode: result
   })
   return result
@@ -133,25 +146,15 @@ const isUIMode = computed(() => {
 const shouldShowInput = computed(() => {
   if (!activeActivations.value?.length) return true
 
-  const isWebcontentMode = activeActivations.value.some(a => a.hideResults === true)
+  const isWebcontentMode = activeActivations.value.some((a) => a.hideResults === true)
   if (!isWebcontentMode) return true
 
-  return activeActivations.value.some(a => a.showInput === true)
+  return activeActivations.value.some((a) => a.showInput === true)
 })
 const activeActivationsList = computed<IProviderActivate[]>(() => activeActivations.value ?? [])
 
 // DivisionBox mode computed properties
-const isDivisionBox = computed(() => {
-  const result = isDivisionBoxMode()
-  console.log(
-    '[CoreBox] isDivisionBox computed:',
-    result,
-    'windowState:',
-    windowState.type,
-    windowState.divisionBox?.sessionId
-  )
-  return result
-})
+const isDivisionBox = computed(() => isDivisionBoxMode())
 const divisionBoxConfig = computed(() => windowState.divisionBox?.config)
 const divisionBoxMeta = computed(() => windowState.divisionBox?.meta)
 
@@ -221,7 +224,9 @@ const { cleanup: cleanupVisibility } = useVisibility({
   boxInputRef,
   deactivateAllProviders
 })
-const itemRefs = ref<HTMLElement[]>([])
+
+type ItemRef = HTMLElement | ComponentPublicInstance
+const itemRefs = ref<ItemRef[]>([])
 
 // Track result batch changes for animation
 const resultBatchKey = ref(0)
@@ -307,7 +312,7 @@ watch(res, (newRes) => {
   lastResultIds = currentIds
 })
 
-function setItemRef(el: any, index: number) {
+function setItemRef(el: ItemRef | null, index: number): void {
   if (el) {
     itemRefs.value[index] = el
   }
@@ -328,7 +333,7 @@ useKeyboard(
   handlePaste,
   itemRefs
 )
-useChannel(boxOptions, res, searchVal)
+useChannel(boxOptions, searchVal)
 
 const { focusWindowAndInput, focusInput } = useFocus({ boxInputRef })
 
@@ -341,21 +346,25 @@ const previewHistory = usePreviewHistory({
 })
 
 // Handle UI mode exit event from main process (ESC pressed in plugin UI view)
-const unregUIModeExited = touchChannel.regChannel('core-box:ui-mode-exited', (payload: any) => {
-  console.debug('[CoreBox] UI mode exited from main process, deactivating providers')
-  deactivateAllProviders().catch((error) => {
-    console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
-  })
+const unregUIModeExited = touchChannel.regChannel(
+  'core-box:ui-mode-exited',
+  (payload: StandardChannelData) => {
+    logDebug('[CoreBox] UI mode exited from main process, deactivating providers')
+    deactivateAllProviders().catch((error) => {
+      console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
+    })
 
-  // Reset input state if requested
-  if (payload?.data?.resetInput) {
-    boxOptions.mode = BoxMode.INPUT
+    // Reset input state if requested
+    const resetInput = isRecord(payload.data) && payload.data.resetInput === true
+    if (resetInput) {
+      boxOptions.mode = BoxMode.INPUT
+    }
+
+    setTimeout(() => {
+      boxInputRef.value?.focus()
+    }, 150)
   }
-
-  setTimeout(() => {
-    boxInputRef.value?.focus()
-  }, 150)
-})
+)
 
 const deactivateProviderVoid = async (id?: string): Promise<void> => {
   await deactivateProvider(id)
@@ -471,7 +480,9 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
         :disabled="!shouldShowInput"
       >
         <template #completion>
-          <div class="text-sm truncate" v-html="completionDisplay" />
+          <div class="text-sm truncate">
+            {{ completionDisplay }}
+          </div>
         </template>
       </BoxInput>
 
@@ -510,7 +521,12 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
                   :active="boxOptions.focus === index"
                   :item="item"
                   :index="index"
-                  :class="{ 'is-new-item': appSetting.animation?.listItemStagger !== false && !lowBatteryMode && newItemIds.has(item.id) }"
+                  :class="{
+                    'is-new-item':
+                      appSetting.animation?.listItemStagger !== false &&
+                      !lowBatteryMode &&
+                      newItemIds.has(item.id)
+                  }"
                   :style="{
                     '--stagger-delay': getStaggerDelay(index, res.length) + 's'
                   }"
@@ -642,20 +658,20 @@ div.CoreBoxRes {
   bottom: 0;
 }
 
-  .CoreBoxRes-Main > .scroll-area .item-list {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-  }
+.CoreBoxRes-Main > .scroll-area .item-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
 
-  .CoreBoxRes-ScrollContent {
-    width: 100%;
-    padding: 8px 12px 16px;
-  }
+.CoreBoxRes-ScrollContent {
+  width: 100%;
+  padding: 8px 12px 16px;
+}
 
-  .CoreBoxRes-ScrollContent.has-footer {
-    padding-bottom: 72px;
-  }
+.CoreBoxRes-ScrollContent.has-footer {
+  padding-bottom: 72px;
+}
 
 // Result switch animation (list <-> grid, or new results)
 .result-switch-enter-active {
@@ -786,5 +802,4 @@ div.CoreBox {
     display: flex !important;
   }
 }
-
 </style>

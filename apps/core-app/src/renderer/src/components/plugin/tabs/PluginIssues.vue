@@ -15,28 +15,26 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div class="p-4 h-full flex flex-col min-h-0">
+  <div class="p-4 h-full w-full flex flex-col min-h-0">
     <h2 class="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-200">
       {{ t('plugin.issues.title') }}
     </h2>
     <TouchScroll no-padding class="flex-1 min-h-0" @scroll="emit('scroll', $event)">
-      <div
-        class="issues-list"
-      >
+      <div class="issues-list">
         <div
           v-for="(issue, index) in plugin.issues"
           :key="index"
           class="issue-item flex items-start p-3 mb-3 last:mb-0 rounded-lg border"
           :class="{
             'bg-red-500/10 border-red-500/20': issue.type === 'error',
-            'bg-yellow-500/10 border-yellow-500/20': issue.type === 'warning',
+            'bg-yellow-500/10 border-yellow-500/20': issue.type === 'warning'
           }"
         >
           <i
             class="flex-shrink-0 mt-1 text-xl"
             :class="{
               'i-ri-close-circle-fill text-red-500': issue.type === 'error',
-              'i-ri-alert-fill text-yellow-500': issue.type === 'warning',
+              'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
             }"
           />
           <div class="ml-3">
@@ -49,7 +47,8 @@ const { t } = useI18n()
             <pre
               v-if="issue.meta"
               class="mt-2 p-2 bg-black/20 rounded text-xs whitespace-pre-wrap break-all"
-            >{{ JSON.stringify(issue.meta, null, 2) }}</pre>
+              >{{ JSON.stringify(issue.meta, null, 2) }}</pre
+            >
           </div>
         </div>
       </div>

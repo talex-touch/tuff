@@ -9,6 +9,7 @@
     "build": "nuxt build",
     "dev:pwa": "VITE_PLUGIN_PWA=true nuxt dev",
     "dev": "nuxt dev --port 3200",
+    "content:reset": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('.data/content', { recursive: true, force: true })\"",
     "generate": "nuxt generate",
     "prepare": "nuxt prepare",
     "preview": "nuxt preview",

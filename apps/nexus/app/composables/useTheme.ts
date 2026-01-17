@@ -3,7 +3,7 @@ import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 
 export function useTheme() {
   const color = useColorMode()
-  const systemDarkMode = hasWindow ? window.matchMedia('(prefers-color-scheme: dark)') : null
+  const systemDarkMode = hasWindow() ? window.matchMedia('(prefers-color-scheme: dark)') : null
 
   const applyPreference = (mode: 'auto' | 'dark' | 'light') => {
     if (mode === 'auto')
@@ -13,7 +13,7 @@ export function useTheme() {
   }
 
   const toggleDark = (mode: 'auto' | 'dark' | 'light', event?: { clientX: number; clientY: number; }) => {
-    if (!hasWindow || !hasDocument) {
+    if (!hasWindow() || !hasDocument()) {
       applyPreference(mode)
       return
     }

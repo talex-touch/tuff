@@ -4,20 +4,18 @@ import { useI18n } from 'vue-i18n'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import OSIcon from '~/components/icon/OSIcon.vue'
 
-// Props
 const props = defineProps<{
   plugin: ITouchPlugin
 }>()
 
 const { t } = useI18n()
 
-// Computed properties
 const platforms = computed<IPlatform>(() => props.plugin?.platforms || {})
 const readme = computed<string>(() => props.plugin.readme)
 </script>
 
 <template>
-  <div class="plugin-overview">
+  <div class="w-full">
     <!-- Environment Cards -->
     <div v-if="platforms && Object.keys(platforms).length" class="glass-card">
       <div class="card-header">
@@ -45,7 +43,7 @@ const readme = computed<string>(() => props.plugin.readme)
     </div>
 
     <!-- Documentation -->
-    <div v-if="plugin.readme" class="glass-card full-width">
+    <template v-if="plugin.readme">
       <div class="card-header">
         <i class="i-ri-file-text-line" />
         <h3>{{ t('plugin.overview.documentation') }}</h3>
@@ -53,27 +51,11 @@ const readme = computed<string>(() => props.plugin.readme)
       <div class="readme-content">
         <FlatMarkdown v-model="readme" :readonly="true" />
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.plugin-overview {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-
-  .full-width {
-    grid-column: 1 / -1;
-  }
-}
-
-.glass-card {
-  &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.3);
-  }
-}
-
 .card-header {
   display: flex;
   align-items: center;
@@ -166,7 +148,30 @@ const readme = computed<string>(() => props.plugin.readme)
 }
 
 .readme-content {
-  background: rgba(var(--el-fill-color-rgb), 0.4);
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 500px;
+    opacity: 0.25;
+    filter: blur(18px);
+    background: linear-gradient(
+      to bottom,
+      var(--el-color-primary-light-7) 10%,
+      var(--el-fill-color-light) 90%
+    );
+    border-radius: 12px;
+    padding: 0.5rem;
+  }
+  position: relative;
+
+  background: var(--el-fill-color);
+  border-radius: 12px;
+  padding: 0.5rem;
+
+  overflow: hidden;
 }
 
 @keyframes pulse {
@@ -176,12 +181,6 @@ const readme = computed<string>(() => props.plugin.readme)
   }
   50% {
     opacity: 0.5;
-  }
-}
-
-@media (max-width: 768px) {
-  .plugin-overview {
-    grid-template-columns: 1fr;
   }
 }
 </style>

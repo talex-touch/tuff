@@ -1,16 +1,21 @@
 import type { Ref } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
-import { BoxMode } from '../types'
+import type { StandardChannelData } from '@talex-touch/utils/channel'
 import { DataCode } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { touchChannel } from '~/modules/channel/channel-core'
+import type { IBoxOptions } from '..'
 
-export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<string>): void {
-  console.log('useChannel', boxOptions)
+type BoxOptionsWithInputVisibility = IBoxOptions & { inputVisible?: boolean }
+
+export function useChannel(
+  boxOptions: BoxOptionsWithInputVisibility,
+  searchVal?: Ref<string>
+): void {
   const transport = useTuffTransport()
 
-  touchChannel.regChannel('core-box:set-input-visibility', ({ data }: any) => {
-    const { visible } = data
+  touchChannel.regChannel('core-box:set-input-visibility', ({ data }: StandardChannelData) => {
+    const visible = (data as { visible?: unknown } | null | undefined)?.visible === true
     if (boxOptions) {
       boxOptions.inputVisible = visible
     }
@@ -22,7 +27,7 @@ export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<str
     }
   })
 
-  touchChannel.regChannel('core-box:request-input-value', ({ reply }: any) => {
+  touchChannel.regChannel('core-box:request-input-value', ({ reply }: StandardChannelData) => {
     const input = searchVal?.value || ''
     reply(DataCode.SUCCESS, { input })
   })
@@ -30,27 +35,5 @@ export function useChannel(boxOptions: any, res: Ref<any[]>, searchVal?: Ref<str
   transport.on(CoreBoxEvents.input.requestValue, () => {
     const input = searchVal?.value || ''
     return { input }
-  })
-
-  touchChannel.regChannel('core-box:clear-items', ({ data }: any) => {
-    if (data && data.pluginName) {
-      const removedIds = new Set()
-
-      res.value = res.value.filter((item: any) => {
-        if (item.value === data.pluginName) {
-          if (item.pushedItemId) {
-            removedIds.add(item.pushedItemId)
-          }
-          return false
-        }
-        return true
-      })
-
-      if (boxOptions.mode === BoxMode.FEATURE && boxOptions.data?.pushedItemIds) {
-        removedIds.forEach((id) => {
-          boxOptions.data.pushedItemIds.delete(id)
-        })
-      }
-    }
   })
 }
