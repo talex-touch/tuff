@@ -3,7 +3,7 @@
  * @module @talex-touch/utils/transport/events/types/agents
  */
 
-import type { AgentDescriptor, AgentResult, AgentTask, AgentTool } from '../../../../types/agent'
+import type { AgentDescriptor, AgentResult, AgentTask, AgentTool } from '../../../types/agent'
 
 export type AgentsListResponse = AgentDescriptor[]
 
@@ -48,4 +48,3 @@ export interface AgentsToolsGetRequest {
 export type AgentsToolsGetResponse = AgentTool | null
 
 export type AgentsStatsResponse = unknown
-

@@ -3,34 +3,37 @@
  * @module @talex-touch/utils/transport/events/types/market
  */
 
-import type { MarketHttpRequestOptions, MarketHttpResponse, MarketPlugin } from '../../../../market/types'
+import type { MarketHttpRequestOptions, MarketHttpResponse } from '../../../market/types'
+import type { MarketPluginInfo, MarketSearchOptions, MarketSearchResult } from '../../../plugin/providers'
+
+export interface MarketPluginUpdateInfo {
+  slug: string
+  currentVersion: string
+  latestVersion: string
+  hasUpdate: boolean
+  downloadUrl?: string
+  changelog?: string
+}
 
 export interface MarketCheckUpdatesResponse {
-  updates: MarketPlugin[]
+  updates: MarketPluginUpdateInfo[]
   checkedAt: string
 }
 
-export interface MarketSearchRequest {
-  keyword?: string
-  source?: string
-  category?: string
-  limit?: number
-  offset?: number
-}
+export type MarketSearchRequest = MarketSearchOptions
 
-export type MarketSearchResponse = unknown
+export type MarketSearchResponse = MarketSearchResult
 
 export interface MarketGetPluginRequest {
   identifier?: string
-  source?: string
+  source?: 'tpex' | 'npm'
 }
 
-export type MarketGetPluginResponse = MarketPlugin | null
+export type MarketGetPluginResponse = MarketPluginInfo | null
 
 export type MarketHttpRequest = MarketHttpRequestOptions
 export type MarketHttpRequestResponse<T = unknown> = MarketHttpResponse<T>
 
 export interface MarketUpdatesAvailablePayload {
-  updates: MarketPlugin[]
+  updates: MarketPluginUpdateInfo[]
 }
-

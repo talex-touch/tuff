@@ -22,7 +22,7 @@
 - workspace 必需：`package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`
 - 统一质量门禁：`eslint.config.js`、`commitlint.config.cts`、`.husky/`
 - 工具脚本：`scripts/`
-- 文档：`docs/`、`plan-prd/`、`AGENTS.md`
+- 文档：`docs/`（含 `docs/plan-prd/`）、`AGENTS.md`
 
 其余“仅某个 workspace 使用”的配置，优先放到对应 workspace 内（例如 `apps/core-app/.prettierrc.yaml`）。
 

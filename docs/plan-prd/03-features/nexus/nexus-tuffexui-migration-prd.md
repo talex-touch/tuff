@@ -51,5 +51,5 @@ Dashboard 与 Marketplace 存在多套基础组件和弹层实现，维护成本
 
 ## 风险与对策
 - 样式冲突：封装层 + 局部样式隔离
-- 样式优先级：Nexus 视觉优先，冲突记录见 `plans/nexus-tuffexui-style-conflicts.md`
+- 样式优先级：Nexus 视觉优先，冲突记录见 `./nexus-tuffexui-style-conflicts.md`
 - SSR/水合差异：必要时 client-only 加载

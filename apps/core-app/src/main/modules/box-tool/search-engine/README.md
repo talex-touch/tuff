@@ -5,15 +5,15 @@
 本模块的详细文档已迁移到项目文档中心：
 
 ### PRD 文档
-- **[TUFF Usage Tracking PRD](../../../../../../plan-prd/03-features/search/TUFF_USAGE_TRACKING_PRD.md)** - 使用跟踪需求文档
-- **[Usage Logging Plan](../../../../../../plan-prd/03-features/search/USAGE_LOGGING_PLAN.md)** - 日志记录实现计划
-- **[Search Optimization Summary](../../../../../../plan-prd/03-features/search/search-optimization-implementation-summary.md)** - 搜索优化总结
-- **[Search Source ID Ranking](../../../../../../plan-prd/03-features/search/search-source-id-ranking-plan.md)** - 搜索源排序计划
-- **[Usage Data Cleanup](../../../../../../plan-prd/03-features/search/search-usage-data-cleanup-plan.md)** - 使用数据清理计划
+- **[Quick Launch & Search Optimization](../../../../../../../docs/plan-prd/03-features/search/quick-launch-and-search-optimization-prd.md)** - 搜索性能优化 PRD
+- **[Search DSL](../../../../../../../docs/plan-prd/03-features/search/SEARCH-DSL-PRD.md)** - Search DSL PRD
+- **[Intelligent Recommendation](../../../../../../../docs/plan-prd/03-features/search/intelligent-recommendation-system-prd.md)** - 智能推荐系统 PRD
+- **[Everything SDK Integration](../../../../../../../docs/plan-prd/03-features/search/EVERYTHING-SDK-INTEGRATION-PRD.md)** - Everything 集成 PRD
+- **[Windows File Search](../../../../../../../docs/plan-prd/03-features/search/WINDOWS-FILE-SEARCH-PRD.md)** - Windows 文件搜索 PRD
 
 ### 快速链接
-- 📖 [完整文档索引](../../../../../../plan-prd/README.md)
-- 🏗️ [项目架构](../../../../../../plan-prd/01-project/PROJECT_ANALYSIS.md)
+- 📖 [完整文档索引](../../../../../../../docs/plan-prd/README.md)
+- 🏗️ [项目架构](../../../../../../../CLAUDE.md)
 
 ## 代码位置
 

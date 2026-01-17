@@ -8,16 +8,6 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 
-declare global {
-  interface Window {
-    $i18n?: {
-      global?: {
-        t?: (key: string, params?: Record<string, unknown>) => string
-      }
-    }
-  }
-}
-
 interface InstallTaskState extends PluginInstallProgressEvent {
   updatedAt: number
 }
@@ -47,10 +37,12 @@ let initialized = false
 let transportDisposers: Array<() => void> = []
 
 function getTranslator(): (key: string, params?: Record<string, unknown>) => string {
-  const i18n = window.$i18n
-  if (i18n?.global?.t) {
-    return i18n.global.t.bind(i18n.global)
-  }
+  const i18n = (
+    window as Window & {
+      $i18n?: { global?: { t?: (key: string, params?: Record<string, unknown>) => string } }
+    }
+  ).$i18n
+  if (i18n?.global?.t) return i18n.global.t.bind(i18n.global)
   return (key: string, params?: Record<string, unknown>) => {
     if (key === 'market.installation.confirmTitle') {
       return '是否安装插件？'

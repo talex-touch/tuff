@@ -9,7 +9,7 @@ import type {
   PermissionDefinition,
   PermissionGrant,
   PluginPermissionStatus,
-} from '../../../../permission/types'
+} from '../../../permission/types'
 
 export interface PermissionGetPluginRequest {
   pluginId: string

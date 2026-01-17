@@ -360,7 +360,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
 
     // For backward compatibility, extract text if query is object
-    const queryText = typeof query === 'string' ? query : query?.text
+    const queryText = typeof query === 'string' ? query : (query?.text ?? '')
     this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(queryText))
   }
 
@@ -1380,9 +1380,12 @@ export class TouchPlugin implements ITouchPlugin {
    * @param content 文件内容
    * @returns 保存结果
    */
-  savePluginFile(fileName: string, content: object): { success: boolean; error?: string } {
+  savePluginFile(fileName: string, content: unknown): { success: boolean; error?: string } {
     const configPath = this.getConfigPath()
     const configData = JSON.stringify(content)
+    if (typeof configData !== 'string') {
+      return { success: false, error: 'Invalid content' }
+    }
 
     const PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
     if (Buffer.byteLength(configData, 'utf-8') > PLUGIN_CONFIG_MAX_SIZE) {
@@ -1597,13 +1600,16 @@ export class TouchPlugin implements ITouchPlugin {
     if (stats.size <= maxPreviewSize) {
       try {
         if (fileType === 'json' || fileType === 'text') {
-          result.content = fse.readFileSync(filePath, 'utf-8')
           if (fileType === 'json') {
+            const text = fse.readFileSync(filePath, 'utf-8')
             try {
-              result.content = JSON.parse(result.content)
+              result.content = JSON.parse(text)
             } catch {
               // 如果解析失败，保持文本格式
+              result.content = text
             }
+          } else {
+            result.content = fse.readFileSync(filePath, 'utf-8')
           }
         } else if (fileType === 'image') {
           // 对于图片，返回 base64
