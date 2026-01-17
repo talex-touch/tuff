@@ -7,6 +7,7 @@ import { getSentryService } from '../modules/sentry/sentry-service'
 import { createLogger, formatDuration } from './logger'
 import { getPerfContextSnapshot } from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
+import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 
 export interface RendererPerfReport {
   kind:
@@ -121,6 +122,7 @@ function toLogMeta(
 ): Record<string, Primitive> | undefined {
   if (!meta) return undefined
 
+  const MAX_META_STRING_CHARS = 300
   const safe: Record<string, Primitive> = {}
   for (const [key, value] of Object.entries(meta)) {
     if (
@@ -130,7 +132,12 @@ function toLogMeta(
       typeof value === 'number' ||
       typeof value === 'boolean'
     ) {
-      safe[key] = value
+      if (typeof value === 'string') {
+        safe[key] =
+          value.length > MAX_META_STRING_CHARS ? `${value.slice(0, MAX_META_STRING_CHARS)}…` : value
+      } else {
+        safe[key] = value
+      }
       continue
     }
 
@@ -322,6 +329,11 @@ export class PerfMonitor {
   }
 
   recordRendererReport(report: RendererPerfReport): void {
+    const payloadPreview =
+      report.payloadPreview === undefined
+        ? undefined
+        : formatPayloadPreview(report.payloadPreview, { maxOutputChars: 800 })
+
     const isUiSignal = typeof report.kind === 'string' && report.kind.startsWith('ui.')
     const thresholds = isUiSignal
       ? resolveUiThreshold(report.kind)
@@ -351,7 +363,7 @@ export class PerfMonitor {
       durationMs: report.durationMs,
       direction: 'renderer->main',
       meta: report.meta,
-      payloadPreview: report.payloadPreview,
+      payloadPreview,
       stack: report.stack
     }
     this.pushIncident(incident)
@@ -362,7 +374,7 @@ export class PerfMonitor {
       meta: toLogMeta({
         kind: report.kind,
         durationMs: Math.round(report.durationMs),
-        payload: report.payloadPreview,
+        payload: payloadPreview,
         ...report.meta
       }),
       error: severity === 'error' ? report.stack : undefined
@@ -389,7 +401,7 @@ export class PerfMonitor {
           eventName: report.eventName,
           durationMs: report.durationMs,
           at: report.at,
-          payloadPreview: report.payloadPreview,
+          payloadPreview,
           stack: report.stack,
           ...report.meta
         }

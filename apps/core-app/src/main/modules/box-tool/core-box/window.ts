@@ -1129,10 +1129,30 @@ export class WindowManager {
     }
 
     formatPayloadPreview(payload) {
+      const truncate = (value, maxChars) => {
+        if (typeof value !== 'string') return String(value);
+        if (!Number.isFinite(maxChars) || maxChars <= 0) return '';
+        return value.length > maxChars ? value.slice(0, maxChars) + '…' : value;
+      };
+      const redactDataUrl = (value) => {
+        if (typeof value !== 'string') return value;
+        if (!value.startsWith('data:')) return value;
+        const base64Index = value.indexOf(';base64,');
+        if (base64Index === -1) return value;
+        const prefixEnd = base64Index + ';base64,'.length;
+        const omitted = Math.max(0, value.length - prefixEnd);
+        return truncate(value.slice(0, prefixEnd), 200) + '[base64 omitted ' + omitted + ' chars]';
+      };
+
       if (payload === null || payload === undefined) return String(payload);
-      if (typeof payload === 'string') return payload.length > 200 ? payload.slice(0, 200) + '…' : payload;
+      if (typeof payload === 'string') return truncate(redactDataUrl(payload), 800);
       try {
-        return JSON.stringify(payload);
+        const json = JSON.stringify(payload, (_key, value) => {
+          if (typeof value === 'string') return truncate(redactDataUrl(value), 200);
+          if (typeof value === 'bigint') return value.toString() + 'n';
+          return value;
+        });
+        return truncate(json, 800);
       } catch {
         return '[unserializable]';
       }

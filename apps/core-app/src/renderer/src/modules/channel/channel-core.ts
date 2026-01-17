@@ -7,6 +7,7 @@ import type {
 
 import type { IpcRendererEvent } from 'electron'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 
 // Use preload-exposed ipcRenderer via electron-toolkit
@@ -149,14 +150,7 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   private formatPayloadPreview(payload: unknown): string {
-    if (payload === null || payload === undefined) return String(payload)
-    if (typeof payload === 'string')
-      return payload.length > 200 ? `${payload.slice(0, 200)}…` : payload
-    try {
-      return JSON.stringify(payload)
-    } catch {
-      return '[unserializable]'
-    }
+    return formatPayloadPreview(payload)
   }
 
   send(eventName: string, arg: any): Promise<any> {
