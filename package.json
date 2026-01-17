@@ -16,6 +16,7 @@
     "preinstall": "npx only-allow pnpm",
     "postinstall": "node scripts/sync-core-package.mjs",
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
+    "typecheck:all": "pnpm -r --if-present run typecheck",
     "sync:core-pkg": "node scripts/sync-core-package.mjs",
     "core:dev": "pnpm -F @talex-touch/core-app run dev",
     "nexus:dev": "pnpm -F @talex-touch/tuff-nexus run dev",
@@ -31,7 +32,6 @@
     "build:release:linux": "pnpm -F @talex-touch/core-app run build:release:linux",
     "utils:test": "pnpm -F test run test",
     "utils:publish": "pnpm -F @talex-touch/utils run publish",
-    "utils:build": "pnpm -F @talex-touch/utils run build",
     "tuffex:dev": "pnpm -F @talex-touch/tuffex run docs:dev",
     "tuffex:build": "pnpm -F @talex-touch/tuffex run build",
     "tuffex:docs": "pnpm -F @talex-touch/tuffex run docs:build",
@@ -96,7 +96,37 @@
     }
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx,mjs,cjs,vue}": [
+    "apps/core-app/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"apps/core-app\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "apps/nexus/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"apps/nexus\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "packages/test/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/test\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "packages/tuff-intelligence/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuff-intelligence\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "packages/tuffex/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/tuffex\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "packages/unplugin-export-plugin/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/unplugin-export-plugin\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "packages/utils/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"packages/utils\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "plugins/touch-image/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"plugins/touch-image\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "plugins/touch-music/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"plugins/touch-music\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "plugins/touch-translation/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
+      "pnpm -C \"plugins/touch-translation\" exec eslint --cache --fix --max-warnings=0"
+    ],
+    "scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
       "eslint --cache --fix --max-warnings=0"
     ]
   }

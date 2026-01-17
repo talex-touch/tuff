@@ -38,6 +38,8 @@
     "component:create": "esno ./utils/create/index.ts",
     "comp:create": "esno ./utils/createComponent/index.ts",
     "dev": "vitepress dev docs --port 8000--host",
+    "lint": "pnpm exec eslint --cache .",
+    "lint:fix": "pnpm exec eslint --cache --fix .",
     "docs:dev": "vitepress dev docs --port 8000 --host",
     "docs:new": "esno ./utils/createVitepressComp/index.ts",
     "docs:build": "vitepress build docs"

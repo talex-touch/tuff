@@ -1,6 +1,5 @@
 import { hasWindow } from '../../env'
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const path = (() => {
   if (!hasWindow()) {
     return require('node:path')

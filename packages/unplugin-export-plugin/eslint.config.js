@@ -1,0 +1,41 @@
+import rootConfig from '../../eslint.config.js'
+
+export default rootConfig.append(
+  {
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      'docs/**',
+      '*.md',
+      'eslint.config.js',
+      'tsconfig.json',
+    ],
+    rules: {
+      'antfu/if-newline': 'off',
+      'import/consistent-type-specifier-style': 'off',
+      'jsdoc/check-alignment': 'off',
+      'node/prefer-global/process': 'off',
+      'perfectionist/sort-exports': 'off',
+      'perfectionist/sort-imports': 'off',
+      'perfectionist/sort-named-exports': 'off',
+      'perfectionist/sort-named-imports': 'off',
+      'prefer-template': 'off',
+      'style/brace-style': 'off',
+      'style/comma-dangle': 'off',
+      'style/eol-last': 'off',
+      'style/arrow-parens': 'off',
+      'style/member-delimiter-style': 'off',
+      'style/multiline-ternary': 'off',
+      'style/no-multi-spaces': 'off',
+      'style/no-multiple-empty-lines': 'off',
+      'style/operator-linebreak': 'off',
+      'style/no-trailing-spaces': 'off',
+      'style/quote-props': 'off',
+      'regexp/use-ignore-case': 'off',
+      'ts/no-unsafe-function-type': 'off',
+      'ts/no-unused-vars': 'off',
+      'unicorn/prefer-number-properties': 'off',
+      'unused-imports/no-unused-vars': 'off',
+    },
+  },
+)

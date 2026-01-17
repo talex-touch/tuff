@@ -66,7 +66,8 @@
   "scripts": {
     "build": "tsup",
     "tuff:builder": "tuff builder",
-    "lint": "eslint .",
+    "lint": "node ../../node_modules/eslint/bin/eslint.js --cache \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "node ../../node_modules/eslint/bin/eslint.js --cache --fix \"src/**/*.{ts,tsx}\"",
     "prepublishOnly": "npm run build",
     "release": "bumpp && npm publish --access public",
     "start": "esno src/index.ts"

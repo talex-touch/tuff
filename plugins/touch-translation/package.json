@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "up": "taze major -I",
-    "postinstall": "npx simple-git-hooks"
+    "postinstall": "node -e \"if (process.env.INIT_CWD && process.env.INIT_CWD === process.cwd()) require('child_process').execSync('npx simple-git-hooks', { stdio: 'inherit' })\""
   },
   "dependencies": {
     "@talex-touch/unplugin-export-plugin": "1.2.7",

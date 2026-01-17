@@ -13,7 +13,7 @@ class MockNotification {
 
   constructor(public options: any) {}
   show() {}
-  on(event: string, callback: Function) {}
+  on(_event: string, _callback: (...args: any[]) => void) {}
 }
 
 vi.mock('electron', () => ({
