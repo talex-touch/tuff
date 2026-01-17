@@ -323,8 +323,10 @@
   border-collapse: collapse;
   display: block;
   width: max-content;
+  min-width: 100%;
   max-width: 100%;
   overflow: auto;
+  border-radius: 12px;
   font-variant: tabular-nums;
 }
 
@@ -685,6 +687,7 @@
 
 .markdown-body table th {
   font-weight: var(--base-text-weight-semibold, 600);
+  background-color: var(--bgColor-muted);
 }
 
 .markdown-body table th,

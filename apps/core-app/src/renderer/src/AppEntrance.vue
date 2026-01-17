@@ -1,10 +1,17 @@
 <script name="AppEntrance" setup lang="ts">
-import { isCoreBox, isMetaOverlay } from '@talex-touch/utils/renderer'
+import { isCoreBox, isDivisionBox, isMetaOverlay } from '@talex-touch/utils/renderer'
 import { Toaster } from 'vue-sonner'
+import { logAppEntranceMode } from './modules/devtools/app-entrance-log'
 import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
 import { useAppState } from './modules/hooks/useAppStates'
 import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
+
+declare global {
+  interface Window {
+    $isMetaOverlay?: boolean
+  }
+}
 
 const props = defineProps<{
   onReady: () => Promise<void>
@@ -14,11 +21,20 @@ const { appStates } = useAppState()
 const { entry } = useAppLifecycle()
 
 const isMetaOverlayMode = computed(() => {
-  return (window as any).$isMetaOverlay === true || isMetaOverlay()
+  return window.$isMetaOverlay === true || isMetaOverlay()
 })
 
 setTimeout(async () => {
   await entry(props.onReady)
+  const mode = isCoreBox() ? (isDivisionBox() ? 'DivisionBox' : 'CoreBox') : 'MainApp'
+  logAppEntranceMode(
+    mode,
+    {
+      startupInfoId: window.$startupInfo?.id,
+      platform: window.$startupInfo?.platform
+    },
+    { onceKey: `appentrance:${mode}` }
+  )
   init.value = true
 }, 100)
 </script>

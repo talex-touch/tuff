@@ -15,8 +15,8 @@ const props = withDefaults(
   }>(),
   {
     modelValue: '',
-    readonly: false,
-  },
+    readonly: false
+  }
 )
 
 const emit = defineEmits<{
@@ -30,8 +30,7 @@ const editorReady = ref(false)
 let internalUpdate = false
 
 async function initEditor(): Promise<void> {
-  if (!editorDom.value)
-    return
+  if (!editorDom.value) return
   if (editor.value) {
     await editor.value.destroy()
     editor.value = null
@@ -43,13 +42,12 @@ async function initEditor(): Promise<void> {
     .config((ctx) => {
       ctx.set(rootCtx, editorDom.value)
       ctx.set(defaultValueCtx, value.value ?? '')
-      ctx.update(editorViewOptionsCtx, prev => ({
+      ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
-        editable: () => !props.readonly,
+        editable: () => !props.readonly
       }))
       ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
-        if (markdown === value.value)
-          return
+        if (markdown === value.value) return
         internalUpdate = true
         value.value = markdown
       })
@@ -66,8 +64,7 @@ async function initEditor(): Promise<void> {
 }
 
 function applyMarkdown(markdown: string): void {
-  if (!editorReady.value || !editor.value)
-    return
+  if (!editorReady.value || !editor.value) return
   editor.value.action(replaceAll(markdown, true))
 }
 
@@ -78,24 +75,22 @@ watch(
       internalUpdate = false
       return
     }
-    if (next === prev)
-      return
+    if (next === prev) return
     applyMarkdown(next ?? '')
-  },
+  }
 )
 
 watch(
   () => props.readonly,
   (readonly) => {
-    if (!editorReady.value || !editor.value)
-      return
+    if (!editorReady.value || !editor.value) return
     editor.value.action((ctx) => {
-      ctx.update(editorViewOptionsCtx, prev => ({
+      ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
-        editable: () => !readonly,
+        editable: () => !readonly
       }))
     })
-  },
+  }
 )
 
 onMounted(() => {
@@ -151,20 +146,20 @@ onBeforeUnmount(async () => {
       position: absolute;
 
       left: 50%;
-      top: 0;
+      top: -10%;
 
       width: 120%;
-      height: 100%;
+      height: 120%;
 
-      transform: translateX(-50%) skewX(-15deg);
-      background-color: var(--el-color-primary-light-7);
+      border-radius: 12px;
+      transform: translateX(-50%) rotate(-1deg);
+      background-color: var(--el-bg-color);
     }
 
     position: relative;
-    display: inline-block;
+    margin: 1rem 0;
 
     align-self: center;
-
     text-align: center;
   }
 

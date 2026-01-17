@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { IFeatureCommand, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -7,23 +7,33 @@ import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
 import FeatureCard from '../FeatureCard.vue'
 
+type FeatureCommandData = {
+  name?: string
+  shortcut?: string
+  desc?: string
+}
+
+type PluginFeatureWithCommandsData = IPluginFeature & {
+  commandsData?: Partial<Record<IFeatureCommand['type'], FeatureCommandData>>
+}
+
 // Props
 const props = defineProps<{
   plugin: ITouchPlugin
 }>()
 
 // Features state - with defensive checks
-const features = computed(() => props.plugin?.features || [])
+const features = computed<PluginFeatureWithCommandsData[]>(() => props.plugin?.features || [])
 
 const totalCommands = computed(() =>
-  features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0),
+  features.value.reduce((total, feature) => total + (feature.commands?.length || 0), 0)
 )
 
 const { t } = useI18n()
 
 // Drawer state
 const showDrawer = ref(false)
-const selectedFeature = ref<any | null>(null)
+const selectedFeature = ref<PluginFeatureWithCommandsData | null>(null)
 
 // Helper function to get icon for input type
 function getInputTypeIcon(type: string): string {
@@ -31,35 +41,34 @@ function getInputTypeIcon(type: string): string {
     text: 'i-ri-text',
     image: 'i-ri-image-line',
     files: 'i-ri-file-copy-line',
-    html: 'i-ri-code-line',
+    html: 'i-ri-code-line'
   }
   return icons[type] || 'i-ri-question-line'
 }
 
 // Helper functions for drawer content
-function getCommandName(command: IFeatureCommand, feature: any): string {
-  if (feature.commandsData && feature.commandsData[command.type]) {
-    return feature.commandsData[command.type].name || command.type
-  }
+function getCommandName(command: IFeatureCommand, feature: PluginFeatureWithCommandsData): string {
+  const data = feature.commandsData?.[command.type]
+  if (data?.name) return data.name
   return command.type
 }
 
-function getCommandShortcut(command: IFeatureCommand, feature: any): string | undefined {
-  if (feature.commandsData && feature.commandsData[command.type]) {
-    return feature.commandsData[command.type].shortcut
-  }
-  return undefined
+function getCommandShortcut(
+  command: IFeatureCommand,
+  feature: PluginFeatureWithCommandsData
+): string | undefined {
+  return feature.commandsData?.[command.type]?.shortcut
 }
 
-function getCommandDesc(command: IFeatureCommand, feature: any): string | undefined {
-  if (feature.commandsData && feature.commandsData[command.type]) {
-    return feature.commandsData[command.type].desc
-  }
-  return undefined
+function getCommandDesc(
+  command: IFeatureCommand,
+  feature: PluginFeatureWithCommandsData
+): string | undefined {
+  return feature.commandsData?.[command.type]?.desc
 }
 
 // Feature details management
-function showFeatureDetails(feature: any): void {
+function showFeatureDetails(feature: PluginFeatureWithCommandsData): void {
   selectedFeature.value = feature
   showDrawer.value = true
 }
@@ -122,6 +131,7 @@ function handleDrawerClose(): void {
       :title="t('plugin.features.drawer.title')"
       direction="rtl"
       size="50%"
+      append-to-body
       :before-close="handleDrawerClose"
     >
       <template #header>
@@ -177,7 +187,8 @@ function handleDrawerClose(): void {
               </span>
               <span
                 class="text-sm bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded"
-              >{{ selectedFeature.type || t('plugin.features.drawer.standardType') }}</span>
+                >{{ selectedFeature.type || t('plugin.features.drawer.standardType') }}</span
+              >
             </div>
             <div v-if="selectedFeature.acceptedInputTypes" class="flex justify-between items-start">
               <span class="text-sm text-[var(--el-text-color-regular)]"> 支持的输入类型 </span>

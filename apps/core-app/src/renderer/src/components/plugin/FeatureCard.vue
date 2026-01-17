@@ -1,24 +1,30 @@
 <script lang="ts" setup>
-import type { IFeatureCommand } from '@talex-touch/utils/plugin'
+import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
+
+type FeatureCommandData = {
+  name?: string
+  shortcut?: string
+  desc?: string
+}
+
+type PluginFeatureWithCommandsData = IPluginFeature & {
+  commandsData?: Partial<Record<IFeatureCommand['type'], FeatureCommandData>>
+}
 
 const props = defineProps<{
-  feature: any
+  feature: PluginFeatureWithCommandsData
 }>()
 
 const emit = defineEmits(['click'])
 
 function getCommandName(command: IFeatureCommand): string {
-  if (props.feature.commandsData && props.feature.commandsData[command.type]) {
-    return props.feature.commandsData[command.type].name || command.type
-  }
+  const data = props.feature.commandsData?.[command.type]
+  if (data?.name) return data.name
   return command.type
 }
 
 function getCommandShortcut(command: IFeatureCommand): string | undefined {
-  if (props.feature.commandsData && props.feature.commandsData[command.type]) {
-    return props.feature.commandsData[command.type].shortcut
-  }
-  return undefined
+  return props.feature.commandsData?.[command.type]?.shortcut
 }
 </script>
 
@@ -29,7 +35,7 @@ function getCommandShortcut(command: IFeatureCommand): string | undefined {
         <div
           class="FeatureCard-Icon w-12 h-12 bg-black/10 dark:bg-white/10 rounded-xl flex items-center justify-center"
         >
-          <TuffIcon :icon="feature.icon" :size="32">
+          <TuffIcon colorful :icon="feature.icon" :size="32">
             <template #empty>
               <i class="i-carbon-application" />
             </template>

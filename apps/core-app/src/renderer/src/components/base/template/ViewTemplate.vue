@@ -113,7 +113,7 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
 
   min-height: 100%;
   width: 100%;
-  padding: 12px 16px 20px;
+  padding: 1.25rem 0.75rem;
 
   box-sizing: border-box;
 }
