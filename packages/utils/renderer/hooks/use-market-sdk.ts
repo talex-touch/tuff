@@ -14,4 +14,3 @@ export function useMarketSdkScope() {
   onUnmounted(() => disposables.dispose())
   return { sdk, disposables }
 }
-

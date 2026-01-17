@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { TxCardProps } from './types'
 import { computed, onBeforeUnmount, ref, toRefs } from 'vue'
 import TxSpinner from '../../spinner/src/TxSpinner.vue'
-import type { TxCardProps } from './types'
 
 defineOptions({ name: 'TxCard' })
 
@@ -25,6 +25,10 @@ const props = withDefaults(defineProps<TxCardProps>(), {
   inertialRebound: 0.12,
 })
 
+const emit = defineEmits<{
+  (e: 'click', ev: MouseEvent): void
+}>()
+
 const {
   variant,
   background,
@@ -42,24 +46,25 @@ const {
   glassOverlayOpacity,
 } = toRefs(props)
 
-const emit = defineEmits<{
-  (e: 'click', ev: MouseEvent): void
-}>()
-
 const resolvedRadius = computed(() => {
-  if (typeof props.radius === 'number') return props.radius
+  if (typeof props.radius === 'number')
+    return props.radius
   return 18
 })
 
 const resolvedPadding = computed(() => {
-  if (typeof props.padding === 'number') return props.padding
-  if (props.size === 'small') return 10
-  if (props.size === 'large') return 16
+  if (typeof props.padding === 'number')
+    return props.padding
+  if (props.size === 'small')
+    return 10
+  if (props.size === 'large')
+    return 16
   return 12
 })
 
 const resolvedSpinnerSize = computed(() => {
-  if (typeof props.loadingSpinnerSize === 'number') return props.loadingSpinnerSize
+  if (typeof props.loadingSpinnerSize === 'number')
+    return props.loadingSpinnerSize
   return 12
 })
 
@@ -83,7 +88,8 @@ function lerp(a: number, b: number, t: number) {
 }
 
 function stopRaf() {
-  if (rafId == null) return
+  if (rafId == null)
+    return
   cancelAnimationFrame(rafId)
   rafId = null
 }
@@ -107,7 +113,7 @@ function tickFrame(ts: number) {
   velocityX += (targetX - motionX.value) * stiffness * dt
   velocityY += (targetY - motionY.value) * stiffness * dt
 
-  const damp = Math.pow(damping, dt)
+  const damp = damping ** dt
   velocityX *= damp
   velocityY *= damp
 
@@ -131,21 +137,26 @@ function tickFrame(ts: number) {
 }
 
 function ensureRaf() {
-  if (rafId != null) return
+  if (rafId != null)
+    return
   rafId = requestAnimationFrame(tickFrame)
 }
 
 function onMouseMove(ev: MouseEvent) {
-  if (!props.inertial) return
-  if (props.disabled) return
+  if (!props.inertial)
+    return
+  if (props.disabled)
+    return
   const el = ev.currentTarget as HTMLElement | null
-  if (!el) return
+  if (!el)
+    return
 
   isReturning = false
   const rect = el.getBoundingClientRect()
   const halfW = rect.width / 2
   const halfH = rect.height / 2
-  if (halfW <= 0 || halfH <= 0) return
+  if (halfW <= 0 || halfH <= 0)
+    return
 
   const dx = ev.clientX - rect.left - halfW
   const dy = ev.clientY - rect.top - halfH
@@ -153,8 +164,8 @@ function onMouseMove(ev: MouseEvent) {
   const ratioX = clamp(dx / halfW, -1, 1)
   const ratioY = clamp(dy / halfH, -1, 1)
 
-  const easedX = Math.sign(ratioX) * Math.pow(Math.abs(ratioX), 0.85)
-  const easedY = Math.sign(ratioY) * Math.pow(Math.abs(ratioY), 0.85)
+  const easedX = Math.sign(ratioX) * Math.abs(ratioX) ** 0.85
+  const easedY = Math.sign(ratioY) * Math.abs(ratioY) ** 0.85
   const max = props.inertialMaxOffset
 
   targetX = easedX * max
@@ -163,7 +174,8 @@ function onMouseMove(ev: MouseEvent) {
 }
 
 function onMouseLeave() {
-  if (!props.inertial) return
+  if (!props.inertial)
+    return
   const rebound = clamp(props.inertialRebound, 0, 1)
   isReturning = true
   velocityX *= rebound
@@ -178,8 +190,10 @@ onBeforeUnmount(() => {
 })
 
 function onClick(ev: MouseEvent) {
-  if (props.disabled) return
-  if (!props.clickable) return
+  if (props.disabled)
+    return
+  if (!props.clickable)
+    return
   emit('click', ev)
 }
 </script>

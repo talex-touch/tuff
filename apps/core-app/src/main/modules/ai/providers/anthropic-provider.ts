@@ -1,9 +1,9 @@
 import type {
-  IntelligenceChatPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
   AiUsageInfo,
+  IntelligenceChatPayload
 } from '@talex-touch/utils'
 import { IntelligenceProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
@@ -21,19 +21,23 @@ export class AnthropicProvider extends IntelligenceProvider {
     return {
       'Content-Type': 'application/json',
       'x-api-key': this.config.apiKey || '',
-      'anthropic-version': '2023-06-01',
+      'anthropic-version': '2023-06-01'
     }
   }
 
-  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(
+    payload: IntelligenceChatPayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
-    const model = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
+    const model =
+      options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/messages',
+      endpoint: '/messages'
     })
 
     const response = await fetch(`${this.baseUrl}/messages`, {
@@ -41,12 +45,12 @@ export class AnthropicProvider extends IntelligenceProvider {
       headers: this.headers,
       body: JSON.stringify({
         model,
-        system: payload.messages.find(msg => msg.role === 'system')?.content,
-        messages: payload.messages.filter(msg => msg.role !== 'system'),
+        system: payload.messages.find((msg) => msg.role === 'system')?.content,
+        messages: payload.messages.filter((msg) => msg.role !== 'system'),
         max_tokens: payload.maxTokens ?? 1024,
-        temperature: payload.temperature ?? 0.7,
+        temperature: payload.temperature ?? 0.7
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok) {
@@ -63,7 +67,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.input_tokens ?? 0,
       completionTokens: data.usage?.output_tokens ?? 0,
-      totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0),
+      totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
     }
 
     return {
@@ -72,20 +76,21 @@ export class AnthropicProvider extends IntelligenceProvider {
       model: data.model || '',
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  async* chatStream(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions,
+    options: AiInvokeOptions
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
-    const model = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-haiku-20240307'
+    const model =
+      options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-haiku-20240307'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/messages (stream)',
+      endpoint: '/messages (stream)'
     })
 
     const response = await fetch(`${this.baseUrl}/messages`, {
@@ -93,13 +98,13 @@ export class AnthropicProvider extends IntelligenceProvider {
       headers: { ...this.headers, accept: 'text/event-stream' },
       body: JSON.stringify({
         model,
-        system: payload.messages.find(msg => msg.role === 'system')?.content,
-        messages: payload.messages.filter(msg => msg.role !== 'system'),
+        system: payload.messages.find((msg) => msg.role === 'system')?.content,
+        messages: payload.messages.filter((msg) => msg.role !== 'system'),
         max_tokens: payload.maxTokens ?? 1024,
         temperature: payload.temperature ?? 0.7,
-        stream: true,
+        stream: true
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok || !response.body) {
@@ -113,18 +118,15 @@ export class AnthropicProvider extends IntelligenceProvider {
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done)
-          break
+        if (done) break
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.trim() || line.trim() === 'data: [DONE]')
-            continue
-          if (!line.startsWith('data: '))
-            continue
+          if (!line.trim() || line.trim() === 'data: [DONE]') continue
+          if (!line.startsWith('data: ')) continue
 
           try {
             const event = JSON.parse(line.substring(6))
@@ -132,16 +134,14 @@ export class AnthropicProvider extends IntelligenceProvider {
             if (delta) {
               yield { delta, done: false }
             }
-          }
-          catch (error) {
+          } catch (error) {
             console.error('[AnthropicProvider] Stream parse error:', error)
           }
         }
       }
 
       yield { delta: '', done: true }
-    }
-    finally {
+    } finally {
       reader.releaseLock()
     }
   }
@@ -150,18 +150,21 @@ export class AnthropicProvider extends IntelligenceProvider {
     throw new Error('[AnthropicProvider] Embedding not supported')
   }
 
-  async translate(payload: import('@talex-touch/utils').IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async translate(
+    payload: import('@talex-touch/utils').IntelligenceTranslatePayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     const chatPayload: import('@talex-touch/utils').IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
-          content: `You are a professional translator. Translate the following text to ${payload.targetLang}. Return only the translated text, without any explanations.`,
+          content: `You are a professional translator. Translate the following text to ${payload.targetLang}. Return only the translated text, without any explanations.`
         },
         {
           role: 'user',
-          content: payload.text,
-        },
-      ],
+          content: payload.text
+        }
+      ]
     }
 
     return this.chat(chatPayload, options)
@@ -169,19 +172,22 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async visionOcr(
     payload: import('@talex-touch/utils').IntelligenceVisionOcrPayload,
-    options: AiInvokeOptions,
+    options: AiInvokeOptions
   ): Promise<AiInvokeResult<import('@talex-touch/utils').AiVisionOcrResult>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
     const imageDataUrl = await this.getImageData(payload.source)
-    const prompt = payload.prompt || 'Extract all text from this image and return the result as JSON with fields: text (extracted text), keywords (array of key terms).'
+    const prompt =
+      payload.prompt ||
+      'Extract all text from this image and return the result as JSON with fields: text (extracted text), keywords (array of key terms).'
 
-    const model = options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
+    const model =
+      options.modelPreference?.[0] || this.config.defaultModel || 'claude-3-5-sonnet-20241022'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/messages (vision)',
+      endpoint: '/messages (vision)'
     })
 
     const response = await fetch(`${this.baseUrl}/messages`, {
@@ -200,18 +206,18 @@ export class AnthropicProvider extends IntelligenceProvider {
                   type: imageDataUrl.startsWith('data:') ? 'base64' : 'url',
                   media_type: 'image/png',
                   data: imageDataUrl.startsWith('data:') ? imageDataUrl.split(',')[1] : undefined,
-                  url: !imageDataUrl.startsWith('data:') ? imageDataUrl : undefined,
-                },
+                  url: !imageDataUrl.startsWith('data:') ? imageDataUrl : undefined
+                }
               },
               {
                 type: 'text',
-                text: prompt,
-              },
-            ],
-          },
-        ],
-     }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+                text: prompt
+              }
+            ]
+          }
+        ]
+      }),
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok) {
@@ -228,7 +234,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.input_tokens ?? 0,
       completionTokens: data.usage?.output_tokens ?? 0,
-      totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0),
+      totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
     }
 
     const rawContent = data.content?.[0]?.text || ''
@@ -241,12 +247,12 @@ export class AnthropicProvider extends IntelligenceProvider {
           language: parsed.language,
           keywords: parsed.keywords ?? [],
           blocks: parsed.blocks,
-          raw: parsed,
+          raw: parsed
         }
       : {
           text: rawContent,
           keywords: this.generateKeywords(rawContent),
-          raw: rawContent,
+          raw: rawContent
         }
 
     return {
@@ -255,11 +261,13 @@ export class AnthropicProvider extends IntelligenceProvider {
       model: data.model || '',
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  private async getImageData(source: import('@talex-touch/utils').AiVisionImageSource): Promise<string> {
+  private async getImageData(
+    source: import('@talex-touch/utils').AiVisionImageSource
+  ): Promise<string> {
     if (source.type === 'data-url' && source.dataUrl) {
       return source.dataUrl
     }
@@ -270,7 +278,9 @@ export class AnthropicProvider extends IntelligenceProvider {
       return `data:image/png;base64,${source.base64}`
     }
     if (source.type === 'file' && source.filePath) {
-      throw new Error('[AnthropicProvider] File path images must be converted to base64 before calling visionOcr')
+      throw new Error(
+        '[AnthropicProvider] File path images must be converted to base64 before calling visionOcr'
+      )
     }
     throw new Error('[AnthropicProvider] Invalid vision image source')
   }
@@ -278,8 +288,7 @@ export class AnthropicProvider extends IntelligenceProvider {
   protected override safeParseJson(text: string): any {
     try {
       return JSON.parse(text)
-    }
-    catch {
+    } catch {
       return null
     }
   }
@@ -287,7 +296,7 @@ export class AnthropicProvider extends IntelligenceProvider {
   private generateKeywords(text: string): string[] {
     return text
       .split(/\s+/)
-      .filter(word => word.length > 3)
+      .filter((word) => word.length > 3)
       .slice(0, 10)
   }
 }

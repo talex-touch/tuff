@@ -18,4 +18,3 @@ export type SentryRecordPerformanceRequest = unknown
 export interface SentryRecordPerformanceResponse {
   success: boolean
 }
-

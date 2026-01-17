@@ -3,10 +3,10 @@ import type { SQL } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import crypto from 'node:crypto'
-import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
+import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
 import { databaseModule } from '../database'
 
@@ -73,7 +73,7 @@ const MODEL_COSTS: Record<string, ModelCostConfig> = {
   'deepseek-chat': { promptCostPer1k: 0.00014, completionCostPer1k: 0.00028 },
   'deepseek-coder': { promptCostPer1k: 0.00014, completionCostPer1k: 0.00028 },
   // Default for unknown models
-  default: { promptCostPer1k: 0.001, completionCostPer1k: 0.002 },
+  default: { promptCostPer1k: 0.001, completionCostPer1k: 0.002 }
 }
 
 /**
@@ -163,7 +163,7 @@ export class IntelligenceAuditLogger {
       await this.withDbWrite('intelligence.audit.flush', async () => {
         await db.transaction(async (tx) => {
           await tx.insert(intelligenceAuditLogs).values(
-            logsToFlush.map(log => ({
+            logsToFlush.map((log) => ({
               traceId: log.traceId,
               timestamp: log.timestamp,
               capabilityId: log.capabilityId,
@@ -179,15 +179,14 @@ export class IntelligenceAuditLogger {
               latency: log.latency,
               success: log.success,
               error: log.error,
-              metadata: log.metadata ? JSON.stringify(log.metadata) : null,
-            })),
+              metadata: log.metadata ? JSON.stringify(log.metadata) : null
+            }))
           )
 
           await this.updateUsageStats(tx, logsToFlush)
         })
       })
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[AuditLogger] Failed to flush logs:', error)
       // Re-add failed logs to pending
       this.pendingLogs.push(...logsToFlush)
@@ -197,11 +196,7 @@ export class IntelligenceAuditLogger {
   /**
    * Update usage statistics based on audit logs
    */
-  private async updateUsageStats(
-    db: any,
-    logs: IntelligenceAuditLogEntry[],
-  ): Promise<void> {
-
+  private async updateUsageStats(db: any, logs: IntelligenceAuditLogEntry[]): Promise<void> {
     // Group logs by caller and period
     const stats = new Map<string, IntelligenceUsageSummary>()
 
@@ -233,8 +228,8 @@ export class IntelligenceAuditLogger {
             and(
               eq(intelligenceUsageStats.callerId, caller),
               eq(intelligenceUsageStats.callerType, callerTypeValue),
-              eq(intelligenceUsageStats.period, fullPeriod),
-            ),
+              eq(intelligenceUsageStats.period, fullPeriod)
+            )
           )
           .limit(1)
 
@@ -242,9 +237,11 @@ export class IntelligenceAuditLogger {
           // Update existing record
           const old = existing[0]
           const newRequestCount = old.requestCount + stat.requestCount
-          const newAvgLatency = newRequestCount > 0
-            ? (old.avgLatency * old.requestCount + stat.avgLatency * stat.requestCount) / newRequestCount
-            : 0
+          const newAvgLatency =
+            newRequestCount > 0
+              ? (old.avgLatency * old.requestCount + stat.avgLatency * stat.requestCount) /
+                newRequestCount
+              : 0
 
           await db
             .update(intelligenceUsageStats)
@@ -257,17 +254,16 @@ export class IntelligenceAuditLogger {
               completionTokens: old.completionTokens + stat.completionTokens,
               totalCost: old.totalCost + stat.totalCost,
               avgLatency: newAvgLatency,
-              updatedAt: new Date(),
+              updatedAt: new Date()
             })
             .where(
               and(
                 eq(intelligenceUsageStats.callerId, caller),
                 eq(intelligenceUsageStats.callerType, callerTypeValue),
-                eq(intelligenceUsageStats.period, fullPeriod),
-              ),
+                eq(intelligenceUsageStats.period, fullPeriod)
+              )
             )
-        }
-        else {
+        } else {
           // Insert new record
           await db.insert(intelligenceUsageStats).values({
             callerId: caller,
@@ -282,11 +278,10 @@ export class IntelligenceAuditLogger {
             completionTokens: stat.completionTokens,
             totalCost: stat.totalCost,
             avgLatency: stat.avgLatency,
-            updatedAt: new Date(),
+            updatedAt: new Date()
           })
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.error(`[AuditLogger] Failed to update usage stats for ${key}:`, error)
       }
     }
@@ -296,7 +291,7 @@ export class IntelligenceAuditLogger {
     stats: Map<string, IntelligenceUsageSummary>,
     key: string,
     log: IntelligenceAuditLogEntry,
-    periodType: 'minute' | 'day' | 'month',
+    periodType: 'minute' | 'day' | 'month'
   ): void {
     let stat = stats.get(key)
     if (!stat) {
@@ -310,7 +305,7 @@ export class IntelligenceAuditLogger {
         promptTokens: 0,
         completionTokens: 0,
         totalCost: 0,
-        avgLatency: 0,
+        avgLatency: 0
       }
       stats.set(key, stat)
     }
@@ -318,8 +313,7 @@ export class IntelligenceAuditLogger {
     stat.requestCount++
     if (log.success) {
       stat.successCount++
-    }
-    else {
+    } else {
       stat.failureCount++
     }
     stat.totalTokens += log.usage.totalTokens
@@ -365,7 +359,7 @@ export class IntelligenceAuditLogger {
 
     const rows = await query
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       traceId: row.traceId,
       timestamp: row.timestamp,
       capabilityId: row.capabilityId,
@@ -377,13 +371,13 @@ export class IntelligenceAuditLogger {
       usage: {
         promptTokens: row.promptTokens,
         completionTokens: row.completionTokens,
-        totalTokens: row.totalTokens,
+        totalTokens: row.totalTokens
       },
       latency: row.latency,
       success: row.success,
       error: row.error || undefined,
       estimatedCost: row.estimatedCost || undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
     }))
   }
 
@@ -394,12 +388,12 @@ export class IntelligenceAuditLogger {
     callerId: string,
     periodType: 'day' | 'month',
     startPeriod?: string,
-    endPeriod?: string,
+    endPeriod?: string
   ): Promise<IntelligenceUsageSummary[]> {
     const db = this.getDb()
     const conditions = [
       eq(intelligenceUsageStats.callerId, callerId),
-      eq(intelligenceUsageStats.periodType, periodType),
+      eq(intelligenceUsageStats.periodType, periodType)
     ]
 
     if (startPeriod) {
@@ -415,7 +409,7 @@ export class IntelligenceAuditLogger {
       .where(and(...conditions))
       .orderBy(desc(intelligenceUsageStats.period))
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       period: row.period.split(':').slice(1).join(':'),
       periodType: row.periodType as 'minute' | 'day' | 'month',
       requestCount: row.requestCount,
@@ -425,7 +419,7 @@ export class IntelligenceAuditLogger {
       promptTokens: row.promptTokens,
       completionTokens: row.completionTokens,
       totalCost: row.totalCost,
-      avgLatency: row.avgLatency,
+      avgLatency: row.avgLatency
     }))
   }
 
@@ -477,8 +471,8 @@ export class IntelligenceAuditLogger {
     }
     this.pollingService.register(
       this.flushTaskId,
-      () => this.flushToDB().catch(err => console.error('[AuditLogger] Flush error:', err)),
-      { interval: this.flushIntervalMs, unit: 'milliseconds' },
+      () => this.flushToDB().catch((err) => console.error('[AuditLogger] Flush error:', err)),
+      { interval: this.flushIntervalMs, unit: 'milliseconds' }
     )
     this.pollingService.start()
   }

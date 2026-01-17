@@ -1,6 +1,6 @@
-import TxSplitter from './src/TxSplitter.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { SplitterEmits, SplitterProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxSplitter from './src/TxSplitter.vue'
 
 const Splitter = withInstall(TxSplitter)
 

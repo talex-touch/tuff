@@ -20,9 +20,8 @@ const props = withDefaults(
     strokeWidth: 6,
     showText: true,
     indeterminate: false,
-  }
+  },
 )
-
 </script>
 
 <template>

@@ -1,4 +1,8 @@
-import type { MarketInstallInstruction, MarketPlugin, MarketProviderListOptions } from '@talex-touch/utils/market'
+import type {
+  MarketInstallInstruction,
+  MarketPlugin,
+  MarketProviderListOptions
+} from '@talex-touch/utils/market'
 import { BaseMarketProvider } from './base-provider'
 
 /**
@@ -186,12 +190,12 @@ export class RepositoryProvider extends BaseMarketProvider {
 
     // Normalize Gitee response to GitHub format
     if (this.repoType === 'gitee') {
-      return (response.data as GiteeRelease[]).map(r => ({
+      return (response.data as GiteeRelease[]).map((r) => ({
         tag_name: r.tag_name,
         name: r.name,
         body: r.body,
         published_at: r.created_at,
-        assets: r.assets.map(a => ({
+        assets: r.assets.map((a) => ({
           name: a.name,
           browser_download_url: a.browser_download_url,
           size: 0,
@@ -251,7 +255,7 @@ export class RepositoryProvider extends BaseMarketProvider {
     manifest: PluginManifest | null
   ): MarketPlugin[] {
     // Filter out prereleases and drafts, get latest stable
-    const stableReleases = releases.filter(r => !r.prerelease && !r.draft)
+    const stableReleases = releases.filter((r) => !r.prerelease && !r.draft)
     const latestRelease = stableReleases[0] || releases[0]
 
     if (!latestRelease) {
@@ -313,7 +317,7 @@ export class RepositoryProvider extends BaseMarketProvider {
     const priorities = ['.tpex', '.zip', '.tar.gz', '.tgz']
 
     for (const ext of priorities) {
-      const asset = assets.find(a => a.name.toLowerCase().endsWith(ext))
+      const asset = assets.find((a) => a.name.toLowerCase().endsWith(ext))
       if (asset) return asset
     }
 

@@ -7,7 +7,7 @@
  * - Position persistence
  */
 
-import { ref, onUnmounted } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { useDivisionBoxStore } from '../store/division-box'
 import { EDGE_SNAP_THRESHOLD } from '../types'
 

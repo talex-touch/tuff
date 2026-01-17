@@ -13,8 +13,7 @@ provide<(el: HTMLElement) => void>('changePointer', (el: HTMLElement) => {
 
 function hidePointer(): void {
   const pointerEl = pointer.value
-  if (!pointerEl)
-    return
+  if (!pointerEl) return
 
   pointerEl.style.transition = 'opacity .25s'
   pointerEl.style.opacity = '0'
@@ -22,8 +21,7 @@ function hidePointer(): void {
 
 async function fixPointer(targetEl: HTMLElement): Promise<void> {
   const pointerEl = pointer.value
-  if (!pointerEl || !targetEl)
-    return
+  if (!pointerEl || !targetEl) return
 
   const pointerStyle = pointerEl.style
 
@@ -51,8 +49,7 @@ async function fixPointer(targetEl: HTMLElement): Promise<void> {
 
     pointerStyle.top = `${nodeRect.top + nodeRect.height * 0.2 + diffTop}px`
     pointerStyle.height = `${nodeRect.height * 0.6}px`
-  }
-  else {
+  } else {
     pointerStyle.transform = `translate(0, -${nodeRect.height * 0.2}px)`
     pointerStyle.height = `${nodeRect.height * 0.8}px`
 

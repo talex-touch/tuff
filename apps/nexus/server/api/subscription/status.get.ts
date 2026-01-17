@@ -1,6 +1,6 @@
 import { clerkClient } from '@clerk/nuxt/server'
 import { requireAuth } from '../../utils/auth'
-import { getSubscriptionFromMetadata, getPlanFeatures } from '../../utils/subscriptionStore'
+import { getPlanFeatures, getSubscriptionFromMetadata } from '../../utils/subscriptionStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)

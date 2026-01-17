@@ -56,7 +56,8 @@ export default defineConfig({
           index: 'src/main/index.ts',
           'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
           'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
-          'file-reconcile-worker': 'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
+          'file-reconcile-worker':
+            'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
           'file-index-worker': 'src/main/modules/box-tool/addon/files/workers/file-index-worker.ts',
           'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts'
         },

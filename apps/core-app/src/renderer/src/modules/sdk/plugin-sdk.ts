@@ -6,13 +6,13 @@
  */
 
 import type { ITouchPlugin } from '@talex-touch/utils'
+import type { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import type {
   InputChangedRequest,
   PluginFilters,
   PluginStateEvent,
   TriggerFeatureRequest
 } from '@talex-touch/utils/plugin/sdk/types'
-import type { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 

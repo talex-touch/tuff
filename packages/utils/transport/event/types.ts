@@ -156,7 +156,7 @@ export interface TuffEvent<
   TResponse = void,
   TNamespace extends string = string,
   TModule extends string = string,
-  TAction extends string = string
+  TAction extends string = string,
 > {
   /**
    * Brand identifier for runtime type checking.
@@ -210,13 +210,13 @@ export interface TuffEvent<
    * Converts event to its string representation.
    * @returns Event name in format 'namespace:module:action'
    */
-  toString(): string
+  toString: () => string
 
   /**
    * Gets the full event name.
    * @returns Event name in format 'namespace:module:action'
    */
-  toEventName(): string
+  toEventName: () => string
 }
 
 // ============================================================================

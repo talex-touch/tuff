@@ -1,6 +1,6 @@
-import TxTabBar from './src/TxTabBar.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { TabBarEmits, TabBarItem, TabBarProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxTabBar from './src/TxTabBar.vue'
 
 const TabBar = withInstall(TxTabBar)
 

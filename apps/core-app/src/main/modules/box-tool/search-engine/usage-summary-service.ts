@@ -1,11 +1,11 @@
 import type { DbUtils } from '../../../db/utils'
 import type { Primitive } from '../../../utils/logger'
+import { sleep } from '@talex-touch/utils'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { lt, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
 import { TimeStatsAggregator } from './time-stats-aggregator'
-import { sleep } from '@talex-touch/utils'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 const log = createLogger('UsageSummaryService')
 
@@ -23,16 +23,12 @@ function isSqliteBusyError(error: unknown): boolean {
   return typeof message === 'string' && message.includes('SQLITE_BUSY')
 }
 
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  retries = MAX_RETRIES,
-): Promise<T> {
+async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await operation()
-    }
-    catch (error) {
+    } catch (error) {
       lastError = error
       if (isSqliteBusyError(error) && attempt < retries) {
         log.warn(`SQLITE_BUSY, retrying attempt ${attempt + 1}/${retries}`)
@@ -60,7 +56,7 @@ export interface SummaryStats {
 const DEFAULT_CONFIG: SummaryConfig = {
   retentionDays: 30,
   autoCleanup: true,
-  summaryInterval: 24 * 60 * 60 * 1000,
+  summaryInterval: 24 * 60 * 60 * 1000
 }
 
 /** Service for periodically aggregating usage logs and cleaning up old data */
@@ -74,12 +70,12 @@ export class UsageSummaryService {
     totalRuns: 0,
     totalSummarized: 0,
     totalCleaned: 0,
-    avgDuration: 0,
+    avgDuration: 0
   }
 
   constructor(
     private dbUtils: DbUtils,
-    config?: Partial<SummaryConfig>,
+    config?: Partial<SummaryConfig>
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config }
     this.timeStatsAggregator = new TimeStatsAggregator(dbUtils)
@@ -93,7 +89,7 @@ export class UsageSummaryService {
 
     this.isRunning = true
     log.info('Starting usage summary service', {
-      meta: { interval: `${this.config.summaryInterval / 1000 / 60 / 60}h` },
+      meta: { interval: `${this.config.summaryInterval / 1000 / 60 / 60}h` }
     })
 
     this.runSummary().catch((error) => {
@@ -108,12 +104,11 @@ export class UsageSummaryService {
       async () => {
         try {
           await this.runSummary()
-        }
-        catch (error) {
+        } catch (error) {
           log.error('Scheduled summary failed', { error })
         }
       },
-      { interval: this.config.summaryInterval, unit: 'milliseconds' },
+      { interval: this.config.summaryInterval, unit: 'milliseconds' }
     )
     this.pollingService.start()
   }
@@ -143,16 +138,15 @@ export class UsageSummaryService {
       this.stats.totalRuns++
       this.stats.totalSummarized += summarizedCount
       this.stats.totalCleaned += cleanedCount
-      this.stats.avgDuration
-        = (this.stats.avgDuration * (this.stats.totalRuns - 1) + duration) / this.stats.totalRuns
+      this.stats.avgDuration =
+        (this.stats.avgDuration * (this.stats.totalRuns - 1) + duration) / this.stats.totalRuns
 
       log.info('Summary completed', {
-        meta: { summarized: summarizedCount, cleaned: cleanedCount },
+        meta: { summarized: summarizedCount, cleaned: cleanedCount }
       })
 
       return { summarizedLogs: summarizedCount, cleanedLogs: cleanedCount, duration }
-    }
-    catch (error) {
+    } catch (error) {
       log.error('Summary process failed', { error })
       throw error
     }
@@ -169,7 +163,7 @@ export class UsageSummaryService {
           itemId: schema.usageLogs.itemId,
           source: schema.usageLogs.source,
           action: schema.usageLogs.action,
-          timestamp: schema.usageLogs.timestamp,
+          timestamp: schema.usageLogs.timestamp
         })
         .from(schema.usageLogs)
         .where(sql`${schema.usageLogs.itemId} != 'search_session'`)
@@ -205,7 +199,7 @@ export class UsageSummaryService {
             searchCount: 0,
             executeCount: 0,
             lastSearched: null,
-            lastExecuted: null,
+            lastExecuted: null
           })
         }
 
@@ -215,8 +209,7 @@ export class UsageSummaryService {
           if (!stat.lastSearched || log.timestamp > stat.lastSearched) {
             stat.lastSearched = log.timestamp
           }
-        }
-        else if (log.action === 'execute') {
+        } else if (log.action === 'execute') {
           stat.executeCount++
           if (!stat.lastExecuted || log.timestamp > stat.lastExecuted) {
             stat.lastExecuted = log.timestamp
@@ -255,11 +248,11 @@ export class UsageSummaryService {
                 lastExecuted: stat.lastExecuted,
                 lastCancelled: null,
                 createdAt: now,
-                updatedAt: now,
+                updatedAt: now
               })
               .onConflictDoUpdate({
                 target: [schema.itemUsageStats.sourceId, schema.itemUsageStats.itemId],
-                set: updateFields,
+                set: updateFields
               })
           }
         })
@@ -267,8 +260,7 @@ export class UsageSummaryService {
 
       timer.end('debug')
       return logs.length
-    }
-    catch (error) {
+    } catch (error) {
       log.error('Failed to summarize usage logs', { error })
       throw error
     }
@@ -283,14 +275,11 @@ export class UsageSummaryService {
       const expirationDate = new Date()
       expirationDate.setDate(expirationDate.getDate() - this.config.retentionDays)
 
-      await db
-        .delete(schema.usageLogs)
-        .where(lt(schema.usageLogs.timestamp, expirationDate))
+      await db.delete(schema.usageLogs).where(lt(schema.usageLogs.timestamp, expirationDate))
 
       timer.end('debug')
       return 0
-    }
-    catch (error) {
+    } catch (error) {
       log.error('Failed to cleanup expired logs', { error })
       throw error
     }
@@ -305,7 +294,7 @@ export class UsageSummaryService {
     const metaConfig: Record<string, Primitive> = {
       retentionDays: this.config.retentionDays,
       autoCleanup: this.config.autoCleanup,
-      summaryInterval: this.config.summaryInterval,
+      summaryInterval: this.config.summaryInterval
     }
     log.info('Configuration updated', { meta: metaConfig })
 

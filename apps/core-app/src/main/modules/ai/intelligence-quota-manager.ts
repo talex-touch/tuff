@@ -49,7 +49,7 @@ export interface QuotaCheckResult {
  */
 export class IntelligenceQuotaManager {
   private quotaCache = new Map<string, QuotaConfig>()
-  private usageCache = new Map<string, { usage: CurrentUsage, timestamp: number }>()
+  private usageCache = new Map<string, { usage: CurrentUsage; timestamp: number }>()
   private readonly usageCacheTTL = 10000 // 10 seconds
 
   private getDb() {
@@ -69,8 +69,8 @@ export class IntelligenceQuotaManager {
       .where(
         and(
           eq(intelligenceQuotas.callerId, config.callerId),
-          eq(intelligenceQuotas.callerType, config.callerType),
-        ),
+          eq(intelligenceQuotas.callerType, config.callerType)
+        )
       )
       .limit(1)
 
@@ -88,16 +88,15 @@ export class IntelligenceQuotaManager {
           costLimitPerDay: config.costLimitPerDay,
           costLimitPerMonth: config.costLimitPerMonth,
           enabled: config.enabled ?? true,
-          updatedAt: new Date(),
+          updatedAt: new Date()
         })
         .where(
           and(
             eq(intelligenceQuotas.callerId, config.callerId),
-            eq(intelligenceQuotas.callerType, config.callerType),
-          ),
+            eq(intelligenceQuotas.callerType, config.callerType)
+          )
         )
-    }
-    else {
+    } else {
       // Insert new
       await db.insert(intelligenceQuotas).values({
         callerId: config.callerId,
@@ -110,7 +109,7 @@ export class IntelligenceQuotaManager {
         tokensPerMonth: config.tokensPerMonth,
         costLimitPerDay: config.costLimitPerDay,
         costLimitPerMonth: config.costLimitPerMonth,
-        enabled: config.enabled ?? true,
+        enabled: config.enabled ?? true
       })
     }
 
@@ -121,7 +120,10 @@ export class IntelligenceQuotaManager {
   /**
    * Get quota configuration for a caller
    */
-  async getQuota(callerId: string, callerType: 'plugin' | 'user' | 'system' = 'plugin'): Promise<QuotaConfig | null> {
+  async getQuota(
+    callerId: string,
+    callerType: 'plugin' | 'user' | 'system' = 'plugin'
+  ): Promise<QuotaConfig | null> {
     const cacheKey = `${callerType}:${callerId}`
 
     // Check cache
@@ -136,8 +138,8 @@ export class IntelligenceQuotaManager {
       .where(
         and(
           eq(intelligenceQuotas.callerId, callerId),
-          eq(intelligenceQuotas.callerType, callerType),
-        ),
+          eq(intelligenceQuotas.callerType, callerType)
+        )
       )
       .limit(1)
 
@@ -155,7 +157,7 @@ export class IntelligenceQuotaManager {
       tokensPerMonth: row.tokensPerMonth ?? undefined,
       costLimitPerDay: row.costLimitPerDay ?? undefined,
       costLimitPerMonth: row.costLimitPerMonth ?? undefined,
-      enabled: row.enabled,
+      enabled: row.enabled
     }
 
     this.quotaCache.set(cacheKey, config)
@@ -165,7 +167,10 @@ export class IntelligenceQuotaManager {
   /**
    * Delete quota for a caller
    */
-  async deleteQuota(callerId: string, callerType: 'plugin' | 'user' | 'system' = 'plugin'): Promise<void> {
+  async deleteQuota(
+    callerId: string,
+    callerType: 'plugin' | 'user' | 'system' = 'plugin'
+  ): Promise<void> {
     const db = this.getDb()
 
     await db
@@ -173,8 +178,8 @@ export class IntelligenceQuotaManager {
       .where(
         and(
           eq(intelligenceQuotas.callerId, callerId),
-          eq(intelligenceQuotas.callerType, callerType),
-        ),
+          eq(intelligenceQuotas.callerType, callerType)
+        )
       )
 
     this.quotaCache.delete(`${callerType}:${callerId}`)
@@ -183,7 +188,10 @@ export class IntelligenceQuotaManager {
   /**
    * Get current usage for a caller
    */
-  async getCurrentUsage(callerId: string, callerType: 'plugin' | 'user' | 'system' = 'plugin'): Promise<CurrentUsage> {
+  async getCurrentUsage(
+    callerId: string,
+    callerType: 'plugin' | 'user' | 'system' = 'plugin'
+  ): Promise<CurrentUsage> {
     const cacheKey = `usage:${callerType}:${callerId}`
     const cached = this.usageCache.get(cacheKey)
 
@@ -199,14 +207,14 @@ export class IntelligenceQuotaManager {
     const minuteStats = await db
       .select({
         count: sql<number>`count(*)`,
-        tokens: sql<number>`coalesce(sum(${intelligenceAuditLogs.totalTokens}), 0)`,
+        tokens: sql<number>`coalesce(sum(${intelligenceAuditLogs.totalTokens}), 0)`
       })
       .from(intelligenceAuditLogs)
       .where(
         and(
           eq(intelligenceAuditLogs.caller, callerId),
-          gte(intelligenceAuditLogs.timestamp, minuteAgo),
-        ),
+          gte(intelligenceAuditLogs.timestamp, minuteAgo)
+        )
       )
 
     // Query usage stats for today
@@ -217,8 +225,8 @@ export class IntelligenceQuotaManager {
       .where(
         and(
           eq(intelligenceUsageStats.callerId, callerId),
-          eq(intelligenceUsageStats.period, todayPeriod),
-        ),
+          eq(intelligenceUsageStats.period, todayPeriod)
+        )
       )
       .limit(1)
 
@@ -230,8 +238,8 @@ export class IntelligenceQuotaManager {
       .where(
         and(
           eq(intelligenceUsageStats.callerId, callerId),
-          eq(intelligenceUsageStats.period, monthPeriod),
-        ),
+          eq(intelligenceUsageStats.period, monthPeriod)
+        )
       )
       .limit(1)
 
@@ -243,7 +251,7 @@ export class IntelligenceQuotaManager {
       costToday: todayStats[0]?.totalCost || 0,
       requestsThisMonth: monthStats[0]?.requestCount || 0,
       tokensThisMonth: monthStats[0]?.totalTokens || 0,
-      costThisMonth: monthStats[0]?.totalCost || 0,
+      costThisMonth: monthStats[0]?.totalCost || 0
     }
 
     this.usageCache.set(cacheKey, { usage, timestamp: Date.now() })
@@ -256,7 +264,7 @@ export class IntelligenceQuotaManager {
   async checkQuota(
     callerId: string,
     callerType: 'plugin' | 'user' | 'system' = 'plugin',
-    estimatedTokens: number = 0,
+    estimatedTokens: number = 0
   ): Promise<QuotaCheckResult> {
     const quota = await this.getQuota(callerId, callerType)
 
@@ -277,7 +285,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Rate limit exceeded (requests per minute)',
-        remainingRequests: 0,
+        remainingRequests: 0
       }
     }
 
@@ -286,7 +294,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Daily request limit exceeded',
-        remainingRequests: 0,
+        remainingRequests: 0
       }
     }
 
@@ -295,7 +303,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Monthly request limit exceeded',
-        remainingRequests: 0,
+        remainingRequests: 0
       }
     }
 
@@ -304,7 +312,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Rate limit exceeded (tokens per minute)',
-        remainingTokens: Math.max(0, quota.tokensPerMinute - usage.tokensThisMinute),
+        remainingTokens: Math.max(0, quota.tokensPerMinute - usage.tokensThisMinute)
       }
     }
 
@@ -313,7 +321,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Daily token limit exceeded',
-        remainingTokens: Math.max(0, quota.tokensPerDay - usage.tokensToday),
+        remainingTokens: Math.max(0, quota.tokensPerDay - usage.tokensToday)
       }
     }
 
@@ -322,7 +330,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Monthly token limit exceeded',
-        remainingTokens: Math.max(0, quota.tokensPerMonth - usage.tokensThisMonth),
+        remainingTokens: Math.max(0, quota.tokensPerMonth - usage.tokensThisMonth)
       }
     }
 
@@ -331,7 +339,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Daily cost limit exceeded',
-        remainingCost: 0,
+        remainingCost: 0
       }
     }
 
@@ -340,7 +348,7 @@ export class IntelligenceQuotaManager {
       return {
         allowed: false,
         reason: 'Monthly cost limit exceeded',
-        remainingCost: 0,
+        remainingCost: 0
       }
     }
 
@@ -350,12 +358,8 @@ export class IntelligenceQuotaManager {
       remainingRequests: quota.requestsPerDay
         ? quota.requestsPerDay - usage.requestsToday
         : undefined,
-      remainingTokens: quota.tokensPerDay
-        ? quota.tokensPerDay - usage.tokensToday
-        : undefined,
-      remainingCost: quota.costLimitPerDay
-        ? quota.costLimitPerDay - usage.costToday
-        : undefined,
+      remainingTokens: quota.tokensPerDay ? quota.tokensPerDay - usage.tokensToday : undefined,
+      remainingCost: quota.costLimitPerDay ? quota.costLimitPerDay - usage.costToday : undefined
     }
   }
 
@@ -366,7 +370,7 @@ export class IntelligenceQuotaManager {
     const db = this.getDb()
     const rows = await db.select().from(intelligenceQuotas)
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       callerId: row.callerId,
       callerType: row.callerType as 'plugin' | 'user' | 'system',
       requestsPerMinute: row.requestsPerMinute ?? undefined,
@@ -377,7 +381,7 @@ export class IntelligenceQuotaManager {
       tokensPerMonth: row.tokensPerMonth ?? undefined,
       costLimitPerDay: row.costLimitPerDay ?? undefined,
       costLimitPerMonth: row.costLimitPerMonth ?? undefined,
-      enabled: row.enabled,
+      enabled: row.enabled
     }))
   }
 
@@ -396,7 +400,7 @@ export class IntelligenceQuotaManager {
     await this.setQuota({
       ...config,
       callerId: '__default_plugin__',
-      callerType: 'plugin',
+      callerType: 'plugin'
     })
   }
 

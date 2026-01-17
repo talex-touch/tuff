@@ -13,7 +13,7 @@
  *
  * @component
  */
-import type { BlockLineProps, BlockLineEmits } from './types'
+import type { BlockLineEmits, BlockLineProps } from './types'
 
 defineOptions({
   name: 'TxBlockLine',
@@ -49,7 +49,9 @@ function handleClick(event: MouseEvent): void {
   >
     <span class="tx-block-line__title">{{ title }}</span>
     <div v-if="!link" class="tx-block-line__description">
-      <slot name="description">{{ description }}</slot>
+      <slot name="description">
+        {{ description }}
+      </slot>
     </div>
     <div v-else class="tx-block-line__link-slot">
       <slot name="description" />

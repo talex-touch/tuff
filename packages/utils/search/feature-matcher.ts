@@ -59,7 +59,8 @@ function findSubstringMatch(text: string, query: string): MatchRange | null {
   const lowerQuery = query.toLowerCase()
   const index = lowerText.indexOf(lowerQuery)
 
-  if (index === -1) return null
+  if (index === -1)
+    return null
 
   return { start: index, end: index + query.length }
 }
@@ -69,8 +70,8 @@ function findSubstringMatch(text: string, query: string): MatchRange | null {
  */
 function matchToken(
   token: string,
-  query: string
-): { matched: boolean; score: number; type: 'exact' | 'prefix' | 'contains' | 'none' } {
+  query: string,
+): { matched: boolean, score: number, type: 'exact' | 'prefix' | 'contains' | 'none' } {
   const lowerToken = token.toLowerCase()
   const lowerQuery = query.toLowerCase()
 
@@ -112,7 +113,7 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
     searchTokens = [],
     query,
     enableFuzzy = true,
-    maxFuzzyErrors = 2
+    maxFuzzyErrors = 2,
   } = options
 
   const trimmedQuery = query.trim()
@@ -131,7 +132,7 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
       matched: true,
       score: 1000,
       matchType: 'exact',
-      matchRanges: [{ start: 0, end: title.length }]
+      matchRanges: [{ start: 0, end: title.length }],
     }
   }
 
@@ -141,7 +142,7 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
       matched: true,
       score: 900,
       matchType: 'prefix',
-      matchRanges: [{ start: 0, end: trimmedQuery.length }]
+      matchRanges: [{ start: 0, end: trimmedQuery.length }],
     }
   }
 
@@ -152,7 +153,7 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
       matched: true,
       score: 700,
       matchType: 'contains',
-      matchRanges: [titleMatch]
+      matchRanges: [titleMatch],
     }
   }
 
@@ -166,14 +167,15 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
     } | null = null
 
     for (const token of searchTokens) {
-      if (!token) continue
+      if (!token)
+        continue
 
       const result = matchToken(token, trimmedQuery)
       if (result.matched && (!bestTokenMatch || result.score > bestTokenMatch.score)) {
         bestTokenMatch = {
           score: result.score,
           type: result.type as 'exact' | 'prefix' | 'contains',
-          token
+          token,
         }
       }
     }
@@ -186,7 +188,7 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
         score: bestTokenMatch.score - 50, // Slightly lower than direct title match
         matchType: 'token',
         matchRanges: [{ start: 0, end: title.length }],
-        matchedToken: bestTokenMatch.token
+        matchedToken: bestTokenMatch.token,
       }
     }
   }
@@ -199,7 +201,7 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
         matched: true,
         score: 400,
         matchType: 'contains',
-        matchRanges: [] // No title highlight for desc matches
+        matchRanges: [], // No title highlight for desc matches
       }
     }
   }
@@ -212,13 +214,14 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
         matched: true,
         score: Math.round(fuzzyResult.score * 500), // Scale to 0-500 range
         matchType: 'fuzzy',
-        matchRanges: indicesToRanges(fuzzyResult.matchedIndices)
+        matchRanges: indicesToRanges(fuzzyResult.matchedIndices),
       }
     }
 
     // Try fuzzy on tokens
     for (const token of searchTokens) {
-      if (!token || token.length < 2) continue
+      if (!token || token.length < 2)
+        continue
 
       const tokenFuzzy = fuzzyMatch(token, trimmedQuery, maxFuzzyErrors)
       if (tokenFuzzy.matched && tokenFuzzy.score > 0.6) {
@@ -227,7 +230,7 @@ export function matchFeature(options: FeatureMatchOptions): FeatureMatchResult {
           score: Math.round(tokenFuzzy.score * 400),
           matchType: 'fuzzy',
           matchRanges: [{ start: 0, end: title.length }],
-          matchedToken: token
+          matchedToken: token,
         }
       }
     }
@@ -249,19 +252,19 @@ export function matchFeatures<T extends { searchTokens?: string[] }>(
     title: string
     desc?: string
   }>,
-  query: string
+  query: string,
 ): Array<{
   feature: T
   result: FeatureMatchResult
 }> {
-  const results: Array<{ feature: T; result: FeatureMatchResult }> = []
+  const results: Array<{ feature: T, result: FeatureMatchResult }> = []
 
   for (const { feature, title, desc } of features) {
     const result = matchFeature({
       title,
       desc,
       searchTokens: feature.searchTokens,
-      query
+      query,
     })
 
     if (result.matched) {

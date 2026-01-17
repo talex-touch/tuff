@@ -3,7 +3,7 @@ import type {
   ISearchProvider,
   PreviewAbilityResult,
   PreviewCardPayload,
-  TuffItem,
+  TuffItem
 } from '@talex-touch/utils'
 import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-engine/types'
 import type { PreviewAbilityRegistry } from './preview-registry'
@@ -51,8 +51,8 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
           providerName: this.name ?? this.id,
           duration,
           resultCount: 1,
-          status: 'success',
-        },
+          status: 'success'
+        }
       ])
       .build()
   }
@@ -88,8 +88,8 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
           providerName: this.name ?? this.id,
           duration,
           resultCount: 0,
-          status: 'success',
-        },
+          status: 'success'
+        }
       ])
       .build()
   }
@@ -104,13 +104,13 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       .setKind('preview')
       .setCustomRender('vue', PREVIEW_COMPONENT_NAME, {
         ...abilityResult.payload,
-        confidence: abilityResult.confidence,
+        confidence: abilityResult.confidence
       })
       .setMeta({
         preview: {
           abilityId: abilityResult.abilityId,
-          confidence: abilityResult.confidence,
-        },
+          confidence: abilityResult.confidence
+        }
       })
       .setClassName('core-preview-card')
       .setFinalScore(1)
@@ -123,18 +123,18 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   }
 
   private extractPayload(item: TuffItem): PreviewCardPayload | undefined {
-    if (item.render?.mode !== 'custom')
-      return undefined
+    if (item.render?.mode !== 'custom') return undefined
     const custom = item.render.custom
-    if (custom?.type !== 'vue')
-      return undefined
+    if (custom?.type !== 'vue') return undefined
     return custom.data as PreviewCardPayload | undefined
   }
 
   private async recordHistory(payload: PreviewCardPayload, query: TuffQuery): Promise<void> {
-    if (!payload?.primaryValue)
-      return
-    console.log('[PreviewProvider] Saving preview history:', { expression: query.text, value: payload.primaryValue })
+    if (!payload?.primaryValue) return
+    console.log('[PreviewProvider] Saving preview history:', {
+      expression: query.text,
+      value: payload.primaryValue
+    })
     const result = await clipboardModule.saveCustomEntry({
       content: payload.primaryValue,
       rawContent: query.text ?? '',
@@ -142,13 +142,15 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       meta: {
         expression: query.text ?? '',
         abilityId: payload.abilityId,
-        payload,
-      },
+        payload
+      }
     })
     if (result?.id) {
       console.log('[PreviewProvider] Preview history saved successfully:', result.id)
     } else {
-      console.warn('[PreviewProvider] Preview history save returned null - database may not be initialized')
+      console.warn(
+        '[PreviewProvider] Preview history save returned null - database may not be initialized'
+      )
     }
   }
 }

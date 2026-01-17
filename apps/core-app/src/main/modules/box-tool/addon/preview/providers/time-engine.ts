@@ -52,7 +52,7 @@ const TIME_UNITS: Record<string, number> = {
   y: 365 * 24 * 60 * 60 * 1000,
   year: 365 * 24 * 60 * 60 * 1000,
   years: 365 * 24 * 60 * 60 * 1000,
-  年: 365 * 24 * 60 * 60 * 1000,
+  年: 365 * 24 * 60 * 60 * 1000
 }
 
 // 时区别名
@@ -111,7 +111,7 @@ const TIMEZONE_ALIASES: Record<string, string> = {
   dubai: 'Asia/Dubai',
   迪拜: 'Asia/Dubai',
   moscow: 'Europe/Moscow',
-  莫斯科: 'Europe/Moscow',
+  莫斯科: 'Europe/Moscow'
 }
 
 // 时间计算结果
@@ -204,7 +204,7 @@ export class TimeEngine {
    * 支持: +3h, -2d, +1h30m
    */
   parseOffset(input: string): number | null {
-    const pattern = /([+-]?\d+(?:\.\d+)?)\s*([a-zA-Z\u4e00-\u9fa5]+)/g
+    const pattern = /([+-]?\d+(?:\.\d+)?)\s*([a-z\u4E00-\u9FA5]+)/gi
     let totalMs = 0
     let hasMatch = false
 
@@ -255,8 +255,7 @@ export class TimeEngine {
         const offset = this.parseOffset(operand)
         if (offset !== null) {
           result = operator === '+' ? result + offset : result - offset
-        }
-        else {
+        } else {
           // Try to parse as date for subtraction
           const otherTime = this.parseTime(operand)
           if (otherTime && operator === '-') {
@@ -267,8 +266,7 @@ export class TimeEngine {
       }
 
       return this.getTimeResult(new Date(result))
-    }
-    catch (error) {
+    } catch (error) {
       log.debug('Time calculation error', { error })
       return null
     }
@@ -305,7 +303,7 @@ export class TimeEngine {
       minutes: minutes % 60,
       seconds: seconds % 60,
       formatted: this.formatDuration(absDiff),
-      humanReadable: this.humanReadableDuration(absDiff, isPast),
+      humanReadable: this.humanReadableDuration(absDiff, isPast)
     }
   }
 
@@ -334,15 +332,14 @@ export class TimeEngine {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false,
+        hour12: false
       })
 
       const targetDateStr = formatter.format(new Date(utcTime))
       const targetDate = new Date(targetDateStr)
 
       return this.getTimeResult(targetDate, toTimezone)
-    }
-    catch (error) {
+    } catch (error) {
       log.debug('Timezone conversion error', { error })
       return null
     }
@@ -371,8 +368,7 @@ export class TimeEngine {
     try {
       Intl.DateTimeFormat(undefined, { timeZone: input })
       return input
-    }
-    catch {
+    } catch {
       return null
     }
   }
@@ -412,23 +408,17 @@ export class TimeEngine {
 
     if (years > 0) {
       result = `${years} 年 ${months % 12 > 0 ? `${months % 12} 个月` : ''}`
-    }
-    else if (months > 0) {
+    } else if (months > 0) {
       result = `${months} 个月 ${days % 30 > 0 ? `${days % 30} 天` : ''}`
-    }
-    else if (weeks > 0) {
+    } else if (weeks > 0) {
       result = `${weeks} 周 ${days % 7 > 0 ? `${days % 7} 天` : ''}`
-    }
-    else if (days > 0) {
+    } else if (days > 0) {
       result = `${days} 天 ${hours % 24 > 0 ? `${hours % 24} 小时` : ''}`
-    }
-    else if (hours > 0) {
+    } else if (hours > 0) {
       result = `${hours} 小时 ${minutes % 60 > 0 ? `${minutes % 60} 分钟` : ''}`
-    }
-    else if (minutes > 0) {
+    } else if (minutes > 0) {
       result = `${minutes} 分钟 ${seconds % 60 > 0 ? `${seconds % 60} 秒` : ''}`
-    }
-    else {
+    } else {
       result = `${seconds} 秒`
     }
 
@@ -443,7 +433,8 @@ export class TimeEngine {
 
     const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
     const startOfYear = new Date(date.getFullYear(), 0, 1)
-    const dayOfYear = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000)) + 1
+    const dayOfYear =
+      Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000)) + 1
 
     // Calculate week number
     const firstDayOfYear = new Date(date.getFullYear(), 0, 1)
@@ -456,12 +447,12 @@ export class TimeEngine {
       formatted: {
         local: date.toLocaleString('zh-CN', { timeZone: tz }),
         utc: date.toISOString(),
-        iso: date.toISOString(),
+        iso: date.toISOString()
       },
       weekday: weekdays[date.getDay()],
       weekNumber,
       dayOfYear,
-      timezone: tz,
+      timezone: tz
     }
   }
 }

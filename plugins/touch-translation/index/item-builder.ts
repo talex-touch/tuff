@@ -9,7 +9,7 @@ export function createPendingItem(
   featureId: string,
   service: string,
   from: string,
-  to: string
+  to: string,
 ) {
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
   const originalSnippet = formatOriginalSnippet(originalText)
@@ -38,7 +38,7 @@ export function createPendingItem(
 export function createSuccessItem(
   originalText: string,
   result: TranslationResult,
-  featureId: string
+  featureId: string,
 ) {
   const { text: translatedText, from, to, service, provider, model } = result
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
@@ -76,7 +76,7 @@ export function createFailedItem(
   featureId: string,
   detectedLang: string,
   targetLang: string,
-  errorMessage?: string
+  errorMessage?: string,
 ) {
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
   const originalSnippet = formatOriginalSnippet(originalText)

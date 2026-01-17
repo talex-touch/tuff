@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { AgentItemProps } from './types'
 import { computed } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
-import type { AgentItemProps } from './types'
 
 defineOptions({
   name: 'TxAgentItem',

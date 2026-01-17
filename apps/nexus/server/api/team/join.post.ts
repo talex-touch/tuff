@@ -15,9 +15,9 @@ export default defineEventHandler(async (event) => {
   // Check if user is already in an organization
   const existingMemberships = await client.users.getOrganizationMembershipList({ userId })
   if (existingMemberships.data && existingMemberships.data.length > 0) {
-    throw createError({ 
-      statusCode: 400, 
-      statusMessage: 'You are already a member of an organization. Leave your current organization first.' 
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'You are already a member of an organization. Leave your current organization first.',
     })
   }
 
@@ -32,9 +32,9 @@ export default defineEventHandler(async (event) => {
     const user = await client.users.getUser(userId)
     const userEmail = user.primaryEmailAddress?.emailAddress
     if (userEmail?.toLowerCase() !== invite.email.toLowerCase()) {
-      throw createError({ 
-        statusCode: 403, 
-        statusMessage: 'This invite is for a specific email address' 
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'This invite is for a specific email address',
       })
     }
   }
@@ -49,12 +49,13 @@ export default defineEventHandler(async (event) => {
       userId,
       role: usedInvite.role === 'admin' ? 'org:admin' : 'org:member',
     })
-  } catch (error: any) {
+  }
+  catch (error: any) {
     // If Clerk fails, the invite was already consumed - log error
     console.error('[team/join] Failed to add user to organization:', error)
-    throw createError({ 
-      statusCode: 500, 
-      statusMessage: 'Failed to join organization. Please contact support.' 
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Failed to join organization. Please contact support.',
     })
   }
 

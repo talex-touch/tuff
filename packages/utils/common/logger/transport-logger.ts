@@ -11,15 +11,15 @@ import { LogLevel } from './types'
  * ANSI color codes
  */
 const COLORS = {
-  reset: '\x1b[0m',
-  gray: '\x1b[90m',
-  green: '\x1b[32m',
-  bgGreen: '\x1b[42m',
-  white: '\x1b[37m',
-  yellow: '\x1b[33m',
-  red: '\x1b[31m',
-  cyan: '\x1b[36m',
-  bold: '\x1b[1m'
+  reset: '\x1B[0m',
+  gray: '\x1B[90m',
+  green: '\x1B[32m',
+  bgGreen: '\x1B[42m',
+  white: '\x1B[37m',
+  yellow: '\x1B[33m',
+  red: '\x1B[31m',
+  cyan: '\x1B[36m',
+  bold: '\x1B[1m',
 }
 
 /**
@@ -36,7 +36,7 @@ export class TuffTransportLogger {
 
   constructor(
     module: string,
-    options?: { subModule?: string; enabled?: boolean; level?: LogLevel }
+    options?: { subModule?: string, enabled?: boolean, level?: LogLevel },
   ) {
     this.module = module
     this.subModule = options?.subModule
@@ -104,7 +104,8 @@ export class TuffTransportLogger {
    * Log event dispatch
    */
   event(eventName: string, direction: 'send' | 'receive', data?: unknown): void {
-    if (!this.shouldLog(LogLevel.DEBUG)) return
+    if (!this.shouldLog(LogLevel.DEBUG))
+      return
 
     const arrow = direction === 'send' ? '→' : '←'
     const dirLabel = direction === 'send' ? 'SEND' : 'RECV'
@@ -112,7 +113,7 @@ export class TuffTransportLogger {
 
     console.debug(
       `${prefix} ${COLORS.cyan}${arrow} ${dirLabel}${COLORS.reset} ${eventName}`,
-      data !== undefined ? data : ''
+      data !== undefined ? data : '',
     )
   }
 
@@ -120,7 +121,8 @@ export class TuffTransportLogger {
    * Log IPC invoke
    */
   invoke(channel: string, payload?: unknown): void {
-    if (!this.shouldLog(LogLevel.DEBUG)) return
+    if (!this.shouldLog(LogLevel.DEBUG))
+      return
 
     const prefix = this.buildPrefix()
     console.debug(`${prefix} ${COLORS.cyan}⚡ INVOKE${COLORS.reset} ${channel}`, payload ?? '')
@@ -130,12 +132,14 @@ export class TuffTransportLogger {
    * Log IPC response
    */
   response(channel: string, result?: unknown, error?: unknown): void {
-    if (!this.shouldLog(LogLevel.DEBUG)) return
+    if (!this.shouldLog(LogLevel.DEBUG))
+      return
 
     const prefix = this.buildPrefix()
     if (error) {
       console.debug(`${prefix} ${COLORS.red}✗ RESPONSE${COLORS.reset} ${channel}`, error)
-    } else {
+    }
+    else {
       console.debug(`${prefix} ${COLORS.green}✓ RESPONSE${COLORS.reset} ${channel}`, result ?? '')
     }
   }
@@ -147,7 +151,7 @@ export class TuffTransportLogger {
     return new TuffTransportLogger(this.module, {
       subModule: this.subModule ? `${this.subModule}:${subModule}` : subModule,
       enabled: this.enabled,
-      level: this.level
+      level: this.level,
     })
   }
 
@@ -174,7 +178,8 @@ export class TuffTransportLogger {
    * Core log method
    */
   private log(level: LogLevel, message: string, args: unknown[]): void {
-    if (!this.shouldLog(level)) return
+    if (!this.shouldLog(level))
+      return
 
     const prefix = this.buildPrefix()
     const levelColors: Record<LogLevel, string> = {
@@ -182,7 +187,7 @@ export class TuffTransportLogger {
       [LogLevel.INFO]: COLORS.green,
       [LogLevel.WARN]: COLORS.yellow,
       [LogLevel.ERROR]: COLORS.red,
-      [LogLevel.NONE]: ''
+      [LogLevel.NONE]: '',
     }
     const color = levelColors[level] ?? ''
 
@@ -212,7 +217,7 @@ export class TuffTransportLogger {
  */
 export function createTransportLogger(
   module: string,
-  options?: { subModule?: string; enabled?: boolean; level?: LogLevel }
+  options?: { subModule?: string, enabled?: boolean, level?: LogLevel },
 ): TuffTransportLogger {
   return new TuffTransportLogger(module, options)
 }
@@ -225,5 +230,5 @@ export const transportLoggers = {
   coreBox: new TuffTransportLogger('CoreBox'),
   plugin: new TuffTransportLogger('Plugin'),
   storage: new TuffTransportLogger('Storage'),
-  divisionBox: new TuffTransportLogger('DivisionBox')
+  divisionBox: new TuffTransportLogger('DivisionBox'),
 }

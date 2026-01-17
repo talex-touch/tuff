@@ -1,5 +1,5 @@
-import { BridgeEventForCoreBox } from '../enum/bridge-event'
 import { ensureRendererChannel } from '../channel'
+import { BridgeEventForCoreBox } from '../enum/bridge-event'
 
 export type BridgeEvent = BridgeEventForCoreBox
 
@@ -46,7 +46,8 @@ function invokeHook<T>(hook: BridgeHook<T>, data: T, fromCache: boolean, timesta
 }
 
 function registerEarlyListener(type: BridgeEvent): void {
-  if (__channelRegistered.has(type)) return
+  if (__channelRegistered.has(type)) 
+return
 
   try {
     const channel = ensureRendererChannel()
@@ -58,7 +59,8 @@ function registerEarlyListener(type: BridgeEvent): void {
         hooks.forEach(h => invokeHook(h, data, false, timestamp))
       }
       else {
-        if (!__eventCache.has(type)) __eventCache.set(type, [])
+        if (!__eventCache.has(type)) 
+__eventCache.set(type, [])
         const cache = __eventCache.get(type)!
         const maxSize = CACHE_MAX_SIZE[type] ?? 1
         cache.push({ data, timestamp })
@@ -90,7 +92,9 @@ export function clearBridgeEventCache(type?: BridgeEvent): void {
   }, 0)
 })()
 
-/** @internal Injects a hook for a given bridge event with cache replay. */
+/**
+ * @internal
+ */
 export function injectBridgeEvent<T>(type: BridgeEvent, hook: BridgeHook<T>) {
   const hooks: Array<BridgeHook<T>> = __hooks[type] || (__hooks[type] = [])
 

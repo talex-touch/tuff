@@ -7,14 +7,13 @@ import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 const props = defineProps({
   release: {
     type: Object,
-    required: true,
-  },
+    required: true
+  }
 })
 
+const emit = defineEmits(['updateNow', 'skipVersion', 'remindLater'])
 const close = inject<() => void>('destroy')
 const { t } = useI18n()
-const emit = defineEmits(['updateNow', 'skipVersion', 'remindLater'])
-
 /**
  * 打开更新页面的外部链接
  *
@@ -45,13 +44,10 @@ function handleRemindLater(): void {
  * 将 ISO 8601 格式的时间字符串转换为本地化的日期时间格式
  */
 const publishedAt = computed<string>(() => {
-  if (!props.release?.published_at)
-    return ''
+  if (!props.release?.published_at) return ''
 
   const date = new Date(props.release.published_at)
-  return Number.isNaN(date.getTime())
-    ? props.release.published_at
-    : date.toLocaleString()
+  return Number.isNaN(date.getTime()) ? props.release.published_at : date.toLocaleString()
 })
 </script>
 

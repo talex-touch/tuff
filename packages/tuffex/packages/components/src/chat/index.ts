@@ -1,8 +1,3 @@
-import TxChatList from './src/TxChatList.vue'
-import TxChatMessage from './src/TxChatMessage.vue'
-import TxChatComposer from './src/TxChatComposer.vue'
-import TxTypingIndicator from './src/TxTypingIndicator.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type {
   ChatComposerEmits,
   ChatComposerProps,
@@ -12,6 +7,11 @@ import type {
   ChatMessageProps,
   TypingIndicatorProps,
 } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxChatComposer from './src/TxChatComposer.vue'
+import TxChatList from './src/TxChatList.vue'
+import TxChatMessage from './src/TxChatMessage.vue'
+import TxTypingIndicator from './src/TxTypingIndicator.vue'
 
 const ChatList = withInstall(TxChatList)
 const ChatMessage = withInstall(TxChatMessage)
@@ -19,22 +19,22 @@ const ChatComposer = withInstall(TxChatComposer)
 const TypingIndicator = withInstall(TxTypingIndicator)
 
 export {
-  ChatList,
-  TxChatList,
-  ChatMessage,
-  TxChatMessage,
   ChatComposer,
+  ChatList,
+  ChatMessage,
   TxChatComposer,
-  TypingIndicator,
+  TxChatList,
+  TxChatMessage,
   TxTypingIndicator,
+  TypingIndicator,
 }
 export type {
+  ChatComposerEmits,
+  ChatComposerProps,
   ChatListProps,
-  ChatMessageProps,
   ChatMessageEmits,
   ChatMessageModel,
-  ChatComposerProps,
-  ChatComposerEmits,
+  ChatMessageProps,
   TypingIndicatorProps,
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { ref } from 'vue'
 
 /**
  * Test widget that demonstrates API injection

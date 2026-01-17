@@ -3,30 +3,50 @@
     <div class="demo__scroll" aria-label="scrollable content">
       <div class="demo__hero" />
       <div class="demo__text">
-        <div class="demo__h">Scrollable content</div>
-        <div class="demo__p">This panel contains text and image-like blocks. Scroll to see blur/glass react.</div>
-        <div class="demo__p">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer at urna vitae metus ultricies placerat.</div>
-        <div class="demo__p">Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.</div>
-        <div class="demo__p">Curabitur laoreet, mi sed luctus luctus, arcu leo commodo ligula, eget commodo augue nisi sit amet risus.</div>
-        <div class="demo__p">Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae.</div>
-        <div class="demo__p">Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt.</div>
+        <div class="demo__h">
+          Scrollable content
+        </div>
+        <div class="demo__p">
+          This panel contains text and image-like blocks. Scroll to see blur/glass react.
+        </div>
+        <div class="demo__p">
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer at urna vitae metus ultricies placerat.
+        </div>
+        <div class="demo__p">
+          Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.
+        </div>
+        <div class="demo__p">
+          Curabitur laoreet, mi sed luctus luctus, arcu leo commodo ligula, eget commodo augue nisi sit amet risus.
+        </div>
+        <div class="demo__p">
+          Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae.
+        </div>
+        <div class="demo__p">
+          Donec vitae sapien ut libero venenatis faucibus. Nullam quis ante. Etiam sit amet orci eget eros faucibus tincidunt.
+        </div>
       </div>
     </div>
 
     <div class="demo__overlay">
       <div class="demo__grid">
         <div class="demo__item">
-          <div class="demo__title">maskBackground="mask"</div>
+          <div class="demo__title">
+            maskBackground="mask"
+          </div>
           <TxProgressBar :percentage="68" height="12px" show-text mask-background="mask" />
         </div>
 
         <div class="demo__item">
-          <div class="demo__title">maskBackground="blur"</div>
+          <div class="demo__title">
+            maskBackground="blur"
+          </div>
           <TxProgressBar :percentage="68" height="12px" show-text mask-background="blur" />
         </div>
 
         <div class="demo__item">
-          <div class="demo__title">maskBackground="glass"</div>
+          <div class="demo__title">
+            maskBackground="glass"
+          </div>
           <TxProgressBar :percentage="68" height="12px" show-text mask-background="glass" />
         </div>
       </div>

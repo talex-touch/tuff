@@ -30,7 +30,10 @@ export interface UnitConversionResult {
 // Build alias lookup map
 const aliasMap = new Map<string, { category: UnitCategory; unit: string }>()
 
-for (const [category, def] of Object.entries(unitRegistry) as [UnitCategory, CategoryDefinition][]) {
+for (const [category, def] of Object.entries(unitRegistry) as [
+  UnitCategory,
+  CategoryDefinition
+][]) {
   for (const [unit, unitDef] of Object.entries(def.units)) {
     // Add the unit itself
     aliasMap.set(unit.toLowerCase(), { category, unit })
@@ -52,7 +55,7 @@ function evaluateFormula(formula: string, x: number): number {
   // Handles: x, +, -, *, /, (, )
   const expr = formula.replace(/x/g, x.toString())
   // Using Function constructor for simple math (safe since formulas are from our JSON)
-  return Function(`"use strict"; return (${expr})`)()
+  return new Function(`"use strict"; return (${expr})`)()
 }
 
 function convertToBase(value: number, unitDef: UnitDefinition): number {
@@ -79,7 +82,7 @@ export function convertUnit(value: number, fromUnit: string, toUnit: string): Un
       fromValue: value,
       fromUnit,
       toUnit,
-      error: `Unknown unit: ${fromUnit}`,
+      error: `Unknown unit: ${fromUnit}`
     }
   }
 
@@ -89,7 +92,7 @@ export function convertUnit(value: number, fromUnit: string, toUnit: string): Un
       fromValue: value,
       fromUnit,
       toUnit,
-      error: `Unknown unit: ${toUnit}`,
+      error: `Unknown unit: ${toUnit}`
     }
   }
 
@@ -99,7 +102,7 @@ export function convertUnit(value: number, fromUnit: string, toUnit: string): Un
       fromValue: value,
       fromUnit,
       toUnit,
-      error: `Cannot convert between ${from.category} and ${to.category}`,
+      error: `Cannot convert between ${from.category} and ${to.category}`
     }
   }
 
@@ -122,12 +125,13 @@ export function convertUnit(value: number, fromUnit: string, toUnit: string): Un
     fromUnit: from.unit,
     toUnit: to.unit,
     category: from.category,
-    formatted,
+    formatted
   }
 }
 
 // Pattern: "100 kg to lb" or "100kg=lb" or "100 千克 转 磅"
-const UNIT_CONVERSION_PATTERN = /^([\d.]+)\s*([a-zA-Z\u4e00-\u9fa5°℃℉\/]+)\s*(?:to|in|=|->|转|换算|换成)\s*([a-zA-Z\u4e00-\u9fa5°℃℉\/]+)$/i
+const UNIT_CONVERSION_PATTERN =
+  /^([\d.]+)\s*([a-z\u4E00-\u9FA5°℃℉/]+)\s*(?:to|in|=|->|转|换算|换成)\s*([a-z\u4E00-\u9FA5°℃℉/]+)$/i
 
 export function parseUnitConversion(query: string): UnitConversionResult | null {
   const match = query.trim().match(UNIT_CONVERSION_PATTERN)
@@ -136,7 +140,7 @@ export function parseUnitConversion(query: string): UnitConversionResult | null 
   }
 
   const [, valueStr, fromUnit, toUnit] = match
-  const value = parseFloat(valueStr)
+  const value = Number.parseFloat(valueStr)
 
   if (isNaN(value)) {
     return null

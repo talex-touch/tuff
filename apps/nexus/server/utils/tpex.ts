@@ -63,7 +63,7 @@ function readHeaderOctal(block: Buffer, start: number, length: number): number {
   const raw = readHeaderString(block, start, length)
   if (!raw.length)
     return 0
-  const value = parseInt(raw, 8)
+  const value = Number.parseInt(raw, 8)
   return Number.isFinite(value) ? value : 0
 }
 
@@ -84,7 +84,7 @@ export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtracted
   let manifestIconPath: string | undefined
 
   // First pass: find manifest to get icon path
-  for (let offset = 0; offset + TAR_BLOCK_SIZE <= buffer.length; ) {
+  for (let offset = 0; offset + TAR_BLOCK_SIZE <= buffer.length;) {
     const header = buffer.subarray(offset, offset + TAR_BLOCK_SIZE)
     offset += TAR_BLOCK_SIZE
 
@@ -123,7 +123,7 @@ export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtracted
   }
 
   // Second pass: extract all files
-  for (let offset = 0; offset + TAR_BLOCK_SIZE <= buffer.length; ) {
+  for (let offset = 0; offset + TAR_BLOCK_SIZE <= buffer.length;) {
     const header = buffer.subarray(offset, offset + TAR_BLOCK_SIZE)
     offset += TAR_BLOCK_SIZE
 

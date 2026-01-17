@@ -14,7 +14,7 @@ export default defineComponent({
   name: 'TTabs',
   props: {
     default: String,
-    offset: [String, Number],
+    offset: [String, Number]
   },
 
   render() {
@@ -25,12 +25,10 @@ export default defineComponent({
     const fixPointer = async (vnode: any): Promise<void> => {
       const pointerEl = pointer.el
       const nodeEl = vnode.el
-      if (!pointerEl || !nodeEl)
-        return
+      if (!pointerEl || !nodeEl) return
 
       const parentEl = (pointerEl as HTMLElement).offsetParent as HTMLElement | null
-      if (!parentEl)
-        return
+      if (!parentEl) return
 
       const parentRect = parentEl.getBoundingClientRect()
       const nodeRect = nodeEl.getBoundingClientRect()
@@ -54,8 +52,7 @@ export default defineComponent({
         active: () => activeNode.value?.props.name === vnode.props.name,
         ...vnode.props,
         onClick: () => {
-          if ('disabled' in vnode.props)
-            return
+          if ('disabled' in vnode.props) return
 
           const el = slotWrapper.value?.el
           if (el) {
@@ -67,7 +64,7 @@ export default defineComponent({
 
             classList.add('zoomInUp')
           }
-        },
+        }
       })
 
       const isActivation = !!(tab.props && 'activation' in tab.props)
@@ -90,40 +87,38 @@ export default defineComponent({
         this.$slots
           .default?.()
           ?.filter(
-            slot =>
-              slot.type
-              && typeof slot.type === 'object'
-              && 'name' in slot.type
-              && slot.type.name
-              && qualifiedName.includes(slot.type.name as string),
+            (slot) =>
+              slot.type &&
+              typeof slot.type === 'object' &&
+              'name' in slot.type &&
+              slot.type.name &&
+              qualifiedName.includes(slot.type.name as string)
           )
           ?.map((child) => {
             if (
-              child.type
-              && typeof child.type === 'object'
-              && 'name' in child.type
-              && child.type.name === 'TTabHeader'
+              child.type &&
+              typeof child.type === 'object' &&
+              'name' in child.type &&
+              child.type.name === 'TTabHeader'
             ) {
               tabHeader = child
               return null
-            }
-            else if (
-              child.type
-              && typeof child.type === 'object'
-              && 'name' in child.type
-              && child.type.name === 'TTabItemGroup'
+            } else if (
+              child.type &&
+              typeof child.type === 'object' &&
+              'name' in child.type &&
+              child.type.name === 'TTabItemGroup'
             ) {
               return h('div', { class: 'TTabs-TabGroup' }, [
                 h('div', { class: 'TTabs-TabGroup-Name' }, child.props?.name),
-                child.children
-                && typeof child.children === 'object'
-                && 'default' in child.children
-                && typeof child.children.default === 'function'
+                child.children &&
+                typeof child.children === 'object' &&
+                'default' in child.children &&
+                typeof child.children.default === 'function'
                   ? child.children.default?.()?.map(createTab)
-                  : [],
+                  : []
               ])
-            }
-            else {
+            } else {
               return createTab(child)
             }
           })
@@ -135,7 +130,9 @@ export default defineComponent({
       await nextTick()
       if (!activeNode.value) {
         const nodes = this.$slots.default?.() ?? []
-        const first = nodes.find((n: any) => n?.props?.name && qualifiedName.includes(n?.type?.name))
+        const first = nodes.find(
+          (n: any) => n?.props?.name && qualifiedName.includes(n?.type?.name)
+        )
         if (first) activeNode.value = first
       }
 
@@ -148,8 +145,9 @@ export default defineComponent({
       const parentEl = pointerEl?.offsetParent as HTMLElement | null | undefined
       if (!pointerEl || !parentEl) return
 
-      const activeEl = parentEl.querySelector<HTMLElement>('.TTabItem-Container.active')
-        ?? parentEl.querySelector<HTMLElement>('.TTabItem-Container')
+      const activeEl =
+        parentEl.querySelector<HTMLElement>('.TTabItem-Container.active') ??
+        parentEl.querySelector<HTMLElement>('.TTabItem-Container')
       if (!activeEl) return
 
       await fixPointer({ el: activeEl })
@@ -163,34 +161,34 @@ export default defineComponent({
       const contentWrapper = h(
         'div',
         { class: 'TTabs-ContentWrapper' },
-        activeNode.value.children?.default?.(),
+        activeNode.value.children?.default?.()
       )
 
       const scrollableContent = h(
         TouchScroll,
         {
-          noPadding: true,
+          noPadding: true
         },
         {
-          default: () => contentWrapper,
-        },
+          default: () => contentWrapper
+        }
       )
 
       if (tabHeader) {
         return [
           h(
             TTabHeader,
-            tabHeader.children
-            && typeof tabHeader.children === 'object'
-            && 'default' in tabHeader.children
-            && typeof tabHeader.children.default === 'function'
+            tabHeader.children &&
+              typeof tabHeader.children === 'object' &&
+              'default' in tabHeader.children &&
+              typeof tabHeader.children.default === 'function'
               ? tabHeader.children.default?.({
                   ...tabHeader.props,
-                  node: activeNode.value,
+                  node: activeNode.value
                 })
-              : {},
+              : {}
           ),
-          scrollableContent,
+          scrollableContent
         ]
       }
 
@@ -200,7 +198,11 @@ export default defineComponent({
     const selectSlot = h('div', { class: 'TTabs-SelectSlot animated' }, renderContent())
     slotWrapper.value = selectSlot
 
-    const header = h('div', { ref: (el: any) => (headerWrapper.value = el), class: 'TTabs-Header' }, [this.$slots?.tabHeader?.(), ...renderTabs()])
+    const header = h(
+      'div',
+      { ref: (el: any) => (headerWrapper.value = el), class: 'TTabs-Header' },
+      [this.$slots?.tabHeader?.(), ...renderTabs()]
+    )
 
     ensureDefault()
 
@@ -209,13 +211,13 @@ export default defineComponent({
       h(
         'div',
         {
-          class: `TTabs-Main${tabHeader ? ' header-mode' : ''}`,
+          class: `TTabs-Main${tabHeader ? ' header-mode' : ''}`
         },
-        selectSlot,
+        selectSlot
       ),
-      pointer,
+      pointer
     ])
-  },
+  }
 })
 </script>
 
@@ -269,7 +271,10 @@ export default defineComponent({
   width: 3px;
 
   opacity: 0;
-  transition: top 0.22s cubic-bezier(0.2, 0.9, 0.2, 1), height 0.22s cubic-bezier(0.2, 0.9, 0.2, 1), opacity 0.18s ease;
+  transition:
+    top 0.22s cubic-bezier(0.2, 0.9, 0.2, 1),
+    height 0.22s cubic-bezier(0.2, 0.9, 0.2, 1),
+    opacity 0.18s ease;
   border-radius: 50px;
   background-color: var(--el-color-primary);
 }

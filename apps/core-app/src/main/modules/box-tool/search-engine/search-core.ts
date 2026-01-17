@@ -30,8 +30,8 @@ import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter
 import { getSentryService } from '../../sentry'
 import { storageModule } from '../../storage'
 import { appProvider } from '../addon/apps/app-provider'
-import { fileProvider } from '../addon/files/file-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
+import { fileProvider } from '../addon/files/file-provider'
 import { previewProvider } from '../addon/preview'
 import { systemProvider } from '../addon/system/system-provider'
 import { urlProvider } from '../addon/url/url-provider'
@@ -55,12 +55,20 @@ const searchEngineLog = createLogger('SearchEngineCore')
  * Provider filter aliases for @xxx syntax
  */
 const PROVIDER_ALIASES: Record<string, string[]> = {
-  file: ['file-provider', 'file-index', 'files', 'fs', 'document', 'everything-provider', 'everything'],
+  file: [
+    'file-provider',
+    'file-index',
+    'files',
+    'fs',
+    'document',
+    'everything-provider',
+    'everything'
+  ],
   app: ['app-provider', 'applications', 'apps'],
   plugin: ['plugin-features', 'plugins', 'extension', 'extensions'],
   system: ['system-provider', 'sys'],
   url: ['url-provider', 'link', 'links'],
-  preview: ['preview-provider'],
+  preview: ['preview-provider']
 }
 
 const PROVIDER_CATEGORY_MAP: Record<string, string> = {
@@ -70,22 +78,16 @@ const PROVIDER_CATEGORY_MAP: Record<string, string> = {
   'plugin-features': 'plugin',
   'system-provider': 'system',
   'preview-provider': 'preview',
-  'url-provider': 'url',
+  'url-provider': 'url'
 }
 
 function resolveProviderCategory(providerId: string): string {
-  if (PROVIDER_CATEGORY_MAP[providerId])
-    return PROVIDER_CATEGORY_MAP[providerId]
-  if (providerId.includes('file'))
-    return 'file'
-  if (providerId.includes('app'))
-    return 'app'
-  if (providerId.includes('plugin'))
-    return 'plugin'
-  if (providerId.includes('system'))
-    return 'system'
-  if (providerId.includes('url'))
-    return 'url'
+  if (PROVIDER_CATEGORY_MAP[providerId]) return PROVIDER_CATEGORY_MAP[providerId]
+  if (providerId.includes('file')) return 'file'
+  if (providerId.includes('app')) return 'app'
+  if (providerId.includes('plugin')) return 'plugin'
+  if (providerId.includes('system')) return 'system'
+  if (providerId.includes('url')) return 'url'
   return 'other'
 }
 
@@ -103,7 +105,7 @@ interface ParsedSearchQuery {
  */
 function parseProviderFilter(input: string): ParsedSearchQuery {
   if (!input) return { raw: input, text: input }
-  
+
   const filterMatch = input.match(/^@([\w-]+)\s*(.*)$/)
   if (filterMatch) {
     return {
@@ -112,7 +114,7 @@ function parseProviderFilter(input: string): ParsedSearchQuery {
       text: filterMatch[2].trim()
     }
   }
-  
+
   return { raw: input, text: input }
 }
 
@@ -122,17 +124,17 @@ function parseProviderFilter(input: string): ParsedSearchQuery {
 function matchesProviderFilter(providerId: string, filter: string): boolean {
   const normalizedId = providerId.toLowerCase()
   const normalizedFilter = filter.toLowerCase()
-  
+
   // Exact match
   if (normalizedId === normalizedFilter) return true
-  
+
   // Partial match
   if (normalizedId.includes(normalizedFilter)) return true
-  
+
   // Alias match
   const aliases = PROVIDER_ALIASES[normalizedFilter]
-  if (aliases?.some(alias => normalizedId.includes(alias))) return true
-  
+  if (aliases?.some((alias) => normalizedId.includes(alias))) return true
+
   return false
 }
 
@@ -191,14 +193,14 @@ export class SearchEngineCore
     this.registerProvider(appProvider)
     //  this.registerProvider(new ClipboardProvider())
     // TODO refractory - this provider costs a lot of time
-    
+
     // Windows: Use Everything for fast file search, fallback to file-provider for indexing
     // macOS/Linux: Use file-provider with full indexing
     if (process.platform === 'win32') {
       this.registerProvider(everythingProvider)
     }
     this.registerProvider(fileProvider)
-    
+
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(systemProvider)
     this.registerProvider(previewProvider)
@@ -401,7 +403,6 @@ export class SearchEngineCore
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
-
     // Normalize query text: trim leading/trailing whitespace
     if (query.text) {
       query.text = query.text.trim()
@@ -410,7 +411,7 @@ export class SearchEngineCore
     // Parse @xxx provider filter syntax
     const parsedQuery = parseProviderFilter(query.text || '')
     const providerFilter = parsedQuery.providerFilter
-    
+
     // Update query.text with the filtered text (without the @xxx prefix)
     if (providerFilter) {
       query.text = parsedQuery.text
@@ -421,8 +422,7 @@ export class SearchEngineCore
     this.searchSessionStartTimes.set(sessionId, Date.now())
     if (this.searchSessionStartTimes.size > 200) {
       const oldest = this.searchSessionStartTimes.keys().next().value
-      if (oldest)
-        this.searchSessionStartTimes.delete(oldest)
+      if (oldest) this.searchSessionStartTimes.delete(oldest)
     }
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
@@ -512,13 +512,13 @@ export class SearchEngineCore
         const timings = {
           usageStatsDuration: 0,
           pinnedDuration: 0,
-          completionDuration: 0,
+          completionDuration: 0
         }
 
         const usageStatsStartedAt = performance.now()
         const usageStatsContext = enterPerfContext('Search.usageStats', {
           sessionId,
-          itemCount: items.length,
+          itemCount: items.length
         })
         const usageStatsPromise = this._injectUsageStats(items).finally(() => {
           timings.usageStatsDuration = performance.now() - usageStatsStartedAt
@@ -528,7 +528,7 @@ export class SearchEngineCore
         const pinnedStartedAt = performance.now()
         const pinnedContext = enterPerfContext('Search.pinned', {
           sessionId,
-          itemCount: items.length,
+          itemCount: items.length
         })
         const pinnedPromise = this._injectPinnedState(items).finally(() => {
           timings.pinnedDuration = performance.now() - pinnedStartedAt
@@ -540,7 +540,7 @@ export class SearchEngineCore
           const completionStartedAt = performance.now()
           const completionContext = enterPerfContext('Search.completion', {
             sessionId,
-            queryLength: (query.text || '').length,
+            queryLength: (query.text || '').length
           })
           completionPromise = this.queryCompletionService
             .injectCompletionWeights(query.text || '', items)
@@ -630,15 +630,15 @@ export class SearchEngineCore
       // @xxx provider filter: filter providers based on @xxx syntax
       if (providerFilter) {
         const beforeCount = providersToSearch.length
-        providersToSearch = providersToSearch.filter((provider) => 
+        providersToSearch = providersToSearch.filter((provider) =>
           matchesProviderFilter(provider.id, providerFilter)
         )
-        
+
         searchLogger.logSearchPhase(
           '@Provider Filter',
           `Filter: @${providerFilter}, matched ${providersToSearch.length}/${beforeCount} providers: ${providersToSearch.map((p) => p.id).join(', ') || 'none'}`
         )
-        
+
         // If no providers match the filter, log a warning but continue with empty results
         if (providersToSearch.length === 0) {
           searchEngineLog.warn(`No providers match filter @${providerFilter}`)
@@ -670,16 +670,21 @@ export class SearchEngineCore
                 isFirstUpdate = false
                 const initialItems = update.newResults.flatMap((res) => res.items)
 
-                const { usageStatsDuration, completionDuration } = await measurePreSort(initialItems)
+                const { usageStatsDuration, completionDuration } =
+                  await measurePreSort(initialItems)
 
                 const sortingContext = enterPerfContext('Search.sort', {
                   sessionId,
-                  itemCount: initialItems.length,
+                  itemCount: initialItems.length
                 })
                 sortingStartTime.value = performance.now()
                 let sortedItems: TuffItem[] = []
                 try {
-                  ({ sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal))
+                  ;({ sortedItems } = this.sorter.sort(
+                    initialItems,
+                    query,
+                    gatherController!.signal
+                  ))
                 } finally {
                   sortingContext()
                 }
@@ -744,11 +749,16 @@ export class SearchEngineCore
             const coreBoxWindow = windowManager.current?.window
             if (coreBoxWindow) {
               const finalActivationState = this.getActivationState() ?? undefined
-              this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
-                searchId: sessionId,
-                activate: finalActivationState,
-                sources: update.sourceStats
-              })
+              this.touchApp!.channel.sendTo(
+                coreBoxWindow,
+                ChannelType.MAIN,
+                'core-box:search-end',
+                {
+                  searchId: sessionId,
+                  activate: finalActivationState,
+                  sources: update.sourceStats
+                }
+              )
             }
             searchLogger.logSearchPhase(
               'Search End',
@@ -765,12 +775,12 @@ export class SearchEngineCore
 
             const sortingContext = enterPerfContext('Search.sort', {
               sessionId,
-              itemCount: initialItems.length,
+              itemCount: initialItems.length
             })
             sortingStartTime.value = performance.now()
             let sortedItems: TuffItem[] = []
             try {
-              ({ sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal))
+              ;({ sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal))
             } finally {
               sortingContext()
             }
@@ -830,25 +840,29 @@ export class SearchEngineCore
             // 批量获取使用统计并注入到 items 中
             const usageStatsContext = enterPerfContext('Search.usageStats', {
               sessionId,
-              itemCount: subsequentItems.length,
+              itemCount: subsequentItems.length
             })
             await this._injectUsageStats(subsequentItems)
             usageStatsContext()
 
             const pinnedContext = enterPerfContext('Search.pinned', {
               sessionId,
-              itemCount: subsequentItems.length,
+              itemCount: subsequentItems.length
             })
             await this._injectPinnedState(subsequentItems)
             pinnedContext()
 
             const sortingContext = enterPerfContext('Search.sort', {
               sessionId,
-              itemCount: subsequentItems.length,
+              itemCount: subsequentItems.length
             })
             let sortedItems: TuffItem[] = []
             try {
-              ({ sortedItems } = this.sorter.sort(subsequentItems, query, gatherController!.signal))
+              ;({ sortedItems } = this.sorter.sort(
+                subsequentItems,
+                query,
+                gatherController!.signal
+              ))
             } finally {
               sortingContext()
             }
@@ -897,7 +911,6 @@ export class SearchEngineCore
   private async _injectUsageStats(items: TuffItem[]): Promise<void> {
     if (!this.dbUtils || items.length === 0) return
 
-
     const start = performance.now()
 
     try {
@@ -931,7 +944,6 @@ export class SearchEngineCore
           injectedCount++
         }
       }
-
 
       if (searchLogger.isEnabled()) {
         const duration = performance.now() - start
@@ -1087,7 +1099,9 @@ export class SearchEngineCore
 
       const queryLength = (query.text || '').length
       const queryType = query.type || 'text'
-      const hasFilters = Boolean(query.filters?.kinds?.length || query.filters?.sources?.length || query.filters?.date_range)
+      const hasFilters = Boolean(
+        query.filters?.kinds?.length || query.filters?.sources?.length || query.filters?.date_range
+      )
       const filterKinds = query.filters?.kinds?.length ? query.filters.kinds : undefined
       const filterSources = query.filters?.sources?.length ? query.filters.sources : undefined
       const searchScene = inputTypes.includes('files')
@@ -1099,11 +1113,14 @@ export class SearchEngineCore
             : queryType === 'voice'
               ? 'voice'
               : 'text'
-      const resultCategories = Object.entries(providerResults).reduce<Record<string, number>>((acc, [providerId, count]) => {
-        const category = resolveProviderCategory(providerId)
-        acc[category] = (acc[category] ?? 0) + count
-        return acc
-      }, {})
+      const resultCategories = Object.entries(providerResults).reduce<Record<string, number>>(
+        (acc, [providerId, count]) => {
+          const category = resolveProviderCategory(providerId)
+          acc[category] = (acc[category] ?? 0) + count
+          return acc
+        },
+        {}
+      )
 
       if (sentryService.isEnabled()) {
         sentryService.recordSearchMetrics({
@@ -1140,8 +1157,8 @@ export class SearchEngineCore
             filterSources,
             providerResults,
             resultCategories,
-            providerFilter: providerFilter || undefined,
-          },
+            providerFilter: providerFilter || undefined
+          }
         })
       } catch {}
     } catch (error) {
@@ -1224,7 +1241,7 @@ export class SearchEngineCore
         sourceId: item.source.id,
         sourceName: item.source.name,
         sourceVersion: item.source.version,
-        itemKind: item.kind,
+        itemKind: item.kind
       }
 
       if (startedAt) {
@@ -1233,10 +1250,8 @@ export class SearchEngineCore
 
       const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : undefined
       const featureId = typeof meta?.featureId === 'string' ? meta.featureId : undefined
-      if (pluginName)
-        metadata.pluginName = pluginName
-      if (featureId)
-        metadata.featureId = featureId
+      if (pluginName) metadata.pluginName = pluginName
+      if (featureId) metadata.featureId = featureId
 
       if (!anonymous) {
         const entity = this.resolveTelemetryEntity(item, meta)
@@ -1248,7 +1263,7 @@ export class SearchEngineCore
 
       sentryService.queueNexusTelemetry({
         eventType: 'feature_use',
-        metadata,
+        metadata
       })
     } catch {
       // ignore telemetry errors
@@ -1257,17 +1272,15 @@ export class SearchEngineCore
 
   private resolveTelemetryEntity(
     item: TuffItem,
-    meta?: Record<string, unknown>,
-  ): { type: string, id: string } | null {
+    meta?: Record<string, unknown>
+  ): { type: string; id: string } | null {
     if (item.kind === 'app') {
       const appMeta = meta?.app as { bundle_id?: string } | undefined
-      if (appMeta?.bundle_id)
-        return { type: 'app', id: appMeta.bundle_id }
+      if (appMeta?.bundle_id) return { type: 'app', id: appMeta.bundle_id }
     }
 
     const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : undefined
-    if (pluginName)
-      return { type: 'plugin', id: pluginName }
+    if (pluginName) return { type: 'plugin', id: pluginName }
 
     return null
   }

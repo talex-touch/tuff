@@ -1,14 +1,25 @@
 <script setup lang="ts" name="DivisionBoxHeader">
 import type { IUseSearch } from '~/modules/box/adapter/types'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { windowState } from '~/modules/hooks/core-box'
-import BoxInput from './BoxInput.vue'
 import ActivatedProviders from './ActivatedProviders.vue'
+import BoxInput from './BoxInput.vue'
+
+const props = withDefaults(defineProps<Props>(), {
+  showInput: true,
+  providers: () => []
+})
+
+const emit = defineEmits<
+  Emits & {
+    (e: 'deactivate-provider', id: string): void
+  }
+>()
 
 const isMac = process.platform === 'darwin'
 
@@ -24,13 +35,6 @@ interface Emits {
   (e: 'update:searchVal', value: string): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  showInput: true,
-  providers: () => []
-})
-const emit = defineEmits<Emits & {
-  (e: 'deactivate-provider', id: string): void
-}>()
 const { t } = useI18n()
 
 const transport = useTuffTransport()
@@ -64,7 +68,10 @@ async function handleOpacity(): Promise<void> {
   const sessionId = windowState.divisionBox?.sessionId
   if (!sessionId) return
   const nextOpacity = opacity.value >= 0.9 ? 0.8 : opacity.value >= 0.6 ? 0.5 : 1.0
-  const response = await transport.send(DivisionBoxEvents.setOpacity, { sessionId, opacity: nextOpacity })
+  const response = await transport.send(DivisionBoxEvents.setOpacity, {
+    sessionId,
+    opacity: nextOpacity
+  })
   if (response?.success && response.data) opacity.value = response.data.opacity
 }
 

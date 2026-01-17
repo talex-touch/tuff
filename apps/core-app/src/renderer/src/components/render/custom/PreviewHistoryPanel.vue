@@ -1,7 +1,7 @@
 <script setup lang="ts" name="PreviewHistoryPanel">
+import type { CalculationHistoryEntry } from '~/modules/box/adapter/hooks/usePreviewHistory'
 import dayjs from 'dayjs'
 import { computed, nextTick, ref, watch } from 'vue'
-import type { CalculationHistoryEntry } from '~/modules/box/adapter/hooks/usePreviewHistory'
 
 const props = withDefaults(
   defineProps<{
@@ -14,8 +14,8 @@ const props = withDefaults(
     visible: false,
     loading: false,
     items: () => [],
-    activeIndex: -1,
-  },
+    activeIndex: -1
+  }
 )
 
 const emit = defineEmits<{
@@ -25,35 +25,30 @@ const emit = defineEmits<{
 const listRef = ref<HTMLUListElement>()
 
 const formattedItems = computed(() =>
-  props.items.map(item => ({
+  props.items.map((item) => ({
     ...item,
     expression: item.meta?.expression ?? item.meta?.payload?.title ?? item.content,
     result: item.meta?.payload?.primaryValue ?? item.content,
     abilityId: item.meta?.abilityId,
-    time: item.timestamp ? dayjs(item.timestamp).format('HH:mm:ss') : '',
-  })),
+    time: item.timestamp ? dayjs(item.timestamp).format('HH:mm:ss') : ''
+  }))
 )
 
 watch(
   () => props.activeIndex,
   (index) => {
-    if (typeof index !== 'number' || index < 0)
-      return
+    if (typeof index !== 'number' || index < 0) return
     nextTick(() => {
       const list = listRef.value
       const el = list?.children[index] as HTMLElement | undefined
       el?.scrollIntoView({ block: 'nearest' })
     })
-  },
+  }
 )
 </script>
 
 <template>
-  <div
-    class="PreviewHistoryPanel"
-    :class="{ 'is-visible': visible }"
-    :aria-hidden="!visible"
-  >
+  <div class="PreviewHistoryPanel" :class="{ 'is-visible': visible }" :aria-hidden="!visible">
     <div class="panel">
       <header>
         <div class="title-row">
@@ -62,12 +57,8 @@ watch(
         </div>
       </header>
       <div class="panel-body">
-        <div v-if="loading" class="state">
-          加载中...
-        </div>
-        <div v-else-if="!items.length" class="state">
-          暂无记录
-        </div>
+        <div v-if="loading" class="state">加载中...</div>
+        <div v-else-if="!items.length" class="state">暂无记录</div>
         <ul v-else ref="listRef" class="history-list">
           <li
             v-for="(item, index) in formattedItems"
@@ -100,7 +91,9 @@ watch(
   height: 100%;
   overflow: hidden;
   border-left: 1px solid var(--el-border-color);
-  transition: width 0.3s ease, opacity 0.25s ease;
+  transition:
+    width 0.3s ease,
+    opacity 0.25s ease;
 
   &.is-visible {
     width: 280px;

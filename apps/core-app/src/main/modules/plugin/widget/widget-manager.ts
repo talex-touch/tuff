@@ -1,13 +1,14 @@
-import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
+import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
 import type { FSWatcher } from 'chokidar'
-import { ChannelType } from '@talex-touch/utils/channel'
-import { genTouchChannel } from '../../../core/channel-core'
-import chokidar from 'chokidar'
-import { WidgetRegistrationPayload, makeWidgetId } from '@talex-touch/utils/plugin/widget'
-import { pluginWidgetLoader } from './widget-loader'
-import { compileWidgetSource } from './widget-compiler'
 import type { WidgetCompilationContext } from './widget-processor'
+import { ChannelType } from '@talex-touch/utils/channel'
+import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
+import chokidar from 'chokidar'
+import { genTouchChannel } from '../../../core/channel-core'
+import { compileWidgetSource } from './widget-compiler'
+import { pluginWidgetLoader } from './widget-loader'
 
 type WidgetEvent = 'plugin:widget:register' | 'plugin:widget:update'
 
@@ -22,11 +23,10 @@ export class WidgetManager {
   async registerWidget(
     plugin: ITouchPlugin,
     feature: IPluginFeature,
-    options?: { emitAsUpdate?: boolean },
+    options?: { emitAsUpdate?: boolean }
   ): Promise<WidgetRegistrationPayload | null> {
     const source = await pluginWidgetLoader.loadWidget(plugin, feature)
-    if (!source)
-      return null
+    if (!source) return null
 
     const cached = this.cache.get(source.widgetId)
     if (cached && cached.hash === source.hash) {
@@ -39,16 +39,20 @@ export class WidgetManager {
     // Prepare compilation context
     const context: WidgetCompilationContext = {
       plugin,
-      feature,
+      feature
     }
 
     let compiled
     try {
       compiled = await compileWidgetSource(source, context)
-    }
-    catch (error) {
+    } catch (error) {
       plugin.logger.error('[WidgetManager] 编译 widget 失败：', error as Error)
-      this.pushIssue(plugin, feature, 'WIDGET_COMPILE_FAILED', `${(error as Error).message ?? 'unknown error'}`)
+      this.pushIssue(
+        plugin,
+        feature,
+        'WIDGET_COMPILE_FAILED',
+        `${(error as Error).message ?? 'unknown error'}`
+      )
       return null
     }
 
@@ -65,18 +69,22 @@ export class WidgetManager {
       hash: source.hash,
       code: compiled.code,
       styles: compiled.styles,
-      dependencies: compiled.dependencies || [],
+      dependencies: compiled.dependencies || []
     }
 
     try {
       await this.emitPayload(
         options?.emitAsUpdate ? 'plugin:widget:update' : 'plugin:widget:register',
-        payload,
+        payload
       )
-    }
-    catch (error) {
+    } catch (error) {
       plugin.logger.error('[WidgetManager] 发送 widget 注册事件失败：', error as Error)
-      this.pushIssue(plugin, feature, 'WIDGET_REGISTER_FAILED', `${(error as Error).message ?? 'send failed'}`)
+      this.pushIssue(
+        plugin,
+        feature,
+        'WIDGET_REGISTER_FAILED',
+        `${(error as Error).message ?? 'send failed'}`
+      )
       return null
     }
 
@@ -92,8 +100,7 @@ export class WidgetManager {
   async releasePlugin(pluginName: string): Promise<void> {
     const watcherKeys = Array.from(this.watchers.keys())
     for (const key of watcherKeys) {
-      if (!key.startsWith(`${pluginName}::`))
-        continue
+      if (!key.startsWith(`${pluginName}::`)) continue
       const watcher = this.watchers.get(key)
       if (watcher) {
         await watcher.close()
@@ -106,23 +113,30 @@ export class WidgetManager {
       return payload?.pluginName === pluginName
     })
 
-    await Promise.all(widgetIds.map(async (widgetId) => {
-      this.cache.delete(widgetId)
-      await this.unregisterWidget(widgetId)
-    }))
+    await Promise.all(
+      widgetIds.map(async (widgetId) => {
+        this.cache.delete(widgetId)
+        await this.unregisterWidget(widgetId)
+      })
+    )
   }
 
   private async emitPayload(event: WidgetEvent, payload: WidgetRegistrationPayload): Promise<void> {
     await this.channel.send(ChannelType.MAIN, event, payload)
   }
 
-  private pushIssue(plugin: ITouchPlugin, feature: IPluginFeature, code: string, message: string): void {
+  private pushIssue(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature,
+    code: string,
+    message: string
+  ): void {
     plugin.issues.push({
       type: 'error',
       code,
       message,
       source: `feature:${feature.id}`,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     })
   }
 
@@ -143,22 +157,20 @@ export class WidgetManager {
       persistent: true,
       awaitWriteFinish: {
         stabilityThreshold,
-        pollInterval,
-      },
+        pollInterval
+      }
     })
 
     // Log dev mode watching
     if (isDev) {
       plugin.logger.info(
-        `[WidgetManager] 🔥 Dev mode: watching widget "${feature.id}" at ${filePath}`,
+        `[WidgetManager] 🔥 Dev mode: watching widget "${feature.id}" at ${filePath}`
       )
     }
 
     watcher.on('change', () => {
       if (isDev) {
-        plugin.logger.info(
-          `[WidgetManager] ♻️  Widget "${feature.id}" changed, recompiling...`,
-        )
+        plugin.logger.info(`[WidgetManager] ♻️  Widget "${feature.id}" changed, recompiling...`)
       }
       void this.handleWidgetFileChange(plugin, feature)
     })
@@ -172,11 +184,17 @@ export class WidgetManager {
     this.watchers.set(watcherKey, watcher)
   }
 
-  private async handleWidgetFileChange(plugin: ITouchPlugin, feature: IPluginFeature): Promise<void> {
+  private async handleWidgetFileChange(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature
+  ): Promise<void> {
     await this.registerWidget(plugin, feature, { emitAsUpdate: true })
   }
 
-  private async handleWidgetFileRemoved(plugin: ITouchPlugin, feature: IPluginFeature): Promise<void> {
+  private async handleWidgetFileRemoved(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature
+  ): Promise<void> {
     const widgetId = makeWidgetId(plugin.name, feature.id)
     this.cache.delete(widgetId)
     await this.unregisterWidget(widgetId)

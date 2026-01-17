@@ -3,14 +3,14 @@
  * @module @talex-touch/utils/transport/events/types/file-index
  */
 
-export type FileIndexStage =
-  | 'idle'
-  | 'cleanup'
-  | 'scanning'
-  | 'indexing'
-  | 'reconciliation'
-  | 'completed'
-  | string
+export type FileIndexStage
+  = | 'idle'
+    | 'cleanup'
+    | 'scanning'
+    | 'indexing'
+    | 'reconciliation'
+    | 'completed'
+    | string
 
 export interface FileIndexProgress {
   stage: FileIndexStage

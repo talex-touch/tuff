@@ -20,16 +20,22 @@ function toggle() {
 <template>
   <div style="display: flex; flex-direction: column; gap: 12px;">
     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-    <TxButton @click="toggle">Toggle</TxButton>
+      <TxButton @click="toggle">
+        Toggle
+      </TxButton>
 
       <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
         <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">duration (ms)</div>
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            duration (ms)
+          </div>
           <TxSlider v-model="duration" :min="120" :max="720" :step="10" :show-value="true" />
         </div>
 
         <div style="width: 220px;">
-          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">blur (px)</div>
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            blur (px)
+          </div>
           <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
         </div>
       </div>
@@ -53,7 +59,9 @@ function toggle() {
             :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
           />
         </div>
-        <div style="font-size: 12px; opacity: 0.75; margin-top: 6px;">text: {{ text }}</div>
+        <div style="font-size: 12px; opacity: 0.75; margin-top: 6px;">
+          text: {{ text }}
+        </div>
       </TxCard>
     </TxAutoSizer>
   </div>

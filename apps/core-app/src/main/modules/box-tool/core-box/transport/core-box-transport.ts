@@ -1,6 +1,6 @@
 import type { ChannelType } from '@talex-touch/utils/channel'
+import type { TouchApp } from '../../../../core/touch-app'
 import { genTouchApp } from '../../../../core'
-import { TouchApp } from '../../../../core/touch-app'
 
 type Handler<TPayload> = (payload: TPayload) => void | TPayload
 

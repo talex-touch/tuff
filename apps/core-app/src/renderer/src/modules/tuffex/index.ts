@@ -39,8 +39,7 @@ export async function loadTuffexComponent(name: EnabledComponent) {
   try {
     const tuffex = await import('@talex-touch/tuffex')
     return tuffex[name] || null
-  }
-  catch (error) {
+  } catch (error) {
     console.warn(`[Tuffex] Failed to load component: ${name}`, error)
     return null
   }
@@ -63,15 +62,13 @@ export async function registerTuffexComponents(
       const component = tuffex[name]
       if (component && typeof component.install === 'function') {
         app.use(component)
-      }
-      else if (component) {
+      } else if (component) {
         app.component(name, component)
       }
     }
 
     console.debug(`[Tuffex] Registered ${components.length} components`)
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[Tuffex] Failed to register components:', error)
   }
 }
@@ -83,8 +80,7 @@ export async function isTuffexAvailable(): Promise<boolean> {
   try {
     await import('@talex-touch/tuffex')
     return true
-  }
-  catch {
+  } catch {
     return false
   }
 }

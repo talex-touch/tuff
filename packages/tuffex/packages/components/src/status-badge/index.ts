@@ -1,6 +1,6 @@
-import TxStatusBadge from './src/TxStatusBadge.vue'
+import type { StatusBadgeEmits, StatusBadgeProps, StatusKey, StatusTone, TxOsType } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
-import type { StatusBadgeProps, StatusBadgeEmits, StatusTone, StatusKey, TxOsType } from './src/types'
+import TxStatusBadge from './src/TxStatusBadge.vue'
 
 /**
  * TxStatusBadge component with Vue plugin installation support.
@@ -18,7 +18,7 @@ import type { StatusBadgeProps, StatusBadgeEmits, StatusTone, StatusKey, TxOsTyp
 const StatusBadge = withInstall(TxStatusBadge)
 
 export { StatusBadge, TxStatusBadge }
-export type { StatusBadgeProps, StatusBadgeEmits, StatusTone, StatusKey, TxOsType }
+export type { StatusBadgeEmits, StatusBadgeProps, StatusKey, StatusTone, TxOsType }
 export type TxStatusBadgeInstance = InstanceType<typeof TxStatusBadge>
 
 export default StatusBadge

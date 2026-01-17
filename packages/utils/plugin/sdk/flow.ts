@@ -6,12 +6,12 @@
  */
 
 import type {
-  FlowPayload,
   FlowDispatchOptions,
   FlowDispatchResult,
-  FlowTargetInfo,
+  FlowPayload,
+  FlowPayloadType,
   FlowSessionUpdate,
-  FlowPayloadType
+  FlowTargetInfo,
 } from '../../types/flow'
 import { hasWindow } from '../../env'
 import { createPluginTuffTransport } from '../../transport'
@@ -29,7 +29,7 @@ function resolveSdkApi(): number | undefined {
 export type FlowTransferHandler = (
   payload: FlowPayload,
   sessionId: string,
-  senderInfo: { senderId: string; senderName?: string }
+  senderInfo: { senderId: string, senderName?: string },
 ) => Promise<void> | void
 
 /**
@@ -58,7 +58,7 @@ export interface IFlowSDK {
    * )
    * ```
    */
-  dispatch(payload: FlowPayload, options?: FlowDispatchOptions): Promise<FlowDispatchResult>
+  dispatch: (payload: FlowPayload, options?: FlowDispatchOptions) => Promise<FlowDispatchResult>
 
   /**
    * Gets available flow targets
@@ -66,7 +66,7 @@ export interface IFlowSDK {
    * @param payloadType - Filter by payload type (optional)
    * @returns List of available targets
    */
-  getAvailableTargets(payloadType?: FlowPayloadType): Promise<FlowTargetInfo[]>
+  getAvailableTargets: (payloadType?: FlowPayloadType) => Promise<FlowTargetInfo[]>
 
   /**
    * Registers a handler for incoming flow transfers
@@ -84,7 +84,7 @@ export interface IFlowSDK {
    * })
    * ```
    */
-  onFlowTransfer(handler: FlowTransferHandler): () => void
+  onFlowTransfer: (handler: FlowTransferHandler) => () => void
 
   /**
    * Listens for session updates
@@ -93,17 +93,17 @@ export interface IFlowSDK {
    * @param handler - Update handler
    * @returns Unsubscribe function
    */
-  onSessionUpdate(
+  onSessionUpdate: (
     sessionId: string,
-    handler: (update: FlowSessionUpdate) => void
-  ): () => void
+    handler: (update: FlowSessionUpdate) => void,
+  ) => () => void
 
   /**
    * Cancels a flow session
    *
    * @param sessionId - Session to cancel
    */
-  cancel(sessionId: string): Promise<void>
+  cancel: (sessionId: string) => Promise<void>
 
   /**
    * Acknowledges a received flow (for target plugins)
@@ -111,7 +111,7 @@ export interface IFlowSDK {
    * @param sessionId - Session to acknowledge
    * @param ackPayload - Optional acknowledgment data
    */
-  acknowledge(sessionId: string, ackPayload?: any): Promise<void>
+  acknowledge: (sessionId: string, ackPayload?: any) => Promise<void>
 
   /**
    * Reports an error for a received flow (for target plugins)
@@ -119,7 +119,7 @@ export interface IFlowSDK {
    * @param sessionId - Session to report error for
    * @param message - Error message
    */
-  reportError(sessionId: string, message: string): Promise<void>
+  reportError: (sessionId: string, message: string) => Promise<void>
 
   /**
    * Uses native system share functionality
@@ -127,7 +127,7 @@ export interface IFlowSDK {
    * @param payload - Data to share
    * @param target - Optional preferred native target (system, airdrop, mail, messages)
    */
-  nativeShare(payload: FlowPayload, target?: string): Promise<{ success: boolean; target?: string; error?: string }>
+  nativeShare: (payload: FlowPayload, target?: string) => Promise<{ success: boolean, target?: string, error?: string }>
 }
 
 /**
@@ -139,7 +139,7 @@ export interface IFlowSDK {
  */
 export function createFlowSDK(
   channel: { send: (event: string, data?: any) => Promise<any> },
-  pluginId: string
+  pluginId: string,
 ): IFlowSDK {
   const sessionListeners = new Map<string, Set<(update: FlowSessionUpdate) => void>>()
   const flowTransferHandlers = new Set<FlowTransferHandler>()
@@ -155,7 +155,8 @@ export function createFlowSDK(
     for (const listener of listeners) {
       try {
         listener(update as any)
-      } catch (error) {
+      }
+      catch (error) {
         console.error('[FlowSDK] Error in session listener:', error)
       }
     }
@@ -166,7 +167,8 @@ export function createFlowSDK(
     for (const h of flowTransferHandlers) {
       try {
         h(flowPayload, sessionId, { senderId, senderName })
-      } catch (error) {
+      }
+      catch (error) {
         console.error('[FlowSDK] Error in flow transfer handler:', error)
       }
     }
@@ -179,8 +181,8 @@ export function createFlowSDK(
         ...payload,
         context: {
           ...payload.context,
-          sourcePluginId: payload.context?.sourcePluginId || pluginId
-        }
+          sourcePluginId: payload.context?.sourcePluginId || pluginId,
+        },
       }
 
       const response = await transport.send(FlowEvents.dispatch, {
@@ -216,7 +218,7 @@ export function createFlowSDK(
 
     onSessionUpdate(
       sessionId: string,
-      handler: (update: FlowSessionUpdate) => void
+      handler: (update: FlowSessionUpdate) => void,
     ): () => void {
       if (!sessionListeners.has(sessionId)) {
         sessionListeners.set(sessionId, new Set())
@@ -299,7 +301,7 @@ export function createFlowSDK(
       }
     },
 
-    async nativeShare(payload: FlowPayload, target?: string): Promise<{ success: boolean; target?: string; error?: string }> {
+    async nativeShare(payload: FlowPayload, target?: string): Promise<{ success: boolean, target?: string, error?: string }> {
       const response = await transport.send(FlowEvents.nativeShare, {
         payload,
         target,
@@ -307,7 +309,7 @@ export function createFlowSDK(
       })
 
       return response || { success: false, error: 'Native share failed' }
-    }
+    },
   }
 }
 
@@ -333,7 +335,7 @@ export function extractFlowData(query: any): {
     sessionId: query.flow.sessionId,
     payload: query.flow.payload,
     senderId: query.flow.senderId,
-    senderName: query.flow.senderName
+    senderName: query.flow.senderName,
   }
 }
 

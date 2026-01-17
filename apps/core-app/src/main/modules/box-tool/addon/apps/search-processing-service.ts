@@ -22,7 +22,7 @@ export async function processSearchResults(
   apps: (typeof filesSchema.$inferSelect & { extensions: Record<string, string | null> })[],
   query: TuffQuery,
   isFuzzySearch: boolean,
-  aliases: Record<string, string[]>, // 需要传入别名数据
+  aliases: Record<string, string[]> // 需要传入别名数据
 ): Promise<ProcessedTuffItem[]> {
   const processStart = startTiming()
   const lowerCaseQuery = query.text.toLowerCase()
@@ -55,13 +55,11 @@ export async function processSearchResults(
       source: string,
       rawHighlights: Range[] | null | undefined,
       newScore: number,
-      fallbackTitle: string,
+      fallbackTitle: string
     ): void => {
-      if (newScore <= score)
-        return
+      if (newScore <= score) return
       const resolvedHighlights = ensureHighlights(rawHighlights, fallbackTitle)
-      if (resolvedHighlights.length === 0)
-        return
+      if (resolvedHighlights.length === 0) return
       bestSource = source
       bestHighlights = resolvedHighlights
       score = newScore
@@ -107,13 +105,12 @@ export async function processSearchResults(
       }
     }
 
-    if (aliasList.some(alias => alias.toLowerCase().includes(lowerCaseQuery))) {
+    if (aliasList.some((alias) => alias.toLowerCase().includes(lowerCaseQuery))) {
       updateMatch('tag', calculateHighlights(displayName, lowerCaseQuery), 0.7, displayName)
     }
 
     for (const title of potentialTitles) {
-      if (!title)
-        continue
+      if (!title) continue
       const normalizedTitle = title.toLowerCase()
 
       // Check for exact substring match
@@ -143,8 +140,8 @@ export async function processSearchResults(
       if (acronym) {
         const normalizedAcronym = acronym.toLowerCase()
         if (
-          lowerCaseQuery.includes(normalizedAcronym)
-          || normalizedAcronym.includes(lowerCaseQuery)
+          lowerCaseQuery.includes(normalizedAcronym) ||
+          normalizedAcronym.includes(lowerCaseQuery)
         ) {
           updateMatch('initials', calculateHighlights(title, acronym), 0.8, title)
         }
@@ -158,8 +155,7 @@ export async function processSearchResults(
 
         if (fullPinyin.includes(lowerCaseQuery)) {
           updateMatch('name', calculateHighlights(title, lowerCaseQuery), 0.65, title)
-        }
-        else if (firstPinyin.includes(lowerCaseQuery)) {
+        } else if (firstPinyin.includes(lowerCaseQuery)) {
           updateMatch('initials', calculateHighlights(title, lowerCaseQuery), 0.6, title)
         }
       }
@@ -179,7 +175,7 @@ export async function processSearchResults(
       .setIcon({
         // 根据实际内容动态选择类型：base64 Data URI 用 'url'，文件路径用 'file'
         type: iconValue.startsWith('data:') ? 'url' : 'file',
-        value: iconValue,
+        value: iconValue
       })
       .setActions([
         {
@@ -188,25 +184,25 @@ export async function processSearchResults(
           label: 'Open',
           primary: true,
           payload: {
-            path: app.path,
-          },
-        },
+            path: app.path
+          }
+        }
       ])
       .setMeta({
         app: {
           path: app.path,
-          bundle_id: app.extensions.bundleId || '',
+          bundle_id: app.extensions.bundleId || ''
         },
         extension: {
           matchResult: bestHighlights,
           source: bestSource, // 添加来源信息
           keyWords: [...new Set([name, path.basename(app.path).split('.')[0] || ''])].filter(
-            Boolean,
-          ),
-        },
+            Boolean
+          )
+        }
       })
       .setScoring({
-        final: score,
+        final: score
       })
       .build()
 
@@ -225,25 +221,25 @@ export async function processSearchResults(
       durationMs,
       {
         message: `Slow post-processing: ${chalk.green(sortedResults.length)} / ${chalk.cyan(
-          apps.length,
+          apps.length
         )} items processed`,
         style: 'warning',
         unit: 's',
         precision: 2,
-        suffix: '',
+        suffix: ''
       },
       {
         logThresholds: { none: SLOW_PROCESS_THRESHOLD_MS, info: 600, warn: 1200 },
-        formatter: entry =>
+        formatter: (entry) =>
           formatLog(
             'SearchProcessor',
             `${entry.meta?.message ?? 'Post-processing'} in ${chalk.cyan(
-              (entry.durationMs / 1000).toFixed(2),
+              (entry.durationMs / 1000).toFixed(2)
             )}s`,
-            LogStyle.warning,
+            LogStyle.warning
           ),
-        logger: message => console.warn(message),
-      },
+        logger: (message) => console.warn(message)
+      }
     )
   }
 

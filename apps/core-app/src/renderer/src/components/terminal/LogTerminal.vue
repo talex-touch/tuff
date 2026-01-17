@@ -7,8 +7,8 @@ import 'xterm/css/xterm.css'
 const props = defineProps({
   logs: {
     type: Array,
-    required: true,
-  },
+    required: true
+  }
 })
 
 // Terminal.applyAddon(TerminalFit)
@@ -19,13 +19,14 @@ const term = new Terminal({
   disableStdin: true,
   fontSize: 12,
   lineHeight: 1.2,
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  fontFamily:
+    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   theme: {
     background: '#020617',
     foreground: '#e2e8f0',
     cursor: '#94a3b8',
-    selectionBackground: 'rgba(148, 163, 184, 0.25)',
-  },
+    selectionBackground: 'rgba(148, 163, 184, 0.25)'
+  }
 })
 
 const fitAddon = new TerminalFit.FitAddon()
@@ -47,8 +48,7 @@ function scheduleFit(): void {
   window.requestAnimationFrame(() => {
     try {
       fitAddon.fit()
-    }
-    catch {
+    } catch {
       // ignore
     }
   })
@@ -72,12 +72,12 @@ watch(
 
     const oldLength = Array.isArray(oldLogs) ? oldLogs.length : 0
     const shouldReset =
-      !Array.isArray(oldLogs)
-      || newLogs.length < oldLength
-      || (oldLength > 0 && newLogs.length > 0 && newLogs[0] !== oldLogs[0])
-      || (newLogs.length === oldLength
-        && newLogs.length > 0
-        && newLogs[newLogs.length - 1] !== oldLogs[oldLength - 1])
+      !Array.isArray(oldLogs) ||
+      newLogs.length < oldLength ||
+      (oldLength > 0 && newLogs.length > 0 && newLogs[0] !== oldLogs[0]) ||
+      (newLogs.length === oldLength &&
+        newLogs.length > 0 &&
+        newLogs[newLogs.length - 1] !== oldLogs[oldLength - 1])
 
     if (newLogs.length === 0) {
       term.clear()
@@ -93,7 +93,7 @@ watch(
     newLogs.slice(oldLength).forEach(writeLogLine)
     scheduleFit()
   },
-  { deep: true },
+  { deep: true }
 )
 
 onMounted(() => {
@@ -135,8 +135,7 @@ onUnmounted(() => {
   opened = false
   try {
     term.dispose()
-  }
-  catch {
+  } catch {
     // ignore
   }
 })

@@ -1,6 +1,6 @@
 /**
  * LRUCache - Least Recently Used Cache Manager
- * 
+ *
  * Manages DivisionBox sessions with keepAlive mode using LRU eviction strategy.
  * Evicts the least recently used sessions when cache size exceeds threshold.
  */
@@ -10,7 +10,7 @@ import type { DivisionBoxSession } from './session'
 
 /**
  * LRU Cache for managing keepAlive DivisionBox sessions
- * 
+ *
  * Tracks sessions by their lastAccessedAt timestamp and evicts
  * the least recently used sessions when the cache is full.
  */
@@ -23,7 +23,7 @@ export class LRUCache {
 
   /**
    * Creates a new LRU cache
-   * 
+   *
    * @param maxSize - Maximum number of sessions to cache (default: 10)
    */
   constructor(maxSize: number = 10) {
@@ -33,10 +33,10 @@ export class LRUCache {
 
   /**
    * Adds a session to the cache
-   * 
+   *
    * If the cache is full, evicts the least recently used session first.
    * Only sessions with keepAlive enabled should be added to the cache.
-   * 
+   *
    * @param session - Session to add to cache
    */
   add(session: DivisionBoxSession): void {
@@ -52,7 +52,7 @@ export class LRUCache {
 
   /**
    * Removes a session from the cache
-   * 
+   *
    * @param sessionId - ID of session to remove
    * @returns True if session was removed, false if not found
    */
@@ -62,7 +62,7 @@ export class LRUCache {
 
   /**
    * Gets a session from the cache
-   * 
+   *
    * @param sessionId - ID of session to retrieve
    * @returns Session if found, undefined otherwise
    */
@@ -72,7 +72,7 @@ export class LRUCache {
 
   /**
    * Checks if a session is in the cache
-   * 
+   *
    * @param sessionId - ID of session to check
    * @returns True if session is cached
    */
@@ -82,11 +82,11 @@ export class LRUCache {
 
   /**
    * Updates the access time for a session
-   * 
+   *
    * This should be called whenever a session is accessed to maintain
    * accurate LRU ordering. The session's lastAccessedAt timestamp
    * is already updated by the session itself.
-   * 
+   *
    * @param sessionId - ID of session to update
    */
   updateAccess(sessionId: string): void {
@@ -99,10 +99,10 @@ export class LRUCache {
 
   /**
    * Evicts the least recently used session from the cache
-   * 
+   *
    * Finds the session with the oldest lastAccessedAt timestamp
    * and destroys it to free up resources.
-   * 
+   *
    * @returns The sessionId of the evicted session, or null if cache is empty
    */
   evict(): string | null {
@@ -124,13 +124,13 @@ export class LRUCache {
 
     if (lruSessionId) {
       const session = this.cache.get(lruSessionId)
-      
+
       // Remove from cache
       this.cache.delete(lruSessionId)
-      
+
       // Destroy the session to free resources
       if (session) {
-        session.destroy().catch(error => {
+        session.destroy().catch((error) => {
           console.error(`[LRUCache] Error destroying evicted session ${lruSessionId}:`, error)
         })
       }
@@ -143,15 +143,15 @@ export class LRUCache {
 
   /**
    * Evicts multiple sessions to reduce cache size
-   * 
+   *
    * Useful for handling memory pressure by freeing up multiple sessions at once.
-   * 
+   *
    * @param count - Number of sessions to evict
    * @returns Array of evicted session IDs
    */
   evictMultiple(count: number): string[] {
     const evicted: string[] = []
-    
+
     for (let i = 0; i < count && this.cache.size > 0; i++) {
       const sessionId = this.evict()
       if (sessionId) {
@@ -164,7 +164,7 @@ export class LRUCache {
 
   /**
    * Gets the current cache size
-   * 
+   *
    * @returns Number of sessions currently cached
    */
   size(): number {
@@ -173,7 +173,7 @@ export class LRUCache {
 
   /**
    * Gets the maximum cache size
-   * 
+   *
    * @returns Maximum number of sessions that can be cached
    */
   getMaxSize(): number {
@@ -182,7 +182,7 @@ export class LRUCache {
 
   /**
    * Checks if the cache is full
-   * 
+   *
    * @returns True if cache has reached maximum size
    */
   isFull(): boolean {
@@ -191,7 +191,7 @@ export class LRUCache {
 
   /**
    * Gets all cached session IDs
-   * 
+   *
    * @returns Array of session IDs in the cache
    */
   getAllSessionIds(): string[] {
@@ -200,7 +200,7 @@ export class LRUCache {
 
   /**
    * Gets all cached sessions sorted by access time (most recent first)
-   * 
+   *
    * @returns Array of sessions sorted by lastAccessedAt descending
    */
   getSortedSessions(): DivisionBoxSession[] {
@@ -211,7 +211,7 @@ export class LRUCache {
 
   /**
    * Clears all sessions from the cache
-   * 
+   *
    * Destroys all cached sessions and clears the cache.
    * Use with caution as this will destroy all keepAlive sessions.
    */
@@ -221,8 +221,8 @@ export class LRUCache {
 
     // Destroy all sessions
     await Promise.all(
-      sessions.map(session => 
-        session.destroy().catch(error => {
+      sessions.map((session) =>
+        session.destroy().catch((error) => {
           console.error(`[LRUCache] Error destroying session ${session.sessionId}:`, error)
         })
       )

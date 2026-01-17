@@ -8,9 +8,11 @@ import type { AgentPermission, AgentTool, JsonSchema, ToolResult } from '@talex-
 import chalk from 'chalk'
 
 const TAG = chalk.hex('#9c27b0').bold('[ToolRegistry]')
-const logInfo = (...args: any[]) => console.log(TAG, ...args)
-const logWarn = (...args: any[]) => console.warn(TAG, chalk.yellow(...args))
-const logDebug = (...args: any[]) => console.debug(TAG, chalk.gray(...args))
+const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
+const logWarn = (...args: unknown[]) =>
+  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
+const logDebug = (...args: unknown[]) =>
+  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
 
 /**
  * Tool execution context
@@ -53,7 +55,7 @@ export class ToolRegistry {
     this.tools.set(definition.id, {
       definition,
       executor,
-      registeredAt: Date.now(),
+      registeredAt: Date.now()
     })
 
     logInfo(`Registered tool: ${definition.id} (${definition.name})`)
@@ -85,23 +87,21 @@ export class ToolRegistry {
    * Get all tool definitions
    */
   getAllTools(): AgentTool[] {
-    return Array.from(this.tools.values()).map(t => t.definition)
+    return Array.from(this.tools.values()).map((t) => t.definition)
   }
 
   /**
    * Get tools by category
    */
   getToolsByCategory(category: string): AgentTool[] {
-    return this.getAllTools().filter(t => t.category === category)
+    return this.getAllTools().filter((t) => t.category === category)
   }
 
   /**
    * Get tools for a specific agent (by tool refs)
    */
   getToolsForAgent(toolIds: string[]): AgentTool[] {
-    return toolIds
-      .map(id => this.getTool(id))
-      .filter((t): t is AgentTool => t !== null)
+    return toolIds.map((id) => this.getTool(id)).filter((t): t is AgentTool => t !== null)
   }
 
   /**
@@ -117,13 +117,13 @@ export class ToolRegistry {
   async executeTool(
     toolId: string,
     input: unknown,
-    context: ToolExecutionContext,
+    context: ToolExecutionContext
   ): Promise<ToolResult> {
     const tool = this.tools.get(toolId)
     if (!tool) {
       return {
         success: false,
-        error: `Tool ${toolId} not found`,
+        error: `Tool ${toolId} not found`
       }
     }
 
@@ -136,7 +136,7 @@ export class ToolRegistry {
       if (validationError) {
         return {
           success: false,
-          error: `Input validation failed: ${validationError}`,
+          error: `Input validation failed: ${validationError}`
         }
       }
 
@@ -147,16 +147,15 @@ export class ToolRegistry {
 
       return {
         success: true,
-        output,
+        output
       }
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       logWarn(`Tool ${toolId} failed: ${errorMessage}`)
 
       return {
         success: false,
-        error: errorMessage,
+        error: errorMessage
       }
     }
   }
@@ -174,7 +173,12 @@ export class ToolRegistry {
     }
 
     // Required fields validation for objects
-    if (schema.type === 'object' && schema.required && typeof input === 'object' && input !== null) {
+    if (
+      schema.type === 'object' &&
+      schema.required &&
+      typeof input === 'object' &&
+      input !== null
+    ) {
       const obj = input as Record<string, unknown>
       for (const field of schema.required) {
         if (!(field in obj)) {
@@ -190,24 +194,22 @@ export class ToolRegistry {
    * Get tool definitions for LLM (OpenAI function format)
    */
   getToolsForLLM(toolIds?: string[]): unknown[] {
-    const tools = toolIds
-      ? this.getToolsForAgent(toolIds)
-      : this.getAllTools()
+    const tools = toolIds ? this.getToolsForAgent(toolIds) : this.getAllTools()
 
-    return tools.map(tool => ({
+    return tools.map((tool) => ({
       type: 'function',
       function: {
         name: tool.id,
         description: tool.description,
-        parameters: tool.inputSchema,
-      },
+        parameters: tool.inputSchema
+      }
     }))
   }
 
   /**
    * Get registry statistics
    */
-  getStats(): { total: number, byCategory: Record<string, number> } {
+  getStats(): { total: number; byCategory: Record<string, number> } {
     const all = this.getAllTools()
     const byCategory: Record<string, number> = {}
 
@@ -218,7 +220,7 @@ export class ToolRegistry {
 
     return {
       total: all.length,
-      byCategory,
+      byCategory
     }
   }
 
@@ -250,8 +252,8 @@ export function createTool(
   options?: {
     category?: string
     permissions?: AgentPermission[]
-  },
-): { definition: AgentTool, executor: ToolExecutorFn } {
+  }
+): { definition: AgentTool; executor: ToolExecutorFn } {
   return {
     definition: {
       id,
@@ -259,8 +261,8 @@ export function createTool(
       description,
       inputSchema,
       category: options?.category,
-      permissions: options?.permissions,
+      permissions: options?.permissions
     },
-    executor,
+    executor
   }
 }

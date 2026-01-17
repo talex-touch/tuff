@@ -1,11 +1,11 @@
 <script lang="ts" name="Market" setup>
+import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useToggle } from '@vueuse/core'
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MarketGridView from '~/components/market/MarketGridView.vue'
 import MarketHeader from '~/components/market/MarketHeader.vue'
 import { useMarketCategories } from '~/composables/market/useMarketCategories'
-import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { usePluginVersionStatus } from '~/composables/market/usePluginVersionStatus'

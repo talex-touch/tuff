@@ -70,11 +70,7 @@ function handlePaste(): void {
       </template>
     </BoxInput>
 
-    <TagSection
-      v-if="!isUIMode"
-      :box-options="boxOptions"
-      :clipboard-options="clipboardOptions"
-    />
+    <TagSection v-if="!isUIMode" :box-options="boxOptions" :clipboard-options="clipboardOptions" />
 
     <div class="CoreBox-Configure">
       <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
@@ -102,9 +98,15 @@ function handlePaste(): void {
   }
 
   @keyframes pulse {
-    0% { opacity: 0.6; }
-    50% { opacity: 1; }
-    100% { opacity: 0.6; }
+    0% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.6;
+    }
   }
 }
 

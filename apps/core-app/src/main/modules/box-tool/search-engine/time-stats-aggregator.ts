@@ -1,7 +1,7 @@
-import { desc, eq } from 'drizzle-orm'
 import type { DbUtils } from '../../../db/utils'
-import * as schema from '../../../db/schema'
 import { sleep } from '@talex-touch/utils'
+import { desc, eq } from 'drizzle-orm'
+import * as schema from '../../../db/schema'
 
 const MAX_RETRIES = 5
 const RETRY_DELAY_MS = 200
@@ -17,19 +17,17 @@ function isSqliteBusyError(error: unknown): boolean {
   return typeof message === 'string' && message.includes('SQLITE_BUSY')
 }
 
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  retries = MAX_RETRIES,
-): Promise<T> {
+async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await operation()
-    }
-    catch (error) {
+    } catch (error) {
       lastError = error
       if (isSqliteBusyError(error) && attempt < retries) {
-        console.warn(`[TimeStatsAggregator] SQLITE_BUSY, retrying attempt ${attempt + 1}/${retries}`)
+        console.warn(
+          `[TimeStatsAggregator] SQLITE_BUSY, retrying attempt ${attempt + 1}/${retries}`
+        )
         await sleep(RETRY_DELAY_MS * (attempt + 1))
         continue
       }
@@ -60,7 +58,7 @@ export class TimeStatsAggregator {
       .select({
         sourceId: schema.usageLogs.source,
         itemId: schema.usageLogs.itemId,
-        timestamp: schema.usageLogs.timestamp,
+        timestamp: schema.usageLogs.timestamp
       })
       .from(schema.usageLogs)
       .where(eq(schema.usageLogs.action, 'execute'))
@@ -83,14 +81,14 @@ export class TimeStatsAggregator {
         statsMap.set(key, {
           sourceId: log.sourceId,
           itemId: log.itemId,
-          hourDistribution: new Array(24).fill(0),
-          dayOfWeekDistribution: new Array(7).fill(0),
+          hourDistribution: Array.from({ length: 24 }, () => 0),
+          dayOfWeekDistribution: Array.from({ length: 7 }, () => 0),
           timeSlotDistribution: {
             morning: 0,
             afternoon: 0,
             evening: 0,
-            night: 0,
-          },
+            night: 0
+          }
         })
       }
 
@@ -102,7 +100,7 @@ export class TimeStatsAggregator {
 
     // 3. 批量写入数据库（使用事务和重试）
     let updatedCount = 0
-    
+
     await withRetry(async () => {
       await db.transaction(async (tx) => {
         for (const stats of statsMap.values()) {
@@ -114,7 +112,7 @@ export class TimeStatsAggregator {
               hourDistribution: JSON.stringify(stats.hourDistribution),
               dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
               timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
-              lastUpdated: new Date(),
+              lastUpdated: new Date()
             })
             .onConflictDoUpdate({
               target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
@@ -122,8 +120,8 @@ export class TimeStatsAggregator {
                 hourDistribution: JSON.stringify(stats.hourDistribution),
                 dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
                 timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
-                lastUpdated: new Date(),
-              },
+                lastUpdated: new Date()
+              }
             })
           updatedCount++
         }
@@ -132,7 +130,7 @@ export class TimeStatsAggregator {
 
     const duration = performance.now() - startTime
     console.log(
-      `[TimeStatsAggregator] Aggregation completed. Updated ${updatedCount} items in ${duration.toFixed(2)}ms`,
+      `[TimeStatsAggregator] Aggregation completed. Updated ${updatedCount} items in ${duration.toFixed(2)}ms`
     )
   }
 
@@ -140,12 +138,9 @@ export class TimeStatsAggregator {
    * 获取指定时刻的时间段
    */
   private getTimeSlot(hour: number): 'morning' | 'afternoon' | 'evening' | 'night' {
-    if (hour >= 6 && hour < 12)
-      return 'morning'
-    if (hour >= 12 && hour < 18)
-      return 'afternoon'
-    if (hour >= 18 && hour < 22)
-      return 'evening'
+    if (hour >= 6 && hour < 12) return 'morning'
+    if (hour >= 12 && hour < 18) return 'afternoon'
+    if (hour >= 18 && hour < 22) return 'evening'
     return 'night'
   }
 
@@ -154,10 +149,9 @@ export class TimeStatsAggregator {
    */
   async getItemTimeStats(sourceId: string, itemId: string): Promise<ParsedItemTimeStats | null> {
     const results = await this.dbUtils.getItemTimeStatsBatch([{ sourceId, itemId }])
-    
-    if (results.length === 0)
-      return null
-    
+
+    if (results.length === 0) return null
+
     const raw = results[0]
     return this.parseTimeStats(raw)
   }
@@ -166,7 +160,7 @@ export class TimeStatsAggregator {
    * 批量获取时间统计
    */
   async getItemTimeStatsBatch(
-    keys: Array<{ sourceId: string, itemId: string }>,
+    keys: Array<{ sourceId: string; itemId: string }>
   ): Promise<Map<string, ParsedItemTimeStats>> {
     const results = await this.dbUtils.getItemTimeStatsBatch(keys)
     const statsMap = new Map<string, ParsedItemTimeStats>()
@@ -189,7 +183,7 @@ export class TimeStatsAggregator {
       hourDistribution: JSON.parse(raw.hourDistribution),
       dayOfWeekDistribution: JSON.parse(raw.dayOfWeekDistribution),
       timeSlotDistribution: JSON.parse(raw.timeSlotDistribution),
-      lastUpdated: raw.lastUpdated,
+      lastUpdated: raw.lastUpdated
     }
   }
 }

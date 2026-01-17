@@ -1,7 +1,7 @@
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
-import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import crypto from 'node:crypto'
 import path from 'node:path'
+import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import fse from 'fs-extra'
 
 export interface WidgetSource {
@@ -22,12 +22,7 @@ export class WidgetLoader {
   async loadWidget(plugin: ITouchPlugin, feature: IPluginFeature): Promise<WidgetSource | null> {
     const interactionPath = feature.interaction?.path
     if (!interactionPath) {
-      this.pushIssue(
-        plugin,
-        feature,
-        'WIDGET_PATH_MISSING',
-        'widget interaction path is missing.',
-      )
+      this.pushIssue(plugin, feature, 'WIDGET_PATH_MISSING', 'widget interaction path is missing.')
       return null
     }
 
@@ -37,17 +32,17 @@ export class WidgetLoader {
         plugin,
         feature,
         'WIDGET_PATH_INVALID',
-        `widget path "${interactionPath}" is invalid or outside widgets directory.`,
+        `widget path "${interactionPath}" is invalid or outside widgets directory.`
       )
       return null
     }
 
-    if (!await fse.pathExists(widgetFile)) {
+    if (!(await fse.pathExists(widgetFile))) {
       this.pushIssue(
         plugin,
         feature,
         'WIDGET_NOT_FOUND',
-        `widget source "${interactionPath}" does not exist.`,
+        `widget source "${interactionPath}" does not exist.`
       )
       return null
     }
@@ -69,19 +64,21 @@ export class WidgetLoader {
         source,
         filePath: widgetFile,
         hash,
-        loadedAt: Date.now(),
+        loadedAt: Date.now()
       }
 
       this.cache.set(widgetId, result)
       return result
-    }
-    catch (error) {
-      plugin.logger.error(`[WidgetLoader] Failed to read widget from ${widgetFile}:`, error as Error)
+    } catch (error) {
+      plugin.logger.error(
+        `[WidgetLoader] Failed to read widget from ${widgetFile}:`,
+        error as Error
+      )
       this.pushIssue(
         plugin,
         feature,
         'WIDGET_READ_FAILED',
-        `failed to read widget source: ${(error as Error).message}`,
+        `failed to read widget source: ${(error as Error).message}`
       )
       return null
     }
@@ -116,14 +113,14 @@ export class WidgetLoader {
     plugin: ITouchPlugin,
     feature: IPluginFeature,
     code: string,
-    message: string,
+    message: string
   ): void {
     plugin.issues.push({
       type: 'error',
       code,
       message,
       source: `feature:${feature.id}`,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     })
   }
 }

@@ -21,22 +21,22 @@ export function useMarketData() {
     errorMessage.value = ''
 
     try {
-      const definitions = marketSourcesStorage.getSources().filter((source) => source.enabled !== false)
+      const definitions = marketSourcesStorage
+        .getSources()
+        .filter((source) => source.enabled !== false)
       const result = await fetchMarketCatalog({
         definitions,
-        force,
+        force
       })
 
       plugins.value = result.plugins
       stats.value = result.stats
       lastUpdated.value = Date.now()
-    }
-    catch (error: any) {
+    } catch (error: any) {
       console.error('[Market] Failed to load plugins:', error)
       const reason = typeof error?.message === 'string' ? error.message : ''
       errorMessage.value = reason || 'market.error.loadFailed'
-    }
-    finally {
+    } finally {
       loading.value = false
     }
   }
@@ -46,7 +46,7 @@ export function useMarketData() {
     () => {
       void loadMarketPlugins(true)
     },
-    { deep: true },
+    { deep: true }
   )
 
   return {
@@ -55,6 +55,6 @@ export function useMarketData() {
     loading,
     errorMessage,
     lastUpdated,
-    loadMarketPlugins,
+    loadMarketPlugins
   }
 }

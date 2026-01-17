@@ -1,15 +1,6 @@
-<template>
-  <div 
-    class="dock-hint"
-    :style="hintStyle"
-  >
-    <div class="dock-hint-border" />
-  </div>
-</template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { DockHintPosition } from '../composables/useDrag'
+import { computed } from 'vue'
 
 /**
  * Props definition for DockHint component
@@ -28,7 +19,7 @@ const hintStyle = computed(() => {
       display: 'none'
     }
   }
-  
+
   return {
     left: `${props.position.x}px`,
     top: `${props.position.y}px`,
@@ -37,6 +28,12 @@ const hintStyle = computed(() => {
   }
 })
 </script>
+
+<template>
+  <div class="dock-hint" :style="hintStyle">
+    <div class="dock-hint-border" />
+  </div>
+</template>
 
 <style scoped lang="scss">
 .dock-hint {
@@ -57,7 +54,8 @@ const hintStyle = computed(() => {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.3;
   }
   50% {

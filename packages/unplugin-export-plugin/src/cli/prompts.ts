@@ -1,5 +1,6 @@
+import type { Locale } from './i18n'
 import * as readline from 'node:readline'
-import { t, getLocale, setLocale, type Locale } from './i18n'
+import { setLocale, t } from './i18n'
 
 export interface SelectOption<T = string> {
   label: string
@@ -60,19 +61,19 @@ export async function askText(
     defaultValue?: string
     hint?: string
     validate?: (value: string) => boolean | string
-  }
+  },
 ): Promise<string> {
   const rl = createRL()
-  
+
   return new Promise((resolve) => {
     const hint = options?.hint ? styled(` (${options.hint})`, colors.dim) : ''
     const defaultHint = options?.defaultValue ? styled(` [${options.defaultValue}]`, colors.gray) : ''
     const prompt = `${styled('?', colors.cyan)} ${question}${hint}${defaultHint} `
-    
+
     const ask = () => {
       rl.question(prompt, (answer) => {
         const value = answer.trim() || options?.defaultValue || ''
-        
+
         if (options?.validate) {
           const result = options.validate(value)
           if (result !== true) {
@@ -81,12 +82,12 @@ export async function askText(
             return
           }
         }
-        
+
         rl.close()
         resolve(value)
       })
     }
-    
+
     ask()
   })
 }
@@ -96,20 +97,21 @@ export async function askText(
  */
 export async function askConfirm(
   question: string,
-  defaultValue = true
+  defaultValue = true,
 ): Promise<boolean> {
   const rl = createRL()
-  
+
   return new Promise((resolve) => {
     const hint = defaultValue ? 'Y/n' : 'y/N'
     const prompt = `${styled('?', colors.cyan)} ${question} ${styled(`(${hint})`, colors.dim)} `
-    
+
     rl.question(prompt, (answer) => {
       rl.close()
       const value = answer.trim().toLowerCase()
       if (value === '') {
         resolve(defaultValue)
-      } else {
+      }
+      else {
         resolve(value === 'y' || value === 'yes')
       }
     })
@@ -121,34 +123,35 @@ export async function askConfirm(
  */
 export async function askSelect<T = string>(
   question: string,
-  options: SelectOption<T>[]
+  options: SelectOption<T>[],
 ): Promise<T> {
   const rl = createRL()
-  
+
   console.log(`${styled('?', colors.cyan)} ${question}`)
-  
+
   options.forEach((opt, index) => {
     const num = styled(`  ${index + 1})`, colors.cyan)
     const hint = opt.hint ? styled(` - ${opt.hint}`, colors.dim) : ''
     console.log(`${num} ${opt.label}${hint}`)
   })
-  
+
   return new Promise((resolve) => {
     const prompt = styled('  Enter choice (number): ', colors.dim)
-    
+
     const ask = () => {
       rl.question(prompt, (answer) => {
-        const num = parseInt(answer.trim(), 10)
+        const num = Number.parseInt(answer.trim(), 10)
         if (num >= 1 && num <= options.length) {
           rl.close()
           resolve(options[num - 1].value)
-        } else {
+        }
+        else {
           console.log(styled(`  Please enter a number between 1 and ${options.length}`, colors.red))
           ask()
         }
       })
     }
-    
+
     ask()
   })
 }
@@ -158,27 +161,29 @@ export async function askSelect<T = string>(
  */
 export async function withSpinner<T>(
   message: string,
-  task: () => Promise<T>
+  task: () => Promise<T>,
 ): Promise<T> {
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
   let frameIndex = 0
   let running = true
-  
+
   const spin = () => {
-    if (!running) return
+    if (!running)
+      return
     process.stdout.write(`\r${styled(frames[frameIndex], colors.cyan)} ${message}`)
     frameIndex = (frameIndex + 1) % frames.length
     setTimeout(spin, 80)
   }
-  
+
   spin()
-  
+
   try {
     const result = await task()
     running = false
     process.stdout.write(`\r${styled('✔', colors.green)} ${message}\n`)
     return result
-  } catch (error) {
+  }
+  catch (error) {
     running = false
     process.stdout.write(`\r${styled('✖', colors.red)} ${message}\n`)
     throw error
@@ -230,7 +235,7 @@ export function printInfo(message: string): void {
  */
 export function printList(items: string[], indent = 2): void {
   const spaces = ' '.repeat(indent)
-  items.forEach(item => {
+  items.forEach((item) => {
     console.log(`${spaces}${styled('•', colors.dim)} ${item}`)
   })
 }
@@ -243,7 +248,7 @@ export async function askLanguageSwitch(): Promise<Locale> {
     { label: 'English', value: 'en' },
     { label: '中文', value: 'zh' },
   ]
-  
+
   const selected = await askSelect(t('settings.selectLanguage'), options)
   setLocale(selected)
   return selected

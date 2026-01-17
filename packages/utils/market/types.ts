@@ -23,8 +23,8 @@ export interface MarketProviderDefinition {
   trustLevel?: MarketProviderTrustLevel
   tags?: string[]
   /**
-    * Whether this provider should be treated as read-only (no install)
-    */
+   * Whether this provider should be treated as read-only (no install)
+   */
   readOnly?: boolean
   /**
    * Whether this is an official provider
@@ -44,8 +44,8 @@ export interface MarketSourcesPayload {
   sources: MarketProviderDefinition[]
 }
 
-export type MarketInstallInstruction =
-  | {
+export type MarketInstallInstruction
+  = | {
     type: 'url'
     url: string
     format?: 'zip' | 'tar' | 'tgz' | 'tpex'

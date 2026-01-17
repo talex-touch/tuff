@@ -1,7 +1,7 @@
+import { clerkClient } from '@clerk/nuxt/server'
 import { createError } from 'h3'
 import { requireAuth } from '../../../utils/auth'
 import { deletePlugin, getPluginById } from '../../../utils/pluginsStore'
-import { clerkClient } from '@clerk/nuxt/server'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)

@@ -4,8 +4,8 @@
  * Composable for managing plugin permissions in the UI.
  */
 
-import { ref, computed } from 'vue'
 import { useChannel } from '@talex-touch/utils/renderer'
+import { computed, ref } from 'vue'
 
 interface PermissionGrant {
   pluginId: string
@@ -54,7 +54,7 @@ const permissionTranslations: Record<string, { name: string; desc: string }> = {
   'storage.plugin': { name: '插件存储', desc: '使用插件私有存储空间' },
   'storage.shared': { name: '共享存储', desc: '访问跨插件共享存储' },
   'window.create': { name: '创建窗口', desc: '创建新窗口或视图' },
-  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' },
+  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' }
 }
 
 export function usePluginPermission(pluginId: string) {
@@ -71,7 +71,7 @@ export function usePluginPermission(pluginId: string) {
     try {
       const [perms, reg] = await Promise.all([
         send('permission:get-plugin', { pluginId }),
-        send('permission:get-registry'),
+        send('permission:get-registry')
       ])
       permissions.value = perms || []
       registry.value = reg || []
@@ -89,7 +89,7 @@ export function usePluginPermission(pluginId: string) {
         pluginId,
         sdkapi,
         required,
-        optional,
+        optional
       })
       status.value = result
     } catch (e) {
@@ -103,7 +103,7 @@ export function usePluginPermission(pluginId: string) {
       const result = await send('permission:grant', {
         pluginId,
         permissionId,
-        grantedBy: 'user',
+        grantedBy: 'user'
       })
       if (result?.success) {
         await refresh()
@@ -135,7 +135,7 @@ export function usePluginPermission(pluginId: string) {
       const result = await send('permission:grant-multiple', {
         pluginId,
         permissionIds,
-        grantedBy: 'user',
+        grantedBy: 'user'
       })
       if (result?.success) {
         await refresh()
@@ -156,7 +156,7 @@ export function usePluginPermission(pluginId: string) {
       name: trans?.name || permissionId,
       desc: trans?.desc || '',
       category: def?.category || permissionId.split('.')[0],
-      risk: def?.risk || 'medium',
+      risk: def?.risk || 'medium'
     }
   }
 
@@ -182,7 +182,7 @@ export function usePluginPermission(pluginId: string) {
         risk: info.risk as 'low' | 'medium' | 'high',
         required: status.value!.required.includes(id),
         granted: status.value!.granted.includes(id),
-        reason: undefined, // Could be from manifest
+        reason: undefined // Could be from manifest
       }
     })
   })
@@ -221,7 +221,7 @@ export function usePluginPermission(pluginId: string) {
     grantMultiple,
     getPermissionInfo,
     isGranted,
-    stopListening,
+    stopListening
   }
 }
 
@@ -253,7 +253,7 @@ export function usePermissionRequest() {
     return new Promise((resolve) => {
       currentRequest.value = {
         ...options,
-        resolve,
+        resolve
       }
       visible.value = true
     })
@@ -283,6 +283,6 @@ export function usePermissionRequest() {
     request,
     handleAllowOnce,
     handleAllowAlways,
-    handleDeny,
+    handleDeny
   }
 }

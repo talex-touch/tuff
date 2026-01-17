@@ -1,4 +1,5 @@
 import type { ITuffIcon, TuffQuery } from '@talex-touch/utils'
+import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
@@ -9,15 +10,14 @@ import type {
   IPluginFeature,
   ITargetFeatureLifeCycle,
   ITouchPlugin,
-  PluginMeta,
-  PluginIssue
+  PluginIssue,
+  PluginMeta
 } from '@talex-touch/utils/plugin'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { TouchWindow } from '../../core/touch-window'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
-import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import {
   createBoxSDK,
   createClipboardManager,
@@ -27,11 +27,11 @@ import {
   PluginStatus
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import { genTouchChannel } from '../../core/channel-core'
-import { PluginEvents } from '@talex-touch/utils/transport/events'
 import {
   PluginLogAppendEvent,
   PluginStorageUpdatedEvent,

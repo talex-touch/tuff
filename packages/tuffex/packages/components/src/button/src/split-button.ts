@@ -17,4 +17,3 @@ export interface SplitButtonEmits {
   click: [event: MouseEvent]
   menuOpenChange: [open: boolean]
 }
-

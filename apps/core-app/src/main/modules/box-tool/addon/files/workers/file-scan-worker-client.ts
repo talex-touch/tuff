@@ -1,17 +1,22 @@
 import type { ScannedFileInfo } from '../types'
-import { Worker } from 'node:worker_threads'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsResponse,
+  WorkerStatusSnapshot,
+  WorkerTaskSnapshot
+} from './worker-status'
 import path from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { fileProviderLog } from '../../../../../utils/logger'
-import type { WorkerMetricsPayload, WorkerMetricsResponse, WorkerStatusSnapshot, WorkerTaskSnapshot } from './worker-status'
 
-type PendingScan = {
+interface PendingScan {
   results: ScannedFileInfo[]
   resolve: (value: ScannedFileInfo[]) => void
   reject: (error: Error) => void
   startedAt: number
 }
 
-type PendingMetrics = {
+interface PendingMetrics {
   resolve: (value: WorkerMetricsPayload | null) => void
   timeout: ReturnType<typeof setTimeout>
 }
@@ -29,12 +34,13 @@ export class FileScanWorkerClient {
   private lastError: string | null = null
   private lastTask: WorkerTaskSnapshot | null = null
   private workerStartedAt: number | null = null
-  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null = null
+  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
+    null
 
   async scan(
     paths: string[],
     excludePaths?: Set<string>,
-    batchSize?: number,
+    batchSize?: number
   ): Promise<ScannedFileInfo[]> {
     const taskId = `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
@@ -48,7 +54,7 @@ export class FileScanWorkerClient {
         taskId,
         paths,
         excludePaths: excludePaths ? Array.from(excludePaths) : undefined,
-        batchSize,
+        batchSize
       })
     })
   }
@@ -65,7 +71,7 @@ export class FileScanWorkerClient {
       lastTask: this.lastTask,
       lastError: this.lastError,
       uptimeMs: worker && this.workerStartedAt ? Date.now() - this.workerStartedAt : null,
-      metrics: this.toStatusMetrics(metrics),
+      metrics: this.toStatusMetrics(metrics)
     }
   }
 
@@ -126,7 +132,7 @@ export class FileScanWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: null,
+        error: null
       }
       return
     }
@@ -139,7 +145,7 @@ export class FileScanWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: message.error,
+        error: message.error
       }
       pending.reject(new Error(message.error))
     }
@@ -164,7 +170,7 @@ export class FileScanWorkerClient {
     this.workerStartedAt = null
     this.lastError = error.message
     fileProviderLog.warn('[FileScanWorker] Worker failed, will restart on demand', {
-      error,
+      error
     })
   }
 
@@ -182,7 +188,7 @@ export class FileScanWorkerClient {
       this.metricsPending.set(requestId, { resolve, timeout })
       worker.postMessage({
         type: 'metrics',
-        requestId,
+        requestId
       })
     })
   }
@@ -198,9 +204,9 @@ export class FileScanWorkerClient {
       cpu: {
         user: metrics.cpuUsage.user,
         system: metrics.cpuUsage.system,
-        percent,
+        percent
       },
-      eventLoop: metrics.eventLoop,
+      eventLoop: metrics.eventLoop
     }
   }
 

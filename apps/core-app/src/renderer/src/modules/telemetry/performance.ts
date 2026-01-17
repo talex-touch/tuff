@@ -1,5 +1,5 @@
-import { isCoreBox } from '@talex-touch/utils/renderer'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { isCoreBox } from '@talex-touch/utils/renderer'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface RendererPerformanceBuffer {
@@ -17,24 +17,25 @@ const buffer: RendererPerformanceBuffer = {
   longTaskMaxMs: 0,
   rafJankCount: 0,
   rafJankTotalMs: 0,
-  rafJankMaxMs: 0,
+  rafJankMaxMs: 0
 }
 
 let started = false
 const pollingService = PollingService.getInstance()
 const flushTaskId = 'renderer.performance.flush'
 
-export async function startRendererPerformanceTelemetry(options?: { flushIntervalMs?: number }): Promise<void> {
-  if (started)
-    return
+export async function startRendererPerformanceTelemetry(options?: {
+  flushIntervalMs?: number
+}): Promise<void> {
+  if (started) return
   started = true
 
   try {
-    const config = (await touchChannel.send('sentry:get-config')) as { enabled?: boolean } | undefined
-    if (!config?.enabled)
-      return
-  }
-  catch {
+    const config = (await touchChannel.send('sentry:get-config')) as
+      | { enabled?: boolean }
+      | undefined
+    if (!config?.enabled) return
+  } catch {
     return
   }
 
@@ -46,11 +47,10 @@ export async function startRendererPerformanceTelemetry(options?: { flushInterva
   if (pollingService.isRegistered(flushTaskId)) {
     pollingService.unregister(flushTaskId)
   }
-  pollingService.register(
-    flushTaskId,
-    () => flush(),
-    { interval: flushIntervalMs, unit: 'milliseconds' },
-  )
+  pollingService.register(flushTaskId, () => flush(), {
+    interval: flushIntervalMs,
+    unit: 'milliseconds'
+  })
   pollingService.start()
 
   window.addEventListener('beforeunload', () => {
@@ -66,15 +66,13 @@ export async function startRendererPerformanceTelemetry(options?: { flushInterva
 
 function startLongTaskObserver(): void {
   const Observer = typeof PerformanceObserver !== 'undefined' ? PerformanceObserver : undefined
-  if (!Observer)
-    return
+  if (!Observer) return
 
   try {
     const observer = new Observer((list) => {
       for (const entry of list.getEntries()) {
         const duration = typeof entry.duration === 'number' ? entry.duration : 0
-        if (!Number.isFinite(duration) || duration <= 0)
-          continue
+        if (!Number.isFinite(duration) || duration <= 0) continue
         buffer.longTaskCount += 1
         buffer.longTaskTotalMs += duration
         buffer.longTaskMaxMs = Math.max(buffer.longTaskMaxMs, duration)
@@ -82,8 +80,7 @@ function startLongTaskObserver(): void {
     })
 
     observer.observe({ entryTypes: ['longtask'] as any })
-  }
-  catch {
+  } catch {
     // LongTask API may be unavailable; ignore.
   }
 }
@@ -109,8 +106,7 @@ function startRafJankMonitor(): void {
 
 async function flush(): Promise<void> {
   const hasPayload = buffer.longTaskCount > 0 || buffer.rafJankCount > 0
-  if (!hasPayload)
-    return
+  if (!hasPayload) return
 
   const payload = {
     longTaskCount: buffer.longTaskCount,
@@ -119,7 +115,7 @@ async function flush(): Promise<void> {
     rafJankCount: buffer.rafJankCount,
     rafJankTotalMs: Math.round(buffer.rafJankTotalMs),
     rafJankMaxMs: Math.round(buffer.rafJankMaxMs),
-    windowType: isCoreBox() ? 'corebox' : 'main',
+    windowType: isCoreBox() ? 'corebox' : 'main'
   }
 
   buffer.longTaskCount = 0
@@ -131,8 +127,7 @@ async function flush(): Promise<void> {
 
   try {
     await touchChannel.send('sentry:record-performance', payload)
-  }
-  catch {
+  } catch {
     // ignore telemetry errors
   }
 }

@@ -103,13 +103,13 @@ export async function guardTelemetryIp(
       FROM ${SECURITY_TABLE}
       WHERE ip = ?1;
     `).bind(ip).all<{
-      ip: string
-      window_start: number
-      window_count: number
-      violation_count: number
-      blocked_until: number | null
-      block_reason: string | null
-    }>()
+    ip: string
+    window_start: number
+    window_count: number
+    violation_count: number
+    blocked_until: number | null
+    block_reason: string | null
+  }>()
   const row = results?.[0]
 
   if (row?.blocked_until && row.blocked_until > now) {

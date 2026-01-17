@@ -67,7 +67,7 @@ export interface SdkCompatibilityResult {
  */
 export function checkSdkCompatibility(
   pluginSdkVersion: SdkApiVersion | undefined,
-  pluginName: string
+  pluginName: string,
 ): SdkCompatibilityResult {
   // No sdkapi declared - legacy plugin
   if (pluginSdkVersion === undefined) {
@@ -150,8 +150,8 @@ export function checkSdkCompatibility(
  * - Known versions => keep as-is
  */
 export function resolveSdkApiVersion(raw: unknown): SdkApiVersion | undefined {
-  const num =
-    typeof raw === 'number'
+  const num
+    = typeof raw === 'number'
       ? raw
       : typeof raw === 'string'
         ? parseSdkVersion(raw)
@@ -179,9 +179,9 @@ export function isValidSdkVersion(version: number): boolean {
   }
 
   const str = version.toString()
-  const year = parseInt(str.substring(0, 2), 10)
-  const month = parseInt(str.substring(2, 4), 10)
-  const day = parseInt(str.substring(4, 6), 10)
+  const year = Number.parseInt(str.substring(0, 2), 10)
+  const month = Number.parseInt(str.substring(2, 4), 10)
+  const day = Number.parseInt(str.substring(4, 6), 10)
 
   // Basic validation: year 20-99, month 01-12, day 01-31
   return year >= 20 && year <= 99 && month >= 1 && month <= 12 && day >= 1 && day <= 31
@@ -205,7 +205,7 @@ export function formatSdkVersion(version: SdkApiVersion): string {
 export function parseSdkVersion(str: string): SdkApiVersion | undefined {
   // Remove dots if present
   const cleaned = str.replace(/\./g, '')
-  const num = parseInt(cleaned, 10)
+  const num = Number.parseInt(cleaned, 10)
 
   if (isValidSdkVersion(num)) {
     return num

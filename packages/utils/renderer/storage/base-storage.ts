@@ -8,8 +8,8 @@ import type {
   StorageUpdateNotification,
 } from '../../transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
-import { StorageEvents } from '../../transport/events'
 import { reactive, toRaw, watch } from 'vue'
+import { StorageEvents } from '../../transport/events'
 
 /**
  * Interface representing the external communication channel.
@@ -767,7 +767,7 @@ export class TouchStorage<T extends object> {
   }
 }
 
-type StoragePatch = {
+interface StoragePatch {
   set: Array<{ path: string[], value: unknown }>
   unset: Array<string[]>
 }
@@ -904,13 +904,15 @@ function cloneValue<T>(value: T): T {
   if (typeof structuredClone === 'function') {
     try {
       return structuredClone(value)
-    } catch {
+    }
+    catch {
       // fall through
     }
   }
   try {
     return JSON.parse(JSON.stringify(value)) as T
-  } catch {
+  }
+  catch {
     return value
   }
 }

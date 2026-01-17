@@ -1,12 +1,6 @@
-<template>
-  <div class="tx-collapse">
-    <slot />
-  </div>
-</template>
-
 <script setup lang="ts">
-import { provide, ref, watch } from 'vue'
 import type { CollapseContext } from './types'
+import { provide, ref, watch } from 'vue'
 
 interface Props {
   accordion?: boolean
@@ -15,11 +9,11 @@ interface Props {
 
 interface Emits {
   'update:modelValue': [value: string | string[]]
-  change: [value: string | string[]]
+  'change': [value: string | string[]]
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  accordion: false
+  accordion: false,
 })
 
 const emit = defineEmits<Emits>()
@@ -27,8 +21,8 @@ const emit = defineEmits<Emits>()
 const activeNames = ref<string[]>([])
 
 if (props.modelValue) {
-  activeNames.value = Array.isArray(props.modelValue) 
-    ? props.modelValue 
+  activeNames.value = Array.isArray(props.modelValue)
+    ? props.modelValue
     : [props.modelValue]
 }
 
@@ -38,42 +32,45 @@ watch(() => props.modelValue, (newValue) => {
   }
 }, { immediate: true })
 
-const setActiveNames = (names: string[]) => {
+function setActiveNames(names: string[]) {
   activeNames.value = names
-  
-  const emitValue = props.accordion 
+
+  const emitValue = props.accordion
     ? (names.length > 0 ? names[0] : [])
     : names
-    
+
   emit('update:modelValue', emitValue)
   emit('change', emitValue)
 }
 
-const addItem = (name: string) => {
+function addItem(name: string) {
   if (!activeNames.value.includes(name)) {
     activeNames.value.push(name)
   }
 }
 
-const removeItem = (name: string) => {
+function removeItem(name: string) {
   const index = activeNames.value.indexOf(name)
   if (index > -1) {
     activeNames.value.splice(index, 1)
   }
 }
 
-const handleItemClick = (name: string) => {
+function handleItemClick(name: string) {
   if (props.accordion) {
     if (activeNames.value.includes(name)) {
       setActiveNames([])
-    } else {
+    }
+    else {
       setActiveNames([name])
     }
-  } else {
+  }
+  else {
     if (activeNames.value.includes(name)) {
       removeItem(name)
       setActiveNames([...activeNames.value])
-    } else {
+    }
+    else {
       addItem(name)
       setActiveNames([...activeNames.value])
     }
@@ -83,9 +80,15 @@ const handleItemClick = (name: string) => {
 provide<CollapseContext>('collapse', {
   activeNames,
   accordion: props.accordion,
-  handleItemClick
+  handleItemClick,
 })
 </script>
+
+<template>
+  <div class="tx-collapse">
+    <slot />
+  </div>
+</template>
 
 <style scoped>
 .tx-collapse {

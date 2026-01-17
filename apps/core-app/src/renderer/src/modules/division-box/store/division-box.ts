@@ -1,21 +1,17 @@
 /**
  * DivisionBox Pinia Store
- * 
+ *
  * Manages DivisionBox state in the renderer process, including:
  * - Active sessions
  * - Recent and pinned lists
  * - UI state (dragging, resizing)
  */
 
-import { defineStore } from 'pinia'
+import type { CloseOptions, DivisionBoxConfig, SessionInfo } from '@talex-touch/utils'
+import type { DivisionBoxStoreState } from '../types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
-import type {
-  SessionInfo,
-  DivisionBoxConfig,
-  CloseOptions,
-} from '@talex-touch/utils'
-import type { DivisionBoxStoreState } from '../types'
+import { defineStore } from 'pinia'
 import { divisionBoxStorage } from '~/modules/storage/division-box-storage'
 
 let disposeStateChanged: (() => void) | null = null
@@ -37,9 +33,11 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
     /**
      * Get session by ID
      */
-    getSessionById: (state) => (sessionId: string): SessionInfo | undefined => {
-      return state.activeSessions.get(sessionId)
-    },
+    getSessionById:
+      (state) =>
+      (sessionId: string): SessionInfo | undefined => {
+        return state.activeSessions.get(sessionId)
+      },
 
     /**
      * Get all active sessions as array
@@ -51,9 +49,11 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
     /**
      * Check if session is pinned
      */
-    isSessionPinned: (state) => (sessionId: string): boolean => {
-      return state.pinnedList.includes(sessionId)
-    }
+    isSessionPinned:
+      (state) =>
+      (sessionId: string): boolean => {
+        return state.pinnedList.includes(sessionId)
+      }
   },
 
   actions: {
@@ -104,7 +104,11 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
     async updateSessionState(sessionId: string, key: string, value: any): Promise<void> {
       try {
         const transport = useTuffTransport()
-        const result = await transport.send(DivisionBoxEvents.updateState, { sessionId, key, value })
+        const result = await transport.send(DivisionBoxEvents.updateState, {
+          sessionId,
+          key,
+          value
+        })
         if (!result?.success) {
           throw new Error(result?.error?.message || 'Failed to update session state')
         }

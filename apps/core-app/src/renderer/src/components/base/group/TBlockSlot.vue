@@ -1,36 +1,32 @@
-<script name="TBlockSlot">
-export default {
-  name: 'TBlockSlot',
-}
-</script>
-
 <script setup>
 import RemixIcon from '~/components/icon/RemixIcon.vue'
+
+defineOptions({ name: 'TBlockSlot' })
 
 const props = defineProps({
   title: {
     type: String,
-    required: true,
+    required: true
   },
   description: {
     type: String,
-    required: true,
+    required: true
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   icon: {
     type: String,
-    required: true,
-  },
+    required: true
+  }
 })
 </script>
 
 <template>
   <div class="TBlockSlot-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
     <div class="TBlockSlot-Content TBlockSelection-Content">
-      <RemixIcon :name="icon" style="line" />
+      <RemixIcon :name="icon" :style="'line'" />
       <div class="TBlockSlot-Label TBlockSelection-Label">
         <slot name="label">
           <h3>{{ title }}</h3>

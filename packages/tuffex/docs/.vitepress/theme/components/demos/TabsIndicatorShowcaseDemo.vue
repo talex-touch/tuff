@@ -62,7 +62,9 @@ function next() {
         :padding="12"
         :radius="14"
       >
-        <div class="tx-demo__label" style="margin-bottom: 8px;">{{ v.label }}</div>
+        <div class="tx-demo__label" style="margin-bottom: 8px;">
+          {{ v.label }}
+        </div>
 
         <TxTabs
           v-model="active"
@@ -72,9 +74,15 @@ function next() {
           :indicator-motion="motion"
           :animation="{ indicator: { durationMs: 180 }, content: true }"
         >
-          <TxTabItem name="A" activation>Overview</TxTabItem>
-          <TxTabItem name="B">Features</TxTabItem>
-          <TxTabItem name="C">Pricing</TxTabItem>
+          <TxTabItem name="A" activation>
+            Overview
+          </TxTabItem>
+          <TxTabItem name="B">
+            Features
+          </TxTabItem>
+          <TxTabItem name="C">
+            Pricing
+          </TxTabItem>
         </TxTabs>
       </TxCard>
     </div>

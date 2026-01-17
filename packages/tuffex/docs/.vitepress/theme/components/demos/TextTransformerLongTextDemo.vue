@@ -23,15 +23,21 @@ function toggle() {
 <template>
   <div style="display: flex; flex-direction: column; gap: 12px;">
     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-      <TxButton @click="toggle">Toggle chapter</TxButton>
+      <TxButton @click="toggle">
+        Toggle chapter
+      </TxButton>
 
       <div style="width: 220px;">
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">duration (ms)</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          duration (ms)
+        </div>
         <TxSlider v-model="duration" :min="180" :max="900" :step="10" :show-value="true" />
       </div>
 
       <div style="width: 220px;">
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">blur (px)</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          blur (px)
+        </div>
         <TxSlider v-model="blurPx" :min="0" :max="28" :step="1" :show-value="true" />
       </div>
     </div>

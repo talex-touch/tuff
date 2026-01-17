@@ -1,15 +1,15 @@
 /**
  * DivisionBox Window Pool
- * 
+ *
  * Pre-creates DivisionBox windows for instant availability.
  * Maintains a pool of ready-to-use windows to reduce latency when detaching.
  */
 
-import { BrowserWindow } from 'electron'
-import { TouchWindow } from '../../core/touch-window'
+import type { BrowserWindow } from 'electron'
 import { DivisionBoxWindowOption } from '../../config/default'
-import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
+import { TouchWindow } from '../../core/touch-window'
 import { devProcessManager } from '../../utils/dev-process-manager'
+import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 
 const LOG_PREFIX = '[DivisionBox Pool]'
 const IS_WINDOWS = process.platform === 'win32'
@@ -29,21 +29,21 @@ interface PooledWindow {
 
 /**
  * DivisionBox Window Pool
- * 
+ *
  * Manages a pool of pre-created windows for fast detach operations.
  */
 export class DivisionBoxWindowPool {
   private static instance: DivisionBoxWindowPool | null = null
-  
+
   /** Pool of ready windows */
   private pool: PooledWindow[] = []
-  
+
   /** Currently active DivisionBox windows (not in pool) */
   private activeWindows: Set<BrowserWindow> = new Set()
-  
+
   /** Whether pool initialization is in progress */
   private initializing: boolean = false
-  
+
   /** Whether a fill operation is in progress */
   private filling: boolean = false
 
@@ -74,7 +74,7 @@ export class DivisionBoxWindowPool {
     this.initializing = true
 
     console.log(LOG_PREFIX, 'Initializing window pool...')
-    
+
     try {
       await this.fillPool()
       console.log(LOG_PREFIX, `✓ Pool ready (${this.pool.length} windows pre-warmed)`)
@@ -100,19 +100,19 @@ export class DivisionBoxWindowPool {
     // Prevent concurrent fills
     if (this.filling) return
     this.filling = true
-    
+
     try {
       // Clean up destroyed windows from pool
-      this.pool = this.pool.filter(p => !p.touchWindow.window.isDestroyed())
-      
+      this.pool = this.pool.filter((p) => !p.touchWindow.window.isDestroyed())
+
       const needed = POOL_SIZE - this.pool.length
-      
+
       if (needed <= 0) {
         return
       }
-      
+
       console.log(LOG_PREFIX, `Filling pool (need ${needed}, have ${this.pool.length})`)
-      
+
       for (let i = 0; i < needed; i++) {
         if (this.destroyed || devProcessManager.isShuttingDownProcess()) {
           break
@@ -123,7 +123,7 @@ export class DivisionBoxWindowPool {
           console.log(LOG_PREFIX, `Max instances reached (${MAX_DIVISION_BOX_INSTANCES})`)
           break
         }
-        
+
         try {
           const pooledWindow = await this.createPooledWindow()
           this.pool.push(pooledWindow)
@@ -146,7 +146,7 @@ export class DivisionBoxWindowPool {
     }
 
     console.log(LOG_PREFIX, 'Creating new window...')
-    
+
     const touchWindow = new TouchWindow({
       ...DivisionBoxWindowOption,
       show: false, // Don't show until acquired
@@ -157,7 +157,7 @@ export class DivisionBoxWindowPool {
     // Load the CoreBox renderer
     const rendererUrl = getCoreBoxRendererUrl()
     console.log(LOG_PREFIX, `Loading renderer: ${rendererUrl}`)
-    
+
     try {
       if (isDevMode()) {
         await touchWindow.loadURL(rendererUrl)
@@ -165,27 +165,27 @@ export class DivisionBoxWindowPool {
         await touchWindow.loadFile(getCoreBoxRendererPath())
       }
       console.log(LOG_PREFIX, 'Renderer loaded successfully')
-      
+
       // loadURL/loadFile already waits for the page to load
       // No need for additional dom-ready wait
     } catch (error) {
       console.error(LOG_PREFIX, 'Failed to load renderer:', error)
       throw error
     }
-    
+
     console.log(LOG_PREFIX, 'Window ready')
 
     // Handle window closed (remove from pool)
     touchWindow.window.on('closed', () => {
-      this.pool = this.pool.filter(p => p.touchWindow !== touchWindow)
+      this.pool = this.pool.filter((p) => p.touchWindow !== touchWindow)
       this.activeWindows.delete(touchWindow.window)
-      
+
       // Refill pool after a delay
       if (!this.destroyed && !devProcessManager.isShuttingDownProcess()) {
         setTimeout(() => this.fillPool(), 1000)
       }
     })
-    
+
     return {
       touchWindow,
       createdAt: Date.now(),
@@ -215,11 +215,11 @@ export class DivisionBoxWindowPool {
     let touchWindow: TouchWindow
 
     // Clean up destroyed windows first
-    this.pool = this.pool.filter(p => !p.touchWindow.window.isDestroyed())
+    this.pool = this.pool.filter((p) => !p.touchWindow.window.isDestroyed())
 
     // Try to get from pool
     const pooledWindow = this.pool.shift()
-    
+
     if (pooledWindow) {
       touchWindow = pooledWindow.touchWindow
       console.log(LOG_PREFIX, `← Acquired from pool (remaining: ${this.pool.length})`)
@@ -251,7 +251,7 @@ export class DivisionBoxWindowPool {
     if (wasActive) {
       console.log(LOG_PREFIX, `Released window (active: ${this.activeWindows.size})`)
     }
-    
+
     // Refill pool
     if (!this.destroyed && !devProcessManager.isShuttingDownProcess()) {
       setTimeout(() => this.fillPool(), 500)
@@ -302,10 +302,10 @@ export class DivisionBoxWindowPool {
       }
     }
     this.pool = []
-    
+
     // Clear active tracking (windows should be destroyed by their sessions)
     this.activeWindows.clear()
-    
+
     console.log(LOG_PREFIX, 'Pool destroyed')
   }
 }

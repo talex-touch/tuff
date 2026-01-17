@@ -1,6 +1,6 @@
-import TxFusion from './src/TxFusion.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { FusionDirection, FusionProps, FusionTrigger } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxFusion from './src/TxFusion.vue'
 
 const Fusion = withInstall(TxFusion)
 

@@ -71,7 +71,7 @@ export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = 
   const waitRaf = async () => {
     if (typeof requestAnimationFrame === 'undefined')
       return
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
   }
 
   const forceReflow = (el: HTMLElement) => {
@@ -122,12 +122,12 @@ export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = 
 
       el.style.transformOrigin = 'top left'
       const scalePart = opt.includeScale ? ` scale(${dw}, ${dh})` : ''
-      el.style.transform = `translate(${dx}px, ${dy}px)` + scalePart
+      el.style.transform = `translate(${dx}px, ${dy}px)${scalePart}`
 
       forceReflow(el)
 
       el.style.transitionDuration = `${opt.duration}ms`
-      el.style.transform = 'translate(0px, 0px)' + (opt.includeScale ? ' scale(1, 1)' : '')
+      el.style.transform = `translate(0px, 0px)${opt.includeScale ? ' scale(1, 1)' : ''}`
 
       const onEnd = (e: TransitionEvent) => {
         if (e.propertyName !== 'transform')

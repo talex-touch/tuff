@@ -7,7 +7,7 @@ import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
 import FeatureCard from '../FeatureCard.vue'
 
-type FeatureCommandData = {
+interface FeatureCommandData {
   name?: string
   shortcut?: string
   desc?: string

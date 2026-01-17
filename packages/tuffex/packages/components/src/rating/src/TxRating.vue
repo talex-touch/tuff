@@ -1,43 +1,13 @@
-<template>
-  <div class="tx-rating">
-    <div class="tx-rating__stars">
-      <button
-        v-for="star in maxStars"
-        :key="star"
-        class="tx-rating__star"
-        :class="{
-          'tx-rating__star--filled': star <= filledStars,
-          'tx-rating__star--half': star === filledStars + 0.5,
-          'tx-rating__star--disabled': disabled
-        }"
-        @click="handleClick(star)"
-        @mouseenter="handleMouseEnter(star)"
-        @mouseleave="handleMouseLeave"
-        :disabled="disabled"
-        :aria-label="`Rate ${star} star${star !== 1 ? 's' : ''}`"
-      >
-        <TxIcon :name="getStarIcon(star)" />
-      </button>
-    </div>
-    
-    <div v-if="showText" class="tx-rating__text">
-      <slot name="text" :value="rating" :max="maxStars">
-        {{ rating.toFixed(precisionDigits) }} / {{ maxStars }}
-      </slot>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { RatingProps } from './types'
 import { computed, ref } from 'vue'
 import { TxIcon } from '../../icon'
-import type { RatingProps } from './types'
 
 interface Props extends RatingProps {}
 
 interface Emits {
   'update:modelValue': [value: number]
-  change: [value: number]
+  'change': [value: number]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -49,7 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   showText: false,
   filledIcon: 'star',
   emptyIcon: 'star',
-  halfIcon: 'star-half'
+  halfIcon: 'star-half',
 })
 
 const emit = defineEmits<Emits>()
@@ -58,8 +28,10 @@ const rating = computed(() => props.modelValue ?? 0)
 
 const precisionDigits = computed(() => {
   const p = props.precision ?? 1
-  if (p === 0.5) return 1
-  if (typeof p !== 'number' || !Number.isFinite(p)) return 1
+  if (p === 0.5)
+    return 1
+  if (typeof p !== 'number' || !Number.isFinite(p))
+    return 1
   return Math.max(0, Math.min(6, Math.round(p)))
 })
 
@@ -72,40 +44,75 @@ const filledStars = computed(() => {
   return hoverValue.value
 })
 
-const getStarIcon = (star: number) => {
+function getStarIcon(star: number) {
   const filledValue = filledStars.value
-  
+
   if (star <= filledValue) {
     return props.filledIcon
-  } else if (star === filledValue + 0.5) {
+  }
+  else if (star === filledValue + 0.5) {
     return props.halfIcon
-  } else {
+  }
+  else {
     return props.emptyIcon
   }
 }
 
-const handleClick = (star: number) => {
-  if (props.disabled || props.readonly) return
-  
+function handleClick(star: number) {
+  if (props.disabled || props.readonly)
+    return
+
   let newValue = star
   if (props.precision === 0.5 && star === filledStars.value) {
     newValue = star - 0.5
   }
-  
+
   emit('update:modelValue', newValue)
   emit('change', newValue)
 }
 
-const handleMouseEnter = (star: number) => {
-  if (props.disabled || props.readonly) return
+function handleMouseEnter(star: number) {
+  if (props.disabled || props.readonly)
+    return
   hoverValue.value = star
 }
 
-const handleMouseLeave = () => {
-  if (props.disabled || props.readonly) return
+function handleMouseLeave() {
+  if (props.disabled || props.readonly)
+    return
   hoverValue.value = props.modelValue
 }
 </script>
+
+<template>
+  <div class="tx-rating">
+    <div class="tx-rating__stars">
+      <button
+        v-for="star in maxStars"
+        :key="star"
+        class="tx-rating__star"
+        :class="{
+          'tx-rating__star--filled': star <= filledStars,
+          'tx-rating__star--half': star === filledStars + 0.5,
+          'tx-rating__star--disabled': disabled,
+        }"
+        :disabled="disabled"
+        :aria-label="`Rate ${star} star${star !== 1 ? 's' : ''}`"
+        @click="handleClick(star)"
+        @mouseenter="handleMouseEnter(star)"
+        @mouseleave="handleMouseLeave"
+      >
+        <TxIcon :name="getStarIcon(star)" />
+      </button>
+    </div>
+
+    <div v-if="showText" class="tx-rating__text">
+      <slot name="text" :value="rating" :max="maxStars">
+        {{ rating.toFixed(precisionDigits) }} / {{ maxStars }}
+      </slot>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .tx-rating {

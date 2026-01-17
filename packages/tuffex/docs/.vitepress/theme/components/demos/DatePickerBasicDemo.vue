@@ -8,8 +8,12 @@ const value = ref('2026-01-02')
 <template>
   <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
     <div style="display: flex; gap: 8px; align-items: center;">
-      <TxButton variant="primary" @click="visible = true">Open date picker</TxButton>
-      <div style="color: var(--tx-text-color-secondary);">Value: {{ value }}</div>
+      <TxButton variant="primary" @click="visible = true">
+        Open date picker
+      </TxButton>
+      <div style="color: var(--tx-text-color-secondary);">
+        Value: {{ value }}
+      </div>
     </div>
 
     <TxDatePicker

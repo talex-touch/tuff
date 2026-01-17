@@ -5,14 +5,14 @@
  * Handles configuration, global controls, and logger lifecycle.
  */
 
+import type { LoggerInfo, LoggingConfig, ModuleLoggerOptions } from './types'
 import { ModuleLogger } from './module-logger'
 import {
+
   LogLevel,
-  type LoggingConfig,
-  type LoggerInfo,
-  type ModuleLoggerOptions,
+  logLevelToString,
+
   stringToLogLevel,
-  logLevelToString
 } from './types'
 
 /**
@@ -21,29 +21,29 @@ import {
 const DEFAULT_CONFIG: LoggingConfig = {
   enabled: true,
   globalLevel: 'debug',
-  modules: {}
+  modules: {},
 }
 
 /**
  * Predefined module defaults
  */
-const MODULE_DEFAULTS: Record<string, { enabled: boolean; level: LogLevel; color: string }> = {
+const MODULE_DEFAULTS: Record<string, { enabled: boolean, level: LogLevel, color: string }> = {
   'search-engine': { enabled: true, level: LogLevel.DEBUG, color: 'cyan' },
   'file-provider': { enabled: false, level: LogLevel.DEBUG, color: 'green' },
   'app-provider': { enabled: false, level: LogLevel.DEBUG, color: 'blue' },
   'plugin-system': { enabled: true, level: LogLevel.INFO, color: 'magenta' },
-  database: { enabled: false, level: LogLevel.WARN, color: 'yellow' },
-  storage: { enabled: false, level: LogLevel.WARN, color: 'yellow' },
-  clipboard: { enabled: false, level: LogLevel.INFO, color: 'cyan' },
+  'database': { enabled: false, level: LogLevel.WARN, color: 'yellow' },
+  'storage': { enabled: false, level: LogLevel.WARN, color: 'yellow' },
+  'clipboard': { enabled: false, level: LogLevel.INFO, color: 'cyan' },
   'flow-bus': { enabled: true, level: LogLevel.INFO, color: 'green' },
   'division-box': { enabled: true, level: LogLevel.INFO, color: 'blue' },
   'core-box': { enabled: true, level: LogLevel.INFO, color: 'cyan' },
-  tray: { enabled: false, level: LogLevel.INFO, color: 'gray' },
-  download: { enabled: true, level: LogLevel.INFO, color: 'green' },
-  intelligence: { enabled: true, level: LogLevel.INFO, color: 'magenta' },
-  terminal: { enabled: false, level: LogLevel.DEBUG, color: 'gray' },
-  update: { enabled: true, level: LogLevel.INFO, color: 'blue' },
-  widget: { enabled: true, level: LogLevel.DEBUG, color: 'cyan' }
+  'tray': { enabled: false, level: LogLevel.INFO, color: 'gray' },
+  'download': { enabled: true, level: LogLevel.INFO, color: 'green' },
+  'intelligence': { enabled: true, level: LogLevel.INFO, color: 'magenta' },
+  'terminal': { enabled: false, level: LogLevel.DEBUG, color: 'gray' },
+  'update': { enabled: true, level: LogLevel.INFO, color: 'blue' },
+  'widget': { enabled: true, level: LogLevel.DEBUG, color: 'cyan' },
 }
 
 /**
@@ -89,7 +89,8 @@ export class LoggerManager {
       let enabled = this.config.enabled
       if (moduleConfig?.enabled !== undefined) {
         enabled = enabled && moduleConfig.enabled
-      } else if (defaults?.enabled !== undefined) {
+      }
+      else if (defaults?.enabled !== undefined) {
         enabled = enabled && defaults.enabled
       }
       if (options?.enabled !== undefined) {
@@ -100,7 +101,8 @@ export class LoggerManager {
       let level = stringToLogLevel(this.config.globalLevel)
       if (moduleConfig?.level) {
         level = Math.max(level, stringToLogLevel(moduleConfig.level))
-      } else if (defaults?.level !== undefined) {
+      }
+      else if (defaults?.level !== undefined) {
         level = Math.max(level, defaults.level)
       }
       if (options?.level !== undefined) {
@@ -115,7 +117,7 @@ export class LoggerManager {
         color,
         enabled,
         level,
-        prefix: options?.prefix
+        prefix: options?.prefix,
       })
 
       this.loggers.set(module, logger)
@@ -162,7 +164,7 @@ export class LoggerManager {
   setModuleConfig(module: string, enabled: boolean, level: LogLevel): void {
     this.config.modules[module] = {
       enabled,
-      level: logLevelToString(level)
+      level: logLevelToString(level),
     }
 
     const logger = this.loggers.get(module)
@@ -180,7 +182,7 @@ export class LoggerManager {
       module,
       enabled: logger.isEnabled(),
       level: logger.getLevel(),
-      color: logger.getColor()
+      color: logger.getColor(),
     }))
   }
 
@@ -217,7 +219,8 @@ export class LoggerManager {
    * Load configuration from storage
    */
   async loadConfig(): Promise<void> {
-    if (!this.configLoader) return
+    if (!this.configLoader)
+      return
 
     try {
       const loaded = await this.configLoader()
@@ -225,7 +228,8 @@ export class LoggerManager {
         this.config = { ...DEFAULT_CONFIG, ...loaded }
         this.applyConfig()
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[LoggerManager] Failed to load config:', error)
     }
   }
@@ -234,11 +238,13 @@ export class LoggerManager {
    * Save configuration to storage
    */
   async saveConfig(): Promise<void> {
-    if (!this.configSaver) return
+    if (!this.configSaver)
+      return
 
     try {
       await this.configSaver(this.config)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('[LoggerManager] Failed to save config:', error)
     }
   }
@@ -255,7 +261,8 @@ export class LoggerManager {
       let enabled = this.config.enabled
       if (moduleConfig?.enabled !== undefined) {
         enabled = enabled && moduleConfig.enabled
-      } else if (defaults?.enabled !== undefined) {
+      }
+      else if (defaults?.enabled !== undefined) {
         enabled = enabled && defaults.enabled
       }
 
@@ -263,7 +270,8 @@ export class LoggerManager {
       let level = stringToLogLevel(this.config.globalLevel)
       if (moduleConfig?.level) {
         level = Math.max(level, stringToLogLevel(moduleConfig.level))
-      } else if (defaults?.level !== undefined) {
+      }
+      else if (defaults?.level !== undefined) {
         level = Math.max(level, defaults.level)
       }
 

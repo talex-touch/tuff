@@ -134,7 +134,7 @@ export class ItemRebuilder {
         // itemId 格式: "pluginName/featureId"
         const [pluginName, featureId] = item.itemId.split('/')
         if (!pluginName || !featureId) {
-            continue
+          continue
         }
 
         const plugin = pluginManager.plugins.get(pluginName)
@@ -212,8 +212,8 @@ export class ItemRebuilder {
           const render: TuffRender = {
             mode: 'default',
             basic: {
-              title: '',
-            },
+              title: ''
+            }
           }
 
           let kind: TuffItem['kind'] = 'document'
@@ -228,12 +228,12 @@ export class ItemRebuilder {
               render.basic.subtitle = `Text from ${record.sourceApp || 'Unknown'}`
               render.basic.icon = {
                 type: 'emoji',
-                value: '📄',
+                value: '📄'
               }
             }
             render.preview = {
               type: 'panel',
-              content: record.content,
+              content: record.content
             }
           } else if (record.type === 'image') {
             kind = 'image'
@@ -242,28 +242,26 @@ export class ItemRebuilder {
               render.basic.icon = record.thumbnail
                 ? {
                     type: 'url',
-                    value: record.thumbnail,
+                    value: record.thumbnail
                   }
                 : {
                     type: 'emoji',
-                    value: '🖼️',
+                    value: '🖼️'
                   }
             }
             render.preview = {
               type: 'panel',
-              image: record.content,
+              image: record.content
             }
           } else if (record.type === 'files') {
             kind = 'file'
             if (render.basic) {
-        try {
+              try {
                 const files = JSON.parse(record.content)
                 if (files.length === 1) {
                   const filePath = files[0]
                   render.basic.title =
-                    typeof filePath === 'string'
-                      ? filePath.split(/[\\/]/).pop() || 'File'
-                      : 'File'
+                    typeof filePath === 'string' ? filePath.split(/[\\/]/).pop() || 'File' : 'File'
                 } else {
                   render.basic.title = `${files.length} files`
                 }
@@ -272,7 +270,7 @@ export class ItemRebuilder {
               }
               render.basic.icon = {
                 type: 'emoji',
-                value: '📁',
+                value: '📁'
               }
             }
           }
@@ -304,7 +302,7 @@ export class ItemRebuilder {
             source: {
               id: 'clipboard-history',
               type: 'history',
-              name: 'Clipboard History',
+              name: 'Clipboard History'
             },
             kind,
             render,
@@ -313,18 +311,18 @@ export class ItemRebuilder {
                 id: 'paste',
                 type: 'execute',
                 label: 'Paste',
-                shortcut: 'Enter',
+                shortcut: 'Enter'
               },
               {
                 id: 'copy',
                 type: 'copy',
                 label: 'Copy',
-                shortcut: 'CmdOrCtrl+C',
-              },
+                shortcut: 'CmdOrCtrl+C'
+              }
             ],
             meta: {
-              raw: record,
-            },
+              raw: record
+            }
           }
 
           rebuiltItems.push(tuffItem)
@@ -338,8 +336,10 @@ export class ItemRebuilder {
     }
   }
 
-
-  private findScoredByPartialMatch(item: TuffItem, scoredItems: ScoredItem[]): ScoredItem | undefined {
+  private findScoredByPartialMatch(
+    item: TuffItem,
+    scoredItems: ScoredItem[]
+  ): ScoredItem | undefined {
     const itemId = item.id
     const sourceId = item.source.id
     const originalItemId = (item.meta as any)?._originalItemId
@@ -376,10 +376,11 @@ export class ItemRebuilder {
     return items
       .map((item) => {
         const originalItemId = (item.meta as any)?._originalItemId
-        const scored = (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`))
-          || scoreMap.get(item.id)
-          || scoreMap.get(`${item.source.id}:${item.id}`)
-          || this.findScoredByPartialMatch(item, scoredItems)
+        const scored =
+          (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
+          scoreMap.get(item.id) ||
+          scoreMap.get(`${item.source.id}:${item.id}`) ||
+          this.findScoredByPartialMatch(item, scoredItems)
         if (!scored) return null
 
         const meta: any = item.meta || {}

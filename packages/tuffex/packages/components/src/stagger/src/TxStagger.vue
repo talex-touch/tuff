@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Comment, computed, useSlots } from 'vue'
 import type { StaggerProps } from './types'
+import { Comment, computed, useSlots } from 'vue'
 
 defineOptions({
   name: 'TxStagger',

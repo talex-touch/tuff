@@ -1,16 +1,16 @@
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type {
   PluginInstallConfirmRequest,
   PluginInstallConfirmResponse,
   PluginInstallProgressEvent
 } from '@talex-touch/utils/plugin'
+import type { PluginInstallRequest } from '@talex-touch/utils/plugin/providers/types'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { PluginInstaller, PreparedPluginInstall } from './plugin-installer'
 import type { ResolverInstallOptions } from './plugin-resolver'
 import crypto from 'node:crypto'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
-import type { PluginInstallRequest } from '@talex-touch/utils/plugin/providers/types'
-import { extractSignatureInfo, verifyPackageSignature } from './signature-verifier'
 import { checkPluginActiveUI } from './plugin-ui-utils'
+import { extractSignatureInfo, verifyPackageSignature } from './signature-verifier'
 
 type PluginInstallQueueResult =
   | {

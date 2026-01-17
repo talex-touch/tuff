@@ -10,17 +10,22 @@ import type {
   ModuleLoadMetric,
   RendererProcessMetrics,
   StartupHistory,
-  StartupMetrics,
+  StartupMetrics
 } from './types'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import process from 'node:process'
-import { getBooleanEnv, getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
+import {
+  getBooleanEnv,
+  getEnvOrDefault,
+  getTelemetryApiBase,
+  normalizeBaseUrl
+} from '@talex-touch/utils/env'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
-import { ReportQueueStore } from './report-queue-store'
 import { databaseModule } from '../database'
 import { getConfig, saveConfig } from '../storage'
+import { ReportQueueStore } from './report-queue-store'
 import { getOrCreateTelemetryClientId } from './telemetry-client'
 
 const analyticsLog = createLogger('StartupAnalytics')
@@ -30,7 +35,7 @@ const REPORT_QUEUE_MAX_COUNT = 120
 const REPORT_QUEUE_BACKOFF_BASE_MS = 30_000
 const REPORT_QUEUE_BACKOFF_MAX_MS = 10 * 60_000
 
-type FileReportQueueItem = {
+interface FileReportQueueItem {
   payload: any
   endpoint: string
   createdAt: number
@@ -55,7 +60,7 @@ export class StartupAnalytics {
     this.config = {
       enabled,
       maxHistory: 10,
-      ...config,
+      ...config
     }
 
     this.startTime = Date.now()
@@ -69,11 +74,11 @@ export class StartupAnalytics {
       version: app.getVersion(),
       electronVersion: process.versions.electron,
       nodeVersion: process.versions.node,
-      isPackaged: app.isPackaged,
+      isPackaged: app.isPackaged
     }
 
     analyticsLog.info('StartupAnalytics initialized', {
-      meta: { sessionId: this.currentMetrics.sessionId },
+      meta: { sessionId: this.currentMetrics.sessionId }
     })
   }
 
@@ -84,12 +89,12 @@ export class StartupAnalytics {
     this.currentMetrics.mainProcess = metrics
 
     if (this.currentMetrics.renderer) {
-      this.currentMetrics.totalStartupTime
-        = this.currentMetrics.renderer.readyTime - metrics.processCreationTime
+      this.currentMetrics.totalStartupTime =
+        this.currentMetrics.renderer.readyTime - metrics.processCreationTime
     }
 
     analyticsLog.debug('Main process metrics recorded', {
-      meta: { modulesLoadTime: metrics.modulesLoadTime },
+      meta: { modulesLoadTime: metrics.modulesLoadTime }
     })
 
     this.tryAutoFinalize()
@@ -103,15 +108,15 @@ export class StartupAnalytics {
 
     // Calculate total startup time
     if (this.currentMetrics.mainProcess) {
-      this.currentMetrics.totalStartupTime
-        = metrics.readyTime - this.currentMetrics.mainProcess.processCreationTime
+      this.currentMetrics.totalStartupTime =
+        metrics.readyTime - this.currentMetrics.mainProcess.processCreationTime
     }
 
     analyticsLog.success('Renderer process metrics recorded', {
       meta: {
         totalStartupTime: this.currentMetrics.totalStartupTime,
-        readyTime: metrics.readyTime - metrics.startTime,
-      },
+        readyTime: metrics.readyTime - metrics.startTime
+      }
     })
 
     this.tryAutoFinalize()
@@ -124,7 +129,7 @@ export class StartupAnalytics {
     this.moduleMetrics.push({
       name: moduleName,
       loadTime,
-      order,
+      order
     })
   }
 
@@ -150,8 +155,7 @@ export class StartupAnalytics {
       if (history && Array.isArray(history.entries)) {
         return history
       }
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       analyticsLog.warn('Failed to load startup history', { meta: { error: errorMessage } })
     }
@@ -159,7 +163,7 @@ export class StartupAnalytics {
     return {
       entries: [],
       maxEntries: this.config.maxHistory,
-      lastUpdated: Date.now(),
+      lastUpdated: Date.now()
     }
   }
 
@@ -190,11 +194,10 @@ export class StartupAnalytics {
         meta: {
           sessionId: metrics.sessionId,
           totalStartupTime: metrics.totalStartupTime,
-          historyCount: history.entries.length,
-        },
+          historyCount: history.entries.length
+        }
       })
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       analyticsLog.error('Failed to save metrics to history', { meta: { error: errorMessage } })
     }
@@ -214,8 +217,7 @@ export class StartupAnalytics {
   }
 
   private isReportDue(item: Pick<FileReportQueueItem, 'lastAttemptAt' | 'retryCount'>): boolean {
-    if (!item.lastAttemptAt)
-      return true
+    if (!item.lastAttemptAt) return true
     const retryCount = item.retryCount ?? 0
     const backoffMs = this.getReportBackoffMs(retryCount)
     return Date.now() - item.lastAttemptAt >= backoffMs
@@ -224,15 +226,12 @@ export class StartupAnalytics {
   private loadReportQueue(): FileReportQueueItem[] {
     try {
       const data = getConfig(REPORT_QUEUE_FILE) as unknown
-      if (Array.isArray(data))
-        return data as FileReportQueueItem[]
+      if (Array.isArray(data)) return data as FileReportQueueItem[]
       if (typeof data === 'string') {
         const parsed = JSON.parse(data)
-        if (Array.isArray(parsed))
-          return parsed as FileReportQueueItem[]
+        if (Array.isArray(parsed)) return parsed as FileReportQueueItem[]
       }
-    }
-    catch {
+    } catch {
       // ignore parse errors, treat as empty
     }
     return []
@@ -242,29 +241,27 @@ export class StartupAnalytics {
     const now = Date.now()
     const cutoff = now - REPORT_QUEUE_MAX_AGE
     const pruned = queue
-      .filter(item => item.createdAt >= cutoff)
+      .filter((item) => item.createdAt >= cutoff)
       .sort((a, b) => a.createdAt - b.createdAt)
       .slice(-REPORT_QUEUE_MAX_COUNT)
-      .map(item => ({
+      .map((item) => ({
         payload: item.payload,
         endpoint: item.endpoint,
         createdAt: item.createdAt,
         retryCount: item.retryCount,
-        lastAttemptAt: item.lastAttemptAt,
+        lastAttemptAt: item.lastAttemptAt
       }))
 
     saveConfig(REPORT_QUEUE_FILE, JSON.stringify(pruned, null, 2))
   }
 
   private getReportQueueStore(): ReportQueueStore | null {
-    if (this.reportQueueStore)
-      return this.reportQueueStore
+    if (this.reportQueueStore) return this.reportQueueStore
     try {
       const db = databaseModule.getDb()
       this.reportQueueStore = new ReportQueueStore(db)
       return this.reportQueueStore
-    }
-    catch {
+    } catch {
       return null
     }
   }
@@ -277,12 +274,11 @@ export class StartupAnalytics {
     }
 
     const queue = this.loadReportQueue()
-    if (!queue.length)
-      return
+    if (!queue.length) return
 
     const cutoff = Date.now() - REPORT_QUEUE_MAX_AGE
     const freshQueue = queue
-      .filter(item => item.createdAt >= cutoff)
+      .filter((item) => item.createdAt >= cutoff)
       .sort((a, b) => a.createdAt - b.createdAt)
       .slice(-REPORT_QUEUE_MAX_COUNT)
     const remaining: typeof freshQueue = []
@@ -304,33 +300,33 @@ export class StartupAnalytics {
         const response = await fetch(target, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item.payload),
+          body: JSON.stringify(item.payload)
         })
         if (!response.ok) {
           const text = await response.text().catch(() => '')
-          throw new Error(`Queued report failed: ${response.status} ${response.statusText} ${text}`.trim())
+          throw new Error(
+            `Queued report failed: ${response.status} ${response.statusText} ${text}`.trim()
+          )
         }
         succeeded += 1
-      }
-      catch (error) {
+      } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         firstError ||= errorMessage
         remaining.push({
           ...item,
           retryCount: (item.retryCount ?? 0) + 1,
-          lastAttemptAt: Date.now(),
+          lastAttemptAt: Date.now()
         })
       }
     }
 
     this.saveReportQueue(remaining)
 
-    if (attempted === 0)
-      return
+    if (attempted === 0) return
 
     if (succeeded === attempted) {
       analyticsLog.success('Queued startup analytics flushed', {
-        meta: { count: succeeded },
+        meta: { count: succeeded }
       })
       return
     }
@@ -340,8 +336,8 @@ export class StartupAnalytics {
         attempted,
         succeeded,
         skipped,
-        error: firstError,
-      },
+        error: firstError
+      }
     })
   }
 
@@ -351,12 +347,11 @@ export class StartupAnalytics {
     if (allItems.length > REPORT_QUEUE_MAX_COUNT) {
       const dropCount = allItems.length - REPORT_QUEUE_MAX_COUNT
       const dropped = allItems.slice(0, dropCount)
-      await Promise.allSettled(dropped.map(item => store.remove(item.id)))
+      await Promise.allSettled(dropped.map((item) => store.remove(item.id)))
     }
 
     const items = allItems.slice(-REPORT_QUEUE_MAX_COUNT)
-    if (!items.length)
-      return
+    if (!items.length) return
 
     let attempted = 0
     let succeeded = 0
@@ -375,16 +370,17 @@ export class StartupAnalytics {
         const response = await fetch(target, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item.payload),
+          body: JSON.stringify(item.payload)
         })
         if (!response.ok) {
           const text = await response.text().catch(() => '')
-          throw new Error(`Queued report failed: ${response.status} ${response.statusText} ${text}`.trim())
+          throw new Error(
+            `Queued report failed: ${response.status} ${response.statusText} ${text}`.trim()
+          )
         }
         await store.remove(item.id)
         succeeded += 1
-      }
-      catch (error) {
+      } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         await store.markAttempt(item.id)
         firstError ||= errorMessage
@@ -393,12 +389,11 @@ export class StartupAnalytics {
 
     await store.prune(cutoff)
 
-    if (attempted === 0)
-      return
+    if (attempted === 0) return
 
     if (succeeded === attempted) {
       analyticsLog.success('Queued startup analytics flushed (db)', {
-        meta: { count: succeeded },
+        meta: { count: succeeded }
       })
       return
     }
@@ -408,8 +403,8 @@ export class StartupAnalytics {
         attempted,
         succeeded,
         skipped,
-        error: firstError,
-      },
+        error: firstError
+      }
     })
   }
 
@@ -426,14 +421,14 @@ export class StartupAnalytics {
     let url = endpoint || this.config.reportEndpoint
     if (!url) {
       if (isLocal) {
-        const localBase = normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE_LOCAL', 'http://localhost:3200'))
+        const localBase = normalizeBaseUrl(
+          getEnvOrDefault('NEXUS_API_BASE_LOCAL', 'http://localhost:3200')
+        )
         url = `${localBase}/api/telemetry/record`
-      }
-      else {
+      } else {
         try {
           url = `${getTelemetryApiBase()}/api/telemetry/record`
-        }
-        catch {
+        } catch {
           url = undefined
         }
       }
@@ -451,20 +446,20 @@ export class StartupAnalytics {
 
     try {
       analyticsLog.info('Reporting metrics (anonymous)', {
-        meta: { endpoint: url },
+        meta: { endpoint: url }
       })
 
       await this.flushQueuedReports(url)
 
       const memory = {
         total: os.totalmem(),
-        free: os.freemem(),
+        free: os.freemem()
       }
 
       const cpus = os.cpus()
       const cpu = {
         count: cpus.length,
-        model: cpus[0]?.model,
+        model: cpus[0]?.model
       }
 
       const payload = {
@@ -488,24 +483,25 @@ export class StartupAnalytics {
           cpu,
           uptime: os.uptime(),
           release: os.release(),
-          type: os.type(),
-        },
+          type: os.type()
+        }
       }
 
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       })
 
       if (!response.ok) {
         const text = await response.text().catch(() => '')
-        throw new Error(`Startup analytics report failed: ${response.status} ${response.statusText} ${text}`.trim())
+        throw new Error(
+          `Startup analytics report failed: ${response.status} ${response.statusText} ${text}`.trim()
+        )
       }
 
       analyticsLog.success('Metrics reported (anonymous)')
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       analyticsLog.error('Failed to report metrics', { meta: { error: errorMessage } })
       try {
@@ -528,7 +524,7 @@ export class StartupAnalytics {
             renderer: metrics.renderer,
             memory: {
               total: os.totalmem(),
-              free: os.freemem(),
+              free: os.freemem()
             },
             cpu: (() => {
               const cpus = os.cpus()
@@ -536,27 +532,25 @@ export class StartupAnalytics {
             })(),
             uptime: os.uptime(),
             release: os.release(),
-            type: os.type(),
-          },
+            type: os.type()
+          }
         }
 
         const store = this.getReportQueueStore()
         if (store) {
           await store.insert({ payload, endpoint: url, createdAt: Date.now() })
           analyticsLog.info('Queued startup analytics for retry (db)', {
-            meta: { endpoint: url },
+            meta: { endpoint: url }
           })
-        }
-        else {
+        } else {
           const queue = this.loadReportQueue()
           queue.push({ payload, endpoint: url, createdAt: Date.now() })
           this.saveReportQueue(queue)
           analyticsLog.info('Queued startup analytics for retry', {
-            meta: { queueSize: queue.length, endpoint: url },
+            meta: { queueSize: queue.length, endpoint: url }
           })
         }
-      }
-      catch (queueError) {
+      } catch (queueError) {
         const queueMessage = queueError instanceof Error ? queueError.message : String(queueError)
         analyticsLog.warn('Failed to queue startup analytics', { meta: { error: queueMessage } })
       }
@@ -564,18 +558,18 @@ export class StartupAnalytics {
   }
 
   private tryAutoFinalize(): void {
-    if (this.autoFinalizePromise)
-      return
+    if (this.autoFinalizePromise) return
     const metrics = this.getCurrentMetrics()
-    if (!metrics)
-      return
+    if (!metrics) return
 
     this.autoFinalizePromise = (async () => {
       await this.saveToHistory()
       await this.reportMetrics()
     })().catch((error) => {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      analyticsLog.warn('Failed to auto finalize startup analytics', { meta: { error: errorMessage } })
+      analyticsLog.warn('Failed to auto finalize startup analytics', {
+        meta: { error: errorMessage }
+      })
     })
   }
 
@@ -590,20 +584,16 @@ export class StartupAnalytics {
     rating: 'excellent' | 'good' | 'fair' | 'poor'
   } | null {
     const metrics = this.getCurrentMetrics()
-    if (!metrics)
-      return null
+    if (!metrics) return null
 
     const totalTime = metrics.totalStartupTime / 1000 // Convert to seconds
     const rendererTime = (metrics.renderer.readyTime - metrics.renderer.startTime) / 1000
     const mainProcessTime = metrics.mainProcess.modulesLoadTime / 1000
 
     let rating: 'excellent' | 'good' | 'fair' | 'poor'
-    if (totalTime < 1)
-      rating = 'excellent'
-    else if (totalTime < 2)
-      rating = 'good'
-    else if (totalTime < 5)
-      rating = 'fair'
+    if (totalTime < 1) rating = 'excellent'
+    else if (totalTime < 2) rating = 'good'
+    else if (totalTime < 5) rating = 'fair'
     else rating = 'poor'
 
     return {
@@ -611,7 +601,7 @@ export class StartupAnalytics {
       mainProcessTime,
       rendererTime,
       moduleCount: metrics.mainProcess.totalModules,
-      rating,
+      rating
     }
   }
 }

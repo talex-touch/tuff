@@ -3,7 +3,7 @@
  * @module @talex-touch/utils/transport/event/builder
  */
 
-import type { TuffEvent, EventOptions } from './types'
+import type { EventOptions, TuffEvent } from './types'
 
 // ============================================================================
 // Builder Classes
@@ -75,14 +75,14 @@ export class TuffEventBuilder<TNamespace extends string> {
  */
 export class TuffModuleBuilder<
   TNamespace extends string,
-  TModule extends string
+  TModule extends string,
 > {
   /**
    * @internal
    */
   constructor(
     private readonly _namespace: TNamespace,
-    private readonly _module: TModule
+    private readonly _module: TModule,
   ) {}
 
   /**
@@ -115,7 +115,7 @@ export class TuffModuleBuilder<
 export class TuffActionBuilder<
   TNamespace extends string,
   TModule extends string,
-  TAction extends string
+  TAction extends string,
 > {
   /**
    * @internal
@@ -123,7 +123,7 @@ export class TuffActionBuilder<
   constructor(
     private readonly _namespace: TNamespace,
     private readonly _module: TModule,
-    private readonly _action: TAction
+    private readonly _action: TAction,
   ) {}
 
   /**
@@ -166,7 +166,7 @@ export class TuffActionBuilder<
    * ```
    */
   define<TRequest = void, TResponse = void>(
-    options?: EventOptions
+    options?: EventOptions,
   ): TuffEvent<TRequest, TResponse, TNamespace, TModule, TAction> {
     const namespace = this._namespace
     const module = this._module
@@ -300,13 +300,13 @@ export function defineRawEvent<TRequest = void, TResponse = void>(
  */
 export function isTuffEvent(value: unknown): value is TuffEvent {
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<string, unknown>).__brand === 'TuffEvent' &&
-    typeof (value as Record<string, unknown>).toString === 'function' &&
-    typeof (value as Record<string, unknown>).namespace === 'string' &&
-    typeof (value as Record<string, unknown>).module === 'string' &&
-    typeof (value as Record<string, unknown>).action === 'string'
+    typeof value === 'object'
+    && value !== null
+    && (value as Record<string, unknown>).__brand === 'TuffEvent'
+    && typeof (value as Record<string, unknown>).toString === 'function'
+    && typeof (value as Record<string, unknown>).namespace === 'string'
+    && typeof (value as Record<string, unknown>).module === 'string'
+    && typeof (value as Record<string, unknown>).action === 'string'
   )
 }
 
@@ -328,14 +328,14 @@ export function isTuffEvent(value: unknown): value is TuffEvent {
  */
 export function assertTuffEvent(
   value: unknown,
-  context?: string
+  context?: string,
 ): asserts value is TuffEvent {
   if (!isTuffEvent(value)) {
     const prefix = context ? `[${context}] ` : ''
     throw new TypeError(
-      `${prefix}Invalid event. Expected TuffEvent created via defineEvent(), ` +
-      `got ${value === null ? 'null' : typeof value}. ` +
-      `String event names are not allowed - use the event builder.`
+      `${prefix}Invalid event. Expected TuffEvent created via defineEvent(), `
+      + `got ${value === null ? 'null' : typeof value}. `
+      + `String event names are not allowed - use the event builder.`,
     )
   }
 }

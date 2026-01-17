@@ -1,75 +1,14 @@
-<template>
-  <Transition name="division-box-fade">
-    <div 
-      v-if="isVisible"
-      ref="shellRef"
-      class="division-box-shell"
-      :class="shellClasses"
-      :style="shellStyle"
-      @mousedown="handleMouseDown"
-    >
-    <!-- Header 区域 -->
-    <DivisionBoxHeader
-      v-if="showHeader"
-      :title="title"
-      :icon="icon"
-      :session-id="sessionId"
-      @close="handleClose"
-      @pin="handlePin"
-    />
-
-    <!-- Content 区域 (WebContentsView 容器) -->
-    <div 
-      ref="contentRef" 
-      class="division-box-content"
-    >
-      <!-- Loading indicator -->
-      <Transition name="fade">
-        <div v-if="showLoadingIndicator" class="state-indicator loading-indicator">
-          <div class="loading-spinner" />
-          <span>{{ getLoadingText() }}</span>
-        </div>
-      </Transition>
-      
-      <!-- State badge -->
-      <Transition name="fade">
-        <div v-if="stateBadge" class="state-badge" :class="`state-${stateBadge}`">
-          <span class="state-badge-icon">{{ getStateBadgeIcon(stateBadge) }}</span>
-          <span class="state-badge-text">{{ stateBadge }}</span>
-        </div>
-      </Transition>
-      
-      <!-- WebContentsView 将被挂载到这里 -->
-    </div>
-
-    <!-- Resize 手柄 -->
-    <div 
-      v-for="handle in resizeHandles" 
-      :key="handle"
-      :class="`resize-handle resize-handle-${handle}`"
-      @mousedown.stop="handleResizeStart($event, handle)"
-    />
-
-    <!-- Dock 对齐提示 -->
-    <DockHint
-      v-if="showDockHint"
-      :position="dockHintPosition"
-    />
-    </div>
-  </Transition>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import type { DivisionBoxSize } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
-import DivisionBoxHeader from './DivisionBoxHeader.vue'
-import DockHint from './DockHint.vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDrag } from '../composables/useDrag'
 import { useResize } from '../composables/useResize'
 import { useDivisionBoxStore } from '../store/division-box'
-import type { DivisionBoxSize } from '@talex-touch/utils'
 import { SIZE_PRESETS } from '../types'
+import DivisionBoxHeader from './DivisionBoxHeader.vue'
+import DockHint from './DockHint.vue'
 
 /**
  * Props definition for DivisionBoxShell component
@@ -77,19 +16,19 @@ import { SIZE_PRESETS } from '../types'
 interface Props {
   /** Unique session identifier */
   sessionId: string
-  
+
   /** Display title */
   title: string
-  
+
   /** Icon (iconify format) */
   icon?: string
-  
+
   /** Size preset */
   size: DivisionBoxSize
-  
+
   /** Show header */
   showHeader: boolean
-  
+
   /** Initial position */
   initialX?: number
   initialY?: number
@@ -113,35 +52,30 @@ const currentState = ref<string>('prepare')
 const store = useDivisionBoxStore()
 
 // Composables
-const {
-  isDragging,
-  position,
-  showDockHint,
-  dockHintPosition,
-  startDrag
-} = useDrag(props.sessionId, props.initialX, props.initialY)
+const { isDragging, position, showDockHint, dockHintPosition, startDrag } = useDrag(
+  props.sessionId,
+  props.initialX,
+  props.initialY
+)
 
-const {
-  isResizing,
-  dimensions,
-  startResize
-} = useResize(props.sessionId, SIZE_PRESETS[props.size])
+const { isResizing, dimensions, startResize } = useResize(props.sessionId, SIZE_PRESETS[props.size])
 
 // Computed
 const shellClasses = computed(() => ({
   [`size-${props.size}`]: true,
-  'immersive': !props.showHeader,
-  'dragging': isDragging.value,
-  'resizing': isResizing.value
+  immersive: !props.showHeader,
+  dragging: isDragging.value,
+  resizing: isResizing.value
 }))
 
 const shellStyle = computed(() => ({
   transform: `translate(${position.value.x}px, ${position.value.y}px)`,
   width: `${dimensions.value.width}px`,
   height: `${dimensions.value.height}px`,
-  transition: isDragging.value || isResizing.value 
-    ? 'none' 
-    : 'transform 0.3s ease, width 0.3s ease, height 0.3s ease'
+  transition:
+    isDragging.value || isResizing.value
+      ? 'none'
+      : 'transform 0.3s ease, width 0.3s ease, height 0.3s ease'
 }))
 
 const stateBadge = computed(() => {
@@ -159,29 +93,29 @@ const showLoadingIndicator = computed(() => {
 const resizeHandles = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'] as const
 
 // Methods
-const handleMouseDown = (e: MouseEvent) => {
+function handleMouseDown(e: MouseEvent) {
   // Only start drag if clicking on the shell itself (not on resize handles or content)
   if (
-    e.target === shellRef.value || 
+    e.target === shellRef.value ||
     (e.target as HTMLElement).classList.contains('division-box-header')
   ) {
     startDrag(e)
   }
 }
 
-const handleResizeStart = (e: MouseEvent, handle: typeof resizeHandles[number]) => {
+function handleResizeStart(e: MouseEvent, handle: (typeof resizeHandles)[number]) {
   startResize(e, handle)
 }
 
-const handleClose = async () => {
+async function handleClose() {
   await store.closeDivisionBox(props.sessionId)
 }
 
-const handlePin = () => {
+function handlePin() {
   store.togglePin(props.sessionId)
 }
 
-const getLoadingText = () => {
+function getLoadingText() {
   switch (currentState.value) {
     case 'prepare':
       return 'Preparing...'
@@ -192,7 +126,7 @@ const getLoadingText = () => {
   }
 }
 
-const getStateBadgeIcon = (state: string) => {
+function getStateBadgeIcon(state: string) {
   switch (state) {
     case 'prepare':
       return '⚙️'
@@ -217,22 +151,22 @@ const transport = useTuffTransport()
 onMounted(() => {
   // Component mounted, ready for WebContentsView attachment
   isLoading.value = true
-  
+
   // Listen for state changes from main process
   const handleStateChange = (_event: any, data: any) => {
     if (data.sessionId === props.sessionId) {
       const oldState = currentState.value
       currentState.value = data.newState
-      
+
       console.log(`[DivisionBox ${props.sessionId}] State changed: ${oldState} -> ${data.newState}`)
-      
+
       // Update loading state based on new state
       if (data.newState === 'active') {
         isLoading.value = false
       } else if (data.newState === 'prepare' || data.newState === 'attach') {
         isLoading.value = true
       }
-      
+
       // Hide component when destroyed
       if (data.newState === 'destroy') {
         isVisible.value = false
@@ -243,9 +177,10 @@ onMounted(() => {
   stateChangeCleanup = transport.on(DivisionBoxEvents.stateChanged, (event) => {
     handleStateChange(null, event as any)
   })
-  
+
   // Request initial state from main process
-  transport.send(DivisionBoxEvents.getState, { sessionId: props.sessionId })
+  transport
+    .send(DivisionBoxEvents.getState, { sessionId: props.sessionId })
     .then((response) => {
       if (response?.success) {
         const state = (response.data as any)?.state
@@ -271,6 +206,61 @@ onUnmounted(() => {
 })
 </script>
 
+<template>
+  <Transition name="division-box-fade">
+    <div
+      v-if="isVisible"
+      ref="shellRef"
+      class="division-box-shell"
+      :class="shellClasses"
+      :style="shellStyle"
+      @mousedown="handleMouseDown"
+    >
+      <!-- Header 区域 -->
+      <DivisionBoxHeader
+        v-if="showHeader"
+        :title="title"
+        :icon="icon"
+        :session-id="sessionId"
+        @close="handleClose"
+        @pin="handlePin"
+      />
+
+      <!-- Content 区域 (WebContentsView 容器) -->
+      <div ref="contentRef" class="division-box-content">
+        <!-- Loading indicator -->
+        <Transition name="fade">
+          <div v-if="showLoadingIndicator" class="state-indicator loading-indicator">
+            <div class="loading-spinner" />
+            <span>{{ getLoadingText() }}</span>
+          </div>
+        </Transition>
+
+        <!-- State badge -->
+        <Transition name="fade">
+          <div v-if="stateBadge" class="state-badge" :class="`state-${stateBadge}`">
+            <span class="state-badge-icon">{{ getStateBadgeIcon(stateBadge) }}</span>
+            <span class="state-badge-text">{{ stateBadge }}</span>
+          </div>
+        </Transition>
+
+        <!-- WebContentsView 将被挂载到这里 -->
+      </div>
+
+      <!-- Resize 手柄 -->
+      <div
+        v-for="handle in resizeHandles"
+        :key="handle"
+        :class="`resize-handle resize-handle-${handle}`"
+        @mousedown.stop="handleResizeStart($event, handle)"
+      />
+
+      <!-- Dock 对齐提示 -->
+      <DockHint v-if="showDockHint" :position="dockHintPosition" />
+    </div>
+  </Transition>
+</template>
+
 <style scoped lang="scss">
 .division-box-shell {
   position: fixed;
@@ -285,17 +275,17 @@ onUnmounted(() => {
   overflow: hidden;
   z-index: 1000;
   transition: box-shadow 0.2s ease;
-  
+
   &.dragging {
     cursor: move;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     user-select: none;
   }
-  
+
   &.resizing {
     user-select: none;
   }
-  
+
   &.immersive {
     border-radius: 12px;
   }
@@ -361,40 +351,40 @@ onUnmounted(() => {
   backdrop-filter: blur(8px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   pointer-events: none;
-  
+
   .state-badge-icon {
     font-size: 14px;
     line-height: 1;
   }
-  
+
   .state-badge-text {
     line-height: 1;
   }
-  
+
   &.state-prepare {
     background: rgba(144, 147, 153, 0.15);
     color: var(--el-color-info);
     border: 1px solid rgba(144, 147, 153, 0.3);
   }
-  
+
   &.state-attach {
     background: rgba(230, 162, 60, 0.15);
     color: var(--el-color-warning);
     border: 1px solid rgba(230, 162, 60, 0.3);
   }
-  
+
   &.state-inactive {
     background: rgba(144, 147, 153, 0.15);
     color: var(--el-color-info);
     border: 1px solid rgba(144, 147, 153, 0.3);
   }
-  
+
   &.state-detach {
     background: rgba(230, 162, 60, 0.15);
     color: var(--el-color-warning);
     border: 1px solid rgba(230, 162, 60, 0.3);
   }
-  
+
   &.state-destroy {
     background: rgba(245, 108, 108, 0.15);
     color: var(--el-color-danger);
@@ -417,7 +407,7 @@ onUnmounted(() => {
 .resize-handle {
   position: absolute;
   z-index: 10;
-  
+
   &.resize-handle-n {
     top: 0;
     left: 0;
@@ -425,7 +415,7 @@ onUnmounted(() => {
     height: 4px;
     cursor: ns-resize;
   }
-  
+
   &.resize-handle-s {
     bottom: 0;
     left: 0;
@@ -433,7 +423,7 @@ onUnmounted(() => {
     height: 4px;
     cursor: ns-resize;
   }
-  
+
   &.resize-handle-e {
     top: 0;
     right: 0;
@@ -441,7 +431,7 @@ onUnmounted(() => {
     width: 4px;
     cursor: ew-resize;
   }
-  
+
   &.resize-handle-w {
     top: 0;
     left: 0;
@@ -449,7 +439,7 @@ onUnmounted(() => {
     width: 4px;
     cursor: ew-resize;
   }
-  
+
   &.resize-handle-ne {
     top: 0;
     right: 0;
@@ -457,7 +447,7 @@ onUnmounted(() => {
     height: 8px;
     cursor: nesw-resize;
   }
-  
+
   &.resize-handle-nw {
     top: 0;
     left: 0;
@@ -465,7 +455,7 @@ onUnmounted(() => {
     height: 8px;
     cursor: nwse-resize;
   }
-  
+
   &.resize-handle-se {
     bottom: 0;
     right: 0;
@@ -473,7 +463,7 @@ onUnmounted(() => {
     height: 8px;
     cursor: nwse-resize;
   }
-  
+
   &.resize-handle-sw {
     bottom: 0;
     left: 0;

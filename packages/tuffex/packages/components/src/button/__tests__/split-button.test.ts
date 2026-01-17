@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import SplitButton from '../src/split-button.vue'
 
-describe('TxSplitButton', () => {
+describe('txSplitButton', () => {
   it('renders label', () => {
     const wrapper = mount(SplitButton, {
       slots: { default: 'Run' },

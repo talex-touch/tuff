@@ -1,16 +1,8 @@
 <script setup lang="ts">
+import type { TxRadioProps, TxRadioType, TxRadioValue } from './types'
 import { computed, inject, toRefs } from 'vue'
-import type { TxRadioProps, TxRadioValue, TxRadioType } from './types'
 
 defineOptions({ name: 'TxRadio' })
-
-type RadioGroupContext = {
-  model: { value: TxRadioValue | undefined }
-  disabled: { value: boolean }
-  type: { value: TxRadioType }
-}
-
-const group = inject<RadioGroupContext | null>('tx-radio-group', null)
 
 const props = withDefaults(defineProps<TxRadioProps>(), {
   disabled: false,
@@ -18,11 +10,19 @@ const props = withDefaults(defineProps<TxRadioProps>(), {
   type: 'button',
 })
 
-const { label, type: propType } = toRefs(props)
-
 const emit = defineEmits<{
   (e: 'click', v: TxRadioValue): void
 }>()
+
+interface RadioGroupContext {
+  model: { value: TxRadioValue | undefined }
+  disabled: { value: boolean }
+  type: { value: TxRadioType }
+}
+
+const group = inject<RadioGroupContext | null>('tx-radio-group', null)
+
+const { label, type: propType } = toRefs(props)
 
 const isDisabled = computed(() => (group?.disabled.value ?? false) || props.disabled)
 const isChecked = computed(() => group?.model.value === props.value)
@@ -32,9 +32,12 @@ const radioType = computed(() => {
 })
 
 function select() {
-  if (!group) return
-  if (isDisabled.value) return
-  if (isChecked.value) return
+  if (!group)
+    return
+  if (isDisabled.value)
+    return
+  if (isChecked.value)
+    return
   group.model.value = props.value
   emit('click', props.value)
 }
@@ -49,16 +52,16 @@ function select() {
     :disabled="isDisabled"
     :class="[
       { 'is-checked': isChecked, 'is-disabled': isDisabled },
-      `tx-radio--${radioType}`
+      `tx-radio--${radioType}`,
     ]"
     @click="select"
   >
     <template v-if="radioType === 'standard'">
-      <span class="tx-radio__indicator"></span>
+      <span class="tx-radio__indicator" />
       <span class="tx-radio__label"><slot>{{ label }}</slot></span>
     </template>
     <template v-else-if="radioType === 'card'">
-      <span class="tx-radio__indicator"></span>
+      <span class="tx-radio__indicator" />
       <span class="tx-radio__content"><slot>{{ label }}</slot></span>
     </template>
     <template v-else>

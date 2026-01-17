@@ -11,7 +11,9 @@ function bump() {
 <template>
   <div style="display: flex; flex-direction: column; gap: 12px;">
     <div style="display: flex; gap: 8px;">
-      <TxButton @click="bump">Shuffle</TxButton>
+      <TxButton @click="bump">
+        Shuffle
+      </TxButton>
     </div>
 
     <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">

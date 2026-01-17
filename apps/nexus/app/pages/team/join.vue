@@ -15,7 +15,8 @@ watch(
   () => route.query.code,
   (next) => {
     const nextCode = typeof next === 'string' ? next : ''
-    if (nextCode) code.value = nextCode
+    if (nextCode)
+      code.value = nextCode
   },
   { immediate: true },
 )
@@ -23,7 +24,8 @@ watch(
 const canSubmit = computed(() => !pending.value && code.value.trim().length > 0)
 
 async function joinTeam(): Promise<void> {
-  if (!canSubmit.value) return
+  if (!canSubmit.value)
+    return
 
   pending.value = true
   errorMessage.value = ''
@@ -37,9 +39,11 @@ async function joinTeam(): Promise<void> {
 
     success.value = true
     await navigateTo('/dashboard/team')
-  } catch (error: any) {
+  }
+  catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || error?.message || 'Failed to join team'
-  } finally {
+  }
+  finally {
     pending.value = false
   }
 }

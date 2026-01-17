@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { LoadingOverlayProps } from '../index'
+import { computed } from 'vue'
 import { TxSpinner } from '../../spinner'
 
 defineOptions({
@@ -28,7 +28,9 @@ const overlayStyle = computed<CSSProperties>(() => {
     <div v-if="loading" class="tx-loading-overlay tx-loading-overlay--fullscreen" :style="overlayStyle">
       <div class="tx-loading-overlay__inner">
         <TxSpinner :size="spinnerSize" />
-        <div v-if="text" class="tx-loading-overlay__text">{{ text }}</div>
+        <div v-if="text" class="tx-loading-overlay__text">
+          {{ text }}
+        </div>
       </div>
     </div>
   </teleport>
@@ -38,7 +40,9 @@ const overlayStyle = computed<CSSProperties>(() => {
     <div v-if="loading" class="tx-loading-overlay" :style="overlayStyle">
       <div class="tx-loading-overlay__inner">
         <TxSpinner :size="spinnerSize" />
-        <div v-if="text" class="tx-loading-overlay__text">{{ text }}</div>
+        <div v-if="text" class="tx-loading-overlay__text">
+          {{ text }}
+        </div>
       </div>
     </div>
   </div>

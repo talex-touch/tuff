@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DownloadStatus, type GitHubRelease } from '@talex-touch/utils'
+import type { GitHubRelease } from '@talex-touch/utils'
 import {
   Calendar,
   Close,
@@ -7,8 +7,9 @@ import {
   Download,
   Loading,
   Right,
-  Upload,
+  Upload
 } from '@element-plus/icons-vue'
+import { DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
 import ProgressBar from './DownloadProgressBar.vue'
 
@@ -39,14 +40,14 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  downloadStatus: DownloadStatus.PENDING,
+  downloadStatus: DownloadStatus.PENDING
 })
 
 const emit = defineEmits<Emits>()
 
 const visible = computed({
   get: () => props.modelValue,
-  set: value => emit('update:modelValue', value),
+  set: (value) => emit('update:modelValue', value)
 })
 
 const dialogTitle = computed(() => {
@@ -126,21 +127,18 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'long',
-    day: 'numeric',
+    day: 'numeric'
   })
 }
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  }
-  else if (bytes >= 1024 * 1024) {
+  } else if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  else if (bytes >= 1024) {
+  } else if (bytes >= 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`
-  }
-  else {
+  } else {
     return `${bytes} B`
   }
 }
@@ -268,19 +266,12 @@ function handleCancelDownload() {
     <template #footer>
       <div class="dialog-footer">
         <div class="footer-left">
-          <el-button
-            v-if="!isDownloading && !isDownloadComplete"
-            text
-            @click="handleIgnoreVersion"
-          >
+          <el-button v-if="!isDownloading && !isDownloadComplete" text @click="handleIgnoreVersion">
             {{ $t('update.ignore_version') }}
           </el-button>
         </div>
         <div class="footer-right">
-          <el-button
-            v-if="!isDownloading && !isDownloadComplete"
-            @click="handleRemindLater"
-          >
+          <el-button v-if="!isDownloading && !isDownloadComplete" @click="handleRemindLater">
             {{ $t('update.remind_later') }}
           </el-button>
           <el-button
@@ -291,19 +282,11 @@ function handleCancelDownload() {
             <el-icon><Download /></el-icon>
             {{ $t('update.download_now') }}
           </el-button>
-          <el-button
-            v-if="isDownloadComplete"
-            type="success"
-            @click="handleInstall"
-          >
+          <el-button v-if="isDownloadComplete" type="success" @click="handleInstall">
             <el-icon><Upload /></el-icon>
             {{ $t('update.install_now') }}
           </el-button>
-          <el-button
-            v-if="isDownloading"
-            type="warning"
-            @click="handleCancelDownload"
-          >
+          <el-button v-if="isDownloading" type="warning" @click="handleCancelDownload">
             <el-icon><Close /></el-icon>
             {{ $t('update.cancel_download') }}
           </el-button>

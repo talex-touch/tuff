@@ -18,7 +18,9 @@ function shuffle() {
 
 <template>
   <div style="display: flex; flex-direction: column; gap: 10px;">
-    <TxButton @click="shuffle">Shuffle</TxButton>
+    <TxButton @click="shuffle">
+      Shuffle
+    </TxButton>
 
     <TxAutoSizer ref="sizerRef" :width="true" :height="false" outer-class="overflow-hidden">
       <TxButton variant="secondary">

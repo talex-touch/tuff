@@ -7,8 +7,8 @@
  * - 离线 fallback 支持
  */
 
-import { createLogger } from '../../../../../utils/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { createLogger } from '../../../../../utils/logger'
 
 const log = createLogger('FxRateProvider')
 
@@ -30,41 +30,41 @@ export interface FxRateCache {
 
 // 货币别名
 const CURRENCY_ALIASES: Record<string, string> = {
-  '美元': 'USD',
-  '人民币': 'CNY',
-  '元': 'CNY',
-  '欧元': 'EUR',
-  '日元': 'JPY',
-  '英镑': 'GBP',
-  '港币': 'HKD',
-  '港元': 'HKD',
-  '台币': 'TWD',
-  '新台币': 'TWD',
-  '韩元': 'KRW',
-  '澳元': 'AUD',
-  '加元': 'CAD',
-  '新币': 'SGD',
-  '新加坡元': 'SGD',
-  '泰铢': 'THB',
-  '越南盾': 'VND',
-  '印度卢比': 'INR',
-  '瑞士法郎': 'CHF',
-  '比特币': 'BTC',
-  '以太坊': 'ETH',
-  'dollar': 'USD',
-  'dollars': 'USD',
-  'euro': 'EUR',
-  'euros': 'EUR',
-  'yen': 'JPY',
-  'pound': 'GBP',
-  'pounds': 'GBP',
-  'yuan': 'CNY',
-  'rmb': 'CNY',
+  美元: 'USD',
+  人民币: 'CNY',
+  元: 'CNY',
+  欧元: 'EUR',
+  日元: 'JPY',
+  英镑: 'GBP',
+  港币: 'HKD',
+  港元: 'HKD',
+  台币: 'TWD',
+  新台币: 'TWD',
+  韩元: 'KRW',
+  澳元: 'AUD',
+  加元: 'CAD',
+  新币: 'SGD',
+  新加坡元: 'SGD',
+  泰铢: 'THB',
+  越南盾: 'VND',
+  印度卢比: 'INR',
+  瑞士法郎: 'CHF',
+  比特币: 'BTC',
+  以太坊: 'ETH',
+  dollar: 'USD',
+  dollars: 'USD',
+  euro: 'EUR',
+  euros: 'EUR',
+  yen: 'JPY',
+  pound: 'GBP',
+  pounds: 'GBP',
+  yuan: 'CNY',
+  rmb: 'CNY'
 }
 
 // 货币符号
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  '$': 'USD',
+  $: 'USD',
   '¥': 'CNY',
   '￥': 'CNY',
   '€': 'EUR',
@@ -73,7 +73,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   '₫': 'VND',
   '฿': 'THB',
   '₿': 'BTC',
-  'Ξ': 'ETH',
+  Ξ: 'ETH'
 }
 
 // 默认汇率 (fallback)
@@ -94,7 +94,7 @@ const DEFAULT_RATES: Record<string, number> = {
   INR: 83.2,
   CHF: 0.86,
   BTC: 0.000018,
-  ETH: 0.00026,
+  ETH: 0.00026
 }
 
 // API 配置
@@ -111,7 +111,7 @@ export class FxRateProvider {
   private cache: FxRateCache = {
     rates: new Map(),
     lastRefresh: 0,
-    source: 'default',
+    source: 'default'
   }
 
   private readonly pollingService = PollingService.getInstance()
@@ -139,7 +139,7 @@ export class FxRateProvider {
       async () => {
         await this.refresh()
       },
-      { interval: REFRESH_INTERVAL_MS, unit: 'milliseconds' },
+      { interval: REFRESH_INTERVAL_MS, unit: 'milliseconds' }
     )
     this.pollingService.start()
   }
@@ -174,14 +174,18 @@ export class FxRateProvider {
       quote: toCode,
       rate,
       updatedAt: this.cache.lastRefresh,
-      source: this.cache.source,
+      source: this.cache.source
     }
   }
 
   /**
    * Convert currency amount
    */
-  convert(amount: number, from: string, to: string): {
+  convert(
+    amount: number,
+    from: string,
+    to: string
+  ): {
     result: number
     rate: FxRate | null
     formatted: string
@@ -193,7 +197,7 @@ export class FxRateProvider {
     return {
       result,
       rate: fxRate,
-      formatted: this.formatCurrency(result, fxRate.quote),
+      formatted: this.formatCurrency(result, fxRate.quote)
     }
   }
 
@@ -219,7 +223,7 @@ export class FxRateProvider {
       lastRefresh: this.cache.lastRefresh,
       source: this.cache.source,
       isStale,
-      currencyCount: this.cache.rates.size,
+      currencyCount: this.cache.rates.size
     }
   }
 
@@ -279,7 +283,7 @@ export class FxRateProvider {
         this.updateCache(rates, 'ecb')
         this.retryCount = 0
         log.info('Exchange rates refreshed', {
-          meta: { count: Object.keys(rates).length, source: this.cache.source },
+          meta: { count: Object.keys(rates).length, source: this.cache.source }
         })
         return true
       }
@@ -288,16 +292,16 @@ export class FxRateProvider {
       this.retryCount++
       if (this.retryCount < this.maxRetries) {
         const delay = Math.min(1000 * 2 ** this.retryCount, 30000)
-        log.warn(`Rate refresh failed, retrying in ${delay}ms`, { meta: { attempt: this.retryCount } })
+        log.warn(`Rate refresh failed, retrying in ${delay}ms`, {
+          meta: { attempt: this.retryCount }
+        })
         setTimeout(() => this.refresh(), delay)
-      }
-      else {
+      } else {
         log.error('Max retries reached, using cached/default rates')
       }
 
       return false
-    }
-    finally {
+    } finally {
       this.isRefreshing = false
     }
   }
@@ -312,14 +316,14 @@ export class FxRateProvider {
 
       const response = await fetch(ECB_API, {
         signal: controller.signal,
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json' }
       })
 
       clearTimeout(timeout)
 
       if (!response.ok) return null
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         base: string
         rates: Record<string, number>
       }
@@ -331,8 +335,7 @@ export class FxRateProvider {
       }
 
       return rates
-    }
-    catch (error) {
+    } catch (error) {
       log.debug('ECB API error', { error })
       return null
     }
@@ -348,21 +351,20 @@ export class FxRateProvider {
 
       const response = await fetch(BACKUP_API, {
         signal: controller.signal,
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json' }
       })
 
       clearTimeout(timeout)
 
       if (!response.ok) return null
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         base_code: string
         rates: Record<string, number>
       }
 
       return data.rates
-    }
-    catch (error) {
+    } catch (error) {
       log.debug('Backup API error', { error })
       return null
     }
@@ -380,7 +382,7 @@ export class FxRateProvider {
         quote: currency,
         rate,
         updatedAt: now,
-        source,
+        source
       })
     }
 
@@ -391,7 +393,7 @@ export class FxRateProvider {
         quote: 'BTC',
         rate: DEFAULT_RATES.BTC,
         updatedAt: now,
-        source: 'default',
+        source: 'default'
       })
     }
 
@@ -401,7 +403,7 @@ export class FxRateProvider {
         quote: 'ETH',
         rate: DEFAULT_RATES.ETH,
         updatedAt: now,
-        source: 'default',
+        source: 'default'
       })
     }
 
@@ -421,7 +423,7 @@ export class FxRateProvider {
         quote: currency,
         rate,
         updatedAt: now,
-        source: 'default',
+        source: 'default'
       })
     }
 

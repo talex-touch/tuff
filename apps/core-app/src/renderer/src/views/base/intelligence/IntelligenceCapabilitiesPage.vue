@@ -200,7 +200,13 @@ function onReorderProviders(bindings: AiCapabilityProviderBinding[]): void {
 
 async function handleCapabilityTest(
   capabilityId: string,
-  params?: { providerId?: string; userInput?: string; model?: string; promptTemplate?: string; promptVariables?: Record<string, any> }
+  params?: {
+    providerId?: string
+    userInput?: string
+    model?: string
+    promptTemplate?: string
+    promptVariables?: Record<string, any>
+  }
 ): Promise<void> {
   if (capabilityTesting[capabilityId]) return
   capabilityTesting[capabilityId] = true
@@ -213,7 +219,7 @@ async function handleCapabilityTest(
       userInput: params?.userInput,
       model: params?.model,
       promptTemplate: params?.promptTemplate,
-      promptVariables: params?.promptVariables,
+      promptVariables: params?.promptVariables
     })
 
     // 使用格式化后的结果
@@ -277,7 +283,9 @@ async function handleCapabilityTest(
                 未配置
               </span>
             </div>
-            <p class="capability-card__description">{{ capability.description }}</p>
+            <p class="capability-card__description">
+              {{ capability.description }}
+            </p>
           </div>
         </div>
         <div v-if="filteredCapabilities.length === 0" class="capability-list-empty">

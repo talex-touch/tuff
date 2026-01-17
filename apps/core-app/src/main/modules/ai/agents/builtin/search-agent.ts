@@ -35,20 +35,20 @@ const descriptor: AgentDescriptor = {
             type: 'object',
             properties: {
               type: { type: 'string', description: '类型过滤' },
-              dateRange: { type: 'object', description: '日期范围' },
-            },
-          },
+              dateRange: { type: 'object', description: '日期范围' }
+            }
+          }
         },
-        required: ['query'],
+        required: ['query']
       },
       outputSchema: {
         type: 'object',
         properties: {
           results: { type: 'array' },
           total: { type: 'number' },
-          suggestions: { type: 'array' },
-        },
-      },
+          suggestions: { type: 'array' }
+        }
+      }
     },
     {
       id: 'search.semantic',
@@ -60,17 +60,17 @@ const descriptor: AgentDescriptor = {
         properties: {
           query: { type: 'string', description: '自然语言查询' },
           context: { type: 'string', description: '搜索上下文' },
-          threshold: { type: 'number', description: '相似度阈值 (0-1)' },
+          threshold: { type: 'number', description: '相似度阈值 (0-1)' }
         },
-        required: ['query'],
+        required: ['query']
       },
       outputSchema: {
         type: 'object',
         properties: {
           results: { type: 'array' },
-          interpretation: { type: 'string' },
-        },
-      },
+          interpretation: { type: 'string' }
+        }
+      }
     },
     {
       id: 'search.suggest',
@@ -82,17 +82,17 @@ const descriptor: AgentDescriptor = {
         properties: {
           partial: { type: 'string', description: '部分输入' },
           context: { type: 'string', description: '当前上下文' },
-          limit: { type: 'number', description: '建议数量' },
+          limit: { type: 'number', description: '建议数量' }
         },
-        required: ['partial'],
+        required: ['partial']
       },
       outputSchema: {
         type: 'object',
         properties: {
           suggestions: { type: 'array', items: { type: 'string' } },
-          categories: { type: 'array' },
-        },
-      },
+          categories: { type: 'array' }
+        }
+      }
     },
     {
       id: 'search.rank',
@@ -104,26 +104,26 @@ const descriptor: AgentDescriptor = {
         properties: {
           results: { type: 'array', description: '待排序结果' },
           criteria: { type: 'string', description: '排序标准: relevance, date, popularity' },
-          userContext: { type: 'object', description: '用户上下文' },
+          userContext: { type: 'object', description: '用户上下文' }
         },
-        required: ['results'],
+        required: ['results']
       },
       outputSchema: {
         type: 'object',
         properties: {
           ranked: { type: 'array' },
-          explanation: { type: 'string' },
-        },
-      },
-    },
+          explanation: { type: 'string' }
+        }
+      }
+    }
   ],
   tools: [],
-  enabled: true,
+  enabled: true
 }
 
 const implementation: AgentImpl = {
   async execute(input: unknown, ctx: AgentExecutionContext): Promise<unknown> {
-    const { capability, ...params } = input as { capability: string, [key: string]: unknown }
+    const { capability, ...params } = input as { capability: string; [key: string]: unknown }
 
     switch (capability) {
       case 'search.query':
@@ -144,12 +144,17 @@ const implementation: AgentImpl = {
     const steps: AgentPlanStep[] = []
 
     // Generate plan based on goal
-    if (goal.includes('搜索') || goal.includes('查找') || goal.includes('search') || goal.includes('find')) {
+    if (
+      goal.includes('搜索') ||
+      goal.includes('查找') ||
+      goal.includes('search') ||
+      goal.includes('find')
+    ) {
       steps.push({
         id: 'query',
         toolId: 'search.query',
         input: { query: goal },
-        description: '执行搜索查询',
+        description: '执行搜索查询'
       })
     }
 
@@ -158,7 +163,7 @@ const implementation: AgentImpl = {
         id: 'semantic',
         toolId: 'search.semantic',
         input: { query: goal },
-        description: '语义搜索',
+        description: '语义搜索'
       })
     }
 
@@ -167,12 +172,12 @@ const implementation: AgentImpl = {
         id: 'suggest',
         toolId: 'search.suggest',
         input: { partial: goal },
-        description: '生成搜索建议',
+        description: '生成搜索建议'
       })
     }
 
     return steps
-  },
+  }
 }
 
 // ============================================================================
@@ -181,9 +186,14 @@ const implementation: AgentImpl = {
 
 async function executeQuery(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { query, scope = 'all', limit = 20, filters } = params as {
+  const {
+    query,
+    scope = 'all',
+    limit = 20,
+    filters
+  } = params as {
     query: string
     scope?: string
     limit?: number
@@ -201,15 +211,19 @@ async function executeQuery(
     suggestions: generateSuggestions(query),
     filters,
     limit,
-    message: 'Search integration pending - connect to TuffSearchEngine',
+    message: 'Search integration pending - connect to TuffSearchEngine'
   }
 }
 
 async function executeSemantic(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { query, context, threshold = 0.7 } = params as {
+  const {
+    query,
+    context,
+    threshold = 0.7
+  } = params as {
     query: string
     context?: string
     threshold?: number
@@ -222,15 +236,19 @@ async function executeSemantic(
     threshold,
     results: [],
     interpretation: `理解查询: "${query}"`,
-    message: 'Semantic search integration pending',
+    message: 'Semantic search integration pending'
   }
 }
 
 async function executeSuggest(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { partial, context, limit = 5 } = params as {
+  const {
+    partial,
+    context,
+    limit = 5
+  } = params as {
     partial: string
     context?: string
     limit?: number
@@ -242,15 +260,19 @@ async function executeSuggest(
     partial,
     context,
     suggestions,
-    categories: ['files', 'apps', 'plugins'],
+    categories: ['files', 'apps', 'plugins']
   }
 }
 
 async function executeRank(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { results, criteria = 'relevance', userContext } = params as {
+  const {
+    results,
+    criteria = 'relevance',
+    userContext
+  } = params as {
     results: unknown[]
     criteria?: string
     userContext?: Record<string, unknown>
@@ -261,7 +283,7 @@ async function executeRank(
     ranked: results,
     criteria,
     userContext,
-    explanation: `Results ranked by ${criteria}`,
+    explanation: `Results ranked by ${criteria}`
   }
 }
 
@@ -274,13 +296,7 @@ function generateSuggestions(query: string): string[] {
   const base = query.toLowerCase().trim()
   if (!base) return []
 
-  return [
-    `${base} 文件`,
-    `${base} 应用`,
-    `${base} 设置`,
-    `打开 ${base}`,
-    `搜索 ${base}`,
-  ]
+  return [`${base} 文件`, `${base} 应用`, `${base} 设置`, `打开 ${base}`, `搜索 ${base}`]
 }
 
 // ============================================================================

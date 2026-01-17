@@ -1,4 +1,5 @@
 import type { ModuleLoadMetric } from './modules/analytics'
+import type { LogLevel } from './utils/logger'
 
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { app, protocol } from 'electron'
@@ -16,8 +17,8 @@ import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
 import { downloadCenterModule } from './modules/download/download-center'
 import { extensionLoaderModule } from './modules/extension-loader'
-import { flowBusModule } from './modules/flow-bus'
 import { fileProtocolModule } from './modules/file-protocol'
+import { flowBusModule } from './modules/flow-bus'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 import { PermissionModule } from './modules/permission'
@@ -51,21 +52,44 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
       stream: true,
       bypassCSP: true,
-      corsEnabled: true,
-    },
-  },
+      corsEnabled: true
+    }
+  }
 ])
 
 let lastVerboseLogsState: boolean | null = null
 
-function applyLoggerConfig(appSettings: any): void {
-  const loggerConfig = typeof appSettings?.logger === 'object' && appSettings.logger
-    ? appSettings.logger
-    : {}
-  const levels = {
-    ...(typeof loggerConfig.levels === 'object' && loggerConfig.levels ? loggerConfig.levels : {}),
-  } as Record<string, any>
-  const verboseLogs = appSettings?.diagnostics?.verboseLogs === true
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isLogLevel(value: unknown): value is LogLevel {
+  return (
+    value === 'debug' ||
+    value === 'info' ||
+    value === 'success' ||
+    value === 'warn' ||
+    value === 'error'
+  )
+}
+
+function applyLoggerConfig(appSettings: unknown): void {
+  const loggerConfig =
+    isRecord(appSettings) && isRecord(appSettings.logger) ? appSettings.logger : null
+
+  const levels: Record<string, LogLevel> = {}
+  if (loggerConfig && isRecord(loggerConfig.levels)) {
+    for (const [namespace, level] of Object.entries(loggerConfig.levels)) {
+      if (isLogLevel(level)) {
+        levels[namespace] = level
+      }
+    }
+  }
+
+  const verboseLogs =
+    isRecord(appSettings) &&
+    isRecord(appSettings.diagnostics) &&
+    appSettings.diagnostics.verboseLogs === true
   if (verboseLogs && lastVerboseLogsState !== true) {
     mainLog.warn('================ VERBOSE LOGS ENABLED ================')
     mainLog.warn('Verbose logs increase CPU/memory/disk usage and may log file paths.')
@@ -74,16 +98,23 @@ function applyLoggerConfig(appSettings: any): void {
   lastVerboseLogsState = verboseLogs
   if (!verboseLogs) {
     levels.FileProvider = 'warn'
-  }
-  else if (!levels.FileProvider) {
+  } else if (!levels.FileProvider) {
     levels.FileProvider = 'info'
   }
 
+  const defaultLevel =
+    loggerConfig && isLogLevel(loggerConfig.defaultLevel)
+      ? loggerConfig.defaultLevel
+      : app.isPackaged
+        ? 'info'
+        : 'debug'
+
   loggerManager.setConfig({
-    defaultLevel: loggerConfig.defaultLevel ?? (app.isPackaged ? 'info' : 'debug'),
-    levels,
+    defaultLevel,
+    levels
   })
-  ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = verboseLogs
+  ;(globalThis as typeof globalThis & { __TALEX_VERBOSE_LOGS__?: boolean }).__TALEX_VERBOSE_LOGS__ =
+    verboseLogs
 }
 
 applyLoggerConfig({ diagnostics: { verboseLogs: false } })
@@ -115,7 +146,7 @@ const modulesToLoad = [
   tuffDashboardModule,
   FileSystemWatcher,
   terminalModule,
-  downloadCenterModule,
+  downloadCenterModule
 ]
 
 // Record when Electron becomes ready
@@ -147,8 +178,8 @@ app.whenReady().then(async () => {
 
     const moduleLoadTime = Date.now() - moduleStartTime
     // Convert module name to string (handle symbol case)
-    const moduleName
-      = typeof moduleCtor.name === 'string'
+    const moduleName =
+      typeof moduleCtor.name === 'string'
         ? moduleCtor.name
         : typeof moduleCtor.name === 'symbol'
           ? moduleCtor.name.toString()
@@ -157,17 +188,17 @@ app.whenReady().then(async () => {
     moduleLoadMetrics.push({
       name: moduleName,
       loadTime: moduleLoadTime,
-      order: i,
+      order: i
     })
 
     analytics.trackModuleLoad(moduleName, moduleLoadTime, i)
 
     if (moduleCtor === storageModule) {
       try {
-        const appSettings = storageModule.getConfig('app-setting.ini') as any
+        const appSettings = storageModule.getConfig('app-setting.ini')
         applyLoggerConfig(appSettings)
         storageModule.subscribe('app-setting.ini', (data) => {
-          applyLoggerConfig(data as any)
+          applyLoggerConfig(data)
         })
       } catch (error) {
         mainLog.warn('Failed to load logger configuration', { error })
@@ -183,7 +214,7 @@ app.whenReady().then(async () => {
     electronReadyTime,
     modulesLoadTime: totalModulesLoadTime,
     totalModules: modulesToLoad.length,
-    moduleDetails: moduleLoadMetrics,
+    moduleDetails: moduleLoadMetrics
   })
 
   touchEventBus.emit(TalexEvents.ALL_MODULES_LOADED, new AllModulesLoadedEvent())
@@ -192,6 +223,6 @@ app.whenReady().then(async () => {
   pollingService.start()
 
   startupTimer.end('All modules loaded', {
-    meta: { modules: modulesToLoad.length },
+    meta: { modules: modulesToLoad.length }
   })
 })

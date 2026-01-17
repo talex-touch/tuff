@@ -69,9 +69,11 @@ async function fetchCodes() {
   try {
     const res = await $fetch('/api/admin/codes')
     codes.value = res.codes as ActivationCode[]
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.data?.message || e.message || 'Failed to load codes'
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
@@ -85,9 +87,11 @@ async function generateCodes() {
       body: genForm,
     })
     await fetchCodes()
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.data?.message || e.message || 'Failed to generate codes'
-  } finally {
+  }
+  finally {
     generating.value = false
   }
 }
@@ -113,15 +117,21 @@ onMounted(() => {
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-semibold text-black dark:text-light">{{ t('dashboard.sections.codes.title', 'Activation Codes') }}</h1>
-        <p class="mt-1 text-sm text-black/60 dark:text-light/60">{{ t('dashboard.sections.codes.subtitle', 'Generate and manage activation codes') }}</p>
+        <h1 class="text-xl font-semibold text-black dark:text-light">
+          {{ t('dashboard.sections.codes.title', 'Activation Codes') }}
+        </h1>
+        <p class="mt-1 text-sm text-black/60 dark:text-light/60">
+          {{ t('dashboard.sections.codes.subtitle', 'Generate and manage activation codes') }}
+        </p>
       </div>
     </div>
 
     <!-- Generation Form -->
     <section class="rounded-2xl border border-primary/10 bg-white/80 p-5 dark:border-light/10 dark:bg-dark/60">
-      <h2 class="text-base font-semibold text-black dark:text-light">{{ t('dashboard.sections.codes.generateTitle', 'Generate New Codes') }}</h2>
-      
+      <h2 class="text-base font-semibold text-black dark:text-light">
+        {{ t('dashboard.sections.codes.generateTitle', 'Generate New Codes') }}
+      </h2>
+
       <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan</label>
@@ -143,7 +153,7 @@ onMounted(() => {
             min="1"
             max="365"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
+          >
         </div>
 
         <div>
@@ -154,7 +164,7 @@ onMounted(() => {
             min="1"
             max="1000"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
+          >
         </div>
 
         <div>
@@ -165,7 +175,7 @@ onMounted(() => {
             min="1"
             max="365"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
+          >
         </div>
 
         <div>
@@ -176,7 +186,7 @@ onMounted(() => {
             min="1"
             max="100"
             class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-          />
+          >
         </div>
       </div>
 
@@ -198,7 +208,9 @@ onMounted(() => {
     <!-- Codes List -->
     <section class="rounded-2xl border border-primary/10 bg-white/80 dark:border-light/10 dark:bg-dark/60 overflow-hidden">
       <div class="flex items-center justify-between border-b border-primary/10 p-5 dark:border-light/10">
-        <h2 class="text-base font-semibold text-black dark:text-light">{{ t('dashboard.sections.codes.listTitle', 'All Codes') }}</h2>
+        <h2 class="text-base font-semibold text-black dark:text-light">
+          {{ t('dashboard.sections.codes.listTitle', 'All Codes') }}
+        </h2>
         <button
           :disabled="loading"
           class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-light/60 dark:hover:text-light"
@@ -221,13 +233,27 @@ onMounted(() => {
         <table class="w-full min-w-[700px]">
           <thead class="bg-black/5 dark:bg-light/5">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">{{ t('dashboard.sections.codes.table.code', 'Code') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">{{ t('dashboard.sections.codes.table.plan', 'Plan') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">{{ t('dashboard.sections.codes.table.duration', 'Duration') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">{{ t('dashboard.sections.codes.table.uses', 'Uses') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">{{ t('dashboard.sections.codes.table.status', 'Status') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">{{ t('dashboard.sections.codes.table.created', 'Created') }}</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">{{ t('dashboard.sections.codes.table.expires', 'Expires') }}</th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+                {{ t('dashboard.sections.codes.table.code', 'Code') }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+                {{ t('dashboard.sections.codes.table.plan', 'Plan') }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+                {{ t('dashboard.sections.codes.table.duration', 'Duration') }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+                {{ t('dashboard.sections.codes.table.uses', 'Uses') }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+                {{ t('dashboard.sections.codes.table.status', 'Status') }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+                {{ t('dashboard.sections.codes.table.created', 'Created') }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+                {{ t('dashboard.sections.codes.table.expires', 'Expires') }}
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-primary/10 dark:divide-light/10">

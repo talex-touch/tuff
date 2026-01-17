@@ -1,16 +1,16 @@
 import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/events/types'
+import type { TalexEvents } from '../../../core/eventbus/touch-event'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { genTouchApp } from '../../../core'
-import type { TalexEvents } from '../../../core/eventbus/touch-event'
+import { createLogger } from '../../../utils/logger'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
 import { getConfig } from '../../storage'
-import { createLogger } from '../../../utils/logger'
 import SearchEngineCore from '../search-engine/search-core'
 import { coreBoxManager } from './manager'
 import { windowManager } from './window'
@@ -41,10 +41,7 @@ export class CoreBoxModule extends BaseModule {
     await $app.moduleManager.loadModule(SearchEngineCore)
 
     const channel = (ctx.app as any).channel as any
-    this.transport = getTuffTransportMain(
-      channel,
-      channel?.keyManager ?? channel,
-    )
+    this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
     this.registerTransportHandlers()
 
     coreBoxManager.init()
@@ -139,39 +136,34 @@ export class CoreBoxModule extends BaseModule {
   }
 
   private registerTransportHandlers(): void {
-    if (!this.transport)
-      return
+    if (!this.transport) return
 
     this.transportDisposers.push(
       this.transport.on(CoreBoxEvents.layout.update, (payload) => {
         this.queueLayoutUpdate(payload)
-      }),
+      })
     )
   }
 
   private queueLayoutUpdate(payload: CoreBoxLayoutUpdateRequest): void {
     this.pendingLayoutUpdate = payload
 
-    if (this.layoutApplyTimer)
-      return
+    if (this.layoutApplyTimer) return
 
     this.layoutApplyTimer = setTimeout(() => {
       this.layoutApplyTimer = null
       const next = this.pendingLayoutUpdate
       this.pendingLayoutUpdate = null
-      if (!next)
-        return
+      if (!next) return
       this.applyLayoutUpdate(next)
     }, 16)
   }
 
   private applyLayoutUpdate(payload: CoreBoxLayoutUpdateRequest): void {
-    if (coreBoxManager.isUIMode)
-      return
+    if (coreBoxManager.isUIMode) return
 
     const currentWindow = windowManager.current?.window
-    if (!currentWindow || currentWindow.isDestroyed())
-      return
+    if (!currentWindow || currentWindow.isDestroyed()) return
 
     const activationCount = Number.isFinite(payload.activationCount)
       ? Math.max(0, payload.activationCount)
@@ -182,9 +174,7 @@ export class CoreBoxModule extends BaseModule {
       return
     }
 
-    const resultCount = Number.isFinite(payload.resultCount)
-      ? Math.max(0, payload.resultCount)
-      : 0
+    const resultCount = Number.isFinite(payload.resultCount) ? Math.max(0, payload.resultCount) : 0
 
     const loading = payload.loading === true
     const recommendationPending = payload.recommendationPending === true
@@ -204,8 +194,7 @@ export class CoreBoxModule extends BaseModule {
     const safeHeight = Math.max(60, Math.min(Number(payload.height) || 60, 600))
 
     // Guard: if UI has results but height measurement isn't ready, skip this update.
-    if (resultCount > 0 && safeHeight <= 60)
-      return
+    if (resultCount > 0 && safeHeight <= 60) return
 
     if (safeHeight > 60 && coreBoxManager.isCollapsed) {
       coreBoxManager.markExpanded()

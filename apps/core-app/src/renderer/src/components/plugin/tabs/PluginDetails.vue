@@ -24,7 +24,7 @@ const devSettings = reactive({
   enable: false,
   address: '',
   source: false,
-  autoStart: true,
+  autoStart: true
 })
 
 // Track if settings have been modified
@@ -71,13 +71,17 @@ function initDevSettings(): void {
 }
 
 // Watch for changes in dev settings
-watch(devSettings, () => {
-  const original = plugin.value.dev
-  hasChanges.value =
-    devSettings.enable !== (original?.enable ?? false) ||
-    devSettings.address !== (original?.address ?? '') ||
-    devSettings.source !== (original?.source ?? false)
-}, { deep: true })
+watch(
+  devSettings,
+  () => {
+    const original = plugin.value.dev
+    hasChanges.value =
+      devSettings.enable !== (original?.enable ?? false) ||
+      devSettings.address !== (original?.address ?? '') ||
+      devSettings.source !== (original?.source ?? false)
+  },
+  { deep: true }
+)
 
 // Load plugin paths
 async function loadPaths(): Promise<void> {
@@ -91,14 +95,12 @@ async function loadPerformance(): Promise<void> {
 
 function pickString(key: string): string {
   const value = manifestData.value?.[key]
-  if (typeof value !== 'string')
-    return ''
+  if (typeof value !== 'string') return ''
   return value
 }
 
 function pickStringArray(value: unknown): string[] {
-  if (!Array.isArray(value))
-    return []
+  if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
 }
 
@@ -110,7 +112,9 @@ const manifestSummary = computed(() => {
   const category = pickString('category') || (plugin.value as any)?.category || ''
 
   const rawFeatures = manifestData.value?.features
-  const featureCount = Array.isArray(rawFeatures) ? rawFeatures.length : (plugin.value as any)?.features?.length ?? 0
+  const featureCount = Array.isArray(rawFeatures)
+    ? rawFeatures.length
+    : ((plugin.value as any)?.features?.length ?? 0)
 
   const rawPermissions = manifestData.value?.permissions
   let required: string[] = []
@@ -118,8 +122,7 @@ const manifestSummary = computed(() => {
 
   if (Array.isArray(rawPermissions)) {
     required = pickStringArray(rawPermissions)
-  }
-  else if (rawPermissions && typeof rawPermissions === 'object') {
+  } else if (rawPermissions && typeof rawPermissions === 'object') {
     const obj = rawPermissions as Record<string, unknown>
     required = pickStringArray(obj.required)
     optional = pickStringArray(obj.optional)
@@ -132,7 +135,7 @@ const manifestSummary = computed(() => {
     description,
     main,
     featureCount,
-    permissions: { required, optional },
+    permissions: { required, optional }
   }
 })
 
@@ -141,12 +144,10 @@ async function loadManifest(): Promise<void> {
   try {
     manifestData.value = await pluginSDK.getManifest(plugin.value.name)
     manifestError.value = null
-  }
-  catch (error) {
+  } catch (error) {
     manifestData.value = null
     manifestError.value = error instanceof Error ? error.message : String(error)
-  }
-  finally {
+  } finally {
     manifestLoading.value = false
   }
 }
@@ -167,7 +168,7 @@ async function saveDevSettings(): Promise<void> {
     manifest.dev = {
       enable: devSettings.enable,
       address: devSettings.address,
-      source: devSettings.source,
+      source: devSettings.source
     }
 
     const success = await pluginSDK.saveManifest(plugin.value.name, manifest, true)
@@ -233,12 +234,15 @@ onMounted(() => {
 })
 
 // Re-initialize when plugin changes
-watch(() => plugin.value.name, () => {
-  initDevSettings()
-  loadPaths()
-  loadPerformance()
-  loadManifest()
-})
+watch(
+  () => plugin.value.name,
+  () => {
+    initDevSettings()
+    loadPaths()
+    loadPerformance()
+    loadManifest()
+  }
+)
 </script>
 
 <template>
@@ -253,7 +257,9 @@ watch(() => plugin.value.name, () => {
     >
       <TuffBlockLine :title="t('plugin.details.pluginId')">
         <template #description>
-          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{ plugin.name }}</code>
+          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{
+            plugin.name
+          }}</code>
         </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('plugin.details.version')">
@@ -275,10 +281,16 @@ watch(() => plugin.value.name, () => {
       <TuffBlockLine :title="t('plugin.details.mode')">
         <template #description>
           <span
-            :class="plugin.dev?.enable ? 'text-[var(--el-color-primary)]' : 'text-[var(--el-color-success)]'"
+            :class="
+              plugin.dev?.enable
+                ? 'text-[var(--el-color-primary)]'
+                : 'text-[var(--el-color-success)]'
+            "
             class="font-medium"
           >
-            {{ plugin.dev?.enable ? t('plugin.details.development') : t('plugin.details.production') }}
+            {{
+              plugin.dev?.enable ? t('plugin.details.development') : t('plugin.details.production')
+            }}
           </span>
         </template>
       </TuffBlockLine>
@@ -297,7 +309,9 @@ watch(() => plugin.value.name, () => {
 
       <TuffBlockLine v-if="manifestSummary.id" title="ID">
         <template #description>
-          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{ manifestSummary.id }}</code>
+          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{
+            manifestSummary.id
+          }}</code>
         </template>
       </TuffBlockLine>
       <TuffBlockLine v-if="manifestSummary.author" title="Author">
@@ -313,7 +327,9 @@ watch(() => plugin.value.name, () => {
       <TuffBlockLine title="Description" :description="manifestSummary.description || '--'" />
       <TuffBlockLine v-if="manifestSummary.main" title="Main">
         <template #description>
-          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{ manifestSummary.main }}</code>
+          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{
+            manifestSummary.main
+          }}</code>
         </template>
       </TuffBlockLine>
       <TuffBlockLine title="Features">
@@ -322,7 +338,9 @@ watch(() => plugin.value.name, () => {
         </template>
       </TuffBlockLine>
       <TuffBlockLine
-        v-if="manifestSummary.permissions.required.length || manifestSummary.permissions.optional.length"
+        v-if="
+          manifestSummary.permissions.required.length || manifestSummary.permissions.optional.length
+        "
         title="Permissions"
       >
         <template #description>
@@ -435,7 +453,11 @@ watch(() => plugin.value.name, () => {
             <div
               v-if="performanceData"
               class="h-full rounded-full transition-all duration-300"
-              :class="performanceData.storage.usagePercent > 80 ? 'bg-[var(--el-color-danger)]' : 'bg-[var(--el-color-primary)]'"
+              :class="
+                performanceData.storage.usagePercent > 80
+                  ? 'bg-[var(--el-color-danger)]'
+                  : 'bg-[var(--el-color-primary)]'
+              "
               :style="{ width: `${performanceData.storage.usagePercent}%` }"
             />
           </div>
@@ -447,7 +469,11 @@ watch(() => plugin.value.name, () => {
       <TuffBlockLine :title="t('plugin.details.fileCount')">
         <template #description>
           <span class="font-semibold">
-            {{ performanceData ? `${performanceData.storage.fileCount} ${t('plugin.details.files')}` : '--' }}
+            {{
+              performanceData
+                ? `${performanceData.storage.fileCount} ${t('plugin.details.files')}`
+                : '--'
+            }}
           </span>
         </template>
       </TuffBlockLine>
@@ -469,12 +495,17 @@ watch(() => plugin.value.name, () => {
         <template #label>
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.pluginPath') }}</span>
-            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.pluginPath">
+            <code
+              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              :title="pluginPaths?.pluginPath"
+            >
               {{ pluginPaths ? shortenPath(pluginPaths.pluginPath) : '...' }}
             </code>
           </div>
         </template>
-        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+        <i
+          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+        />
       </TuffBlockSlot>
       <TuffBlockSlot
         :title="t('plugin.details.dataDirectory')"
@@ -484,12 +515,17 @@ watch(() => plugin.value.name, () => {
         <template #label>
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.dataDirectory') }}</span>
-            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.dataPath">
+            <code
+              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              :title="pluginPaths?.dataPath"
+            >
               {{ pluginPaths ? shortenPath(pluginPaths.dataPath) : '...' }}
             </code>
           </div>
         </template>
-        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+        <i
+          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+        />
       </TuffBlockSlot>
       <TuffBlockSlot
         :title="t('plugin.details.configDirectory')"
@@ -499,12 +535,17 @@ watch(() => plugin.value.name, () => {
         <template #label>
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.configDirectory') }}</span>
-            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.configPath">
+            <code
+              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              :title="pluginPaths?.configPath"
+            >
               {{ pluginPaths ? shortenPath(pluginPaths.configPath) : '...' }}
             </code>
           </div>
         </template>
-        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+        <i
+          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+        />
       </TuffBlockSlot>
       <TuffBlockSlot
         :title="t('plugin.details.logsDirectory')"
@@ -514,12 +555,17 @@ watch(() => plugin.value.name, () => {
         <template #label>
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.logsDirectory') }}</span>
-            <code class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48" :title="pluginPaths?.logsPath">
+            <code
+              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              :title="pluginPaths?.logsPath"
+            >
               {{ pluginPaths ? shortenPath(pluginPaths.logsPath) : '...' }}
             </code>
           </div>
         </template>
-        <i class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform" />
+        <i
+          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+        />
       </TuffBlockSlot>
     </TuffGroupBlock>
   </div>

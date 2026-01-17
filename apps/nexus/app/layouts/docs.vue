@@ -1,25 +1,6 @@
 <script setup lang="ts">
 </script>
 
-<style scoped>
-.docs-sidebar::-webkit-scrollbar {
-  width: 4px;
-}
-.docs-sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.docs-sidebar::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 2px;
-}
-.docs-sidebar:hover::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-}
-:root.dark .docs-sidebar:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-}
-</style>
-
 <template>
   <div class="relative min-h-screen flex flex-col bg-white text-black dark:bg-black dark:text-light">
     <div>
@@ -50,3 +31,22 @@
     <TuffFooter />
   </div>
 </template>
+
+<style scoped>
+.docs-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.docs-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.docs-sidebar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+}
+.docs-sidebar:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+:root.dark .docs-sidebar:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+</style>

@@ -32,7 +32,8 @@ export default defineEventHandler(async (event) => {
         slug: organization.slug,
       },
     }
-  } catch (error: any) {
+  }
+  catch (error: any) {
     // Handle Clerk API errors
     if (error.statusCode) {
       throw error

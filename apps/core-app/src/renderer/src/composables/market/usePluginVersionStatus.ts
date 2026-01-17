@@ -1,12 +1,13 @@
+import type { ComputedRef } from 'vue'
+import type { MarketPluginListItem } from './useMarketData'
 /**
  * Composable for managing plugin version status in market context
  *
  * Provides unified logic for checking installed plugins and upgrade availability
  */
-import { computed, type ComputedRef } from 'vue'
+import { computed } from 'vue'
 import { usePluginStore } from '~/stores/plugin'
 import { hasUpgradeAvailable } from './useVersionCompare'
-import type { MarketPluginListItem } from './useMarketData'
 
 export interface PluginVersionStatus {
   /** Whether the plugin is installed locally */
@@ -87,7 +88,9 @@ export function usePluginVersionStatus() {
   /**
    * Create a computed version status for a single plugin (useful for detail views)
    */
-  function usePluginStatus(plugin: ComputedRef<MarketPluginListItem | null>): ComputedRef<PluginVersionStatus> {
+  function usePluginStatus(
+    plugin: ComputedRef<MarketPluginListItem | null>
+  ): ComputedRef<PluginVersionStatus> {
     return computed(() => getPluginVersionStatus(plugin.value))
   }
 

@@ -2,7 +2,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 
-type BatteryStatusPayload = {
+interface BatteryStatusPayload {
   onBattery?: boolean
   percent?: number | null
 }

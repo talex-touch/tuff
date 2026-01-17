@@ -1,9 +1,9 @@
 <script lang="ts">
 import type { PropType } from 'vue'
 import { computed, defineComponent, h, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
-import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 
 const qualifiedName = ['TxTabItem', 'TxTabItemGroup', 'TxTabHeader']
 
@@ -234,7 +234,8 @@ export default defineComponent({
     })
 
     function scheduleAutoSizerRefresh() {
-      if (!sizeAnimEnabled.value) return
+      if (!sizeAnimEnabled.value)
+        return
       if (autoSizerRefreshMicrotask)
         return
 
@@ -260,7 +261,8 @@ export default defineComponent({
 
     function playPointerAnim() {
       const el = pointerInnerElRef.value
-      if (!el) return
+      if (!el)
+        return
 
       const motions = ['stretch', 'warp', 'glide', 'snap', 'spring'] as const
       for (const m of motions) {
@@ -287,7 +289,8 @@ export default defineComponent({
       const pointerEl = pointerElRef.value
       const nodeEl = (vnodeOrEl?.el ?? vnodeOrEl) as HTMLElement | undefined
       const navInnerEl = navInnerElRef.value
-      if (!pointerEl || !nodeEl || !navInnerEl) return
+      if (!pointerEl || !nodeEl || !navInnerEl)
+        return
 
       const nodeRect = nodeEl.getBoundingClientRect()
       const navInnerRect = navInnerEl.getBoundingClientRect()
@@ -363,7 +366,8 @@ export default defineComponent({
         ...vnode.props,
         active: activeNode.value?.props?.name === vnode.props?.name,
         onClick: () => {
-          if (vnode.props?.disabled) return
+          if (vnode.props?.disabled)
+            return
           const el = slotWrapper.value?.el as HTMLElement | undefined
           if (el) {
             if (animationContent.value.enabled)
@@ -444,7 +448,8 @@ export default defineComponent({
     watch(
       () => props.modelValue,
       (val) => {
-        if (!val) return
+        if (!val)
+          return
         const node = findByName(val)
         if (node) {
           void runAutoHeight(() => {
@@ -463,7 +468,8 @@ export default defineComponent({
     watch(
       () => props.defaultValue,
       (val) => {
-        if (!val || props.modelValue) return
+        if (!val || props.modelValue)
+          return
         const node = findByName(val)
         if (node) {
           void runAutoHeight(() => setActive(node)).then(() => {

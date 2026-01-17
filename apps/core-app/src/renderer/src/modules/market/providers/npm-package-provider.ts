@@ -1,4 +1,8 @@
-import type { MarketInstallInstruction, MarketPlugin, MarketProviderListOptions } from '@talex-touch/utils/market'
+import type {
+  MarketInstallInstruction,
+  MarketPlugin,
+  MarketProviderListOptions
+} from '@talex-touch/utils/market'
 import { BaseMarketProvider } from './base-provider'
 
 /**
@@ -90,7 +94,7 @@ export class NpmPackageProvider extends BaseMarketProvider {
       this.registry = this.definition.url.replace(/\/$/, '')
     }
 
-    const keyword = options.keyword || this.definition.config?.keyword as string || 'tuff-plugin'
+    const keyword = options.keyword || (this.definition.config?.keyword as string) || 'tuff-plugin'
     const scope = this.definition.config?.scope as string | undefined
 
     try {
@@ -144,7 +148,7 @@ export class NpmPackageProvider extends BaseMarketProvider {
       throw new Error(`NPM search failed: ${response.status}`)
     }
 
-    return response.data.objects.map(obj => ({
+    return response.data.objects.map((obj) => ({
       name: obj.package.name,
       version: obj.package.version,
       description: obj.package.description

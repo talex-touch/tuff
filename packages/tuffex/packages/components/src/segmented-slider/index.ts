@@ -1,11 +1,11 @@
-import TxSegmentedSlider from './src/TxSegmentedSlider.vue'
+import type { SegmentedSliderEmits, SegmentedSliderProps, SegmentedSliderSegment } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
-import type { SegmentedSliderProps, SegmentedSliderEmits, SegmentedSliderSegment } from './src/types'
+import TxSegmentedSlider from './src/TxSegmentedSlider.vue'
 
 const SegmentedSlider = withInstall(TxSegmentedSlider)
 
 export { SegmentedSlider, TxSegmentedSlider }
-export type { SegmentedSliderProps, SegmentedSliderEmits, SegmentedSliderSegment }
+export type { SegmentedSliderEmits, SegmentedSliderProps, SegmentedSliderSegment }
 export type TxSegmentedSliderInstance = InstanceType<typeof TxSegmentedSlider>
 
 export default SegmentedSlider

@@ -1,22 +1,16 @@
 /**
  * DivisionBoxManager - Main Process
- * 
+ *
  * Singleton manager for all DivisionBox sessions.
  * Handles session creation, lifecycle management, resource limits, and LRU caching.
  */
 
+import type { CloseOptions, DivisionBoxConfig, SessionInfo } from '@talex-touch/utils'
 // app import removed - not currently used
-import {
-  DivisionBoxError,
-  DivisionBoxErrorCode,
-  DivisionBoxState,
-  type DivisionBoxConfig,
-  type SessionInfo,
-  type CloseOptions
-} from '@talex-touch/utils'
+import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { DivisionBoxSession } from './session'
 import { LRUCache } from './lru-cache'
+import { DivisionBoxSession } from './session'
 
 /**
  * Resource limits for DivisionBox system
@@ -24,17 +18,17 @@ import { LRUCache } from './lru-cache'
 const RESOURCE_LIMITS = {
   /** Maximum number of active DivisionBox instances globally (matches window pool) */
   MAX_ACTIVE_SESSIONS: 5,
-  
+
   /** Maximum number of WebContentsView instances per session */
   MAX_VIEWS_PER_SESSION: 3,
-  
+
   /** Maximum number of cached keepAlive sessions */
   MAX_CACHED_SESSIONS: 5
 }
 
 /**
  * DivisionBoxManager - Singleton class for managing all DivisionBox sessions
- * 
+ *
  * Responsibilities:
  * - Create and register new sessions
  * - Query and destroy sessions
@@ -70,7 +64,7 @@ export class DivisionBoxManager {
 
   /**
    * Gets the singleton instance of DivisionBoxManager
-   * 
+   *
    * @returns The singleton instance
    */
   static getInstance(): DivisionBoxManager {
@@ -82,26 +76,28 @@ export class DivisionBoxManager {
 
   /**
    * Initializes memory pressure event handling
-   * 
+   *
    * Listens for system memory pressure events and triggers cache eviction.
    */
   private initializeMemoryPressureHandling(): void {
     // Listen for memory pressure warnings (if available)
     // Note: Electron doesn't have a direct memory pressure API,
     // but we can monitor process memory usage
-    
+
     // Set up periodic memory check (every 30 seconds)
     this.pollingService.register(
       this.memoryPressureTaskId,
       () => {
-      const memoryUsage = process.memoryUsage()
-      const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024
-      
-      // If heap usage exceeds 500MB, trigger cache eviction
-      if (heapUsedMB > 500) {
-        console.warn(`[DivisionBoxManager] High memory usage detected: ${heapUsedMB.toFixed(2)}MB`)
-        this.handleMemoryPressure()
-      }
+        const memoryUsage = process.memoryUsage()
+        const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024
+
+        // If heap usage exceeds 500MB, trigger cache eviction
+        if (heapUsedMB > 500) {
+          console.warn(
+            `[DivisionBoxManager] High memory usage detected: ${heapUsedMB.toFixed(2)}MB`
+          )
+          this.handleMemoryPressure()
+        }
       },
       { interval: 30, unit: 'seconds' }
     )
@@ -110,7 +106,7 @@ export class DivisionBoxManager {
 
   /**
    * Generates a unique session ID
-   * 
+   *
    * @returns Unique session ID string
    */
   private generateSessionId(): string {
@@ -121,7 +117,7 @@ export class DivisionBoxManager {
 
   /**
    * Validates and applies default values to DivisionBoxConfig
-   * 
+   *
    * @param config - Configuration to validate
    * @returns Validated configuration with defaults applied
    * @throws {DivisionBoxError} If configuration is invalid
@@ -153,7 +149,9 @@ export class DivisionBoxManager {
     // Validate size
     const validSizes = ['compact', 'medium', 'expanded']
     if (!validSizes.includes(validatedConfig.size!)) {
-      console.warn(`[DivisionBoxManager] Invalid size: ${validatedConfig.size}, using default 'medium'`)
+      console.warn(
+        `[DivisionBoxManager] Invalid size: ${validatedConfig.size}, using default 'medium'`
+      )
       validatedConfig.size = 'medium'
     }
 
@@ -162,10 +160,10 @@ export class DivisionBoxManager {
 
   /**
    * Creates a new DivisionBox session
-   * 
+   *
    * Validates configuration, enforces resource limits, generates unique sessionId,
    * creates DivisionBoxSession instance, creates window, and optionally attaches UI view.
-   * 
+   *
    * @param config - Configuration for the new DivisionBox
    * @param stateChangeCallback - Optional callback for state changes (used by IPC layer for broadcasting)
    * @returns The created DivisionBoxSession
@@ -218,15 +216,15 @@ export class DivisionBoxManager {
     // Create and show the window
     try {
       await session.createWindow()
-      
+
       // Attach UI view with plugin URL if provided
       if (validatedConfig.url) {
         // Get plugin reference if pluginId is provided
         const { pluginModule } = await import('../plugin/plugin-module')
-        const plugin = validatedConfig.pluginId 
-          ? pluginModule.pluginManager?.getPluginByName(validatedConfig.pluginId) as any
+        const plugin = validatedConfig.pluginId
+          ? (pluginModule.pluginManager?.getPluginByName(validatedConfig.pluginId) as any)
           : undefined
-        
+
         await session.attachUIView(validatedConfig.url, plugin)
       }
     } catch (error) {
@@ -242,7 +240,7 @@ export class DivisionBoxManager {
   /**
    * Creates a new DivisionBox session without attaching a UI view.
    * Used when transferring an existing WebContentsView from CoreBox.
-   * 
+   *
    * @param config - Configuration for the new DivisionBox
    * @param stateChangeCallback - Optional callback for state changes
    * @returns The created DivisionBoxSession (window only, no UI view)
@@ -303,7 +301,7 @@ export class DivisionBoxManager {
 
   /**
    * Gets a session by ID
-   * 
+   *
    * @param sessionId - ID of the session to retrieve
    * @returns The session if found, undefined otherwise
    */
@@ -313,16 +311,16 @@ export class DivisionBoxManager {
 
   /**
    * Destroys a session and cleans up all resources
-   * 
+   *
    * Removes the session from the registry, LRU cache, and calls session.destroy().
-   * 
+   *
    * @param sessionId - ID of the session to destroy
    * @param options - Optional close options
    * @throws {DivisionBoxError} If session is not found
    */
   async destroySession(sessionId: string, options?: CloseOptions): Promise<void> {
     const session = this.sessions.get(sessionId)
-    
+
     if (!session) {
       throw new DivisionBoxError(
         DivisionBoxErrorCode.SESSION_NOT_FOUND,
@@ -333,7 +331,7 @@ export class DivisionBoxManager {
 
     // Handle delay if specified
     if (options?.delay && options.delay > 0) {
-      await new Promise(resolve => setTimeout(resolve, options.delay))
+      await new Promise((resolve) => setTimeout(resolve, options.delay))
     }
 
     // Remove from LRU cache if present
@@ -350,30 +348,30 @@ export class DivisionBoxManager {
 
   /**
    * Gets all active sessions
-   * 
+   *
    * Returns sessions that are not in DESTROY state.
-   * 
+   *
    * @returns Array of active DivisionBoxSession instances
    */
   getActiveSessions(): DivisionBoxSession[] {
     const activeSessions: DivisionBoxSession[] = []
-    
+
     for (const session of this.sessions.values()) {
       if (session.getState() !== DivisionBoxState.DESTROY) {
         activeSessions.push(session)
       }
     }
-    
+
     return activeSessions
   }
 
   /**
    * Gets session information for all active sessions
-   * 
+   *
    * @returns Array of SessionInfo objects
    */
   getActiveSessionsInfo(): SessionInfo[] {
-    return this.getActiveSessions().map(session => ({
+    return this.getActiveSessions().map((session) => ({
       sessionId: session.sessionId,
       state: session.getState(),
       meta: session.meta
@@ -382,11 +380,11 @@ export class DivisionBoxManager {
 
   /**
    * Validates that a session can register a new WebContentsView
-   * 
+   *
    * Enforces the limit of MAX_VIEWS_PER_SESSION (3) per session.
    * Note: This is a placeholder for future multi-view support.
    * Currently, each session only has one WebContentsView.
-   * 
+   *
    * @param sessionId - ID of the session
    * @param currentViewCount - Current number of views in the session
    * @throws {DivisionBoxError} If view limit is exceeded
@@ -403,7 +401,7 @@ export class DivisionBoxManager {
 
   /**
    * Gets the current resource usage statistics
-   * 
+   *
    * @returns Object containing current resource usage
    */
   getResourceStats(): {
@@ -424,14 +422,14 @@ export class DivisionBoxManager {
 
   /**
    * Handles memory pressure by evicting cached sessions
-   * 
+   *
    * Evicts up to 50% of cached keepAlive sessions to free memory.
    * This is called automatically when high memory usage is detected,
    * or can be called manually.
    */
   handleMemoryPressure(): void {
     const cacheSize = this.lruCache.size()
-    
+
     if (cacheSize === 0) {
       console.log('[DivisionBoxManager] No cached sessions to evict')
       return
@@ -439,22 +437,26 @@ export class DivisionBoxManager {
 
     // Evict up to 50% of cached sessions
     const evictCount = Math.ceil(cacheSize * 0.5)
-    
-    console.log(`[DivisionBoxManager] Memory pressure detected, evicting ${evictCount} cached sessions`)
-    
+
+    console.log(
+      `[DivisionBoxManager] Memory pressure detected, evicting ${evictCount} cached sessions`
+    )
+
     const evictedIds = this.lruCache.evictMultiple(evictCount)
-    
+
     // Remove evicted sessions from the sessions map
     for (const sessionId of evictedIds) {
       this.sessions.delete(sessionId)
     }
-    
-    console.log(`[DivisionBoxManager] Evicted ${evictedIds.length} sessions: ${evictedIds.join(', ')}`)
+
+    console.log(
+      `[DivisionBoxManager] Evicted ${evictedIds.length} sessions: ${evictedIds.join(', ')}`
+    )
   }
 
   /**
    * Gets the singleton instance (alias for getInstance)
-   * 
+   *
    * @returns The singleton instance
    */
   static get(): DivisionBoxManager {

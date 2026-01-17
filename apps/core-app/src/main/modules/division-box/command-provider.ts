@@ -1,6 +1,6 @@
 /**
  * DivisionBox Command Provider
- * 
+ *
  * Integrates DivisionBox with CoreBox command panel.
  * Allows users to search and open DivisionBox instances through the command palette.
  */
@@ -13,7 +13,7 @@ import { shortcutTriggerManager } from './shortcut-trigger'
 
 /**
  * DivisionBoxCommandProvider
- * 
+ *
  * Provides DivisionBox commands in the CoreBox search interface.
  * Shows available DivisionBox shortcuts and allows opening them via command palette.
  */
@@ -23,44 +23,40 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
   public readonly name = 'DivisionBox Commands'
   public readonly icon = 'ri:window-line'
   public readonly supportedInputTypes = [TuffInputType.Text]
-  
+
   private manager: DivisionBoxManager
-  
+
   constructor() {
     this.manager = DivisionBoxManager.getInstance()
   }
-  
+
   async onLoad(_context: ProviderContext): Promise<void> {
     console.log('[DivisionBoxCommandProvider] Provider loaded')
   }
-  
+
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
     const startTime = Date.now()
     const keyword = query.text.toLowerCase()
-    
+
     // Get all registered shortcut mappings
     const mappings = shortcutTriggerManager.getAllMappings()
-    
+
     // Filter mappings based on search query
-    const filteredMappings = mappings.filter(mapping => {
+    const filteredMappings = mappings.filter((mapping) => {
       // Match against title, plugin ID, or shortcut ID
-      const searchableText = [
-        mapping.config.title,
-        mapping.config.pluginId,
-        mapping.id
-      ]
+      const searchableText = [mapping.config.title, mapping.config.pluginId, mapping.id]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-      
+
       return searchableText.includes(keyword)
     })
-    
+
     // Transform mappings to TuffItems
-    const items: TuffItem[] = filteredMappings.map(mapping => 
+    const items: TuffItem[] = filteredMappings.map((mapping) =>
       this.transformMappingToItem(mapping)
     )
-    
+
     // Add "Open Active Sessions" command if there are active sessions
     const activeSessions = this.manager.getActiveSessions()
     if (activeSessions.length > 0 && 'active'.includes(keyword)) {
@@ -96,9 +92,9 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
         } as any
       })
     }
-    
+
     const duration = Date.now() - startTime
-    
+
     return {
       items,
       query,
@@ -114,13 +110,13 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
       ]
     }
   }
-  
+
   /**
    * Transforms a shortcut mapping to a TuffItem
    */
   private transformMappingToItem(mapping: import('./shortcut-trigger').ShortcutMapping): TuffItem {
     const { config, defaultAccelerator } = mapping
-    
+
     return {
       id: `division-box:${mapping.id}`,
       source: {
@@ -159,16 +155,18 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
       } as any
     }
   }
-  
+
   /**
    * Handles command execution
-   * 
+   *
    * Called when a user selects a DivisionBox command from the search results.
-   * 
+   *
    * @param item - The selected TuffItem
    */
-  async onExecute(args: import('@talex-touch/utils').IExecuteArgs): Promise<import('@talex-touch/utils').IProviderActivate | null> {
-    const item = args.item;
+  async onExecute(
+    args: import('@talex-touch/utils').IExecuteArgs
+  ): Promise<import('@talex-touch/utils').IProviderActivate | null> {
+    const item = args.item
     try {
       // Handle "show active sessions" command
       if (item.meta && 'command' in item.meta && item.meta.command === 'show-active-sessions') {
@@ -178,35 +176,36 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
         console.log('[DivisionBoxCommandProvider] Active sessions:', sessions)
         return null
       }
-      
+
       // Handle opening a DivisionBox via shortcut mapping
-      const mappingId = item.meta && 'mappingId' in item.meta ? item.meta.mappingId as string : undefined
+      const mappingId =
+        item.meta && 'mappingId' in item.meta ? (item.meta.mappingId as string) : undefined
       if (!mappingId) {
         console.error('[DivisionBoxCommandProvider] No mapping ID in item meta')
         return null
       }
-      
+
       const mapping = shortcutTriggerManager.getMapping(mappingId)
       if (!mapping) {
         console.error(`[DivisionBoxCommandProvider] Mapping not found: ${mappingId}`)
         return null
       }
-      
+
       // Execute beforeOpen callback if provided
       if (mapping.beforeOpen) {
         await mapping.beforeOpen()
       }
-      
+
       // Create DivisionBox session
       const session = await this.manager.createSession(mapping.config)
-      
+
       console.log(`[DivisionBoxCommandProvider] DivisionBox opened: ${session.sessionId}`)
-      
+
       // Execute afterOpen callback if provided
       if (mapping.afterOpen) {
         await mapping.afterOpen(session.sessionId)
       }
-      
+
       return null
     } catch (error) {
       console.error('[DivisionBoxCommandProvider] Error executing command:', error)
@@ -221,4 +220,3 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
 export function createDivisionBoxCommandProvider(): DivisionBoxCommandProvider {
   return new DivisionBoxCommandProvider()
 }
-

@@ -53,9 +53,9 @@ const styleVars = computed(() => ({
           stroke-dashoffset="31.416"
         />
       </svg>
-      <div class="tx-spinner-container" v-else>
-        <div class="tx-spinner-container-ball"></div>
-        <div class="tx-spinner-container-float"></div>
+      <div v-else class="tx-spinner-container">
+        <div class="tx-spinner-container-ball" />
+        <div class="tx-spinner-container-float" />
       </div>
     </span>
   </Transition>

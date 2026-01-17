@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { IntelligenceUsageSummary } from '@talex-touch/utils/renderer'
+import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 
 const props = defineProps<{
   callerId?: string
@@ -26,39 +26,35 @@ async function loadChartData() {
     const startPeriod = startDate.toISOString().split('T')[0]
     const endPeriod = endDate.toISOString().split('T')[0]
 
-    const data = await getUsageStats(
-      props.callerId || 'system',
-      'day',
-      startPeriod,
-      endPeriod,
-    )
+    const data = await getUsageStats(props.callerId || 'system', 'day', startPeriod, endPeriod)
 
     // Fill missing days with empty data
     const filledData: IntelligenceUsageSummary[] = []
-    const dataMap = new Map(data.map(d => [d.period, d]))
+    const dataMap = new Map(data.map((d) => [d.period, d]))
 
     for (let i = 0; i < days; i++) {
       const date = new Date(startDate)
       date.setDate(date.getDate() + i)
       const period = date.toISOString().split('T')[0]
 
-      filledData.push(dataMap.get(period) || {
-        period,
-        periodType: 'day',
-        requestCount: 0,
-        successCount: 0,
-        failureCount: 0,
-        totalTokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalCost: 0,
-        avgLatency: 0,
-      })
+      filledData.push(
+        dataMap.get(period) || {
+          period,
+          periodType: 'day',
+          requestCount: 0,
+          successCount: 0,
+          failureCount: 0,
+          totalTokens: 0,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalCost: 0,
+          avgLatency: 0
+        }
+      )
     }
 
     chartData.value = filledData
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to load chart data:', error)
   }
 }
@@ -72,9 +68,12 @@ const maxValue = computed(() => {
 
   const values = chartData.value.map((d) => {
     switch (activeMetric.value) {
-      case 'requests': return d.requestCount
-      case 'tokens': return d.totalTokens
-      case 'cost': return d.totalCost
+      case 'requests':
+        return d.requestCount
+      case 'tokens':
+        return d.totalTokens
+      case 'cost':
+        return d.totalCost
     }
   })
 
@@ -124,19 +123,22 @@ const chartBars = computed(() => {
       period: d.period,
       dayLabel,
       weekday,
-      data: d,
+      data: d
     }
   })
 })
 
 const totalStats = computed(() => {
-  const totals = chartData.value.reduce((acc, d) => ({
-    requests: acc.requests + d.requestCount,
-    tokens: acc.tokens + d.totalTokens,
-    cost: acc.cost + d.totalCost,
-    success: acc.success + d.successCount,
-    failure: acc.failure + d.failureCount,
-  }), { requests: 0, tokens: 0, cost: 0, success: 0, failure: 0 })
+  const totals = chartData.value.reduce(
+    (acc, d) => ({
+      requests: acc.requests + d.requestCount,
+      tokens: acc.tokens + d.totalTokens,
+      cost: acc.cost + d.totalCost,
+      success: acc.success + d.successCount,
+      failure: acc.failure + d.failureCount
+    }),
+    { requests: 0, tokens: 0, cost: 0, success: 0, failure: 0 }
+  )
 
   return totals
 })
@@ -172,26 +174,17 @@ function formatDate(period: string): string {
     <div v-else class="chart-container">
       <!-- Metric Selector -->
       <div class="metric-tabs">
-        <button
-          :class="{ active: activeMetric === 'requests' }"
-          @click="activeMetric = 'requests'"
-        >
+        <button :class="{ active: activeMetric === 'requests' }" @click="activeMetric = 'requests'">
           <i class="i-carbon-send-alt" />
           <span>{{ t('intelligence.usage.requests') }}</span>
           <span class="metric-value">{{ totalStats.requests.toLocaleString() }}</span>
         </button>
-        <button
-          :class="{ active: activeMetric === 'tokens' }"
-          @click="activeMetric = 'tokens'"
-        >
+        <button :class="{ active: activeMetric === 'tokens' }" @click="activeMetric = 'tokens'">
           <i class="i-carbon-text-short-paragraph" />
           <span>{{ t('intelligence.usage.tokens') }}</span>
           <span class="metric-value">{{ formatValue(totalStats.tokens, 'tokens') }}</span>
         </button>
-        <button
-          :class="{ active: activeMetric === 'cost' }"
-          @click="activeMetric = 'cost'"
-        >
+        <button :class="{ active: activeMetric === 'cost' }" @click="activeMetric = 'cost'">
           <i class="i-carbon-currency-dollar" />
           <span>{{ t('intelligence.usage.cost') }}</span>
           <span class="metric-value">{{ formatValue(totalStats.cost, 'cost') }}</span>
@@ -216,10 +209,7 @@ function formatDate(period: string): string {
           >
             <div class="bar-stack">
               <!-- Success/Primary bar -->
-              <div
-                class="bar success"
-                :style="{ height: `${bar.successHeight}%` }"
-              />
+              <div class="bar success" :style="{ height: `${bar.successHeight}%` }" />
               <!-- Failure/Secondary bar -->
               <div
                 v-if="activeMetric !== 'cost'"
@@ -235,7 +225,9 @@ function formatDate(period: string): string {
             <!-- Tooltip -->
             <Transition name="fade">
               <div v-if="hoveredIndex === bar.index" class="tooltip">
-                <div class="tooltip-header">{{ formatDate(bar.period) }}</div>
+                <div class="tooltip-header">
+                  {{ formatDate(bar.period) }}
+                </div>
                 <div class="tooltip-row">
                   <span>{{ t('intelligence.usage.requests') }}</span>
                   <span>{{ bar.data.requestCount }}</span>
@@ -347,7 +339,8 @@ function formatDate(period: string): string {
         background: var(--el-color-primary-light-9);
         border-color: var(--el-color-primary-light-5);
 
-        i, span {
+        i,
+        span {
           color: var(--el-color-primary);
         }
 

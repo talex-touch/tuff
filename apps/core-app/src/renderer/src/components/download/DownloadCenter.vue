@@ -15,17 +15,18 @@ const {
   pauseTask: pauseTaskHook,
   resumeTask: resumeTaskHook,
   cancelTask: cancelTaskHook,
-  formatSpeed,
+  formatSpeed
 } = useDownloadCenter()
 
-const hasActiveTasks = computed(() => taskStats.value.downloading > 0 || taskStats.value.pending > 0)
+const hasActiveTasks = computed(
+  () => taskStats.value.downloading > 0 || taskStats.value.pending > 0
+)
 
 async function pauseTask(taskId: string) {
   try {
     await pauseTaskHook(taskId)
     toast.success(t('download.messages.paused'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.messages.pauseFailed')}: ${message}`)
   }
@@ -35,8 +36,7 @@ async function cancelTask(taskId: string) {
   try {
     await cancelTaskHook(taskId)
     toast.success(t('download.messages.cancelled'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.messages.cancelFailed')}: ${message}`)
   }
@@ -46,8 +46,7 @@ async function retryTask(taskId: string) {
   try {
     await resumeTaskHook(taskId)
     toast.success(t('download.messages.retrying'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.messages.retryFailed')}: ${message}`)
   }
@@ -67,8 +66,12 @@ function removeTask(_taskId: string) {
           <i class="i-carbon-arrow-down" />
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ formatSpeed(currentDownloadSpeed) }}</div>
-          <div class="stat-label">{{ $t('download.current_speed') }}</div>
+          <div class="stat-value">
+            {{ formatSpeed(currentDownloadSpeed) }}
+          </div>
+          <div class="stat-label">
+            {{ $t('download.current_speed') }}
+          </div>
         </div>
       </div>
       <div class="stat-card">
@@ -76,8 +79,12 @@ function removeTask(_taskId: string) {
           <i class="i-carbon-in-progress" />
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ taskStats.downloading }}</div>
-          <div class="stat-label">{{ $t('download.active_downloads') }}</div>
+          <div class="stat-value">
+            {{ taskStats.downloading }}
+          </div>
+          <div class="stat-label">
+            {{ $t('download.active_downloads') }}
+          </div>
         </div>
       </div>
       <div class="stat-card">
@@ -85,8 +92,12 @@ function removeTask(_taskId: string) {
           <i class="i-carbon-checkmark-filled" />
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ taskStats.completed }}</div>
-          <div class="stat-label">{{ $t('download.total_completed') }}</div>
+          <div class="stat-value">
+            {{ taskStats.completed }}
+          </div>
+          <div class="stat-label">
+            {{ $t('download.total_completed') }}
+          </div>
         </div>
       </div>
       <div class="stat-card">
@@ -94,8 +105,12 @@ function removeTask(_taskId: string) {
           <i class="i-carbon-warning-filled" />
         </div>
         <div class="stat-info">
-          <div class="stat-value">{{ taskStats.failed }}</div>
-          <div class="stat-label">{{ $t('download.total_failed') }}</div>
+          <div class="stat-value">
+            {{ taskStats.failed }}
+          </div>
+          <div class="stat-label">
+            {{ $t('download.total_failed') }}
+          </div>
         </div>
       </div>
     </div>
@@ -178,8 +193,12 @@ function removeTask(_taskId: string) {
         <div class="empty-icon">
           <i class="i-carbon-cloud-download" />
         </div>
-        <div class="empty-text">{{ $t('download.no_tasks') }}</div>
-        <div class="empty-hint">{{ $t('download.no_tasks_hint') }}</div>
+        <div class="empty-text">
+          {{ $t('download.no_tasks') }}
+        </div>
+        <div class="empty-hint">
+          {{ $t('download.no_tasks_hint') }}
+        </div>
       </div>
     </div>
   </div>
@@ -287,10 +306,18 @@ function removeTask(_taskId: string) {
     .section-icon {
       font-size: 16px;
 
-      &.downloading { color: var(--el-color-primary); }
-      &.pending { color: var(--el-color-warning); }
-      &.completed { color: var(--el-color-success); }
-      &.failed { color: var(--el-color-danger); }
+      &.downloading {
+        color: var(--el-color-primary);
+      }
+      &.pending {
+        color: var(--el-color-warning);
+      }
+      &.completed {
+        color: var(--el-color-success);
+      }
+      &.failed {
+        color: var(--el-color-danger);
+      }
     }
 
     .section-title {

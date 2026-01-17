@@ -1,5 +1,5 @@
-import { clerkClient } from '@clerk/nuxt/server'
 import type { PluginChannel } from '../../../../utils/pluginsStore'
+import { clerkClient } from '@clerk/nuxt/server'
 import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../../../utils/auth'
 import { publishPluginVersion } from '../../../../utils/pluginsStore'

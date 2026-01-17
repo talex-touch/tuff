@@ -1,36 +1,32 @@
-<script name="TTabItem">
-export default {
-  name: 'TTabItem',
-}
-</script>
-
 <script setup>
 import { ref, watchEffect } from 'vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 
+defineOptions({ name: 'TTabItem' })
+
 const props = defineProps({
   icon: {
     type: String,
-    required: true,
+    required: true
   },
   name: {
     type: String,
-    required: true,
+    required: true
   },
   active: {
-    type: Function,
+    type: Function
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   nonStyle: {
-    type: Boolean,
+    type: Boolean
   },
   activation: {
     type: Boolean,
-    default: false,
-  },
+    default: false
+  }
 })
 
 const active = ref(false)

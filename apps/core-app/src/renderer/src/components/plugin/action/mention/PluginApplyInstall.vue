@@ -36,10 +36,10 @@ async function install(forceUpdate = false): Promise<void> {
   try {
     await sleep(400)
 
-    const data = await touchChannel.send('@install-plugin', { 
-      name: props.fileName, 
+    const data = await touchChannel.send('@install-plugin', {
+      name: props.fileName,
       buffer,
-      forceUpdate 
+      forceUpdate
     })
 
     await sleep(400)
@@ -50,8 +50,7 @@ async function install(forceUpdate = false): Promise<void> {
       if (data.msg === '10091') {
         close()
         await blowMention('Install Error', 'The plugin package is corrupted!')
-      }
-      else if (data.msg === 'plugin already exists') {
+      } else if (data.msg === 'plugin already exists') {
         // Ask user if they want to update/override
         let shouldUpdate = false
         await forTouchTip(
@@ -73,35 +72,33 @@ async function install(forceUpdate = false): Promise<void> {
             }
           ]
         )
-        
+
         if (shouldUpdate) {
           // Retry with force update
           await install(true)
           return
         }
         close()
-      }
-      else if (typeof data.msg === 'string') {
+      } else if (typeof data.msg === 'string') {
         close()
         await blowMention('Install Error', `Installation failed: ${data.msg}`)
-      }
-      else {
+      } else {
         close()
         await blowMention('Install Error', `Installation failed: ${JSON.stringify(data.msg)}`)
       }
-    }
-    else {
+    } else {
       close()
-      await blowMention('Install Success', `Plugin "${props.manifest.name}" installed successfully!`)
+      await blowMention(
+        'Install Success',
+        `Plugin "${props.manifest.name}" installed successfully!`
+      )
     }
-  }
-  catch (error: any) {
+  } catch (error: any) {
     installing.value = false
     close()
     console.error('[PluginApplyInstall] Installation error:', error)
     await blowMention('Install Error', `Unexpected error: ${error?.message || 'Unknown error'}`)
-  }
-  finally {
+  } finally {
     clearBufferedFile(props.fileName)
   }
 }
@@ -116,24 +113,22 @@ function onIgnore(): void {
   <div
     class="PluginApplyInstall-Container transition-all duration-300 ease-in-out"
     :class="{
-      installing,
+      installing
     }"
   >
     <div
       class="PluginApplyInstall-Installing -mb-[110%] opacity-0 transition-all duration-300 ease-in-out"
       :class="{
-        '!-mb-[50%] !opacity-100': installing,
+        '!-mb-[50%] !opacity-100': installing
       }"
     >
-      <h4 class="text-center">
-        Installing...
-      </h4>
+      <h4 class="text-center">Installing...</h4>
       <LottieFrame :data="Loading" />
     </div>
     <div
       class="PluginApplyInstall-Main relative transition-all duration-300 ease-in-out"
       :class="{
-        '!opacity-0 !-translate-y-full': installing,
+        '!opacity-0 !-translate-y-full': installing
       }"
     >
       <h2 my-4 text-2xl font-bold text-center>
@@ -144,12 +139,8 @@ function onIgnore(): void {
       </h4>
       <span my-2 class="block text-center text-xs text-gray-500">{{ manifest.version }}</span>
       <div class="flex justify-between mt-16px gap-16px h-2.5rem">
-        <FlatButton v-wave flex-1 @click="onIgnore">
-          Ignore
-        </FlatButton>
-        <FlatButton v-wave flex-1 :primary="true" @click="install">
-          Install
-        </FlatButton>
+        <FlatButton v-wave flex-1 @click="onIgnore"> Ignore </FlatButton>
+        <FlatButton v-wave flex-1 :primary="true" @click="install"> Install </FlatButton>
       </div>
     </div>
   </div>

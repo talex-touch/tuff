@@ -21,32 +21,32 @@ export interface VibratePattern {
 export const VIBRATE_PATTERNS: Record<VibrateType, VibratePattern> = {
   light: {
     pattern: [5],
-    description: '轻微震动 - 适用于轻触反馈'
+    description: '轻微震动 - 适用于轻触反馈',
   },
   heavy: {
     pattern: [5, 30],
-    description: '重度震动 - 适用于重要操作反馈'
+    description: '重度震动 - 适用于重要操作反馈',
   },
   medium: {
     pattern: [10, 15],
-    description: '中等震动 - 适用于一般操作反馈'
+    description: '中等震动 - 适用于一般操作反馈',
   },
   bit: {
     pattern: [2, 1],
-    description: '微震动 - 适用于细微交互反馈'
+    description: '微震动 - 适用于细微交互反馈',
   },
   success: {
     pattern: [10, 50, 10],
-    description: '成功震动 - 适用于成功操作反馈'
+    description: '成功震动 - 适用于成功操作反馈',
   },
   warning: {
     pattern: [15, 30, 15, 30, 15],
-    description: '警告震动 - 适用于警告提示'
+    description: '警告震动 - 适用于警告提示',
   },
   error: {
     pattern: [20, 100, 20, 100, 20],
-    description: '错误震动 - 适用于错误提示'
-  }
+    description: '错误震动 - 适用于错误提示',
+  },
 }
 
 /**
@@ -68,9 +68,10 @@ export interface VibrateOptions {
  */
 export function useVibrate(type: VibrateType, options: VibrateOptions = {}) {
   const { enabled = true, silent = true } = options
-  
-  if (!enabled) return
-  
+
+  if (!enabled)
+    return
+
   const pattern = options.pattern || VIBRATE_PATTERNS[type].pattern
   useAutoVibrate(pattern, { silent })
 }
@@ -82,7 +83,7 @@ export function useVibrate(type: VibrateType, options: VibrateOptions = {}) {
  */
 export function useAutoVibrate(duration: number[], options: VibrateOptions = {}) {
   const { silent = true } = options
-  
+
   try {
     // 检查是否在浏览器环境
     if (!hasWindow()) {
@@ -91,7 +92,7 @@ export function useAutoVibrate(duration: number[], options: VibrateOptions = {})
       }
       return false
     }
-    
+
     // 检查是否支持震动 API
     if (!window.navigator.vibrate) {
       if (!silent) {
@@ -99,10 +100,11 @@ export function useAutoVibrate(duration: number[], options: VibrateOptions = {})
       }
       return false
     }
-    
+
     // 执行震动
     return window.navigator.vibrate(duration)
-  } catch (error) {
+  }
+  catch (error) {
     if (!silent) {
       console.error('Failed to vibrate:', error)
     }
@@ -119,7 +121,8 @@ export function stopVibrate() {
       window.navigator.vibrate(0)
       return true
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to stop vibration:', error)
   }
   return false
@@ -142,7 +145,7 @@ export function isVibrateSupported(): boolean {
 export function createVibratePattern(pattern: number[], description?: string): VibratePattern {
   return {
     pattern,
-    description
+    description,
   }
 }
 
@@ -152,43 +155,44 @@ export function createVibratePattern(pattern: number[], description?: string): V
 export class VibrateManager {
   private enabled: boolean = true
   private silent: boolean = true
-  
+
   constructor(options: VibrateOptions = {}) {
     this.enabled = options.enabled ?? true
     this.silent = options.silent ?? true
   }
-  
+
   /**
    * 设置是否启用震动
    */
   setEnabled(enabled: boolean) {
     this.enabled = enabled
   }
-  
+
   /**
    * 设置是否静默模式
    */
   setSilent(silent: boolean) {
     this.silent = silent
   }
-  
+
   /**
    * 执行震动
    */
   vibrate(type: VibrateType, customPattern?: number[]) {
-    if (!this.enabled) return false
-    
+    if (!this.enabled)
+      return false
+
     const pattern = customPattern || VIBRATE_PATTERNS[type].pattern
     return useAutoVibrate(pattern, { silent: this.silent })
   }
-  
+
   /**
    * 停止震动
    */
   stop() {
     return stopVibrate()
   }
-  
+
   /**
    * 检查支持状态
    */
@@ -212,5 +216,5 @@ export const vibrate = {
   warning: () => useVibrate('warning'),
   error: () => useVibrate('error'),
   stop: stopVibrate,
-  isSupported: isVibrateSupported
+  isSupported: isVibrateSupported,
 }

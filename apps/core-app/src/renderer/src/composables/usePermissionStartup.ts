@@ -4,8 +4,8 @@
  * Handles permission confirmation requests when plugins are enabled.
  */
 
-import { ref, onMounted, onUnmounted, h } from 'vue'
-import { ElMessageBox, ElButton } from 'element-plus'
+import { ElButton, ElMessageBox } from 'element-plus'
+import { h, onMounted, onUnmounted, ref } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface PermissionStartupRequest {
@@ -36,7 +36,7 @@ const permissionNames: Record<string, string> = {
   'storage.plugin': '插件存储',
   'storage.shared': '共享存储',
   'window.create': '创建窗口',
-  'window.capture': '屏幕截图',
+  'window.capture': '屏幕截图'
 }
 
 const PERMISSION_TIMEOUT_MS = 30_000
@@ -50,11 +50,13 @@ export function usePermissionStartup() {
     if (!request.required || request.required.length === 0) return
 
     // Build permission list text
-    const permList = request.required.map(p => {
-      const name = permissionNames[p] || p
-      const reason = request.reasons[p]
-      return reason ? `• ${name}：${reason}` : `• ${name}`
-    }).join('\n')
+    const permList = request.required
+      .map((p) => {
+        const name = permissionNames[p] || p
+        const reason = request.reasons[p]
+        return reason ? `• ${name}：${reason}` : `• ${name}`
+      })
+      .join('\n')
 
     const userChoice = await new Promise<'always' | 'session' | 'deny'>((resolve) => {
       let timeoutId: ReturnType<typeof setTimeout> | null = null
@@ -82,30 +84,28 @@ export function usePermissionStartup() {
             'pre',
             {
               style:
-                'background: var(--el-fill-color); padding: 8px; border-radius: 4px; margin: 8px 0',
+                'background: var(--el-fill-color); padding: 8px; border-radius: 4px; margin: 8px 0'
             },
-            permList,
+            permList
           ),
           h(
             'p',
             {
-              style:
-                'color: var(--el-text-color-secondary); font-size: 12px; margin-top: 12px',
+              style: 'color: var(--el-text-color-secondary); font-size: 12px; margin-top: 12px'
             },
-            `⏱ 如无操作，将在 ${Math.floor(PERMISSION_TIMEOUT_MS / 1000)} 秒后自动拒绝`,
+            `⏱ 如无操作，将在 ${Math.floor(PERMISSION_TIMEOUT_MS / 1000)} 秒后自动拒绝`
           ),
           h(
             'div',
             {
-              style:
-                'display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px',
+              style: 'display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px'
             },
             [
               h(ElButton, { onClick: () => finish('deny') }, () => '拒绝'),
               h(ElButton, { onClick: () => finish('session') }, () => '仅本次允许'),
-              h(ElButton, { type: 'primary', onClick: () => finish('always') }, () => '始终允许'),
-            ],
-          ),
+              h(ElButton, { type: 'primary', onClick: () => finish('always') }, () => '始终允许')
+            ]
+          )
         ]),
         showConfirmButton: false,
         showCancelButton: false,
@@ -116,7 +116,7 @@ export function usePermissionStartup() {
         beforeClose: (_action, _instance, done) => {
           finish('deny')
           done()
-        },
+        }
       } as any).catch(() => {
         finish('deny')
       })
@@ -128,14 +128,14 @@ export function usePermissionStartup() {
         await touchChannel.send('permission:grant-multiple', {
           pluginId: request.pluginId,
           permissionIds: request.required,
-          grantedBy: 'user',
+          grantedBy: 'user'
         })
         break
 
       case 'session':
         await touchChannel.send('permission:grant-session', {
           pluginId: request.pluginId,
-          permissionIds: request.required,
+          permissionIds: request.required
         })
         break
 
@@ -165,6 +165,6 @@ export function usePermissionStartup() {
   })
 
   return {
-    pendingRequests,
+    pendingRequests
   }
 }

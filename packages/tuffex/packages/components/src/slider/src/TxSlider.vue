@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { SliderEmits, SliderProps } from './types'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxSlider',
@@ -85,19 +85,22 @@ const clampedValue = computed(() => {
 
 const percent = computed(() => {
   const range = props.max - props.min
-  if (range <= 0) return 0
+  if (range <= 0)
+    return 0
   return ((clampedValue.value - props.min) / range) * 100
 })
 
 const thumbCenterPx = computed(() => {
-  if (mainWidth.value <= 0) return 0
+  if (mainWidth.value <= 0)
+    return 0
   const edge = thumbSizePx.value / 2
   const inner = Math.max(0, mainWidth.value - thumbSizePx.value)
   return edge + inner * (percent.value / 100)
 })
 
 const fillWidthStyle = computed(() => {
-  if (mainWidth.value <= 0) return { width: `${percent.value}%` }
+  if (mainWidth.value <= 0)
+    return { width: `${percent.value}%` }
   return { width: `${thumbCenterPx.value}px` }
 })
 
@@ -106,15 +109,20 @@ const displayValue = computed(() => {
 })
 
 const tooltipText = computed(() => {
-  if (props.tooltipFormatter) return props.tooltipFormatter(clampedValue.value)
+  if (props.tooltipFormatter)
+    return props.tooltipFormatter(clampedValue.value)
   return displayValue.value
 })
 
 const shouldShowTooltip = computed(() => {
-  if (!props.showTooltip) return false
-  if (props.disabled) return false
-  if (props.tooltipTrigger === 'always') return true
-  if (props.tooltipTrigger === 'hover') return hovering.value || dragging.value
+  if (!props.showTooltip)
+    return false
+  if (props.disabled)
+    return false
+  if (props.tooltipTrigger === 'always')
+    return true
+  if (props.tooltipTrigger === 'hover')
+    return hovering.value || dragging.value
   return dragging.value
 })
 
@@ -145,14 +153,14 @@ const tooltipStyle = computed(() => {
   const skew = baseSkew + wobbleSkew
   const scaleX = 1 + baseSquash * 0.16 + wobbleSquash * 0.28
   const scaleY = 1 - baseSquash * 0.1 - wobbleSquash * 0.18
-  
+
   // Clamp position to prevent overflow
   const half = tooltipWidth.value > 0 ? tooltipWidth.value / 2 : 40 // fallback width
   const safe = 8
   const min = half + safe
   const max = Math.max(min, mainWidth.value - half - safe)
   const clampedX = Math.min(max, Math.max(min, baseX + offsetX))
-  
+
   const y = props.tooltipPlacement === 'bottom' ? 28 : -28
   const origin = props.tooltipPlacement === 'bottom' ? '50% 0%' : '50% 100%'
 
@@ -160,7 +168,7 @@ const tooltipStyle = computed(() => {
   const transition = useMotion
     ? (dragging.value ? 'none' : 'transform 0.3s ease')
     : (dragging.value ? 'opacity 0.12s ease' : 'opacity 0.2s ease, transform 0.3s ease')
-  
+
   return {
     left: `${clampedX}px`,
     top: '50%',
@@ -171,9 +179,11 @@ const tooltipStyle = computed(() => {
 })
 
 function refreshTooltipWidth() {
-  if (!tooltipRef.value) return
+  if (!tooltipRef.value)
+    return
   const w = tooltipRef.value.getBoundingClientRect().width
-  if (Number.isFinite(w) && w > 0) tooltipWidth.value = w
+  if (Number.isFinite(w) && w > 0)
+    tooltipWidth.value = w
 }
 
 function clamp01(v: number) {
@@ -202,11 +212,14 @@ function resetTooltipMotion() {
 }
 
 function triggerJelly(kick: number, dir: number) {
-  if (!props.tooltipTilt) return
-  if (!props.tooltipJelly) return
+  if (!props.tooltipTilt)
+    return
+  if (!props.tooltipJelly)
+    return
 
   const k = clamp01(kick)
-  if (k <= 0) return
+  if (k <= 0)
+    return
 
   tooltipJellyDir.value = dir === 0 ? 1 : dir
   tooltipJellyAmp.value = Math.min(1, tooltipJellyAmp.value + k)
@@ -215,7 +228,8 @@ function triggerJelly(kick: number, dir: number) {
 }
 
 function ensureTooltipRaf() {
-  if (tooltipRafId != null) return
+  if (tooltipRafId != null)
+    return
 
   tooltipLastRafTs = null
   tooltipRafId = window.requestAnimationFrame(function loop(ts) {
@@ -295,7 +309,8 @@ function setElasticTargets(dir: number, intensity: number) {
 }
 
 function onGlobalPointerMove(e: PointerEvent) {
-  if (!dragging.value || !props.tooltipTilt) return
+  if (!dragging.value || !props.tooltipTilt)
+    return
 
   const now = performance.now()
   const x = e.clientX
@@ -388,16 +403,19 @@ function onChange(e: Event) {
 }
 
 function refreshMetrics() {
-  if (!mainRef.value) return
+  if (!mainRef.value)
+    return
   const rect = mainRef.value.getBoundingClientRect()
   mainWidth.value = rect.width
   const raw = getComputedStyle(mainRef.value).getPropertyValue('--tx-slider-thumb-size')
   const size = Number.parseFloat(raw)
-  if (Number.isFinite(size) && size > 0) thumbSizePx.value = size
+  if (Number.isFinite(size) && size > 0)
+    thumbSizePx.value = size
 }
 
 function startDragging(e: PointerEvent) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   dragging.value = true
   refreshMetrics()
 
@@ -415,7 +433,8 @@ function startDragging(e: PointerEvent) {
 }
 
 function stopDragging() {
-  if (!dragging.value) return
+  if (!dragging.value)
+    return
   dragging.value = false
 
   window.removeEventListener('pointermove', onGlobalPointerMove)
@@ -424,7 +443,7 @@ function stopDragging() {
   pointerVelocity.value = 0
   pointerAcceleration.value = 0
   hadPointerMove.value = false
-  
+
   if (props.tooltipTilt) {
     setElasticTargets(1, 0)
     ensureTooltipRaf()
@@ -473,7 +492,8 @@ watch(
 )
 
 watch(tooltipText, async () => {
-  if (!shouldShowTooltip.value) return
+  if (!shouldShowTooltip.value)
+    return
   await nextTick()
   refreshTooltipWidth()
 })
@@ -561,10 +581,12 @@ onBeforeUnmount(() => {
         @blur="stopDragging"
         @input="onInput"
         @change="onChange"
-      />
+      >
     </div>
 
-    <div v-if="showValue" class="tx-slider__value">{{ displayValue }}</div>
+    <div v-if="showValue" class="tx-slider__value">
+      {{ displayValue }}
+    </div>
   </div>
 </template>
 

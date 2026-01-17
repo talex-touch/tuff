@@ -1,5 +1,6 @@
-import { recordTelemetryMessages, type TelemetryMessageInput } from '../../utils/messageStore'
+import type { TelemetryMessageInput } from '../../utils/messageStore'
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
+import { recordTelemetryMessages } from '../../utils/messageStore'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)

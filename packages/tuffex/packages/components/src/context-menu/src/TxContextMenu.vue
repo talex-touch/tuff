@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { ContextMenuProps } from './types'
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
-import type { ContextMenuProps } from './types'
 
 defineOptions({ name: 'TxContextMenu' })
 
@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<ContextMenuProps>(), {
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
-  (e: 'open', payload: { x: number; y: number }): void
+  (e: 'open', payload: { x: number, y: number }): void
   (e: 'close'): void
 }>()
 
@@ -100,8 +100,10 @@ function isEventInside(e: Event, el: HTMLElement | null): boolean {
 }
 
 function handleOutside(e: MouseEvent) {
-  if (!props.closeOnClickOutside) return
-  if (!open.value) return
+  if (!props.closeOnClickOutside)
+    return
+  if (!open.value)
+    return
   if (performance.now() - lastOpenedAt.value < 60)
     return
 
@@ -112,9 +114,12 @@ function handleOutside(e: MouseEvent) {
 }
 
 function handleEsc(e: KeyboardEvent) {
-  if (!props.closeOnEsc) return
-  if (e.key !== 'Escape') return
-  if (!open.value) return
+  if (!props.closeOnEsc)
+    return
+  if (e.key !== 'Escape')
+    return
+  if (!open.value)
+    return
   close()
 }
 

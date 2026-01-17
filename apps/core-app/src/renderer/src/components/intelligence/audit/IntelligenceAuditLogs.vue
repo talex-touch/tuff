@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { IntelligenceAuditLogEntry } from '@talex-touch/utils/renderer'
+import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 
 const props = defineProps<{
@@ -10,7 +10,8 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const { getAuditLogs, exportToCSV, exportToJSON, downloadAsFile, isLoading } = useIntelligenceStats()
+const { getAuditLogs, exportToCSV, exportToJSON, downloadAsFile, isLoading } =
+  useIntelligenceStats()
 
 const logs = ref<IntelligenceAuditLogEntry[]>([])
 const selectedLog = ref<IntelligenceAuditLogEntry | null>(null)
@@ -22,19 +23,17 @@ async function loadLogs(append = false) {
     const newLogs = await getAuditLogs({
       caller: props.callerId,
       limit: limit.value,
-      offset: append ? logs.value.length : 0,
+      offset: append ? logs.value.length : 0
     })
 
     if (append) {
       logs.value.push(...newLogs)
-    }
-    else {
+    } else {
       logs.value = newLogs
     }
 
     hasMore.value = newLogs.length === limit.value
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to load logs:', error)
   }
 }
@@ -112,7 +111,9 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
             <i :class="log.success ? 'i-carbon-checkmark-filled' : 'i-carbon-close-filled'" />
           </div>
           <div class="log-info">
-            <div class="log-capability">{{ log.capabilityId }}</div>
+            <div class="log-capability">
+              {{ log.capabilityId }}
+            </div>
             <div class="log-meta">
               <span class="provider">{{ log.provider }}</span>
               <span class="model">{{ log.model }}</span>
@@ -128,9 +129,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
               <i class="i-carbon-time" />
               {{ formatLatency(log.latency) }}
             </span>
-            <span v-if="log.estimatedCost" class="cost">
-              ${{ log.estimatedCost.toFixed(4) }}
-            </span>
+            <span v-if="log.estimatedCost" class="cost"> ${{ log.estimatedCost.toFixed(4) }} </span>
           </div>
         </div>
 
@@ -150,8 +149,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           <div class="detail-row">
             <span class="label">Tokens:</span>
             <span>
-              Prompt: {{ log.usage.promptTokens }} |
-              Completion: {{ log.usage.completionTokens }} |
+              Prompt: {{ log.usage.promptTokens }} | Completion: {{ log.usage.completionTokens }} |
               Total: {{ log.usage.totalTokens }}
             </span>
           </div>
@@ -193,7 +191,8 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
     }
   }
 
-  .loading, .empty {
+  .loading,
+  .empty {
     display: flex;
     flex-direction: column;
     align-items: center;

@@ -1,12 +1,11 @@
 /* eslint-disable no-console */
-import process from 'node:process'
-import path from 'pathe'
-import fs from 'fs-extra'
-import { createUnplugin } from 'unplugin'
 import type { ViteDevServer } from 'vite'
-import Debug from 'debug'
 import type { Options } from './types'
-import { build } from './core/exporter'
+import process from 'node:process'
+import Debug from 'debug'
+import fs from 'fs-extra'
+import path from 'pathe'
+import { createUnplugin } from 'unplugin'
 
 const INDEX_FOLDER = 'index'
 let indexBuildContext: any = null
@@ -53,7 +52,7 @@ async function buildIndexFolder(projectRoot: string, chalk: any): Promise<string
     }
 
     const startTime = Date.now()
-    
+
     // Check if entry path changed or force rebuild requested
     const needsRebuild = lastIndexEntryPath !== entryPath || forceRebuildIndex
     if (needsRebuild && indexBuildContext) {
@@ -62,7 +61,7 @@ async function buildIndexFolder(projectRoot: string, chalk: any): Promise<string
       indexBuildContext = null
       forceRebuildIndex = false
     }
-    
+
     // Use incremental build context for faster rebuilds
     if (!indexBuildContext) {
       lastIndexEntryPath = entryPath
@@ -77,8 +76,8 @@ async function buildIndexFolder(projectRoot: string, chalk: any): Promise<string
         minify: false,
         sourcemap: 'inline',
         define: {
-          '__PLUGIN_NAME__': JSON.stringify(manifest.name),
-          '__PLUGIN_VERSION__': JSON.stringify(manifest.version),
+          __PLUGIN_NAME__: JSON.stringify(manifest.name),
+          __PLUGIN_VERSION__: JSON.stringify(manifest.version),
         },
         alias: {
           '@': indexDir,
@@ -101,7 +100,8 @@ async function buildIndexFolder(projectRoot: string, chalk: any): Promise<string
     const output = result.outputFiles?.[0]?.text || ''
     console.log(chalk.green(`[Tuff DevKit] index/ rebuilt in ${duration}ms`))
     return output
-  } catch (error: any) {
+  }
+  catch (error: any) {
     console.error(chalk.red(`[Tuff DevKit] Failed to build index/: ${error.message}`))
     return null
   }
@@ -114,7 +114,7 @@ function debouncedIndexBuild(projectRoot: string, chalk: any, delay = 100): Prom
   if (indexBuildPromise) {
     return indexBuildPromise
   }
-  
+
   indexBuildPromise = new Promise((resolve) => {
     setTimeout(async () => {
       const result = await buildIndexFolder(projectRoot, chalk)
@@ -122,7 +122,7 @@ function debouncedIndexBuild(projectRoot: string, chalk: any, delay = 100): Prom
       resolve(result)
     }, delay)
   })
-  
+
   return indexBuildPromise
 }
 
@@ -158,14 +158,14 @@ export default createUnplugin<Options | undefined>((options, meta) => {
           // File does not exist, do nothing
         }
       }
-      
+
       // Check for index/ folder - if exists, add virtual index.js
       const indexDir = path.join(projectRoot, INDEX_FOLDER)
       if (await fs.pathExists(indexDir) && !filesToVirtualize.includes('index.js')) {
         filesToVirtualize.push('index.js')
         console.log(chalk.cyan('[Tuff DevKit]'), 'Detected index/ folder, enabling real-time compilation')
       }
-      
+
       debug('Virtualizing files:', filesToVirtualize)
     },
 
@@ -183,7 +183,7 @@ export default createUnplugin<Options | undefined>((options, meta) => {
       if (id.startsWith(VIRTUAL_PREFIX_RESOLVED)) {
         const originalId = id.slice(VIRTUAL_PREFIX_RESOLVED.length)
         const filePath = path.join(projectRoot, originalId)
-        
+
         // Special handling for index.js when index/ folder exists
         if (originalId === 'index.js') {
           const indexDir = path.join(projectRoot, INDEX_FOLDER)
@@ -195,7 +195,7 @@ export default createUnplugin<Options | undefined>((options, meta) => {
             }
           }
         }
-        
+
         try {
           await fs.access(filePath)
           const content = await fs.readFile(filePath, 'utf-8')
@@ -229,25 +229,25 @@ export default createUnplugin<Options | undefined>((options, meta) => {
         const handleFileChange = async (file: string) => {
           const relativePath = path.relative(projectRoot, file)
           debug(`File changed: ${relativePath}, triggering HMR.`)
-          
+
           // If file is in index/ folder, rebuild and invalidate index.js
-          if (relativePath.startsWith(INDEX_FOLDER + '/') || relativePath.startsWith(INDEX_FOLDER + '\\')) {
+          if (relativePath.startsWith(`${INDEX_FOLDER}/`) || relativePath.startsWith(`${INDEX_FOLDER}\\`)) {
             const chalk = await getChalk()
             console.log(chalk.cyan('[Tuff DevKit]'), `index/ changed: ${relativePath}`)
-            
+
             // Force rebuild context to pick up new/deleted dependencies
             forceRebuildIndex = true
-            
+
             // Rebuild index folder
             await debouncedIndexBuild(projectRoot, chalk)
-            
+
             // Invalidate virtual index.js module
-            const virtualIndexId = VIRTUAL_PREFIX_RESOLVED + 'index.js'
+            const virtualIndexId = `${VIRTUAL_PREFIX_RESOLVED}index.js`
             const indexMod = server.moduleGraph.getModuleById(virtualIndexId)
             if (indexMod) {
               server.moduleGraph.invalidateModule(indexMod)
             }
-            
+
             server.ws.send('tuff:update', {
               path: 'index.js',
               timestamp: Date.now(),

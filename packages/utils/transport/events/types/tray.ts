@@ -14,4 +14,3 @@ export type TrayShowSetRequest = boolean
 export type TrayShowSetResponse = boolean
 
 export type TrayHideDockSetResponse = boolean
-

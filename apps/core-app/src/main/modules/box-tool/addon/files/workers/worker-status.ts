@@ -1,4 +1,4 @@
-export type WorkerMetricsPayload = {
+export interface WorkerMetricsPayload {
   timestamp: number
   memory: {
     rss: number
@@ -18,18 +18,18 @@ export type WorkerMetricsPayload = {
   } | null
 }
 
-export type WorkerMetricsRequest = {
+export interface WorkerMetricsRequest {
   type: 'metrics'
   requestId: string
 }
 
-export type WorkerMetricsResponse = {
+export interface WorkerMetricsResponse {
   type: 'metrics'
   requestId: string
   metrics: WorkerMetricsPayload
 }
 
-export type WorkerTaskSnapshot = {
+export interface WorkerTaskSnapshot {
   id: string
   startedAt: string | null
   finishedAt: string | null
@@ -37,7 +37,7 @@ export type WorkerTaskSnapshot = {
   error: string | null
 }
 
-export type WorkerStatusSnapshot = {
+export interface WorkerStatusSnapshot {
   name: string
   threadId: number | null
   state: 'offline' | 'idle' | 'busy'

@@ -10,6 +10,24 @@
 /**
  * Plugin status enumeration.
  */
+// ============================================================================
+// Plugin Management (Renderer/Main) Types
+// ============================================================================
+
+import type { ITouchPlugin } from '../../../plugin'
+import type {
+  PluginInstallConfirmRequest,
+  PluginInstallConfirmResponse,
+  PluginInstallProgressEvent,
+} from '../../../plugin/install'
+import type { PluginInstallRequest } from '../../../plugin/providers/types'
+import type {
+  InputChangedRequest,
+  PluginFilters,
+  PluginStateEvent,
+  TriggerFeatureRequest,
+} from '../../../plugin/sdk/types'
+
 export enum PluginStatus {
   /**
    * Plugin is not loaded.
@@ -298,24 +316,6 @@ export interface PluginMessageResponse {
    */
   error?: string
 }
-
-// ============================================================================
-// Plugin Management (Renderer/Main) Types
-// ============================================================================
-
-import type { ITouchPlugin } from '../../../plugin'
-import type {
-  InputChangedRequest,
-  PluginFilters,
-  PluginStateEvent,
-  TriggerFeatureRequest,
-} from '../../../plugin/sdk/types'
-import type {
-  PluginInstallConfirmRequest,
-  PluginInstallConfirmResponse,
-  PluginInstallProgressEvent,
-} from '../../../plugin/install'
-import type { PluginInstallRequest } from '../../../plugin/providers/types'
 
 export interface PluginApiListRequest {
   filters?: PluginFilters

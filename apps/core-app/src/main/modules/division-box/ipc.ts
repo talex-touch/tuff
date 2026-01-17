@@ -1,28 +1,28 @@
 /**
  * DivisionBox IPC Communication Interface
- * 
+ *
  * Registers IPC handlers for DivisionBox operations and manages
  * communication between main process and renderer processes.
  */
 
-import type { ITouchChannel } from '@talex-touch/utils/channel'
-import {
-  DivisionBoxError,
-  DivisionBoxErrorCode,
-  type DivisionBoxConfig,
-  type CloseOptions,
-  type IPCResponse,
-  type SessionInfo,
-  type StateChangeEvent
+import type {
+  CloseOptions,
+  DivisionBoxConfig,
+  IPCResponse,
+  SessionInfo,
+  StateChangeEvent
 } from '@talex-touch/utils'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
+import type { FlowPayload } from './flow-trigger'
+import { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
 import { DivisionBoxEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
 import { getPermissionModule } from '../permission'
+import { flowTriggerManager } from './flow-trigger'
 import { DivisionBoxManager } from './manager'
-import { flowTriggerManager, type FlowPayload } from './flow-trigger'
 
 /**
  * Validates DivisionBoxConfig format
- * 
+ *
  * @param config - Configuration to validate
  * @returns Validation result with error message if invalid
  */
@@ -53,7 +53,7 @@ function validateConfig(config: any): { valid: boolean; error?: string } {
 
 /**
  * Validates sessionId format
- * 
+ *
  * @param sessionId - Session ID to validate
  * @returns Validation result with error message if invalid
  */
@@ -67,7 +67,7 @@ function validateSessionId(sessionId: any): { valid: boolean; error?: string } {
 
 /**
  * Creates a success IPC response
- * 
+ *
  * @param data - Response data
  * @returns IPCResponse object
  */
@@ -80,7 +80,7 @@ function createSuccessResponse<T>(data: T): IPCResponse<T> {
 
 /**
  * Creates an error IPC response
- * 
+ *
  * @param error - Error object or message
  * @returns IPCResponse object
  */
@@ -116,7 +116,7 @@ function createErrorResponse(error: DivisionBoxError | Error | string): IPCRespo
 
 /**
  * DivisionBoxIPC class
- * 
+ *
  * Manages IPC communication for DivisionBox operations.
  * Registers handlers and broadcasts events to renderer processes.
  */
@@ -128,7 +128,7 @@ export class DivisionBoxIPC {
 
   /**
    * Creates a new DivisionBoxIPC instance
-   * 
+   *
    * @param channel - Touch channel for IPC communication
    */
   constructor(channel: ITouchChannel) {
@@ -138,7 +138,7 @@ export class DivisionBoxIPC {
 
   /**
    * Registers all IPC handlers
-   * 
+   *
    * Sets up handlers for:
    * - division-box:open
    * - division-box:close
@@ -158,10 +158,7 @@ export class DivisionBoxIPC {
     }
 
     const channel = this.channel as any
-    this.transport = getTuffTransportMain(
-      channel,
-      channel?.keyManager ?? channel,
-    )
+    this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
 
     const transport = this.transport
 
@@ -193,11 +190,11 @@ export class DivisionBoxIPC {
         const sessionInfo: SessionInfo = {
           sessionId: session.sessionId,
           state: session.getState(),
-          meta: session.meta,
+          meta: session.meta
         }
 
         return createSuccessResponse(sessionInfo)
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -212,7 +209,7 @@ export class DivisionBoxIPC {
         await this.manager.destroySession(sessionId, options)
         this.broadcastSessionDestroyed(sessionId)
         return createSuccessResponse({ success: true })
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -230,8 +227,8 @@ export class DivisionBoxIPC {
             new DivisionBoxError(
               DivisionBoxErrorCode.SESSION_NOT_FOUND,
               `Session not found: ${sessionId}`,
-              sessionId,
-            ),
+              sessionId
+            )
           )
         }
 
@@ -240,7 +237,7 @@ export class DivisionBoxIPC {
         }
 
         return createSuccessResponse({ state: session.getState() })
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -262,14 +259,14 @@ export class DivisionBoxIPC {
             new DivisionBoxError(
               DivisionBoxErrorCode.SESSION_NOT_FOUND,
               `Session not found: ${sessionId}`,
-              sessionId,
-            ),
+              sessionId
+            )
           )
         }
 
         session.setSessionState(key, value)
         return createSuccessResponse({ success: true })
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -277,25 +274,33 @@ export class DivisionBoxIPC {
         enforce(context, 'division-box:session:get-active-sessions', payload?._sdkapi)
         const sessions = this.manager.getActiveSessionsInfo()
         return createSuccessResponse(sessions)
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.flowTrigger, async (payload: any, context: any) => {
         enforce(context, 'division-box:flow:trigger', payload?._sdkapi)
-        const { targetId, payload: flowPayload } = payload as { targetId: string; payload: FlowPayload }
+        const { targetId, payload: flowPayload } = payload as {
+          targetId: string
+          payload: FlowPayload
+        }
 
         if (!targetId || typeof targetId !== 'string') {
           return createErrorResponse('Invalid or missing targetId')
         }
 
-        if (!flowPayload || typeof flowPayload !== 'object' || !flowPayload.type || !flowPayload.data) {
+        if (
+          !flowPayload ||
+          typeof flowPayload !== 'object' ||
+          !flowPayload.type ||
+          !flowPayload.data
+        ) {
           return createErrorResponse('Invalid or missing payload')
         }
 
         const sessionId = await flowTriggerManager.handleFlow(targetId, flowPayload)
         return createSuccessResponse({ sessionId })
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -314,7 +319,7 @@ export class DivisionBoxIPC {
 
         const isPinned = session.toggleAlwaysOnTop()
         return createSuccessResponse({ isPinned })
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -333,7 +338,7 @@ export class DivisionBoxIPC {
 
         session.setOpacity(opacity)
         return createSuccessResponse({ opacity: session.getOpacity() })
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -357,7 +362,7 @@ export class DivisionBoxIPC {
         }
 
         return createSuccessResponse({ isOpen: session.isDevToolsOpen() })
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -377,15 +382,19 @@ export class DivisionBoxIPC {
         return createSuccessResponse({
           isPinned: session.isAlwaysOnTop(),
           opacity: session.getOpacity(),
-          isDevToolsOpen: session.isDevToolsOpen(),
+          isDevToolsOpen: session.isDevToolsOpen()
         })
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.inputChange, async (payload: any, context: any) => {
         enforce(context, 'division-box:ui:input-change', payload?._sdkapi)
-        const { sessionId, input, query } = payload as { sessionId: string; input: string; query: any }
+        const { sessionId, input, query } = payload as {
+          sessionId: string
+          input: string
+          query: any
+        }
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -401,12 +410,12 @@ export class DivisionBoxIPC {
           this.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
             input,
             query,
-            source: 'division-box',
+            source: 'division-box'
           })
         }
 
         return createSuccessResponse({ received: true })
-      }),
+      })
     )
   }
 
@@ -429,7 +438,7 @@ export class DivisionBoxIPC {
 
   /**
    * Broadcasts a state change event to all renderer processes
-   * 
+   *
    * @param event - State change event data
    */
   private broadcastStateChanged(event: StateChangeEvent): void {
@@ -444,7 +453,7 @@ export class DivisionBoxIPC {
 
   /**
    * Broadcasts a session destroyed event to all renderer processes
-   * 
+   *
    * @param sessionId - ID of the destroyed session
    */
   private broadcastSessionDestroyed(sessionId: string): void {
@@ -460,7 +469,7 @@ export class DivisionBoxIPC {
 
 /**
  * Initializes the DivisionBox IPC system
- * 
+ *
  * @param channel - Touch channel for IPC communication
  * @returns DivisionBoxIPC instance
  */

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
 import type { ImageUploaderEmits, ImageUploaderFile, ImageUploaderProps } from './types'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 defineOptions({
   name: 'TxImageUploader',

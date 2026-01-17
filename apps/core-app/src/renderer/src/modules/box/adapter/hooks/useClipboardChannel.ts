@@ -1,10 +1,10 @@
+import type { ClipboardChangePayload, ClipboardItem } from '@talex-touch/utils/transport/events'
 import type { IClipboardItem } from './types'
-import type { ClipboardItem, ClipboardChangePayload } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils'
 import {
-  getLatest as getLatestClipboardItem,
   apply as applyClipboardItem,
-  onClipboardChange,
+  getLatest as getLatestClipboardItem,
+  onClipboardChange
 } from '../transport/clipboard-transport'
 
 /**
@@ -30,7 +30,7 @@ function convertClipboardItem(item: ClipboardItem | null): IClipboardItem | null
     timestamp: new Date(item.createdAt),
     isFavorite: item.isFavorite || false,
     metadata: undefined, // Metadata is stored separately
-    meta: undefined,
+    meta: undefined
   }
 }
 
@@ -38,7 +38,7 @@ function convertClipboardItem(item: ClipboardItem | null): IClipboardItem | null
  * Clipboard metadata update (for backward compatibility)
  * @deprecated Metadata updates are now handled via the change stream
  */
-export type ClipboardMetaUpdate = {
+export interface ClipboardMetaUpdate {
   clipboardId: number
   entries: Record<string, unknown>
 }
@@ -59,7 +59,7 @@ export type ClipboardChannelHandlers = ClipboardTransportHandlers
  */
 export const CLIPBOARD_CHANNELS = {
   NEW_ITEM: 'clipboard:new-item',
-  META_UPDATE: 'clipboard:meta-update',
+  META_UPDATE: 'clipboard:meta-update'
 } as const
 
 /**
@@ -85,7 +85,7 @@ export function useClipboardChannel(handlers?: ClipboardChannelHandlers): () => 
   // Return cleanup function
   return () => {
     if (streamControllerPromise) {
-      streamControllerPromise.then(controller => controller.cancel()).catch(() => {})
+      streamControllerPromise.then((controller) => controller.cancel()).catch(() => {})
       streamControllerPromise = null
     }
   }
@@ -106,7 +106,9 @@ export async function getLatestClipboard(): Promise<IClipboardItem | null> {
 export function getLatestClipboardSync(): IClipboardItem | null {
   // TuffTransport doesn't support synchronous operations
   // Return null and log a warning
-  console.warn('[useClipboardChannel] getLatestClipboardSync() is deprecated. Use getLatestClipboard() instead.')
+  console.warn(
+    '[useClipboardChannel] getLatestClipboardSync() is deprecated. Use getLatestClipboard() instead.'
+  )
   return null
 }
 
@@ -122,8 +124,7 @@ export async function applyClipboardToActiveApp(item: IClipboardItem): Promise<b
   try {
     await applyClipboardItem(item.id)
     return true
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[useClipboardChannel] Failed to apply clipboard item:', error)
     return false
   }

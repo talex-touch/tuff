@@ -3,7 +3,7 @@ import {
   createDefaultMarketSourcesPayload,
   DEFAULT_MARKET_PROVIDERS,
   MARKET_SOURCES_STORAGE_KEY,
-  MARKET_SOURCES_STORAGE_VERSION,
+  MARKET_SOURCES_STORAGE_VERSION
 } from '@talex-touch/utils/market'
 import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
 
@@ -38,7 +38,7 @@ class MarketSourcesStorage extends TouchStorage<MarketSourcesPayload> {
     const normalized = this.normalizeDefinitions(nextSources)
     this.set({
       version: MARKET_SOURCES_STORAGE_VERSION,
-      sources: normalized,
+      sources: normalized
     })
   }
 
@@ -62,7 +62,7 @@ class MarketSourcesStorage extends TouchStorage<MarketSourcesPayload> {
 
     const normalizedPayload: MarketSourcesPayload = {
       version: MARKET_SOURCES_STORAGE_VERSION,
-      sources: this.normalizeDefinitions(normalizedSources),
+      sources: this.normalizeDefinitions(normalizedSources)
     }
 
     const hasChanged = JSON.stringify(payload) !== JSON.stringify(normalizedPayload)
@@ -72,9 +72,7 @@ class MarketSourcesStorage extends TouchStorage<MarketSourcesPayload> {
     }
   }
 
-  private normalizeDefinitions(
-    sources: MarketProviderDefinition[],
-  ): MarketProviderDefinition[] {
+  private normalizeDefinitions(sources: MarketProviderDefinition[]): MarketProviderDefinition[] {
     return sources
       .filter((source) => Boolean(source && source.id && source.name))
       .map((source) => ({
@@ -88,14 +86,14 @@ class MarketSourcesStorage extends TouchStorage<MarketSourcesPayload> {
         priority: typeof source.priority === 'number' ? source.priority : 0,
         trustLevel: source.trustLevel ?? 'unverified',
         tags: Array.isArray(source.tags) ? [...source.tags] : undefined,
-        readOnly: source.readOnly ?? false,
+        readOnly: source.readOnly ?? false
       }))
   }
 }
 
 export const marketSourcesStorage = createStorageProxy(
   MARKET_SOURCES_SINGLETON_KEY,
-  () => new MarketSourcesStorage(),
+  () => new MarketSourcesStorage()
 )
 
 export function getMarketSourceDefinitions(): MarketProviderDefinition[] {

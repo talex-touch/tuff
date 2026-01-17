@@ -1,21 +1,22 @@
-import { exec, spawn } from 'node:child_process'
-import { promisify } from 'node:util'
-import path from 'node:path'
+import type { SelectOption } from '../prompts'
+import { exec } from 'node:child_process'
 import fs from 'node:fs'
+import path from 'node:path'
+import { promisify } from 'node:util'
 import { t } from '../i18n'
 import {
-  askText,
-  askSelect,
   askConfirm,
-  withSpinner,
-  printHeader,
-  printSuccess,
+  askSelect,
+  askText,
+  colors,
   printError,
+  printHeader,
   printInfo,
   printList,
+  printSuccess,
+
   styled,
-  colors,
-  type SelectOption,
+  withSpinner,
 } from '../prompts'
 
 const execAsync = promisify(exec)
@@ -56,7 +57,8 @@ async function checkGitInstalled(): Promise<boolean> {
   try {
     await execAsync('git --version')
     return true
-  } catch {
+  }
+  catch {
     return false
   }
 }
@@ -67,7 +69,7 @@ async function checkGitInstalled(): Promise<boolean> {
 async function cloneTemplate(targetDir: string, branch?: string): Promise<void> {
   const branchArg = branch ? `-b ${branch}` : ''
   await execAsync(`git clone --depth 1 ${branchArg} ${TEMPLATE_REPO} "${targetDir}"`)
-  
+
   // Remove .git folder to start fresh
   const gitDir = path.join(targetDir, '.git')
   if (fs.existsSync(gitDir)) {
@@ -85,10 +87,10 @@ async function configureManifest(
     type: string
     language: string
     uiFramework: string
-  }
+  },
 ): Promise<void> {
   const manifestPath = path.join(targetDir, 'manifest.json')
-  
+
   if (!fs.existsSync(manifestPath)) {
     // Create default manifest if not exists
     const manifest = {
@@ -112,12 +114,12 @@ async function configureManifest(
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
     return
   }
-  
+
   // Update existing manifest
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
   manifest.name = config.name
   manifest.description = `${config.name} - A Tuff plugin`
-  
+
   // Update feature titles
   if (manifest.features && Array.isArray(manifest.features)) {
     manifest.features = manifest.features.map((feature: any) => ({
@@ -126,7 +128,7 @@ async function configureManifest(
       description: feature.description?.replace(/template/gi, config.name) || `Feature of ${config.name}`,
     }))
   }
-  
+
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
 }
 
@@ -137,19 +139,19 @@ async function configurePackageJson(
   targetDir: string,
   config: {
     name: string
-  }
+  },
 ): Promise<void> {
   const packagePath = path.join(targetDir, 'package.json')
-  
+
   if (!fs.existsSync(packagePath)) {
     return
   }
-  
+
   const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf-8'))
   pkg.name = config.name
   pkg.version = '0.0.1'
   pkg.description = `${config.name} - A Tuff plugin`
-  
+
   fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2))
 }
 
@@ -162,15 +164,17 @@ async function installDependencies(targetDir: string): Promise<void> {
   try {
     await execAsync('pnpm --version')
     pm = 'pnpm'
-  } catch {
+  }
+  catch {
     try {
       await execAsync('yarn --version')
       pm = 'yarn'
-    } catch {
+    }
+    catch {
       // fallback to npm
     }
   }
-  
+
   await execAsync(`${pm} install`, { cwd: targetDir })
 }
 
@@ -179,7 +183,7 @@ async function installDependencies(targetDir: string): Promise<void> {
  */
 export async function runCreate(options: CreateOptions = {}): Promise<void> {
   printHeader(t('create.title'))
-  
+
   // Check git
   const gitInstalled = await checkGitInstalled()
   if (!gitInstalled) {
@@ -187,13 +191,13 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
     process.exitCode = 1
     return
   }
-  
+
   // Get plugin name
   const name = options.name || await askText(t('create.enterName'), {
     hint: t('create.enterNameHint'),
     validate: validatePluginName,
   })
-  
+
   // Get plugin type
   const typeOptions: SelectOption<CreateOptions['type']>[] = [
     { label: t('create.types.basic'), value: 'basic' },
@@ -201,14 +205,14 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
     { label: t('create.types.service'), value: 'service' },
   ]
   const type = options.type || await askSelect(t('create.selectType'), typeOptions)
-  
+
   // Get language
   const langOptions: SelectOption<CreateOptions['language']>[] = [
     { label: t('create.languages.typescript'), value: 'typescript' },
     { label: t('create.languages.javascript'), value: 'javascript' },
   ]
   const language = options.language || await askSelect(t('create.selectLanguage'), langOptions)
-  
+
   // Get UI framework (only for UI type)
   let uiFramework: CreateOptions['uiFramework'] = 'none'
   if (type === 'ui') {
@@ -219,7 +223,7 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
     ]
     uiFramework = options.uiFramework || await askSelect(t('create.selectUIFramework'), uiOptions)
   }
-  
+
   // Get template
   const templateOptions: SelectOption<CreateOptions['template']>[] = [
     { label: t('create.templates.default'), value: 'default' },
@@ -228,24 +232,24 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
     { label: t('create.templates.custom'), value: 'custom' },
   ]
   const template = options.template || await askSelect(t('create.selectTemplate'), templateOptions)
-  
+
   // Get output directory
   const outputDir = options.outputDir || await askText(t('create.outputDir'), {
     hint: t('create.outputDirHint'),
     defaultValue: '.',
   })
-  
+
   // Calculate target directory
   const targetDir = path.resolve(process.cwd(), outputDir, name)
   const relativePath = path.relative(process.cwd(), targetDir)
-  
+
   // Check if directory exists
   if (fs.existsSync(targetDir)) {
     printError(t('errors.directoryExists', { path: relativePath }))
     process.exitCode = 1
     return
   }
-  
+
   // Show summary and confirm
   console.log('')
   printInfo('Summary:')
@@ -258,15 +262,15 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
     `Output: ${styled(relativePath, colors.cyan)}`,
   ])
   console.log('')
-  
+
   const confirmed = await askConfirm(t('create.confirmCreate'))
   if (!confirmed) {
     printInfo(t('common.cancel'))
     return
   }
-  
+
   console.log('')
-  
+
   // Clone template
   try {
     await withSpinner(t('create.cloning'), async () => {
@@ -280,12 +284,13 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
       const branch = branchMap[template || 'default']
       await cloneTemplate(targetDir, branch)
     })
-  } catch (error: any) {
+  }
+  catch (error: any) {
     printError(t('create.cloningError', { error: error.message }))
     process.exitCode = 1
     return
   }
-  
+
   // Configure plugin
   try {
     await withSpinner(t('create.configuring'), async () => {
@@ -297,10 +302,11 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
       })
       await configurePackageJson(targetDir, { name })
     })
-  } catch (error: any) {
+  }
+  catch (error: any) {
     printError(`Configuration failed: ${error.message}`)
   }
-  
+
   // Install dependencies (optional)
   if (!options.skipInstall) {
     const shouldInstall = await askConfirm('Install dependencies now?', true)
@@ -309,13 +315,14 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
         await withSpinner(t('create.installing'), async () => {
           await installDependencies(targetDir)
         })
-      } catch (error: any) {
+      }
+      catch (error: any) {
         printError(t('create.installingError', { error: error.message }))
         printInfo('You can install dependencies manually later.')
       }
     }
   }
-  
+
   // Success!
   console.log('')
   printSuccess(t('create.complete', { name }))

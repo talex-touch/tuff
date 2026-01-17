@@ -17,12 +17,13 @@ const activationError = ref('')
 const activationSuccess = ref(false)
 
 async function activateCode() {
-  if (!activationCode.value.trim()) return
-  
+  if (!activationCode.value.trim())
+    return
+
   activating.value = true
   activationError.value = ''
   activationSuccess.value = false
-  
+
   try {
     await $fetch('/api/subscription/activate', {
       method: 'POST',
@@ -31,9 +32,11 @@ async function activateCode() {
     activationSuccess.value = true
     activationCode.value = ''
     await refreshSubscription()
-  } catch (error: any) {
+  }
+  catch (error: any) {
     activationError.value = error.data?.statusMessage || 'Failed to activate code'
-  } finally {
+  }
+  finally {
     activating.value = false
   }
 }
@@ -44,7 +47,8 @@ const newTeamName = ref('')
 const creatingTeam = ref(false)
 
 async function createTeam() {
-  if (!newTeamName.value.trim()) return
+  if (!newTeamName.value.trim())
+    return
   creatingTeam.value = true
   try {
     await $fetch('/api/dashboard/team/create', {
@@ -54,9 +58,11 @@ async function createTeam() {
     showCreateTeamModal.value = false
     newTeamName.value = ''
     await refreshTeam()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to create team:', error)
-  } finally {
+  }
+  finally {
     creatingTeam.value = false
   }
 }
@@ -84,9 +90,11 @@ async function createInvite() {
     inviteRole.value = 'member'
     await refreshInvites()
     await refreshTeam()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to create invite:', error)
-  } finally {
+  }
+  finally {
     creating.value = false
   }
 }
@@ -96,7 +104,8 @@ async function revokeInvite(id: string) {
     await $fetch(`/api/dashboard/team/invites/${id}`, { method: 'DELETE' })
     await refreshInvites()
     await refreshTeam()
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to revoke invite:', error)
   }
 }
@@ -112,16 +121,19 @@ const disbanding = ref(false)
 const disbandConfirm = ref('')
 
 async function disbandTeam() {
-  if (disbandConfirm.value !== 'DISBAND') return
+  if (disbandConfirm.value !== 'DISBAND')
+    return
   disbanding.value = true
   try {
     await $fetch('/api/dashboard/team/disband', { method: 'POST' })
     showDisbandModal.value = false
     disbandConfirm.value = ''
     await refreshTeam()
-  } catch (error: any) {
+  }
+  catch (error: any) {
     console.error('Failed to disband team:', error)
-  } finally {
+  }
+  finally {
     disbanding.value = false
   }
 }
@@ -130,7 +142,7 @@ async function disbandTeam() {
 const teamQuota = ref<any>(null)
 const quotaLoading = ref(false)
 
-const memberUsageMap = ref<Record<string, { aiRequestsUsed: number; aiTokensUsed: number }>>({})
+const memberUsageMap = ref<Record<string, { aiRequestsUsed: number, aiTokensUsed: number }>>({})
 
 const hasTeam = computed(() => !!team.value?.organization)
 const isTeamAdmin = computed(() => team.value?.organization?.role === 'admin' || team.value?.organization?.role === 'org:admin')
@@ -141,23 +153,27 @@ function calcNextResetDate(weekStartDate: string): Date {
 }
 
 async function fetchTeamQuota() {
-  if (!team.value?.organization) return
+  if (!team.value?.organization)
+    return
   quotaLoading.value = true
   try {
     const res = await $fetch('/api/dashboard/team/quota')
     teamQuota.value = res.quota
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to fetch team quota:', error)
-  } finally {
+  }
+  finally {
     quotaLoading.value = false
   }
 }
 
 async function fetchMemberUsage() {
-  if (!team.value?.organization) return
+  if (!team.value?.organization)
+    return
   try {
     const res = await $fetch('/api/dashboard/team/member-usage') as any
-    const nextMap: Record<string, { aiRequestsUsed: number; aiTokensUsed: number }> = {}
+    const nextMap: Record<string, { aiRequestsUsed: number, aiTokensUsed: number }> = {}
     for (const m of (res.members ?? [])) {
       nextMap[m.userId] = {
         aiRequestsUsed: m.usage?.aiRequestsUsed ?? 0,
@@ -165,7 +181,8 @@ async function fetchMemberUsage() {
       }
     }
     memberUsageMap.value = nextMap
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to fetch member usage:', error)
   }
 }
@@ -209,8 +226,8 @@ const planIcons: Record<string, string> = {
     <!-- Subscription Card - Compact -->
     <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
       <div class="flex items-center gap-3">
-        <div :class="[planColors[plan] || planColors.FREE, 'flex h-10 w-10 items-center justify-center rounded-xl']">
-          <span :class="[planIcons[plan] || planIcons.FREE, 'text-xl']" />
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl" :class="[planColors[plan] || planColors.FREE]">
+          <span class="text-xl" :class="[planIcons[plan] || planIcons.FREE]" />
         </div>
         <div>
           <span class="text-xs text-black/50 dark:text-light/50">{{ t('dashboard.sections.team.currentPlan', 'Current Plan') }}</span>
@@ -244,7 +261,9 @@ const planIcons: Record<string, string> = {
     <!-- Team Section -->
     <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
       <div class="mb-4 flex items-center justify-between">
-        <h2 class="font-semibold text-black dark:text-light">{{ t('dashboard.sections.team.title', 'Team') }}</h2>
+        <h2 class="font-semibold text-black dark:text-light">
+          {{ t('dashboard.sections.team.title', 'Team') }}
+        </h2>
         <div class="flex gap-2">
           <button
             v-if="!hasTeam"
@@ -279,7 +298,9 @@ const planIcons: Record<string, string> = {
         <div class="mb-4 flex items-center gap-3 rounded-xl bg-black/5 p-3 dark:bg-light/5">
           <span class="i-carbon-enterprise text-xl text-black/60 dark:text-light/60" />
           <div class="flex-1">
-            <p class="font-medium text-black dark:text-light">{{ team?.organization?.name }}</p>
+            <p class="font-medium text-black dark:text-light">
+              {{ team?.organization?.name }}
+            </p>
             <p class="text-xs text-black/50 dark:text-light/50">
               {{ team?.organization?.role }} · {{ team?.slots?.used ?? 0 }}/{{ team?.slots?.total ?? 0 }} seats
             </p>
@@ -354,8 +375,12 @@ const planIcons: Record<string, string> = {
                 {{ member.name?.charAt(0)?.toUpperCase() || '?' }}
               </div>
               <div>
-                <p class="text-sm font-medium text-black dark:text-light">{{ member.name }}</p>
-                <p class="text-xs text-black/50 dark:text-light/50">{{ member.email || member.role }}</p>
+                <p class="text-sm font-medium text-black dark:text-light">
+                  {{ member.name }}
+                </p>
+                <p class="text-xs text-black/50 dark:text-light/50">
+                  {{ member.email || member.role }}
+                </p>
               </div>
             </div>
             <div class="text-right">
@@ -371,7 +396,9 @@ const planIcons: Record<string, string> = {
 
         <!-- Pending Invites -->
         <div v-if="invites.length > 0" class="mt-4 border-t border-black/10 pt-4 dark:border-light/10">
-          <p class="mb-2 text-xs text-black/50 dark:text-light/50">{{ t('dashboard.sections.team.pendingInvites', 'Pending Invites') }}</p>
+          <p class="mb-2 text-xs text-black/50 dark:text-light/50">
+            {{ t('dashboard.sections.team.pendingInvites', 'Pending Invites') }}
+          </p>
           <div class="space-y-2">
             <div
               v-for="invite in invites"
@@ -379,7 +406,9 @@ const planIcons: Record<string, string> = {
               class="flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2"
             >
               <div>
-                <p class="font-mono text-xs text-amber-700 dark:text-amber-300">{{ invite.code }}</p>
+                <p class="font-mono text-xs text-amber-700 dark:text-amber-300">
+                  {{ invite.code }}
+                </p>
                 <p class="text-xs text-black/50 dark:text-light/50">
                   {{ invite.email || 'Anyone' }} · {{ invite.role }}
                 </p>
@@ -413,7 +442,9 @@ const planIcons: Record<string, string> = {
       @click.self="showCreateTeamModal = false"
     >
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-dark">
-        <h3 class="font-semibold text-black dark:text-light">{{ t('dashboard.sections.team.modal.createTitle', 'Create Team') }}</h3>
+        <h3 class="font-semibold text-black dark:text-light">
+          {{ t('dashboard.sections.team.modal.createTitle', 'Create Team') }}
+        </h3>
         <p class="mt-1 text-sm text-black/50 dark:text-light/50">
           {{ t('dashboard.sections.team.modal.createDesc', 'Start collaborating with your team members') }}
         </p>
@@ -453,7 +484,9 @@ const planIcons: Record<string, string> = {
       @click.self="showInviteModal = false"
     >
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-dark">
-        <h3 class="font-semibold text-black dark:text-light">{{ t('dashboard.sections.team.modal.inviteTitle', 'Invite Member') }}</h3>
+        <h3 class="font-semibold text-black dark:text-light">
+          {{ t('dashboard.sections.team.modal.inviteTitle', 'Invite Member') }}
+        </h3>
         <p class="mt-1 text-sm text-black/50 dark:text-light/50">
           {{ t('dashboard.sections.team.modal.inviteDesc', 'Add someone to your team') }}
         </p>
@@ -468,8 +501,12 @@ const planIcons: Record<string, string> = {
             v-model="inviteRole"
             class="w-full rounded-lg border-0 bg-black/5 px-4 py-3 text-sm text-black outline-none dark:bg-light/5 dark:text-light"
           >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
+            <option value="member">
+              Member
+            </option>
+            <option value="admin">
+              Admin
+            </option>
           </select>
         </div>
         <div class="mt-4 flex justify-end gap-2">
@@ -499,7 +536,9 @@ const planIcons: Record<string, string> = {
       @click.self="showDisbandModal = false"
     >
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-dark">
-        <h3 class="font-semibold text-red-500">{{ t('dashboard.sections.team.modal.disbandTitle', 'Disband Team') }}</h3>
+        <h3 class="font-semibold text-red-500">
+          {{ t('dashboard.sections.team.modal.disbandTitle', 'Disband Team') }}
+        </h3>
         <p class="mt-1 text-sm text-black/50 dark:text-light/50">
           {{ t('dashboard.sections.team.modal.disbandDesc', 'This action cannot be undone. All members will be removed and team data will be deleted.') }}
         </p>

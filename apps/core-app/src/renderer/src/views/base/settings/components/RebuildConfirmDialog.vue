@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, inject } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 
@@ -45,13 +45,13 @@ onUnmounted(() => {
   }
 })
 
-const handleConfirm = () => {
+function handleConfirm() {
   if (countdown.value > 0) return
   props.onConfirm()
   destroy?.()
 }
 
-const close = () => {
+function close() {
   props.onCancel?.()
   destroy?.()
 }
@@ -63,29 +63,32 @@ const close = () => {
       <div class="icon-wrapper">
         <div class="i-carbon-warning-alt text-24px text-yellow-500" />
       </div>
-      <h3 class="dialog-title">{{ t('settings.settingFileIndex.rebuildTitle') }}</h3>
+      <h3 class="dialog-title">
+        {{ t('settings.settingFileIndex.rebuildTitle') }}
+      </h3>
     </div>
 
     <div class="dialog-content">
       <div class="warning-item">
         <div class="i-carbon-battery-full text-16px" />
         <span>
-          {{ t('settings.settingFileIndex.warningBatterySimple', {
-            min: minBatteryValue,
-            critical: criticalBatteryValue,
-            hint: batteryHint
-          }) }}
+          {{
+            t('settings.settingFileIndex.warningBatterySimple', {
+              min: minBatteryValue,
+              critical: criticalBatteryValue,
+              hint: batteryHint
+            })
+          }}
         </span>
       </div>
-      <div
-        v-if="showCriticalWarning || isBatteryCritical"
-        class="warning-item warning-critical"
-      >
+      <div v-if="showCriticalWarning || isBatteryCritical" class="warning-item warning-critical">
         <div class="i-carbon-warning-alt text-16px" />
         <span>
-          {{ t('settings.settingFileIndex.warningBatteryCritical', {
-            critical: criticalBatteryValue
-          }) }}
+          {{
+            t('settings.settingFileIndex.warningBatteryCritical', {
+              critical: criticalBatteryValue
+            })
+          }}
         </span>
       </div>
       <div class="warning-item">
@@ -102,11 +105,7 @@ const close = () => {
       <FlatButton @click="close">
         {{ t('common.cancel') }}
       </FlatButton>
-      <FlatButton
-        primary
-        :disabled="countdown > 0"
-        @click="handleConfirm"
-      >
+      <FlatButton primary :disabled="countdown > 0" @click="handleConfirm">
         {{ countdown > 0 ? `${t('common.confirm')} (${countdown}s)` : t('common.confirm') }}
       </FlatButton>
     </div>

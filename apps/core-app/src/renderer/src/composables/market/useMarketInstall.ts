@@ -1,14 +1,14 @@
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import type {
   PluginInstallSourceRequest,
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
+import type { MarketPluginListItem } from './useMarketData'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { useI18n } from 'vue-i18n'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
-import type { MarketPluginListItem } from './useMarketData'
 
 const NEXUS_URL = getTuffBaseUrl()
 

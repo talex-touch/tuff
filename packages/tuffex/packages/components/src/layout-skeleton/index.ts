@@ -1,5 +1,5 @@
-import TxLayoutSkeleton from './src/TxLayoutSkeleton.vue'
 import { withInstall } from '../../../utils/withInstall'
+import TxLayoutSkeleton from './src/TxLayoutSkeleton.vue'
 
 const LayoutSkeleton = withInstall(TxLayoutSkeleton)
 

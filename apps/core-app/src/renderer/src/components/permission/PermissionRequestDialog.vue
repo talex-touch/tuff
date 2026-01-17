@@ -5,20 +5,20 @@
  * Shows when a plugin requests a permission at runtime.
  */
 
-import { computed } from 'vue'
-import { ElDialog, ElButton, ElIcon, ElAlert } from 'element-plus'
 import {
   Check,
-  Warning,
-  Document,
-  DocumentCopy,
+  Coin,
   Connection,
   Cpu,
-  Coin,
-  Platform,
-  Monitor,
+  Document,
+  DocumentCopy,
   InfoFilled,
+  Monitor,
+  Platform,
+  Warning
 } from '@element-plus/icons-vue'
+import { ElAlert, ElButton, ElDialog, ElIcon } from 'element-plus'
+import { computed } from 'vue'
 
 interface Props {
   visible: boolean
@@ -42,7 +42,7 @@ const emit = defineEmits<{
 
 const dialogVisible = computed({
   get: () => props.visible,
-  set: (val) => emit('update:visible', val),
+  set: (val) => emit('update:visible', val)
 })
 
 const riskColor = computed(() => {
@@ -123,7 +123,9 @@ function handleDeny() {
       <!-- Header -->
       <div class="permission-header">
         <div class="permission-icon" :style="{ color: riskColor }">
-          <ElIcon :size="32"><component :is="iconComponent" /></ElIcon>
+          <ElIcon :size="32">
+            <component :is="iconComponent" />
+          </ElIcon>
         </div>
         <div class="permission-title">
           <h3>{{ pluginName }}</h3>
@@ -134,22 +136,25 @@ function handleDeny() {
       <!-- Permission Info -->
       <div class="permission-info">
         <div class="permission-name">
-          <ElIcon v-if="riskLevel === 'high'" :size="18" class="risk-icon high"><Warning /></ElIcon>
-          <ElIcon v-else-if="riskLevel === 'medium'" :size="18" class="risk-icon medium"><InfoFilled /></ElIcon>
-          <ElIcon v-else :size="18" class="risk-icon low"><Check /></ElIcon>
+          <ElIcon v-if="riskLevel === 'high'" :size="18" class="risk-icon high">
+            <Warning />
+          </ElIcon>
+          <ElIcon v-else-if="riskLevel === 'medium'" :size="18" class="risk-icon medium">
+            <InfoFilled />
+          </ElIcon>
+          <ElIcon v-else :size="18" class="risk-icon low">
+            <Check />
+          </ElIcon>
           <span>{{ permissionName }}</span>
           <span class="risk-badge" :class="riskLevel">{{ riskLabel }}</span>
         </div>
-        <p class="permission-desc">{{ permissionDesc }}</p>
+        <p class="permission-desc">
+          {{ permissionDesc }}
+        </p>
       </div>
 
       <!-- Reason -->
-      <ElAlert
-        v-if="reason"
-        type="info"
-        :closable="false"
-        class="permission-reason"
-      >
+      <ElAlert v-if="reason" type="info" :closable="false" class="permission-reason">
         <template #title>
           <span class="reason-label">插件说明：</span>
         </template>
@@ -157,27 +162,16 @@ function handleDeny() {
       </ElAlert>
 
       <!-- Warning for high risk -->
-      <ElAlert
-        v-if="riskLevel === 'high'"
-        type="warning"
-        :closable="false"
-        class="risk-warning"
-      >
+      <ElAlert v-if="riskLevel === 'high'" type="warning" :closable="false" class="risk-warning">
         此权限风险较高，请确认您信任此插件。
       </ElAlert>
     </div>
 
     <template #footer>
       <div class="dialog-footer">
-        <ElButton @click="handleDeny">
-          拒绝
-        </ElButton>
-        <ElButton type="primary" plain @click="handleAllowOnce">
-          仅本次
-        </ElButton>
-        <ElButton type="primary" @click="handleAllowAlways">
-          始终允许
-        </ElButton>
+        <ElButton @click="handleDeny"> 拒绝 </ElButton>
+        <ElButton type="primary" plain @click="handleAllowOnce"> 仅本次 </ElButton>
+        <ElButton type="primary" @click="handleAllowAlways"> 始终允许 </ElButton>
       </div>
     </template>
   </ElDialog>

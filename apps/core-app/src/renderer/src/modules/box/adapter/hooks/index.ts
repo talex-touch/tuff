@@ -1,11 +1,20 @@
 export type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
+export { useActionPanel } from './useActionPanel'
 export { useChannel } from './useChannel'
 export { useClipboard } from './useClipboard'
-export { useClipboardState, type UseClipboardStateOptions, type ClipboardStateReturn } from './useClipboardState'
-export { useClipboardChannel, CLIPBOARD_CHANNELS, type ClipboardChannelHandlers, type ClipboardMetaUpdate } from './useClipboardChannel'
+export {
+  CLIPBOARD_CHANNELS,
+  type ClipboardChannelHandlers,
+  type ClipboardMetaUpdate,
+  useClipboardChannel
+} from './useClipboardChannel'
+export {
+  type ClipboardStateReturn,
+  useClipboardState,
+  type UseClipboardStateOptions
+} from './useClipboardState'
+export { useDetach } from './useDetach'
 export { useKeyboard } from './useKeyboard'
+export { type CalculationHistoryEntry, usePreviewHistory } from './usePreviewHistory'
 export { useSearch } from './useSearch'
 export { useVisibility } from './useVisibility'
-export { usePreviewHistory, type CalculationHistoryEntry } from './usePreviewHistory'
-export { useActionPanel } from './useActionPanel'
-export { useDetach } from './useDetach'

@@ -6,15 +6,15 @@
 import type { DownloadError } from './error-types'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { DownloadErrorType, ErrorSeverity } from './error-types'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { DownloadErrorType, ErrorSeverity } from './error-types'
 
 // 日志级别
 export enum LogLevel {
   DEBUG = 'debug',
   INFO = 'info',
   WARN = 'warn',
-  ERROR = 'error',
+  ERROR = 'error'
 }
 
 // 日志条目接口
@@ -61,16 +61,16 @@ export class ErrorLogger {
       }
       this.pollingService.register(
         this.flushTaskId,
-        () => this.flush().catch((error) => {
-          console.error('Failed to flush log buffer:', error)
-        }),
-        { interval: 5, unit: 'seconds' },
+        () =>
+          this.flush().catch((error) => {
+            console.error('Failed to flush log buffer:', error)
+          }),
+        { interval: 5, unit: 'seconds' }
       )
       this.pollingService.start()
 
       this.isInitialized = true
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Failed to initialize error logger:', error)
     }
   }
@@ -84,7 +84,7 @@ export class ErrorLogger {
       timestamp: Date.now(),
       message: error.message,
       error,
-      metadata,
+      metadata
     }
 
     this.logBuffer.push(entry)
@@ -103,7 +103,7 @@ export class ErrorLogger {
       level: LogLevel.INFO,
       timestamp: Date.now(),
       message,
-      metadata,
+      metadata
     }
 
     this.logBuffer.push(entry)
@@ -117,7 +117,7 @@ export class ErrorLogger {
       level: LogLevel.WARN,
       timestamp: Date.now(),
       message,
-      metadata,
+      metadata
     }
 
     this.logBuffer.push(entry)
@@ -131,7 +131,7 @@ export class ErrorLogger {
       level: LogLevel.DEBUG,
       timestamp: Date.now(),
       message,
-      metadata,
+      metadata
     }
 
     this.logBuffer.push(entry)
@@ -153,12 +153,11 @@ export class ErrorLogger {
       await this.rotateLogIfNeeded()
 
       // 格式化日志条目
-      const logLines = `${entries.map(entry => this.formatLogEntry(entry)).join('\n')}\n`
+      const logLines = `${entries.map((entry) => this.formatLogEntry(entry)).join('\n')}\n`
 
       // 追加到日志文件
       await fs.appendFile(this.logFilePath, logLines, 'utf-8')
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Failed to write log entries:', error)
       // 将条目放回缓冲区
       this.logBuffer.unshift(...entries)
@@ -213,8 +212,7 @@ export class ErrorLogger {
         // 清理旧日志文件
         await this.cleanupOldLogs()
       }
-    }
-    catch (error: any) {
+    } catch (error: any) {
       if (error.code !== 'ENOENT') {
         console.error('Failed to rotate log file:', error)
       }
@@ -232,10 +230,10 @@ export class ErrorLogger {
 
       // 找到所有轮转的日志文件
       const logFiles = entries
-        .filter(entry => entry.startsWith(logFileName) && entry !== logFileName)
-        .map(entry => ({
+        .filter((entry) => entry.startsWith(logFileName) && entry !== logFileName)
+        .map((entry) => ({
           name: entry,
-          path: path.join(logDir, entry),
+          path: path.join(logDir, entry)
         }))
         .sort((a, b) => b.name.localeCompare(a.name)) // 按时间戳降序排序
 
@@ -246,8 +244,7 @@ export class ErrorLogger {
           await fs.unlink(file.path)
         }
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Failed to cleanup old logs:', error)
     }
   }
@@ -258,15 +255,14 @@ export class ErrorLogger {
   async readLogs(limit?: number): Promise<string> {
     try {
       const content = await fs.readFile(this.logFilePath, 'utf-8')
-      const lines = content.split('\n').filter(line => line.trim())
+      const lines = content.split('\n').filter((line) => line.trim())
 
       if (limit && limit > 0) {
         return lines.slice(-limit).join('\n')
       }
 
       return content
-    }
-    catch (error: any) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         return ''
       }
@@ -284,12 +280,12 @@ export class ErrorLogger {
   }> {
     try {
       const content = await fs.readFile(this.logFilePath, 'utf-8')
-      const lines = content.split('\n').filter(line => line.includes('[ERROR]'))
+      const lines = content.split('\n').filter((line) => line.includes('[ERROR]'))
 
       const stats = {
         total: lines.length,
         byType: {} as Record<DownloadErrorType, number>,
-        bySeverity: {} as Record<ErrorSeverity, number>,
+        bySeverity: {} as Record<ErrorSeverity, number>
       }
 
       // 初始化计数器
@@ -319,13 +315,12 @@ export class ErrorLogger {
       }
 
       return stats
-    }
-    catch (error: any) {
+    } catch (error: any) {
       if (error.code === 'ENOENT') {
         return {
           total: 0,
           byType: {} as Record<DownloadErrorType, number>,
-          bySeverity: {} as Record<ErrorSeverity, number>,
+          bySeverity: {} as Record<ErrorSeverity, number>
         }
       }
       throw error
@@ -338,8 +333,7 @@ export class ErrorLogger {
   async clearLogs(): Promise<void> {
     try {
       await fs.unlink(this.logFilePath)
-    }
-    catch (error: any) {
+    } catch (error: any) {
       if (error.code !== 'ENOENT') {
         throw error
       }

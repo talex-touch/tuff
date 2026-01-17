@@ -82,19 +82,23 @@ export class NexusStoreProvider extends BaseMarketProvider {
 
     if (Array.isArray(data)) {
       entries = data as NexusManifestEntry[]
-    } else if (data && typeof data === 'object' && 'plugins' in data && Array.isArray(data.plugins)) {
+    } else if (
+      data &&
+      typeof data === 'object' &&
+      'plugins' in data &&
+      Array.isArray(data.plugins)
+    ) {
       entries = data.plugins as NexusManifestEntry[]
     } else {
       // Provide detailed debug info
       const dataType = data === null ? 'null' : typeof data
-      const dataPreview = data === null || data === undefined
-        ? String(data)
-        : JSON.stringify(data).slice(0, 200)
+      const dataPreview =
+        data === null || data === undefined ? String(data) : JSON.stringify(data).slice(0, 200)
       console.error('[NexusStoreProvider] Invalid manifest format:', {
         url: manifestUrl,
         status: response.status,
         dataType,
-        dataPreview,
+        dataPreview
       })
       throw new TypeError(`MARKET_NEXUS_INVALID_MANIFEST (type: ${dataType})`)
     }
@@ -205,9 +209,10 @@ export class NexusStoreProvider extends BaseMarketProvider {
     }
 
     // Handle author
-    const author = typeof entry.author === 'object' && entry.author?.name
-      ? entry.author.name
-      : (entry.author as string | undefined)
+    const author =
+      typeof entry.author === 'object' && entry.author?.name
+        ? entry.author.name
+        : (entry.author as string | undefined)
 
     // Use description or summary
     const description = entry.description || entry.summary

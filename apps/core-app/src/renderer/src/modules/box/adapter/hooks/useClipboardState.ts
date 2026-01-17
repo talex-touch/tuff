@@ -6,10 +6,11 @@
  */
 
 import type { TuffQueryInput } from '@talex-touch/utils'
-import type { IClipboardOptions } from './types'
+import type { ComputedRef } from 'vue'
 import type { IBoxOptions } from '..'
+import type { IClipboardOptions } from './types'
 import { TuffInputType } from '@talex-touch/utils'
-import { computed, type ComputedRef } from 'vue'
+import { computed } from 'vue'
 import { BoxMode } from '..'
 
 const MIN_TEXT_ATTACHMENT_LENGTH = 80
@@ -45,7 +46,9 @@ export interface ClipboardStateReturn {
   /**
    * Safely serialize metadata for IPC transfer
    */
-  safeSerializeMetadata: (meta: Record<string, unknown> | null | undefined) => Record<string, unknown> | undefined
+  safeSerializeMetadata: (
+    meta: Record<string, unknown> | null | undefined
+  ) => Record<string, unknown> | undefined
 }
 
 /**

@@ -1,4 +1,5 @@
 <script setup lang="ts" name="MarketItemCard">
+import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 /**
  * MarketItemCard - Card component for displaying a plugin in the market list
  *
@@ -6,7 +7,6 @@
  * Delegates installation state logic to MarketInstallButton component.
  */
 import { TxStatusBadge, TxTag } from '@talex-touch/tuffex'
-import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 import { useI18n } from 'vue-i18n'
 import MarketIcon from '~/components/market/MarketIcon.vue'
 import MarketInstallButton from '~/components/market/MarketInstallButton.vue'

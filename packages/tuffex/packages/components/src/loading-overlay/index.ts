@@ -1,5 +1,5 @@
-import TxLoadingOverlay from './src/TxLoadingOverlay.vue'
 import { withInstall } from '../../../utils/withInstall'
+import TxLoadingOverlay from './src/TxLoadingOverlay.vue'
 
 export interface LoadingOverlayProps {
   loading?: boolean

@@ -5,7 +5,9 @@
   <div style="width: 360px; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden;">
     <TxNavBar title="Title" :show-back="true" @back="() => {}">
       <template #right>
-        <TxButton variant="ghost" size="small">Edit</TxButton>
+        <TxButton variant="ghost" size="small">
+          Edit
+        </TxButton>
       </template>
     </TxNavBar>
 

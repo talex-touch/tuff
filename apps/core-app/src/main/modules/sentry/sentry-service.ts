@@ -5,6 +5,7 @@
  */
 
 import type { ModuleKey } from '@talex-touch/utils'
+import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -12,9 +13,9 @@ import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { BrowserWindow, app } from 'electron'
+import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
+import { app, BrowserWindow } from 'electron'
 import { innerRootPath } from '../../core/precore'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -22,10 +23,7 @@ import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
 import { databaseModule } from '../database'
 import { storageModule } from '../storage'
-import {
-  TelemetryUploadStatsStore,
-  type TelemetryUploadStatsRecord
-} from './telemetry-upload-stats-store'
+import { TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
 
 // User type from Clerk
 interface ClerkUser {
@@ -413,11 +411,10 @@ export class SentryServiceModule extends BaseModule {
     }
 
     const flushIntervalMs = 60_000
-    this.pollingService.register(
-      SENTRY_PERF_TASK_ID,
-      () => this.flushPerformanceMetrics(),
-      { interval: flushIntervalMs, unit: 'milliseconds' },
-    )
+    this.pollingService.register(SENTRY_PERF_TASK_ID, () => this.flushPerformanceMetrics(), {
+      interval: flushIntervalMs,
+      unit: 'milliseconds'
+    })
     this.pollingService.start()
   }
 
@@ -645,8 +642,7 @@ export class SentryServiceModule extends BaseModule {
     if (user && user.id) {
       this.currentUserId = user.id
 
-      if (!this.isInitialized)
-        return
+      if (!this.isInitialized) return
 
       const userContext: Sentry.User = {
         id: user.id,
@@ -668,8 +664,7 @@ export class SentryServiceModule extends BaseModule {
     } else {
       this.currentUserId = null
 
-      if (!this.isInitialized)
-        return
+      if (!this.isInitialized) return
 
       // Not authenticated, but not anonymous mode - use device fingerprint only
       if (this.deviceFingerprint) {
@@ -953,11 +948,10 @@ export class SentryServiceModule extends BaseModule {
 
     // Set up periodic flush timer if not already running
     if (!this.pollingService.isRegistered(SENTRY_NEXUS_TASK_ID)) {
-      this.pollingService.register(
-        SENTRY_NEXUS_TASK_ID,
-        () => this.flushNexusTelemetry(),
-        { interval: NEXUS_TELEMETRY_FLUSH_INTERVAL, unit: 'milliseconds' },
-      )
+      this.pollingService.register(SENTRY_NEXUS_TASK_ID, () => this.flushNexusTelemetry(), {
+        interval: NEXUS_TELEMETRY_FLUSH_INTERVAL,
+        unit: 'milliseconds'
+      })
       this.pollingService.start()
     }
   }

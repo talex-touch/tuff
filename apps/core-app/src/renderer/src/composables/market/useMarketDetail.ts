@@ -1,6 +1,7 @@
-import { computed, type ComputedRef } from 'vue'
+import type { ComputedRef } from 'vue'
 import type { MarketPluginListItem } from './useMarketData'
 import type { PluginVersionStatus } from './usePluginVersionStatus'
+import { computed } from 'vue'
 
 interface DetailMetaItem {
   icon: string
@@ -33,12 +34,13 @@ export function useMarketDetail(
     if (!p) return []
 
     const meta: DetailMetaItem[] = []
-    if (p.author)
+    if (p.author) {
       meta.push({
         icon: 'i-ri-user-line',
         label: t('market.detailDialog.author'),
         value: p.author
       })
+    }
     if (p.version) {
       const status = versionStatus?.value
       // Show upgrade info: "v1.0.0 → v1.1.0" or just "v1.0.0"

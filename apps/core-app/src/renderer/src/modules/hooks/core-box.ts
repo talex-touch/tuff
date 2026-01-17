@@ -1,8 +1,8 @@
-import { reactive } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import type { DivisionBoxConfig, SessionMeta } from '@talex-touch/utils'
 import type { StandardChannelData } from '@talex-touch/utils/channel'
 import { isDivisionBox as checkIsDivisionBox } from '@talex-touch/utils/renderer'
+import { reactive } from 'vue'
+import { touchChannel } from '~/modules/channel/channel-core'
 import { logAppEntranceMode } from '~/modules/devtools/app-entrance-log'
 
 /**
@@ -27,7 +27,7 @@ declare global {
  * Window type state
  * Uses preload flag $isDivisionBox OR arg-mapper for initial detection
  */
-const detectDivisionBox = (): boolean => {
+function detectDivisionBox(): boolean {
   // Check preload flag first
   if (window.$isDivisionBox) return true
   // Fallback to arg-mapper check

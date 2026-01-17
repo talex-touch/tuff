@@ -1,5 +1,5 @@
-import TxToastHost from './src/TxToastHost.vue'
 import { withInstall } from '../../../utils/withInstall'
+import TxToastHost from './src/TxToastHost.vue'
 
 const ToastHost = withInstall(TxToastHost)
 

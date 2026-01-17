@@ -3,5 +3,5 @@
  * @module @talex-touch/utils/transport/event
  */
 
-export * from './types'
 export * from './builder'
+export * from './types'

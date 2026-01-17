@@ -1,8 +1,8 @@
+import type { AssetArch, AssetPlatform, ReleaseAsset } from '../../../../../utils/releasesStore'
 import { Buffer } from 'node:buffer'
 import { createError, send, setResponseHeader } from 'h3'
-import { getReleaseByTag, incrementDownloadCount } from '../../../../../utils/releasesStore'
-import type { AssetArch, AssetPlatform, ReleaseAsset } from '../../../../../utils/releasesStore'
 import { requireReleaseAsset } from '../../../../../utils/releaseAssetStorage'
+import { getReleaseByTag, incrementDownloadCount } from '../../../../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {
   const { tag, platform, arch } = event.context.params ?? {}

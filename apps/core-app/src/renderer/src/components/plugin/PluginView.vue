@@ -1,23 +1,19 @@
-<script name="PluginView">
-export default {
-  name: 'PluginView',
-}
-</script>
-
 <script setup>
 import Loading from '~/components/icon/LoadingIcon.vue'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 
+defineOptions({ name: 'PluginView' })
+
 const props = defineProps({
   plugin: {
     type: Object,
-    required: true,
+    required: true
   },
   lists: {
     type: Object,
-    required: true,
-  },
+    required: true
+  }
 })
 
 const loadDone = ref(false)
@@ -46,13 +42,13 @@ function handleListeners(viewData, webview) {
       {
         content: 'Ignore Load',
         type: 'info',
-        onClick: () => true,
+        onClick: () => true
       },
       {
         content: 'Restart plugin',
         type: 'warning',
-        onClick: () => pluginSDK.reload(props.plugin.name) && true,
-      },
+        onClick: () => pluginSDK.reload(props.plugin.name) && true
+      }
     ])
 
     // When failed => close devtool
@@ -60,8 +56,7 @@ function handleListeners(viewData, webview) {
   })
 
   webview.addEventListener('did-finish-load', async () => {
-    if (status.value === 4)
-      webview.openDevTools()
+    if (status.value === 4) webview.openDevTools()
 
     webview.insertCSS(`${styles}`)
     await webview.executeJavaScript(`${js}`)
@@ -91,8 +86,7 @@ function handleListeners(viewData, webview) {
 
 function init() {
   const viewData = props.plugin.webview
-  if (!viewData)
-    return
+  if (!viewData) return
   const { _, attrs } = viewData
 
   pluginManager.setPluginWebviewInit(props.plugin.name)
@@ -116,11 +110,9 @@ function init() {
 }
 
 watch(status, (val, oldVal) => {
-  if (props.plugin?.webViewInit)
-    return
+  if (props.plugin?.webViewInit) return
 
-  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4))
-    init()
+  if ((val === 3 && oldVal === 4) || (oldVal === 3 && val === 4)) init()
   // else if ( val === 4 ) webviewDom.value.openDevTools()
   // else webviewDom.value.closeDevTools()
 })

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import Logo from '/images/logo.svg'
 import DefaultTheme from 'vitepress/theme'
+import Logo from '/images/logo.svg'
 
 const { Layout } = DefaultTheme
 </script>
@@ -8,7 +8,7 @@ const { Layout } = DefaultTheme
 <template>
   <Layout>
     <template #nav-bar-title-before>
-      <img width="32" :src="Logo" alt="logo" />
+      <img width="32" :src="Logo" alt="logo">
     </template>
     <template #nav-bar-title-after>
       <span class="beta-tag">BETA</span>

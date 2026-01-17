@@ -65,8 +65,7 @@ export class TuffIconImpl implements ITuffIcon {
     if (!(await fse.pathExists(iconPath))) {
       this.status = 'error'
       this.value = ''
-    }
-    else {
+    } else {
       this.value = iconPath
       this.status = 'normal'
     }

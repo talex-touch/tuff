@@ -1,6 +1,6 @@
 /**
  * Legacy Permission Types
- * 
+ *
  * For backward compatibility with old permission-center.ts
  * @deprecated Use new permission system instead
  */
@@ -18,9 +18,9 @@ export interface Permission {
  * Legacy permission center interface
  */
 export interface IPermissionCenter {
-  addPermission(pluginScope: string, permission: Permission): void
-  delPermission(pluginScope: string, permission: Permission): void
-  hasPermission(pluginScope: string, permission: Permission): boolean
-  getPermission(pluginScope: string, permission: symbol): Permission
-  save(): Promise<void>
+  addPermission: (pluginScope: string, permission: Permission) => void
+  delPermission: (pluginScope: string, permission: Permission) => void
+  hasPermission: (pluginScope: string, permission: Permission) => boolean
+  getPermission: (pluginScope: string, permission: symbol) => Permission
+  save: () => Promise<void>
 }

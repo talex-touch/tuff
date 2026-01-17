@@ -12,13 +12,19 @@ const active = ref('Left1')
       :animation="{ indicator: false, content: false }"
     >
       <TxTabItem name="Left1" activation>
-        <div style="padding: 10px;">Bottom - No animations</div>
+        <div style="padding: 10px;">
+          Bottom - No animations
+        </div>
       </TxTabItem>
       <TxTabItem name="Left2">
-        <div style="padding: 10px;">Bottom - No animations 2</div>
+        <div style="padding: 10px;">
+          Bottom - No animations 2
+        </div>
       </TxTabItem>
       <TxTabItem name="Left3">
-        <div style="padding: 10px;">Bottom - No animations 3</div>
+        <div style="padding: 10px;">
+          Bottom - No animations 3
+        </div>
       </TxTabItem>
     </TxTabs>
   </div>

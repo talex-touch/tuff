@@ -101,7 +101,7 @@ const pendingUpdatesLabel = computed(() => {
   const value = t('plugin.logs.newLogs')
   return value === 'plugin.logs.newLogs' ? '有新的实时日志' : value
 })
-void pendingUpdatesLabel
+void pendingUpdatesLabel.value
 
 const clearLabel = computed(() => {
   const value = t('common.clear')
@@ -114,20 +114,18 @@ const exportLabel = computed(() => {
 })
 
 const isViewingLiveSession = computed(
-  () => selectedSessionId.value !== null && selectedSessionId.value === latestSessionId.value,
+  () => selectedSessionId.value !== null && selectedSessionId.value === latestSessionId.value
 )
 
 const isLiveStreaming = computed(() => isViewingLiveSession.value && !isLivePaused.value)
 
 const selectedSession = computed<LogSessionMeta | null>(() => {
-  if (!selectedSessionId.value)
-    return null
+  if (!selectedSessionId.value) return null
   return sessionCache.value[selectedSessionId.value] ?? null
 })
 
 const activeSessionLabel = computed(() => {
-  if (!selectedSession.value)
-    return ''
+  if (!selectedSession.value) return ''
   return formatSessionLabel(selectedSession.value)
 })
 
@@ -136,8 +134,7 @@ const noLogs = computed(() => !isLoadingLogs.value && terminalLogs.value.length 
 const historySessions = computed(() => sessions.value)
 
 const totalPages = computed(() => {
-  if (!totalSessions.value || !pageSize.value)
-    return 1
+  if (!totalSessions.value || !pageSize.value) return 1
   return Math.max(1, Math.ceil(totalSessions.value / pageSize.value))
 })
 
@@ -163,8 +160,7 @@ function dedupeLogs(items: LogItem[]): LogItem[] {
   return items
     .filter((item) => {
       const key = computeLogKey(item)
-      if (seen.has(key))
-        return false
+      if (seen.has(key)) return false
       seen.add(key)
       return true
     })
@@ -172,8 +168,7 @@ function dedupeLogs(items: LogItem[]): LogItem[] {
 }
 
 function upsertSessionCache(list: LogSessionMeta[]): void {
-  if (!list.length)
-    return
+  if (!list.length) return
   const next = { ...sessionCache.value }
   for (const item of list) {
     next[item.id] = item
@@ -184,14 +179,13 @@ function upsertSessionCache(list: LogSessionMeta[]): void {
 function setLogs(items: LogItem[]): void {
   const deduped = dedupeLogs(items)
   logKeySet.clear()
-  deduped.forEach(log => logKeySet.add(computeLogKey(log)))
-  terminalLogs.value = deduped.map(log => formatLogForTerminal(log))
+  deduped.forEach((log) => logKeySet.add(computeLogKey(log)))
+  terminalLogs.value = deduped.map((log) => formatLogForTerminal(log))
 }
 
 function appendLog(log: LogItem): void {
   const key = computeLogKey(log)
-  if (logKeySet.has(key))
-    return
+  if (logKeySet.has(key)) return
   logKeySet.add(key)
   terminalLogs.value = [...terminalLogs.value, formatLogForTerminal(log)]
 }
@@ -212,16 +206,14 @@ function toggleLiveIndicator(): void {
 }
 
 function scheduleLiveIndicatorCollapse(): void {
-  if (liveIndicatorTimer)
-    window.clearTimeout(liveIndicatorTimer)
+  if (liveIndicatorTimer) window.clearTimeout(liveIndicatorTimer)
   liveIndicatorTimer = window.setTimeout(() => {
     liveIndicatorExpanded.value = false
   }, 3200)
 }
 
 function handleLogStream(log: LogItem): void {
-  if (!currentPluginName.value || log.plugin !== currentPluginName.value)
-    return
+  if (!currentPluginName.value || log.plugin !== currentPluginName.value) return
   if (!isViewingLiveSession.value) {
     pendingLiveUpdates.value = true
     return
@@ -251,14 +243,15 @@ function clearTerminal(): void {
 }
 
 function exportTerminalLogs(): void {
-  if (!terminalLogs.value.length)
-    return
+  if (!terminalLogs.value.length) return
 
-  const pluginName = (currentPluginName.value ?? 'plugin').replace(/[^a-zA-Z0-9._-]+/g, '_')
-  const sessionId = (selectedSessionId.value ?? 'session').replace(/[^a-zA-Z0-9._-]+/g, '_')
+  const pluginName = (currentPluginName.value ?? 'plugin').replace(/[^\w.-]+/g, '_')
+  const sessionId = (selectedSessionId.value ?? 'session').replace(/[^\w.-]+/g, '_')
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
   const filename = `${pluginName}-${sessionId}-${timestamp}.log.txt`
-  const blob = new Blob([`${terminalLogs.value.join('\n')}\n`], { type: 'text/plain;charset=utf-8' })
+  const blob = new Blob([`${terminalLogs.value.join('\n')}\n`], {
+    type: 'text/plain;charset=utf-8'
+  })
   const url = window.URL.createObjectURL(blob)
 
   const link = document.createElement('a')
@@ -279,8 +272,7 @@ function detachStream(): void {
 
 function cleanup(): void {
   const pluginName = currentPluginName.value
-  if (!pluginName)
-    return
+  if (!pluginName) return
   detachStream()
   void touchSdk.rawChannel.send('plugin-log:unsubscribe', { pluginName })
   currentPluginName.value = null
@@ -292,7 +284,11 @@ function cleanup(): void {
   setLogs([])
 }
 
-async function readSessionLogs(pluginName: string, sessionId: string, options?: { includeBuffer?: boolean }): Promise<void> {
+async function readSessionLogs(
+  pluginName: string,
+  sessionId: string,
+  options?: { includeBuffer?: boolean }
+): Promise<void> {
   isLoadingLogs.value = true
   try {
     const chunks: LogItem[] = []
@@ -304,12 +300,11 @@ async function readSessionLogs(pluginName: string, sessionId: string, options?: 
           'plugin-log:get-session-log',
           {
             pluginName,
-            session: sessionId,
-          },
+            session: sessionId
+          }
         )
         chunks.push(...sessionLogs)
-      }
-      catch (error) {
+      } catch (error) {
         console.warn('[PluginLogs] Failed to load session log:', error)
       }
     }
@@ -317,30 +312,31 @@ async function readSessionLogs(pluginName: string, sessionId: string, options?: 
     if (options?.includeBuffer) {
       try {
         const buffer: LogItem[] = await touchSdk.rawChannel.send('plugin-log:get-buffer', {
-          pluginName,
+          pluginName
         })
         chunks.push(...buffer)
-      }
-      catch (error) {
+      } catch (error) {
         console.warn('[PluginLogs] Failed to load buffer:', error)
       }
     }
 
     setLogs(chunks)
     pendingLiveUpdates.value = false
-  }
-  finally {
+  } finally {
     isLoadingLogs.value = false
   }
 }
 
-async function fetchSessions(pluginName: string, options?: { page?: number, preferLatest?: boolean, preserveSelection?: boolean }): Promise<void> {
+async function fetchSessions(
+  pluginName: string,
+  options?: { page?: number; preferLatest?: boolean; preserveSelection?: boolean }
+): Promise<void> {
   const targetPage = options?.page ?? currentPage.value
   try {
     const response: SessionResponse = await touchSdk.rawChannel.send('plugin-log:get-sessions', {
       pluginName,
       page: targetPage,
-      pageSize: pageSize.value,
+      pageSize: pageSize.value
     })
 
     sessions.value = response.sessions ?? []
@@ -354,13 +350,11 @@ async function fetchSessions(pluginName: string, options?: { page?: number, pref
 
     if (shouldUseLatest && latestSessionId.value) {
       selectedSessionId.value = latestSessionId.value
-    }
-    else if (!options?.preserveSelection) {
+    } else if (!options?.preserveSelection) {
       const first = response.sessions?.[0]
       selectedSessionId.value = first ? first.id : selectedSessionId.value
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[PluginLogs] Failed to fetch sessions:', error)
     sessions.value = []
     totalSessions.value = 0
@@ -375,8 +369,7 @@ async function refreshSessions(options?: {
   reloadLogs?: boolean
   preserveSelection?: boolean
 }): Promise<void> {
-  if (!currentPluginName.value)
-    return
+  if (!currentPluginName.value) return
   const gotoLatest = options?.gotoLatest ?? false
   const preserveSelection = options?.preserveSelection ?? !gotoLatest
   const targetPage = gotoLatest ? 1 : currentPage.value
@@ -384,14 +377,14 @@ async function refreshSessions(options?: {
   await fetchSessions(currentPluginName.value, {
     page: targetPage,
     preferLatest: gotoLatest,
-    preserveSelection,
+    preserveSelection
   })
 
   if (options?.reloadLogs ?? gotoLatest) {
     const sessionId = selectedSessionId.value
     if (sessionId) {
       await readSessionLogs(currentPluginName.value, sessionId, {
-        includeBuffer: sessionId === latestSessionId.value,
+        includeBuffer: sessionId === latestSessionId.value
       })
     }
   }
@@ -406,8 +399,7 @@ function attachStream(pluginName: string): void {
 }
 
 async function initialize(pluginName: string): Promise<void> {
-  if (!pluginName)
-    return
+  if (!pluginName) return
   if (currentPluginName.value && currentPluginName.value !== pluginName) {
     cleanup()
   }
@@ -420,11 +412,12 @@ async function initialize(pluginName: string): Promise<void> {
   attachStream(pluginName)
 }
 
-async function selectSession(sessionId: string, options?: { fromHistory?: boolean }): Promise<void> {
-  if (!currentPluginName.value)
-    return
-  if (sessionId === selectedSessionId.value && !options?.fromHistory)
-    return
+async function selectSession(
+  sessionId: string,
+  options?: { fromHistory?: boolean }
+): Promise<void> {
+  if (!currentPluginName.value) return
+  if (sessionId === selectedSessionId.value && !options?.fromHistory) return
 
   selectedSessionId.value = sessionId
   isLivePaused.value = false
@@ -432,19 +425,19 @@ async function selectSession(sessionId: string, options?: { fromHistory?: boolea
   if (options?.fromHistory) {
     const session = sessionCache.value[sessionId]
     if (session) {
-      const sessionPageIndex = sessions.value.findIndex(item => item.id === sessionId)
+      const sessionPageIndex = sessions.value.findIndex((item) => item.id === sessionId)
       if (sessionPageIndex === -1) {
         await refreshSessions({
           gotoLatest: sessionId === latestSessionId.value,
           reloadLogs: false,
-          preserveSelection: true,
+          preserveSelection: true
         })
       }
     }
   }
 
   await readSessionLogs(currentPluginName.value, sessionId, {
-    includeBuffer: sessionId === latestSessionId.value,
+    includeBuffer: sessionId === latestSessionId.value
   })
 
   if (options?.fromHistory) {
@@ -453,30 +446,26 @@ async function selectSession(sessionId: string, options?: { fromHistory?: boolea
 }
 
 function openSelectedSessionFile(): void {
-  if (!currentPluginName.value || !selectedSessionId.value || !canOpenLogFile.value)
-    return
+  if (!currentPluginName.value || !selectedSessionId.value || !canOpenLogFile.value) return
   void touchSdk.rawChannel.send('plugin-log:open-session-file', {
     pluginName: currentPluginName.value,
-    session: selectedSessionId.value,
+    session: selectedSessionId.value
   })
 }
 
 function openLogDirectory(): void {
-  if (!currentPluginName.value || !canOpenLogDirectory.value)
-    return
+  if (!currentPluginName.value || !canOpenLogDirectory.value) return
   void touchSdk.rawChannel.send('plugin-log:open-log-directory', {
-    pluginName: currentPluginName.value,
+    pluginName: currentPluginName.value
   })
 }
 
 async function handleManualRefresh(): Promise<void> {
-  if (isRefreshing.value)
-    return
+  if (isRefreshing.value) return
   isRefreshing.value = true
   try {
     await refreshSessions({ gotoLatest: false, reloadLogs: true, preserveSelection: true })
-  }
-  finally {
+  } finally {
     isRefreshing.value = false
   }
 }
@@ -487,20 +476,18 @@ async function openHistoryDrawer(): Promise<void> {
 }
 
 async function changePage(page: number): Promise<void> {
-  if (!currentPluginName.value)
-    return
+  if (!currentPluginName.value) return
   const safePage = Math.min(Math.max(page, 1), totalPages.value)
   currentPage.value = safePage
   await fetchSessions(currentPluginName.value, {
     page: safePage,
     preferLatest: safePage === 1,
-    preserveSelection: true,
+    preserveSelection: true
   })
 }
 
 async function jumpToLive(): Promise<void> {
-  if (!currentPluginName.value || !latestSessionId.value)
-    return
+  if (!currentPluginName.value || !latestSessionId.value) return
   isLivePaused.value = false
   currentPage.value = 1
   await refreshSessions({ gotoLatest: true, reloadLogs: true })
@@ -512,7 +499,7 @@ watch(
   (plugin) => {
     void initialize(plugin.name)
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 watch(
@@ -521,7 +508,7 @@ watch(
     if (opened) {
       void refreshSessions({ gotoLatest: false, reloadLogs: false, preserveSelection: true })
     }
-  },
+  }
 )
 
 onMounted(() => {
@@ -539,7 +526,7 @@ onUnmounted(() => {
 defineExpose({
   refreshSessions,
   selectSession,
-  openHistoryDrawer,
+  openHistoryDrawer
 })
 </script>
 
@@ -550,19 +537,34 @@ defineExpose({
         <PluginPerfCharts :plugin-name="plugin.name" layout="bar" />
       </div>
       <div class="toolbar-actions">
-        <ElTooltip popper-class="tuff-tooltip-blur" :content="historyActionLabel" placement="bottom" effect="dark">
+        <ElTooltip
+          popper-class="tuff-tooltip-blur"
+          :content="historyActionLabel"
+          placement="bottom"
+          effect="dark"
+        >
           <button class="toolbar-icon" type="button" @click="openHistoryDrawer">
             <i class="i-ri-history-line" />
           </button>
         </ElTooltip>
 
-        <ElTooltip popper-class="tuff-tooltip-blur" :content="refreshLabel" placement="bottom" effect="dark">
+        <ElTooltip
+          popper-class="tuff-tooltip-blur"
+          :content="refreshLabel"
+          placement="bottom"
+          effect="dark"
+        >
           <button class="toolbar-icon" type="button" @click="handleManualRefresh">
             <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
           </button>
         </ElTooltip>
 
-        <ElTooltip popper-class="tuff-tooltip-blur" :content="openFileLabel" placement="bottom" effect="dark">
+        <ElTooltip
+          popper-class="tuff-tooltip-blur"
+          :content="openFileLabel"
+          placement="bottom"
+          effect="dark"
+        >
           <button
             class="toolbar-icon"
             type="button"
@@ -573,7 +575,12 @@ defineExpose({
           </button>
         </ElTooltip>
 
-        <ElTooltip popper-class="tuff-tooltip-blur" :content="openDirectoryLabel" placement="bottom" effect="dark">
+        <ElTooltip
+          popper-class="tuff-tooltip-blur"
+          :content="openDirectoryLabel"
+          placement="bottom"
+          effect="dark"
+        >
           <button
             class="toolbar-icon"
             type="button"
@@ -590,7 +597,10 @@ defineExpose({
       <header class="terminal-header">
         <div class="terminal-title">
           <h2>{{ activeSessionLabel }}</h2>
-          <span class="terminal-state" :class="[isViewingLiveSession ? 'state-live' : 'state-archive']">
+          <span
+            class="terminal-state"
+            :class="[isViewingLiveSession ? 'state-live' : 'state-archive']"
+          >
             {{ isViewingLiveSession ? liveLabel : archiveLabel }}
           </span>
         </div>
@@ -624,14 +634,29 @@ defineExpose({
             </button>
           </ElTooltip>
 
-          <ElTooltip popper-class="tuff-tooltip-blur" :content="clearLabel" placement="bottom" effect="dark">
+          <ElTooltip
+            popper-class="tuff-tooltip-blur"
+            :content="clearLabel"
+            placement="bottom"
+            effect="dark"
+          >
             <button class="terminal-icon" type="button" @click="clearTerminal">
               <i class="i-ri-delete-bin-6-line" />
             </button>
           </ElTooltip>
 
-          <ElTooltip popper-class="tuff-tooltip-blur" :content="exportLabel" placement="bottom" effect="dark">
-            <button class="terminal-icon" type="button" :disabled="!terminalLogs.length" @click="exportTerminalLogs">
+          <ElTooltip
+            popper-class="tuff-tooltip-blur"
+            :content="exportLabel"
+            placement="bottom"
+            effect="dark"
+          >
+            <button
+              class="terminal-icon"
+              type="button"
+              :disabled="!terminalLogs.length"
+              @click="exportTerminalLogs"
+            >
               <i class="i-ri-download-2-line" />
             </button>
           </ElTooltip>
@@ -667,7 +692,7 @@ defineExpose({
           class="history-item"
           :class="{
             active: session.id === selectedSessionId,
-            live: session.id === latestSessionId,
+            live: session.id === latestSessionId
           }"
           @click="selectSession(session.id, { fromHistory: true })"
         >
@@ -846,7 +871,9 @@ defineExpose({
   font-size: 1.05rem;
   font-weight: 600;
   color: rgba(226, 232, 240, 0.92);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
 }
 
 .terminal-state {
@@ -935,7 +962,9 @@ defineExpose({
   color: rgba(226, 232, 240, 0.88);
   font-size: 0.75rem;
   line-height: 1;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
   letter-spacing: 0.08em;
   cursor: pointer;
   transition: all 0.18s ease;

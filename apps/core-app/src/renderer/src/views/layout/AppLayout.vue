@@ -3,8 +3,8 @@ import { computed } from 'vue'
 import DynamicLayout from '~/components/layout/DynamicLayout.vue'
 import LayoutBackButton from '~/components/layout/LayoutBackButton.vue'
 import { useSecondaryNavigation } from '~/modules/layout/useSecondaryNavigation'
-import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
+import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
 
 const mica = computed(() => themeStyle.value.theme.window === 'Mica')
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)

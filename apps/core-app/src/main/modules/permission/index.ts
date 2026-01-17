@@ -5,20 +5,20 @@
  */
 
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import { TalexEvents, touchEventBus, PermissionGrantedEvent } from '../../core/eventbus/touch-event'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { BrowserWindow } from 'electron'
+import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
-import { PermissionStore } from './permission-store'
 import { PermissionGuard } from './permission-guard'
+import { PermissionStore } from './permission-store'
 
 const permLog = createLogger('Permission')
 
+export { createProtectedRegister, registerProtectedChannels, withPermission } from './channel-guard'
+export type { ProtectedChannelDefinition, ProtectedChannelOptions } from './channel-guard'
 export { PermissionGuard } from './permission-guard'
-export type { PermissionCheckResult, ApiPermissionMapping } from './permission-guard'
-export { withPermission, createProtectedRegister, registerProtectedChannels } from './channel-guard'
-export type { ProtectedChannelOptions, ProtectedChannelDefinition } from './channel-guard'
+export type { ApiPermissionMapping, PermissionCheckResult } from './permission-guard'
 
 /**
  * PermissionModule - Plugin permission management
@@ -39,7 +39,7 @@ export class PermissionModule extends BaseModule {
   constructor() {
     super(PermissionModule.key, {
       create: true,
-      dirName: 'permission',
+      dirName: 'permission'
     })
   }
 
@@ -71,11 +71,10 @@ export class PermissionModule extends BaseModule {
     // Get permission status for a plugin
     channel.regChannel(ChannelType.MAIN, 'permission:get-status', async ({ data }) => {
       if (!data?.pluginId) return null
-      return this.store.getPluginPermissionStatus(
-        data.pluginId,
-        data.sdkapi,
-        { required: data.required || [], optional: data.optional || [] }
-      )
+      return this.store.getPluginPermissionStatus(data.pluginId, data.sdkapi, {
+        required: data.required || [],
+        optional: data.optional || []
+      })
     })
 
     // Grant permission
@@ -101,10 +100,10 @@ export class PermissionModule extends BaseModule {
         await this.store.grant(data.pluginId, permissionId, data.grantedBy || 'user')
       }
       this.broadcastUpdate(data.pluginId)
-      
+
       // Notify plugin module to retry enabling the plugin
       touchEventBus.emit(TalexEvents.PERMISSION_GRANTED, new PermissionGrantedEvent(data.pluginId))
-      
+
       return { success: true }
     })
 
@@ -113,10 +112,10 @@ export class PermissionModule extends BaseModule {
       if (!data?.pluginId || !data?.permissionIds) return { success: false }
       this.store.grantSessionMultiple(data.pluginId, data.permissionIds)
       this.broadcastUpdate(data.pluginId)
-      
+
       // Notify plugin module to retry enabling the plugin
       touchEventBus.emit(TalexEvents.PERMISSION_GRANTED, new PermissionGrantedEvent(data.pluginId))
-      
+
       return { success: true }
     })
 
@@ -151,7 +150,7 @@ export class PermissionModule extends BaseModule {
         pluginId: data?.pluginId,
         action: data?.action,
         limit: data?.limit || 50,
-        offset: data?.offset || 0,
+        offset: data?.offset || 0
       })
     })
 
@@ -222,7 +221,7 @@ export class PermissionModule extends BaseModule {
     const status = this.store.getPluginPermissionStatus(pluginId, sdkapi, declared)
     return {
       required: status.missingRequired,
-      optional: declared.optional.filter(p => !status.granted.includes(p)),
+      optional: declared.optional.filter((p) => !status.granted.includes(p))
     }
   }
 
@@ -266,7 +265,9 @@ export class PermissionModule extends BaseModule {
     // Log final performance stats
     const stats = this.guard.getPerformanceStats()
     if (stats.totalChecks > 0) {
-      permLog.info(`Performance: ${stats.totalChecks} checks, avg ${stats.avgDurationMs}ms, max ${stats.maxDurationMs}ms, target met: ${stats.meetsTarget}`)
+      permLog.info(
+        `Performance: ${stats.totalChecks} checks, avg ${stats.avgDurationMs}ms, max ${stats.maxDurationMs}ms, target met: ${stats.meetsTarget}`
+      )
     }
     // Save any pending changes
     this.store.save()

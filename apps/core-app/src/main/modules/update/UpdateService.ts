@@ -6,24 +6,25 @@ import type {
   UpdateUserAction
 } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
+import type { UpdateRecordRow } from './update-repository'
 import fs from 'node:fs'
 import path from 'node:path'
 import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
-import { app } from 'electron'
 import axios from 'axios'
-import { TalexEvents, UpdateAvailableEvent, touchEventBus } from '../../core/eventbus/touch-event'
-import { getAppVersionSafe } from '../../utils/version-util'
+import { app } from 'electron'
+import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
+import { getAppVersionSafe } from '../../utils/version-util'
 /**
  * Update service for checking application updates in main process
  */
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
+import { UpdateRecordStatus, UpdateRepository } from './update-repository'
 import { UpdateSystem } from './update-system'
-import { UpdateRecordStatus, UpdateRepository, type UpdateRecordRow } from './update-repository'
 
 const updateLog = createLogger('UpdateService')
 
@@ -89,7 +90,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       autoCheck: this.settings.enabled,
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
       ignoredVersions: this.settings.ignoredVersions,
-      updateChannel: this.settings.updateChannel,
+      updateChannel: this.settings.updateChannel
     })
     updateLog.success('UpdateSystem initialized with DownloadCenter integration')
     return true
@@ -110,10 +111,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     const channel = ((ctx.app as any)?.channel ?? ($app as any)?.channel) as any
-    this.transport = getTuffTransportMain(
-      channel,
-      (channel as any)?.keyManager ?? channel,
-    )
+    this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
     this.registerTransportHandlers()
 
     // Load settings
@@ -288,7 +286,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         try {
           const requestedChannel = payload?.channel as AppPreviewChannel | undefined
           const targetChannel = requestedChannel ?? this.getEffectiveChannel()
-          const record = this.updateRepository ? await this.updateRepository.getLatestRecord(targetChannel) : null
+          const record = this.updateRepository
+            ? await this.updateRepository.getLatestRecord(targetChannel)
+            : null
           if (record) {
             const release = this.deserializeRelease(record.payload)
             return {
@@ -422,7 +422,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             error: error instanceof Error ? error.message : 'Unknown error'
           }
         }
-      }),
+      })
     )
   }
 
@@ -514,7 +514,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       if (result.hasUpdate && result.release) {
         await this.persistRelease(targetChannel, result.release, result.source)
         if (this.updateRepository) {
-          const persistedForRelease = await this.updateRepository.getRecordByTag(result.release.tag_name)
+          const persistedForRelease = await this.updateRepository.getRecordByTag(
+            result.release.tag_name
+          )
           const persistedDecision = await this.buildResultFromRecord(persistedForRelease)
           if (persistedDecision && !persistedDecision.hasUpdate) {
             if (this.settings.cacheEnabled) {
@@ -774,7 +776,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
   }
 
-  private async buildResultFromRecord(record: UpdateRecordRow | null): Promise<UpdateCheckResult | null> {
+  private async buildResultFromRecord(
+    record: UpdateRecordRow | null
+  ): Promise<UpdateCheckResult | null> {
     if (!record) {
       return null
     }
@@ -1061,7 +1065,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       .catch((error) => {
         const errorMessage = error instanceof Error ? error.message : String(error)
         updateLog.warn('Background update check failed', { error: errorMessage })
-        return { hasUpdate: false, error: errorMessage, source: this.settings.source?.name ?? 'Unknown' }
+        return {
+          hasUpdate: false,
+          error: errorMessage,
+          source: this.settings.source?.name ?? 'Unknown'
+        }
       })
       .finally(() => {
         this.checkInFlight = null

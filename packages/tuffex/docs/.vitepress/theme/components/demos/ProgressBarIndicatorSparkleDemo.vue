@@ -1,12 +1,16 @@
 <template>
   <div class="demo">
     <div class="demo__row">
-      <div class="demo__title">indicatorEffect="none"</div>
+      <div class="demo__title">
+        indicatorEffect="none"
+      </div>
       <TxProgressBar :percentage="86" height="12px" show-text flow-effect="wave" mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">indicatorEffect="sparkle"</div>
+      <div class="demo__title">
+        indicatorEffect="sparkle"
+      </div>
       <TxProgressBar :percentage="86" height="12px" show-text flow-effect="wave" indicator-effect="sparkle" hover-effect="glow" mask-background="glass" />
     </div>
   </div>

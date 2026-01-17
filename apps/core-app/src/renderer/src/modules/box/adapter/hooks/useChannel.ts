@@ -1,10 +1,10 @@
-import type { Ref } from 'vue'
 import type { StandardChannelData } from '@talex-touch/utils/channel'
+import type { Ref } from 'vue'
+import type { IBoxOptions } from '..'
 import { DataCode } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { touchChannel } from '~/modules/channel/channel-core'
-import type { IBoxOptions } from '..'
 
 type BoxOptionsWithInputVisibility = IBoxOptions & { inputVisible?: boolean }
 

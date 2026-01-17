@@ -1,6 +1,6 @@
-import type { Method, AxiosResponseHeaders, RawAxiosResponseHeaders, AxiosHeaderValue } from 'axios'
-import axios from 'axios'
 import type { MarketHttpRequestOptions, MarketHttpResponse } from '@talex-touch/utils/market'
+import type { AxiosHeaderValue, AxiosResponseHeaders, Method, RawAxiosResponseHeaders } from 'axios'
+import axios from 'axios'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 
@@ -13,8 +13,9 @@ function normalizeHeaders(headers: HeaderSource): Record<string, string> {
     return normalized
   }
 
-  const raw =
-    isAxiosHeaders(headers) ? headers.toJSON() : (headers as Record<string, AxiosHeaderValue | undefined>)
+  const raw = isAxiosHeaders(headers)
+    ? headers.toJSON()
+    : (headers as Record<string, AxiosHeaderValue | undefined>)
 
   for (const [key, value] of Object.entries(raw)) {
     if (value === null || typeof value === 'undefined') {
@@ -32,12 +33,14 @@ function normalizeHeaders(headers: HeaderSource): Record<string, string> {
   return normalized
 }
 
-function isAxiosHeaders(headers: AxiosResponseHeaders | RawAxiosResponseHeaders): headers is AxiosResponseHeaders {
+function isAxiosHeaders(
+  headers: AxiosResponseHeaders | RawAxiosResponseHeaders
+): headers is AxiosResponseHeaders {
   return typeof (headers as AxiosResponseHeaders).toJSON === 'function'
 }
 
 export async function performMarketHttpRequest<T = unknown>(
-  options: MarketHttpRequestOptions,
+  options: MarketHttpRequestOptions
 ): Promise<MarketHttpResponse<T>> {
   if (!options || typeof options.url !== 'string' || options.url.trim().length === 0) {
     throw new Error('MARKET_HTTP_INVALID_URL')
@@ -46,8 +49,7 @@ export async function performMarketHttpRequest<T = unknown>(
   let parsed: URL
   try {
     parsed = new URL(options.url)
-  }
-  catch {
+  } catch {
     throw new Error('MARKET_HTTP_INVALID_URL')
   }
 
@@ -68,7 +70,7 @@ export async function performMarketHttpRequest<T = unknown>(
       timeout,
       responseType: options.responseType ?? 'json',
       proxy: false,
-      validateStatus: () => true,
+      validateStatus: () => true
     })
 
     if (response.status < 200 || response.status >= 300) {
@@ -80,17 +82,16 @@ export async function performMarketHttpRequest<T = unknown>(
       statusText: response.statusText,
       headers: normalizeHeaders(response.headers),
       data: response.data,
-      url: response.config.url ?? options.url,
+      url: response.config.url ?? options.url
     }
-  }
-  catch (error: any) {
+  } catch (error: any) {
     if (error?.message?.startsWith?.('MARKET_HTTP_')) {
       throw error
     }
     throw new Error(
       typeof error?.message === 'string' && error.message.length > 0
         ? error.message
-        : 'MARKET_HTTP_REQUEST_FAILED',
+        : 'MARKET_HTTP_REQUEST_FAILED'
     )
   }
 }

@@ -1,15 +1,20 @@
-import { Worker } from 'node:worker_threads'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsResponse,
+  WorkerStatusSnapshot,
+  WorkerTaskSnapshot
+} from './worker-status'
 import path from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { fileProviderLog } from '../../../../../utils/logger'
-import type { WorkerMetricsPayload, WorkerMetricsResponse, WorkerStatusSnapshot, WorkerTaskSnapshot } from './worker-status'
 
-type PendingIcon = {
+interface PendingIcon {
   resolve: (value: Buffer | null) => void
   reject: (error: Error) => void
   startedAt: number
 }
 
-type PendingMetrics = {
+interface PendingMetrics {
   resolve: (value: WorkerMetricsPayload | null) => void
   timeout: ReturnType<typeof setTimeout>
 }
@@ -26,7 +31,8 @@ export class IconWorkerClient {
   private lastError: string | null = null
   private lastTask: WorkerTaskSnapshot | null = null
   private workerStartedAt: number | null = null
-  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null = null
+  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
+    null
 
   async extract(filePath: string): Promise<Buffer | null> {
     const taskId = `icon-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -39,7 +45,7 @@ export class IconWorkerClient {
       worker.postMessage({
         type: 'extract',
         taskId,
-        filePath,
+        filePath
       })
     })
   }
@@ -56,7 +62,7 @@ export class IconWorkerClient {
       lastTask: this.lastTask,
       lastError: this.lastError,
       uptimeMs: worker && this.workerStartedAt ? Date.now() - this.workerStartedAt : null,
-      metrics: this.toStatusMetrics(metrics),
+      metrics: this.toStatusMetrics(metrics)
     }
   }
 
@@ -112,7 +118,7 @@ export class IconWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: null,
+        error: null
       }
       return
     }
@@ -125,7 +131,7 @@ export class IconWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: message.error,
+        error: message.error
       }
       pending.reject(new Error(message.error))
     }
@@ -150,7 +156,7 @@ export class IconWorkerClient {
     this.workerStartedAt = null
     this.lastError = error.message
     fileProviderLog.warn('[IconWorker] Worker failed, will restart on demand', {
-      error,
+      error
     })
   }
 
@@ -168,7 +174,7 @@ export class IconWorkerClient {
       this.metricsPending.set(requestId, { resolve, timeout })
       worker.postMessage({
         type: 'metrics',
-        requestId,
+        requestId
       })
     })
   }
@@ -184,9 +190,9 @@ export class IconWorkerClient {
       cpu: {
         user: metrics.cpuUsage.user,
         system: metrics.cpuUsage.system,
-        percent,
+        percent
       },
-      eventLoop: metrics.eventLoop,
+      eventLoop: metrics.eventLoop
     }
   }
 

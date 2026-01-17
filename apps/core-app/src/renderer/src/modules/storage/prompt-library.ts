@@ -1,5 +1,5 @@
-import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
+import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
 
 export interface PromptLibraryData {
   version: number
@@ -20,20 +20,20 @@ const defaultPromptLibrary: PromptLibraryData = {
       category: 'custom',
       description: '用户自定义的提示词模板',
       createdAt: Date.now(),
-      updatedAt: Date.now(),
-    },
-  ],
+      updatedAt: Date.now()
+    }
+  ]
 }
 
 function clonePrompts(prompts: PromptTemplate[]): PromptTemplate[] {
-  return prompts.map(prompt => ({ ...prompt }))
+  return prompts.map((prompt) => ({ ...prompt }))
 }
 
 class PromptLibraryStorage extends TouchStorage<PromptLibraryData> {
   constructor() {
     super(PROMPT_LIBRARY_STORAGE_KEY, {
       version: defaultPromptLibrary.version,
-      customPrompts: clonePrompts(defaultPromptLibrary.customPrompts),
+      customPrompts: clonePrompts(defaultPromptLibrary.customPrompts)
     })
     this.setAutoSave(true)
   }
@@ -49,5 +49,5 @@ class PromptLibraryStorage extends TouchStorage<PromptLibraryData> {
 
 export const promptLibraryStorage = createStorageProxy(
   PROMPT_LIBRARY_SINGLETON_KEY,
-  () => new PromptLibraryStorage(),
+  () => new PromptLibraryStorage()
 )

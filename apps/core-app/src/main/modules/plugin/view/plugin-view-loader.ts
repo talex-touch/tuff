@@ -12,7 +12,7 @@ export class PluginViewLoader {
   public static async loadPluginView(
     plugin: TouchPlugin,
     feature: IPluginFeature,
-    query?: TuffQuery | string,
+    query?: TuffQuery | string
   ): Promise<void | null> {
     const interactionPath = feature.interaction?.path
 
@@ -39,8 +39,7 @@ export class PluginViewLoader {
       // }
       // Dev mode: load from remote dev server
       viewUrl = new URL(interactionPath, plugin.dev.address).toString()
-    }
-    else {
+    } else {
       // Production mode: load from local file system
       if (interactionPath.includes('..')) {
         viewLog.error(`Security Alert: Aborted loading view with invalid path: ${interactionPath}`)
@@ -49,7 +48,7 @@ export class PluginViewLoader {
           code: 'INVALID_VIEW_PATH',
           message: `Interaction path cannot contain '..'.`,
           source: `feature:${feature.id}`,
-          timestamp: Date.now(),
+          timestamp: Date.now()
         })
         return null
       }
@@ -59,12 +58,11 @@ export class PluginViewLoader {
       if (hasFileExtension) {
         const viewPath = path.join(plugin.pluginPath, interactionPath)
         viewUrl = pathToFileURL(viewPath).href
-      }
-      else {
+      } else {
         // Route path: use hash routing with index.html
         const indexPath = path.join(plugin.pluginPath, 'index.html')
         const hashPath = interactionPath.startsWith('/') ? interactionPath : `/${interactionPath}`
-        viewUrl = pathToFileURL(indexPath).href + '#' + hashPath
+        viewUrl = `${pathToFileURL(indexPath).href}#${hashPath}`
       }
       viewLog.debug(`Loading view: ${viewUrl}`)
     }

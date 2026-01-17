@@ -1,8 +1,8 @@
 import { ChannelType } from '@talex-touch/utils/channel'
 import { createLogger } from '../../../utils/logger'
-import { windowManager } from './window'
-import { coreBoxTransport } from './transport/core-box-transport'
 import { coreBoxManager } from './manager'
+import { coreBoxTransport } from './transport/core-box-transport'
+import { windowManager } from './window'
 
 /**
  * Serialized keyboard event data for IPC transport.
@@ -68,10 +68,8 @@ class CoreBoxKeyTransport {
       (data) => this.handleKeyEvent(data)
     )
 
-    coreBoxTransport.register<void>(
-      ChannelType.MAIN,
-      'core-box:get-ui-view-state',
-      () => this.getUIViewState()
+    coreBoxTransport.register<void>(ChannelType.MAIN, 'core-box:get-ui-view-state', () =>
+      this.getUIViewState()
     )
 
     keyTransportLog.info('Key transport channels registered')

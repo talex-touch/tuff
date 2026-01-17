@@ -11,17 +11,19 @@ import type {
   AgentTask,
   AgentToolCall,
   AgentTraceStep,
-  AgentUsage,
+  AgentUsage
 } from '@talex-touch/utils'
-import chalk from 'chalk'
 import type { AgentExecutionContext, AgentImpl } from './agent-registry'
-import { agentRegistry } from './agent-registry'
 import type { ToolRegistry } from './tool-registry'
+import chalk from 'chalk'
+import { agentRegistry } from './agent-registry'
 
 const TAG = chalk.hex('#9c27b0').bold('[AgentExecutor]')
-const logInfo = (...args: any[]) => console.log(TAG, ...args)
-const logWarn = (...args: any[]) => console.warn(TAG, chalk.yellow(...args))
-const logDebug = (...args: any[]) => console.debug(TAG, chalk.gray(...args))
+const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
+const logWarn = (...args: unknown[]) =>
+  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
+const logDebug = (...args: unknown[]) =>
+  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
 
 /**
  * Executor options
@@ -36,11 +38,11 @@ export interface ExecutorOptions {
  * IntelligenceSDK interface (for dependency injection)
  */
 export interface IntelligenceSDKInterface {
-  invoke(
+  invoke: (
     capability: string,
     params: unknown,
     options?: unknown
-  ): Promise<{ success: boolean, data?: unknown, error?: string }>
+  ) => Promise<{ success: boolean; data?: unknown; error?: string }>
 }
 
 /**
@@ -56,7 +58,7 @@ export class AgentExecutor {
     this.options = {
       defaultTimeout: options.defaultTimeout ?? 60000,
       maxRetries: options.maxRetries ?? 2,
-      enableTracing: options.enableTracing ?? true,
+      enableTracing: options.enableTracing ?? true
     }
   }
 
@@ -112,7 +114,7 @@ export class AgentExecutor {
         sessionId: task.context?.sessionId,
         workingDirectory: task.context?.workingDirectory,
         signal: abortController.signal,
-        metadata: task.context?.metadata,
+        metadata: task.context?.metadata
       }
 
       // Add thought trace
@@ -120,7 +122,7 @@ export class AgentExecutor {
         trace.push({
           type: 'thought',
           timestamp: Date.now(),
-          content: `Starting ${task.type} task for agent ${task.agentId}`,
+          content: `Starting ${task.type} task for agent ${task.agentId}`
         })
       }
 
@@ -148,7 +150,7 @@ export class AgentExecutor {
         trace.push({
           type: 'output',
           timestamp: Date.now(),
-          content: typeof output === 'string' ? output : JSON.stringify(output),
+          content: typeof output === 'string' ? output : JSON.stringify(output)
         })
       }
 
@@ -162,10 +164,9 @@ export class AgentExecutor {
         status: 'completed' as AgentStatus,
         usage: this.calculateUsage(startTime, trace),
         trace: this.options.enableTracing ? trace : undefined,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       }
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       const isAborted = abortController.signal.aborted
 
@@ -178,10 +179,9 @@ export class AgentExecutor {
         error: isAborted ? 'Task timed out or was cancelled' : errorMessage,
         status: (isAborted ? 'cancelled' : 'failed') as AgentStatus,
         trace: this.options.enableTracing ? trace : undefined,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       }
-    }
-    finally {
+    } finally {
       clearTimeout(timeoutId)
       this.abortControllers.delete(taskId)
     }
@@ -194,7 +194,7 @@ export class AgentExecutor {
     impl: AgentImpl,
     task: AgentTask,
     context: AgentExecutionContext,
-    trace: AgentTraceStep[],
+    trace: AgentTraceStep[]
   ): Promise<unknown> {
     // If agent has custom execute, use it
     if (impl.execute) {
@@ -211,7 +211,7 @@ export class AgentExecutor {
   private async executeLLMAction(
     task: AgentTask,
     _context: AgentExecutionContext,
-    trace: AgentTraceStep[],
+    trace: AgentTraceStep[]
   ): Promise<unknown> {
     if (!this.intelligenceSDK) {
       throw new Error('IntelligenceSDK not configured')
@@ -229,7 +229,7 @@ export class AgentExecutor {
     const messages: AgentMessage[] = [
       { role: 'system', content: systemPrompt },
       ...(task.context?.messages || []),
-      { role: 'user', content: JSON.stringify(task.input) },
+      { role: 'user', content: JSON.stringify(task.input) }
     ]
 
     // Add thought trace
@@ -237,17 +237,21 @@ export class AgentExecutor {
       trace.push({
         type: 'thought',
         timestamp: Date.now(),
-        content: `Invoking LLM with ${messages.length} messages`,
+        content: `Invoking LLM with ${messages.length} messages`
       })
     }
 
     // Invoke LLM
-    const response = await this.intelligenceSDK.invoke('text.chat', {
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-    }, {
-      strategy: 'adaptive-default',
-      modelPreference: ['gpt-4o-mini', 'deepseek-chat'],
-    })
+    const response = await this.intelligenceSDK.invoke(
+      'text.chat',
+      {
+        messages: messages.map((m) => ({ role: m.role, content: m.content }))
+      },
+      {
+        strategy: 'adaptive-default',
+        modelPreference: ['gpt-4o-mini', 'deepseek-chat']
+      }
+    )
 
     if (!response.success) {
       throw new Error(response.error || 'LLM invocation failed')
@@ -263,7 +267,7 @@ export class AgentExecutor {
     impl: AgentImpl,
     task: AgentTask,
     context: AgentExecutionContext,
-    _trace: AgentTraceStep[],
+    _trace: AgentTraceStep[]
   ): Promise<unknown> {
     if (impl.plan) {
       return impl.plan(task.input, context)
@@ -293,11 +297,15 @@ Return a JSON array of steps, each with:
 
 Respond with only valid JSON.`
 
-    const response = await this.intelligenceSDK.invoke('text.chat', {
-      messages: [{ role: 'user', content: planPrompt }],
-    }, {
-      strategy: 'adaptive-default',
-    })
+    const response = await this.intelligenceSDK.invoke(
+      'text.chat',
+      {
+        messages: [{ role: 'user', content: planPrompt }]
+      },
+      {
+        strategy: 'adaptive-default'
+      }
+    )
 
     if (!response.success) {
       throw new Error(response.error || 'Plan generation failed')
@@ -307,7 +315,7 @@ Respond with only valid JSON.`
       taskId: task.id,
       agentId: task.agentId,
       steps: this.parsePlanResponse(response.data),
-      createdAt: Date.now(),
+      createdAt: Date.now()
     }
   }
 
@@ -318,7 +326,7 @@ Respond with only valid JSON.`
     impl: AgentImpl,
     task: AgentTask,
     context: AgentExecutionContext,
-    trace: AgentTraceStep[],
+    trace: AgentTraceStep[]
   ): Promise<unknown> {
     // If agent has streaming chat, collect all chunks
     if (impl.chat) {
@@ -364,7 +372,7 @@ Respond with only valid JSON.`
       taskId: context.taskId,
       agentId: '',
       workingDirectory: context.workingDirectory,
-      signal: context.signal,
+      signal: context.signal
     })
 
     return result
@@ -396,8 +404,7 @@ Instructions:
       try {
         const parsed = JSON.parse(data)
         return Array.isArray(parsed) ? parsed : [parsed]
-      }
-      catch {
+      } catch {
         return [{ id: '1', description: data }]
       }
     }
@@ -408,13 +415,13 @@ Instructions:
    * Calculate usage statistics
    */
   private calculateUsage(startTime: number, trace: AgentTraceStep[]): AgentUsage {
-    const toolCalls = trace.filter(t => t.type === 'tool_call').length
+    const toolCalls = trace.filter((t) => t.type === 'tool_call').length
     return {
       promptTokens: 0, // Would be filled by actual LLM response
       completionTokens: 0,
       totalTokens: 0,
       toolCalls,
-      duration: Date.now() - startTime,
+      duration: Date.now() - startTime
     }
   }
 
@@ -428,7 +435,7 @@ Instructions:
       agentId,
       error,
       status: 'failed' as AgentStatus,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
   }
 

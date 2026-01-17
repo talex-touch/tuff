@@ -1,3 +1,26 @@
+<script setup lang="ts">
+import type { BreadcrumbItem, BreadcrumbProps } from './types'
+import { TxIcon } from '../../icon'
+
+interface Props extends BreadcrumbProps {}
+
+interface Emits {
+  click: [item: BreadcrumbItem, index: number]
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  separatorIcon: 'chevron-right',
+})
+
+const emit = defineEmits<Emits>()
+
+function handleClick(item: BreadcrumbItem, index: number) {
+  if (!item.href) {
+    emit('click', item, index)
+  }
+}
+</script>
+
 <template>
   <nav class="tx-breadcrumb" aria-label="Breadcrumb">
     <ol class="tx-breadcrumb__list">
@@ -17,7 +40,7 @@
           <TxIcon v-if="item.icon" :name="item.icon" class="tx-breadcrumb__icon" />
           {{ item.label }}
         </component>
-        
+
         <span
           v-if="index < items.length - 1"
           class="tx-breadcrumb__separator"
@@ -29,29 +52,6 @@
     </ol>
   </nav>
 </template>
-
-<script setup lang="ts">
-import { TxIcon } from '../../icon'
-import type { BreadcrumbItem, BreadcrumbProps } from './types'
-
-interface Props extends BreadcrumbProps {}
-
-interface Emits {
-  click: [item: BreadcrumbItem, index: number]
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  separatorIcon: 'chevron-right'
-})
-
-const emit = defineEmits<Emits>()
-
-const handleClick = (item: BreadcrumbItem, index: number) => {
-  if (!item.href) {
-    emit('click', item, index)
-  }
-}
-</script>
 
 <style scoped>
 .tx-breadcrumb {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { TuffInput } from '@talex-touch/tuffex'
+import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{

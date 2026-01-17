@@ -1,40 +1,36 @@
-<script name="TMenuItem">
-export default {
-  name: 'TMenuItem',
-}
-</script>
-
 <script setup>
 import { useRouter } from 'vue-router'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 
+defineOptions({ name: 'TMenuItem' })
+
 const props = defineProps({
   icon: {
     type: String,
-    required: true,
+    required: true
   },
   name: {
     type: String,
-    required: true,
+    required: true
   },
   active: {
-    type: Function,
+    type: Function
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   activation: {
     type: Boolean,
-    default: false,
+    default: false
   },
   route: {
-    type: String,
+    type: String
   },
   nonStyle: {
     type: Boolean,
-    default: false,
-  },
+    default: false
+  }
 })
 
 const router = useRouter()
@@ -42,7 +38,7 @@ const router = useRouter()
 const active = computed(() => props?.active?.(props.name))
 watch(
   () => active.value,
-  val => val && router.push(props.route),
+  (val) => val && router.push(props.route)
 )
 </script>
 

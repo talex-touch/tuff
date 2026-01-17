@@ -27,14 +27,18 @@ const shouldShowDirection = computed(() => type.value !== 'button')
 const shouldShowIndicatorProps = computed(() => type.value === 'button')
 
 const resolvedGlass = computed(() => {
-  if (!shouldShowIndicatorProps.value) return false
-  if (indicatorVariant.value === 'glass') return true
+  if (!shouldShowIndicatorProps.value)
+    return false
+  if (indicatorVariant.value === 'glass')
+    return true
   return glass.value
 })
 
 const resolvedBlur = computed(() => {
-  if (!shouldShowIndicatorProps.value) return false
-  if (indicatorVariant.value === 'blur') return true
+  if (!shouldShowIndicatorProps.value)
+    return false
+  if (indicatorVariant.value === 'blur')
+    return true
   return blur.value
 })
 
@@ -103,17 +107,23 @@ const directionOptions = [
         </div>
 
         <div class="tx-demo__col" style="gap: 10px;">
-          <div class="tx-demo__label">stiffness</div>
+          <div class="tx-demo__label">
+            stiffness
+          </div>
           <TxSlider v-model="stiffness" :min="60" :max="220" :step="1" show-value />
         </div>
 
         <div class="tx-demo__col" style="gap: 10px;">
-          <div class="tx-demo__label">damping</div>
+          <div class="tx-demo__label">
+            damping
+          </div>
           <TxSlider v-model="damping" :min="4" :max="30" :step="1" show-value />
         </div>
 
         <div v-if="shouldShowIndicatorProps && blur" class="tx-demo__col" style="gap: 10px;">
-          <div class="tx-demo__label">blurAmount</div>
+          <div class="tx-demo__label">
+            blurAmount
+          </div>
           <TxSlider v-model="blurAmount" :min="0" :max="24" :step="1" show-value />
         </div>
       </div>
@@ -135,8 +145,12 @@ const directionOptions = [
       >
         <TxRadio value="a" :disabled="disabled && type !== 'button'">
           <template v-if="type === 'card'">
-            <div class="tx-demo__title">Option A</div>
-            <div class="tx-demo__desc">Card description A</div>
+            <div class="tx-demo__title">
+              Option A
+            </div>
+            <div class="tx-demo__desc">
+              Card description A
+            </div>
           </template>
           <template v-else>
             Option A
@@ -145,8 +159,12 @@ const directionOptions = [
 
         <TxRadio value="b">
           <template v-if="type === 'card'">
-            <div class="tx-demo__title">Option B</div>
-            <div class="tx-demo__desc">Card description B</div>
+            <div class="tx-demo__title">
+              Option B
+            </div>
+            <div class="tx-demo__desc">
+              Card description B
+            </div>
           </template>
           <template v-else>
             Option B
@@ -155,8 +173,12 @@ const directionOptions = [
 
         <TxRadio value="c" :disabled="type === 'button' ? false : true">
           <template v-if="type === 'card'">
-            <div class="tx-demo__title">Option C (disabled)</div>
-            <div class="tx-demo__desc">Disabled in non-button types</div>
+            <div class="tx-demo__title">
+              Option C (disabled)
+            </div>
+            <div class="tx-demo__desc">
+              Disabled in non-button types
+            </div>
           </template>
           <template v-else>
             Option C
@@ -164,7 +186,9 @@ const directionOptions = [
         </TxRadio>
       </TxRadioGroup>
 
-      <div class="tx-demo__meta" style="margin-top: 12px;">selected: {{ value }}</div>
+      <div class="tx-demo__meta" style="margin-top: 12px;">
+        selected: {{ value }}
+      </div>
     </TxCard>
   </div>
 </template>

@@ -6,7 +6,7 @@ import { useStorage } from '#imports'
 import { createError } from 'h3'
 import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
-import { deleteImage, uploadImage, uploadImageFromBuffer } from './imageStorage'
+import { deleteImage, uploadImageFromBuffer } from './imageStorage'
 import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
 import { extractTpexMetadata } from './tpex'
 
@@ -531,7 +531,7 @@ function validateChannel(channel: string): asserts channel is PluginChannel {
  */
 function validateSemanticVersion(version: string): boolean {
   // Standard semver pattern: major.minor.patch with optional pre-release and build metadata
-  const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+  const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*))?(?:\+([0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/i
   return semverPattern.test(version)
 }
 

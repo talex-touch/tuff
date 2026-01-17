@@ -1,16 +1,16 @@
 import type { Primitive } from './logger'
 
 import fs from 'node:fs'
-import { mkdir, appendFile } from 'node:fs/promises'
+import { appendFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { app } from 'electron'
 
-type WorkflowDebugConfig = {
+interface WorkflowDebugConfig {
   sid: string
   enabled: boolean
 }
 
-type WorkflowDebugLogEntry = {
+interface WorkflowDebugLogEntry {
   hid: string
   loc: string
   msg: string
@@ -27,7 +27,7 @@ let cachedConfig: {
 } = {
   loadedAt: 0,
   debugRoot: null,
-  config: null,
+  config: null
 }
 
 let ensuredSid: string | null = null
@@ -43,7 +43,7 @@ function resolveDebugRoot(): string | null {
 }
 
 function safeToLogMeta(
-  value: Record<string, unknown> | undefined,
+  value: Record<string, unknown> | undefined
 ): Record<string, Primitive> | undefined {
   if (!value) {
     return undefined
@@ -51,12 +51,7 @@ function safeToLogMeta(
 
   const safe: Record<string, Primitive> = {}
   for (const [key, raw] of Object.entries(value)) {
-    if (
-      raw === null
-      || raw === undefined
-      || typeof raw === 'number'
-      || typeof raw === 'boolean'
-    ) {
+    if (raw === null || raw === undefined || typeof raw === 'number' || typeof raw === 'boolean') {
       safe[key] = raw
       continue
     }
@@ -68,8 +63,7 @@ function safeToLogMeta(
     try {
       const encoded = JSON.stringify(raw)
       safe[key] = encoded.length > 2_000 ? `${encoded.slice(0, 2_000)}…` : encoded
-    }
-    catch {
+    } catch {
       safe[key] = '[unserializable]'
     }
   }
@@ -77,7 +71,7 @@ function safeToLogMeta(
   return safe
 }
 
-function loadWorkflowDebugConfig(): { debugRoot: string, config: WorkflowDebugConfig } | null {
+function loadWorkflowDebugConfig(): { debugRoot: string; config: WorkflowDebugConfig } | null {
   const now = Date.now()
   if (now - cachedConfig.loadedAt < WORKFLOW_DEBUG_TTL_MS) {
     return cachedConfig.debugRoot && cachedConfig.config
@@ -112,8 +106,7 @@ function loadWorkflowDebugConfig(): { debugRoot: string, config: WorkflowDebugCo
     cachedConfig.debugRoot = debugRoot
     cachedConfig.config = config
     return { debugRoot, config }
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -128,8 +121,7 @@ async function ensureLogFile(debugRoot: string, sid: string): Promise<string> {
   ensuredSid = sid
   try {
     await mkdir(sessionDir, { recursive: true })
-  }
-  catch {
+  } catch {
     // ignore
   }
   return logPath
@@ -150,7 +142,7 @@ export function appendWorkflowDebugLog(entry: WorkflowDebugLogEntry): void {
     msg: entry.msg,
     data: safeToLogMeta(entry.data),
     ts: Date.now(),
-    pid: process.pid,
+    pid: process.pid
   }
 
   writeChain = writeChain

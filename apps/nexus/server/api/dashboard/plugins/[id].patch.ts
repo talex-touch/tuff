@@ -1,8 +1,8 @@
 import { clerkClient } from '@clerk/nuxt/server'
 import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../../utils/auth'
-import { getPluginById, updatePlugin } from '../../../utils/pluginsStore'
 import { uploadImage } from '../../../utils/imageStorage'
+import { getPluginById, updatePlugin } from '../../../utils/pluginsStore'
 
 const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import Drawer from '~/components/ui/Drawer.vue'
 import Button from '~/components/ui/Button.vue'
+import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 
@@ -66,7 +66,6 @@ watch(() => props.open, (isOpen) => {
     }
   }
 })
-
 
 async function submit() {
   saving.value = true

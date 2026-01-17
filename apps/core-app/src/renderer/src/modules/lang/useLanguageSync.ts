@@ -3,10 +3,10 @@
  * Synchronizes language changes between renderer and main process
  */
 
-import { watch } from 'vue'
-import { useLanguage } from './useLanguage'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { watch } from 'vue'
+import { useLanguage } from './useLanguage'
 
 /**
  * Setup language synchronization with main process
@@ -22,6 +22,6 @@ export function setupLanguageSync() {
     (newLang) => {
       void transport.send(AppEvents.i18n.setLocale, { locale: newLang as any }).catch(() => {})
     },
-    { immediate: true },
+    { immediate: true }
   )
 }

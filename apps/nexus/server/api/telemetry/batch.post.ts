@@ -1,5 +1,5 @@
-import { recordTelemetryEvent } from '../../utils/telemetryStore'
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
+import { recordTelemetryEvent } from '../../utils/telemetryStore'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -54,15 +54,16 @@ export default defineEventHandler(async (event) => {
         metadata: e.metadata || undefined,
         isAnonymous: e.isAnonymous !== false,
       })
-    } catch {
+    }
+    catch {
       // Silently ignore individual event errors
     }
   })
 
   await Promise.all(promises)
 
-  return { 
-    success: true, 
+  return {
+    success: true,
     processed: eventsToProcess.length,
     dropped: Math.max(0, events.length - maxBatchSize),
   }

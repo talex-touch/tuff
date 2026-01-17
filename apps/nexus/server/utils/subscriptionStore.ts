@@ -50,7 +50,8 @@ function getD1Database(event: H3Event): D1Database | null {
 }
 
 async function ensureSubscriptionSchema(db: D1Database) {
-  if (subscriptionSchemaInitialized) return
+  if (subscriptionSchemaInitialized)
+    return
 
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${ACTIVATION_CODES_TABLE} (
@@ -125,7 +126,7 @@ export async function createActivationCode(
     maxUses?: number
     expiresInDays?: number
     createdBy?: string
-  }
+  },
 ): Promise<ActivationCode> {
   const db = getD1Database(event)
   if (!db) {
@@ -175,7 +176,7 @@ export async function createActivationCode(
 
 export async function getActivationCodeByCode(
   event: H3Event,
-  code: string
+  code: string,
 ): Promise<ActivationCode | null> {
   const db = getD1Database(event)
   if (!db) {
@@ -194,8 +195,8 @@ export async function getActivationCodeByCode(
 export async function activateCode(
   event: H3Event,
   code: string,
-  userId: string
-): Promise<{ plan: SubscriptionPlan; expiresAt: string }> {
+  userId: string,
+): Promise<{ plan: SubscriptionPlan, expiresAt: string }> {
   const db = getD1Database(event)
   if (!db) {
     throw createError({ statusCode: 500, statusMessage: 'Database not available' })
@@ -258,8 +259,8 @@ export async function activateCode(
 
 export async function getUserActivationHistory(
   event: H3Event,
-  userId: string
-): Promise<Array<{ plan: SubscriptionPlan; activatedAt: string; expiresAt: string }>> {
+  userId: string,
+): Promise<Array<{ plan: SubscriptionPlan, activatedAt: string, expiresAt: string }>> {
   const db = getD1Database(event)
   if (!db) {
     throw createError({ statusCode: 500, statusMessage: 'Database not available' })
@@ -272,7 +273,7 @@ export async function getUserActivationHistory(
     FROM ${ACTIVATION_LOGS_TABLE}
     WHERE user_id = ?1
     ORDER BY activated_at DESC;
-  `).bind(userId).all<{ plan: string; activated_at: string; expires_at: string }>()
+  `).bind(userId).all<{ plan: string, activated_at: string, expires_at: string }>()
 
   return (results ?? []).map(row => ({
     plan: row.plan as SubscriptionPlan,

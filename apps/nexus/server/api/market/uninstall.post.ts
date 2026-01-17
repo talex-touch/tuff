@@ -1,5 +1,5 @@
 import { readBody } from 'h3'
-import { getPluginBySlug, decrementPluginInstalls } from '../../utils/pluginsStore'
+import { decrementPluginInstalls, getPluginBySlug } from '../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ slug?: string }>(event)

@@ -1,7 +1,7 @@
 <script lang="ts">
+import type { AvatarGroupProps } from './types'
 import { cloneVNode, computed, defineComponent, h, isVNode } from 'vue'
 import TxAvatar from './TxAvatar.vue'
-import type { AvatarGroupProps } from './types'
 
 export default defineComponent({
   name: 'TxAvatarGroup',

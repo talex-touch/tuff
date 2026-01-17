@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { hasWindow } from '../../../../utils/env'
 import type { CSSProperties, StyleValue } from 'vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { GradualBlurProps } from './types'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 
 defineOptions({
   name: 'TxGradualBlur',
@@ -27,8 +27,7 @@ const props = withDefaults(defineProps<GradualBlurProps>(), {
   style: () => ({}),
 })
 
-const DEFAULT_CONFIG: Required<Pick<GradualBlurProps,
-  | 'position'
+const DEFAULT_CONFIG: Required<Pick<GradualBlurProps, | 'position'
   | 'strength'
   | 'height'
   | 'divCount'
@@ -42,8 +41,7 @@ const DEFAULT_CONFIG: Required<Pick<GradualBlurProps,
   | 'responsive'
   | 'target'
   | 'className'
-  | 'style'
->> = {
+  | 'style'>> = {
   position: 'bottom',
   strength: 2,
   height: '6rem',
@@ -62,20 +60,20 @@ const DEFAULT_CONFIG: Required<Pick<GradualBlurProps,
 }
 
 const PRESETS: Record<NonNullable<GradualBlurProps['preset']>, Partial<GradualBlurProps>> = {
-  top: { position: 'top', height: '6rem' },
-  bottom: { position: 'bottom', height: '6rem' },
-  left: { position: 'left', height: '6rem' },
-  right: { position: 'right', height: '6rem' },
+  'top': { position: 'top', height: '6rem' },
+  'bottom': { position: 'bottom', height: '6rem' },
+  'left': { position: 'left', height: '6rem' },
+  'right': { position: 'right', height: '6rem' },
 
-  subtle: { height: '4rem', strength: 1, opacity: 0.8, divCount: 3 },
-  intense: { height: '10rem', strength: 4, divCount: 8, exponential: true },
+  'subtle': { height: '4rem', strength: 1, opacity: 0.8, divCount: 3 },
+  'intense': { height: '10rem', strength: 4, divCount: 8, exponential: true },
 
-  smooth: { height: '8rem', curve: 'bezier', divCount: 10 },
-  sharp: { height: '5rem', curve: 'linear', divCount: 4 },
+  'smooth': { height: '8rem', curve: 'bezier', divCount: 10 },
+  'sharp': { height: '5rem', curve: 'linear', divCount: 4 },
 
-  header: { position: 'top', height: '8rem', curve: 'ease-out' },
-  footer: { position: 'bottom', height: '8rem', curve: 'ease-out' },
-  sidebar: { position: 'left', height: '6rem', strength: 2.5 },
+  'header': { position: 'top', height: '8rem', curve: 'ease-out' },
+  'footer': { position: 'bottom', height: '8rem', curve: 'ease-out' },
+  'sidebar': { position: 'left', height: '6rem', strength: 2.5 },
 
   'page-header': {
     position: 'top',
@@ -92,11 +90,11 @@ const PRESETS: Record<NonNullable<GradualBlurProps['preset']>, Partial<GradualBl
 }
 
 const CURVE_FUNCTIONS: Record<NonNullable<GradualBlurProps['curve']>, (p: number) => number> = {
-  linear: p => p,
-  bezier: p => p * p * (3 - 2 * p),
+  'linear': p => p,
+  'bezier': p => p * p * (3 - 2 * p),
   'ease-in': p => p * p,
-  'ease-out': p => 1 - Math.pow(1 - p, 2),
-  'ease-in-out': p => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2),
+  'ease-out': p => 1 - (1 - p) ** 2,
+  'ease-in-out': p => (p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2),
 }
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -134,8 +132,10 @@ function debounce<T extends (...a: any[]) => void>(fn: T, wait: number) {
 }
 
 function updateResponsiveDimensions() {
-  if (!config.value.responsive) return
-  if (!hasWindow()) return
+  if (!config.value.responsive)
+    return
+  if (!hasWindow())
+    return
 
   const width = window.innerWidth
   const currentConfig = config.value
@@ -168,9 +168,12 @@ function updateResponsiveDimensions() {
 let intersectionObserver: IntersectionObserver | null = null
 
 function setupIntersectionObserver() {
-  if (config.value.animated !== 'scroll') return
-  if (!containerRef.value) return
-  if (typeof IntersectionObserver === 'undefined') return
+  if (config.value.animated !== 'scroll')
+    return
+  if (!containerRef.value)
+    return
+  if (typeof IntersectionObserver === 'undefined')
+    return
 
   intersectionObserver = new IntersectionObserver(
     ([entry]) => {
@@ -199,7 +202,7 @@ const blurDivs = computed(() => {
     progress = curveFunc(progress)
 
     const blurValue = config.value.exponential
-      ? Math.pow(2, progress * 4) * 0.0625 * currentStrength
+      ? 2 ** (progress * 4) * 0.0625 * currentStrength
       : 0.0625 * (progress * count + 1) * currentStrength
 
     const p1 = Math.round((increment * i - increment) * 10) / 10
@@ -208,8 +211,10 @@ const blurDivs = computed(() => {
     const p4 = Math.round((increment * i + increment * 2) * 10) / 10
 
     let gradient = `transparent ${p1}%, black ${p2}%`
-    if (p3 <= 100) gradient += `, black ${p3}%`
-    if (p4 <= 100) gradient += `, transparent ${p4}%`
+    if (p3 <= 100)
+      gradient += `, black ${p3}%`
+    if (p4 <= 100)
+      gradient += `, transparent ${p4}%`
 
     const direction = getGradientDirection(config.value.position)
 
@@ -294,13 +299,16 @@ onUnmounted(() => {
 watch(
   () => isVisible.value,
   (newVisible) => {
-    if (!newVisible) return
-    if (config.value.animated !== 'scroll') return
-    if (!props.onAnimationComplete) return
+    if (!newVisible)
+      return
+    if (config.value.animated !== 'scroll')
+      return
+    if (!props.onAnimationComplete)
+      return
 
     const timeout = setTimeout(() => {
       props.onAnimationComplete?.()
-    }, parseFloat(config.value.duration) * 1000)
+    }, Number.parseFloat(config.value.duration) * 1000)
 
     return () => clearTimeout(timeout)
   },
@@ -310,8 +318,7 @@ watch(
 <template>
   <div
     ref="containerRef"
-    :class="[
-      'tx-gradual-blur',
+    class="tx-gradual-blur" :class="[
       config.target === 'page' ? 'tx-gradual-blur--page' : 'tx-gradual-blur--parent',
       config.className,
     ]"

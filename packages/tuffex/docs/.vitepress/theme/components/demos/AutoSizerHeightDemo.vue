@@ -31,15 +31,21 @@ function setTab(next: 'a' | 'b') {
       style="border: 1px solid var(--tx-border-color); border-radius: 12px; padding: 12px;"
     >
       <div v-if="active === 'a'">
-        <div style="font-weight: 600; margin-bottom: 8px;">Tab A</div>
-        <div style="color: var(--tx-text-color-secondary);">Short content.</div>
+        <div style="font-weight: 600; margin-bottom: 8px;">
+          Tab A
+        </div>
+        <div style="color: var(--tx-text-color-secondary);">
+          Short content.
+        </div>
       </div>
       <div v-else>
-        <div style="font-weight: 600; margin-bottom: 8px;">Tab B</div>
+        <div style="font-weight: 600; margin-bottom: 8px;">
+          Tab B
+        </div>
         <div style="color: var(--tx-text-color-secondary); line-height: 1.6;">
           Long content. Long content. Long content. Long content. Long content. Long content.
         </div>
-        <div style="height: 24px;"></div>
+        <div style="height: 24px;" />
         <div style="color: var(--tx-text-color-secondary); line-height: 1.6;">
           More lines. More lines. More lines.
         </div>

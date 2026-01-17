@@ -30,12 +30,12 @@ export interface NpmPackageInfo {
 }
 
 export interface NpmPackageVersions {
-  name: string
+  'name': string
   'dist-tags': {
     latest: string
     [tag: string]: string
   }
-  versions: Record<string, NpmPackageInfo>
+  'versions': Record<string, NpmPackageInfo>
 }
 
 /**
@@ -166,7 +166,8 @@ export class NpmProvider implements PluginProvider {
     const res = await fetch(`${this.registry}/${encodedName}`)
 
     if (!res.ok) {
-      if (res.status === 404) return null
+      if (res.status === 404)
+        return null
       throw new Error(`Failed to fetch package info: ${res.statusText}`)
     }
 

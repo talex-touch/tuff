@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import crypto from 'uncrypto'
 import { createError } from 'h3'
+import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
 
 const API_KEYS_TABLE = 'user_api_keys'
@@ -14,7 +14,8 @@ function getD1Database(event: H3Event): D1Database | null {
 }
 
 async function ensureApiKeySchema(db: D1Database) {
-  if (apiKeySchemaInitialized) return
+  if (apiKeySchemaInitialized)
+    return
 
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${API_KEYS_TABLE} (
@@ -52,12 +53,12 @@ export interface ApiKeyWithSecret extends ApiKey {
   secretKey: string // Only returned on creation
 }
 
-function generateApiKey(): { key: string; prefix: string; hash: string } {
+function generateApiKey(): { key: string, prefix: string, hash: string } {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   const key = `tuff_${Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')}`
-  const prefix = key.substring(0, 12) + '...'
-  
+  const prefix = `${key.substring(0, 12)}...`
+
   // Simple hash for storage (in production, use proper hashing)
   const encoder = new TextEncoder()
   const data = encoder.encode(key)
@@ -67,7 +68,7 @@ function generateApiKey(): { key: string; prefix: string; hash: string } {
     hash = hash & hash
   }
   const hashStr = Math.abs(hash).toString(16)
-  
+
   return { key, prefix, hash: hashStr }
 }
 
@@ -79,7 +80,7 @@ export async function createApiKey(
   userId: string,
   name: string,
   scopes: string[] = ['plugin:publish'],
-  expiresInDays?: number
+  expiresInDays?: number,
 ): Promise<ApiKeyWithSecret> {
   const db = getD1Database(event)
   if (!db) {
@@ -91,7 +92,7 @@ export async function createApiKey(
   const id = crypto.randomUUID()
   const { key, prefix, hash } = generateApiKey()
   const now = new Date().toISOString()
-  const expiresAt = expiresInDays 
+  const expiresAt = expiresInDays
     ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
     : null
 
@@ -174,7 +175,7 @@ export async function deleteApiKey(event: H3Event, userId: string, keyId: string
 /**
  * Validate an API key and return the user ID if valid
  */
-export async function validateApiKey(event: H3Event, key: string): Promise<{ userId: string; scopes: string[] } | null> {
+export async function validateApiKey(event: H3Event, key: string): Promise<{ userId: string, scopes: string[] } | null> {
   if (!key.startsWith('tuff_')) {
     return null
   }
@@ -186,8 +187,8 @@ export async function validateApiKey(event: H3Event, key: string): Promise<{ use
 
   await ensureApiKeySchema(db)
 
-  const prefix = key.substring(0, 12) + '...'
-  
+  const prefix = `${key.substring(0, 12)}...`
+
   // Simple hash matching
   const encoder = new TextEncoder()
   const data = encoder.encode(key)

@@ -202,7 +202,7 @@ export function isI18nMessage(str: string): boolean {
 /**
  * Parse i18n message to extract key and params
  */
-export function parseI18nMessage(str: string): { key: string; params?: Record<string, unknown> } | null {
+export function parseI18nMessage(str: string): { key: string, params?: Record<string, unknown> } | null {
   if (!isI18nMessage(str)) {
     return null
   }
@@ -218,7 +218,8 @@ export function parseI18nMessage(str: string): { key: string; params?: Record<st
   try {
     const params = JSON.parse(content.slice(pipeIndex + 1))
     return { key, params }
-  } catch {
+  }
+  catch {
     return { key }
   }
 }

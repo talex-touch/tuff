@@ -10,7 +10,7 @@ export enum ResolverStatus {
   UNCOMPRESS_ERROR,
   MANIFEST_NOT_FOUND,
   INVALID_MANIFEST,
-  SUCCESS,
+  SUCCESS
 }
 
 export interface ResolverInstallOptions {
@@ -61,7 +61,7 @@ export class PluginResolver {
   async install(
     manifest: IManifest,
     cb: (msg: string, type?: string) => void,
-    options?: ResolverInstallOptions,
+    options?: ResolverInstallOptions
   ): Promise<void> {
     console.log(`[PluginResolver] Installing plugin: ${manifest.name}`)
     const _target = path.join(pluginModule.filePath!, manifest.name)
@@ -117,17 +117,16 @@ export class PluginResolver {
       }
 
       cb('success', 'success')
-    }
-    catch (e: any) {
+    } catch (e: any) {
       console.error(`[PluginResolver] Failed to install plugin ${manifest.name}:`, e)
       cb(e.message || 'Install failed', 'error')
     }
   }
 
   async resolve(
-    callback: (result: { event: any, type: string }) => void,
+    callback: (result: { event: any; type: string }) => void,
     whole = false,
-    options?: ResolverOptions,
+    options?: ResolverOptions
   ): Promise<void> {
     console.debug(`[PluginResolver] Resolving plugin: ${this.filePath}`)
     const event = { msg: '' } as any
@@ -143,11 +142,9 @@ export class PluginResolver {
 
       if (await fse.pathExists(manifestPath)) {
         finalManifestPath = manifestPath
-      }
-      else if (await fse.pathExists(keyPath)) {
+      } else if (await fse.pathExists(keyPath)) {
         finalManifestPath = keyPath
-      }
-      else {
+      } else {
         event.msg = ResolverStatus.MANIFEST_NOT_FOUND
         return callback({ event, type: 'error' })
       }
@@ -161,22 +158,23 @@ export class PluginResolver {
       }
 
       if (whole) {
-        await this.install(manifest, (msg, type = 'error') => {
-          event.msg = msg
-          callback({ event, type })
-        }, options?.installOptions)
-      }
-      else {
+        await this.install(
+          manifest,
+          (msg, type = 'error') => {
+            event.msg = msg
+            callback({ event, type })
+          },
+          options?.installOptions
+        )
+      } else {
         event.msg = manifest
         callback({ event, type: 'success' })
       }
-    }
-    catch (e: any) {
+    } catch (e: any) {
       console.error(`[PluginResolver] Failed to resolve plugin ${this.filePath}:`, e)
       event.msg = ResolverStatus.UNCOMPRESS_ERROR
       callback({ event, type: 'error' })
-    }
-    finally {
+    } finally {
       await fse.remove(tempDir)
       console.log(`[PluginResolver] Resolved plugin: ${this.filePath} | Temp dir released!`)
     }
@@ -185,10 +183,9 @@ export class PluginResolver {
   private async applyInstallOptions(
     manifest: IManifest,
     targetDir: string,
-    options?: ResolverInstallOptions,
+    options?: ResolverInstallOptions
   ): Promise<void> {
-    if (!options?.enforceProdMode)
-      return
+    if (!options?.enforceProdMode) return
     await this.disableDevMode(manifest, targetDir)
   }
 
@@ -201,8 +198,7 @@ export class PluginResolver {
 
     const manifestPath = path.join(targetDir, 'manifest.json')
     try {
-      if (!(await fse.pathExists(manifestPath)))
-        return
+      if (!(await fse.pathExists(manifestPath))) return
       const fileManifest = (await fse.readJSON(manifestPath)) as IManifest
       fileManifest.dev = this.createProdDevConfig(fileManifest.dev)
       if (fileManifest.plugin?.dev) {
@@ -210,8 +206,7 @@ export class PluginResolver {
         fileManifest.plugin.dev.address = ''
       }
       await fse.writeFile(manifestPath, JSON.stringify(fileManifest, null, 2))
-    }
-    catch (error) {
+    } catch (error) {
       console.warn('[PluginResolver] Failed to enforce prod mode manifest:', error)
     }
   }

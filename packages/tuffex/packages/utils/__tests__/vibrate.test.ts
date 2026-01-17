@@ -1,28 +1,28 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  useVibrate,
-  useAutoVibrate,
-  stopVibrate,
-  isVibrateSupported,
   createVibratePattern,
-  VibrateManager,
+  isVibrateSupported,
+  stopVibrate,
+  useAutoVibrate,
+  useVibrate,
+  vibrate,
   VIBRATE_PATTERNS,
-  vibrate
+  VibrateManager,
 } from '../vibrate'
 
 // Mock navigator.vibrate
 const mockVibrate = vi.fn()
 
-describe('Vibrate Utils', () => {
+describe('vibrate Utils', () => {
   beforeEach(() => {
     // Mock window and navigator
     Object.defineProperty(global, 'window', {
       value: {
         navigator: {
-          vibrate: mockVibrate
-        }
+          vibrate: mockVibrate,
+        },
       },
-      writable: true
+      writable: true,
     })
     mockVibrate.mockClear()
   })
@@ -124,25 +124,25 @@ describe('Vibrate Utils', () => {
       const pattern = [100, 50, 100]
       const description = 'Test pattern'
       const result = createVibratePattern(pattern, description)
-      
+
       expect(result).toEqual({
         pattern,
-        description
+        description,
       })
     })
 
     it('should create pattern without description', () => {
       const pattern = [100, 50, 100]
       const result = createVibratePattern(pattern)
-      
+
       expect(result).toEqual({
         pattern,
-        description: undefined
+        description: undefined,
       })
     })
   })
 
-  describe('VibrateManager', () => {
+  describe('vibrateManager', () => {
     let manager: VibrateManager
 
     beforeEach(() => {
@@ -198,7 +198,7 @@ describe('Vibrate Utils', () => {
     })
   })
 
-  describe('VIBRATE_PATTERNS', () => {
+  describe('vIBRATE_PATTERNS', () => {
     it('should contain all expected patterns', () => {
       expect(VIBRATE_PATTERNS).toHaveProperty('light')
       expect(VIBRATE_PATTERNS).toHaveProperty('heavy')
@@ -210,7 +210,7 @@ describe('Vibrate Utils', () => {
     })
 
     it('should have correct pattern structure', () => {
-      Object.values(VIBRATE_PATTERNS).forEach(pattern => {
+      Object.values(VIBRATE_PATTERNS).forEach((pattern) => {
         expect(pattern).toHaveProperty('pattern')
         expect(Array.isArray(pattern.pattern)).toBe(true)
         expect(pattern.pattern.length).toBeGreaterThan(0)

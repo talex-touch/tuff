@@ -1,10 +1,10 @@
-import type { IntelligenceChatPayload, AiUsageInfo } from '@talex-touch/utils'
+import type { AiUsageInfo, IntelligenceChatPayload } from '@talex-touch/utils'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { IFeatureLifeCycle, IPluginFeature } from '@talex-touch/utils/plugin'
 import crypto from 'node:crypto'
 import path from 'node:path'
-import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { DEFAULT_WIDGET_RENDERERS } from '@talex-touch/utils/plugin'
 import { app } from 'electron'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { ensureAiConfigLoaded } from '../../modules/ai/intelligence-config'
@@ -274,5 +274,3 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
     }
   }
 }
-
-

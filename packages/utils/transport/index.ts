@@ -21,93 +21,6 @@
 // ============================================================================
 
 export {
-  defineEvent,
-  isTuffEvent,
-  assertTuffEvent,
-  TuffEventBuilder,
-  TuffModuleBuilder,
-  TuffActionBuilder,
-} from './event/builder'
-
-// ============================================================================
-// Event Types
-// ============================================================================
-
-export type {
-  TuffEvent,
-  BatchConfig,
-  StreamConfig,
-  EventOptions,
-  EventRequest,
-  EventResponse,
-  IsStreamEvent,
-  StreamChunk,
-} from './event/types'
-
-// ============================================================================
-// Predefined Events (by domain)
-// ============================================================================
-
-export * from './events'
-
-// ============================================================================
-// SDK Types
-// ============================================================================
-
-export type {
-  // Transport interfaces
-  ITuffTransport,
-  ITuffTransportMain,
-  IPluginTuffTransport,
-
-  // Options
-  SendOptions,
-  StreamOptions,
-  StreamController,
-
-  // Contexts
-  HandlerContext,
-  StreamContext,
-
-  // Batch types
-  BatchPayload,
-  BatchResponse,
-  BatchResult,
-
-  // Stream types
-  StreamMessage,
-  StreamMessageType,
-
-  // Plugin security
-  PluginSecurityContext,
-  PluginKeyManager,
-} from './types'
-
-// ============================================================================
-// Error Types
-// ============================================================================
-
-export {
-  TuffTransportError,
-  TuffTransportErrorCode,
-} from './errors'
-
-// ============================================================================
-// SDK Functions
-// ============================================================================
-
-export {
-  useTuffTransport,
-  createTuffRendererTransport,
-  createPluginTuffTransport,
-  getTuffTransportMain,
-} from './sdk'
-
-// ============================================================================
-// Legacy Compatibility (Deprecated)
-// ============================================================================
-
-export {
   /**
    * @deprecated Use `useTuffTransport()` instead. Will be removed in v3.0.0.
    */
@@ -117,6 +30,10 @@ export {
    */
   DataCode,
 } from '../channel'
+
+// ============================================================================
+// Event Types
+// ============================================================================
 
 export type {
   /**
@@ -130,9 +47,92 @@ export type {
   /**
    * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
    */
-  StandardChannelData,
+  RawStandardChannelData,
   /**
    * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
    */
-  RawStandardChannelData,
+  StandardChannelData,
 } from '../channel'
+
+// ============================================================================
+// Predefined Events (by domain)
+// ============================================================================
+
+export {
+  TuffTransportError,
+  TuffTransportErrorCode,
+} from './errors'
+
+// ============================================================================
+// SDK Types
+// ============================================================================
+
+export {
+  assertTuffEvent,
+  defineEvent,
+  isTuffEvent,
+  TuffActionBuilder,
+  TuffEventBuilder,
+  TuffModuleBuilder,
+} from './event/builder'
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
+export type {
+  BatchConfig,
+  EventOptions,
+  EventRequest,
+  EventResponse,
+  IsStreamEvent,
+  StreamChunk,
+  StreamConfig,
+  TuffEvent,
+} from './event/types'
+
+// ============================================================================
+// SDK Functions
+// ============================================================================
+
+export * from './events'
+
+// ============================================================================
+// Legacy Compatibility (Deprecated)
+// ============================================================================
+
+export {
+  createPluginTuffTransport,
+  createTuffRendererTransport,
+  getTuffTransportMain,
+  useTuffTransport,
+} from './sdk'
+
+export type {
+  // Batch types
+  BatchPayload,
+  BatchResponse,
+  BatchResult,
+
+  // Contexts
+  HandlerContext,
+  IPluginTuffTransport,
+  // Transport interfaces
+  ITuffTransport,
+
+  ITuffTransportMain,
+  PluginKeyManager,
+
+  // Plugin security
+  PluginSecurityContext,
+  // Options
+  SendOptions,
+  StreamContext,
+
+  StreamController,
+  // Stream types
+  StreamMessage,
+
+  StreamMessageType,
+  StreamOptions,
+} from './types'

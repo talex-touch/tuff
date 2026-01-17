@@ -133,7 +133,8 @@ export class PluginMarketClient {
     }
 
     const sorted = results.sort((a, b) => {
-      if (a.isOfficial !== b.isOfficial) return a.isOfficial ? -1 : 1
+      if (a.isOfficial !== b.isOfficial)
+        return a.isOfficial ? -1 : 1
       return (b.downloads ?? 0) - (a.downloads ?? 0)
     })
 
@@ -156,7 +157,8 @@ export class PluginMarketClient {
     if (source === 'tpex' || (!source && !identifier.includes('/'))) {
       try {
         const plugin = await this.tpexProvider.getPlugin(identifier)
-        if (plugin) return normalizeTpexPlugin(plugin)
+        if (plugin)
+          return normalizeTpexPlugin(plugin)
       }
       catch {
         // Fall through to npm
@@ -166,7 +168,8 @@ export class PluginMarketClient {
     if (source === 'npm' || !source) {
       try {
         const pkg = await this.npmProvider.getPackageInfo(identifier)
-        if (pkg) return normalizeNpmPlugin(pkg)
+        if (pkg)
+          return normalizeNpmPlugin(pkg)
       }
       catch {
         // Not found

@@ -1,13 +1,13 @@
 import type { MarketProviderDefinition } from '@talex-touch/utils/market'
-import { BaseMarketProvider, type MarketProviderContext } from './providers/base-provider'
+import type { BaseMarketProvider, MarketProviderContext } from './providers/base-provider'
 import { NexusStoreProvider } from './providers/nexus-store-provider'
-import { RepositoryProvider } from './providers/repository-provider'
 import { NpmPackageProvider } from './providers/npm-package-provider'
+import { RepositoryProvider } from './providers/repository-provider'
 import { TpexApiProvider } from './providers/tpex-api-provider'
 
 export function createMarketProvider(
   definition: MarketProviderDefinition,
-  ctx: MarketProviderContext,
+  ctx: MarketProviderContext
 ): BaseMarketProvider | null {
   switch (definition.type) {
     case 'nexusStore':
@@ -20,7 +20,7 @@ export function createMarketProvider(
       return new TpexApiProvider(definition, ctx)
     default:
       console.warn(
-        `[Market] Unsupported provider type "${definition.type}" for "${definition.name}".`,
+        `[Market] Unsupported provider type "${definition.type}" for "${definition.name}".`
       )
       return null
   }

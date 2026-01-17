@@ -7,11 +7,11 @@ import type {
 import { computed, reactive, ref } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'
-import Modal from '~/components/ui/Modal.vue'
 import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
-import Tag from '~/components/ui/Tag.vue'
+import Modal from '~/components/ui/Modal.vue'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
+import Tag from '~/components/ui/Tag.vue'
 import { useMarketCategories } from '~/composables/useMarketCategories'
 import { useMarketFormatters } from '~/composables/useMarketFormatters'
 

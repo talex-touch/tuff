@@ -13,5 +13,5 @@ export interface SegmentedSliderProps {
 
 export interface SegmentedSliderEmits {
   'update:modelValue': [value: number | string]
-  change: [value: number | string]
+  'change': [value: number | string]
 }

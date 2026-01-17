@@ -5,9 +5,10 @@
  */
 
 import type { AgentPermission } from '@talex-touch/utils'
+import type { ToolExecutionContext } from '../tool-registry'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import { toolRegistry, type ToolExecutionContext } from '../tool-registry'
+import { toolRegistry } from '../tool-registry'
 
 /**
  * Register all file tools
@@ -24,17 +25,17 @@ export function registerFileTools(): void {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Path to the file to read' },
-          encoding: { type: 'string', description: 'File encoding (default: utf-8)' },
+          encoding: { type: 'string', description: 'File encoding (default: utf-8)' }
         },
-        required: ['path'],
+        required: ['path']
       },
-      permissions: ['file:read' as AgentPermission],
+      permissions: ['file:read' as AgentPermission]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
-      const { path: filePath, encoding = 'utf-8' } = input as { path: string, encoding?: string }
+      const { path: filePath, encoding = 'utf-8' } = input as { path: string; encoding?: string }
       const resolvedPath = resolvePath(filePath, ctx.workingDirectory)
       return fs.readFile(resolvedPath, { encoding: encoding as BufferEncoding })
-    },
+    }
   )
 
   // file.write - Write file contents
@@ -49,14 +50,18 @@ export function registerFileTools(): void {
         properties: {
           path: { type: 'string', description: 'Path to the file to write' },
           content: { type: 'string', description: 'Content to write to the file' },
-          encoding: { type: 'string', description: 'File encoding (default: utf-8)' },
+          encoding: { type: 'string', description: 'File encoding (default: utf-8)' }
         },
-        required: ['path', 'content'],
+        required: ['path', 'content']
       },
-      permissions: ['file:write' as AgentPermission],
+      permissions: ['file:write' as AgentPermission]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
-      const { path: filePath, content, encoding = 'utf-8' } = input as {
+      const {
+        path: filePath,
+        content,
+        encoding = 'utf-8'
+      } = input as {
         path: string
         content: string
         encoding?: string
@@ -68,7 +73,7 @@ export function registerFileTools(): void {
       await fs.writeFile(resolvedPath, content, { encoding: encoding as BufferEncoding })
 
       return { success: true, path: resolvedPath }
-    },
+    }
   )
 
   // file.exists - Check if file exists
@@ -81,11 +86,11 @@ export function registerFileTools(): void {
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Path to check' },
+          path: { type: 'string', description: 'Path to check' }
         },
-        required: ['path'],
+        required: ['path']
       },
-      permissions: ['file:read' as AgentPermission],
+      permissions: ['file:read' as AgentPermission]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: filePath } = input as { path: string }
@@ -94,11 +99,10 @@ export function registerFileTools(): void {
       try {
         await fs.access(resolvedPath)
         return { exists: true, path: resolvedPath }
-      }
-      catch {
+      } catch {
         return { exists: false, path: resolvedPath }
       }
-    },
+    }
   )
 
   // file.list - List directory contents
@@ -112,25 +116,25 @@ export function registerFileTools(): void {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Directory path to list' },
-          recursive: { type: 'boolean', description: 'Whether to list recursively' },
+          recursive: { type: 'boolean', description: 'Whether to list recursively' }
         },
-        required: ['path'],
+        required: ['path']
       },
-      permissions: ['file:read' as AgentPermission],
+      permissions: ['file:read' as AgentPermission]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
-      const { path: dirPath, recursive = false } = input as { path: string, recursive?: boolean }
+      const { path: dirPath, recursive = false } = input as { path: string; recursive?: boolean }
       const resolvedPath = resolvePath(dirPath, ctx.workingDirectory)
 
       const entries = await fs.readdir(resolvedPath, { withFileTypes: true })
-      const items: { name: string, type: 'file' | 'directory', path: string }[] = []
+      const items: { name: string; type: 'file' | 'directory'; path: string }[] = []
 
       for (const entry of entries) {
         const itemPath = path.join(resolvedPath, entry.name)
         items.push({
           name: entry.name,
           type: entry.isDirectory() ? 'directory' : 'file',
-          path: itemPath,
+          path: itemPath
         })
 
         if (recursive && entry.isDirectory()) {
@@ -141,18 +145,17 @@ export function registerFileTools(): void {
               items.push({
                 name: path.join(entry.name, subEntry.name),
                 type: subEntry.isDirectory() ? 'directory' : 'file',
-                path: path.join(itemPath, subEntry.name),
+                path: path.join(itemPath, subEntry.name)
               })
             }
-          }
-          catch {
+          } catch {
             // Ignore errors in subdirectories
           }
         }
       }
 
       return items
-    },
+    }
   )
 
   // file.delete - Delete a file
@@ -165,11 +168,11 @@ export function registerFileTools(): void {
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Path to delete' },
+          path: { type: 'string', description: 'Path to delete' }
         },
-        required: ['path'],
+        required: ['path']
       },
-      permissions: ['file:delete' as AgentPermission],
+      permissions: ['file:delete' as AgentPermission]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: filePath } = input as { path: string }
@@ -177,7 +180,7 @@ export function registerFileTools(): void {
 
       await fs.unlink(resolvedPath)
       return { success: true, deleted: resolvedPath }
-    },
+    }
   )
 
   // file.copy - Copy a file
@@ -191,14 +194,14 @@ export function registerFileTools(): void {
         type: 'object',
         properties: {
           source: { type: 'string', description: 'Source file path' },
-          destination: { type: 'string', description: 'Destination file path' },
+          destination: { type: 'string', description: 'Destination file path' }
         },
-        required: ['source', 'destination'],
+        required: ['source', 'destination']
       },
-      permissions: ['file:read' as AgentPermission, 'file:write' as AgentPermission],
+      permissions: ['file:read' as AgentPermission, 'file:write' as AgentPermission]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
-      const { source, destination } = input as { source: string, destination: string }
+      const { source, destination } = input as { source: string; destination: string }
       const srcPath = resolvePath(source, ctx.workingDirectory)
       const destPath = resolvePath(destination, ctx.workingDirectory)
 
@@ -207,7 +210,7 @@ export function registerFileTools(): void {
       await fs.copyFile(srcPath, destPath)
 
       return { success: true, source: srcPath, destination: destPath }
-    },
+    }
   )
 
   // file.move - Move/rename a file
@@ -221,14 +224,18 @@ export function registerFileTools(): void {
         type: 'object',
         properties: {
           source: { type: 'string', description: 'Source file path' },
-          destination: { type: 'string', description: 'Destination file path' },
+          destination: { type: 'string', description: 'Destination file path' }
         },
-        required: ['source', 'destination'],
+        required: ['source', 'destination']
       },
-      permissions: ['file:read' as AgentPermission, 'file:write' as AgentPermission, 'file:delete' as AgentPermission],
+      permissions: [
+        'file:read' as AgentPermission,
+        'file:write' as AgentPermission,
+        'file:delete' as AgentPermission
+      ]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
-      const { source, destination } = input as { source: string, destination: string }
+      const { source, destination } = input as { source: string; destination: string }
       const srcPath = resolvePath(source, ctx.workingDirectory)
       const destPath = resolvePath(destination, ctx.workingDirectory)
 
@@ -237,7 +244,7 @@ export function registerFileTools(): void {
       await fs.rename(srcPath, destPath)
 
       return { success: true, source: srcPath, destination: destPath }
-    },
+    }
   )
 
   // file.info - Get file info
@@ -250,11 +257,11 @@ export function registerFileTools(): void {
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Path to the file' },
+          path: { type: 'string', description: 'Path to the file' }
         },
-        required: ['path'],
+        required: ['path']
       },
-      permissions: ['file:read' as AgentPermission],
+      permissions: ['file:read' as AgentPermission]
     },
     async (input: unknown, ctx: ToolExecutionContext) => {
       const { path: filePath } = input as { path: string }
@@ -270,9 +277,9 @@ export function registerFileTools(): void {
         isDirectory: stats.isDirectory(),
         createdAt: stats.birthtime.toISOString(),
         modifiedAt: stats.mtime.toISOString(),
-        accessedAt: stats.atime.toISOString(),
+        accessedAt: stats.atime.toISOString()
       }
-    },
+    }
   )
 }
 

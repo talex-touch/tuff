@@ -41,7 +41,8 @@ async function ensureNetworkPermission(): Promise<boolean> {
 function upsertFeatureItem(item: any) {
   try {
     plugin.feature.updateItem(item.id, item)
-  } catch {
+  }
+  catch {
     plugin.feature.pushItems([item])
   }
 }
@@ -50,7 +51,7 @@ async function startTranslationRequest(
   textToTranslate: string,
   featureId: string,
   signal: AbortSignal,
-  nextSeq: number
+  nextSeq: number,
 ) {
   const ok = await ensureNetworkPermission()
   if (!ok) {
@@ -78,8 +79,8 @@ async function startTranslationRequest(
     : ['tuffintelligence']
 
   const providersToShow = enabledProviders.length > 0 ? enabledProviders : ['tuffintelligence']
-  const pendingItems = providersToShow.map((id) =>
-    createPendingItem(textToTranslate, featureId, id, detectedLang, targetLang)
+  const pendingItems = providersToShow.map(id =>
+    createPendingItem(textToTranslate, featureId, id, detectedLang, targetLang),
   )
   plugin.feature.pushItems(pendingItems)
 
@@ -108,10 +109,12 @@ async function startTranslationRequest(
 
       if (result.error) {
         upsertFeatureItem(createFailedItem(textToTranslate, providerId, featureId, detectedLang, targetLang, result.error))
-      } else {
+      }
+      else {
         upsertFeatureItem(createSuccessItem(textToTranslate, result, featureId))
       }
-    } catch (error) {
+    }
+    catch (error) {
       if (!signal?.aborted) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error'
         upsertFeatureItem(createFailedItem(textToTranslate, providerId, featureId, detectedLang, targetLang, errorMsg))
@@ -156,7 +159,8 @@ const pluginLifecycle = {
         if (signal) {
           if (signal.aborted) {
             controller.abort()
-          } else {
+          }
+          else {
             signal.addEventListener('abort', () => controller.abort(), { once: true })
           }
         }
@@ -176,7 +180,8 @@ const pluginLifecycle = {
 
         return true
       }
-    } catch (error) {
+    }
+    catch (error) {
       logger.error('Error processing translation feature:', error)
     }
   },
@@ -192,7 +197,8 @@ const pluginLifecycle = {
         if (!isFeatureExecution) {
           plugin.box.hide()
         }
-      } else {
+      }
+      else {
         logger.warn('No copy action or payload found for item:', item)
       }
     }

@@ -1,12 +1,12 @@
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
 import fse from 'fs-extra'
 
 export enum Platform {
   MAC_OS,
   WINDOWS,
   LINUX,
-  UNKNOWN,
+  UNKNOWN
 }
 
 // export enum PlatformVersion {
@@ -83,8 +83,7 @@ export function getMacOSVersion(): number | null {
     // Version mapping: 20.x = macOS 11, 21.x = macOS 12, 22.x = macOS 13, 23.x = macOS 14
     const majorVersion = Number.parseInt(release.split('.')[0])
     return majorVersion - 9 // Convert to actual macOS version number
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('Failed to get macOS version:', error)
     return null
   }
@@ -113,7 +112,7 @@ export function checkPlatformCompatibility(): string | null {
   return null
 }
 export async function sleep(time: number) {
-  return new Promise(resolve => setTimeout(() => resolve(time), time))
+  return new Promise((resolve) => setTimeout(() => resolve(time), time))
 }
 
 export async function checkDirWithCreate(url, abs = true) {

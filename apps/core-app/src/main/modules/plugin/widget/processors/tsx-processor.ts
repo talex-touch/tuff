@@ -5,15 +5,15 @@
  * Supports React-style components with full TypeScript support.
  */
 
-import { transform } from 'esbuild'
+import type { WidgetSource } from '../widget-loader'
 import type {
   CompiledWidget,
   DependencyValidationResult,
   IWidgetProcessor,
   WidgetCompilationContext
 } from '../widget-processor'
-import type { WidgetSource } from '../widget-loader'
 import path from 'node:path'
+import { transform } from 'esbuild'
 
 /**
  * Allowed packages in widget sandbox
@@ -43,7 +43,8 @@ export class WidgetTsxProcessor implements IWidgetProcessor {
    * Validate dependencies used in the widget source
    */
   validateDependencies(source: string): DependencyValidationResult {
-    const importRegex = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g
+    const importRegex =
+      /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g
     const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
     const dynamicImportRegex = /(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\)/g
     const reExportRegex = /export\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/g
@@ -101,7 +102,7 @@ export class WidgetTsxProcessor implements IWidgetProcessor {
     const validation = this.validateDependencies(source.source)
 
     if (!validation.valid) {
-      validation.errors.forEach(err => {
+      validation.errors.forEach((err) => {
         plugin.issues.push({
           type: 'error',
           code: 'WIDGET_INVALID_DEPENDENCY',
@@ -143,9 +144,7 @@ const __component = exports.default || module.exports || {}
 module.exports = __component
 `
 
-      plugin.logger.info(
-        `[WidgetTsxProcessor] Successfully compiled widget "${source.widgetId}"`
-      )
+      plugin.logger.info(`[WidgetTsxProcessor] Successfully compiled widget "${source.widgetId}"`)
 
       return {
         code: wrappedCode,
@@ -179,8 +178,6 @@ module.exports = __component
       return false
     }
 
-    return ALLOWED_PACKAGES.some(
-      pkg => module === pkg || module.startsWith(`${pkg}/`)
-    )
+    return ALLOWED_PACKAGES.some((pkg) => module === pkg || module.startsWith(`${pkg}/`))
   }
 }

@@ -1,5 +1,5 @@
-import { h } from 'vue'
 import { ElLoading } from 'element-plus'
+import { h } from 'vue'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { touchChannel } from '../channel/channel-core'
 import { blowMention, popperMention } from '../mention/dialog-mention'
@@ -24,7 +24,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
     const loadingInstance = ElLoading.service({
       lock: true,
       text: 'Parsing plugin package...',
-      background: 'rgba(0, 0, 0, 0.7)',
+      background: 'rgba(0, 0, 0, 0.7)'
     })
 
     try {
@@ -37,7 +37,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       const data = touchChannel.sendSync('drop:plugin', {
         name: file.name,
         buffer,
-        size: file.size,
+        size: file.size
       })
 
       loadingInstance.close()
@@ -48,22 +48,18 @@ async function handlePluginDrop(file: File): Promise<boolean> {
         clearBufferedFile(file.name)
         if (data.msg === '10091') {
           await blowMention('Install Error', 'The plugin has been irreversibly damaged!')
-        }
-        else if (data.msg === '10092') {
+        } else if (data.msg === '10092') {
           await blowMention('Install Error', 'Unable to identify the file!')
-        }
-        else {
+        } else {
           await blowMention('Install Error', `An unknown error occurred: ${data.msg}`)
         }
-      }
-      else {
+      } else {
         const { manifest, path } = data
         await popperMention(manifest.name, () => {
           return h(PluginApplyInstall, { manifest, path, fileName: file.name })
         })
       }
-    }
-    catch (error) {
+    } catch (error) {
       loadingInstance.close()
       console.error('[DropperResolver] Failed to process TPEX file:', error)
       clearBufferedFile(file.name)
@@ -81,7 +77,7 @@ function parseFile(file: File): any {
     name: file.name,
     // path: file.path,
     size: file.size,
-    type: file.type,
+    type: file.type
   }
 }
 
@@ -115,8 +111,8 @@ export function useDropperResolver(): void {
       y: e.y,
       data: {
         files: [...files].map(parseFile),
-        types: e.dataTransfer!.types,
-      },
+        types: e.dataTransfer!.types
+      }
     }
 
     touchChannel.send('drop', option)

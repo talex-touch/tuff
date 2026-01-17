@@ -20,10 +20,17 @@ export interface VersionCompareResult {
  * Parse a semver-like version string into comparable parts
  * Supports: 1.0.0, 1.0.0-beta.1, 1.0.0-alpha, etc.
  */
-function parseVersion(version: string): { major: number; minor: number; patch: number; prerelease: string[] } {
+function parseVersion(version: string): {
+  major: number
+  minor: number
+  patch: number
+  prerelease: string[]
+} {
   const cleaned = version.replace(/^v/, '').trim()
   const [main, prerelease] = cleaned.split('-')
-  const [major = 0, minor = 0, patch = 0] = (main || '').split('.').map(n => parseInt(n, 10) || 0)
+  const [major = 0, minor = 0, patch = 0] = (main || '')
+    .split('.')
+    .map((n) => Number.parseInt(n, 10) || 0)
 
   return {
     major,
@@ -54,8 +61,8 @@ function comparePrereleases(a: string[], b: string[]): number {
     if (aPart === undefined) return -1
     if (bPart === undefined) return 1
 
-    const aNum = parseInt(aPart, 10)
-    const bNum = parseInt(bPart, 10)
+    const aNum = Number.parseInt(aPart, 10)
+    const bNum = Number.parseInt(bPart, 10)
     const aIsNum = !isNaN(aNum)
     const bIsNum = !isNaN(bNum)
 
@@ -109,7 +116,10 @@ export function compareVersions(a: string | undefined, b: string | undefined): -
 /**
  * Check if market version is newer than installed version
  */
-export function hasUpgradeAvailable(installedVersion: string | undefined, marketVersion: string | undefined): boolean {
+export function hasUpgradeAvailable(
+  installedVersion: string | undefined,
+  marketVersion: string | undefined
+): boolean {
   if (!installedVersion || !marketVersion) return false
   return compareVersions(installedVersion, marketVersion) === -1
 }

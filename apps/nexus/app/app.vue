@@ -17,7 +17,7 @@ const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
 
 type SupportedLocale = 'en' | 'zh'
 
-const normalizeLocale = (value?: string | null): SupportedLocale | null => {
+function normalizeLocale(value?: string | null): SupportedLocale | null {
   if (!value)
     return null
   const lower = value.toLowerCase()

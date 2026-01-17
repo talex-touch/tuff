@@ -15,8 +15,12 @@ function openAtCenter() {
 <template>
   <div style="display: grid; gap: 12px; width: 520px;">
     <div style="display: flex; gap: 8px; align-items: center;">
-      <TxButton type="primary" @click="openAtCenter">Open controlled menu</TxButton>
-      <TxButton @click="controlledOpen = false">Close</TxButton>
+      <TxButton type="primary" @click="openAtCenter">
+        Open controlled menu
+      </TxButton>
+      <TxButton @click="controlledOpen = false">
+        Close
+      </TxButton>
     </div>
 
     <TxContextMenu
@@ -26,9 +30,15 @@ function openAtCenter() {
       @open="() => {}"
     >
       <template #menu>
-        <TxContextMenuItem @select="() => {}">Copy</TxContextMenuItem>
-        <TxContextMenuItem @select="() => {}">Paste</TxContextMenuItem>
-        <TxContextMenuItem danger @select="() => {}">Delete</TxContextMenuItem>
+        <TxContextMenuItem @select="() => {}">
+          Copy
+        </TxContextMenuItem>
+        <TxContextMenuItem @select="() => {}">
+          Paste
+        </TxContextMenuItem>
+        <TxContextMenuItem danger @select="() => {}">
+          Delete
+        </TxContextMenuItem>
       </template>
     </TxContextMenu>
 
@@ -48,9 +58,15 @@ function openAtCenter() {
       </template>
 
       <template #menu>
-        <TxContextMenuItem @select="() => {}">Refresh</TxContextMenuItem>
-        <TxContextMenuItem @select="() => {}">Rename</TxContextMenuItem>
-        <TxContextMenuItem danger @select="() => {}">Delete</TxContextMenuItem>
+        <TxContextMenuItem @select="() => {}">
+          Refresh
+        </TxContextMenuItem>
+        <TxContextMenuItem @select="() => {}">
+          Rename
+        </TxContextMenuItem>
+        <TxContextMenuItem danger @select="() => {}">
+          Delete
+        </TxContextMenuItem>
       </template>
     </TxContextMenu>
   </div>

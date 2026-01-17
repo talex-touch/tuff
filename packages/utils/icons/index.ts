@@ -16,6 +16,7 @@
  */
 
 import type { ITuffIcon } from '../types/icon'
+
 export * from './svg'
 
 /**
@@ -24,7 +25,7 @@ export * from './svg'
 export function classIcon(iconClass: string): ITuffIcon {
   return {
     type: 'class',
-    value: iconClass
+    value: iconClass,
   }
 }
 
@@ -38,7 +39,7 @@ export function classIcon(iconClass: string): ITuffIcon {
  * - simple-icons: Brand/logo icons
  */
 export const TuffIcons = {
-  //============ Navigation ============
+  // ============ Navigation ============
   Home: 'i-ri-home-line',
   HomeFill: 'i-ri-home-fill',
   Back: 'i-ri-arrow-left-line',
@@ -62,7 +63,8 @@ export const TuffIcons = {
   Cut: 'i-ri-scissors-line',
   Save: 'i-ri-save-line',
   Download: 'i-ri-download-line',
-  Upload: 'i-ri-upload-line',Refresh: 'i-ri-refresh-line',
+  Upload: 'i-ri-upload-line',
+  Refresh: 'i-ri-refresh-line',
   Sync: 'i-ri-loop-left-line',
 
   // ============ Status ============
@@ -92,7 +94,7 @@ export const TuffIcons = {
   FilePdf: 'i-ri-file-pdf-line',
   FileZip: 'i-ri-file-zip-line',
 
-  //============ Folders ============
+  // ============ Folders ============
   Folder: 'i-ri-folder-line',
   FolderFill: 'i-ri-folder-fill',
   FolderOpen: 'i-ri-folder-open-line',
@@ -199,7 +201,7 @@ export const TuffIcons = {
   Fire: 'i-ri-fire-line',
   Sparkles: 'i-ri-sparkles-line',
   Loader: 'i-ri-loader-4-line',
-  Loading: 'i-ri-loader-line'
+  Loading: 'i-ri-loader-line',
 } as const
 
 /**
@@ -246,7 +248,7 @@ export const AppIcons = {
   GitLab: 'i-simple-icons-gitlab',
   Docker: 'i-simple-icons-docker',
   Figma: 'i-simple-icons-figma',
-  Notion: 'i-simple-icons-notion'
+  Notion: 'i-simple-icons-notion',
 } as const
 
 /**

@@ -1,11 +1,11 @@
 import type {
-  IntelligenceChatPayload,
-  IntelligenceEmbeddingPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
-  IntelligenceTranslatePayload,
   AiUsageInfo,
+  IntelligenceChatPayload,
+  IntelligenceEmbeddingPayload,
+  IntelligenceTranslatePayload
 } from '@talex-touch/utils'
 import { IntelligenceProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
@@ -22,11 +22,14 @@ export class OpenAIProvider extends IntelligenceProvider {
   private get headers(): HeadersInit {
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.config.apiKey}`,
+      Authorization: `Bearer ${this.config.apiKey}`
     }
   }
 
-  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(
+    payload: IntelligenceChatPayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -34,7 +37,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     const model = options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o-mini'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions',
+      endpoint: '/chat/completions'
     })
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -48,9 +51,9 @@ export class OpenAIProvider extends IntelligenceProvider {
         top_p: payload.topP,
         frequency_penalty: payload.frequencyPenalty,
         presence_penalty: payload.presencePenalty,
-        stop: payload.stop,
+        stop: payload.stop
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok) {
@@ -67,7 +70,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
-      totalTokens: data.usage?.total_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0
     }
 
     return {
@@ -76,20 +79,20 @@ export class OpenAIProvider extends IntelligenceProvider {
       model: data.model || '',
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  async* chatStream(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions,
+    options: AiInvokeOptions
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
     const model = options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o-mini'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions',
+      endpoint: '/chat/completions'
     })
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -100,9 +103,9 @@ export class OpenAIProvider extends IntelligenceProvider {
         messages: payload.messages,
         temperature: payload.temperature,
         max_tokens: payload.maxTokens,
-        stream: true,
+        stream: true
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok || !response.body) {
@@ -116,18 +119,15 @@ export class OpenAIProvider extends IntelligenceProvider {
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done)
-          break
+        if (done) break
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.trim() || line.trim() === 'data: [DONE]')
-            continue
-          if (!line.startsWith('data: '))
-            continue
+          if (!line.trim() || line.trim() === 'data: [DONE]') continue
+          if (!line.startsWith('data: ')) continue
 
           try {
             const data = JSON.parse(line.substring(6))
@@ -135,8 +135,7 @@ export class OpenAIProvider extends IntelligenceProvider {
             if (delta) {
               yield { delta, done: false }
             }
-          }
-          catch (error) {
+          } catch (error) {
             console.error('[OpenAIProvider] Stream parse error:', error)
           }
         }
@@ -144,15 +143,17 @@ export class OpenAIProvider extends IntelligenceProvider {
 
       yield {
         delta: '',
-        done: true,
+        done: true
       }
-    }
-    finally {
+    } finally {
       reader.releaseLock()
     }
   }
 
-  async embedding(payload: IntelligenceEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>> {
+  async embedding(
+    payload: IntelligenceEmbeddingPayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<number[]>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -160,7 +161,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     const model = payload.model || this.config.defaultModel || 'text-embedding-3-small'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/embeddings',
+      endpoint: '/embeddings'
     })
 
     const response = await fetch(`${this.baseUrl}/embeddings`, {
@@ -168,9 +169,9 @@ export class OpenAIProvider extends IntelligenceProvider {
       headers: this.headers,
       body: JSON.stringify({
         model,
-        input: payload.text,
+        input: payload.text
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok) {
@@ -187,7 +188,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: 0,
-      totalTokens: data.usage?.total_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0
     }
 
     return {
@@ -196,22 +197,25 @@ export class OpenAIProvider extends IntelligenceProvider {
       model: data.model || '',
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  async translate(payload: IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async translate(
+    payload: IntelligenceTranslatePayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
-          content: `You are a professional translator. Translate the following text to ${payload.targetLang}.`,
+          content: `You are a professional translator. Translate the following text to ${payload.targetLang}.`
         },
         {
           role: 'user',
-          content: payload.text,
-        },
-      ],
+          content: payload.text
+        }
+      ]
     }
 
     return this.chat(chatPayload, options)
@@ -219,19 +223,21 @@ export class OpenAIProvider extends IntelligenceProvider {
 
   async visionOcr(
     payload: import('@talex-touch/utils').IntelligenceVisionOcrPayload,
-    options: AiInvokeOptions,
+    options: AiInvokeOptions
   ): Promise<AiInvokeResult<import('@talex-touch/utils').IntelligenceVisionOcrResult>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
     const imageDataUrl = await this.getImageData(payload.source)
-    const prompt = payload.prompt || 'Extract all text from this image and return the result as JSON with fields: text (extracted text), keywords (array of key terms).'
+    const prompt =
+      payload.prompt ||
+      'Extract all text from this image and return the result as JSON with fields: text (extracted text), keywords (array of key terms).'
 
     const model = options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions (vision)',
+      endpoint: '/chat/completions (vision)'
     })
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -242,7 +248,7 @@ export class OpenAIProvider extends IntelligenceProvider {
         messages: [
           {
             role: 'system',
-            content: prompt,
+            content: prompt
           },
           {
             role: 'user',
@@ -250,15 +256,15 @@ export class OpenAIProvider extends IntelligenceProvider {
               {
                 type: 'image_url',
                 image_url: {
-                  url: imageDataUrl,
-                },
-              },
-            ],
-          },
+                  url: imageDataUrl
+                }
+              }
+            ]
+          }
         ],
-        max_tokens: 1000,
+        max_tokens: 1000
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok) {
@@ -275,7 +281,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
-      totalTokens: data.usage?.total_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0
     }
 
     const rawContent = data.choices[0]?.message?.content || ''
@@ -288,12 +294,12 @@ export class OpenAIProvider extends IntelligenceProvider {
           language: parsed.language,
           keywords: parsed.keywords ?? [],
           blocks: parsed.blocks,
-          raw: parsed,
+          raw: parsed
         }
       : {
           text: rawContent,
           keywords: this.generateKeywords(rawContent),
-          raw: rawContent,
+          raw: rawContent
         }
 
     return {
@@ -302,11 +308,13 @@ export class OpenAIProvider extends IntelligenceProvider {
       model: data.model || '',
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  private async getImageData(source: import('@talex-touch/utils').AiVisionImageSource): Promise<string> {
+  private async getImageData(
+    source: import('@talex-touch/utils').AiVisionImageSource
+  ): Promise<string> {
     if (source.type === 'data-url' && source.dataUrl) {
       return source.dataUrl
     }
@@ -319,7 +327,9 @@ export class OpenAIProvider extends IntelligenceProvider {
     if (source.type === 'file' && source.filePath) {
       // For file paths, we'd need to read the file and convert to base64
       // This is typically handled at a higher level before calling the provider
-      throw new Error('[OpenAIProvider] File path images must be converted to base64 before calling visionOcr')
+      throw new Error(
+        '[OpenAIProvider] File path images must be converted to base64 before calling visionOcr'
+      )
     }
     throw new Error('[OpenAIProvider] Invalid vision image source')
   }
@@ -327,8 +337,7 @@ export class OpenAIProvider extends IntelligenceProvider {
   protected override safeParseJson(text: string): any {
     try {
       return JSON.parse(text)
-    }
-    catch {
+    } catch {
       return null
     }
   }
@@ -336,7 +345,7 @@ export class OpenAIProvider extends IntelligenceProvider {
   private generateKeywords(text: string): string[] {
     return text
       .split(/\s+/)
-      .filter(word => word.length > 3)
+      .filter((word) => word.length > 3)
       .slice(0, 10)
   }
 }

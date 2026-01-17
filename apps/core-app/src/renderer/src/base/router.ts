@@ -29,17 +29,13 @@ function resolveRoutePattern(route: any): string {
   return pattern || route?.path || route?.fullPath || 'unknown'
 }
 
-function withRouteComponentPerf(
-  label: string,
-  loader: () => Promise<any>,
-): () => Promise<any> {
+function withRouteComponentPerf(label: string, loader: () => Promise<any>): () => Promise<any> {
   return async () => {
     const startedAt = performance.now()
     const stack = new Error().stack
     try {
       return await loader()
-    }
-    finally {
+    } finally {
       const durationMs = performance.now() - startedAt
       if (durationMs >= ROUTE_COMPONENT_LOAD_WARN_MS) {
         reportPerfToMain({
@@ -48,7 +44,7 @@ function withRouteComponentPerf(
           durationMs,
           at: Date.now(),
           stack,
-          meta: { category: 'route-component' },
+          meta: { category: 'route-component' }
         })
       }
     }
@@ -71,7 +67,10 @@ const routes: any = [
   {
     path: '/market/installed',
     name: 'Installed Plugins',
-    component: withRouteComponentPerf('/market/installed', () => import('../views/base/Market.vue')),
+    component: withRouteComponentPerf(
+      '/market/installed',
+      () => import('../views/base/Market.vue')
+    ),
     meta: {
       index: 2
     }
@@ -79,7 +78,10 @@ const routes: any = [
   {
     path: '/market/:id',
     name: 'Market Detail',
-    component: withRouteComponentPerf('/market/:id', () => import('../views/base/MarketDetail.vue')),
+    component: withRouteComponentPerf(
+      '/market/:id',
+      () => import('../views/base/MarketDetail.vue')
+    ),
     meta: {
       index: 2,
       parentRoute: '/market'
@@ -88,7 +90,10 @@ const routes: any = [
   {
     path: '/plugin/:name?',
     name: 'Plugin',
-    component: withRouteComponentPerf('/plugin/:name?', () => import('../views/base/PluginDetail.vue')),
+    component: withRouteComponentPerf(
+      '/plugin/:name?',
+      () => import('../views/base/PluginDetail.vue')
+    ),
     meta: {
       index: 3
     }
@@ -96,7 +101,10 @@ const routes: any = [
   {
     path: '/downloads',
     name: 'Downloads',
-    component: withRouteComponentPerf('/downloads', () => import('../components/download/DownloadCenterView.vue')),
+    component: withRouteComponentPerf(
+      '/downloads',
+      () => import('../components/download/DownloadCenterView.vue')
+    ),
     meta: {
       index: 7
     }
@@ -113,7 +121,10 @@ const routes: any = [
   {
     path: '/styles',
     name: 'Styles',
-    component: withRouteComponentPerf('/styles', () => import('../views/base/styles/ThemeStyle.vue')),
+    component: withRouteComponentPerf(
+      '/styles',
+      () => import('../views/base/styles/ThemeStyle.vue')
+    ),
     meta: {
       index: 5
     }
@@ -121,7 +132,10 @@ const routes: any = [
   {
     path: '/styles/theme',
     name: 'Theme',
-    component: withRouteComponentPerf('/styles/theme', () => import('../views/base/styles/sub/ThemePreference.vue')),
+    component: withRouteComponentPerf(
+      '/styles/theme',
+      () => import('../views/base/styles/sub/ThemePreference.vue')
+    ),
     meta: {
       index: 5
     }
@@ -129,7 +143,10 @@ const routes: any = [
   {
     path: '/application',
     name: 'Application',
-    component: withRouteComponentPerf('/application', () => import('../views/base/application/ApplicationIndex.vue')),
+    component: withRouteComponentPerf(
+      '/application',
+      () => import('../views/base/application/ApplicationIndex.vue')
+    ),
     meta: {
       index: 6
     }
@@ -137,12 +154,18 @@ const routes: any = [
   {
     path: '/setting',
     name: 'AppSettings',
-    component: withRouteComponentPerf('/setting', () => import('../views/base/settings/AppSettings.vue')),
+    component: withRouteComponentPerf(
+      '/setting',
+      () => import('../views/base/settings/AppSettings.vue')
+    ),
     children: [
       {
         path: '/setting/storage',
         name: 'Storagable',
-        component: withRouteComponentPerf('/setting/storage', () => import('../views/storage/Storagable.vue')),
+        component: withRouteComponentPerf(
+          '/setting/storage',
+          () => import('../views/storage/Storagable.vue')
+        ),
         meta: {
           index: 1
         }
@@ -155,7 +178,10 @@ const routes: any = [
   {
     path: '/intelligence',
     name: 'Intelligence',
-    component: withRouteComponentPerf('/intelligence', () => import('../views/base/intelligence/IntelligencePage.vue')),
+    component: withRouteComponentPerf(
+      '/intelligence',
+      () => import('../views/base/intelligence/IntelligencePage.vue')
+    ),
     meta: {
       index: 8
     }
@@ -163,7 +189,10 @@ const routes: any = [
   {
     path: '/intelligence/channels',
     name: 'IntelligenceChannels',
-    component: withRouteComponentPerf('/intelligence/channels', () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')),
+    component: withRouteComponentPerf(
+      '/intelligence/channels',
+      () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')
+    ),
     meta: {
       index: 8
     }
@@ -171,7 +200,10 @@ const routes: any = [
   {
     path: '/intelligence/capabilities',
     name: 'IntelligenceCapabilities',
-    component: withRouteComponentPerf('/intelligence/capabilities', () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')),
+    component: withRouteComponentPerf(
+      '/intelligence/capabilities',
+      () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
+    ),
     meta: {
       index: 8
     }
@@ -179,7 +211,10 @@ const routes: any = [
   {
     path: '/intelligence/prompts',
     name: 'IntelligencePrompts',
-    component: withRouteComponentPerf('/intelligence/prompts', () => import('../views/base/intelligence/IntelligencePromptsPage.vue')),
+    component: withRouteComponentPerf(
+      '/intelligence/prompts',
+      () => import('../views/base/intelligence/IntelligencePromptsPage.vue')
+    ),
     meta: {
       index: 8
     }
@@ -187,7 +222,10 @@ const routes: any = [
   {
     path: '/intelligence/audit',
     name: 'IntelligenceAudit',
-    component: withRouteComponentPerf('/intelligence/audit', () => import('../views/base/intelligence/IntelligenceAuditPage.vue')),
+    component: withRouteComponentPerf(
+      '/intelligence/audit',
+      () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
+    ),
     meta: {
       index: 8
     }
@@ -195,7 +233,10 @@ const routes: any = [
   {
     path: '/intelligence/agents',
     name: 'IntelligenceAgents',
-    component: withRouteComponentPerf('/intelligence/agents', () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')),
+    component: withRouteComponentPerf(
+      '/intelligence/agents',
+      () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')
+    ),
     meta: {
       index: 8
     }
@@ -203,7 +244,10 @@ const routes: any = [
   {
     path: '/meta-overlay',
     name: 'MetaOverlay',
-    component: withRouteComponentPerf('/meta-overlay', () => import('../views/meta/MetaOverlay.vue')),
+    component: withRouteComponentPerf(
+      '/meta-overlay',
+      () => import('../views/meta/MetaOverlay.vue')
+    ),
     meta: {
       index: 0
     }
@@ -223,7 +267,10 @@ router.beforeEach((to, _from, next) => {
   }
 })
 
-const routeNavigationStarts = new Map<string, { startedAt: number, fromPattern: string, toPattern: string }>()
+const routeNavigationStarts = new Map<
+  string,
+  { startedAt: number; fromPattern: string; toPattern: string }
+>()
 
 router.beforeEach((to, from, next) => {
   const toPattern = resolveRoutePattern(to)
@@ -231,7 +278,7 @@ router.beforeEach((to, from, next) => {
   routeNavigationStarts.set(to.fullPath, {
     startedAt: performance.now(),
     fromPattern,
-    toPattern,
+    toPattern
   })
   next()
 })
@@ -254,14 +301,14 @@ router.afterEach((to, from) => {
         from: record.fromPattern,
         toFullPath: to.fullPath,
         fromFullPath: from.fullPath,
-        toName: typeof to.name === 'string' ? to.name : null,
-      },
+        toName: typeof to.name === 'string' ? to.name : null
+      }
     })
   }
 
   void (async () => {
     await nextTick()
-    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     const renderDurationMs = performance.now() - record.startedAt
     if (renderDurationMs < ROUTE_RENDER_WARN_MS) {
       return
@@ -275,8 +322,8 @@ router.afterEach((to, from) => {
         from: record.fromPattern,
         toFullPath: to.fullPath,
         fromFullPath: from.fullPath,
-        toName: typeof to.name === 'string' ? to.name : null,
-      },
+        toName: typeof to.name === 'string' ? to.name : null
+      }
     })
   })()
 })

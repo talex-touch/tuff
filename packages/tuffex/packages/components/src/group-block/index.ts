@@ -1,18 +1,18 @@
-import TxGroupBlock from './src/TxGroupBlock.vue'
+import type {
+  BlockLineEmits,
+  BlockLineProps,
+  BlockSlotEmits,
+  BlockSlotProps,
+  BlockSwitchEmits,
+  BlockSwitchProps,
+  GroupBlockEmits,
+  GroupBlockProps,
+} from './src/types'
+import { withInstall } from '../../../utils/withInstall'
 import TxBlockLine from './src/TxBlockLine.vue'
 import TxBlockSlot from './src/TxBlockSlot.vue'
 import TxBlockSwitch from './src/TxBlockSwitch.vue'
-import { withInstall } from '../../../utils/withInstall'
-import type {
-  GroupBlockProps,
-  GroupBlockEmits,
-  BlockLineProps,
-  BlockLineEmits,
-  BlockSlotProps,
-  BlockSlotEmits,
-  BlockSwitchProps,
-  BlockSwitchEmits,
-} from './src/types'
+import TxGroupBlock from './src/TxGroupBlock.vue'
 
 /**
  * TxGroupBlock component with Vue plugin installation support.
@@ -30,25 +30,25 @@ const BlockSlot = withInstall(TxBlockSlot)
 const BlockSwitch = withInstall(TxBlockSwitch)
 
 export {
-  GroupBlock,
   BlockLine,
   BlockSlot,
   BlockSwitch,
-  TxGroupBlock,
+  GroupBlock,
   TxBlockLine,
   TxBlockSlot,
   TxBlockSwitch,
+  TxGroupBlock,
 }
 
 export type {
-  GroupBlockProps,
-  GroupBlockEmits,
-  BlockLineProps,
   BlockLineEmits,
-  BlockSlotProps,
+  BlockLineProps,
   BlockSlotEmits,
-  BlockSwitchProps,
+  BlockSlotProps,
   BlockSwitchEmits,
+  BlockSwitchProps,
+  GroupBlockEmits,
+  GroupBlockProps,
 }
 
 export type TxGroupBlockInstance = InstanceType<typeof TxGroupBlock>

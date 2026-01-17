@@ -7,13 +7,13 @@ import type {
   UpdateUserAction,
 } from '../../../types/update'
 
-export type UpdateOpResponse<T = void> = {
+export interface UpdateOpResponse<T = void> {
   success: boolean
   data?: T
   error?: string
 }
 
-export type UpdateCheckRequest = {
+export interface UpdateCheckRequest {
   force?: boolean
 }
 
@@ -26,11 +26,11 @@ export type UpdateGetStatusResponse = UpdateOpResponse<{
   lastCheck: number | null
 }>
 
-export type UpdateCachedReleaseRequest = {
+export interface UpdateCachedReleaseRequest {
   channel?: AppPreviewChannel
 }
 
-export type UpdateRecordActionRequest = {
+export interface UpdateRecordActionRequest {
   tag: string
   action: UpdateUserAction
 }
@@ -41,23 +41,23 @@ export type UpdateDownloadResponse = UpdateOpResponse<{
   taskId?: string
 }>
 
-export type UpdateInstallRequest = {
+export interface UpdateInstallRequest {
   taskId: string
 }
 
-export type UpdateIgnoreVersionRequest = {
+export interface UpdateIgnoreVersionRequest {
   version: string
 }
 
-export type UpdateAutoDownloadRequest = {
+export interface UpdateAutoDownloadRequest {
   enabled: boolean
 }
 
-export type UpdateAutoCheckRequest = {
+export interface UpdateAutoCheckRequest {
   enabled: boolean
 }
 
-export type UpdateAvailablePayload = {
+export interface UpdateAvailablePayload {
   hasUpdate: boolean
   release: GitHubRelease
   source: string
@@ -70,6 +70,6 @@ export type UpdateCheckResponse = UpdateOpResponse<UpdateCheckResult>
 
 export type UpdateGetSettingsResponse = UpdateOpResponse<UpdateSettings>
 
-export type UpdateUpdateSettingsRequest = {
+export interface UpdateUpdateSettingsRequest {
   settings: Partial<UpdateSettings>
 }

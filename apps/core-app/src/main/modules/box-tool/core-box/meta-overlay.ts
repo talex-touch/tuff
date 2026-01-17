@@ -7,19 +7,22 @@
  * @module CoreBox/MetaOverlay
  */
 
-import { BrowserWindow, WebContentsView } from 'electron'
 import type { TuffItem } from '@talex-touch/utils/core-box'
-import type { MetaAction, MetaShowRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
+import type {
+  MetaAction,
+  MetaShowRequest
+} from '@talex-touch/utils/transport/events/types/meta-overlay'
+import type { BrowserWindow } from 'electron'
 import type { TouchApp } from '../../../core/touch-app'
-import { app } from 'electron'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
-import { createLogger } from '../../../utils/logger'
-import { genTouchApp } from '../../../core'
-import { getCoreBoxWindow } from './window'
+import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
+import { genTouchApp } from '../../../core'
+import { createLogger } from '../../../utils/logger'
+import { getCoreBoxWindow } from './window'
 
 const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
 
@@ -85,15 +88,18 @@ export class MetaOverlayManager {
       metaOverlayLog.debug('MetaOverlay finished loading')
     })
 
-    this.metaView.webContents.addListener('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
-      metaOverlayLog.error('MetaOverlay failed to load', {
-        meta: {
-          errorCode,
-          errorDescription,
-          validatedURL
-        }
-      })
-    })
+    this.metaView.webContents.addListener(
+      'did-fail-load',
+      (_event, errorCode, errorDescription, validatedURL) => {
+        metaOverlayLog.error('MetaOverlay failed to load', {
+          meta: {
+            errorCode,
+            errorDescription,
+            validatedURL
+          }
+        })
+      }
+    )
 
     // Handle ESC key to close MetaOverlay
     this.metaView.webContents.on('before-input-event', (event, input) => {
@@ -126,8 +132,8 @@ export class MetaOverlayManager {
 
     // Load URL
     const loadUrl = app.isPackaged
-      ? path.join(__dirname, '..', 'renderer', 'index.html') + '#/meta-overlay'
-      : (process.env.ELECTRON_RENDERER_URL as string) + '#/meta-overlay'
+      ? `${path.join(__dirname, '..', 'renderer', 'index.html')}#/meta-overlay`
+      : `${process.env.ELECTRON_RENDERER_URL as string}#/meta-overlay`
 
     if (app.isPackaged) {
       this.metaView.webContents.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), {
@@ -198,16 +204,13 @@ export class MetaOverlayManager {
         }
 
         const channel = genTouchApp().channel as any
-        const tx = getTuffTransportMain(
-          channel,
-          channel?.keyManager ?? channel,
-        )
+        const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
 
         tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.show, {
           item: request.item,
           builtinActions: request.builtinActions,
           itemActions: request.itemActions,
-          pluginActions: request.pluginActions,
+          pluginActions: request.pluginActions
         }).catch(() => {})
 
         metaOverlayLog.debug('Sent show message to MetaOverlay renderer')
@@ -246,12 +249,11 @@ export class MetaOverlayManager {
 
     if (!this.metaView.webContents.isDestroyed()) {
       const channel = genTouchApp().channel as any
-      const tx = getTuffTransportMain(
-        channel,
-        channel?.keyManager ?? channel,
-      )
+      const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
 
-      tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined as any).catch(() => {})
+      tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined as any).catch(
+        () => {}
+      )
     }
 
     // Return focus to parent window
@@ -304,7 +306,7 @@ export class MetaOverlayManager {
   public unregisterPluginAction(pluginId: string, actionId: string): void {
     const actions = this.pluginActions.get(pluginId)
     if (actions) {
-      const index = actions.findIndex(a => a.id === actionId)
+      const index = actions.findIndex((a) => a.id === actionId)
       if (index >= 0) {
         actions.splice(index, 1)
         if (actions.length === 0) {
@@ -342,7 +344,7 @@ export class MetaOverlayManager {
 
     // Check plugin actions first
     for (const [pid, actions] of this.pluginActions.entries()) {
-      const found = actions.find(a => a.id === actionId)
+      const found = actions.find((a) => a.id === actionId)
       if (found) {
         action = found
         pluginId = pid
@@ -362,13 +364,15 @@ export class MetaOverlayManager {
     // Handle based on action type
     if (handler === 'plugin' && pluginId) {
       // Plugin action - notify the plugin
-      void touchApp.channel.sendToPlugin(pluginId, 'meta-overlay:action-executed', {
-        actionId,
-        item,
-        pluginId
-      }).catch((error) => {
-        metaOverlayLog.error(`Failed to notify plugin ${pluginId} of action execution`, { error })
-      })
+      void touchApp.channel
+        .sendToPlugin(pluginId, 'meta-overlay:action-executed', {
+          actionId,
+          item,
+          pluginId
+        })
+        .catch((error) => {
+          metaOverlayLog.error(`Failed to notify plugin ${pluginId} of action execution`, { error })
+        })
     } else if (handler === 'builtin') {
       // Built-in action - handle in main process
       await this.handleBuiltinAction(actionId, item, touchApp)
@@ -376,10 +380,15 @@ export class MetaOverlayManager {
       // Item action - broadcast to renderer to handle
       const coreBoxWindow = getCoreBoxWindow()
       if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-        void touchApp.channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, 'meta-overlay:item-action', {
-          actionId,
-          item
-        })
+        void touchApp.channel.sendTo(
+          coreBoxWindow.window,
+          ChannelType.MAIN,
+          'meta-overlay:item-action',
+          {
+            actionId,
+            item
+          }
+        )
       }
     }
 
@@ -394,7 +403,11 @@ export class MetaOverlayManager {
    * @param item - The item context
    * @param touchApp - The TouchApp instance
    */
-  private async handleBuiltinAction(actionId: string, item: TuffItem, touchApp: TouchApp): Promise<void> {
+  private async handleBuiltinAction(
+    actionId: string,
+    item: TuffItem,
+    touchApp: TouchApp
+  ): Promise<void> {
     const coreBoxWindow = getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
       return
@@ -402,35 +415,55 @@ export class MetaOverlayManager {
 
     switch (actionId) {
       case 'toggle-pin': {
-        void touchApp.channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:toggle-pin', {
-          sourceId: item.source.id,
-          itemId: item.id,
-          sourceType: item.source.type
-        })
+        void touchApp.channel.sendTo(
+          coreBoxWindow.window,
+          ChannelType.MAIN,
+          'core-box:toggle-pin',
+          {
+            sourceId: item.source.id,
+            itemId: item.id,
+            sourceType: item.source.type
+          }
+        )
         break
       }
       case 'copy-title': {
         const title = item.render?.basic?.title
         if (title) {
-          void touchApp.channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, 'clipboard:write-text', {
-            text: title
-          })
+          void touchApp.channel.sendTo(
+            coreBoxWindow.window,
+            ChannelType.MAIN,
+            'clipboard:write-text',
+            {
+              text: title
+            }
+          )
         }
         break
       }
       case 'reveal-in-finder': {
         const filePath = (item.meta as any)?.app?.path || (item.meta as any)?.file?.path
         if (filePath) {
-          void touchApp.channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, 'shell:show-item-in-folder', {
-            path: filePath
-          })
+          void touchApp.channel.sendTo(
+            coreBoxWindow.window,
+            ChannelType.MAIN,
+            'shell:show-item-in-folder',
+            {
+              path: filePath
+            }
+          )
         }
         break
       }
       case 'flow-transfer': {
-        void touchApp.channel.sendTo(coreBoxWindow.window, ChannelType.MAIN, 'meta-overlay:flow-transfer', {
-          item
-        })
+        void touchApp.channel.sendTo(
+          coreBoxWindow.window,
+          ChannelType.MAIN,
+          'meta-overlay:flow-transfer',
+          {
+            item
+          }
+        )
         break
       }
       default:

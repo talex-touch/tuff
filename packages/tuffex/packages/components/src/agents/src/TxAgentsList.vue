@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { AgentItemProps, AgentsListGroup, AgentsListProps } from './types'
 import { computed } from 'vue'
-import TxAgentItem from './TxAgentItem.vue'
 import TxListItemSkeleton from '../../skeleton/src/TxListItemSkeleton.vue'
-import type { AgentsListGroup, AgentsListProps, AgentItemProps } from './types'
+import TxAgentItem from './TxAgentItem.vue'
 
 defineOptions({
   name: 'TxAgentsList',
@@ -81,7 +81,9 @@ const groups = computed<AgentsListGroup<AgentItemProps>[]>(() => {
 
     <div v-else class="tx-agents-list__empty">
       <i class="i-carbon-bot" aria-hidden="true" />
-      <div class="tx-agents-list__empty-text">No agents</div>
+      <div class="tx-agents-list__empty-text">
+        No agents
+      </div>
     </div>
   </div>
 </template>

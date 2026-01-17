@@ -1,2 +1,2 @@
 export { default as TxAlert } from './TxAlert.vue'
-export type { AlertType, AlertProps, AlertEmits } from './types'
+export type { AlertEmits, AlertProps, AlertType } from './types'

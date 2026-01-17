@@ -12,7 +12,9 @@ const actionWide = ref(false)
       <TxTabs v-model="activeTop" placement="top" auto-width :animation="{ indicator: { durationMs: 220, easing: 'ease' } }">
         <TxTabHeader v-slot="{ props }">
           <div style="display: flex; align-items: center; width: 100%; padding: 10px 12px;">
-            <div style="font-weight: 600;">{{ props.node?.props?.name }}</div>
+            <div style="font-weight: 600;">
+              {{ props.node?.props?.name }}
+            </div>
           </div>
         </TxTabHeader>
 
@@ -23,13 +25,19 @@ const actionWide = ref(false)
         </template>
 
         <TxTabItem name="A" activation>
-          <div style="padding: 8px;">Top - A</div>
+          <div style="padding: 8px;">
+            Top - A
+          </div>
         </TxTabItem>
         <TxTabItem name="B">
-          <div style="padding: 8px;">Top - B</div>
+          <div style="padding: 8px;">
+            Top - B
+          </div>
         </TxTabItem>
         <TxTabItem name="C">
-          <div style="padding: 8px;">Top - C</div>
+          <div style="padding: 8px;">
+            Top - C
+          </div>
         </TxTabItem>
       </TxTabs>
     </div>
@@ -37,10 +45,14 @@ const actionWide = ref(false)
     <div style="height: 240px;">
       <TxTabs v-model="activeRight" placement="right">
         <TxTabItem name="General" icon-class="i-carbon-settings" activation>
-          <div style="padding: 8px;">Right - General</div>
+          <div style="padding: 8px;">
+            Right - General
+          </div>
         </TxTabItem>
         <TxTabItem name="Account" icon-class="i-carbon-user">
-          <div style="padding: 8px;">Right - Account</div>
+          <div style="padding: 8px;">
+            Right - Account
+          </div>
         </TxTabItem>
       </TxTabs>
     </div>

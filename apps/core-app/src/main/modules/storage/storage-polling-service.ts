@@ -19,7 +19,7 @@ export class StoragePollingService {
   constructor(
     cache: StorageCache,
     saveFn: (name: string) => Promise<void>,
-    pollingInterval: number = 5000,
+    pollingInterval: number = 5000
   ) {
     this.cache = cache
     this.saveFn = saveFn
@@ -36,14 +36,13 @@ export class StoragePollingService {
 
     this.isRunning = true
     console.info(
-      chalk.blue(`[StoragePolling] Started with ${this.pollingInterval / 1000}s interval`),
+      chalk.blue(`[StoragePolling] Started with ${this.pollingInterval / 1000}s interval`)
     )
 
-    StoragePollingService.pollingService.register(
-      this.pollingTaskId,
-      () => this.performSave(),
-      { interval: this.pollingInterval, unit: 'milliseconds' },
-    )
+    StoragePollingService.pollingService.register(this.pollingTaskId, () => this.performSave(), {
+      interval: this.pollingInterval,
+      unit: 'milliseconds'
+    })
     StoragePollingService.pollingService.start()
   }
 
@@ -75,22 +74,19 @@ export class StoragePollingService {
         await this.saveFn(name)
         this.cache.clearDirty(name)
         return name
-      }),
+      })
     )
 
-    const failCount = results.filter(r => r.status === 'rejected').length
+    const failCount = results.filter((r) => r.status === 'rejected').length
 
     if (failCount > 0) {
       console.error(
-        chalk.red(`[StoragePolling] ${failCount}/${dirtyConfigs.length} config(s) failed to save`),
+        chalk.red(`[StoragePolling] ${failCount}/${dirtyConfigs.length} config(s) failed to save`)
       )
 
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
-          console.error(
-            chalk.red(`  - ${dirtyConfigs[index]}:`),
-            result.reason,
-          )
+          console.error(chalk.red(`  - ${dirtyConfigs[index]}:`), result.reason)
         }
       })
     }
@@ -100,8 +96,7 @@ export class StoragePollingService {
     try {
       await this.saveFn(name)
       this.cache.clearDirty(name)
-    }
-    catch (error) {
+    } catch (error) {
       throw error
     }
   }
@@ -116,16 +111,14 @@ export class StoragePollingService {
       return
     }
 
-    const results = await Promise.allSettled(
-      dirtyConfigs.map(name => this.saveConfig(name)),
-    )
+    const results = await Promise.allSettled(dirtyConfigs.map((name) => this.saveConfig(name)))
 
-    const successCount = results.filter(r => r.status === 'fulfilled').length
-    const failCount = results.filter(r => r.status === 'rejected').length
+    const successCount = results.filter((r) => r.status === 'fulfilled').length
+    const failCount = results.filter((r) => r.status === 'rejected').length
 
     if (successCount > 0 || failCount > 0) {
       console.info(
-        chalk.green(`[StoragePolling] Saved ${successCount}/${dirtyConfigs.length} config(s)`),
+        chalk.green(`[StoragePolling] Saved ${successCount}/${dirtyConfigs.length} config(s)`)
       )
     }
 
@@ -142,11 +135,10 @@ export class StoragePollingService {
 
     if (this.isRunning) {
       StoragePollingService.pollingService.unregister(this.pollingTaskId)
-      StoragePollingService.pollingService.register(
-        this.pollingTaskId,
-        () => this.performSave(),
-        { interval: this.pollingInterval, unit: 'milliseconds' },
-      )
+      StoragePollingService.pollingService.register(this.pollingTaskId, () => this.performSave(), {
+        interval: this.pollingInterval,
+        unit: 'milliseconds'
+      })
       StoragePollingService.pollingService.start()
     }
   }
@@ -162,7 +154,7 @@ export class StoragePollingService {
     return {
       isRunning: this.isRunning,
       pollingInterval: this.pollingInterval,
-      dirtyCount: this.cache.getDirtyConfigs().length,
+      dirtyCount: this.cache.getDirtyConfigs().length
     }
   }
 
@@ -189,7 +181,7 @@ export class StoragePollingService {
           this.pendingWidgetCalls.delete(widgetId)
         }
       },
-      { interval: 60_000, unit: 'milliseconds', initialDelayMs: 100 },
+      { interval: 60_000, unit: 'milliseconds', initialDelayMs: 100 }
     )
     StoragePollingService.pollingService.start()
 

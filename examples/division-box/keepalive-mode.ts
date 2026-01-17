@@ -1,6 +1,6 @@
 /**
  * DivisionBox KeepAlive 模式示例
- * 
+ *
  * 本示例展示如何:
  * 1. 启用 KeepAlive 缓存模式
  * 2. 快速恢复会话
@@ -8,13 +8,14 @@
  * 4. 管理缓存生命周期
  */
 
-import { Plugin, DivisionBoxState } from '@talex-touch/utils'
+import type { Plugin } from '@talex-touch/utils'
+import { DivisionBoxState } from '@talex-touch/utils'
 
 interface UserSession {
   sessionId: string
   lastAccessTime: number
   userData: {
-    scrollPosition: { x: number; y: number }
+    scrollPosition: { x: number, y: number }
     draftContent: string
     selectedTab: string
   }
@@ -52,7 +53,7 @@ export default class KeepAliveModeExample implements Plugin {
         title: '文档编辑器',
         icon: 'ri:file-edit-line',
         size: 'expanded',
-        keepAlive: true  // 启用缓存模式
+        keepAlive: true, // 启用缓存模式
       })
 
       console.log('DivisionBox opened with keepAlive:', sessionId)
@@ -64,12 +65,13 @@ export default class KeepAliveModeExample implements Plugin {
         userData: {
           scrollPosition: { x: 0, y: 0 },
           draftContent: '',
-          selectedTab: 'editor'
-        }
+          selectedTab: 'editor',
+        },
       })
 
       return sessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to open DivisionBox:', error)
       throw error
     }
@@ -92,32 +94,33 @@ export default class KeepAliveModeExample implements Plugin {
       await this.plugin.divisionBox.updateState(
         sessionId,
         'scrollPosition',
-        session.userData.scrollPosition
+        session.userData.scrollPosition,
       )
 
       // 保存草稿内容
       await this.plugin.divisionBox.updateState(
         sessionId,
         'draftContent',
-        session.userData.draftContent
+        session.userData.draftContent,
       )
 
       // 保存选中的标签页
       await this.plugin.divisionBox.updateState(
         sessionId,
         'selectedTab',
-        session.userData.selectedTab
+        session.userData.selectedTab,
       )
 
       // 保存最后访问时间
       await this.plugin.divisionBox.updateState(
         sessionId,
         'lastAccessTime',
-        Date.now()
+        Date.now(),
       )
 
       console.log('User state saved successfully')
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to save user state:', error)
     }
   }
@@ -132,25 +135,25 @@ export default class KeepAliveModeExample implements Plugin {
       // 恢复滚动位置
       const scrollPosition = await this.plugin.divisionBox.getState(
         sessionId,
-        'scrollPosition'
+        'scrollPosition',
       )
 
       // 恢复草稿内容
       const draftContent = await this.plugin.divisionBox.getState(
         sessionId,
-        'draftContent'
+        'draftContent',
       )
 
       // 恢复选中的标签页
       const selectedTab = await this.plugin.divisionBox.getState(
         sessionId,
-        'selectedTab'
+        'selectedTab',
       )
 
       // 恢复最后访问时间
       const lastAccessTime = await this.plugin.divisionBox.getState(
         sessionId,
-        'lastAccessTime'
+        'lastAccessTime',
       )
 
       // 更新本地会话数据
@@ -159,18 +162,19 @@ export default class KeepAliveModeExample implements Plugin {
         session.userData = {
           scrollPosition: scrollPosition || { x: 0, y: 0 },
           draftContent: draftContent || '',
-          selectedTab: selectedTab || 'editor'
+          selectedTab: selectedTab || 'editor',
         }
         session.lastAccessTime = lastAccessTime || Date.now()
       }
 
       console.log('User state restored:', {
         scrollPosition,
-        draftContent: draftContent?.substring(0, 50) + '...',
+        draftContent: `${draftContent?.substring(0, 50)}...`,
         selectedTab,
-        lastAccessTime: new Date(lastAccessTime).toISOString()
+        lastAccessTime: new Date(lastAccessTime).toISOString(),
       })
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to restore user state:', error)
     }
   }
@@ -202,17 +206,18 @@ export default class KeepAliveModeExample implements Plugin {
    */
   async simulateUserEditing(sessionId: string) {
     const session = this.sessions.get(sessionId)
-    if (!session) return
+    if (!session)
+      return
 
     // 模拟滚动
     session.userData.scrollPosition = {
       x: 0,
-      y: Math.random() * 1000
+      y: Math.random() * 1000,
     }
 
     // 模拟编辑内容
-    session.userData.draftContent = `Draft content at ${new Date().toISOString()}\n` +
-      'Lorem ipsum dolor sit amet...'
+    session.userData.draftContent = `Draft content at ${new Date().toISOString()}\n`
+      + 'Lorem ipsum dolor sit amet...'
 
     // 模拟切换标签页
     session.userData.selectedTab = ['editor', 'preview', 'settings'][
@@ -254,7 +259,7 @@ export default class KeepAliveModeExample implements Plugin {
     const { sessionId: restoredSessionId } = await this.plugin.divisionBox.open({
       url: 'https://example.com/editor',
       title: '文档编辑器',
-      keepAlive: true
+      keepAlive: true,
     })
     const restoreTime = performance.now() - restoreStart
     console.log(`Restore time: ${restoreTime.toFixed(2)}ms`)
@@ -263,7 +268,7 @@ export default class KeepAliveModeExample implements Plugin {
       openTime: `${openTime.toFixed(2)}ms`,
       closeTime: `${closeTime.toFixed(2)}ms`,
       restoreTime: `${restoreTime.toFixed(2)}ms`,
-      speedup: `${(openTime / restoreTime).toFixed(2)}x faster`
+      speedup: `${(openTime / restoreTime).toFixed(2)}x faster`,
     })
 
     // 清理
@@ -278,7 +283,8 @@ export default class KeepAliveModeExample implements Plugin {
 
     if (featureId === 'test-keepalive') {
       await this.testKeepAlivePerformance()
-    } else {
+    }
+    else {
       const sessionId = await this.openWithKeepAlive()
       await this.simulateUserEditing(sessionId)
     }

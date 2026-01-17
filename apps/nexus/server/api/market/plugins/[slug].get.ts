@@ -1,5 +1,5 @@
-import { createError } from 'h3'
 import type { DashboardPluginVersion } from '../../../utils/pluginsStore'
+import { createError } from 'h3'
 import { getPluginBySlug } from '../../../utils/pluginsStore'
 
 function buildMarketDownloadUrl(slug: string, version: string): string {

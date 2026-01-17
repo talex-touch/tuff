@@ -1,11 +1,11 @@
 <script setup lang="ts" name="SettingEverything">
+import { tryUseChannel } from '@talex-touch/utils/renderer'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import { tryUseChannel } from '@talex-touch/utils/renderer'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const { t } = useI18n()
 const channel = tryUseChannel()
@@ -25,9 +25,9 @@ const isTesting = ref(false)
 
 let statusCheckInterval: NodeJS.Timeout | null = null
 
-const checkStatus = async () => {
+async function checkStatus() {
   if (isChecking.value || !channel) return
-  
+
   isChecking.value = true
   try {
     const status = await channel.send('everything:status')
@@ -39,17 +39,17 @@ const checkStatus = async () => {
   }
 }
 
-const toggleEverything = async () => {
+async function toggleEverything() {
   if (!everythingStatus.value || !channel) return
-  
+
   const newEnabled = !everythingStatus.value.enabled
-  
+
   try {
     await channel.send('everything:toggle', { enabled: newEnabled })
     everythingStatus.value.enabled = newEnabled
-    
+
     ElMessage.success(
-      newEnabled 
+      newEnabled
         ? t('settings.settingEverything.enabledSuccess')
         : t('settings.settingEverything.disabledSuccess')
     )
@@ -63,13 +63,13 @@ const toggleEverything = async () => {
   }
 }
 
-const testSearch = async () => {
+async function testSearch() {
   if (isTesting.value || !channel) return
-  
+
   isTesting.value = true
   try {
     const result = await channel.send('everything:test')
-    
+
     if (result.success) {
       ElMessage.success(
         t('settings.settingEverything.testSuccess', {
@@ -96,11 +96,11 @@ const testSearch = async () => {
   }
 }
 
-const openEverythingDownload = () => {
+function openEverythingDownload() {
   window.open('https://www.voidtools.com/', '_blank')
 }
 
-const openCLIDownload = () => {
+function openCLIDownload() {
   window.open('https://www.voidtools.com/support/everything/command_line_interface/', '_blank')
 }
 
@@ -128,16 +128,16 @@ const showToggle = computed(() => {
 
 const lastCheckedText = computed(() => {
   if (!everythingStatus.value?.lastChecked) return t('settings.settingEverything.neverChecked')
-  
+
   const now = Date.now()
   const diff = now - everythingStatus.value.lastChecked
   const seconds = Math.floor(diff / 1000)
   const minutes = Math.floor(seconds / 60)
-  
+
   if (minutes < 1) return t('settings.settingEverything.justNow')
   if (minutes === 1) return t('settings.settingEverything.oneMinuteAgo')
   if (minutes < 60) return t('settings.settingEverything.minutesAgo', { minutes })
-  
+
   const hours = Math.floor(minutes / 60)
   if (hours === 1) return t('settings.settingEverything.oneHourAgo')
   return t('settings.settingEverything.hoursAgo', { hours })
@@ -145,7 +145,7 @@ const lastCheckedText = computed(() => {
 
 onMounted(async () => {
   await checkStatus()
-  
+
   statusCheckInterval = setInterval(() => {
     checkStatus()
   }, 30000)
@@ -174,7 +174,7 @@ onUnmounted(() => {
       default-icon="i-carbon-ai-status"
       active-icon="i-carbon-ai-status-complete"
     >
-      <div :class="['status-badge', statusColor]">
+      <div class="status-badge" :class="[statusColor]">
         {{ statusText }}
       </div>
     </TuffBlockSlot>
@@ -198,13 +198,11 @@ onUnmounted(() => {
       default-icon="i-carbon-power"
       active-icon="i-carbon-power"
     >
-      <FlatButton 
-        :primary="!everythingStatus?.enabled"
-        @click="toggleEverything"
-      >
-        {{ everythingStatus?.enabled 
-          ? t('settings.settingEverything.disable') 
-          : t('settings.settingEverything.enable') 
+      <FlatButton :primary="!everythingStatus?.enabled" @click="toggleEverything">
+        {{
+          everythingStatus?.enabled
+            ? t('settings.settingEverything.disable')
+            : t('settings.settingEverything.enable')
         }}
       </FlatButton>
     </TuffBlockSlot>
@@ -216,10 +214,11 @@ onUnmounted(() => {
       default-icon="i-carbon-test-tool"
       active-icon="i-carbon-test-tool"
     >
-      <FlatButton @click="testSearch" :disabled="isTesting">
-        {{ isTesting 
-          ? t('settings.settingEverything.testing') 
-          : t('settings.settingEverything.testNow') 
+      <FlatButton :disabled="isTesting" @click="testSearch">
+        {{
+          isTesting
+            ? t('settings.settingEverything.testing')
+            : t('settings.settingEverything.testNow')
         }}
       </FlatButton>
     </TuffBlockSlot>
@@ -260,10 +259,11 @@ onUnmounted(() => {
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
-      <FlatButton @click="checkStatus" :disabled="isChecking">
-        {{ isChecking 
-          ? t('settings.settingEverything.checking') 
-          : t('settings.settingEverything.checkNow') 
+      <FlatButton :disabled="isChecking" @click="checkStatus">
+        {{
+          isChecking
+            ? t('settings.settingEverything.checking')
+            : t('settings.settingEverything.checkNow')
         }}
       </FlatButton>
     </TuffBlockSlot>

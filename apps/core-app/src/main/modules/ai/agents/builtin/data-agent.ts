@@ -32,19 +32,19 @@ const descriptor: AgentDescriptor = {
           sourceType: { type: 'string', description: '源类型: text, file, url' },
           schema: {
             type: 'object',
-            description: '期望的数据结构',
+            description: '期望的数据结构'
           },
-          format: { type: 'string', description: '源格式: json, csv, xml, text' },
+          format: { type: 'string', description: '源格式: json, csv, xml, text' }
         },
-        required: ['source'],
+        required: ['source']
       },
       outputSchema: {
         type: 'object',
         properties: {
           data: { type: 'object' },
-          metadata: { type: 'object' },
-        },
-      },
+          metadata: { type: 'object' }
+        }
+      }
     },
     {
       id: 'data.transform',
@@ -61,20 +61,20 @@ const descriptor: AgentDescriptor = {
               type: 'object',
               properties: {
                 type: { type: 'string', description: '转换类型: map, filter, reduce, sort' },
-                config: { type: 'object' },
-              },
-            },
-          },
+                config: { type: 'object' }
+              }
+            }
+          }
         },
-        required: ['data', 'transforms'],
+        required: ['data', 'transforms']
       },
       outputSchema: {
         type: 'object',
         properties: {
           result: { type: 'object' },
-          applied: { type: 'array' },
-        },
-      },
+          applied: { type: 'array' }
+        }
+      }
     },
     {
       id: 'data.format',
@@ -87,17 +87,17 @@ const descriptor: AgentDescriptor = {
           data: { type: 'object', description: '输入数据' },
           fromFormat: { type: 'string', description: '源格式: json, csv, xml, yaml' },
           toFormat: { type: 'string', description: '目标格式: json, csv, xml, yaml' },
-          options: { type: 'object', description: '格式化选项' },
+          options: { type: 'object', description: '格式化选项' }
         },
-        required: ['data', 'toFormat'],
+        required: ['data', 'toFormat']
       },
       outputSchema: {
         type: 'object',
         properties: {
           output: { type: 'string' },
-          format: { type: 'string' },
-        },
-      },
+          format: { type: 'string' }
+        }
+      }
     },
     {
       id: 'data.clean',
@@ -114,21 +114,24 @@ const descriptor: AgentDescriptor = {
               type: 'object',
               properties: {
                 field: { type: 'string' },
-                action: { type: 'string', description: '清洗动作: trim, lowercase, removeEmpty, dedupe' },
-              },
-            },
-          },
+                action: {
+                  type: 'string',
+                  description: '清洗动作: trim, lowercase, removeEmpty, dedupe'
+                }
+              }
+            }
+          }
         },
-        required: ['data'],
+        required: ['data']
       },
       outputSchema: {
         type: 'object',
         properties: {
           cleaned: { type: 'object' },
           changes: { type: 'number' },
-          removed: { type: 'number' },
-        },
-      },
+          removed: { type: 'number' }
+        }
+      }
     },
     {
       id: 'data.analyze',
@@ -142,31 +145,28 @@ const descriptor: AgentDescriptor = {
           metrics: {
             type: 'array',
             items: { type: 'string' },
-            description: '分析指标: count, sum, avg, min, max, distribution',
+            description: '分析指标: count, sum, avg, min, max, distribution'
           },
-          groupBy: { type: 'string', description: '分组字段' },
+          groupBy: { type: 'string', description: '分组字段' }
         },
-        required: ['data'],
+        required: ['data']
       },
       outputSchema: {
         type: 'object',
         properties: {
           summary: { type: 'object' },
-          groups: { type: 'object' },
-        },
-      },
-    },
+          groups: { type: 'object' }
+        }
+      }
+    }
   ],
-  tools: [
-    { toolId: 'file.read' },
-    { toolId: 'file.write' },
-  ],
-  enabled: true,
+  tools: [{ toolId: 'file.read' }, { toolId: 'file.write' }],
+  enabled: true
 }
 
 const implementation: AgentImpl = {
   async execute(input: unknown, ctx: AgentExecutionContext): Promise<unknown> {
-    const { capability, ...params } = input as { capability: string, [key: string]: unknown }
+    const { capability, ...params } = input as { capability: string; [key: string]: unknown }
 
     switch (capability) {
       case 'data.extract':
@@ -193,7 +193,7 @@ const implementation: AgentImpl = {
         id: 'extract',
         toolId: 'data.extract',
         input: {},
-        description: '提取数据',
+        description: '提取数据'
       })
     }
 
@@ -202,7 +202,7 @@ const implementation: AgentImpl = {
         id: 'transform',
         toolId: 'data.transform',
         input: {},
-        description: '转换数据',
+        description: '转换数据'
       })
     }
 
@@ -211,7 +211,7 @@ const implementation: AgentImpl = {
         id: 'clean',
         toolId: 'data.clean',
         input: {},
-        description: '清洗数据',
+        description: '清洗数据'
       })
     }
 
@@ -220,12 +220,12 @@ const implementation: AgentImpl = {
         id: 'analyze',
         toolId: 'data.analyze',
         input: {},
-        description: '分析数据',
+        description: '分析数据'
       })
     }
 
     return steps
-  },
+  }
 }
 
 // ============================================================================
@@ -234,9 +234,13 @@ const implementation: AgentImpl = {
 
 async function executeExtract(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { source, sourceType = 'text', format = 'json' } = params as {
+  const {
+    source,
+    sourceType = 'text',
+    format = 'json'
+  } = params as {
     source: string
     sourceType?: string
     format?: string
@@ -247,19 +251,16 @@ async function executeExtract(
   try {
     if (format === 'json') {
       data = JSON.parse(source)
-    }
-    else if (format === 'csv') {
+    } else if (format === 'csv') {
       data = parseCSV(source)
-    }
-    else {
+    } else {
       data = { raw: source }
     }
-  }
-  catch (err) {
+  } catch (err) {
     return {
       success: false,
       error: `Failed to parse ${format}: ${err}`,
-      source,
+      source
     }
   }
 
@@ -269,18 +270,18 @@ async function executeExtract(
     metadata: {
       sourceType,
       format,
-      extractedAt: new Date().toISOString(),
-    },
+      extractedAt: new Date().toISOString()
+    }
   }
 }
 
 async function executeTransform(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
   const { data, transforms } = params as {
     data: unknown
-    transforms: Array<{ type: string, config?: Record<string, unknown> }>
+    transforms: Array<{ type: string; config?: Record<string, unknown> }>
   }
 
   let result = data
@@ -290,7 +291,9 @@ async function executeTransform(
     switch (transform.type) {
       case 'map':
         if (Array.isArray(result) && transform.config?.field) {
-          result = result.map((item: Record<string, unknown>) => item[transform.config!.field as string])
+          result = result.map(
+            (item: Record<string, unknown>) => item[transform.config!.field as string]
+          )
           applied.push(`map:${transform.config.field}`)
         }
         break
@@ -299,7 +302,7 @@ async function executeTransform(
         if (Array.isArray(result) && transform.config?.condition) {
           // Simple filter by field existence
           result = result.filter((item: Record<string, unknown>) =>
-            Boolean(item[transform.config!.condition as string]),
+            Boolean(item[transform.config!.condition as string])
           )
           applied.push(`filter:${transform.config.condition}`)
         }
@@ -309,7 +312,7 @@ async function executeTransform(
         if (Array.isArray(result) && transform.config?.field) {
           const field = transform.config.field as string
           const order = transform.config.order === 'desc' ? -1 : 1
-          result = [...result].sort((a: any, b: any) => {
+          result = [...result].sort((a, b) => {
             if (a[field] < b[field]) return -1 * order
             if (a[field] > b[field]) return 1 * order
             return 0
@@ -328,9 +331,13 @@ async function executeTransform(
 
 async function executeFormat(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { data, toFormat, options = {} } = params as {
+  const {
+    data,
+    toFormat,
+    options = {}
+  } = params as {
     data: unknown
     toFormat: string
     options?: Record<string, unknown>
@@ -340,7 +347,7 @@ async function executeFormat(
 
   switch (toFormat) {
     case 'json':
-      output = JSON.stringify(data, null, options.indent as number || 2)
+      output = JSON.stringify(data, null, (options.indent as number) || 2)
       break
 
     case 'csv':
@@ -360,11 +367,11 @@ async function executeFormat(
 
 async function executeClean(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
   const { data, rules = [] } = params as {
     data: unknown
-    rules?: Array<{ field?: string, action: string }>
+    rules?: Array<{ field?: string; action: string }>
   }
 
   let cleaned = JSON.parse(JSON.stringify(data))
@@ -372,10 +379,7 @@ async function executeClean(
   let removed = 0
 
   // Default rules if none provided
-  const effectiveRules = rules.length > 0 ? rules : [
-    { action: 'trim' },
-    { action: 'removeEmpty' },
-  ]
+  const effectiveRules = rules.length > 0 ? rules : [{ action: 'trim' }, { action: 'removeEmpty' }]
 
   for (const rule of effectiveRules) {
     switch (rule.action) {
@@ -396,7 +400,7 @@ async function executeClean(
       case 'dedupe':
         if (Array.isArray(cleaned)) {
           const before = cleaned.length
-          cleaned = [...new Set(cleaned.map(x => JSON.stringify(x)))].map(x => JSON.parse(x))
+          cleaned = [...new Set(cleaned.map((x) => JSON.stringify(x)))].map((x) => JSON.parse(x))
           removed += before - cleaned.length
           changes += before - cleaned.length
         }
@@ -409,9 +413,13 @@ async function executeClean(
 
 async function executeAnalyze(
   params: Record<string, unknown>,
-  _ctx: AgentExecutionContext,
+  _ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { data, metrics = ['count'], groupBy } = params as {
+  const {
+    data,
+    metrics = ['count'],
+    groupBy
+  } = params as {
     data: unknown[]
     metrics?: string[]
     groupBy?: string
@@ -428,7 +436,7 @@ async function executeAnalyze(
   }
 
   // Numeric analysis for number arrays
-  const numbers = data.filter(x => typeof x === 'number') as number[]
+  const numbers = data.filter((x) => typeof x === 'number') as number[]
   if (numbers.length > 0) {
     if (metrics.includes('sum')) {
       summary.sum = numbers.reduce((a, b) => a + b, 0)
@@ -466,11 +474,11 @@ function parseCSV(csv: string): Record<string, string>[] {
   const lines = csv.trim().split('\n')
   if (lines.length < 2) return []
 
-  const headers = lines[0].split(',').map(h => h.trim())
+  const headers = lines[0].split(',').map((h) => h.trim())
   const data: Record<string, string>[] = []
 
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',').map(v => v.trim())
+    const values = lines[i].split(',').map((v) => v.trim())
     const row: Record<string, string> = {}
     headers.forEach((h, j) => {
       row[h] = values[j] || ''
@@ -493,7 +501,7 @@ function toCSV(data: unknown): string {
   const lines = [headers.join(',')]
 
   for (const item of data as Record<string, unknown>[]) {
-    const values = headers.map(h => String(item[h] ?? ''))
+    const values = headers.map((h) => String(item[h] ?? ''))
     lines.push(values.join(','))
   }
 
@@ -508,7 +516,7 @@ function toYAML(data: unknown, indent = 0): string {
   if (typeof data === 'number' || typeof data === 'boolean') return String(data)
 
   if (Array.isArray(data)) {
-    return data.map(item => `${prefix}- ${toYAML(item, indent + 1)}`).join('\n')
+    return data.map((item) => `${prefix}- ${toYAML(item, indent + 1)}`).join('\n')
   }
 
   if (typeof data === 'object') {
@@ -528,11 +536,10 @@ function trimStrings(obj: unknown): number {
       if (typeof val === 'string') {
         const trimmed = val.trim()
         if (trimmed !== val) {
-          (obj as Record<string, unknown>)[key] = trimmed
+          ;(obj as Record<string, unknown>)[key] = trimmed
           count++
         }
-      }
-      else if (typeof val === 'object') {
+      } else if (typeof val === 'object') {
         count += trimStrings(val)
       }
     }
@@ -546,10 +553,9 @@ function lowercaseStrings(obj: unknown): number {
     for (const key of Object.keys(obj)) {
       const val = (obj as Record<string, unknown>)[key]
       if (typeof val === 'string') {
-        (obj as Record<string, unknown>)[key] = val.toLowerCase()
+        ;(obj as Record<string, unknown>)[key] = val.toLowerCase()
         count++
-      }
-      else if (typeof val === 'object') {
+      } else if (typeof val === 'object') {
         count += lowercaseStrings(val)
       }
     }
@@ -565,8 +571,7 @@ function removeEmpty(obj: unknown): number {
       if (val === '' || val === null || val === undefined) {
         delete (obj as Record<string, unknown>)[key]
         count++
-      }
-      else if (typeof val === 'object') {
+      } else if (typeof val === 'object') {
         count += removeEmpty(val)
       }
     }

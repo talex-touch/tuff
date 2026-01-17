@@ -1,11 +1,8 @@
 <script setup lang="ts">
-import { hasWindow } from '../../../../utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 
 defineOptions({ name: 'TxGrid' })
-
-type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-type Responsive<T> = Partial<Record<Breakpoint, T>>
 
 const props = withDefaults(
   defineProps<{
@@ -14,7 +11,7 @@ const props = withDefaults(
     gap?:
       | number
       | string
-      | { row?: number | string; col?: number | string }
+      | { row?: number | string, col?: number | string }
       | Responsive<number | string>
     minItemWidth?: string
     justify?: string
@@ -29,14 +26,20 @@ const props = withDefaults(
     align: 'stretch',
   },
 )
+type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+type Responsive<T> = Partial<Record<Breakpoint, T>>
 
 const width = ref<number>(hasWindow() ? window.innerWidth : 1024)
 
 function getBp(w: number): Breakpoint {
-  if (w < 640) return 'xs'
-  if (w < 768) return 'sm'
-  if (w < 1024) return 'md'
-  if (w < 1280) return 'lg'
+  if (w < 640)
+    return 'xs'
+  if (w < 768)
+    return 'sm'
+  if (w < 1024)
+    return 'md'
+  if (w < 1280)
+    return 'lg'
   return 'xl'
 }
 
@@ -59,8 +62,10 @@ onBeforeUnmount(() => {
 })
 
 function toCssSize(v: any): string {
-  if (v == null) return ''
-  if (typeof v === 'number') return `${v}px`
+  if (v == null)
+    return ''
+  if (typeof v === 'number')
+    return `${v}px`
   return String(v)
 }
 
@@ -70,7 +75,8 @@ function resolveResponsive<T>(v: Responsive<T>): T | undefined {
 }
 
 const resolvedCols = computed(() => {
-  if (typeof props.cols === 'number') return props.cols
+  if (typeof props.cols === 'number')
+    return props.cols
   if (props.cols && typeof props.cols === 'object') {
     const n = resolveResponsive<number>(props.cols as any)
     return Number.isFinite(n) ? Number(n) : 0
@@ -80,7 +86,8 @@ const resolvedCols = computed(() => {
 
 const resolvedGap = computed(() => {
   const gap = props.gap as any
-  if (gap == null) return { row: '16px', col: '16px' }
+  if (gap == null)
+    return { row: '16px', col: '16px' }
   if (typeof gap === 'number' || typeof gap === 'string') {
     const s = toCssSize(gap)
     return { row: s, col: s }
@@ -111,7 +118,8 @@ const style = computed<Record<string, string>>(() => {
   let templateCols = ''
   if (props.minItemWidth) {
     templateCols = `repeat(auto-fit, minmax(${props.minItemWidth}, 1fr))`
-  } else if ((resolvedCols.value ?? 0) > 0) {
+  }
+  else if ((resolvedCols.value ?? 0) > 0) {
     templateCols = `repeat(${resolvedCols.value}, minmax(0, 1fr))`
   }
 

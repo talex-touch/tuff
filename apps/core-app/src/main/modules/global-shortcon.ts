@@ -5,9 +5,9 @@ import { ChannelType } from '@talex-touch/utils/channel'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
 import { BrowserWindow, globalShortcut } from 'electron'
+import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 import { storageModule } from './storage'
-import { createLogger } from '../utils/logger'
 
 const shortconLog = createLogger('GlobalShortcon')
 
@@ -44,7 +44,7 @@ const acceleratorTokenAlias = new Map<string, string>([
   ['HOME', 'Home'],
   ['END', 'End'],
   ['PAGEUP', 'PageUp'],
-  ['PAGEDOWN', 'PageDown'],
+  ['PAGEDOWN', 'PageDown']
 ])
 const F_KEY_REGEX = /^F\d{1,2}$/i
 
@@ -57,14 +57,14 @@ export class ShortcutModule extends BaseModule {
 
   constructor() {
     super(ShortcutModule.key, {
-      create: false,
+      create: false
     })
   }
 
   onInit(): MaybePromise<void> {
     this.storage = new ShortcutStorage({
       getConfig: storageModule.getConfig.bind(storageModule),
-      saveConfig: storageModule.saveConfig.bind(storageModule),
+      saveConfig: storageModule.saveConfig.bind(storageModule)
     })
     this.setupIpcListeners()
     this.reregisterAllShortcuts()
@@ -83,9 +83,9 @@ export class ShortcutModule extends BaseModule {
       ChannelType.MAIN,
       'shortcon:update',
       ({ data }: StandardChannelData) => {
-        const { id, accelerator } = data as { id: string, accelerator: string }
+        const { id, accelerator } = data as { id: string; accelerator: string }
         return this.updateShortcut(id, accelerator)
-      },
+      }
     )
 
     $app.channel.regChannel(ChannelType.MAIN, 'shortcon:disable-all', () => {
@@ -122,8 +122,8 @@ export class ShortcutModule extends BaseModule {
         meta: {
           creationTime: Date.now(),
           modificationTime: Date.now(),
-          author: 'system',
-        },
+          author: 'system'
+        }
       })
     }
 
@@ -148,8 +148,7 @@ export class ShortcutModule extends BaseModule {
    * Disables all currently active global shortcuts.
    */
   disableAll(): void {
-    if (!this.isEnabled)
-      return
+    if (!this.isEnabled) return
     globalShortcut.unregisterAll()
     this.isEnabled = false
     shortconLog.info('All global shortcuts disabled')
@@ -159,8 +158,7 @@ export class ShortcutModule extends BaseModule {
    * Enables and registers all shortcuts from storage.
    */
   enableAll(): void {
-    if (this.isEnabled)
-      return
+    if (this.isEnabled) return
     this.isEnabled = true
     this.reregisterAllShortcuts()
     shortconLog.info('All global shortcuts enabled')
@@ -183,7 +181,7 @@ export class ShortcutModule extends BaseModule {
       const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
       if (!normalizedAccelerator) {
         shortconLog.error(
-          `Invalid accelerator for shortcut ${shortcut.id}: ${shortcut.accelerator}`,
+          `Invalid accelerator for shortcut ${shortcut.id}: ${shortcut.accelerator}`
         )
         continue
       }
@@ -199,11 +197,10 @@ export class ShortcutModule extends BaseModule {
           this.handleTrigger(shortcut)
         })
         successCount++
-      }
-      catch (error) {
+      } catch (error) {
         shortconLog.error(
           `Failed to register shortcut: ${shortcut.id} (${normalizedAccelerator})`,
-          { error },
+          { error }
         )
       }
     }
@@ -220,8 +217,7 @@ export class ShortcutModule extends BaseModule {
         const callback = mainCallbackRegistry.get(shortcut.id)
         if (callback) {
           callback()
-        }
-        else {
+        } else {
           shortconLog.error(`No main-process callback found for shortcut ID: ${shortcut.id}`)
         }
         break
@@ -244,7 +240,7 @@ export class ShortcutModule extends BaseModule {
 
     const tokens = raw
       .split('+')
-      .map(token => token.trim())
+      .map((token) => token.trim())
       .filter(Boolean)
 
     if (!tokens.length) {
@@ -252,7 +248,7 @@ export class ShortcutModule extends BaseModule {
     }
 
     const normalizedTokens = tokens
-      .map(token => this.normalizeAcceleratorToken(token))
+      .map((token) => this.normalizeAcceleratorToken(token))
       .filter((token): token is string => Boolean(token))
 
     if (!normalizedTokens.length) {

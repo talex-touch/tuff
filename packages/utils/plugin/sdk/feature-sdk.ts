@@ -1,6 +1,6 @@
 /**
  * Feature SDK for Plugin Development
- * 
+ *
  * Provides a unified API for plugins to manage search result items (TuffItems)
  * in the CoreBox interface. This SDK handles item lifecycle, updates, and
  * input change notifications.
@@ -34,7 +34,7 @@ export type KeyEventHandler = (event: ForwardedKeyEvent) => void
 
 /**
  * Feature SDK interface for plugins
- * 
+ *
  * @example
  * ```typescript
  * // Push items to CoreBox
@@ -42,10 +42,10 @@ export type KeyEventHandler = (event: ForwardedKeyEvent) => void
  *   { id: 'item-1', title: 'Result 1', ... },
  *   { id: 'item-2', title: 'Result 2', ... }
  * ])
- * 
+ *
  * // Update a specific item
  * plugin.feature.updateItem('item-1', { title: 'Updated Title' })
- * 
+ *
  * // Listen for input changes
  * plugin.feature.onInputChange((input) => {
  *   console.log('User typed:', input)
@@ -55,9 +55,9 @@ export type KeyEventHandler = (event: ForwardedKeyEvent) => void
 export interface FeatureSDK {
   /**
    * Pushes multiple items to the CoreBox search results
-   * 
+   *
    * @param items - Array of TuffItem objects to display
-   * 
+   *
    * @example
    * ```typescript
    * plugin.feature.pushItems([
@@ -70,14 +70,14 @@ export interface FeatureSDK {
    * ])
    * ```
    */
-  pushItems(items: TuffItem[]): void
+  pushItems: (items: TuffItem[]) => void
 
   /**
    * Updates a specific item by ID
-   * 
+   *
    * @param id - The unique ID of the item to update
    * @param updates - Partial TuffItem with fields to update
-   * 
+   *
    * @example
    * ```typescript
    * // Update title and subtitle
@@ -87,49 +87,49 @@ export interface FeatureSDK {
    * })
    * ```
    */
-  updateItem(id: string, updates: Partial<TuffItem>): void
+  updateItem: (id: string, updates: Partial<TuffItem>) => void
 
   /**
    * Removes a specific item by ID
-   * 
+   *
    * @param id - The unique ID of the item to remove
-   * 
+   *
    * @example
    * ```typescript
    * plugin.feature.removeItem('item-1')
    * ```
    */
-  removeItem(id: string): void
+  removeItem: (id: string) => void
 
   /**
    * Clears all items pushed by this plugin
-   * 
+   *
    * @example
    * ```typescript
    * plugin.feature.clearItems()
    * ```
    */
-  clearItems(): void
+  clearItems: () => void
 
   /**
    * Gets all items currently pushed by this plugin
-   * 
+   *
    * @returns Array of TuffItem objects
-   * 
+   *
    * @example
    * ```typescript
    * const items = plugin.feature.getItems()
    * console.log(`Currently showing ${items.length} items`)
    * ```
    */
-  getItems(): TuffItem[]
+  getItems: () => TuffItem[]
 
   /**
    * Registers a listener for input changes in the CoreBox search field
-   * 
+   *
    * @param handler - Callback function invoked when input changes
    * @returns Unsubscribe function
-   * 
+   *
    * @example
    * ```typescript
    * const unsubscribe = plugin.feature.onInputChange((input) => {
@@ -137,22 +137,22 @@ export interface FeatureSDK {
    *   // Perform real-time search
    *   performSearch(input)
    * })
-   * 
+   *
    * // Later, unsubscribe
    * unsubscribe()
    * ```
    */
-  onInputChange(handler: InputChangeHandler): () => void
+  onInputChange: (handler: InputChangeHandler) => () => void
 
   /**
    * Registers a listener for keyboard events forwarded from CoreBox
-   * 
+   *
    * When a plugin's UI view is attached to CoreBox, certain key events
    * (Enter, Arrow keys, Meta+key combinations) are forwarded to the plugin.
-   * 
+   *
    * @param handler - Callback function invoked when a key event is forwarded
    * @returns Unsubscribe function
-   * 
+   *
    * @example
    * ```typescript
    * const unsubscribe = plugin.feature.onKeyEvent((event) => {
@@ -167,21 +167,21 @@ export interface FeatureSDK {
    *     openSearch()
    *   }
    * })
-   * 
+   *
    * // Later, unsubscribe
    * unsubscribe()
    * ```
    */
-  onKeyEvent(handler: KeyEventHandler): () => void
+  onKeyEvent: (handler: KeyEventHandler) => () => void
 }
 
 /**
  * Creates a Feature SDK instance for plugin use
- * 
+ *
  * @param boxItemsAPI - The boxItems API object from plugin context
  * @param channel - The plugin channel bridge for IPC communication
  * @returns Configured Feature SDK instance
- * 
+ *
  * @internal
  */
 export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
@@ -196,7 +196,8 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
         const input = event.data?.input || event.data?.query?.text || event.input || ''
         inputChangeHandlers.forEach(handler => handler(input))
       })
-    } else if (channel.on) {
+    }
+    else if (channel.on) {
       // Renderer process context
       channel.on('core-box:input-change', (data: any) => {
         const input = data?.input || data?.query?.text || data || ''
@@ -215,7 +216,8 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
           keyEventHandlers.forEach(handler => handler(keyEvent))
         }
       })
-    } else if (channel.on) {
+    }
+    else if (channel.on) {
       // Renderer process context
       channel.on('core-box:key-event', (data: any) => {
         const keyEvent = data as ForwardedKeyEvent
@@ -267,7 +269,7 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
 
     onInputChange(handler: InputChangeHandler): () => void {
       inputChangeHandlers.add(handler)
-      
+
       return () => {
         inputChangeHandlers.delete(handler)
       }
@@ -275,23 +277,23 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
 
     onKeyEvent(handler: KeyEventHandler): () => void {
       keyEventHandlers.add(handler)
-      
+
       return () => {
         keyEventHandlers.delete(handler)
       }
-    }
+    },
   }
 }
 
 /**
  * Hook for using Feature SDK in plugin context
- * 
+ *
  * @returns Feature SDK instance
- * 
+ *
  * @example
  * ```typescript
  * const feature = useFeature()
- * 
+ *
  * feature.pushItems([
  *   { id: '1', title: { text: 'Item 1' }, ... }
  * ])
@@ -301,10 +303,10 @@ export function useFeature(): FeatureSDK {
   // @ts-ignore - window.$boxItems is injected by the plugin system
   const boxItemsAPI = window.$boxItems
   const channel = ensureRendererChannel('[Feature SDK] Channel not available. Make sure this is called in a plugin context.')
-  
+
   if (!boxItemsAPI) {
     throw new Error('[Feature SDK] boxItems API not available. Make sure this is called in a plugin context.')
   }
-  
+
   return createFeatureSDK(boxItemsAPI, channel)
 }

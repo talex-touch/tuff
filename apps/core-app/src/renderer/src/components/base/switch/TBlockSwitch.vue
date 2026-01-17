@@ -8,28 +8,28 @@ import RemixIcon from '~/components/icon/RemixIcon.vue'
 const props = defineProps({
   title: {
     type: String,
-    required: true,
+    required: true
   },
   description: {
     type: String,
-    required: true,
+    required: true
   },
   modelValue: {
     type: Boolean,
-    required: true,
+    required: true
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   icon: {
     type: String,
-    required: true,
+    required: true
   },
   guidance: {
     type: Boolean,
-    default: false,
-  },
+    default: false
+  }
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
@@ -43,7 +43,7 @@ watch(
 
     // refresh(v)
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 // watch(() => value.value ? $t('base.status-open') : $t('base.status-close'), v => refresh(v))
@@ -92,7 +92,7 @@ watch(
       <TSwitch v-model="value" />
     </div>
     <div v-else class="TBlockSwitch-Guidance">
-      <RemixIcon name="arrow-right-s" style="line" />
+      <RemixIcon name="arrow-right-s" :style="'line'" />
     </div>
   </div>
 </template>

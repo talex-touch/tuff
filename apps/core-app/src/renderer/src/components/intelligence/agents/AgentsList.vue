@@ -1,7 +1,7 @@
 <script lang="ts" name="AgentsList" setup>
+import type { AgentDescriptor } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AgentDescriptor } from '@talex-touch/utils'
 import AgentItem from './AgentItem.vue'
 
 const props = defineProps<{
@@ -16,8 +16,8 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
-const enabledAgents = computed(() => props.agents.filter(a => a.enabled !== false))
-const disabledAgents = computed(() => props.agents.filter(a => a.enabled === false))
+const enabledAgents = computed(() => props.agents.filter((a) => a.enabled !== false))
+const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === false))
 </script>
 
 <template>
@@ -30,7 +30,9 @@ const disabledAgents = computed(() => props.agents.filter(a => a.enabled === fal
         <div class="group-header">
           <span class="i-carbon-checkmark-filled text-green-500" />
           <span>{{ t('intelligence.agents.enabled') }}</span>
-          <el-tag size="small" type="success">{{ enabledAgents.length }}</el-tag>
+          <el-tag size="small" type="success">
+            {{ enabledAgents.length }}
+          </el-tag>
         </div>
         <div class="group-items">
           <AgentItem
@@ -48,7 +50,9 @@ const disabledAgents = computed(() => props.agents.filter(a => a.enabled === fal
         <div class="group-header">
           <span class="i-carbon-close-filled text-gray-400" />
           <span>{{ t('intelligence.agents.disabled') }}</span>
-          <el-tag size="small" type="info">{{ disabledAgents.length }}</el-tag>
+          <el-tag size="small" type="info">
+            {{ disabledAgents.length }}
+          </el-tag>
         </div>
         <div class="group-items">
           <AgentItem
@@ -64,7 +68,9 @@ const disabledAgents = computed(() => props.agents.filter(a => a.enabled === fal
 
     <div v-else class="empty-list">
       <div class="i-carbon-bot text-3xl op-20" />
-      <p class="text-sm op-40">{{ t('intelligence.agents.empty') }}</p>
+      <p class="text-sm op-40">
+        {{ t('intelligence.agents.empty') }}
+      </p>
     </div>
   </div>
 </template>

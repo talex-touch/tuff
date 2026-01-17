@@ -13,4 +13,3 @@ export interface TxStatusIconProps {
   indicatorSize?: number
   indicatorOffset?: number
 }
-

@@ -41,12 +41,16 @@ const showPercentageControl = computed(() => !indeterminate.value)
     <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
       <div class="demo__grid">
         <div class="demo__row">
-          <div class="demo__label">indeterminate</div>
+          <div class="demo__label">
+            indeterminate
+          </div>
           <TxSwitch v-model="indeterminate" />
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">indeterminateVariant</div>
+          <div class="demo__label">
+            indeterminateVariant
+          </div>
           <TuffSelect v-model="indeterminateVariant" style="min-width: 220px;">
             <TuffSelectItem value="classic" label="classic" />
             <TuffSelectItem value="sweep" label="sweep" />
@@ -57,12 +61,16 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row" :style="{ opacity: showPercentageControl ? 1 : 0.4 }">
-          <div class="demo__label">percentage</div>
+          <div class="demo__label">
+            percentage
+          </div>
           <TxSlider v-model="percentage" :min="0" :max="100" :step="1" show-value :disabled="!showPercentageControl" />
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">status</div>
+          <div class="demo__label">
+            status
+          </div>
           <TuffSelect v-model="status" style="min-width: 220px;">
             <TuffSelectItem value="" label="(none)" />
             <TuffSelectItem value="success" label="success" />
@@ -72,7 +80,9 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">maskVariant</div>
+          <div class="demo__label">
+            maskVariant
+          </div>
           <TuffSelect v-model="maskVariant" style="min-width: 220px;">
             <TuffSelectItem value="solid" label="solid" />
             <TuffSelectItem value="dashed" label="dashed" />
@@ -81,7 +91,9 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">maskBackground</div>
+          <div class="demo__label">
+            maskBackground
+          </div>
           <TuffSelect v-model="maskBackground" style="min-width: 220px;">
             <TuffSelectItem value="mask" label="mask" />
             <TuffSelectItem value="blur" label="blur" />
@@ -90,7 +102,9 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">flowEffect</div>
+          <div class="demo__label">
+            flowEffect
+          </div>
           <TuffSelect v-model="flowEffect" style="min-width: 220px;">
             <TuffSelectItem value="none" label="none" />
             <TuffSelectItem value="shimmer" label="shimmer" />
@@ -100,7 +114,9 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">indicatorEffect</div>
+          <div class="demo__label">
+            indicatorEffect
+          </div>
           <TuffSelect v-model="indicatorEffect" style="min-width: 220px;">
             <TuffSelectItem value="none" label="none" />
             <TuffSelectItem value="sparkle" label="sparkle" />
@@ -108,7 +124,9 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">hoverEffect</div>
+          <div class="demo__label">
+            hoverEffect
+          </div>
           <TuffSelect v-model="hoverEffect" style="min-width: 220px;">
             <TuffSelectItem value="none" label="none" />
             <TuffSelectItem value="glow" label="glow" />
@@ -116,7 +134,9 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">textPlacement</div>
+          <div class="demo__label">
+            textPlacement
+          </div>
           <TuffSelect v-model="textPlacement" style="min-width: 220px;">
             <TuffSelectItem value="inside" label="inside" />
             <TuffSelectItem value="outside" label="outside" />
@@ -124,12 +144,16 @@ const showPercentageControl = computed(() => !indeterminate.value)
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">showText</div>
+          <div class="demo__label">
+            showText
+          </div>
           <TxSwitch v-model="showText" />
         </div>
 
         <div class="demo__row">
-          <div class="demo__label">message</div>
+          <div class="demo__label">
+            message
+          </div>
           <TuffInput v-model="message" placeholder="optional" style="min-width: 320px;" />
         </div>
       </div>

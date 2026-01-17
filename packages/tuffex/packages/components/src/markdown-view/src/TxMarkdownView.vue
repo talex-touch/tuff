@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { marked } from 'marked'
 import type { MarkdownViewProps } from './types'
+import { marked } from 'marked'
+import { computed, onMounted, ref } from 'vue'
 
 defineOptions({
   name: 'TxMarkdownView',

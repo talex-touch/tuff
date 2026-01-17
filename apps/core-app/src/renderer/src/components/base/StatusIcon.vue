@@ -24,8 +24,8 @@ const props = withDefaults(
     colorful: true,
     tone: 'none',
     indicatorSize: undefined,
-    indicatorOffset: 0,
-  },
+    indicatorOffset: 0
+  }
 )
 
 const indicatorSize = computed(() => {
@@ -41,7 +41,7 @@ const indicatorSize = computed(() => {
     :style="{
       '--status-icon-size': `${size}px`,
       '--status-indicator-size': `${indicatorSize}px`,
-      '--status-indicator-offset': `${indicatorOffset}px`,
+      '--status-indicator-offset': `${indicatorOffset}px`
     }"
   >
     <TuffIcon
@@ -135,4 +135,3 @@ const indicatorSize = computed(() => {
   }
 }
 </style>
-

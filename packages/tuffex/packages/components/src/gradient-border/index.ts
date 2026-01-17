@@ -1,5 +1,5 @@
-import TxGradientBorder from './src/TxGradientBorder.vue'
 import { withInstall } from '../../../utils/withInstall'
+import TxGradientBorder from './src/TxGradientBorder.vue'
 
 export interface GradientBorderProps {
   as?: string

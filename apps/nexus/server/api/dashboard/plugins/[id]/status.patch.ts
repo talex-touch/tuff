@@ -1,5 +1,5 @@
-import { createError, readBody } from 'h3'
 import { clerkClient } from '@clerk/nuxt/server'
+import { createError, readBody } from 'h3'
 import { requireAuth } from '../../../../utils/auth'
 import { getPluginById, setPluginStatus } from '../../../../utils/pluginsStore'
 

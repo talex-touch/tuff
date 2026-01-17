@@ -1,9 +1,9 @@
-import { net, session } from 'electron'
-import url from 'url'
-import { BaseModule } from '../abstract-base-module'
-import { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import url from 'node:url'
 import chalk from 'chalk'
+import { net, session } from 'electron'
 import { FILE_SCHEMA } from '../../config/default'
+import { BaseModule } from '../abstract-base-module'
 
 class FileProtocolModule extends BaseModule {
   static key: symbol = Symbol.for('FileProtocolModule')
@@ -21,7 +21,7 @@ class FileProtocolModule extends BaseModule {
     ses.protocol.handle(FILE_SCHEMA, async (request) => {
       console.debug('tfile request:', request.url)
       const filePath = decodeURIComponent(request.url.slice(FILE_SCHEMA.length + 3))
-      const fileUrl = url.pathToFileURL('/' + filePath).toString()
+      const fileUrl = url.pathToFileURL(`/${filePath}`).toString()
       console.debug('tfile resolved path:', fileUrl)
 
       try {

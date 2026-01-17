@@ -34,7 +34,8 @@ export class DialogManager {
 
   unregister(id: string): void {
     const index = this.stack.findIndex(d => d.id === id)
-    if (index === -1) return
+    if (index === -1)
+      return
 
     const [dialog] = this.stack.splice(index, 1)
     const wasVisible = index === this.stack.length
@@ -97,6 +98,7 @@ export class DialogManager {
 let singleton: DialogManager | null = null
 
 export function getDialogManager(): DialogManager {
-  if (!singleton) singleton = new DialogManager()
+  if (!singleton)
+    singleton = new DialogManager()
   return singleton
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { SplitterDirection, SplitterEmits, SplitterProps } from './types'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 defineOptions({ name: 'TxSplitter' })
 
@@ -29,7 +29,8 @@ function clamp(v: number, min: number, max: number) {
 
 function snapValue(v: number) {
   const s = Math.max(0, props.snap ?? 0)
-  if (!s) return v
+  if (!s)
+    return v
   const n = Math.round(v / s) * s
   return clamp01(n)
 }
@@ -54,7 +55,8 @@ const rootStyle = computed<Record<string, string>>(() => {
 
 function setByPointer(e: PointerEvent) {
   const el = rootRef.value
-  if (!el) return
+  if (!el)
+    return
   const rect = el.getBoundingClientRect()
 
   if (dir.value === 'horizontal') {
@@ -70,7 +72,8 @@ function setByPointer(e: PointerEvent) {
 }
 
 function onPointerDown(e: PointerEvent) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   dragging.value = true
   emit('drag-start')
   ;(e.currentTarget as HTMLElement | null)?.setPointerCapture?.(e.pointerId)
@@ -80,12 +83,14 @@ function onPointerDown(e: PointerEvent) {
 }
 
 function onWindowPointerMove(e: PointerEvent) {
-  if (!dragging.value) return
+  if (!dragging.value)
+    return
   setByPointer(e)
 }
 
 function endDrag() {
-  if (!dragging.value) return
+  if (!dragging.value)
+    return
   dragging.value = false
   emit('drag-end')
   window.removeEventListener('pointermove', onWindowPointerMove)
@@ -97,7 +102,8 @@ function onWindowPointerUp() {
 }
 
 function onKeyDown(e: KeyboardEvent) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   const step = 0.02
 
   if (dir.value === 'horizontal') {
@@ -109,7 +115,8 @@ function onKeyDown(e: KeyboardEvent) {
       e.preventDefault()
       value.value = value.value + step
     }
-  } else {
+  }
+  else {
     if (e.key === 'ArrowUp') {
       e.preventDefault()
       value.value = value.value - step
@@ -124,7 +131,8 @@ function onKeyDown(e: KeyboardEvent) {
 watch(
   () => props.disabled,
   (v) => {
-    if (v) endDrag()
+    if (v)
+      endDrag()
   },
 )
 

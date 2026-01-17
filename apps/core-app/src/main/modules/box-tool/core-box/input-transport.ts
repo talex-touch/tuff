@@ -2,8 +2,8 @@ import type { TuffQuery } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { createLogger } from '../../../utils/logger'
 import pluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
-import { windowManager } from './window'
 import { coreBoxTransport } from './transport/core-box-transport'
+import { windowManager } from './window'
 
 export interface CoreBoxInputChange {
   input?: string

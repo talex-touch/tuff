@@ -1,17 +1,17 @@
 <script lang="ts" setup>
-import { onMounted } from 'vue';
-import TouchBanner from './base/TouchBanner.vue';
-import TouchText from './base/TouchText.vue';
-import TouchFeatures from './base/TouchFeatures.vue';
-import TouchButton from './base/TouchButton.vue';
-import CoreBoxMockup from './core-box/CoreBoxMockup.vue';
-import PluginExtensionSection from './PluginExtensionSection.vue';
-import PioneerTestingSection from './PioneerTestingSection.vue';
+import { onMounted } from 'vue'
+import TouchBanner from './base/TouchBanner.vue'
+import TouchButton from './base/TouchButton.vue'
+import TouchFeatures from './base/TouchFeatures.vue'
+import TouchText from './base/TouchText.vue'
+import CoreBoxMockup from './core-box/CoreBoxMockup.vue'
+import PioneerTestingSection from './PioneerTestingSection.vue'
+import PluginExtensionSection from './PluginExtensionSection.vue'
 
 onMounted(() => {
-  const pageHeight = document.documentElement.clientHeight;
+  const pageHeight = document.documentElement.clientHeight
 
-  document.documentElement.style.setProperty('--vh', `${pageHeight}px`);
+  document.documentElement.style.setProperty('--vh', `${pageHeight}px`)
 })
 </script>
 
@@ -24,7 +24,9 @@ onMounted(() => {
 
       <template #center>
         <TouchText />
-        <p style="color: #eee">A strong adaptation more platform all-tool program.</p>
+        <p style="color: #eee">
+          A strong adaptation more platform all-tool program.
+        </p>
 
         <div style="margin-bottom: -4rem">
           <TouchButton>

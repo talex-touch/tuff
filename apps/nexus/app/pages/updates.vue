@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
 import type { ReleaseChannelId } from '~/data/updates'
 import { computed, ref, watch } from 'vue'
-import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
-import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
+import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
 
 definePageMeta({
   layout: 'home',
@@ -204,7 +204,9 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
         class="mx-auto max-w-3xl w-full flex flex-col items-center gap-4 rounded-2xl bg-gray-50 px-8 py-16 text-center dark:bg-gray-800/50"
       >
         <span class="i-carbon-circle-dash animate-spin text-2xl text-gray-400" />
-        <p class="text-gray-500 dark:text-gray-400">{{ t('updates.loading') || 'Loading releases...' }}</p>
+        <p class="text-gray-500 dark:text-gray-400">
+          {{ t('updates.loading') || 'Loading releases...' }}
+        </p>
       </div>
 
       <!-- Latest Release Card -->
@@ -297,7 +299,9 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
         class="mx-auto max-w-3xl w-full flex flex-col items-center gap-4 rounded-2xl bg-gray-50 px-8 py-16 text-center dark:bg-gray-800/50"
       >
         <span class="i-carbon-incomplete text-3xl text-gray-400" />
-        <p class="text-gray-500 dark:text-gray-400">{{ t('updates.empty') }}</p>
+        <p class="text-gray-500 dark:text-gray-400">
+          {{ t('updates.empty') }}
+        </p>
       </div>
     </Transition>
 

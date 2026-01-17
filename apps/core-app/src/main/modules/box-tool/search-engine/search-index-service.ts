@@ -2,8 +2,8 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { LibSQLTransaction } from 'drizzle-orm/libsql/session'
 import { performance } from 'node:perf_hooks'
 import { eq, sql } from 'drizzle-orm'
-import * as schema from '../../../db/schema'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { searchLogger } from './search-logger'
 
@@ -56,7 +56,7 @@ export class SearchIndexService {
     const start = performance.now()
 
     await dbWriteScheduler.schedule('search-index.ensure', () =>
-      withSqliteRetry(() => this.ensureInitialized(), { label: 'search-index.ensure' }),
+      withSqliteRetry(() => this.ensureInitialized(), { label: 'search-index.ensure' })
     )
 
     const preparedDocs = await Promise.all(items.map((item) => this.prepareDocument(item)))
@@ -69,8 +69,8 @@ export class SearchIndexService {
               await this.applyDocument(tx, doc)
             }
           }),
-        { label: 'search-index.indexItems' },
-      ),
+        { label: 'search-index.indexItems' }
+      )
     )
     console.debug(
       `[SearchIndexService] Indexed ${items.length} items in ${(performance.now() - start).toFixed(
@@ -90,12 +90,14 @@ export class SearchIndexService {
           await this.db.transaction(async (tx) => {
             for (const itemId of itemIds) {
               await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
-              await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, itemId))
+              await tx
+                .delete(schema.keywordMappings)
+                .where(eq(schema.keywordMappings.itemId, itemId))
             }
           })
         },
-        { label: 'search-index.removeItems' },
-      ),
+        { label: 'search-index.removeItems' }
+      )
     )
     console.debug(
       `[SearchIndexService] Removed ${itemIds.length} items in ${(
@@ -310,7 +312,7 @@ export class SearchIndexService {
       if (item.keywords.length > 10) {
         console.warn(
           `[SearchIndexService] Item "${item.itemId}" has ${item.keywords.length} keywords. ` +
-          `Consider reducing to <= 10 for better performance.`
+            `Consider reducing to <= 10 for better performance.`
         )
       }
       for (const keyword of item.keywords) {

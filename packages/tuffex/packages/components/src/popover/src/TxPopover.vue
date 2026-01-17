@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { PopoverProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import TxCard from '../../card/src/TxCard.vue'
-import type { PopoverProps } from './types'
 
 defineOptions({ name: 'TxPopover' })
 
@@ -67,7 +67,8 @@ const popoverVars = computed<Record<string, string>>(() => {
     if (side === 'top' || side === 'bottom') {
       if (arrowData.x != null)
         fusionX = `${arrowData.x + arrowSize * 0.5}px`
-    } else {
+    }
+    else {
       if (arrowData.y != null)
         fusionY = `${arrowData.y + arrowSize * 0.5}px`
     }
@@ -124,9 +125,9 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
         elements.floating.style.setProperty('--tx-popover-max-height', `${maxH}px`)
       },
     }),
-    arrow({ 
+    arrow({
       element: computed(() => arrowRef.value),
-      padding: 6 
+      padding: 6,
     }),
   ],
 })
@@ -136,27 +137,29 @@ const arrowSide = computed(() => String(stablePlacement.value || placement.value
 const arrowStyle = computed<Record<string, string>>(() => {
   if (!props.showArrow || !arrowRef.value)
     return { display: 'none' }
-    
+
   const data = (middlewareData.value as any)?.arrow
-  
+
   // Ensure arrow data is stable and valid
   if (!data || (data.x == null && data.y == null)) {
     return { display: 'none' }
   }
-  
+
   const x = data.x
   const y = data.y
   const side = arrowSide.value
-  
+
   const base: Record<string, string> = {
     display: 'block',
     position: 'absolute',
   }
-  
+
   // Only set position if we have valid coordinates
-  if (x != null) base.left = `${x}px`
-  if (y != null) base.top = `${y}px`
-  
+  if (x != null)
+    base.left = `${x}px`
+  if (y != null)
+    base.top = `${y}px`
+
   const staticSide = {
     top: 'bottom',
     right: 'left',
@@ -178,7 +181,8 @@ function onBeforeEnter(el: Element) {
 
   const node = el as HTMLElement
   const refEl = referenceRef.value
-  if (!refEl) return
+  if (!refEl)
+    return
 
   const refRect = refEl.getBoundingClientRect()
   const side = arrowSide.value
@@ -194,10 +198,14 @@ function onBeforeEnter(el: Element) {
     const arrowRect = arrowEl.getBoundingClientRect()
     tipX = arrowRect.left + arrowRect.width * 0.5
     tipY = arrowRect.top + arrowRect.height * 0.5
-    if (side === 'top') tipY = arrowRect.bottom
-    if (side === 'bottom') tipY = arrowRect.top
-    if (side === 'left') tipX = arrowRect.right
-    if (side === 'right') tipX = arrowRect.left
+    if (side === 'top')
+      tipY = arrowRect.bottom
+    if (side === 'bottom')
+      tipY = arrowRect.top
+    if (side === 'left')
+      tipX = arrowRect.right
+    if (side === 'right')
+      tipX = arrowRect.left
   }
   else {
     const floatRect = node.getBoundingClientRect()
@@ -216,7 +224,8 @@ function onBeforeEnter(el: Element) {
 }
 
 function toggle() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   if (!open.value)
     lastOpenedAt.value = performance.now()
   open.value = !open.value
@@ -238,8 +247,10 @@ function isEventInside(e: Event, el: HTMLElement | null): boolean {
 }
 
 function handleOutside(e: Event) {
-  if (!props.closeOnClickOutside) return
-  if (!open.value) return
+  if (!props.closeOnClickOutside)
+    return
+  if (!open.value)
+    return
 
   if (performance.now() - lastOpenedAt.value < 60)
     return
@@ -251,9 +262,12 @@ function handleOutside(e: Event) {
 }
 
 function handleEsc(e: KeyboardEvent) {
-  if (!props.closeOnEsc) return
-  if (e.key !== 'Escape') return
-  if (!open.value) return
+  if (!props.closeOnEsc)
+    return
+  if (e.key !== 'Escape')
+    return
+  if (!open.value)
+    return
   close()
 }
 
@@ -282,7 +296,7 @@ watch(
 onMounted(async () => {
   document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', handleEsc)
-  
+
   // Pre-calculate position even when closed to avoid jump on first open
   await nextTick()
   if (referenceRef.value) {

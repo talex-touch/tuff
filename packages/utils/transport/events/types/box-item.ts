@@ -3,7 +3,7 @@
  * @module @talex-touch/utils/transport/events/types/box-item
  */
 
-import type { TuffIcon, TuffAction, TuffMeta } from './core-box'
+import type { TuffAction, TuffIcon, TuffMeta } from './core-box'
 
 // ============================================================================
 // BoxItem Core Types

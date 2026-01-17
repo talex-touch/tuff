@@ -1,13 +1,14 @@
 import type { IpcMainEvent } from 'electron'
+import type { Primitive } from './logger'
 import { performance } from 'node:perf_hooks'
-import { ipcMain } from 'electron'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { createLogger, formatDuration, type Primitive } from './logger'
+import { ipcMain } from 'electron'
+import { getSentryService } from '../modules/sentry/sentry-service'
+import { createLogger, formatDuration } from './logger'
 import { getPerfContextSnapshot } from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
-import { getSentryService } from '../modules/sentry/sentry-service'
 
-export type RendererPerfReport = {
+export interface RendererPerfReport {
   kind:
     | 'channel.sendSync.slow'
     | 'channel.send.slow'
@@ -30,7 +31,7 @@ export type RendererPerfReport = {
 
 type IpcDirection = 'renderer->main' | 'main->renderer'
 
-type PerfIncident = {
+interface PerfIncident {
   kind: string
   severity: 'warn' | 'error'
   at: number
@@ -42,16 +43,16 @@ type PerfIncident = {
   stack?: string
 }
 
-export type PerfSummary = {
+export interface PerfSummary {
   at: number
   total: number
   errorCount: number
   kinds: string
-  topSlow: Array<{ name: string, durationMs: number }>
-  topEvents: Array<{ key: string, count: number }>
+  topSlow: Array<{ name: string; durationMs: number }>
+  topEvents: Array<{ key: string; count: number }>
 }
 
-type PerfAggregate = {
+interface PerfAggregate {
   count: number
   warnCount: number
   errorCount: number
@@ -71,7 +72,7 @@ const IPC_ERROR_MS = 1_000
 const UI_DEFAULT_WARN_MS = 250
 const UI_DEFAULT_ERROR_MS = 1_500
 
-function resolveUiThreshold(kind: RendererPerfReport['kind']): { warn: number, error: number } {
+function resolveUiThreshold(kind: RendererPerfReport['kind']): { warn: number; error: number } {
   switch (kind) {
     case 'ui.component.load':
       return { warn: 150, error: 1_000 }
@@ -115,18 +116,19 @@ function pushWithCap<T>(arr: T[], item: T, cap: number): void {
   }
 }
 
-function toLogMeta(meta: Record<string, unknown> | undefined): Record<string, Primitive> | undefined {
-  if (!meta)
-    return undefined
+function toLogMeta(
+  meta: Record<string, unknown> | undefined
+): Record<string, Primitive> | undefined {
+  if (!meta) return undefined
 
   const safe: Record<string, Primitive> = {}
   for (const [key, value] of Object.entries(meta)) {
     if (
-      value === null
-      || value === undefined
-      || typeof value === 'string'
-      || typeof value === 'number'
-      || typeof value === 'boolean'
+      value === null ||
+      value === undefined ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
     ) {
       safe[key] = value
       continue
@@ -135,8 +137,7 @@ function toLogMeta(meta: Record<string, unknown> | undefined): Record<string, Pr
     try {
       const encoded = JSON.stringify(value)
       safe[key] = encoded.length > 300 ? `${encoded.slice(0, 300)}…` : encoded
-    }
-    catch {
+    } catch {
       safe[key] = '[unserializable]'
     }
   }
@@ -182,13 +183,13 @@ function queueNexusPerformance(incident: PerfIncident): void {
         kind: incident.kind,
         severity: incident.severity,
         eventName: incident.eventName,
-        durationMs: typeof incident.durationMs === 'number' ? Math.round(incident.durationMs) : undefined,
+        durationMs:
+          typeof incident.durationMs === 'number' ? Math.round(incident.durationMs) : undefined,
         direction: incident.direction,
-        meta: incident.meta ? toLogMeta(incident.meta) : undefined,
-      },
+        meta: incident.meta ? toLogMeta(incident.meta) : undefined
+      }
     })
-  }
-  catch {
+  } catch {
     // ignore nexus telemetry failures
   }
 }
@@ -201,7 +202,7 @@ export class PerfMonitor {
     warnCount: 0,
     errorCount: 0,
     maxDurationMs: 0,
-    lastAt: 0,
+    lastAt: 0
   }
 
   private lastLoopTick = 0
@@ -228,16 +229,15 @@ export class PerfMonitor {
             this.recordEventLoopLag(lag, severity)
           }
         },
-        { interval: 100, unit: 'milliseconds' },
+        { interval: 100, unit: 'milliseconds' }
       )
     }
 
     if (!pollingService.isRegistered(PERF_SUMMARY_TASK_ID)) {
-      pollingService.register(
-        PERF_SUMMARY_TASK_ID,
-        () => this.flushSummary(),
-        { interval: SUMMARY_INTERVAL_MS, unit: 'milliseconds' },
-      )
+      pollingService.register(PERF_SUMMARY_TASK_ID, () => this.flushSummary(), {
+        interval: SUMMARY_INTERVAL_MS,
+        unit: 'milliseconds'
+      })
     }
 
     pollingService.start()
@@ -248,14 +248,11 @@ export class PerfMonitor {
     pollingService.unregister(PERF_SUMMARY_TASK_ID)
   }
 
-  recordIpcHandler(
-    eventName: string,
-    durationMs: number,
-    meta: Record<string, unknown>,
-  ): void {
+  recordIpcHandler(eventName: string, durationMs: number, meta: Record<string, unknown>): void {
     const now = Date.now()
 
-    const severity = durationMs >= IPC_ERROR_MS ? 'error' : durationMs >= IPC_WARN_MS ? 'warn' : null
+    const severity =
+      durationMs >= IPC_ERROR_MS ? 'error' : durationMs >= IPC_WARN_MS ? 'warn' : null
     if (!severity) {
       this.updateAggregate(`handler:${eventName}`, now, durationMs, null)
       return
@@ -270,7 +267,7 @@ export class PerfMonitor {
       eventName,
       durationMs,
       direction: 'renderer->main',
-      meta,
+      meta
     }
     this.pushIncident(incident)
     queueNexusPerformance(incident)
@@ -279,19 +276,18 @@ export class PerfMonitor {
     const contexts = getPerfContextSnapshot(2)
     if (severity === 'error') {
       ipcPerfLog.error(message, {
-        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts }),
+        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts })
       })
-    }
-    else {
+    } else {
       ipcPerfLog.warn(message, {
-        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts }),
+        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts })
       })
     }
     this.lastSlowIpc = {
       kind: 'ipc.handler.slow',
       eventName,
       durationMs,
-      at: now,
+      at: now
     }
 
     if (eventName === 'tuff:dashboard') {
@@ -303,8 +299,8 @@ export class PerfMonitor {
           eventName,
           durationMs,
           severity,
-          ...meta,
-        },
+          ...meta
+        }
       })
     }
   }
@@ -319,7 +315,7 @@ export class PerfMonitor {
       at: now,
       eventName,
       direction: 'renderer->main',
-      meta,
+      meta
     }
     this.pushIncident(incident)
     ipcPerfLog.warn(`No handler for ${eventName}`, { meta: toLogMeta(meta) })
@@ -331,13 +327,14 @@ export class PerfMonitor {
       ? resolveUiThreshold(report.kind)
       : { warn: IPC_WARN_MS, error: IPC_ERROR_MS }
 
-    const severity = report.kind === 'channel.send.timeout'
-      ? 'error'
-      : report.durationMs >= thresholds.error
+    const severity =
+      report.kind === 'channel.send.timeout'
         ? 'error'
-        : report.durationMs >= thresholds.warn
-          ? 'warn'
-          : null
+        : report.durationMs >= thresholds.error
+          ? 'error'
+          : report.durationMs >= thresholds.warn
+            ? 'warn'
+            : null
 
     const key = `renderer:${report.kind}:${report.eventName}`
     this.updateAggregate(key, report.at, report.durationMs, severity)
@@ -355,7 +352,7 @@ export class PerfMonitor {
       direction: 'renderer->main',
       meta: report.meta,
       payloadPreview: report.payloadPreview,
-      stack: report.stack,
+      stack: report.stack
     }
     this.pushIncident(incident)
     queueNexusPerformance(incident)
@@ -366,22 +363,21 @@ export class PerfMonitor {
         kind: report.kind,
         durationMs: Math.round(report.durationMs),
         payload: report.payloadPreview,
-        ...report.meta,
+        ...report.meta
       }),
-      error: severity === 'error' ? report.stack : undefined,
+      error: severity === 'error' ? report.stack : undefined
     }
 
     if (severity === 'error') {
       ipcPerfLog.error(message, logOptions)
-    }
-    else {
+    } else {
       ipcPerfLog.warn(message, logOptions)
     }
     this.lastSlowIpc = {
       kind: report.kind,
       eventName: report.eventName,
       durationMs: report.durationMs,
-      at: report.at,
+      at: report.at
     }
 
     if (report.eventName === 'tuff:dashboard' || isUiSignal) {
@@ -395,8 +391,8 @@ export class PerfMonitor {
           at: report.at,
           payloadPreview: report.payloadPreview,
           stack: report.stack,
-          ...report.meta,
-        },
+          ...report.meta
+        }
       })
     }
   }
@@ -406,42 +402,38 @@ export class PerfMonitor {
     this.loopLagAggregate.count += 1
     this.loopLagAggregate.lastAt = now
     this.loopLagAggregate.maxDurationMs = Math.max(this.loopLagAggregate.maxDurationMs, lagMs)
-    if (severity === 'warn')
-      this.loopLagAggregate.warnCount += 1
-    else
-      this.loopLagAggregate.errorCount += 1
+    if (severity === 'warn') this.loopLagAggregate.warnCount += 1
+    else this.loopLagAggregate.errorCount += 1
 
     const incident: PerfIncident = {
       kind: 'event_loop.lag',
       severity,
       at: now,
-      durationMs: lagMs,
+      durationMs: lagMs
     }
     this.pushIncident(incident)
 
     const message = `Event loop lag ${formatDuration(lagMs)}`
     const contexts = getPerfContextSnapshot(3)
     const pollingDiagnostics = pollingService.getDiagnostics()
-    const pollingActive = pollingDiagnostics.activeTasks
-      .slice(0, 4)
-      .map(task => ({
-        id: task.id,
-        ageMs: Math.round(task.ageMs),
-      }))
+    const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
+      id: task.id,
+      ageMs: Math.round(task.ageMs)
+    }))
     const pollingRecent = pollingDiagnostics.recentTasks
       .sort((a, b) => b.lastDurationMs - a.lastDurationMs)
       .slice(0, 3)
-      .map(task => ({
+      .map((task) => ({
         id: task.id,
         durationMs: Math.round(task.lastDurationMs),
-        ageMs: Math.max(0, now - task.lastEndAt),
+        ageMs: Math.max(0, now - task.lastEndAt)
       }))
     const lastSlowIpc = this.lastSlowIpc
       ? {
           kind: this.lastSlowIpc.kind,
           eventName: this.lastSlowIpc.eventName,
           durationMs: Math.round(this.lastSlowIpc.durationMs),
-          ageMs: Math.max(0, now - this.lastSlowIpc.at),
+          ageMs: Math.max(0, now - this.lastSlowIpc.at)
         }
       : undefined
     const meta = toLogMeta({
@@ -449,12 +441,11 @@ export class PerfMonitor {
       contexts,
       pollingActive,
       pollingRecent,
-      lastSlowIpc,
+      lastSlowIpc
     })
     if (severity === 'error') {
       loopPerfLog.error(message, { meta })
-    }
-    else {
+    } else {
       loopPerfLog.warn(message, { meta })
     }
 
@@ -468,8 +459,8 @@ export class PerfMonitor {
         contexts,
         pollingActive,
         pollingRecent,
-        lastSlowIpc,
-      },
+        lastSlowIpc
+      }
     })
   }
 
@@ -481,31 +472,28 @@ export class PerfMonitor {
     key: string,
     at: number,
     durationMs: number,
-    severity: 'warn' | 'error' | null,
+    severity: 'warn' | 'error' | null
   ): void {
     const agg = this.ipcAggregates.get(key) ?? {
       count: 0,
       warnCount: 0,
       errorCount: 0,
       maxDurationMs: 0,
-      lastAt: 0,
+      lastAt: 0
     }
     agg.count += 1
     agg.lastAt = at
     agg.maxDurationMs = Math.max(agg.maxDurationMs, durationMs)
-    if (severity === 'warn')
-      agg.warnCount += 1
-    if (severity === 'error')
-      agg.errorCount += 1
+    if (severity === 'warn') agg.warnCount += 1
+    if (severity === 'error') agg.errorCount += 1
     this.ipcAggregates.set(key, agg)
   }
 
   flushSummary(): void {
     const snapshot = this.incidents.slice()
-    if (snapshot.length === 0)
-      return
+    if (snapshot.length === 0) return
 
-    const errorCount = snapshot.filter(item => item.severity === 'error').length
+    const errorCount = snapshot.filter((item) => item.severity === 'error').length
 
     const byKind = new Map<string, number>()
     for (const incident of snapshot) {
@@ -522,7 +510,7 @@ export class PerfMonitor {
 
     // Show top slow incidents
     const slow = snapshot
-      .filter(i => typeof i.durationMs === 'number')
+      .filter((i) => typeof i.durationMs === 'number')
       .sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0))
       .slice(0, 5)
 
@@ -533,8 +521,7 @@ export class PerfMonitor {
 
     const eventCounts = new Map<string, number>()
     for (const incident of snapshot) {
-      if (!incident.eventName)
-        continue
+      if (!incident.eventName) continue
       const channelType =
         incident.meta && typeof incident.meta.channelType === 'string'
           ? incident.meta.channelType
@@ -557,9 +544,9 @@ export class PerfMonitor {
       kinds,
       topSlow: slow.map((incident) => ({
         name: incident.eventName ?? incident.kind,
-        durationMs: Math.round(incident.durationMs ?? 0),
+        durationMs: Math.round(incident.durationMs ?? 0)
       })),
-      topEvents,
+      topEvents
     })
 
     // Reset snapshot window while keeping aggregates.
@@ -571,14 +558,10 @@ export const perfMonitor = new PerfMonitor()
 
 export function registerPerfReportListener(): () => void {
   const handler = (_event: IpcMainEvent, report: RendererPerfReport) => {
-    if (!report || typeof report !== 'object')
-      return
-    if (!report.eventName || typeof report.eventName !== 'string')
-      return
-    if (!Number.isFinite(report.durationMs))
-      return
-    if (!Number.isFinite(report.at))
-      return
+    if (!report || typeof report !== 'object') return
+    if (!report.eventName || typeof report.eventName !== 'string') return
+    if (!Number.isFinite(report.durationMs)) return
+    if (!Number.isFinite(report.at)) return
 
     perfMonitor.recordRendererReport(report)
   }

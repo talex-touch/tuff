@@ -1,6 +1,6 @@
-import TxStatCard from './src/TxStatCard.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { StatCardProps } from './src/types.ts'
+import { withInstall } from '../../../utils/withInstall'
+import TxStatCard from './src/TxStatCard.vue'
 
 const StatCard = withInstall(TxStatCard)
 

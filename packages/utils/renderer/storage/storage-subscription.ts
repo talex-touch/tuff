@@ -1,7 +1,7 @@
 import type { ITuffTransport } from '../../transport'
 import type { StorageUpdateNotification } from '../../transport/events/types'
-import { StorageEvents } from '../../transport/events'
 import type { IStorageChannel } from './base-storage'
+import { StorageEvents } from '../../transport/events'
 
 /**
  * Storage subscription callback type
@@ -106,7 +106,8 @@ class StorageSubscriptionManager {
       this.channel
         .send('storage:get', configName)
         .then((data) => {
-          if (data === undefined || data === null) return
+          if (data === undefined || data === null)
+            return
           this.cachedData.set(configName, data)
           try {
             callback(data)
@@ -123,7 +124,8 @@ class StorageSubscriptionManager {
       this.transport
         .send(StorageEvents.app.get, { key: configName })
         .then((data) => {
-          if (data === undefined || data === null) return
+          if (data === undefined || data === null)
+            return
           this.cachedData.set(configName, data)
           try {
             callback(data)

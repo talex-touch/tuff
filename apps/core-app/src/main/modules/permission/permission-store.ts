@@ -4,16 +4,10 @@
  * Persistent storage for plugin permissions.
  */
 
-import type {
-  PermissionGrant,
-  PluginPermissionStatus,
-} from '@talex-touch/utils/permission'
-import {
-  getPluginPermissionStatus,
-  DEFAULT_PERMISSIONS,
-} from '@talex-touch/utils/permission'
-import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
+import type { PermissionGrant, PluginPermissionStatus } from '@talex-touch/utils/permission'
 import path from 'node:path'
+import { DEFAULT_PERMISSIONS, getPluginPermissionStatus } from '@talex-touch/utils/permission'
+import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 import fse from 'fs-extra'
 
 interface AuditLogEntry {
@@ -80,7 +74,7 @@ export class PermissionStore {
     // Return default empty data
     return {
       version: CURRENT_VERSION,
-      grants: {},
+      grants: {}
     }
   }
 
@@ -91,7 +85,7 @@ export class PermissionStore {
     console.info('[PermissionStore] Migrating data to version', CURRENT_VERSION)
     return {
       version: CURRENT_VERSION,
-      grants: data.grants || {},
+      grants: data.grants || {}
     }
   }
 
@@ -126,11 +120,16 @@ export class PermissionStore {
       pluginId,
       permissionId,
       grantedAt: Date.now(),
-      grantedBy,
+      grantedBy
     }
 
     // Add audit log
-    this.addAuditLog('grant', pluginId, permissionId, grantedBy === 'trust' ? 'system' : grantedBy === 'auto' ? 'auto' : 'user')
+    this.addAuditLog(
+      'grant',
+      pluginId,
+      permissionId,
+      grantedBy === 'trust' ? 'system' : grantedBy === 'auto' ? 'auto' : 'user'
+    )
 
     this.dirty = true
     this.save()
@@ -287,7 +286,7 @@ export class PermissionStore {
       action,
       permissionId,
       triggeredBy,
-      details,
+      details
     }
 
     this.data.auditLogs.unshift(entry)

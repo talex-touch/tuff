@@ -1,22 +1,30 @@
 <template>
   <div class="demo">
     <div class="demo__row">
-      <div class="demo__title">flowEffect="none"</div>
+      <div class="demo__title">
+        flowEffect="none"
+      </div>
       <TxProgressBar :percentage="72" height="12px" show-text mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">flowEffect="shimmer"</div>
+      <div class="demo__title">
+        flowEffect="shimmer"
+      </div>
       <TxProgressBar :percentage="72" height="12px" show-text flow-effect="shimmer" mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">flowEffect="wave"</div>
+      <div class="demo__title">
+        flowEffect="wave"
+      </div>
       <TxProgressBar :percentage="72" height="12px" show-text flow-effect="wave" mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">flowEffect="particles"</div>
+      <div class="demo__title">
+        flowEffect="particles"
+      </div>
       <TxProgressBar :percentage="72" height="12px" show-text flow-effect="particles" mask-background="glass" />
     </div>
   </div>

@@ -5,9 +5,9 @@
  * Displays feedback when content is shared via system or copied to clipboard.
  */
 
-import { Notification } from 'electron'
-import type { NativeShareResult, FlowPayloadType } from '@talex-touch/utils'
+import type { FlowPayloadType, NativeShareResult } from '@talex-touch/utils'
 import { FlowTransferKeys, i18nMsg } from '@talex-touch/utils/i18n'
+import { Notification } from 'electron'
 
 /**
  * Share notification configuration
@@ -45,7 +45,8 @@ const MESSAGES = {
   },
   fileRevealed: {
     title: i18nMsg(FlowTransferKeys.FILE_REVEALED),
-    body: (count: number) => count > 1 ? `${count} files revealed in file manager` : 'File revealed in file manager'
+    body: (count: number) =>
+      count > 1 ? `${count} files revealed in file manager` : 'File revealed in file manager'
   },
   shareError: {
     title: i18nMsg(FlowTransferKeys.SHARE_FAILED),

@@ -8,10 +8,10 @@
 import type {
   MarketPluginInfo,
   MarketSearchOptions,
-  MarketSearchResult,
+  MarketSearchResult
 } from '@talex-touch/utils/plugin/providers'
-import { PluginMarketClient } from '@talex-touch/utils/plugin/providers'
 import { getTpexApiBase } from '@talex-touch/utils/env'
+import { PluginMarketClient } from '@talex-touch/utils/plugin/providers'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('PluginMarketService')
@@ -35,7 +35,7 @@ export function getMarketClient(): PluginMarketClient {
     const tpexApiBase = resolveTpexApiBase()
     marketClient = new PluginMarketClient({
       tpexApiBase,
-      npmRegistry: 'https://registry.npmjs.org',
+      npmRegistry: 'https://registry.npmjs.org'
     })
     log.info('Plugin market client initialized', { meta: { tpexApiBase } })
   }
@@ -45,7 +45,9 @@ export function getMarketClient(): PluginMarketClient {
 /**
  * Search for plugins across all sources
  */
-export async function searchPlugins(options: MarketSearchOptions = {}): Promise<MarketSearchResult> {
+export async function searchPlugins(
+  options: MarketSearchOptions = {}
+): Promise<MarketSearchResult> {
   const client = getMarketClient()
   log.debug('Searching plugins', { meta: { keyword: options.keyword, source: options.source } })
 
@@ -55,12 +57,11 @@ export async function searchPlugins(options: MarketSearchOptions = {}): Promise<
       meta: {
         total: result.total,
         tpex: result.sources.tpex,
-        npm: result.sources.npm,
-      },
+        npm: result.sources.npm
+      }
     })
     return result
-  }
-  catch (error) {
+  } catch (error) {
     log.error('Plugin search failed', { error })
     throw error
   }
@@ -71,15 +72,14 @@ export async function searchPlugins(options: MarketSearchOptions = {}): Promise<
  */
 export async function getPluginDetails(
   identifier: string,
-  source?: 'tpex' | 'npm',
+  source?: 'tpex' | 'npm'
 ): Promise<MarketPluginInfo | null> {
   const client = getMarketClient()
   log.debug('Getting plugin details', { meta: { identifier, source } })
 
   try {
     return await client.getPlugin(identifier, source)
-  }
-  catch (error) {
+  } catch (error) {
     log.error('Failed to get plugin details', { error })
     return null
   }
@@ -94,8 +94,7 @@ export async function listOfficialPlugins(): Promise<MarketPluginInfo[]> {
 
   try {
     return await client.listOfficialPlugins()
-  }
-  catch (error) {
+  } catch (error) {
     log.error('Failed to list official plugins', { error })
     return []
   }
@@ -110,8 +109,7 @@ export async function listNpmPlugins(): Promise<MarketPluginInfo[]> {
 
   try {
     return await client.listNpmPlugins()
-  }
-  catch (error) {
+  } catch (error) {
     log.error('Failed to list NPM plugins', { error })
     return []
   }
@@ -136,8 +134,7 @@ export async function getFeaturedPlugins(limit = 20): Promise<MarketPluginInfo[]
     const result = await client.search({ limit, source: 'all' })
     // Filter to get official plugins first, then popular ones
     return result.plugins.slice(0, limit)
-  }
-  catch (error) {
+  } catch (error) {
     log.error('Failed to get featured plugins', { error })
     return []
   }
@@ -148,7 +145,7 @@ export async function getFeaturedPlugins(limit = 20): Promise<MarketPluginInfo[]
  */
 export async function getPluginsByCategory(
   category: string,
-  limit = 50,
+  limit = 50
 ): Promise<MarketPluginInfo[]> {
   const client = getMarketClient()
   log.debug('Getting plugins by category', { meta: { category } })
@@ -156,8 +153,7 @@ export async function getPluginsByCategory(
   try {
     const result = await client.search({ category, limit })
     return result.plugins
-  }
-  catch (error) {
+  } catch (error) {
     log.error('Failed to get plugins by category', { error })
     return []
   }

@@ -1,9 +1,6 @@
-<template>
-  <component :is="as" class="gradient-border" :style="rootStyle"></component>
-</template>
-
 <script lang="ts">
-import { defineComponent, computed, PropType, CSSProperties } from 'vue'
+import type { CSSProperties, PropType } from 'vue'
+import { computed, defineComponent } from 'vue'
 
 /**
  * GradientBorder
@@ -85,6 +82,10 @@ export default defineComponent({
   }
 })
 </script>
+
+<template>
+  <component :is="as" class="gradient-border" :style="rootStyle" />
+</template>
 
 <style scoped>
 /* Register a typed custom property for the angle,

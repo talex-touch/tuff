@@ -1,7 +1,7 @@
+import type { ContextMenuProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
 import TxContextMenu from './src/TxContextMenu.vue'
 import TxContextMenuItem from './src/TxContextMenuItem.vue'
-import { withInstall } from '../../../utils/withInstall'
-import type { ContextMenuProps } from './src/types'
 
 const ContextMenu = withInstall(TxContextMenu)
 const ContextMenuItem = withInstall(TxContextMenuItem)

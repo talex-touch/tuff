@@ -21,7 +21,8 @@ export function createDisposableBag(): DisposableBag {
       for (const disposer of disposers) {
         try {
           disposer()
-        } catch {
+        }
+        catch {
           // ignore disposer errors
         }
       }
@@ -32,4 +33,3 @@ export function createDisposableBag(): DisposableBag {
     },
   }
 }
-

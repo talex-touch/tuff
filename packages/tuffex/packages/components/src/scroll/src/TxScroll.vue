@@ -292,7 +292,7 @@ async function initBetterScroll() {
       const x = wheelTargetX ?? (typeof bs.x === 'number' ? bs.x : 0)
       const y = wheelTargetY ?? (typeof bs.y === 'number' ? bs.y : 0)
       if ((bs as any).pending)
-        ;(bs as any)?.stop?.()
+      ;(bs as any)?.stop?.()
       bs.scrollTo(x, y, 0)
     })
   }
@@ -388,7 +388,7 @@ async function initBetterScroll() {
     }
 
     if (isBouncing)
-      ;(bs as any)?.stop?.()
+    ;(bs as any)?.stop?.()
 
     const currXAfterStop = typeof bs.x === 'number' ? bs.x : currX
     const currYAfterStop = typeof bs.y === 'number' ? bs.y : currY

@@ -1,43 +1,18 @@
-<template>
-  <div
-    :class="[
-      'tx-avatar',
-      `tx-avatar--${size}`,
-      { 'tx-avatar--clickable': clickable }
-    ]"
-    :style="customStyle"
-    @click="handleClick"
-  >
-    <img
-      v-if="src && !imageError"
-      :src="src"
-      :alt="alt"
-      class="tx-avatar__image"
-      @error="handleImageError"
-    />
-    
-    <div v-else class="tx-avatar__fallback">
-      <slot v-if="$slots.default" />
-      <TxIcon v-else-if="icon" :name="icon" class="tx-avatar__icon" />
-      <span v-else-if="fallbackText" class="tx-avatar__text">
-        {{ fallbackText }}
-      </span>
-      <TxIcon v-else name="user" class="tx-avatar__default-icon" />
-    </div>
-    
-    <div v-if="status" class="tx-avatar__status" :class="`tx-avatar__status--${status}`">
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { AvatarProps } from './types'
 import { computed, ref } from 'vue'
 import { TxIcon } from '../../icon'
-import type { AvatarSize, AvatarStatus, AvatarProps } from './types'
 
 defineOptions({
   name: 'TxAvatar',
 })
+
+const props = withDefaults(defineProps<Props>(), {
+  size: 'medium',
+  clickable: false,
+})
+
+const emit = defineEmits<Emits>()
 
 interface Props extends AvatarProps {}
 
@@ -45,20 +20,13 @@ interface Emits {
   click: []
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  size: 'medium',
-  clickable: false
-})
-
-const emit = defineEmits<Emits>()
-
 const imageError = ref(false)
 
 const customStyle = computed(() => {
   if (props.backgroundColor) {
     return {
       '--tx-avatar-bg': props.backgroundColor,
-      '--tx-avatar-text': props.textColor || '#ffffff'
+      '--tx-avatar-text': props.textColor || '#ffffff',
     }
   }
   return {}
@@ -69,23 +37,54 @@ const fallbackText = computed(() => {
     const words = props.name.split(' ').filter(word => word.length > 0)
     if (words.length >= 2) {
       return words[0][0].toUpperCase() + words[words.length - 1][0].toUpperCase()
-    } else if (words.length === 1) {
+    }
+    else if (words.length === 1) {
       return words[0][0].toUpperCase()
     }
   }
   return ''
 })
 
-const handleImageError = () => {
+function handleImageError() {
   imageError.value = true
 }
 
-const handleClick = () => {
+function handleClick() {
   if (props.clickable) {
     emit('click')
   }
 }
 </script>
+
+<template>
+  <div
+    class="tx-avatar" :class="[
+      `tx-avatar--${size}`,
+      { 'tx-avatar--clickable': clickable },
+    ]"
+    :style="customStyle"
+    @click="handleClick"
+  >
+    <img
+      v-if="src && !imageError"
+      :src="src"
+      :alt="alt"
+      class="tx-avatar__image"
+      @error="handleImageError"
+    >
+
+    <div v-else class="tx-avatar__fallback">
+      <slot v-if="$slots.default" />
+      <TxIcon v-else-if="icon" :name="icon" class="tx-avatar__icon" />
+      <span v-else-if="fallbackText" class="tx-avatar__text">
+        {{ fallbackText }}
+      </span>
+      <TxIcon v-else name="user" class="tx-avatar__default-icon" />
+    </div>
+
+    <div v-if="status" class="tx-avatar__status" :class="`tx-avatar__status--${status}`" />
+  </div>
+</template>
 
 <style scoped>
 .tx-avatar {

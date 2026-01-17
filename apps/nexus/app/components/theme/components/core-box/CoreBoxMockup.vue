@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
-import Logo from "../../../icon/Logo.vue";
 import TypeIt from 'typeit'
+import { onMounted } from 'vue'
+import Logo from '../../../icon/Logo.vue'
 
 onMounted(() => {
   new TypeIt('#input', {
@@ -17,13 +17,13 @@ onMounted(() => {
       'Generate code snippets based on this description.',
       'Perform sentiment analysis on this feedback.',
       'Extract and organize references from this research paper.',
-      'Transform this data into an interactive visualization.'
+      'Transform this data into an interactive visualization.',
     ],
     speed: 25,
     deleteSpeed: 20,
     nextStringDelay: 2000,
     loop: true,
-    breakLines: false
+    breakLines: false,
   }).go()
 })
 </script>
@@ -34,7 +34,7 @@ onMounted(() => {
       <Logo />
     </div>
     <div class="CoreBoxMockup-Input">
-      <input id="input" placeholder="Type what you want to search by tuff." />
+      <input id="input" placeholder="Type what you want to search by tuff.">
     </div>
     <div class="CoreBoxMockup-Suffix">
       <i />

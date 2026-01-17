@@ -1,5 +1,5 @@
-import { listTelemetryMessages } from '../../utils/messageStore'
 import { requireAdmin } from '../../utils/auth'
+import { listTelemetryMessages } from '../../utils/messageStore'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)

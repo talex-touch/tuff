@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Component, PropType, VNode } from 'vue'
 /**
  * TxBlowDialog Component
  *
@@ -17,14 +18,14 @@
  * @component
  */
 import {
-  ref,
+
   defineComponent,
   onMounted,
   onUnmounted,
+
   provide,
-  type Component,
-  type PropType,
-  type VNode,
+  ref,
+
 } from 'vue'
 
 defineOptions({
@@ -92,7 +93,8 @@ function setFocusToDialog(): void {
   const confirmButton = dialogWrapper.value?.querySelector('.tx-blow-dialog__confirm')
   if (confirmButton instanceof HTMLElement) {
     confirmButton.focus()
-  } else if (dialogWrapper.value) {
+  }
+  else if (dialogWrapper.value) {
     dialogWrapper.value.setAttribute('tabindex', '-1')
     dialogWrapper.value.focus()
   }
@@ -113,10 +115,12 @@ function restoreFocus(): void {
  */
 function applyBackgroundBlur(apply: boolean): void {
   const isVitePress = !!document.querySelector('.VPApp')
-  if (isVitePress) return
+  if (isVitePress)
+    return
 
   const app = document.getElementById('app')
-  if (!app) return
+  if (!app)
+    return
 
   if (apply) {
     Object.assign(app.style, {
@@ -125,7 +129,8 @@ function applyBackgroundBlur(apply: boolean): void {
       opacity: '.75',
     })
     didApplyBackgroundBlur = true
-  } else {
+  }
+  else {
     Object.assign(app.style, {
       transform: 'scale(1)',
       opacity: '1',
@@ -169,7 +174,9 @@ provide('destroy', destroy)
         <component :is="renderComp" v-if="renderComp" />
         <component :is="comp" v-else-if="comp" />
         <template v-else>
-          <p v-if="title" id="tx-blow-dialog-title" class="tx-blow-dialog__title">{{ title }}</p>
+          <p v-if="title" id="tx-blow-dialog-title" class="tx-blow-dialog__title">
+            {{ title }}
+          </p>
           <div class="tx-blow-dialog__content">
             <span v-html="message" />
           </div>

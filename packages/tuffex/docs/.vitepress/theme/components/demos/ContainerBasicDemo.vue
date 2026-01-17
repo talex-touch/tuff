@@ -3,10 +3,14 @@
     <TxContainer :padding="16">
       <TxRow :gutter="16">
         <TxCol :span="12">
-          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">Left</div>
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            Left
+          </div>
         </TxCol>
         <TxCol :span="12">
-          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">Right</div>
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            Right
+          </div>
         </TxCol>
       </TxRow>
     </TxContainer>

@@ -5,15 +5,15 @@
  * Supports macOS Share Sheet, Windows Share API, etc.
  */
 
-import { shell } from 'electron'
-import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
 import type {
   FlowPayload,
   FlowTarget,
   NativeShareOptions,
   NativeShareResult
 } from '@talex-touch/utils'
+import { exec } from 'node:child_process'
+import { promisify } from 'node:util'
+import { shell } from 'electron'
 import { shareNotificationService } from './share-notification'
 
 const execAsync = promisify(exec)
@@ -190,7 +190,7 @@ export class NativeShareService {
   private async shareAirDrop(files: string[]): Promise<NativeShareResult> {
     try {
       // Use NSSharingService via AppleScript
-      const filePaths = files.map(f => `POSIX file "${f}"`).join(', ')
+      const filePaths = files.map((f) => `POSIX file "${f}"`).join(', ')
       const script = `
         use framework "AppKit"
         use scripting additions
@@ -204,7 +204,9 @@ export class NativeShareService {
       return { success: true, target: 'airdrop' }
     } catch (error) {
       // Fallback: open AirDrop window
-      await execAsync('open /System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app')
+      await execAsync(
+        'open /System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app'
+      )
       return { success: true, target: 'airdrop-window' }
     }
   }
@@ -222,7 +224,7 @@ export class NativeShareService {
           tell application "Mail"
             activate
             set newMessage to make new outgoing message with properties {subject:"${title || ''}", content:"${text || ''}"}
-            ${files.map(f => `tell newMessage to make new attachment with properties {file name:"${f}"}`).join('\n')}
+            ${files.map((f) => `tell newMessage to make new attachment with properties {file name:"${f}"}`).join('\n')}
             tell newMessage to set visible to true
           end tell
         `
@@ -326,7 +328,8 @@ export class NativeShareService {
 
     switch (payload.type) {
       case 'text':
-        options.text = typeof payload.data === 'string' ? payload.data : JSON.stringify(payload.data)
+        options.text =
+          typeof payload.data === 'string' ? payload.data : JSON.stringify(payload.data)
         break
 
       case 'json':
@@ -356,7 +359,8 @@ export class NativeShareService {
         break
 
       default:
-        options.text = typeof payload.data === 'string' ? payload.data : JSON.stringify(payload.data)
+        options.text =
+          typeof payload.data === 'string' ? payload.data : JSON.stringify(payload.data)
     }
 
     // Add context as title if available

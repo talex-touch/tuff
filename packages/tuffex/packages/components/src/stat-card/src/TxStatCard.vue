@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { StatCardProps } from './types.ts'
 import NumberFlow from '@number-flow/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { StatCardProps } from './types.ts'
 
 defineOptions({
   name: 'TxStatCard',
@@ -13,7 +13,8 @@ const props = withDefaults(defineProps<StatCardProps>(), {
 })
 
 const numericValue = computed(() => {
-  if (typeof props.value === 'number') return props.value
+  if (typeof props.value === 'number')
+    return props.value
   if (typeof props.value === 'string') {
     const n = Number(props.value)
     return Number.isFinite(n) ? n : null
@@ -42,12 +43,14 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (mountTimer != null) clearTimeout(mountTimer)
+  if (mountTimer != null)
+    clearTimeout(mountTimer)
   mountTimer = null
 })
 
 watch(numericValue, (v) => {
-  if (v == null) return
+  if (v == null)
+    return
   displayNumber.value = v
 })
 
@@ -82,7 +85,9 @@ watch(
         </slot>
       </div>
       <div class="tx-stat-card__label">
-        <slot name="label">{{ label }}</slot>
+        <slot name="label">
+          {{ label }}
+        </slot>
       </div>
     </div>
 

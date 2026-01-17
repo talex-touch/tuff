@@ -25,7 +25,7 @@ async function executeTask() {
     const task: AgentTask = {
       agentId: props.agent.id,
       type: 'execute',
-      input: { query: taskInput.value },
+      input: { query: taskInput.value }
     }
 
     const result = await touchChannel.send('agents:execute-immediate', task)
@@ -33,16 +33,13 @@ async function executeTask() {
 
     if (result?.success) {
       ElMessage.success(t('intelligence.agents.task_success'))
-    }
-    else {
+    } else {
       ElMessage.error(result?.error || t('intelligence.agents.task_failed'))
     }
-  }
-  catch (err) {
+  } catch (err) {
     console.error('Task execution failed:', err)
     ElMessage.error(t('intelligence.agents.task_failed'))
-  }
-  finally {
+  } finally {
     executing.value = false
   }
 }
@@ -51,7 +48,7 @@ function getCapabilityIcon(type: string): string {
   const iconMap: Record<string, string> = {
     action: 'i-carbon-play-filled',
     query: 'i-carbon-search',
-    workflow: 'i-carbon-flow',
+    workflow: 'i-carbon-flow'
   }
   return iconMap[type] || 'i-carbon-circle-filled'
 }
@@ -63,7 +60,9 @@ function getCapabilityIcon(type: string): string {
     <div class="detail-header">
       <div class="header-icon i-carbon-bot" />
       <div class="header-info">
-        <h2 class="agent-title">{{ agent.name }}</h2>
+        <h2 class="agent-title">
+          {{ agent.name }}
+        </h2>
         <p class="agent-version">v{{ agent.version }}</p>
       </div>
       <el-tag v-if="agent.enabled !== false" type="success">
@@ -76,23 +75,27 @@ function getCapabilityIcon(type: string): string {
 
     <!-- Description -->
     <div class="detail-section">
-      <h3 class="section-title">{{ t('intelligence.agents.description') }}</h3>
-      <p class="section-content">{{ agent.description }}</p>
+      <h3 class="section-title">
+        {{ t('intelligence.agents.description') }}
+      </h3>
+      <p class="section-content">
+        {{ agent.description }}
+      </p>
     </div>
 
     <!-- Capabilities -->
     <div v-if="agent.capabilities?.length" class="detail-section">
-      <h3 class="section-title">{{ t('intelligence.agents.capabilities') }}</h3>
+      <h3 class="section-title">
+        {{ t('intelligence.agents.capabilities') }}
+      </h3>
       <div class="capabilities-grid">
-        <div
-          v-for="cap in agent.capabilities"
-          :key="cap.id"
-          class="capability-card"
-        >
+        <div v-for="cap in agent.capabilities" :key="cap.id" class="capability-card">
           <div class="cap-header">
             <span :class="getCapabilityIcon(cap.type)" />
             <span class="cap-name">{{ cap.id }}</span>
-            <el-tag size="small">{{ cap.type }}</el-tag>
+            <el-tag size="small">
+              {{ cap.type }}
+            </el-tag>
           </div>
         </div>
       </div>
@@ -100,14 +103,11 @@ function getCapabilityIcon(type: string): string {
 
     <!-- Tools -->
     <div v-if="agent.tools?.length" class="detail-section">
-      <h3 class="section-title">{{ t('intelligence.agents.tools') }}</h3>
+      <h3 class="section-title">
+        {{ t('intelligence.agents.tools') }}
+      </h3>
       <div class="tools-list">
-        <el-tag
-          v-for="tool in agent.tools"
-          :key="tool.toolId"
-          size="small"
-          class="tool-tag"
-        >
+        <el-tag v-for="tool in agent.tools" :key="tool.toolId" size="small" class="tool-tag">
           <span class="i-carbon-tool mr-1" />
           {{ tool.toolId }}
         </el-tag>
@@ -116,7 +116,9 @@ function getCapabilityIcon(type: string): string {
 
     <!-- Quick Execute -->
     <div class="detail-section">
-      <h3 class="section-title">{{ t('intelligence.agents.quick_execute') }}</h3>
+      <h3 class="section-title">
+        {{ t('intelligence.agents.quick_execute') }}
+      </h3>
       <div class="execute-form">
         <el-input
           v-model="taskInput"
@@ -138,7 +140,9 @@ function getCapabilityIcon(type: string): string {
 
       <!-- Result -->
       <div v-if="taskResult" class="execute-result">
-        <h4 class="result-title">{{ t('intelligence.agents.result') }}</h4>
+        <h4 class="result-title">
+          {{ t('intelligence.agents.result') }}
+        </h4>
         <pre class="result-content">{{ JSON.stringify(taskResult, null, 2) }}</pre>
       </div>
     </div>

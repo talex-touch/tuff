@@ -26,21 +26,21 @@
  * ```
  */
 
+export { getLogger, LoggerManager, loggerManager } from './logger-manager'
 export { ModuleLogger } from './module-logger'
-export { LoggerManager, loggerManager, getLogger } from './logger-manager'
 export {
-  TuffTransportLogger,
   createTransportLogger,
-  transportLoggers
+  transportLoggers,
+  TuffTransportLogger,
 } from './transport-logger'
 export {
+  type LogEntry,
+  type LoggerInfo,
+  type LoggingConfig,
   LogLevel,
   type LogLevelString,
-  type ModuleLoggerOptions,
-  type LoggingConfig,
-  type ModuleConfig,
-  type LoggerInfo,
-  type LogEntry,
   logLevelToString,
-  stringToLogLevel
+  type ModuleConfig,
+  type ModuleLoggerOptions,
+  stringToLogLevel,
 } from './types'

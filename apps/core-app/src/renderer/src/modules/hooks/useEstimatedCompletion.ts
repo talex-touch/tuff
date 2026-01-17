@@ -1,4 +1,5 @@
-import { computed, ComputedRef, Ref, unref } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
+import { computed, unref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 type TimeSource = ComputedRef<number | null> | Ref<number | null>

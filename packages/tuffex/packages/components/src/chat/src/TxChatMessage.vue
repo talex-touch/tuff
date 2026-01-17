@@ -14,7 +14,7 @@ const props = withDefaults(
       content: string
       createdAt?: number
       avatarUrl?: string
-      attachments?: Array<{ type: 'image'; url: string; name?: string }>
+      attachments?: Array<{ type: 'image', url: string, name?: string }>
     }
     markdown?: boolean
   }>(),
@@ -24,7 +24,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (e: 'imageClick', payload: { url: string; name?: string; messageId: string }): void
+  (e: 'imageClick', payload: { url: string, name?: string, messageId: string }): void
 }>()
 
 const roleClass = computed(() => {
@@ -48,7 +48,7 @@ function onImageClick(url: string, name?: string): void {
     <div class="tx-chat-message__meta">
       <div class="tx-chat-message__avatar">
         <slot name="avatar" :message="message">
-          <img v-if="message.avatarUrl" :src="message.avatarUrl" alt="" />
+          <img v-if="message.avatarUrl" :src="message.avatarUrl" alt="">
           <div v-else class="tx-chat-message__avatar-fallback" aria-hidden="true" />
         </slot>
       </div>
@@ -63,7 +63,9 @@ function onImageClick(url: string, name?: string): void {
         <div class="tx-chat-message__content">
           <slot name="content" :message="message">
             <TxMarkdownView v-if="markdown" :content="message.content" />
-            <div v-else class="tx-chat-message__plain">{{ message.content }}</div>
+            <div v-else class="tx-chat-message__plain">
+              {{ message.content }}
+            </div>
           </slot>
         </div>
 
@@ -75,7 +77,7 @@ function onImageClick(url: string, name?: string): void {
             class="tx-chat-message__thumb"
             @click="onImageClick(a.url, a.name)"
           >
-            <img :src="a.url" :alt="a.name || ''" loading="lazy" />
+            <img :src="a.url" :alt="a.name || ''" loading="lazy">
           </button>
         </div>
       </div>

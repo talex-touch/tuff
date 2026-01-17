@@ -1,38 +1,37 @@
-<template>
-  <span
-    :class="[
-      'tx-badge',
-      `tx-badge--${variant}`,
-      { 'tx-badge--dot': dot }
-    ]"
-    :style="customStyle"
-  >
-    <span v-if="dot" class="tx-badge__dot"></span>
-    <slot v-else>{{ value }}</slot>
-  </span>
-</template>
-
 <script setup lang="ts">
+import type { BadgeProps } from './types'
 import { computed } from 'vue'
-import type { BadgeVariant, BadgeProps } from './types'
 
 interface Props extends BadgeProps {}
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'default',
-  value: 0
+  value: 0,
 })
 
 const customStyle = computed(() => {
   if (props.color) {
     return {
       '--tx-badge-bg': props.color,
-      '--tx-badge-text': '#ffffff'
+      '--tx-badge-text': '#ffffff',
     }
   }
   return {}
 })
 </script>
+
+<template>
+  <span
+    class="tx-badge" :class="[
+      `tx-badge--${variant}`,
+      { 'tx-badge--dot': dot },
+    ]"
+    :style="customStyle"
+  >
+    <span v-if="dot" class="tx-badge__dot" />
+    <slot v-else>{{ value }}</slot>
+  </span>
+</template>
 
 <style scoped>
 .tx-badge {

@@ -13,10 +13,14 @@ function toggle() {
 
 <template>
   <div style="display: flex; flex-direction: column; gap: 10px;">
-    <TxButton @click="toggle">Toggle loading</TxButton>
+    <TxButton @click="toggle">
+      Toggle loading
+    </TxButton>
 
     <TxAutoSizer ref="sizerRef" :width="true" :height="false" outer-class="overflow-hidden">
-      <TxButton :loading="loading" variant="primary">Submit</TxButton>
+      <TxButton :loading="loading" variant="primary">
+        Submit
+      </TxButton>
     </TxAutoSizer>
   </div>
 </template>

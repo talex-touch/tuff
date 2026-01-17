@@ -1,10 +1,10 @@
 import type {
-  IntelligenceChatPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
-  IntelligenceTranslatePayload,
   AiUsageInfo,
+  IntelligenceChatPayload,
+  IntelligenceTranslatePayload
 } from '@talex-touch/utils'
 import { IntelligenceProviderType } from '@talex-touch/utils'
 import { IntelligenceProvider } from '../runtime/base-provider'
@@ -21,11 +21,14 @@ export class DeepSeekProvider extends IntelligenceProvider {
   private get headers(): HeadersInit {
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.config.apiKey}`,
+      Authorization: `Bearer ${this.config.apiKey}`
     }
   }
 
-  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(
+    payload: IntelligenceChatPayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -33,7 +36,7 @@ export class DeepSeekProvider extends IntelligenceProvider {
     const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-chat'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions',
+      endpoint: '/chat/completions'
     })
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -47,14 +50,16 @@ export class DeepSeekProvider extends IntelligenceProvider {
         top_p: payload.topP,
         frequency_penalty: payload.frequencyPenalty,
         presence_penalty: payload.presencePenalty,
-        stop: payload.stop,
+        stop: payload.stop
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => response.statusText)
-      throw new Error(`DeepSeek API error: ${response.status} ${response.statusText} - ${errorText}`)
+      throw new Error(
+        `DeepSeek API error: ${response.status} ${response.statusText} - ${errorText}`
+      )
     }
 
     const data = await this.parseJsonResponse<{
@@ -67,7 +72,7 @@ export class DeepSeekProvider extends IntelligenceProvider {
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
-      totalTokens: data.usage?.total_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0
     }
 
     return {
@@ -76,20 +81,20 @@ export class DeepSeekProvider extends IntelligenceProvider {
       model: data.model || '',
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  async* chatStream(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions,
+    options: AiInvokeOptions
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
     const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-chat'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions (stream)',
+      endpoint: '/chat/completions (stream)'
     })
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -100,9 +105,9 @@ export class DeepSeekProvider extends IntelligenceProvider {
         messages: payload.messages,
         temperature: payload.temperature,
         max_tokens: payload.maxTokens,
-        stream: true,
+        stream: true
       }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok || !response.body) {
@@ -116,18 +121,15 @@ export class DeepSeekProvider extends IntelligenceProvider {
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done)
-          break
+        if (done) break
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.trim() || line.trim() === 'data: [DONE]')
-            continue
-          if (!line.startsWith('data: '))
-            continue
+          if (!line.trim() || line.trim() === 'data: [DONE]') continue
+          if (!line.startsWith('data: ')) continue
 
           try {
             const data = JSON.parse(line.substring(6))
@@ -135,16 +137,14 @@ export class DeepSeekProvider extends IntelligenceProvider {
             if (delta) {
               yield { delta, done: false }
             }
-          }
-          catch (error) {
+          } catch (error) {
             console.error('[DeepSeekProvider] Stream parse error:', error)
           }
         }
       }
 
       yield { delta: '', done: true }
-    }
-    finally {
+    } finally {
       reader.releaseLock()
     }
   }
@@ -153,18 +153,21 @@ export class DeepSeekProvider extends IntelligenceProvider {
     throw new Error('[DeepSeekProvider] Embedding is not supported by DeepSeek')
   }
 
-  async translate(payload: IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async translate(
+    payload: IntelligenceTranslatePayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
-          content: `You are a professional translator. Translate the following text to ${payload.targetLang}.`,
+          content: `You are a professional translator. Translate the following text to ${payload.targetLang}.`
         },
         {
           role: 'user',
-          content: payload.text,
-        },
-      ],
+          content: payload.text
+        }
+      ]
     }
 
     return this.chat(chatPayload, options)

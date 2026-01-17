@@ -7,15 +7,19 @@ const blurPx = ref(10)
 
 const mode = ref<'ok' | 'warn' | 'err'>('ok')
 
-const label = () => {
-  if (mode.value === 'ok') return 'Synced'
-  if (mode.value === 'warn') return 'Syncing (may take a while)'
+function label() {
+  if (mode.value === 'ok')
+    return 'Synced'
+  if (mode.value === 'warn')
+    return 'Syncing (may take a while)'
   return 'Failed: Network error'
 }
 
-const color = () => {
-  if (mode.value === 'ok') return 'var(--tx-color-success)'
-  if (mode.value === 'warn') return 'var(--tx-color-warning)'
+function color() {
+  if (mode.value === 'ok')
+    return 'var(--tx-color-success)'
+  if (mode.value === 'warn')
+    return 'var(--tx-color-warning)'
   return 'var(--tx-color-danger)'
 }
 
@@ -29,13 +33,19 @@ function toggle() {
 <template>
   <div style="display: flex; flex-direction: column; gap: 12px;">
     <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-      <TxButton @click="toggle">Toggle</TxButton>
+      <TxButton @click="toggle">
+        Toggle
+      </TxButton>
       <div style="width: 220px;">
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">duration (ms)</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          duration (ms)
+        </div>
         <TxSlider v-model="duration" :min="120" :max="600" :step="10" :show-value="true" />
       </div>
       <div style="width: 220px;">
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">blur (px)</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          blur (px)
+        </div>
         <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
       </div>
     </div>
@@ -54,7 +64,7 @@ function toggle() {
           <div
             style="width: 8px; height: 8px; border-radius: 99px;"
             :style="{ background: color() }"
-          ></div>
+          />
           <TxTextTransformer
             :text="label()"
             :duration-ms="duration"

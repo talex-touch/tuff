@@ -19,10 +19,12 @@ const illustrationDots = Array.from({ length: 28 })
 
 onMounted(() => {
   const scroller = document.querySelector<HTMLDivElement>('.gradual-blur-animated-demo__scroll')
-  if (!scroller) return
+  if (!scroller)
+    return
 
   const handleWheel = () => {
-    if (scrollAnimatedDone.value) return
+    if (scrollAnimatedDone.value)
+      return
     scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' })
   }
 
@@ -34,7 +36,9 @@ onMounted(() => {
   <div class="gradual-blur-animated-demo">
     <header class="gradual-blur-animated-demo__header">
       <div>
-        <p class="gradual-blur-animated-demo__eyebrow">Animated scroll</p>
+        <p class="gradual-blur-animated-demo__eyebrow">
+          Animated scroll
+        </p>
         <h4>Hero overlay enter / leave</h4>
       </div>
       <span class="gradual-blur-animated-demo__pill" :class="scrollAnimatedDone ? 'is-true' : ''">
@@ -45,7 +49,9 @@ onMounted(() => {
     <section class="gradual-blur-animated-demo__section">
       <div class="gradual-blur-animated-demo__scroll">
         <article class="gradual-blur-animated-demo__card">
-          <div class="gradual-blur-animated-demo__badge">Case study</div>
+          <div class="gradual-blur-animated-demo__badge">
+            Case study
+          </div>
           <h5>Launch week spotlight</h5>
           <p>
             当用户滑过首屏时，底部的 CTA 区域被柔和模糊，自动避免背景图片干扰。
@@ -66,7 +72,9 @@ onMounted(() => {
           </li>
         </ul>
 
-        <div class="gradual-blur-animated-demo__spacer">End.</div>
+        <div class="gradual-blur-animated-demo__spacer">
+          End.
+        </div>
       </div>
 
       <TxGradualBlur

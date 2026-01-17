@@ -1,27 +1,37 @@
 <template>
   <div class="demo">
     <div class="demo__row">
-      <div class="demo__title">classic</div>
+      <div class="demo__title">
+        classic
+      </div>
       <TxProgressBar indeterminate height="10px" message="Classic" indeterminate-variant="classic" mask-variant="dashed" mask-background="mask" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">sweep</div>
+      <div class="demo__title">
+        sweep
+      </div>
       <TxProgressBar indeterminate height="10px" message="Uploading..." indeterminate-variant="sweep" mask-background="blur" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">bounce</div>
+      <div class="demo__title">
+        bounce
+      </div>
       <TxProgressBar indeterminate height="10px" message="Bounce" indeterminate-variant="bounce" mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">elastic</div>
+      <div class="demo__title">
+        elastic
+      </div>
       <TxProgressBar indeterminate height="10px" message="Elastic" indeterminate-variant="elastic" mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">split</div>
+      <div class="demo__title">
+        split
+      </div>
       <TxProgressBar indeterminate height="10px" message="Split" indeterminate-variant="split" mask-background="glass" />
     </div>
   </div>

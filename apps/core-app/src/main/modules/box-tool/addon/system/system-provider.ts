@@ -4,20 +4,17 @@ import type {
   ISearchProvider,
   TuffItem,
   TuffQuery,
-  TuffSearchResult,
+  TuffSearchResult
 } from '@talex-touch/utils'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
-import {
-  TuffInputType,
-  TuffSearchResultBuilder,
-} from '@talex-touch/utils'
+import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { dialog, shell } from 'electron'
-import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
 import { pinyin } from 'pinyin-pro'
+import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
 import { calculateHighlights } from '../apps/highlighting-service'
 
 const execAsync = promisify(exec)
@@ -66,13 +63,17 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     tokens.add(lower)
     tokens.add(lower.replace(/\s+/g, ''))
 
-    if (/[\u4e00-\u9fff]/.test(text)) {
+    if (/[\u4E00-\u9FFF]/.test(text)) {
       try {
         const full = pinyin(text, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
         if (full) tokens.add(full)
-        const first = pinyin(text, { pattern: 'first', toneType: 'none' }).replace(/\s/g, '').toLowerCase()
+        const first = pinyin(text, { pattern: 'first', toneType: 'none' })
+          .replace(/\s/g, '')
+          .toLowerCase()
         if (first) tokens.add(first)
-      } catch { /* ignore pinyin errors */ }
+      } catch {
+        /* ignore pinyin errors */
+      }
     }
   }
 
@@ -100,25 +101,22 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
               detail: '此操作需要管理员权限，可能会提示输入密码。',
               buttons: ['取消', '确定'],
               defaultId: 0,
-              cancelId: 0,
+              cancelId: 0
             })
             if (result.response === 1) {
               await execAsync('osascript -e \'tell app "System Events" to shut down\'')
             }
-          }
-          catch (error) {
+          } catch (error) {
             await this.showPermissionError('关机')
           }
-        }
-        else if (isWindows) {
+        } else if (isWindows) {
           try {
             await execAsync('shutdown /s /t 0')
-          }
-          catch (error) {
+          } catch (error) {
             await this.showPermissionError('关机')
           }
         }
-      },
+      }
     })
 
     // Restart
@@ -139,25 +137,22 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
               detail: '此操作需要管理员权限，可能会提示输入密码。',
               buttons: ['取消', '确定'],
               defaultId: 0,
-              cancelId: 0,
+              cancelId: 0
             })
             if (result.response === 1) {
               await execAsync('osascript -e \'tell app "System Events" to restart\'')
             }
-          }
-          catch (error) {
+          } catch (error) {
             await this.showPermissionError('重启')
           }
-        }
-        else if (isWindows) {
+        } else if (isWindows) {
           try {
             await execAsync('shutdown /r /t 0')
-          }
-          catch (error) {
+          } catch (error) {
             await this.showPermissionError('重启')
           }
         }
-      },
+      }
     })
 
     // Lock Screen
@@ -172,12 +167,11 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         if (isMac) {
           // macOS: 使用 pmset displaysleepnow（无需密码）
           await execAsync('pmset displaysleepnow')
-        }
-        else if (isWindows) {
+        } else if (isWindows) {
           // Windows: 使用 rundll32（无需管理员权限）
           await execAsync('rundll32.exe user32.dll,LockWorkStation')
         }
-      },
+      }
     })
 
     // Volume Up
@@ -191,15 +185,16 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       execute: async () => {
         if (isMac) {
           // macOS: 使用 osascript 调整音量（通常不需要密码）
-          await execAsync('osascript -e \'set volume output volume (output volume of (get volume settings) + 10)\'')
-        }
-        else if (isWindows) {
+          await execAsync(
+            "osascript -e 'set volume output volume (output volume of (get volume settings) + 10)'"
+          )
+        } else if (isWindows) {
           // Windows: 使用 PowerShell
           await execAsync(
-            'powershell -Command "(New-Object -ComObject Shell.Application).NameSpace(17).ParseName(\'Volume Control\').InvokeVerb(\'properties\')"',
+            "powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\""
           )
         }
-      },
+      }
     })
 
     // Volume Down
@@ -212,14 +207,15 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       requiresAdmin: false,
       execute: async () => {
         if (isMac) {
-          await execAsync('osascript -e \'set volume output volume (output volume of (get volume settings) - 10)\'')
-        }
-        else if (isWindows) {
           await execAsync(
-            'powershell -Command "(New-Object -ComObject Shell.Application).NameSpace(17).ParseName(\'Volume Control\').InvokeVerb(\'properties\')"',
+            "osascript -e 'set volume output volume (output volume of (get volume settings) - 10)'"
+          )
+        } else if (isWindows) {
+          await execAsync(
+            "powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\""
           )
         }
-      },
+      }
     })
 
     // Mute
@@ -232,13 +228,16 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       requiresAdmin: false,
       execute: async () => {
         if (isMac) {
-          await execAsync('osascript -e \'set volume output muted not (output muted of (get volume settings))\'')
-        }
-        else if (isWindows) {
+          await execAsync(
+            "osascript -e 'set volume output muted not (output muted of (get volume settings))'"
+          )
+        } else if (isWindows) {
           // Windows: 使用 nircmd 或 PowerShell
-          await execAsync('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]173)"')
+          await execAsync(
+            'powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]173)"'
+          )
         }
-      },
+      }
     })
 
     // Brightness Up (macOS only, Windows requires different approach)
@@ -252,7 +251,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         requiresAdmin: false,
         execute: async () => {
           await execAsync('osascript -e \'tell application "System Events" to key code 144\'')
-        },
+        }
       })
 
       this.actions.push({
@@ -264,7 +263,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         requiresAdmin: false,
         execute: async () => {
           await execAsync('osascript -e \'tell application "System Events" to key code 145\'')
-        },
+        }
       })
     }
 
@@ -280,7 +279,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
         const mainWindow = $app.window.window
         mainWindow.show()
         mainWindow.focus()
-      },
+      }
     })
   }
 
@@ -290,15 +289,14 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       title: '权限不足',
       message: `执行"${action}"操作需要管理员权限`,
       detail: '请以管理员身份运行应用，或手动执行该操作。',
-      buttons: ['确定', '打开系统设置'],
+      buttons: ['确定', '打开系统设置']
     })
 
     if (result.response === 1) {
       // Open system settings
       if (process.platform === 'darwin') {
         await shell.openExternal('x-apple.systempreferences:com.apple.preference.security')
-      }
-      else if (process.platform === 'win32') {
+      } else if (process.platform === 'win32') {
         await shell.openExternal('ms-settings:')
       }
     }
@@ -322,7 +320,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       name: action.name,
       displayName: action.name,
       keywords: action.keywords.map((kw) => ({ value: kw, priority: 1.2 })),
-      tags: ['system', 'action'],
+      tags: ['system', 'action']
     }))
 
     await this.searchIndex.indexItems(indexItems)
@@ -339,7 +337,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
 
     // 1. Search via index (supports pinyin)
     if (this.searchIndex) {
-      const ftsQuery = searchText.replace(/[^\w\u4e00-\u9fa5]/g, ' ').trim()
+      const ftsQuery = searchText.replace(/[^\w\u4E00-\u9FA5]/g, ' ').trim()
       if (ftsQuery) {
         const ftsResults = await this.searchIndex.search(this.id, `${ftsQuery}*`, 20)
         for (const result of ftsResults) {
@@ -353,15 +351,15 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     // 2. Fallback: simple string matching for direct matches
     for (const action of this.actions) {
       const nameMatch = action.name.toLowerCase().includes(searchText)
-      const keywordMatch = action.keywords.some(keyword =>
-        keyword.toLowerCase().includes(searchText),
+      const keywordMatch = action.keywords.some((keyword) =>
+        keyword.toLowerCase().includes(searchText)
       )
       if (nameMatch || keywordMatch) {
         matchedActionIds.add(action.id)
       }
     }
 
-    const matchedActions = this.actions.filter(action => matchedActionIds.has(action.id))
+    const matchedActions = this.actions.filter((action) => matchedActionIds.has(action.id))
 
     const items: TuffItem[] = matchedActions.map((action) => {
       const matchResult = calculateHighlights(action.name, searchText)
@@ -375,15 +373,15 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
           match: 100,
           recency: 0,
           frequency: 0,
-          base: 0,
+          base: 0
         })
         .setMeta({
           raw: { systemActionId: action.id },
           icon: action.icon,
           extension: {
             searchTokens: action.searchTokens,
-            matchResult: matchResult ?? undefined,
-          },
+            matchResult: matchResult ?? undefined
+          }
         })
         .build()
     })
@@ -394,7 +392,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
   async onExecute({ item }: IExecuteArgs): Promise<IProviderActivate | null> {
     const actionMeta = item.meta?.raw as { systemActionId?: string } | undefined
     const action = actionMeta
-      ? this.actions.find(candidate => candidate.id === actionMeta.systemActionId)
+      ? this.actions.find((candidate) => candidate.id === actionMeta.systemActionId)
       : undefined
     if (!action) {
       console.error('[SystemProvider] Action not found in item meta')
@@ -413,14 +411,13 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     try {
       await action.execute()
       console.log(`[SystemProvider] Executed action: ${action.name}`)
-    }
-    catch (error) {
+    } catch (error) {
       console.error(`[SystemProvider] Failed to execute action ${action.name}:`, error)
       await dialog.showMessageBox({
         type: 'error',
         title: '操作失败',
         message: `执行"${action.name}"操作时发生错误`,
-        detail: error instanceof Error ? error.message : String(error),
+        detail: error instanceof Error ? error.message : String(error)
       })
     }
 

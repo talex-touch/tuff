@@ -1,12 +1,12 @@
 /**
  * MetaOverlay SDK for Plugin Development
- * 
+ *
  * Provides API for plugins to register global actions in MetaOverlay.
  * MetaOverlay is a floating action panel that appears above plugin UI.
  */
 
-import type { MetaAction } from '../../transport/events/types/meta-overlay'
 import type { TuffItem } from '../../core-box/tuff/tuff-dsl'
+import type { MetaAction } from '../../transport/events/types/meta-overlay'
 import { MetaOverlayEvents } from '../../transport/events/meta-overlay'
 
 /**
@@ -19,7 +19,7 @@ export type ActionExecuteHandler = (data: {
 
 /**
  * MetaOverlay SDK interface for plugins
- * 
+ *
  * @example
  * ```typescript
  * // Register a global action
@@ -36,14 +36,14 @@ export type ActionExecuteHandler = (data: {
  *   },
  *   priority: 100
  * })
- * 
+ *
  * // Listen for action execution
  * plugin.meta.onActionExecute((data) => {
  *   if (data.actionId === 'my-plugin-action') {
  *     // Handle action
  *   }
  * })
- * 
+ *
  * // Unregister all actions
  * plugin.meta.unregisterAll()
  * ```
@@ -51,10 +51,10 @@ export type ActionExecuteHandler = (data: {
 export interface MetaSDK {
   /**
    * Registers a global action that will appear in MetaOverlay
-   * 
+   *
    * @param action - Action definition
    * @returns Cleanup function to unregister this action
-   * 
+   *
    * @example
    * ```typescript
    * const unregister = plugin.meta.registerAction({
@@ -70,51 +70,51 @@ export interface MetaSDK {
    *   },
    *   priority: 100
    * })
- * 
+   *
    * // Later: unregister
    * unregister()
    * ```
    */
-  registerAction(action: MetaAction): () => void
+  registerAction: (action: MetaAction) => () => void
 
   /**
    * Unregisters all actions registered by this plugin
-   * 
+   *
    * @example
    * ```typescript
    * // Cleanup on plugin unload
    * plugin.meta.unregisterAll()
    * ```
    */
-  unregisterAll(): void
+  unregisterAll: () => void
 
   /**
    * Registers a listener for when actions registered by this plugin are executed
-   * 
+   *
    * @param handler - Handler function
    * @returns Cleanup function to remove listener
-   * 
+   *
    * @example
    * ```typescript
    * const unsubscribe = plugin.meta.onActionExecute((data) => {
    *   console.log(`Action ${data.actionId} executed for item ${data.item.id}`)
    *   // Handle the action
    * })
- * 
+   *
    * // Later: unsubscribe
    * unsubscribe()
    * ```
    */
-  onActionExecute(handler: ActionExecuteHandler): () => void
+  onActionExecute: (handler: ActionExecuteHandler) => () => void
 }
 
 /**
  * Creates a MetaSDK instance for plugin use
- * 
+ *
  * @param channel - The plugin channel bridge for IPC communication
  * @param pluginId - Plugin identifier
  * @returns Configured MetaSDK instance
- * 
+ *
  * @internal
  */
 export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
@@ -130,17 +130,18 @@ export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
         if (data.pluginId === pluginId && registeredActionIds.has(data.actionId)) {
           actionExecuteHandlers.forEach(handler => handler({
             actionId: data.actionId,
-            item: data.item
+            item: data.item,
           }))
         }
       })
-    } else if (channel.on) {
+    }
+    else if (channel.on) {
       // Renderer process context
       channel.on('meta-overlay:action-executed', (data: any) => {
         if (data.pluginId === pluginId && registeredActionIds.has(data.actionId)) {
           actionExecuteHandlers.forEach(handler => handler({
             actionId: data.actionId,
-            item: data.item
+            item: data.item,
           }))
         }
       })
@@ -149,8 +150,8 @@ export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
 
   registerListener()
 
-  const send: (eventName: string, payload?: any) => Promise<any> =
-    typeof channel?.sendToMain === 'function'
+  const send: (eventName: string, payload?: any) => Promise<any>
+    = typeof channel?.sendToMain === 'function'
       ? channel.sendToMain.bind(channel)
       : typeof channel?.send === 'function'
         ? channel.send.bind(channel)
@@ -167,8 +168,8 @@ export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
         action: {
           ...action,
           handler: pluginId,
-          priority: action.priority ?? 100
-        }
+          priority: action.priority ?? 100,
+        },
       }).catch((error) => {
         console.error('[MetaSDK] Failed to register action', error)
       })
@@ -177,7 +178,7 @@ export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
         registeredActionIds.delete(action.id)
         void send(MetaOverlayEvents.action.unregister.toEventName(), {
           pluginId,
-          actionId: action.id
+          actionId: action.id,
         }).catch((error) => {
           console.error('[MetaSDK] Failed to unregister action', error)
         })
@@ -188,7 +189,7 @@ export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
       registeredActionIds.clear()
 
       void send(MetaOverlayEvents.action.unregister.toEventName(), {
-        pluginId
+        pluginId,
       }).catch((error) => {
         console.error('[MetaSDK] Failed to unregister all actions', error)
       })
@@ -199,7 +200,6 @@ export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
       return () => {
         actionExecuteHandlers.delete(handler)
       }
-    }
+    },
   }
 }
-

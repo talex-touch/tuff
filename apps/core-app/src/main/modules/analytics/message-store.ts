@@ -1,7 +1,7 @@
 import type {
   AnalyticsMessage,
   AnalyticsMessageListRequest,
-  AnalyticsMessageStatus,
+  AnalyticsMessageStatus
 } from '@talex-touch/utils/analytics'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
@@ -15,7 +15,7 @@ type MessageInput = Omit<AnalyticsMessage, 'id' | 'createdAt' | 'status'> & {
   createdAt?: number
 }
 
-type MessageDedupeEntry = {
+interface MessageDedupeEntry {
   message: AnalyticsMessage
   count: number
   firstAt: number
@@ -37,12 +37,9 @@ export class AnalyticsMessageStore {
     const status = request?.status ?? 'all'
 
     const filtered = messages.filter((message) => {
-      if (status !== 'all' && message.status !== status)
-        return false
-      if (request?.source && message.source !== request.source)
-        return false
-      if (request?.since && message.createdAt < request.since)
-        return false
+      if (status !== 'all' && message.status !== status) return false
+      if (request?.source && message.source !== request.source) return false
+      if (request?.since && message.createdAt < request.since) return false
       return true
     })
 
@@ -64,7 +61,7 @@ export class AnalyticsMessageStore {
         ...existing.message.meta,
         count: existing.count,
         firstAt: existing.firstAt,
-        lastAt: existing.lastAt,
+        lastAt: existing.lastAt
       }
       if (this.isDev) {
         this.bumpMessage(existing.message)
@@ -80,14 +77,14 @@ export class AnalyticsMessageStore {
       message: input.message,
       meta: input.meta,
       status: input.status ?? 'unread',
-      createdAt: now,
+      createdAt: now
     }
 
     const entry: MessageDedupeEntry = {
       message,
       count: 1,
       firstAt: now,
-      lastAt: now,
+      lastAt: now
     }
 
     this.dedupeIndex.set(dedupeKey, entry)
@@ -106,9 +103,8 @@ export class AnalyticsMessageStore {
       return null
     }
 
-    const target = this.messages.find(item => item.id === id)
-    if (!target)
-      return null
+    const target = this.messages.find((item) => item.id === id)
+    if (!target) return null
 
     target.status = status
     return target
@@ -129,7 +125,7 @@ export class AnalyticsMessageStore {
   private pruneMessages(): void {
     const cutoff = Date.now() - MESSAGE_MAX_AGE
     this.messages = this.messages
-      .filter(message => message.createdAt >= cutoff)
+      .filter((message) => message.createdAt >= cutoff)
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, MESSAGE_MAX_COUNT)
   }
@@ -144,7 +140,7 @@ export class AnalyticsMessageStore {
   }
 
   private bumpMessage(message: AnalyticsMessage): void {
-    const index = this.messages.findIndex(item => item.id === message.id)
+    const index = this.messages.findIndex((item) => item.id === message.id)
     if (index === -1) {
       this.messages.unshift(message)
       this.pruneMessages()
@@ -164,8 +160,7 @@ export class AnalyticsMessageStore {
         if (result && typeof (result as Promise<void>).catch === 'function') {
           void (result as Promise<void>).catch(() => {})
         }
-      }
-      catch {
+      } catch {
         // ignore listener errors
       }
     }
@@ -179,7 +174,6 @@ function buildDedupeKey(input: MessageInput): string {
 let messageStore: AnalyticsMessageStore | null = null
 
 export function getAnalyticsMessageStore(): AnalyticsMessageStore {
-  if (!messageStore)
-    messageStore = new AnalyticsMessageStore()
+  if (!messageStore) messageStore = new AnalyticsMessageStore()
   return messageStore
 }

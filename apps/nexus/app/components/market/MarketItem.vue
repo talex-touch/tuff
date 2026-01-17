@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { MarketplacePluginSummary } from '~/types/marketplace'
-import Tag from '~/components/ui/Tag.vue'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
+import Tag from '~/components/ui/Tag.vue'
 import { useMarketCategories } from '~/composables/useMarketCategories'
 import { useMarketFormatters } from '~/composables/useMarketFormatters'
 

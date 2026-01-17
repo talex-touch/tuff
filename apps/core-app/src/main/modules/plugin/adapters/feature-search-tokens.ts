@@ -1,8 +1,8 @@
-import { pinyin } from 'pinyin-pro'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import { pinyin } from 'pinyin-pro'
 
-const CHINESE_CHAR_REGEX = /[\u4e00-\u9fff]/u
-const INVALID_CHAR_REGEX = /[^a-z0-9\u4e00-\u9fff]+/gi
+const CHINESE_CHAR_REGEX = /[\u4E00-\u9FFF]/u
+const INVALID_CHAR_REGEX = /[^a-z0-9\u4E00-\u9FFF]+/gi
 const WORD_SEPARATORS = /[\s\-_]+/
 const CAMEL_BOUNDARY = /([a-z])([A-Z])/g
 

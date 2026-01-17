@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { TabItemProps } from './types'
+import { computed } from 'vue'
 
 defineOptions({
   name: 'TxTabItem',
@@ -35,7 +35,9 @@ const active = computed(() => !!props.active)
       </slot>
     </div>
     <div class="tx-tab-item__name">
-      <slot name="name">{{ name }}</slot>
+      <slot name="name">
+        {{ name }}
+      </slot>
     </div>
   </div>
 </template>

@@ -1,7 +1,7 @@
 import type { IntelligenceTranslatePayload } from '@talex-touch/utils'
+import { hasWindow } from '@talex-touch/utils/env'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence'
 import { intelligence } from '@talex-touch/utils/plugin/sdk'
-import { hasWindow } from '@talex-touch/utils/env'
 
 export interface TuffIntelligenceTranslateResponse {
   text: string

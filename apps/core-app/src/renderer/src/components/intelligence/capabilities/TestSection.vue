@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import type { CapabilityTestResult } from './types'
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
+import type { CapabilityTestResult } from './types'
 import CapabilityTestInput from './CapabilityTestInput.vue'
 import CapabilityTestResultView from './CapabilityTestResult.vue'
 
@@ -9,14 +9,32 @@ defineProps<{
   isTesting: boolean
   disabled: boolean
   testResult?: CapabilityTestResult | null
-  enabledBindings?: Array<{ providerId: string, provider?: IntelligenceProviderConfig, models?: string[] }>
+  enabledBindings?: Array<{
+    providerId: string
+    provider?: IntelligenceProviderConfig
+    models?: string[]
+  }>
 }>()
 
 const emits = defineEmits<{
-  test: [options: { providerId: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }]
+  test: [
+    options: {
+      providerId: string
+      model?: string
+      promptTemplate?: string
+      promptVariables?: Record<string, any>
+      userInput?: string
+    }
+  ]
 }>()
 
-function handleTest(options: { providerId: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }): void {
+function handleTest(options: {
+  providerId: string
+  model?: string
+  promptTemplate?: string
+  promptVariables?: Record<string, any>
+  userInput?: string
+}): void {
   emits('test', options)
 }
 </script>
@@ -31,10 +49,7 @@ function handleTest(options: { providerId: string, model?: string, promptTemplat
       @test="handleTest"
     />
 
-    <CapabilityTestResultView
-      v-if="testResult"
-      :result="testResult"
-    />
+    <CapabilityTestResultView v-if="testResult" :result="testResult" />
   </div>
 </template>
 

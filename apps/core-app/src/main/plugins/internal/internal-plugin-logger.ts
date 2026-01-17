@@ -23,9 +23,7 @@ export class InternalPluginLogger {
 
   getManager(): { destroy: () => void } {
     return {
-      destroy() {},
+      destroy() {}
     }
   }
 }
-
-

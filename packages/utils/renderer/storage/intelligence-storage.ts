@@ -1,18 +1,18 @@
-import type { IntelligenceProviderConfig, AISDKGlobalConfig, AISDKStorageData } from '../../types/intelligence'
+import type { AISDKGlobalConfig, AISDKStorageData, IntelligenceProviderConfig } from '../../types/intelligence'
 import { StorageList } from '../../common/storage/constants'
 import {
 
-  IntelligenceProviderType,
-
   DEFAULT_CAPABILITIES,
+
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROVIDERS,
+  IntelligenceProviderType,
 } from '../../types/intelligence'
 import { createStorageProxy, TouchStorage } from './base-storage'
 
 // Re-export types for convenience
 export { IntelligenceProviderType }
-export type { IntelligenceProviderConfig, AISDKGlobalConfig }
+export type { AISDKGlobalConfig, IntelligenceProviderConfig }
 
 const defaultIntelligenceData: AISDKStorageData = {
   providers: [...DEFAULT_PROVIDERS],
@@ -172,7 +172,7 @@ export async function migrateIntelligenceSettings(): Promise<void> {
 
     // Force update to latest DEFAULT_CAPABILITIES (version 2)
     console.log('[Intelligence Storage] Updating capabilities to latest defaults')
-    
+
     intelligenceStorage.applyData({
       providers: migratedProviders,
       globalConfig: migratedGlobalConfig,

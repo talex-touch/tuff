@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import type { VersionFormData } from '~/components/VersionDrawer.vue'
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { PendingReviewItem } from '~/components/dashboard/PendingReviewSection.vue'
 import type { ReviewItem } from '~/components/dashboard/ReviewModal.vue'
-import VersionDrawer from '~/components/VersionDrawer.vue'
+import type { VersionFormData } from '~/components/VersionDrawer.vue'
+import { useUser } from '@clerk/vue'
+import { computed, ref } from 'vue'
 import CreatePluginDrawer from '~/components/CreatePluginDrawer.vue'
-import PluginListItem from '~/components/dashboard/PluginListItem.vue'
-import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
 import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vue'
+import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
+import PluginListItem from '~/components/dashboard/PluginListItem.vue'
 import ReviewModal from '~/components/dashboard/ReviewModal.vue'
 import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
-import { useUser } from '@clerk/vue'
-import { computed, ref } from 'vue'
-import { PLUGIN_CATEGORIES, isPluginCategoryId } from '~/utils/plugin-categories'
+import VersionDrawer from '~/components/VersionDrawer.vue'
 import { useDashboardPluginsData } from '~/composables/useDashboardData'
+import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
 
 type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
 
@@ -193,7 +193,6 @@ function slugify(input: string): string {
 const PACKAGE_PREVIEW_ENDPOINT = '/api/dashboard/plugins/package/preview'
 const PACKAGE_CHANNELS: PluginChannel[] = ['SNAPSHOT', 'BETA', 'RELEASE']
 
-
 async function requestPackagePreview(file: File): Promise<PackagePreviewResult> {
   const formData = new FormData()
   formData.append('package', file)
@@ -353,7 +352,8 @@ const reviewLoading = ref(false)
 
 // Computed: pending review items for admin
 const pendingReviewItems = computed<PendingReviewItem[]>(() => {
-  if (!isAdmin.value) return []
+  if (!isAdmin.value)
+    return []
 
   const items: PendingReviewItem[] = []
 
@@ -363,7 +363,7 @@ const pendingReviewItems = computed<PendingReviewItem[]>(() => {
     .forEach(p => items.push({ type: 'plugin', plugin: p }))
 
   // Pending versions
-  plugins.value.forEach(p => {
+  plugins.value.forEach((p) => {
     p.versions?.filter(v => v.status === 'pending')
       .forEach(v => items.push({ type: 'version', plugin: p, version: v }))
   })
@@ -910,10 +910,6 @@ function openPublishVersionForm(plugin: DashboardPlugin) {
   resetVersionForm(plugin)
   showVersionForm.value = true
 }
-
-
-
-
 
 async function submitVersionForm(data: VersionFormData) {
   versionSaving.value = true

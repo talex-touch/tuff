@@ -1,6 +1,6 @@
 /**
  * DivisionBox Shortcut Trigger System
- * 
+ *
  * Manages global shortcuts for opening DivisionBox instances.
  * Plugins can register shortcuts that trigger their DivisionBox with specific configurations.
  */
@@ -16,42 +16,42 @@ import { DivisionBoxManager } from './manager'
 export interface ShortcutMapping {
   /** Unique identifier for this shortcut mapping */
   id: string
-  
+
   /** Default keyboard accelerator (e.g., 'CommandOrControl+Shift+D') */
   defaultAccelerator: string
-  
+
   /** DivisionBox configuration to use when triggered */
   config: DivisionBoxConfig
-  
+
   /** Optional callback to execute before opening */
   beforeOpen?: () => void | boolean | Promise<void | boolean>
-  
+
   /** Optional callback to execute after opening */
   afterOpen?: (sessionId: string) => void | Promise<void>
 }
 
 /**
  * ShortcutTriggerManager
- * 
+ *
  * Manages shortcut registrations and triggers for DivisionBox instances.
  * Integrates with the global shortcut system to provide keyboard-based access.
  */
 export class ShortcutTriggerManager {
   private static instance: ShortcutTriggerManager | null = null
-  
+
   /** Map of shortcut ID to mapping configuration */
   private mappings: Map<string, ShortcutMapping> = new Map()
-  
+
   /** Reference to DivisionBoxManager */
   private manager: DivisionBoxManager
-  
+
   /**
    * Private constructor (singleton pattern)
    */
   private constructor() {
     this.manager = DivisionBoxManager.getInstance()
   }
-  
+
   /**
    * Gets the singleton instance
    */
@@ -61,13 +61,13 @@ export class ShortcutTriggerManager {
     }
     return ShortcutTriggerManager.instance
   }
-  
+
   /**
    * Registers a shortcut mapping for a DivisionBox
-   * 
+   *
    * @param mapping - Shortcut mapping configuration
    * @returns Success status
-   * 
+   *
    * @example
    * ```typescript
    * shortcutTrigger.registerShortcut({
@@ -89,29 +89,31 @@ export class ShortcutTriggerManager {
       console.warn(`[ShortcutTrigger] Shortcut mapping already exists: ${mapping.id}`)
       return false
     }
-    
+
     // Register with global shortcut module
     const success = shortcutModule.registerMainShortcut(
       mapping.id,
       mapping.defaultAccelerator,
       () => this.handleTrigger(mapping.id)
     )
-    
+
     if (!success) {
       console.error(`[ShortcutTrigger] Failed to register shortcut: ${mapping.id}`)
       return false
     }
-    
+
     // Store mapping
     this.mappings.set(mapping.id, mapping)
-    
-    console.log(`[ShortcutTrigger] Registered shortcut: ${mapping.id} (${mapping.defaultAccelerator})`)
+
+    console.log(
+      `[ShortcutTrigger] Registered shortcut: ${mapping.id} (${mapping.defaultAccelerator})`
+    )
     return true
   }
-  
+
   /**
    * Unregisters a shortcut mapping
-   * 
+   *
    * @param id - Shortcut mapping ID
    * @returns Success status
    */
@@ -120,55 +122,55 @@ export class ShortcutTriggerManager {
       console.warn(`[ShortcutTrigger] Shortcut mapping not found: ${id}`)
       return false
     }
-    
+
     // Remove mapping
     this.mappings.delete(id)
-    
+
     // Note: Global shortcut module doesn't provide unregister for individual shortcuts
     // The shortcut will remain registered but won't have a mapping
-    
+
     console.log(`[ShortcutTrigger] Unregistered shortcut: ${id}`)
     return true
   }
-  
+
   /**
    * Gets a shortcut mapping by ID
-   * 
+   *
    * @param id - Shortcut mapping ID
    * @returns Shortcut mapping or undefined
    */
   getMapping(id: string): ShortcutMapping | undefined {
     return this.mappings.get(id)
   }
-  
+
   /**
    * Gets all registered shortcut mappings
-   * 
+   *
    * @returns Array of shortcut mappings
    */
   getAllMappings(): ShortcutMapping[] {
     return Array.from(this.mappings.values())
   }
-  
+
   /**
    * Handles shortcut trigger
-   * 
+   *
    * Called when a registered shortcut is pressed.
    * Executes beforeOpen callback, creates DivisionBox session, and executes afterOpen callback.
-   * 
+   *
    * @param id - Shortcut mapping ID
    */
   private async handleTrigger(id: string): Promise<void> {
     const mapping = this.mappings.get(id)
-    
+
     if (!mapping) {
       console.error(`[ShortcutTrigger] No mapping found for shortcut: ${id}`)
       return
     }
-    
+
     try {
       console.log(`[ShortcutTrigger] Shortcut triggered: ${id}`)
-      
+
       // Execute beforeOpen callback if provided
       if (mapping.beforeOpen) {
         const result = await mapping.beforeOpen()
@@ -177,12 +179,12 @@ export class ShortcutTriggerManager {
           return
         }
       }
-      
+
       // Create DivisionBox session
       const session = await this.manager.createSession(mapping.config)
-      
+
       console.log(`[ShortcutTrigger] DivisionBox opened: ${session.sessionId}`)
-      
+
       // Execute afterOpen callback if provided
       if (mapping.afterOpen) {
         await mapping.afterOpen(session.sessionId)
@@ -191,17 +193,17 @@ export class ShortcutTriggerManager {
       console.error(`[ShortcutTrigger] Error handling shortcut trigger for ${id}:`, error)
     }
   }
-  
+
   /**
    * Registers a shortcut for a plugin's DivisionBox
-   * 
+   *
    * Convenience method for plugins to register shortcuts with plugin-specific defaults.
-   * 
+   *
    * @param pluginId - Plugin identifier
    * @param accelerator - Keyboard accelerator
    * @param config - DivisionBox configuration
    * @returns Success status
-   * 
+   *
    * @example
    * ```typescript
    * shortcutTrigger.registerPluginShortcut(
@@ -221,7 +223,7 @@ export class ShortcutTriggerManager {
     config: DivisionBoxConfig
   ): boolean {
     const shortcutId = `plugin.${pluginId}.division-box`
-    
+
     return this.registerShortcut({
       id: shortcutId,
       defaultAccelerator: accelerator,
@@ -231,10 +233,10 @@ export class ShortcutTriggerManager {
       }
     })
   }
-  
+
   /**
    * Clears all shortcut mappings
-   * 
+   *
    * Used for cleanup during shutdown or testing.
    */
   clear(): void {
@@ -247,4 +249,3 @@ export class ShortcutTriggerManager {
  * Singleton instance export
  */
 export const shortcutTriggerManager = ShortcutTriggerManager.getInstance()
-

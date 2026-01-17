@@ -17,7 +17,7 @@ const props = withDefaults(
     modelValue: false,
     disabled: false,
     labelPlacement: 'end',
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -36,12 +36,14 @@ const isChecked = computed({
 const hasLabel = computed(() => Boolean(props.label) || Boolean(useSlots().default))
 
 const effectiveAriaLabel = computed(() => {
-  if (hasLabel.value) return undefined
+  if (hasLabel.value)
+    return undefined
   return props.ariaLabel
 })
 
 function toggle() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   isChecked.value = !isChecked.value
 }
 </script>
@@ -53,8 +55,7 @@ function toggle() {
     :aria-disabled="disabled"
     :aria-label="effectiveAriaLabel"
     :tabindex="disabled ? -1 : 0"
-    :class="[
-      'tx-checkbox',
+    class="tx-checkbox" :class="[
       {
         'is-checked': isChecked,
         'is-disabled': disabled,

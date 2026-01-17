@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
-import { hasWindow } from '@talex-touch/utils/env'
 import { useState } from '#imports'
+import { hasWindow } from '@talex-touch/utils/env'
 import { onBeforeUnmount } from 'vue'
 
 interface LandingRevealTimings {

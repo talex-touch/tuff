@@ -46,12 +46,12 @@ const inputValue = computed({
 const placeholder = computed(() => {
   // Use custom placeholder if provided via props
   if (props.placeholder) return props.placeholder
-  
+
   // Feature mode: show feature description
   if (props.boxOptions.mode === BoxMode.FEATURE) {
     return props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name
   }
-  
+
   // Use custom placeholder from settings, fallback to i18n default
   return appSetting.coreBox?.customPlaceholder || t('boxInput.placeholder')
 })

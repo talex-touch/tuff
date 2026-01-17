@@ -17,13 +17,13 @@ export interface IntelligenceChatOptions {
 }
 
 export interface IntelligenceSDK {
-  invoke<T = any>(
+  invoke: <T = any>(
     capabilityId: string,
     payload: any,
     options?: IntelligenceInvokeOptions,
-  ): Promise<IntelligenceInvokeResult<T>>
+  ) => Promise<IntelligenceInvokeResult<T>>
 
-  chat(options: IntelligenceChatOptions): Promise<IntelligenceInvokeResult<string>>
+  chat: (options: IntelligenceChatOptions) => Promise<IntelligenceInvokeResult<string>>
 }
 
 function resolveSdkApi(): number | undefined {

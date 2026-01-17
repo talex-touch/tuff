@@ -216,7 +216,7 @@ export interface BoxSDK {
    *
    * @returns Window bounds { x, y, width, height }
    */
-  getBounds: () => Promise<{ x: number; y: number; width: number; height: number }>
+  getBounds: () => Promise<{ x: number, y: number, width: number, height: number }>
 }
 
 /**
@@ -352,7 +352,7 @@ export function createBoxSDK(channel: ITouchClientChannel): BoxSDK {
       }
     },
 
-    async getBounds(): Promise<{ x: number; y: number; width: number; height: number }> {
+    async getBounds(): Promise<{ x: number, y: number, width: number, height: number }> {
       try {
         const result = await channel.send('core-box:get-bounds')
         return result.bounds

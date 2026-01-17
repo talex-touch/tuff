@@ -15,16 +15,16 @@ export type FlowPayloadType = 'text' | 'image' | 'files' | 'json' | 'html' | 'cu
 /**
  * Flow session states
  */
-export type FlowSessionState =
-  | 'INIT'
-  | 'TARGET_SELECTING'
-  | 'TARGET_SELECTED'
-  | 'DELIVERING'
-  | 'DELIVERED'
-  | 'PROCESSING'
-  | 'ACKED'
-  | 'FAILED'
-  | 'CANCELLED'
+export type FlowSessionState
+  = | 'INIT'
+    | 'TARGET_SELECTING'
+    | 'TARGET_SELECTED'
+    | 'DELIVERING'
+    | 'DELIVERED'
+    | 'PROCESSING'
+    | 'ACKED'
+    | 'FAILED'
+    | 'CANCELLED'
 
 /**
  * Flow error codes
@@ -39,7 +39,7 @@ export enum FlowErrorCode {
   PERMISSION_DENIED = 'PERMISSION_DENIED',
   TIMEOUT = 'TIMEOUT',
   CANCELLED = 'CANCELLED',
-  INTERNAL_ERROR = 'INTERNAL_ERROR'
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
 }
 
 /**
@@ -277,7 +277,7 @@ export enum FlowIPCChannel {
   ACKNOWLEDGE = 'flow:acknowledge',
   REPORT_ERROR = 'flow:report-error',
   SESSION_UPDATE = 'flow:session-update',
-  DELIVER = 'flow:deliver'
+  DELIVER = 'flow:deliver',
 }
 
 /**

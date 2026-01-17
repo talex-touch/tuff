@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StatusBadgeEmits, StatusBadgeProps, StatusTone, ToneMeta } from './types'
 /**
  * TxStatusBadge Component
  *
@@ -15,7 +16,6 @@
  * @component
  */
 import { computed } from 'vue'
-import type { StatusBadgeProps, StatusBadgeEmits, StatusTone, ToneMeta } from './types'
 
 defineOptions({
   name: 'TxStatusBadge',
@@ -46,7 +46,8 @@ const toneMap: Record<StatusTone, ToneMeta> = {
  * Uses explicit status prop if provided, otherwise maps from statusKey.
  */
 const resolvedTone = computed<StatusTone>(() => {
-  if (props.status) return props.status
+  if (props.status)
+    return props.status
 
   switch (props.statusKey) {
     case 'granted':

@@ -1,15 +1,7 @@
-<template>
-  <component :is="as" class="tx-gradient-border" :style="rootStyle">
-    <span class="tx-gradient-border__inner">
-      <slot />
-    </span>
-  </component>
-</template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { GradientBorderProps } from '../index'
+import { computed } from 'vue'
 
 defineOptions({
   name: 'TxGradientBorder',
@@ -36,6 +28,14 @@ const rootStyle = computed<CSSProperties>(() => {
   } as CSSProperties
 })
 </script>
+
+<template>
+  <component :is="as" class="tx-gradient-border" :style="rootStyle">
+    <span class="tx-gradient-border__inner">
+      <slot />
+    </span>
+  </component>
+</template>
 
 <style scoped>
 @property --tx-gradient-angle {

@@ -137,7 +137,8 @@ export function useAutoResize(
       if (opt.height)
         styleEl.style.height = `${e.next.height}px`
       // Resume ResizeObserver immediately for sync mode
-      if (enabled.value) start()
+      if (enabled.value)
+        start()
       return
     }
 
@@ -210,12 +211,14 @@ export function useAutoResize(
       const onFinish = () => {
         done()
         // Resume ResizeObserver after animation finishes
-        if (enabled.value) start()
+        if (enabled.value)
+          start()
       }
       const onCancel = () => {
         done()
         // Resume ResizeObserver after animation cancels
-        if (enabled.value) start()
+        if (enabled.value)
+          start()
       }
 
       anim.addEventListener('finish', onFinish, { once: true })
@@ -227,7 +230,8 @@ export function useAutoResize(
         anim.cancel()
         done()
         // Resume ResizeObserver after animation cleanup
-        if (enabled.value) start()
+        if (enabled.value)
+          start()
       }
 
       return
@@ -294,7 +298,8 @@ export function useAutoResize(
       styleEl.removeEventListener('transitionend', onEnd)
       done()
       // Resume ResizeObserver after transition ends
-      if (enabled.value) start()
+      if (enabled.value)
+        start()
     }
 
     styleEl.addEventListener('transitionend', onEnd)
@@ -304,7 +309,8 @@ export function useAutoResize(
         styleEl.removeEventListener('transitionend', onEnd)
         done()
         // Resume ResizeObserver after timeout
-        if (enabled.value) start()
+        if (enabled.value)
+          start()
       }, opt.durationMs + 34) as unknown as number
     }
 
@@ -314,7 +320,8 @@ export function useAutoResize(
         clearTimeout(timeoutId)
       done()
       // Resume ResizeObserver after transition cleanup
-      if (enabled.value) start()
+      if (enabled.value)
+        start()
     }
   }
 

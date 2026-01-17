@@ -8,9 +8,11 @@ import type { AgentCapability, AgentConfig, AgentDescriptor } from '@talex-touch
 import chalk from 'chalk'
 
 const TAG = chalk.hex('#9c27b0').bold('[Agents]')
-const logInfo = (...args: any[]) => console.log(TAG, ...args)
-const logWarn = (...args: any[]) => console.warn(TAG, chalk.yellow(...args))
-const logDebug = (...args: any[]) => console.debug(TAG, chalk.gray(...args))
+const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
+const logWarn = (...args: unknown[]) =>
+  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
+const logDebug = (...args: unknown[]) =>
+  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
 
 /**
  * Agent implementation interface
@@ -19,27 +21,27 @@ export interface AgentImpl {
   /**
    * Execute an agent task
    */
-  execute(input: unknown, context: AgentExecutionContext): Promise<unknown>
+  execute: (input: unknown, context: AgentExecutionContext) => Promise<unknown>
 
   /**
    * Optional: Generate execution plan
    */
-  plan?(input: unknown, context: AgentExecutionContext): Promise<unknown>
+  plan?: (input: unknown, context: AgentExecutionContext) => Promise<unknown>
 
   /**
    * Optional: Handle chat interaction
    */
-  chat?(messages: unknown[], context: AgentExecutionContext): AsyncGenerator<string>
+  chat?: (messages: unknown[], context: AgentExecutionContext) => AsyncGenerator<string>
 
   /**
    * Optional: Initialize the agent
    */
-  init?(): Promise<void>
+  init?: () => Promise<void>
 
   /**
    * Optional: Cleanup resources
    */
-  destroy?(): Promise<void>
+  destroy?: () => Promise<void>
 }
 
 /**
@@ -79,7 +81,7 @@ export class AgentRegistry {
     this.agents.set(descriptor.id, {
       descriptor,
       impl,
-      registeredAt: Date.now(),
+      registeredAt: Date.now()
     })
 
     logInfo(`Registered agent: ${descriptor.id} (${descriptor.name})`)
@@ -134,29 +136,29 @@ export class AgentRegistry {
    * Get all registered agent descriptors
    */
   getAllDescriptors(): AgentDescriptor[] {
-    return Array.from(this.agents.values()).map(a => a.descriptor)
+    return Array.from(this.agents.values()).map((a) => a.descriptor)
   }
 
   /**
    * Get enabled agents only
    */
   getEnabledAgents(): AgentDescriptor[] {
-    return this.getAllDescriptors().filter(a => a.enabled !== false)
+    return this.getAllDescriptors().filter((a) => a.enabled !== false)
   }
 
   /**
    * Get agents by category
    */
   getAgentsByCategory(category: string): AgentDescriptor[] {
-    return this.getAllDescriptors().filter(a => a.category === category)
+    return this.getAllDescriptors().filter((a) => a.category === category)
   }
 
   /**
    * Find agents with a specific capability
    */
   findAgentsWithCapability(capabilityType: AgentCapability['type']): AgentDescriptor[] {
-    return this.getAllDescriptors().filter(a =>
-      a.capabilities.some(c => c.type === capabilityType),
+    return this.getAllDescriptors().filter((a) =>
+      a.capabilities.some((c) => c.type === capabilityType)
     )
   }
 
@@ -179,7 +181,7 @@ export class AgentRegistry {
 
     agent.descriptor.config = {
       ...agent.descriptor.config,
-      ...config,
+      ...config
     }
 
     logDebug(`Updated config for agent ${agentId}`)
@@ -203,7 +205,7 @@ export class AgentRegistry {
   /**
    * Get registry statistics
    */
-  getStats(): { total: number, enabled: number, byCategory: Record<string, number> } {
+  getStats(): { total: number; enabled: number; byCategory: Record<string, number> } {
     const all = this.getAllDescriptors()
     const byCategory: Record<string, number> = {}
 
@@ -214,8 +216,8 @@ export class AgentRegistry {
 
     return {
       total: all.length,
-      enabled: all.filter(a => a.enabled !== false).length,
-      byCategory,
+      enabled: all.filter((a) => a.enabled !== false).length,
+      byCategory
     }
   }
 

@@ -4,13 +4,21 @@
  * Priority-based task scheduling for agent execution.
  */
 
-import type { AgentResult, AgentStatus, AgentTask, QueuedTask, SchedulerStats, TaskProgress } from '@talex-touch/utils'
-import chalk from 'chalk'
+import type {
+  AgentResult,
+  AgentStatus,
+  AgentTask,
+  QueuedTask,
+  SchedulerStats,
+  TaskProgress
+} from '@talex-touch/utils'
 import { EventEmitter } from 'node:events'
+import chalk from 'chalk'
 
 const TAG = chalk.hex('#9c27b0').bold('[AgentScheduler]')
-const logInfo = (...args: any[]) => console.log(TAG, ...args)
-const logDebug = (...args: any[]) => console.debug(TAG, chalk.gray(...args))
+const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
+const logDebug = (...args: unknown[]) =>
+  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
 
 type TaskExecutor = (task: AgentTask) => Promise<AgentResult>
 
@@ -28,7 +36,7 @@ interface QueueNode {
  */
 export class AgentScheduler extends EventEmitter {
   private queue: QueueNode[] = []
-  private activeTasks: Map<string, { task: AgentTask, startedAt: number }> = new Map()
+  private activeTasks: Map<string, { task: AgentTask; startedAt: number }> = new Map()
   private completedCount = 0
   private failedCount = 0
   private totalWaitTime = 0
@@ -60,7 +68,7 @@ export class AgentScheduler extends EventEmitter {
     const node: QueueNode = {
       task: taskWithId,
       priority: task.priority || 5,
-      enqueuedAt: Date.now(),
+      enqueuedAt: Date.now()
     }
 
     // Insert in priority order (lower number = higher priority)
@@ -97,7 +105,7 @@ export class AgentScheduler extends EventEmitter {
    * Update task priority
    */
   updatePriority(taskId: string, priority: number): boolean {
-    const index = this.queue.findIndex(n => n.task.id === taskId)
+    const index = this.queue.findIndex((n) => n.task.id === taskId)
     if (index === -1) return false
 
     const node = this.queue.splice(index, 1)[0]
@@ -125,7 +133,7 @@ export class AgentScheduler extends EventEmitter {
    * Cancel a queued task
    */
   cancelQueued(taskId: string): boolean {
-    const index = this.queue.findIndex(n => n.task.id === taskId)
+    const index = this.queue.findIndex((n) => n.task.id === taskId)
     if (index === -1) return false
 
     this.queue.splice(index, 1)
@@ -181,18 +189,15 @@ export class AgentScheduler extends EventEmitter {
       if (result.success) {
         this.completedCount++
         this.emit('task:completed', { taskId, result })
-      }
-      else {
+      } else {
         this.failedCount++
         this.emit('task:failed', { taskId, error: result.error })
       }
-    }
-    catch (error) {
+    } catch (error) {
       this.failedCount++
       const errorMessage = error instanceof Error ? error.message : String(error)
       this.emit('task:failed', { taskId, error: errorMessage })
-    }
-    finally {
+    } finally {
       this.activeTasks.delete(taskId)
       // Continue processing queue
       this.processQueue()
@@ -214,7 +219,7 @@ export class AgentScheduler extends EventEmitter {
       return 'running' as AgentStatus
     }
 
-    const queued = this.queue.find(n => n.task.id === taskId)
+    const queued = this.queue.find((n) => n.task.id === taskId)
     if (queued) {
       return 'idle' as AgentStatus
     }
@@ -226,11 +231,11 @@ export class AgentScheduler extends EventEmitter {
    * Get all queued tasks
    */
   getQueuedTasks(): QueuedTask[] {
-    return this.queue.map(n => ({
+    return this.queue.map((n) => ({
       task: n.task,
       priority: n.priority,
       enqueuedAt: n.enqueuedAt,
-      status: 'idle' as AgentStatus,
+      status: 'idle' as AgentStatus
     }))
   }
 
@@ -238,7 +243,7 @@ export class AgentScheduler extends EventEmitter {
    * Get all active tasks
    */
   getActiveTasks(): AgentTask[] {
-    return Array.from(this.activeTasks.values()).map(a => a.task)
+    return Array.from(this.activeTasks.values()).map((a) => a.task)
   }
 
   /**
@@ -261,7 +266,7 @@ export class AgentScheduler extends EventEmitter {
       completedTasks: this.completedCount,
       failedTasks: this.failedCount,
       averageWaitTime: totalTasks > 0 ? this.totalWaitTime / totalTasks : 0,
-      averageExecutionTime: totalTasks > 0 ? this.totalExecutionTime / totalTasks : 0,
+      averageExecutionTime: totalTasks > 0 ? this.totalExecutionTime / totalTasks : 0
     }
   }
 

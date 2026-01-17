@@ -17,14 +17,14 @@ export default defineEventHandler(async (event) => {
 
   // Update user's public metadata with subscription info
   const features = getPlanFeatures(result.plan)
-  
+
   await client.users.updateUserMetadata(userId, {
     publicMetadata: {
       subscription: {
         plan: result.plan,
         expiresAt: result.expiresAt,
         activatedAt: new Date().toISOString(),
-        activationCode: code.substring(0, 12) + '****', // Mask code
+        activationCode: `${code.substring(0, 12)}****`, // Mask code
       },
       quotas: {
         aiRequests: { used: 0, limit: features.aiRequestsLimit },

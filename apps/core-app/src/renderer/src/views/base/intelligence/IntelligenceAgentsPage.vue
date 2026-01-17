@@ -14,17 +14,15 @@ const selectedAgentId = ref<string | null>(null)
 const loading = ref(true)
 const searchQuery = ref('')
 
-const selectedAgent = computed(() =>
-  agents.value.find(a => a.id === selectedAgentId.value) || null,
+const selectedAgent = computed(
+  () => agents.value.find((a) => a.id === selectedAgentId.value) || null
 )
 
 const filteredAgents = computed(() => {
   if (!searchQuery.value.trim()) return agents.value
   const query = searchQuery.value.toLowerCase()
   return agents.value.filter(
-    a =>
-      a.name.toLowerCase().includes(query)
-      || a.description.toLowerCase().includes(query),
+    (a) => a.name.toLowerCase().includes(query) || a.description.toLowerCase().includes(query)
   )
 })
 
@@ -36,11 +34,9 @@ async function loadAgents() {
     if (agents.value.length > 0 && !selectedAgentId.value) {
       selectedAgentId.value = agents.value[0].id
     }
-  }
-  catch (err) {
+  } catch (err) {
     console.error('Failed to load agents:', err)
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
@@ -75,10 +71,7 @@ onMounted(() => {
       </div>
 
       <div class="agents-content">
-        <AgentDetail
-          v-if="selectedAgent"
-          :agent="selectedAgent"
-        />
+        <AgentDetail v-if="selectedAgent" :agent="selectedAgent" />
         <div v-else class="empty-state">
           <div class="i-carbon-bot text-4xl op-30" />
           <p class="mt-2 op-50">

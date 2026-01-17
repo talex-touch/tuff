@@ -5,9 +5,9 @@
  * Performance target: < 5ms per check (verified via timing instrumentation)
  */
 
-import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
+import type { PermissionStore } from './permission-store'
 import { DEFAULT_PERMISSIONS, permissionRegistry } from '@talex-touch/utils/permission'
-import { PermissionStore } from './permission-store'
+import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 
 /**
  * Permission check result
@@ -91,7 +91,7 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'flow:*', permissions: ['storage.shared'] },
 
   // DivisionBox APIs
-  { pattern: 'division-box:*', permissions: ['window.create'] },
+  { pattern: 'division-box:*', permissions: ['window.create'] }
 ]
 
 /**
@@ -104,7 +104,7 @@ export class PermissionGuard {
     totalChecks: 0,
     totalDurationMs: 0,
     maxDurationMs: 0,
-    slowChecks: 0, // > 5ms
+    slowChecks: 0 // > 5ms
   }
 
   constructor(store: PermissionStore) {
@@ -119,11 +119,7 @@ export class PermissionGuard {
   /**
    * Check if plugin has permission for an API call
    */
-  check(
-    pluginId: string,
-    apiName: string,
-    sdkapi?: number
-  ): PermissionCheckResult {
+  check(pluginId: string, apiName: string, sdkapi?: number): PermissionCheckResult {
     const startTime = performance.now()
 
     // Find matching permission mapping
@@ -137,7 +133,7 @@ export class PermissionGuard {
         allowed: true,
         permissionId: '',
         pluginId,
-        durationMs: duration,
+        durationMs: duration
       }
     }
 
@@ -152,7 +148,7 @@ export class PermissionGuard {
         permissionId: requiredPermissions[0],
         pluginId,
         reason: 'Permission enforcement disabled for legacy SDK',
-        durationMs: duration,
+        durationMs: duration
       }
     }
 
@@ -173,7 +169,7 @@ export class PermissionGuard {
           pluginId,
           reason: `Permission '${permissionId}' not granted`,
           showRequest: true,
-          durationMs: duration,
+          durationMs: duration
         }
       }
     }
@@ -184,7 +180,7 @@ export class PermissionGuard {
       allowed: true,
       permissionId: requiredPermissions[0],
       pluginId,
-      durationMs: duration,
+      durationMs: duration
     }
   }
 
@@ -212,15 +208,16 @@ export class PermissionGuard {
     slowChecks: number
     meetsTarget: boolean
   } {
-    const avg = this.performanceStats.totalChecks > 0
-      ? this.performanceStats.totalDurationMs / this.performanceStats.totalChecks
-      : 0
+    const avg =
+      this.performanceStats.totalChecks > 0
+        ? this.performanceStats.totalDurationMs / this.performanceStats.totalChecks
+        : 0
     return {
       totalChecks: this.performanceStats.totalChecks,
       avgDurationMs: Math.round(avg * 100) / 100,
       maxDurationMs: Math.round(this.performanceStats.maxDurationMs * 100) / 100,
       slowChecks: this.performanceStats.slowChecks,
-      meetsTarget: avg < 5 && this.performanceStats.maxDurationMs < 10,
+      meetsTarget: avg < 5 && this.performanceStats.maxDurationMs < 10
     }
   }
 
@@ -232,18 +229,14 @@ export class PermissionGuard {
       totalChecks: 0,
       totalDurationMs: 0,
       maxDurationMs: 0,
-      slowChecks: 0,
+      slowChecks: 0
     }
   }
 
   /**
    * Check permission and throw if denied
    */
-  enforce(
-    pluginId: string,
-    apiName: string,
-    sdkapi?: number
-  ): void {
+  enforce(pluginId: string, apiName: string, sdkapi?: number): void {
     const result = this.check(pluginId, apiName, sdkapi)
     if (!result.allowed) {
       const error = new Error(`Permission denied: ${result.reason}`)
@@ -286,7 +279,7 @@ export class PermissionGuard {
 
     if (pattern.includes('*')) {
       // Convert to regex
-      const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$')
+      const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`)
       return regex.test(apiName)
     }
 

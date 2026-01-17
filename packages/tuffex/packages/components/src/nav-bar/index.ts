@@ -1,6 +1,6 @@
-import TxNavBar from './src/TxNavBar.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { NavBarEmits, NavBarProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxNavBar from './src/TxNavBar.vue'
 
 const NavBar = withInstall(TxNavBar)
 

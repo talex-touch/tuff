@@ -3,16 +3,16 @@
  * @module @talex-touch/utils/transport/sdk/main-transport
  */
 
+import type { ITouchChannel } from '../../channel'
+import type { TuffEvent } from '../event/types'
 import type {
   HandlerContext,
   ITuffTransportMain,
   PluginKeyManager,
   StreamContext,
 } from '../types'
-import type { TuffEvent } from '../event/types'
-import type { ITouchChannel } from '../../channel'
-import { assertTuffEvent } from '../event/builder'
 import { ChannelType, DataCode } from '../../channel'
+import { assertTuffEvent } from '../event/builder'
 import { STREAM_SUFFIXES } from './constants'
 
 /**
@@ -71,7 +71,7 @@ export class TuffMainTransport implements ITuffTransportMain {
 
   /**
    * Registers a stream handler.
-   * 
+   *
    * @remarks
    * Phase 1 implementation uses IPC events to simulate streaming.
    */
@@ -88,7 +88,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     const streams = new Map<string, { cancelled: boolean }>()
 
     const startHandler = (data: any) => {
-      const rawPayload = data?.data as { streamId?: string; [key: string]: any } | undefined
+      const rawPayload = data?.data as { streamId?: string, [key: string]: any } | undefined
       const streamId = rawPayload?.streamId
       const sender = data?.header?.event?.sender as any
 
@@ -106,7 +106,8 @@ export class TuffMainTransport implements ITuffTransportMain {
             name,
             header: { status: 'request', type: ChannelType.MAIN },
           })
-        } catch {
+        }
+        catch {
           // Ignore send failures (renderer may have been destroyed)
         }
       }
@@ -206,19 +207,19 @@ export class TuffMainTransport implements ITuffTransportMain {
     assertTuffEvent(event, 'TuffMainTransport.sendTo')
 
     const eventName = event.toEventName()
-    
+
     // Find the BrowserWindow that owns this WebContents
     const { BrowserWindow } = await import('electron')
     const windows = BrowserWindow.getAllWindows()
     const targetWindow = windows.find(win => win.webContents === webContents)
-    
+
     if (!targetWindow) {
       throw new Error(
         '[TuffTransport] Cannot find BrowserWindow for WebContents. '
         + 'Make sure the WebContents belongs to an existing BrowserWindow.',
       )
     }
-    
+
     return this.channel.sendTo(targetWindow, ChannelType.MAIN, eventName, payload)
   }
 

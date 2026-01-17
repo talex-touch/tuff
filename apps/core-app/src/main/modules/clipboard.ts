@@ -1,7 +1,4 @@
 import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
-import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import type { NativeImage } from 'electron'
-import type * as schema from '../db/schema'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
 import type {
   ClipboardApplyRequest,
@@ -10,33 +7,36 @@ import type {
   ClipboardItem,
   ClipboardQueryRequest,
   ClipboardQueryResponse,
-  ClipboardSetFavoriteRequest,
+  ClipboardSetFavoriteRequest
 } from '@talex-touch/utils/transport/events/types'
-import { TuffInputType } from '@talex-touch/utils/transport/events/types'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { NativeImage } from 'electron'
+import type * as schema from '../db/schema'
 import { execFile } from 'node:child_process'
 import crypto from 'node:crypto'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { performance } from 'node:perf_hooks'
 import { DataCode } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm'
-import { clipboard, nativeImage } from 'electron'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { TuffInputType } from '@talex-touch/utils/transport/events/types'
+import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm'
+import { clipboard, nativeImage } from 'electron'
 import { genTouchChannel } from '../core/channel-core'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
+import { appTaskGate } from '../service/app-task-gate'
+import { createLogger } from '../utils/logger'
+import { enterPerfContext } from '../utils/perf-context'
 import { BaseModule } from './abstract-base-module'
 import { coreBoxManager } from './box-tool/core-box/manager'
 import { windowManager } from './box-tool/core-box/window'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { activeAppService } from './system/active-app'
-import { appTaskGate } from '../service/app-task-gate'
-import { createLogger } from '../utils/logger'
-import { enterPerfContext } from '../utils/perf-context'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -148,13 +148,12 @@ class ClipboardHelper {
   }
 
   private getImageHash(image: NativeImage): string {
-    if (!image || image.isEmpty())
-      return ''
+    if (!image || image.isEmpty()) return ''
 
     const resized = image.resize({
       width: IMAGE_HASH_SIZE,
       height: IMAGE_HASH_SIZE,
-      quality: 'good',
+      quality: 'good'
     })
 
     const buffer = resized.toBitmap()
@@ -373,9 +372,11 @@ export class ClipboardModule extends BaseModule {
   private monitoringStarted = false
   private ipcHandlersRegistered = false
   private clipboardCheckCooldownUntil = 0
-  private activeAppCache:
-    | { value: Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null; fetchedAt: number }
-    | null = null
+  private activeAppCache: {
+    value: Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null
+    fetchedAt: number
+  } | null = null
+
   private readonly activeAppCacheTtlMs = 2000
 
   static key: symbol = Symbol.for('Clipboard')
@@ -479,18 +480,20 @@ export class ClipboardModule extends BaseModule {
   }
 
   private toTransportItem(item: IClipboardItem): ClipboardItem | null {
-    if (!item || typeof item.id !== 'number')
-      return null
+    if (!item || typeof item.id !== 'number') return null
 
     const createdAt = item.timestamp
-      ? (item.timestamp instanceof Date ? item.timestamp.getTime() : new Date(item.timestamp).getTime())
+      ? item.timestamp instanceof Date
+        ? item.timestamp.getTime()
+        : new Date(item.timestamp).getTime()
       : Date.now()
 
-    const type: TuffInputType = item.type === 'image'
-      ? TuffInputType.Image
-      : item.type === 'files'
-        ? TuffInputType.Files
-        : TuffInputType.Text
+    const type: TuffInputType =
+      item.type === 'image'
+        ? TuffInputType.Image
+        : item.type === 'files'
+          ? TuffInputType.Files
+          : TuffInputType.Text
 
     return {
       id: item.id,
@@ -505,7 +508,7 @@ export class ClipboardModule extends BaseModule {
 
   private buildTransportChangePayload(): ClipboardChangePayload {
     const history = this.memoryCache
-      .map(item => this.toTransportItem(item))
+      .map((item) => this.toTransportItem(item))
       .filter((item): item is ClipboardItem => !!item)
     const latest = history.length > 0 ? history[0] : null
     return { latest, history }
@@ -708,9 +711,9 @@ export class ClipboardModule extends BaseModule {
     return JSON.stringify({ ...base, ...patch })
   }
 
-  private async getActiveAppSnapshot(): Promise<
-    Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null
-  > {
+  private async getActiveAppSnapshot(): Promise<Awaited<
+    ReturnType<typeof activeAppService.getActiveApp>
+  > | null> {
     const now = Date.now()
     if (this.activeAppCache && now - this.activeAppCache.fetchedAt < this.activeAppCacheTtlMs) {
       return this.activeAppCache.value
@@ -841,11 +844,10 @@ export class ClipboardModule extends BaseModule {
     if (pollingService.isRegistered(CLIPBOARD_POLL_TASK_ID)) {
       pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
     }
-    pollingService.register(
-      CLIPBOARD_POLL_TASK_ID,
-      () => this.checkClipboard(),
-      { interval: 1, unit: 'seconds' },
-    )
+    pollingService.register(CLIPBOARD_POLL_TASK_ID, () => this.checkClipboard(), {
+      interval: 1,
+      unit: 'seconds'
+    })
     pollingService.start()
     this.registerIpcHandlers()
   }
@@ -1029,13 +1031,15 @@ export class ClipboardModule extends BaseModule {
       if (persisted.id) {
         await this.persistMetaEntries(persisted.id, metaObject)
         setImmediate(() => {
-          ocrService.enqueueFromClipboard({
-            clipboardId: persisted.id!,
-            item: persisted,
-            formats
-          }).catch((error) => {
-            clipboardLog.warn('Failed to enqueue clipboard OCR', { error })
-          })
+          ocrService
+            .enqueueFromClipboard({
+              clipboardId: persisted.id!,
+              item: persisted,
+              formats
+            })
+            .catch((error) => {
+              clipboardLog.warn('Failed to enqueue clipboard OCR', { error })
+            })
         })
       }
 
@@ -1050,7 +1054,10 @@ export class ClipboardModule extends BaseModule {
       }
 
       const activePlugin = windowManager.getAttachedPlugin()
-      if (activePlugin?._uniqueChannelKey && windowManager.shouldForwardClipboardChange(persisted.type)) {
+      if (
+        activePlugin?._uniqueChannelKey &&
+        windowManager.shouldForwardClipboardChange(persisted.type)
+      ) {
         touchChannel
           .sendToPlugin(activePlugin.name, 'core-box:clipboard-change', { item: persisted })
           .catch((error) => {
@@ -1171,7 +1178,7 @@ export class ClipboardModule extends BaseModule {
         await this.db!.update(clipboardHistory)
           .set({ isFavorite })
           .where(eq(clipboardHistory.id, id))
-        const cached = this.memoryCache.find(item => item.id === id)
+        const cached = this.memoryCache.find((item) => item.id === id)
         if (cached) {
           cached.isFavorite = isFavorite
           this.notifyTransportChange()
@@ -1321,7 +1328,12 @@ export class ClipboardModule extends BaseModule {
 
           let payload: ClipboardApplyPayload
           if (image) {
-            payload = { type: 'image', item: { type: 'image', content: image }, hideCoreBox, delayMs }
+            payload = {
+              type: 'image',
+              item: { type: 'image', content: image },
+              hideCoreBox,
+              delayMs
+            }
           } else if (files && files.length > 0) {
             payload = { type: 'files', files, hideCoreBox, delayMs }
           } else {
@@ -1346,7 +1358,9 @@ export class ClipboardModule extends BaseModule {
         const { source, category, metaFilter, limit: requestedLimit } = data ?? {}
         const limit = Math.min(Math.max(requestedLimit ?? 5, 1), 50) // 限制最多50条
 
-        clipboardLog.debug('[clipboard:query] Request', { meta: { source, category, metaFilter, limit } })
+        clipboardLog.debug('[clipboard:query] Request', {
+          meta: { source, category, metaFilter, limit }
+        })
 
         // 如果没有任何筛选条件，返回最近的记录
         if (!source && !category && !metaFilter) {
@@ -1374,7 +1388,9 @@ export class ClipboardModule extends BaseModule {
 
         if (category) {
           const categoryValue = JSON.stringify(category)
-          clipboardLog.debug('[clipboard:query] Searching for category', { meta: { category, categoryValue } })
+          clipboardLog.debug('[clipboard:query] Searching for category', {
+            meta: { category, categoryValue }
+          })
           conditions.push(
             and(
               eq(clipboardHistoryMeta.key, 'category'),
@@ -1419,7 +1435,9 @@ export class ClipboardModule extends BaseModule {
           return
         }
 
-        clipboardLog.debug('[clipboard:query] Fetching clipboard entries', { meta: { count: ids.length, sampleIds: ids.slice(0, 5).join(',') } })
+        clipboardLog.debug('[clipboard:query] Fetching clipboard entries', {
+          meta: { count: ids.length, sampleIds: ids.slice(0, 5).join(',') }
+        })
 
         const rows = await this.db
           .select()
@@ -1428,7 +1446,9 @@ export class ClipboardModule extends BaseModule {
           .orderBy(desc(clipboardHistory.timestamp))
 
         const history = await this.hydrateWithMeta(rows)
-        clipboardLog.debug('[clipboard:query] Returning results', { meta: { count: history.length } })
+        clipboardLog.debug('[clipboard:query] Returning results', {
+          meta: { count: history.length }
+        })
         reply(DataCode.SUCCESS, history)
       })
     }
@@ -1461,7 +1481,7 @@ export class ClipboardModule extends BaseModule {
 
         const offset = (page - 1) * limit
 
-        let whereClause: any = undefined
+        let whereClause: any
         if (request?.type === 'favorite') {
           whereClause = eq(clipboardHistory.isFavorite, true)
         } else if (request?.type === 'text') {
@@ -1485,7 +1505,7 @@ export class ClipboardModule extends BaseModule {
 
         const total = totalResult[0]?.count ?? 0
         const items = rows
-          .map(row => this.toTransportItem(row as unknown as IClipboardItem))
+          .map((row) => this.toTransportItem(row as unknown as IClipboardItem))
           .filter((item): item is ClipboardItem => !!item)
 
         return { items, total, page, limit } satisfies ClipboardQueryResponse
@@ -1494,16 +1514,14 @@ export class ClipboardModule extends BaseModule {
 
     this.transportDisposers.push(
       this.transport.on(ClipboardEvents.apply, async (request: ClipboardApplyRequest) => {
-        if (!this.db)
-          return
+        if (!this.db) return
         const [row] = await this.db
           .select()
           .from(clipboardHistory)
           .where(eq(clipboardHistory.id, request.id))
           .limit(1)
 
-        if (!row)
-          return
+        if (!row) return
 
         if (request.autoPaste === false) {
           this.writeItemToClipboard(row as unknown as IClipboardItem, { item: row as any })
@@ -1516,44 +1534,48 @@ export class ClipboardModule extends BaseModule {
 
     this.transportDisposers.push(
       this.transport.on(ClipboardEvents.delete, async (request: ClipboardDeleteRequest) => {
-        if (!this.db)
-          return
+        if (!this.db) return
         await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
-        this.memoryCache = this.memoryCache.filter(item => item.id !== request.id)
+        this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
         this.notifyTransportChange()
       })
     )
 
     this.transportDisposers.push(
-      this.transport.on(ClipboardEvents.setFavorite, async (request: ClipboardSetFavoriteRequest) => {
-        if (!this.db)
-          return
-        await this.db
-          .update(clipboardHistory)
-          .set({ isFavorite: request.isFavorite })
-          .where(eq(clipboardHistory.id, request.id))
+      this.transport.on(
+        ClipboardEvents.setFavorite,
+        async (request: ClipboardSetFavoriteRequest) => {
+          if (!this.db) return
+          await this.db
+            .update(clipboardHistory)
+            .set({ isFavorite: request.isFavorite })
+            .where(eq(clipboardHistory.id, request.id))
 
-        const cached = this.memoryCache.find(item => item.id === request.id)
-        if (cached) {
-          cached.isFavorite = request.isFavorite
-          this.notifyTransportChange()
+          const cached = this.memoryCache.find((item) => item.id === request.id)
+          if (cached) {
+            cached.isFavorite = request.isFavorite
+            this.notifyTransportChange()
+          }
         }
-      })
+      )
     )
 
     this.transportDisposers.push(
-      this.transport.onStream(ClipboardEvents.change, (_request: void, context: StreamContext<ClipboardChangePayload>) => {
-        const listener = () => {
-          if (context.isCancelled()) {
-            this.transportChangeListeners.delete(listener)
-            return
+      this.transport.onStream(
+        ClipboardEvents.change,
+        (_request: void, context: StreamContext<ClipboardChangePayload>) => {
+          const listener = () => {
+            if (context.isCancelled()) {
+              this.transportChangeListeners.delete(listener)
+              return
+            }
+            context.emit(this.buildTransportChangePayload())
           }
-          context.emit(this.buildTransportChangePayload())
-        }
 
-        this.transportChangeListeners.add(listener)
-        listener()
-      })
+          this.transportChangeListeners.add(listener)
+          listener()
+        }
+      )
     )
   }
 

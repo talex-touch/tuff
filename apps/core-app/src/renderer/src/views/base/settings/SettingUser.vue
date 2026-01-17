@@ -1,4 +1,5 @@
 <script setup lang="ts" name="SettingUser">
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -8,7 +9,6 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
 const { t } = useI18n()
 const { isLoggedIn, currentUser, loginWithBrowser, logout, authLoadingState } = useAuth()
@@ -22,7 +22,7 @@ const useLocalServer = computed({
     if (appSetting?.dev) {
       appSetting.dev.authServer = val ? 'local' : 'production'
     }
-  },
+  }
 })
 
 async function handleLogin() {
@@ -32,8 +32,7 @@ async function handleLogin() {
     if (result.success) {
       console.log('登录结果:', result)
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('登录过程出错:', error)
     toast.error('登录过程中发生错误')
   }
@@ -43,8 +42,7 @@ async function handleLogout() {
   try {
     await logout()
     toast.success('已登出')
-  }
-  catch (error) {
+  } catch (error) {
     console.error('登出失败:', error)
     toast.error('登出失败')
   }
@@ -100,13 +98,13 @@ function openDeviceManagement() {
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
     >
-      <FlatButton
-        type="primary"
-        :disabled="authLoadingState.isLoggingIn"
-        @click="handleLogin"
-      >
+      <FlatButton type="primary" :disabled="authLoadingState.isLoggingIn" @click="handleLogin">
         <span v-if="authLoadingState.isLoggingIn" class="i-carbon-circle-dash animate-spin mr-1" />
-        {{ authLoadingState.isLoggingIn ? t('settingUser.loggingIn', '登录中...') : t('settingUser.login') }}
+        {{
+          authLoadingState.isLoggingIn
+            ? t('settingUser.loggingIn', '登录中...')
+            : t('settingUser.login')
+        }}
       </FlatButton>
     </TuffBlockSlot>
 

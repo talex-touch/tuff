@@ -1,6 +1,6 @@
 /**
  * DivisionBox Types - Renderer Process
- * 
+ *
  * UI-specific type definitions for the renderer process.
  * For shared types, import directly from '@talex-touch/utils'.
  */
@@ -13,13 +13,13 @@ import type { SessionInfo } from '@talex-touch/utils'
 export interface DivisionBoxUIState {
   /** Currently dragging session ID */
   draggingSessionId: string | null
-  
+
   /** Currently resizing session ID */
   resizingSessionId: string | null
-  
+
   /** Show dock alignment hint */
   showDockHint: boolean
-  
+
   /** Dock hint position */
   dockHintPosition?: {
     x: number
@@ -35,13 +35,13 @@ export interface DivisionBoxUIState {
 export interface DivisionBoxStoreState {
   /** Active sessions map */
   activeSessions: Map<string, SessionInfo>
-  
+
   /** Recent sessions list (sessionIds) */
   recentList: string[]
-  
+
   /** Pinned sessions list (sessionIds) */
   pinnedList: string[]
-  
+
   /** UI state */
   uiState: DivisionBoxUIState
 }

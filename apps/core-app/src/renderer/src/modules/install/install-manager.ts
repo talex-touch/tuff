@@ -3,9 +3,9 @@ import type {
   PluginInstallConfirmResponse,
   PluginInstallProgressEvent
 } from '@talex-touch/utils/plugin'
-import { computed, reactive } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
+import { computed, reactive } from 'vue'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 interface InstallTaskState extends PluginInstallProgressEvent {

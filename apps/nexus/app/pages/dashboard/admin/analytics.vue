@@ -110,7 +110,8 @@ const regionTotal = computed(() =>
 const regionDisplayNames = computed(() => {
   try {
     return new Intl.DisplayNames([locale.value], { type: 'region' })
-  } catch {
+  }
+  catch {
     return null
   }
 })
@@ -146,9 +147,11 @@ async function fetchAnalytics() {
   try {
     const data = await $fetch<AnalyticsData>(`/api/admin/analytics?days=${selectedDays.value}`)
     analytics.value = data
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.data?.message || e.message || 'Failed to load analytics'
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
@@ -159,10 +162,12 @@ async function fetchMessages() {
   try {
     const data = await $fetch<{ messages: TelemetryMessage[] }>('/api/telemetry/messages?limit=12')
     messages.value = data.messages ?? []
-  } catch (e: any) {
+  }
+  catch (e: any) {
     messagesError.value = e.data?.message || e.message || 'Failed to load messages'
     messages.value = []
-  } finally {
+  }
+  finally {
     messagesLoading.value = false
   }
 }
@@ -177,8 +182,10 @@ watch(selectedDays, () => {
 })
 
 function formatNumber(num: number): string {
-  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
-  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
+  if (num >= 1000000)
+    return `${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000)
+    return `${(num / 1000).toFixed(1)}K`
   return num.toString()
 }
 
@@ -215,16 +222,26 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-semibold text-black dark:text-light">{{ t('dashboard.sections.analytics.title', 'Analytics Dashboard') }}</h1>
-        <p class="text-sm text-black/50 dark:text-light/50">{{ t('dashboard.sections.analytics.subtitle', 'Usage statistics and insights') }}</p>
+        <h1 class="text-xl font-semibold text-black dark:text-light">
+          {{ t('dashboard.sections.analytics.title', 'Analytics Dashboard') }}
+        </h1>
+        <p class="text-sm text-black/50 dark:text-light/50">
+          {{ t('dashboard.sections.analytics.subtitle', 'Usage statistics and insights') }}
+        </p>
       </div>
       <select
         v-model="selectedDays"
         class="rounded-lg border-0 bg-black/5 px-3 py-2 text-sm text-black outline-none dark:bg-light/5 dark:text-light"
       >
-        <option :value="7">{{ t('dashboard.sections.analytics.last7Days', 'Last 7 days') }}</option>
-        <option :value="30">{{ t('dashboard.sections.analytics.last30Days', 'Last 30 days') }}</option>
-        <option :value="90">{{ t('dashboard.sections.analytics.last90Days', 'Last 90 days') }}</option>
+        <option :value="7">
+          {{ t('dashboard.sections.analytics.last7Days', 'Last 7 days') }}
+        </option>
+        <option :value="30">
+          {{ t('dashboard.sections.analytics.last30Days', 'Last 30 days') }}
+        </option>
+        <option :value="90">
+          {{ t('dashboard.sections.analytics.last90Days', 'Last 90 days') }}
+        </option>
       </select>
     </div>
 
@@ -340,25 +357,33 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <!-- Summary Stats -->
       <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-4">
         <div class="rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
-          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Uploaded Events</h3>
+          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">
+            Uploaded Events
+          </h3>
           <p class="mt-1 text-3xl font-bold text-black dark:text-light">
             {{ formatNumber(analytics.summary.totalEvents) }}
           </p>
         </div>
         <div class="rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
-          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Total Users</h3>
+          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">
+            Total Users
+          </h3>
           <p class="mt-1 text-3xl font-bold text-black dark:text-light">
             {{ formatNumber(analytics.summary.totalUsers) }}
           </p>
         </div>
         <div class="rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
-          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Total Searches</h3>
+          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">
+            Total Searches
+          </h3>
           <p class="mt-1 text-3xl font-bold text-black dark:text-light">
             {{ formatNumber(analytics.summary.totalSearches) }}
           </p>
         </div>
         <div class="rounded-2xl bg-white/60 p-4 dark:bg-dark/40">
-          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">Avg Search Duration</h3>
+          <h3 class="text-sm font-medium text-black/60 dark:text-light/60">
+            Avg Search Duration
+          </h3>
           <p class="mt-1 text-3xl font-bold text-black dark:text-light">
             {{ analytics.summary.avgSearchDuration }}ms
           </p>
@@ -368,25 +393,33 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <!-- Search Quality -->
       <div v-if="activeSection === 'search'" class="grid gap-4 lg:grid-cols-4">
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Query Length</h3>
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">
+            Avg Query Length
+          </h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
             {{ analytics.summary.avgQueryLength }}
           </p>
         </div>
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Sorting</h3>
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">
+            Avg Sorting
+          </h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
             {{ analytics.summary.avgSortingDuration }}ms
           </p>
         </div>
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Results</h3>
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">
+            Avg Results
+          </h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
             {{ analytics.summary.avgResultCount }}
           </p>
         </div>
         <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">Avg Execute Latency</h3>
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-light/50">
+            Avg Execute Latency
+          </h3>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-light">
             {{ analytics.summary.avgExecuteLatency }}ms
           </p>
@@ -395,7 +428,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- Daily Trend Chart (simplified bar representation) -->
       <div v-if="activeSection === 'overview'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
-        <h3 class="mb-4 font-semibold text-black dark:text-light">Daily Activity</h3>
+        <h3 class="mb-4 font-semibold text-black dark:text-light">
+          Daily Activity
+        </h3>
         <div class="space-y-2">
           <div
             v-for="day in analytics.summary.dailyStats.slice(0, 14)"
@@ -490,7 +525,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <!-- Module Load Performance -->
       <div v-if="activeSection === 'performance'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <div class="mb-4 flex items-center justify-between">
-          <h3 class="font-semibold text-black dark:text-light">Module Load Performance</h3>
+          <h3 class="font-semibold text-black dark:text-light">
+            Module Load Performance
+          </h3>
           <span class="text-xs text-black/40 dark:text-light/40">avg / max / min / ratio</span>
         </div>
         <div v-if="topModuleLoads.length === 0" class="text-sm text-black/40 dark:text-light/40">
@@ -503,8 +540,12 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             class="flex items-center justify-between gap-4 rounded-xl bg-black/5 px-4 py-3 text-sm dark:bg-light/5"
           >
             <div class="min-w-0">
-              <p class="truncate font-medium text-black dark:text-light">{{ item.module }}</p>
-              <p class="text-xs text-black/40 dark:text-light/40">ratio {{ item.ratio.toFixed(2) }}x</p>
+              <p class="truncate font-medium text-black dark:text-light">
+                {{ item.module }}
+              </p>
+              <p class="text-xs text-black/40 dark:text-light/40">
+                ratio {{ item.ratio.toFixed(2) }}x
+              </p>
             </div>
             <div class="flex items-center gap-4 text-xs text-black/60 dark:text-light/60">
               <span>avg {{ item.avgDuration }}ms</span>
@@ -519,7 +560,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-2">
         <!-- Device Distribution -->
         <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
-          <h3 class="mb-4 font-semibold text-black dark:text-light">Device Distribution</h3>
+          <h3 class="mb-4 font-semibold text-black dark:text-light">
+            Device Distribution
+          </h3>
           <div class="space-y-3">
             <div
               v-for="(count, device) in analytics.summary.deviceDistribution"
@@ -532,7 +575,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               <div class="flex-1">
                 <div class="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-light/10">
                   <div
-                    :class="[deviceColors[device] || 'bg-gray-500', 'h-full rounded-full']"
+                    class="h-full rounded-full" :class="[deviceColors[device] || 'bg-gray-500']"
                     :style="{ width: `${(count / Object.values(analytics.summary.deviceDistribution).reduce((a, b) => a + b, 0)) * 100}%` }"
                   />
                 </div>
@@ -546,7 +589,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
         <!-- Region Distribution -->
         <div class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
-          <h3 class="mb-4 font-semibold text-black dark:text-light">Region Distribution</h3>
+          <h3 class="mb-4 font-semibold text-black dark:text-light">
+            Region Distribution
+          </h3>
           <div v-if="Object.keys(analytics.summary.regionDistribution).length === 0" class="py-4 text-center text-sm text-black/40 dark:text-light/40">
             No region data yet
           </div>
@@ -578,7 +623,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- Hourly Distribution -->
       <div v-if="activeSection === 'overview'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
-        <h3 class="mb-4 font-semibold text-black dark:text-light">Hourly Distribution (UTC)</h3>
+        <h3 class="mb-4 font-semibold text-black dark:text-light">
+          Hourly Distribution (UTC)
+        </h3>
         <div v-if="!hasHourlyData" class="py-4 text-center text-sm text-black/40 dark:text-light/40">
           No hourly data yet
         </div>
@@ -592,7 +639,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               <div
                 class="w-full rounded-t bg-blue-500/60 transition-all"
                 :style="{
-                  height: `${Math.max(4, hourlySeries.max ? (hour.count / hourlySeries.max) * 100 : 0)}%`
+                  height: `${Math.max(4, hourlySeries.max ? (hour.count / hourlySeries.max) * 100 : 0)}%`,
                 }"
                 :title="`${hour.label} - ${hour.count}`"
               />
@@ -610,7 +657,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- Search Term Collection Disabled -->
       <div v-if="activeSection === 'search'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
-        <h3 class="mb-2 font-semibold text-black dark:text-light">Search Terms</h3>
+        <h3 class="mb-2 font-semibold text-black dark:text-light">
+          Search Terms
+        </h3>
         <p class="text-sm text-black/50 dark:text-light/50">
           Disabled by privacy policy. Only length, type, and timing metrics are recorded.
         </p>
@@ -620,7 +669,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <div v-if="activeSection === 'search' || activeSection === 'usage'" class="grid gap-4 lg:grid-cols-3">
         <div v-if="activeSection === 'search'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <div class="mb-3 flex items-center justify-between">
-            <h3 class="font-semibold text-black dark:text-light">Search Scenes</h3>
+            <h3 class="font-semibold text-black dark:text-light">
+              Search Scenes
+            </h3>
             <button
               type="button"
               class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
@@ -638,7 +689,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
         <div v-if="activeSection === 'search'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <div class="mb-3 flex items-center justify-between">
-            <h3 class="font-semibold text-black dark:text-light">Result Categories</h3>
+            <h3 class="font-semibold text-black dark:text-light">
+              Result Categories
+            </h3>
             <button
               type="button"
               class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
@@ -656,7 +709,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
         <div v-if="activeSection === 'usage'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <div class="mb-3 flex items-center justify-between">
-            <h3 class="font-semibold text-black dark:text-light">Most Executed</h3>
+            <h3 class="font-semibold text-black dark:text-light">
+              Most Executed
+            </h3>
             <button
               type="button"
               class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
@@ -679,7 +734,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <!-- Telemetry Messages -->
       <div v-if="activeSection === 'messages'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
         <div class="mb-4 flex items-center justify-between">
-          <h3 class="font-semibold text-black dark:text-light">Telemetry Messages</h3>
+          <h3 class="font-semibold text-black dark:text-light">
+            Telemetry Messages
+          </h3>
           <button
             type="button"
             class="rounded-lg bg-black/5 px-3 py-1 text-xs text-black/70 transition hover:bg-black/10 dark:bg-light/5 dark:text-light/70"
@@ -722,8 +779,12 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                     unread
                   </span>
                 </div>
-                <p class="mt-2 font-semibold text-black dark:text-light">{{ item.title }}</p>
-                <p class="mt-1 text-black/60 dark:text-light/60">{{ item.message }}</p>
+                <p class="mt-2 font-semibold text-black dark:text-light">
+                  {{ item.title }}
+                </p>
+                <p class="mt-1 text-black/60 dark:text-light/60">
+                  {{ item.message }}
+                </p>
               </div>
               <span class="text-xs text-black/40 dark:text-light/40">{{ formatMessageTime(item.createdAt) }}</span>
             </div>
@@ -736,8 +797,12 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         <div class="h-full w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-[#0f1115]">
           <div class="mb-4 flex items-center justify-between">
             <div>
-              <h3 class="text-lg font-semibold text-black dark:text-light">Analytics Breakdown</h3>
-              <p class="text-xs text-black/50 dark:text-light/50">Secondary distributions and deep-dive signals</p>
+              <h3 class="text-lg font-semibold text-black dark:text-light">
+                Analytics Breakdown
+              </h3>
+              <p class="text-xs text-black/50 dark:text-light/50">
+                Secondary distributions and deep-dive signals
+              </p>
             </div>
             <button
               type="button"
@@ -773,7 +838,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
           <div v-if="activeBreakdownTab === 'search'" class="space-y-6 text-sm">
             <div>
-              <h4 class="mb-2 font-semibold text-black dark:text-light">Search Input Types</h4>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">
+                Search Input Types
+              </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.searchInputTypeDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span>{{ item[0] }}</span>
@@ -782,7 +849,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               </div>
             </div>
             <div>
-              <h4 class="mb-2 font-semibold text-black dark:text-light">Provider Usage</h4>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">
+                Provider Usage
+              </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.searchProviderDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span>{{ item[0] }}</span>
@@ -791,7 +860,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               </div>
             </div>
             <div>
-              <h4 class="mb-2 font-semibold text-black dark:text-light">Provider Results</h4>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">
+                Provider Results
+              </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.searchProviderResultDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span>{{ item[0] }}</span>
@@ -803,7 +874,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
           <div v-else class="space-y-6 text-sm">
             <div>
-              <h4 class="mb-2 font-semibold text-black dark:text-light">Executed Sources</h4>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">
+                Executed Sources
+              </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUseSourceTypeDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span class="capitalize">{{ item[0] }}</span>
@@ -812,7 +885,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               </div>
             </div>
             <div>
-              <h4 class="mb-2 font-semibold text-black dark:text-light">Item Kinds</h4>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">
+                Item Kinds
+              </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUseItemKindDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span class="capitalize">{{ item[0] }}</span>
@@ -821,7 +896,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               </div>
             </div>
             <div>
-              <h4 class="mb-2 font-semibold text-black dark:text-light">Plugins</h4>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">
+                Plugins
+              </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUsePluginDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span class="truncate">{{ item[0] }}</span>
@@ -830,7 +907,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               </div>
             </div>
             <div>
-              <h4 class="mb-2 font-semibold text-black dark:text-light">Entities</h4>
+              <h4 class="mb-2 font-semibold text-black dark:text-light">
+                Entities
+              </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUseEntityDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span class="truncate">{{ formatEntityKey(item[0]).type }} · {{ formatEntityKey(item[0]).id }}</span>

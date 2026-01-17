@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
 import type { TypingIndicatorProps } from './types'
+import { computed, useId } from 'vue'
 
 defineOptions({
   name: 'TxTypingIndicator',

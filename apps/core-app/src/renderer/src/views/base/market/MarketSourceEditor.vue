@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MarketProviderType } from '@talex-touch/utils/market'
-import { onMounted, reactive, ref } from 'vue'
 import { onClickOutside } from '@vueuse/core'
+import { onMounted, reactive, ref } from 'vue'
 import { vDraggable } from 'vue-draggable-plus'
 import { marketSourcesStorage } from '~/modules/storage/market-sources'
 
@@ -39,20 +39,17 @@ function generateSourceId(name: string): string {
 
 function deleteSource(ind: number) {
   const list = sources
-  if (list.length === 1)
-    return
+  if (list.length === 1) return
 
   const target = list[ind]
-  if (!target || target.readOnly)
-    return
+  if (!target || target.readOnly) return
 
   list.splice(ind, 1)
 }
 
 function toggleSource(ind: number) {
   const target = sources[ind]
-  if (!target)
-    return
+  if (!target) return
 
   target.enabled = !target.enabled
 }
@@ -64,8 +61,7 @@ function resetNewSource() {
 }
 
 function handleAdd() {
-  if (!newSource.name.trim() || !newSource.url.trim())
-    return
+  if (!newSource.name.trim() || !newSource.url.trim()) return
 
   const list = sources
   const id = generateSourceId(newSource.name)
@@ -79,7 +75,9 @@ function handleAdd() {
       ? url
       : `${url.replace(/\/$/, '')}/api/market/plugins`
   } else if (newSource.type === 'tpexApi') {
-    config.apiUrl = url.endsWith('/api/market/plugins') ? url : `${url.replace(/\/$/, '')}/api/market/plugins`
+    config.apiUrl = url.endsWith('/api/market/plugins')
+      ? url
+      : `${url.replace(/\/$/, '')}/api/market/plugins`
   }
 
   list.push({
@@ -90,7 +88,7 @@ function handleAdd() {
     enabled: true,
     priority: list.length ? Math.max(...list.map((item) => item.priority ?? 0)) + 1 : 1,
     trustLevel: 'unverified',
-    config,
+    config
   })
 
   resetNewSource()
@@ -148,7 +146,11 @@ function handleAdd() {
               <div flex gap-2 class="Item-Title">
                 <FlatInput v-model="newSource.name" flex-1 placeholder="Source name" />
                 <select v-model="newSource.type" class="TypeSelect">
-                  <option v-for="option in providerTypeOptions" :key="option.value" :value="option.value">
+                  <option
+                    v-for="option in providerTypeOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
                     {{ option.label }}
                   </option>
                 </select>
@@ -201,7 +203,7 @@ function handleAdd() {
 
   &.is-disabled {
     opacity: 0.5;
-    
+
     .Item-Container {
       text-decoration: line-through;
     }
@@ -238,7 +240,7 @@ function handleAdd() {
       background-color: var(--el-color-success-light-7);
       color: var(--el-color-success);
       cursor: not-allowed;
-      
+
       &:hover {
         background-color: var(--el-color-success-light-7);
         color: var(--el-color-success);
@@ -301,7 +303,7 @@ function handleAdd() {
   &.New {
     height: auto;
     min-height: 140px;
-    
+
     .Item-Container {
       left: 0%;
       width: 100%;

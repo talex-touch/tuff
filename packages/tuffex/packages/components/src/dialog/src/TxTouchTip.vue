@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watchEffect, type PropType } from 'vue'
+import type { PropType } from 'vue'
 import type { TouchTipButton } from './types'
+import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 
 defineOptions({
   name: 'TxTouchTip',
 })
-
-interface ButtonState {
-  content: string
-  type?: 'info' | 'warning' | 'error' | 'success'
-  onClick: () => Promise<boolean> | boolean
-  loading?: boolean
-}
 
 const props = defineProps({
   title: {
@@ -31,6 +25,13 @@ const props = defineProps({
     required: true,
   },
 })
+
+interface ButtonState {
+  content: string
+  type?: 'info' | 'warning' | 'error' | 'success'
+  onClick: () => Promise<boolean> | boolean
+  loading?: boolean
+}
 
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const wholeDom = ref<HTMLElement | null>(null)
@@ -85,7 +86,8 @@ function scrollListener(): void {
 
 async function forClose(): Promise<void> {
   const el = wholeDom.value
-  if (!el) return
+  if (!el)
+    return
 
   const style = el.style
 

@@ -8,7 +8,8 @@
  * 4. 关闭 DivisionBox
  */
 
-import { Plugin, DivisionBoxState } from '@talex-touch/utils'
+import type { Plugin } from '@talex-touch/utils'
+import { DivisionBoxState } from '@talex-touch/utils'
 
 export default class BasicUsageExample implements Plugin {
   private currentSessionId: string | null = null
@@ -20,7 +21,7 @@ export default class BasicUsageExample implements Plugin {
     this.plugin.divisionBox.onStateChange((data) => {
       console.log(`Session ${data.sessionId} state changed:`, {
         from: data.oldState,
-        to: data.newState
+        to: data.newState,
       })
 
       // 当 DivisionBox 变为活跃状态时
@@ -49,14 +50,15 @@ export default class BasicUsageExample implements Plugin {
         url: 'https://example.com/tool',
         title: '简单工具',
         icon: 'ri:tools-line',
-        size: 'medium'
+        size: 'medium',
       })
 
       console.log('DivisionBox opened successfully:', sessionId)
       this.currentSessionId = sessionId
 
       return sessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to open DivisionBox:', error)
       throw error
     }
@@ -72,8 +74,8 @@ export default class BasicUsageExample implements Plugin {
         name: 'John Doe',
         preferences: {
           theme: 'dark',
-          language: 'zh-CN'
-        }
+          language: 'zh-CN',
+        },
       })
 
       console.log('State updated successfully')
@@ -81,7 +83,8 @@ export default class BasicUsageExample implements Plugin {
       // 读取状态
       const userData = await this.plugin.divisionBox.getState(sessionId, 'userData')
       console.log('Current user data:', userData)
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to update state:', error)
     }
   }
@@ -96,7 +99,8 @@ export default class BasicUsageExample implements Plugin {
       await this.plugin.divisionBox.close(sessionId)
 
       console.log('DivisionBox closed successfully')
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to close DivisionBox:', error)
     }
   }
@@ -109,12 +113,13 @@ export default class BasicUsageExample implements Plugin {
       console.log('Closing DivisionBox with delay...')
 
       await this.plugin.divisionBox.close(sessionId, {
-        delay: 2000,      // 2 秒后关闭
-        animation: true   // 播放关闭动画
+        delay: 2000, // 2 秒后关闭
+        animation: true, // 播放关闭动画
       })
 
       console.log('DivisionBox will close in 2 seconds')
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to close DivisionBox:', error)
     }
   }
@@ -127,16 +132,17 @@ export default class BasicUsageExample implements Plugin {
       const sessions = await this.plugin.divisionBox.getActiveSessions()
 
       console.log(`Found ${sessions.length} active sessions:`)
-      sessions.forEach(session => {
+      sessions.forEach((session) => {
         console.log(`- ${session.sessionId}:`, {
           state: session.state,
           title: session.meta.title,
-          size: session.meta.size
+          size: session.meta.size,
         })
       })
 
       return sessions
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to list sessions:', error)
       return []
     }
@@ -169,7 +175,7 @@ export default class BasicUsageExample implements Plugin {
     // 关闭当前会话
     if (this.currentSessionId) {
       await this.plugin.divisionBox.close(this.currentSessionId, {
-        force: true  // 强制关闭
+        force: true, // 强制关闭
       })
     }
 

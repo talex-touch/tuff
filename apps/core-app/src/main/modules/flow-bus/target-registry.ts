@@ -4,11 +4,7 @@
  * Manages registration and discovery of Flow targets from plugins.
  */
 
-import type {
-  FlowTarget,
-  FlowTargetInfo,
-  FlowPayloadType
-} from '@talex-touch/utils'
+import type { FlowPayloadType, FlowTarget, FlowTargetInfo } from '@talex-touch/utils'
 
 /**
  * Internal target entry with plugin metadata
@@ -125,7 +121,9 @@ export class FlowTargetRegistry {
         count++
       }
     }
-    console.log(`[FlowTargetRegistry] Registered ${count}/${targets.length} targets for plugin: ${pluginId}`)
+    console.log(
+      `[FlowTargetRegistry] Registered ${count}/${targets.length} targets for plugin: ${pluginId}`
+    )
     return count
   }
 
@@ -287,9 +285,7 @@ export class FlowTargetRegistry {
    * Adapted plugins first, then unadapted plugins at the end
    */
   getTargetsSortedByAdaptation(payloadType?: FlowPayloadType): FlowTargetInfo[] {
-    let targets = payloadType
-      ? this.getTargetsByPayloadType(payloadType)
-      : this.getAllTargets()
+    let targets = payloadType ? this.getTargetsByPayloadType(payloadType) : this.getAllTargets()
 
     // Sort: native share first, then adapted, then unadapted
     return targets.sort((a, b) => {

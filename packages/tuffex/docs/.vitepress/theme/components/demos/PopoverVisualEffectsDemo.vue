@@ -73,11 +73,15 @@ const showArrow = ref(true)
         </template>
 
         <div style="width: 260px; display: grid; gap: 8px;">
-          <div style="font-weight: 600;">Split out popover</div>
+          <div style="font-weight: 600;">
+            Split out popover
+          </div>
           <div style="color: var(--tx-text-color-secondary); font-size: 12px;">
             Blur/Glass/Mask + Fusion + Arrow
           </div>
-          <TxButton size="small">Action</TxButton>
+          <TxButton size="small">
+            Action
+          </TxButton>
         </div>
       </TxPopover>
     </div>

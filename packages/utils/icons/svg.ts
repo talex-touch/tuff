@@ -1,4 +1,3 @@
-
 /**
  * Built-in SVG icons for offline usage and documentation preview
  * These are inline SVG strings that can be used without UnoCSS CDN

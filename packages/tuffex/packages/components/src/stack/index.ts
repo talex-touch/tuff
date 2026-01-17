@@ -1,6 +1,6 @@
-import TxStack from './src/TxStack.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { StackProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxStack from './src/TxStack.vue'
 
 const Stack = withInstall(TxStack)
 

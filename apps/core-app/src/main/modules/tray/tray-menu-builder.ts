@@ -2,18 +2,18 @@ import type { MenuItemConstructorOptions } from 'electron'
 import type { TrayState } from './tray-state-manager'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-import { app, Menu, shell } from 'electron'
-import { t } from '../../utils/i18n-helper'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
-import { coreBoxManager } from '../box-tool/core-box/manager'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { app, Menu, shell } from 'electron'
+import { t } from '../../utils/i18n-helper'
+import { coreBoxManager } from '../box-tool/core-box/manager'
 
 /**
  * TrayMenuBuilder - Tray menu builder
- * 
+ *
  * Responsible for building the system tray context menu with dynamic state and i18n support.
- * 
+ *
  * @example
  * ```ts
  * const builder = new TrayMenuBuilder()
@@ -38,14 +38,12 @@ export class TrayMenuBuilder {
       if (terminalCommand) {
         spawn(terminalCommand, [], { detached: true, stdio: 'ignore' }).unref()
       }
-    }
-    catch {
-    }
+    } catch {}
   }
 
   /**
    * Builds the complete tray menu
-   * 
+   *
    * @param state - Current tray state containing window visibility, download count, etc.
    * @returns Electron Menu instance ready to be set on the tray
    */
@@ -63,7 +61,7 @@ export class TrayMenuBuilder {
       this.buildAboutGroup(state),
       { type: 'separator' },
 
-      ...this.buildAppControlGroup(),
+      ...this.buildAppControlGroup()
     ]
 
     return Menu.buildFromTemplate(template)
@@ -71,7 +69,7 @@ export class TrayMenuBuilder {
 
   /**
    * Builds window control menu item (show/hide main window)
-   * 
+   *
    * @param state - Current tray state
    * @returns Menu item for toggling window visibility
    */
@@ -82,18 +80,17 @@ export class TrayMenuBuilder {
         const mainWindow = $app.window.window
         if (mainWindow.isVisible()) {
           mainWindow.hide()
-        }
-        else {
+        } else {
           mainWindow.show()
           mainWindow.focus()
         }
-      },
+      }
     }
   }
 
   /**
    * Builds quick action menu items (CoreBox, Download Center)
-   * 
+   *
    * @param state - Current tray state
    * @returns Array of quick action menu items
    */
@@ -104,7 +101,7 @@ export class TrayMenuBuilder {
         accelerator: process.platform === 'darwin' ? 'Cmd+E' : 'Ctrl+E',
         click: () => {
           coreBoxManager.trigger(true, { triggeredByShortcut: true })
-        },
+        }
       },
       {
         label:
@@ -116,15 +113,19 @@ export class TrayMenuBuilder {
           mainWindow.show()
           const channel = $app.channel as any
           const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
-          tx.sendTo(mainWindow.webContents, AppEvents.window.openDownloadCenter, undefined as any).catch(() => {})
-        },
-      },
+          tx.sendTo(
+            mainWindow.webContents,
+            AppEvents.window.openDownloadCenter,
+            undefined as any
+          ).catch(() => {})
+        }
+      }
     ]
   }
 
   /**
    * Builds tool menu items (Clipboard History, Terminal, Settings)
-   * 
+   *
    * @returns Array of tool menu items
    */
   private buildToolsGroup(): MenuItemConstructorOptions[] {
@@ -136,14 +137,16 @@ export class TrayMenuBuilder {
           mainWindow.show()
           const channel = $app.channel as any
           const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
-          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, { path: '/details' } as any).catch(() => {})
-        },
+          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
+            path: '/details'
+          } as any).catch(() => {})
+        }
       },
       {
         label: t('tray.terminal'),
         click: () => {
           this.openSystemTerminal()
-        },
+        }
       },
       {
         label: t('tray.settings'),
@@ -152,15 +155,17 @@ export class TrayMenuBuilder {
           mainWindow.show()
           const channel = $app.channel as any
           const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
-          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, { path: '/setting' } as any).catch(() => {})
-        },
-      },
+          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
+            path: '/setting'
+          } as any).catch(() => {})
+        }
+      }
     ]
   }
 
   /**
    * Builds about submenu (Version, Update Check, Logs, Data Directory, Website)
-   * 
+   *
    * @param state - Current tray state
    * @returns Menu item with about submenu
    */
@@ -170,41 +175,41 @@ export class TrayMenuBuilder {
       submenu: [
         {
           label: t('tray.version', { version: app.getVersion() }),
-          enabled: false,
+          enabled: false
         },
         { type: 'separator' },
         {
           label: state.hasUpdate ? t('tray.checkUpdateAvailable') : t('tray.checkUpdate'),
           click: () => {
             $app.window.window.webContents.send('trigger-update-check')
-          },
+          }
         },
         {
           label: t('tray.viewLogs'),
           click: () => {
             const logPath = path.join(app.getPath('userData'), 'logs')
             shell.openPath(logPath)
-          },
+          }
         },
         {
           label: t('tray.openDataDir'),
           click: () => {
             shell.openPath(app.getPath('userData'))
-          },
+          }
         },
         {
           label: t('tray.visitWebsite'),
           click: () => {
             shell.openExternal(NEXUS_BASE_URL)
-          },
-        },
-      ],
+          }
+        }
+      ]
     }
   }
 
   /**
    * Builds application control menu items (Restart, Quit)
-   * 
+   *
    * @returns Array of app control menu items
    */
   private buildAppControlGroup(): MenuItemConstructorOptions[] {
@@ -214,15 +219,15 @@ export class TrayMenuBuilder {
         click: () => {
           app.relaunch()
           app.quit()
-        },
+        }
       },
       {
         label: t('tray.quit'),
         click: () => {
           app.quit()
           process.exit(0)
-        },
-      },
+        }
+      }
     ]
   }
 }

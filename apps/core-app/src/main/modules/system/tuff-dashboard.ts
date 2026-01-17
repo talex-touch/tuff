@@ -12,13 +12,13 @@ import { desc, sql } from 'drizzle-orm'
 import { app } from 'electron'
 import { genTouchChannel } from '../../core/channel-core'
 import { config, scanProgress } from '../../db/schema'
+import { createLogger } from '../../utils/logger'
+import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
 import { BaseModule } from '../abstract-base-module'
 import { fileProvider } from '../box-tool/addon/files/file-provider'
 import { databaseModule } from '../database'
 import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
-import { createLogger } from '../../utils/logger'
-import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
 
 const dashboardLog = createLogger('TuffDashboard')
 
@@ -35,7 +35,7 @@ export class TuffDashboardModule extends BaseModule {
   constructor() {
     super(TuffDashboardModule.key, {
       create: false,
-      dirName: 'system',
+      dirName: 'system'
     })
   }
 
@@ -52,30 +52,28 @@ export class TuffDashboardModule extends BaseModule {
           hid: 'H1',
           loc: 'tuff-dashboard.handler',
           msg: 'request.start',
-          data: { requestId, limit },
+          data: { requestId, limit }
         })
         const snapshot = await this.buildSnapshot(limit, requestId)
         reply(DataCode.SUCCESS, {
           ok: true,
-          snapshot,
+          snapshot
         })
-      }
-      catch (error) {
+      } catch (error) {
         dashboardLog.error('Failed to build snapshot', { error })
         reply(DataCode.ERROR, {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: error instanceof Error ? error.message : String(error)
         })
-      }
-      finally {
+      } finally {
         appendWorkflowDebugLog({
           hid: 'H1',
           loc: 'tuff-dashboard.handler',
           msg: 'request.end',
           data: {
             requestId,
-            durationMs: performance.now() - requestStartedAt,
-          },
+            durationMs: performance.now() - requestStartedAt
+          }
         })
       }
     })
@@ -88,8 +86,7 @@ export class TuffDashboardModule extends BaseModule {
   }
 
   private toIso(value: unknown): string | null {
-    if (!value)
-      return null
+    if (!value) return null
     if (typeof value === 'string') {
       const parsed = new Date(value)
       return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString()
@@ -111,7 +108,7 @@ export class TuffDashboardModule extends BaseModule {
       this.buildConfigOverview(Math.min(limit, 100), requestId),
       this.buildLogOverview(Math.min(limit, 20), requestId),
       this.buildApplicationSection(requestId),
-      this.buildWorkerSection(requestId),
+      this.buildWorkerSection(requestId)
     ])
     appendWorkflowDebugLog({
       hid: 'H1',
@@ -120,8 +117,8 @@ export class TuffDashboardModule extends BaseModule {
       data: {
         requestId,
         limit,
-        durationMs: performance.now() - startedAt,
-      },
+        durationMs: performance.now() - startedAt
+      }
     })
 
     return {
@@ -133,7 +130,7 @@ export class TuffDashboardModule extends BaseModule {
       config: configOverview,
       logs,
       applications,
-      workers,
+      workers
     }
   }
 
@@ -146,8 +143,8 @@ export class TuffDashboardModule extends BaseModule {
       uptime: os.uptime(),
       memory: {
         free: os.freemem(),
-        total: os.totalmem(),
-      },
+        total: os.totalmem()
+      }
     }
   }
 
@@ -155,15 +152,13 @@ export class TuffDashboardModule extends BaseModule {
     const startedAt = performance.now()
     const activeApp = await activeAppService.getActiveApp(false)
     const rawMetrics = app.getAppMetrics()
-    const metrics = rawMetrics
-      .slice(0, 10)
-      .map(metric => ({
-        pid: metric.pid,
-        type: metric.type,
-        cpu: metric.cpu?.percentCPUUsage ?? null,
-        memory: metric.memory?.workingSetSize ?? null,
-        created: metric.creationTime ? this.toIso(metric.creationTime) : null,
-      }))
+    const metrics = rawMetrics.slice(0, 10).map((metric) => ({
+      pid: metric.pid,
+      type: metric.type,
+      cpu: metric.cpu?.percentCPUUsage ?? null,
+      memory: metric.memory?.workingSetSize ?? null,
+      created: metric.creationTime ? this.toIso(metric.creationTime) : null
+    }))
 
     const totals = rawMetrics.reduce(
       (acc, metric) => {
@@ -171,22 +166,22 @@ export class TuffDashboardModule extends BaseModule {
         acc.memory += metric.memory?.workingSetSize ?? 0
         return acc
       },
-      { cpu: 0, memory: 0 },
+      { cpu: 0, memory: 0 }
     )
 
     const section = {
       activeApp: activeApp
         ? {
             ...activeApp,
-            lastUpdated: this.toIso(activeApp.lastUpdated),
+            lastUpdated: this.toIso(activeApp.lastUpdated)
           }
         : null,
       summary: {
         cpu: totals.cpu,
         memory: totals.memory,
-        processCount: rawMetrics.length,
+        processCount: rawMetrics.length
       },
-      metrics,
+      metrics
     }
 
     appendWorkflowDebugLog({
@@ -197,8 +192,8 @@ export class TuffDashboardModule extends BaseModule {
         requestId,
         section: 'applications',
         durationMs: performance.now() - startedAt,
-        metricsCount: rawMetrics.length,
-      },
+        metricsCount: rawMetrics.length
+      }
     })
 
     return section
@@ -212,31 +207,31 @@ export class TuffDashboardModule extends BaseModule {
       fileProvider.getIndexingProgress(),
       db
         ? db.select().from(scanProgress).orderBy(desc(scanProgress.lastScanned)).limit(limit)
-        : Promise.resolve([]),
+        : Promise.resolve([])
     ])
 
     const scanOverview = Array.isArray(scanRows)
-      ? scanRows.map(row => ({
+      ? scanRows.map((row) => ({
           path: row.path ?? '',
-          lastScanned: this.toIso(row.lastScanned),
+          lastScanned: this.toIso(row.lastScanned)
         }))
       : []
 
-    const entries = progress.entries.map(entry => ({
+    const entries = progress.entries.map((entry) => ({
       path: entry.path,
       status: entry.status,
       progress: entry.progress,
       processedBytes: entry.processedBytes,
       totalBytes: entry.totalBytes,
       updatedAt: this.toIso(entry.updatedAt),
-      lastError: entry.lastError,
+      lastError: entry.lastError
     }))
 
     const section = {
       summary: progress.summary,
       watchedPaths: fileProvider.getWatchedPaths(),
       entries,
-      scanProgress: scanOverview,
+      scanProgress: scanOverview
     }
 
     appendWorkflowDebugLog({
@@ -248,8 +243,8 @@ export class TuffDashboardModule extends BaseModule {
         section: 'indexing',
         durationMs: performance.now() - startedAt,
         entriesCount: entries.length,
-        scanProgressCount: scanOverview.length,
-      },
+        scanProgressCount: scanOverview.length
+      }
     })
 
     return section
@@ -266,8 +261,8 @@ export class TuffDashboardModule extends BaseModule {
         requestId,
         section: 'ocr',
         durationMs: performance.now() - startedAt,
-        jobsCount: snapshot?.jobs?.length ?? null,
-      },
+        jobsCount: snapshot?.jobs?.length ?? null
+      }
     })
     return snapshot
   }
@@ -279,7 +274,7 @@ export class TuffDashboardModule extends BaseModule {
     if (!db) {
       const section = {
         total: 0,
-        entries: [] as Array<{ key: string, value: unknown }>,
+        entries: [] as Array<{ key: string; value: unknown }>
       }
       appendWorkflowDebugLog({
         hid: 'H1',
@@ -290,8 +285,8 @@ export class TuffDashboardModule extends BaseModule {
           section: 'config',
           durationMs: performance.now() - startedAt,
           entriesCount: 0,
-          databaseReady: false,
-        },
+          databaseReady: false
+        }
       })
       return section
     }
@@ -301,7 +296,7 @@ export class TuffDashboardModule extends BaseModule {
       db
         .select({ total: sql<number>`COUNT(*)` })
         .from(config)
-        .limit(1),
+        .limit(1)
     ])
 
     const entries = rows.map((row) => {
@@ -309,20 +304,19 @@ export class TuffDashboardModule extends BaseModule {
       if (typeof row.value === 'string') {
         try {
           parsed = JSON.parse(row.value)
-        }
-        catch {
+        } catch {
           parsed = row.value
         }
       }
       return {
         key: row.key ?? '',
-        value: parsed,
+        value: parsed
       }
     })
 
     const section = {
       total: totalRow.length > 0 ? Number(totalRow[0].total ?? 0) : entries.length,
-      entries,
+      entries
     }
 
     appendWorkflowDebugLog({
@@ -334,8 +328,8 @@ export class TuffDashboardModule extends BaseModule {
         section: 'config',
         durationMs: performance.now() - startedAt,
         entriesCount: entries.length,
-        databaseReady: true,
-      },
+        databaseReady: true
+      }
     })
 
     return section
@@ -345,13 +339,13 @@ export class TuffDashboardModule extends BaseModule {
     const startedAt = performance.now()
     const logsDir = app.getPath('logs')
     const userDataDir = app.getPath('userData')
-    let recentFiles: Array<{ name: string, size: number, updatedAt: string | null }> = []
+    let recentFiles: Array<{ name: string; size: number; updatedAt: string | null }> = []
 
     try {
       const readDirStartedAt = performance.now()
       const dirents = await readdir(logsDir, { withFileTypes: true })
       const readDirDurationMs = performance.now() - readDirStartedAt
-      const files = dirents.filter(dirent => dirent.isFile())
+      const files = dirents.filter((dirent) => dirent.isFile())
       const statStartedAt = performance.now()
       const detailed = await Promise.all(
         files.map(async (file) => {
@@ -361,20 +355,19 @@ export class TuffDashboardModule extends BaseModule {
             return {
               name: file.name,
               size: stats.size,
-              updatedAt: this.toIso(stats.mtime),
+              updatedAt: this.toIso(stats.mtime)
             }
-          }
-          catch (error) {
+          } catch (error) {
             dashboardLog.warn('Failed to stat log file', { error, meta: { path: fullPath } })
             return null
           }
-        }),
+        })
       )
       const statDurationMs = performance.now() - statStartedAt
       recentFiles = detailed
         .filter(
-          (entry): entry is { name: string, size: number, updatedAt: string | null } =>
-            entry !== null,
+          (entry): entry is { name: string; size: number; updatedAt: string | null } =>
+            entry !== null
         )
         .sort((a, b) => {
           const left = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
@@ -395,18 +388,17 @@ export class TuffDashboardModule extends BaseModule {
           filesCount: files.length,
           recentFilesCount: recentFiles.length,
           readDirDurationMs,
-          statDurationMs,
-        },
+          statDurationMs
+        }
       })
-    }
-    catch (error) {
+    } catch (error) {
       dashboardLog.warn('Failed to read logs directory', { error, meta: { dir: logsDir } })
     }
 
     const section = {
       directory: logsDir,
       userDataDir,
-      recentFiles,
+      recentFiles
     }
 
     appendWorkflowDebugLog({
@@ -417,8 +409,8 @@ export class TuffDashboardModule extends BaseModule {
         requestId,
         section: 'logs',
         durationMs: performance.now() - startedAt,
-        recentFilesCount: recentFiles.length,
-      },
+        recentFilesCount: recentFiles.length
+      }
     })
 
     return section
@@ -436,12 +428,11 @@ export class TuffDashboardModule extends BaseModule {
           requestId,
           section: 'workers',
           durationMs: performance.now() - startedAt,
-          workersCount: snapshot.workers.length,
-        },
+          workersCount: snapshot.workers.length
+        }
       })
       return snapshot
-    }
-    catch (error) {
+    } catch (error) {
       dashboardLog.warn('Failed to load worker status snapshot', { error })
       appendWorkflowDebugLog({
         hid: 'H1',
@@ -451,23 +442,21 @@ export class TuffDashboardModule extends BaseModule {
           requestId,
           section: 'workers',
           durationMs: performance.now() - startedAt,
-          error: error instanceof Error ? error.message : String(error),
-        },
+          error: error instanceof Error ? error.message : String(error)
+        }
       })
       return {
         summary: { total: 0, busy: 0, idle: 0, offline: 0 },
-        workers: [],
+        workers: []
       }
     }
   }
 
   private ensureDb(): LibSQLDatabase<typeof schema> | null {
-    if (this.db)
-      return this.db
+    if (this.db) return this.db
     try {
       this.db = databaseModule.getDb()
-    }
-    catch (error) {
+    } catch (error) {
       dashboardLog.warn('Database not ready yet, returning partial snapshot', { error })
       return null
     }

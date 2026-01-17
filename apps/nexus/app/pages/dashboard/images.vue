@@ -203,19 +203,19 @@ watchEffect(() => {
 
       <div class="mt-6 space-y-4">
         <div
-        v-if="imagesPending"
-        class="flex items-center gap-3 rounded-2xl border border-primary/20 border-dashed bg-dark/5 px-4 py-6 text-sm text-black/60 dark:border-light/20 dark:bg-light/5 dark:text-light/70"
-      >
-        <span class="i-carbon-circle-dash animate-spin text-base" />
-        <span>{{ t('dashboard.sections.images.loading', 'Loading resources...') }}</span>
-      </div>
+          v-if="imagesPending"
+          class="flex items-center gap-3 rounded-2xl border border-primary/20 border-dashed bg-dark/5 px-4 py-6 text-sm text-black/60 dark:border-light/20 dark:bg-light/5 dark:text-light/70"
+        >
+          <span class="i-carbon-circle-dash animate-spin text-base" />
+          <span>{{ t('dashboard.sections.images.loading', 'Loading resources...') }}</span>
+        </div>
 
-      <div
-        v-else-if="!images.length"
-        class="rounded-2xl border border-primary/15 border-dashed bg-white/70 px-4 py-6 text-sm text-black/60 dark:border-light/20 dark:bg-dark/60 dark:text-light/70"
-      >
-        {{ t('dashboard.sections.images.empty', 'No resources uploaded yet') }}
-      </div>
+        <div
+          v-else-if="!images.length"
+          class="rounded-2xl border border-primary/15 border-dashed bg-white/70 px-4 py-6 text-sm text-black/60 dark:border-light/20 dark:bg-dark/60 dark:text-light/70"
+        >
+          {{ t('dashboard.sections.images.empty', 'No resources uploaded yet') }}
+        </div>
 
         <div
           v-else

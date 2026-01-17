@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ITuffIcon } from '@talex-touch/utils'
+import type { ITuffIcon } from '@talex-touch/utils'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import Loading from '~/components/icon/LoadingIcon.vue'

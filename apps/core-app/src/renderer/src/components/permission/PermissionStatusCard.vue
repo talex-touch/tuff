@@ -5,9 +5,9 @@
  * Shows permission summary for a plugin.
  */
 
+import { Check, Close, InfoFilled, Warning } from '@element-plus/icons-vue'
+import { ElAlert, ElButton, ElCard, ElIcon, ElProgress, ElTag } from 'element-plus'
 import { computed } from 'vue'
-import { ElCard, ElButton, ElProgress, ElAlert, ElTag, ElIcon } from 'element-plus'
-import { Check, Warning, InfoFilled, Close } from '@element-plus/icons-vue'
 
 interface Props {
   pluginId: string
@@ -75,15 +75,12 @@ const progressColor = computed(() => {
     <template #header>
       <div class="card-header">
         <div class="header-left">
-          <ElIcon
-            :size="20"
-            :class="['status-icon', statusType]"
-          ><component :is="statusIcon" /></ElIcon>
+          <ElIcon :size="20" class="status-icon" :class="[statusType]">
+            <component :is="statusIcon" />
+          </ElIcon>
           <span class="header-title">权限状态</span>
         </div>
-        <ElButton size="small" @click="emit('manage')">
-          管理权限
-        </ElButton>
+        <ElButton size="small" @click="emit('manage')"> 管理权限 </ElButton>
       </div>
     </template>
 
@@ -97,7 +94,9 @@ const progressColor = computed(() => {
       >
         <template #title>
           <div class="warning-title">
-            <ElIcon :size="16"><Warning /></ElIcon>
+            <ElIcon :size="16">
+              <Warning />
+            </ElIcon>
             <span>旧版 SDK</span>
           </div>
         </template>
@@ -111,15 +110,9 @@ const progressColor = computed(() => {
         </div>
 
         <div class="permission-stats">
-          <ElTag type="danger" effect="light" size="small">
-            必需: {{ requiredCount }}
-          </ElTag>
-          <ElTag type="info" effect="light" size="small">
-            可选: {{ optionalCount }}
-          </ElTag>
-          <ElTag type="success" effect="light" size="small">
-            已授予: {{ grantedCount }}
-          </ElTag>
+          <ElTag type="danger" effect="light" size="small"> 必需: {{ requiredCount }} </ElTag>
+          <ElTag type="info" effect="light" size="small"> 可选: {{ optionalCount }} </ElTag>
+          <ElTag type="success" effect="light" size="small"> 已授予: {{ grantedCount }} </ElTag>
         </div>
       </div>
 
@@ -137,7 +130,9 @@ const progressColor = computed(() => {
       <!-- Missing Required -->
       <div v-if="missingRequired.length > 0" class="missing-section">
         <div class="missing-title">
-          <ElIcon :size="14"><Warning /></ElIcon>
+          <ElIcon :size="14">
+            <Warning />
+          </ElIcon>
           <span>缺少必需权限：</span>
         </div>
         <div class="missing-list">
@@ -151,12 +146,7 @@ const progressColor = computed(() => {
             {{ perm }}
           </ElTag>
         </div>
-        <ElButton
-          type="primary"
-          size="small"
-          class="grant-all-btn"
-          @click="emit('grant-all')"
-        >
+        <ElButton type="primary" size="small" class="grant-all-btn" @click="emit('grant-all')">
           授予全部必需权限
         </ElButton>
       </div>

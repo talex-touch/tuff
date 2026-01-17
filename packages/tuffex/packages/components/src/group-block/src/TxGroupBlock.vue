@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { hasWindow } from '../../../../utils/env'
+import type { GroupBlockEmits, GroupBlockProps } from './types'
 import { nextTick, onMounted, ref, watch } from 'vue'
-import type { GroupBlockProps, GroupBlockEmits } from './types'
+import { hasWindow } from '../../../../utils/env'
 
 defineOptions({
   name: 'TxGroupBlock',
@@ -207,8 +207,12 @@ onMounted(() => {
           <i v-if="icon" :class="icon" class="tx-group-block__icon" aria-hidden="true" />
         </slot>
         <div class="tx-group-block__label">
-          <h3 class="tx-group-block__name">{{ name }}</h3>
-          <p v-if="description" class="tx-group-block__description">{{ description }}</p>
+          <h3 class="tx-group-block__name">
+            {{ name }}
+          </h3>
+          <p v-if="description" class="tx-group-block__description">
+            {{ description }}
+          </p>
         </div>
       </div>
 

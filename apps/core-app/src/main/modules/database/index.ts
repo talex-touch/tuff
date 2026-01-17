@@ -1,18 +1,10 @@
 import type { Client } from '@libsql/client'
-import type {
-  MaybePromise,
-  ModuleInitContext,
-  ModuleKey,
-  TimingLogLevel,
-} from '@talex-touch/utils'
+import type { MaybePromise, ModuleInitContext, ModuleKey, TimingLogLevel } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
 import { createClient } from '@libsql/client'
-import {
-  createTiming,
-
-} from '@talex-touch/utils'
+import { createTiming } from '@talex-touch/utils'
 import chalk from 'chalk'
 import { drizzle } from 'drizzle-orm/libsql'
 import { migrate } from 'drizzle-orm/libsql/migrator'
@@ -35,7 +27,7 @@ export class DatabaseModule extends BaseModule {
   constructor() {
     super(DatabaseModule.key, {
       create: true,
-      dirName: 'database',
+      dirName: 'database'
     })
   }
 
@@ -49,7 +41,7 @@ export class DatabaseModule extends BaseModule {
       detail: details || error.message || 'Unknown error',
       buttons: ['OK'],
       defaultId: 0,
-      noLink: true,
+      noLink: true
     })
   }
 
@@ -58,7 +50,9 @@ export class DatabaseModule extends BaseModule {
       const appPath = app.getAppPath()
       const migrationsPath = path.resolve(appPath, 'resources', 'db', 'migrations')
 
-      dbLog.debug('Resolving migrations folder', { meta: { appPath, __dirname, resourcesPath: process.resourcesPath || 'N/A' } })
+      dbLog.debug('Resolving migrations folder', {
+        meta: { appPath, __dirname, resourcesPath: process.resourcesPath || 'N/A' }
+      })
       dbLog.debug(`Primary path: ${migrationsPath}, exists: ${fse.existsSync(migrationsPath)}`)
 
       // First check the expected path
@@ -73,23 +67,39 @@ export class DatabaseModule extends BaseModule {
       // Try alternative paths
       const alternativePaths = [
         // Alternative 1: relative to main directory
-        path.resolve(path.dirname(__dirname || path.join(appPath, 'main')), '..', 'resources', 'db', 'migrations'),
+        path.resolve(
+          path.dirname(__dirname || path.join(appPath, 'main')),
+          '..',
+          'resources',
+          'db',
+          'migrations'
+        ),
         // Alternative 2: relative to appPath
         path.resolve(appPath, '..', 'resources', 'db', 'migrations'),
         // Alternative 3: process.resourcesPath (Electron specific)
         ...(process.resourcesPath
           ? [
               path.resolve(process.resourcesPath, 'app', 'resources', 'db', 'migrations'),
-              path.resolve(process.resourcesPath, 'resources', 'db', 'migrations'),
+              path.resolve(process.resourcesPath, 'resources', 'db', 'migrations')
             ]
           : []),
         // Alternative 4: macOS-specific paths
         ...(process.platform === 'darwin'
           ? [
-              path.resolve(appPath, '..', '..', '..', 'Resources', 'app', 'resources', 'db', 'migrations'),
-              path.resolve(__dirname, '..', '..', '..', 'resources', 'db', 'migrations'),
+              path.resolve(
+                appPath,
+                '..',
+                '..',
+                '..',
+                'Resources',
+                'app',
+                'resources',
+                'db',
+                'migrations'
+              ),
+              path.resolve(__dirname, '..', '..', '..', 'resources', 'db', 'migrations')
             ]
-          : []),
+          : [])
       ]
 
       dbLog.debug(`Trying ${alternativePaths.length} alternative paths`)
@@ -106,8 +116,7 @@ export class DatabaseModule extends BaseModule {
 
       dbLog.error(`No valid migrations path found, returning primary: ${migrationsPath}`)
       return migrationsPath
-    }
-    else {
+    } else {
       const dbFolder = path.dirname(migrationsLocator)
       return path.resolve(dbFolder, 'migrations')
     }
@@ -139,7 +148,9 @@ export class DatabaseModule extends BaseModule {
 
     if (!fse.existsSync(migrationsFolderResolved)) {
       const error = new Error(`Migrations folder not found: ${migrationsFolderResolved}`)
-      dbLog.error('Migration folder not found', { meta: { path: migrationsFolderResolved, appPath: app.getAppPath() } })
+      dbLog.error('Migration folder not found', {
+        meta: { path: migrationsFolderResolved, appPath: app.getAppPath() }
+      })
 
       // Collect all tried paths for error message
       const allTriedPaths = [
@@ -151,12 +162,14 @@ export class DatabaseModule extends BaseModule {
               ...(process.resourcesPath
                 ? [
                     path.resolve(process.resourcesPath, 'app', 'resources', 'db', 'migrations'),
-                    ...(process.platform === 'darwin' ? [path.resolve(process.resourcesPath, 'resources', 'db', 'migrations')] : []),
+                    ...(process.platform === 'darwin'
+                      ? [path.resolve(process.resourcesPath, 'resources', 'db', 'migrations')]
+                      : [])
                   ]
                 : []),
-              path.resolve(__dirname, '..', '..', '..', 'resources', 'db', 'migrations'),
+              path.resolve(__dirname, '..', '..', '..', 'resources', 'db', 'migrations')
             ]
-          : []),
+          : [])
       ]
 
       const detail = `Migrations folder not found:\n${migrationsFolderResolved}\n\nPlease check if the application installation is complete.\n\nDebug information:\n- app.getAppPath(): ${app.getAppPath()}\n- __dirname: ${__dirname}\n- process.resourcesPath: ${process.resourcesPath || 'N/A'}\n- Tried paths:\n${allTriedPaths.join('\n')}`
@@ -189,7 +202,7 @@ export class DatabaseModule extends BaseModule {
       none: chalk.gray,
       info: chalk.green,
       warn: chalk.yellow,
-      error: chalk.red,
+      error: chalk.red
     }
 
     const timing = createTiming('Database:Migrations', {
@@ -197,23 +210,26 @@ export class DatabaseModule extends BaseModule {
       logThresholds: {
         none: 200,
         info: 800,
-        warn: 2000,
+        warn: 2000
       },
       formatter: (entry, stats) => {
         const level = entry.logLevel ?? 'info'
         const color = timingLevelColors[level] ?? chalk.green
         const durationText = color(`${entry.durationMs.toFixed(2)}ms`)
         return `${chalk.dim('[Timing]')} ${chalk.blue(entry.label)} ${durationText} (avg ${stats.avgMs.toFixed(
-          2,
+          2
         )}ms, max ${stats.maxMs.toFixed(2)}ms, count ${stats.count})`
-      },
+      }
     })
 
     try {
       // Use resolved path for migration
-      await timing.cost(async () => migrate(this.db!, { migrationsFolder: migrationsFolderResolved }), {
-        folder: migrationsFolderResolved,
-      })
+      await timing.cost(
+        async () => migrate(this.db!, { migrationsFolder: migrationsFolderResolved }),
+        {
+          folder: migrationsFolderResolved
+        }
+      )
 
       await this.ensureKeywordMappingsProviderColumn()
       await this.ensureRecommendationTables()
@@ -222,8 +238,7 @@ export class DatabaseModule extends BaseModule {
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
       dbLog.success(`Migrations completed successfully in ${duration}ms`)
-    }
-    catch (error: unknown) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error ?? '')
       const duplicateColumn = message.includes('duplicate column name: provider_id')
 
@@ -238,7 +253,7 @@ export class DatabaseModule extends BaseModule {
       const errorInstance = error instanceof Error ? error : new Error(errorMessage)
       await this.showDatabaseErrorDialog(
         errorInstance,
-        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`,
+        `Database migration failed:\n${errorMessage}\n\nCheck log files for more information.\nLog location: ${app.getPath('userData')}/tuff/logs/`
       )
 
       process.exit(1)
@@ -246,12 +261,11 @@ export class DatabaseModule extends BaseModule {
   }
 
   private async ensureKeywordMappingsProviderColumn(): Promise<void> {
-    if (!this.client)
-      return
+    if (!this.client) return
 
     try {
       const check = await this.client.execute(
-        'SELECT 1 FROM pragma_table_info(\'keyword_mappings\') WHERE name = \'provider_id\' LIMIT 1',
+        "SELECT 1 FROM pragma_table_info('keyword_mappings') WHERE name = 'provider_id' LIMIT 1"
       )
       if (check.rows.length > 0) {
         return
@@ -259,23 +273,21 @@ export class DatabaseModule extends BaseModule {
 
       dbLog.info('Adding missing column `keyword_mappings.provider_id`')
       await this.client.execute(
-        'ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT \'\' NOT NULL',
+        "ALTER TABLE keyword_mappings ADD COLUMN provider_id text DEFAULT '' NOT NULL"
       )
-    }
-    catch (error) {
+    } catch (error) {
       dbLog.warn('Failed to set up `provider_id` column pre-migration', { error })
     }
   }
 
   private async ensureRecommendationTables(): Promise<void> {
-    if (!this.client)
-      return
+    if (!this.client) return
 
     try {
       const checkTimeStats = await this.client.execute(
-        'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=\'item_time_stats\' LIMIT 1',
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='item_time_stats' LIMIT 1"
       )
-      
+
       if (checkTimeStats.rows.length === 0) {
         dbLog.info('Creating missing table `item_time_stats`')
         await this.client.execute(`
@@ -290,14 +302,14 @@ export class DatabaseModule extends BaseModule {
           )
         `)
         await this.client.execute(
-          'CREATE INDEX idx_item_time_stats_updated ON item_time_stats (last_updated)',
+          'CREATE INDEX idx_item_time_stats_updated ON item_time_stats (last_updated)'
         )
       }
 
       const checkCache = await this.client.execute(
-        'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=\'recommendation_cache\' LIMIT 1',
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='recommendation_cache' LIMIT 1"
       )
-      
+
       if (checkCache.rows.length === 0) {
         dbLog.info('Creating missing table `recommendation_cache`')
         await this.client.execute(`
@@ -309,11 +321,10 @@ export class DatabaseModule extends BaseModule {
           )
         `)
         await this.client.execute(
-          'CREATE INDEX idx_recommendation_cache_expires ON recommendation_cache (expires_at)',
+          'CREATE INDEX idx_recommendation_cache_expires ON recommendation_cache (expires_at)'
         )
       }
-    }
-    catch (error) {
+    } catch (error) {
       dbLog.warn('Failed to ensure recommendation tables', { error })
     }
   }
@@ -325,7 +336,7 @@ export class DatabaseModule extends BaseModule {
 
     try {
       const tableCheck = await this.client.execute(
-        'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name=\'analytics_snapshots\' LIMIT 1',
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='analytics_snapshots' LIMIT 1"
       )
 
       if (tableCheck.rows.length === 0) {
@@ -341,23 +352,23 @@ export class DatabaseModule extends BaseModule {
         `)
       } else {
         const columnCheck = await this.client.execute(
-          'SELECT 1 FROM pragma_table_info(\'analytics_snapshots\') WHERE name = \'created_at\' LIMIT 1',
+          "SELECT 1 FROM pragma_table_info('analytics_snapshots') WHERE name = 'created_at' LIMIT 1"
         )
         if (columnCheck.rows.length === 0) {
           dbLog.info('Adding missing column `analytics_snapshots.created_at`')
           await this.client.execute(
-            'ALTER TABLE analytics_snapshots ADD COLUMN created_at integer DEFAULT (unixepoch())',
+            'ALTER TABLE analytics_snapshots ADD COLUMN created_at integer DEFAULT (unixepoch())'
           )
         }
       }
 
       const indexCheck = await this.client.execute(
-        'SELECT 1 FROM sqlite_master WHERE type=\'index\' AND name=\'idx_analytics_snapshots_window_time\' LIMIT 1',
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_analytics_snapshots_window_time' LIMIT 1"
       )
       if (indexCheck.rows.length === 0) {
         dbLog.info('Creating missing index `idx_analytics_snapshots_window_time`')
         await this.client.execute(
-          'CREATE INDEX idx_analytics_snapshots_window_time ON analytics_snapshots (window_type, timestamp)',
+          'CREATE INDEX idx_analytics_snapshots_window_time ON analytics_snapshots (window_type, timestamp)'
         )
       }
     } catch (error) {

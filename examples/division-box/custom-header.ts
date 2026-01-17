@@ -1,6 +1,6 @@
 /**
  * DivisionBox 自定义 Header 示例
- * 
+ *
  * 本示例展示如何:
  * 1. 自定义 Header 标题和图标
  * 2. 添加自定义操作按钮
@@ -9,7 +9,7 @@
  * 5. 切换沉浸模式
  */
 
-import { Plugin } from '@talex-touch/utils'
+import type { Plugin } from '@talex-touch/utils'
 
 export default class CustomHeaderExample implements Plugin {
   private currentSessionId: string | null = null
@@ -46,37 +46,38 @@ export default class CustomHeaderExample implements Plugin {
             {
               id: 'swap-languages',
               label: '交换语言',
-              icon: 'ri:arrow-left-right-line'
+              icon: 'ri:arrow-left-right-line',
             },
             {
               id: 'copy-result',
               label: '复制结果',
-              icon: 'ri:file-copy-line'
+              icon: 'ri:file-copy-line',
             },
             {
               id: 'history',
               label: '历史记录',
-              icon: 'ri:history-line'
+              icon: 'ri:history-line',
             },
             {
               id: 'settings',
               label: '设置',
-              icon: 'ri:settings-3-line'
+              icon: 'ri:settings-3-line',
             },
             {
               id: 'toggle-immersive',
               label: '沉浸模式',
-              icon: 'ri:fullscreen-line'
-            }
-          ]
-        }
+              icon: 'ri:fullscreen-line',
+            },
+          ],
+        },
       })
 
       console.log('DivisionBox opened with custom header:', sessionId)
       this.currentSessionId = sessionId
 
       return sessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to open DivisionBox:', error)
       throw error
     }
@@ -113,7 +114,8 @@ export default class CustomHeaderExample implements Plugin {
         default:
           console.warn('Unknown action:', actionId)
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error(`Failed to handle action ${actionId}:`, error)
       this.showNotification('操作失败,请重试')
     }
@@ -127,12 +129,12 @@ export default class CustomHeaderExample implements Plugin {
 
     // 获取当前语言设置
     const currentLangs = await this.plugin.divisionBox.getState(sessionId, 'languages')
-    
+
     if (currentLangs) {
       // 交换语言
       const swapped = {
         source: currentLangs.target,
-        target: currentLangs.source
+        target: currentLangs.source,
       }
 
       // 保存新的语言设置
@@ -140,11 +142,12 @@ export default class CustomHeaderExample implements Plugin {
 
       console.log('Languages swapped:', swapped)
       this.showNotification('语言已交换')
-    } else {
+    }
+    else {
       // 设置默认语言
       await this.plugin.divisionBox.updateState(sessionId, 'languages', {
         source: 'zh-CN',
-        target: 'en-US'
+        target: 'en-US',
       })
     }
   }
@@ -163,7 +166,8 @@ export default class CustomHeaderExample implements Plugin {
       await navigator.clipboard.writeText(result)
       console.log('Result copied to clipboard')
       this.showNotification('已复制到剪贴板')
-    } else {
+    }
+    else {
       console.warn('No result to copy')
       this.showNotification('没有可复制的内容')
     }
@@ -216,8 +220,8 @@ export default class CustomHeaderExample implements Plugin {
       size: 'medium',
       keepAlive: true,
       header: {
-        show: !this.isImmersiveMode  // 切换 Header 显示
-      }
+        show: !this.isImmersiveMode, // 切换 Header 显示
+      },
     })
 
     this.currentSessionId = newSessionId
@@ -247,15 +251,16 @@ export default class CustomHeaderExample implements Plugin {
             {
               id: 'clear',
               label: '清除',
-              icon: 'ri:delete-bin-line'
-            }
-          ]
-        }
+              icon: 'ri:delete-bin-line',
+            },
+          ],
+        },
       })
 
       console.log('DivisionBox opened with minimal header:', sessionId)
       return sessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to open DivisionBox:', error)
       throw error
     }
@@ -273,13 +278,14 @@ export default class CustomHeaderExample implements Plugin {
         title: '专注计时器',
         size: 'compact',
         header: {
-          show: false  // 隐藏 Header,进入沉浸模式
-        }
+          show: false, // 隐藏 Header,进入沉浸模式
+        },
       })
 
       console.log('DivisionBox opened in immersive mode:', sessionId)
       return sessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to open DivisionBox:', error)
       throw error
     }

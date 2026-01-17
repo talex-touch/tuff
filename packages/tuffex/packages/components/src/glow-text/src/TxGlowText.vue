@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { GlowTextProps } from './types'
+import { computed } from 'vue'
 
 defineOptions({ name: 'TxGlowText' })
 

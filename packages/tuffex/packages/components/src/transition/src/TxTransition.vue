@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { TxTransitionProps } from './types'
 import { computed, useAttrs } from 'vue'
 import TxTransitionSmoothSize from './TxTransitionSmoothSize.vue'
-import type { TxTransitionProps } from './types'
 
 defineOptions({
   name: 'TxTransition',

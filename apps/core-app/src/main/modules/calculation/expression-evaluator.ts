@@ -1,8 +1,9 @@
-import { create, all, type MathJsInstance } from 'mathjs'
+import type { MathJsInstance } from 'mathjs'
+import { all, create } from 'mathjs'
 
 const math: MathJsInstance = create(all, {
   number: 'BigNumber',
-  precision: 64,
+  precision: 64
 })
 
 export interface ExpressionResult {
@@ -22,7 +23,7 @@ const DANGEROUS_PATTERNS = [
   /\bprocess\b/i,
   /\bglobal\b/i,
   /\bwindow\b/i,
-  /\bdocument\b/i,
+  /\bdocument\b/i
 ]
 
 function isSafeExpression(expr: string): boolean {
@@ -117,21 +118,23 @@ export function evaluateExpression(expression: string): ExpressionResult {
     }
 
     const formatted = formatResult(result)
-    const numericValue = typeof result === 'number' ? result : (result as any)?.toNumber?.() ?? parseFloat(formatted)
+    const numericValue =
+      typeof result === 'number'
+        ? result
+        : ((result as any)?.toNumber?.() ?? Number.parseFloat(formatted))
 
     return {
       success: true,
       value: formatted,
       numericValue,
       expression: trimmed,
-      formatted: `${trimmed} = ${formatted}`,
+      formatted: `${trimmed} = ${formatted}`
     }
-  }
-  catch (error) {
+  } catch (error) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'EVALUATION_ERROR',
-      expression,
+      expression
     }
   }
 }
@@ -154,7 +157,7 @@ export function looksLikeExpression(query: string): boolean {
   const hasPercent = /%/.test(trimmed)
 
   // Exclude file paths and URLs
-  if (/^[\/~]/.test(trimmed) || /^https?:\/\//i.test(trimmed)) {
+  if (/^[/~]/.test(trimmed) || /^https?:\/\//i.test(trimmed)) {
     return false
   }
 

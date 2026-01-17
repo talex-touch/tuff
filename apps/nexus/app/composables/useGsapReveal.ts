@@ -1,4 +1,5 @@
-import { onBeforeUnmount, onMounted, type Ref } from 'vue'
+import type { Ref } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 
 type TweenVars = import('gsap').TweenVars
 type GsapContext = import('gsap').Context
@@ -36,7 +37,8 @@ export function useGsapReveal(
   let ctx: GsapContext | undefined
 
   onMounted(async () => {
-    if (!container.value) return
+    if (!container.value)
+      return
 
     const { gsap } = await import('gsap')
     const { ScrollTrigger } = await import('gsap/ScrollTrigger')
@@ -61,7 +63,8 @@ export function useGsapReveal(
       const fromOptions = options.from ?? {}
       const clearProps = (fromOptions as { clearProps?: TweenVars['clearProps'] }).clearProps ?? 'filter'
 
-      if (!elements.length) return
+      if (!elements.length)
+        return
 
       gsap.from(elements, {
         ...fallbackFrom,

@@ -25,15 +25,15 @@ const isAdmin = computed(() => {
 })
 
 const sectionPaths: Record<string, string> = {
-  overview: '/dashboard/overview',
-  plugins: '/dashboard/plugins',
-  team: '/dashboard/team',
+  'overview': '/dashboard/overview',
+  'plugins': '/dashboard/plugins',
+  'team': '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
-  updates: '/dashboard/updates',
-  images: '/dashboard/images',
-  codes: '/dashboard/admin/codes',
-  analytics: '/dashboard/admin/analytics',
-  privacy: '/dashboard/privacy',
+  'updates': '/dashboard/updates',
+  'images': '/dashboard/images',
+  'codes': '/dashboard/admin/codes',
+  'analytics': '/dashboard/admin/analytics',
+  'privacy': '/dashboard/privacy',
 }
 
 const menuItems = computed(() => {

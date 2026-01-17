@@ -1,25 +1,17 @@
-<script name="FlatCodeInput">
-import FlatButton from '~/components/base/button//FlatButton.vue'
-
-export default {
-  name: 'FlatCodeInput',
-  components: { FlatButton },
-}
-</script>
-
-<script setup>
+<script lang="ts" setup>
 import { reactive, watch } from 'vue'
+
+defineOptions({ name: 'FlatCodeInput' })
 
 const emits = defineEmits(['input'])
 
-const codes = reactive([])
+const codes = reactive<number[]>([])
 
-function inputCode(code) {
+function inputCode(code: number): void {
   const i = codes.indexOf(code)
   if (i !== -1) {
     codes.splice(i, 1)
-  }
-  else {
+  } else {
     codes.push(code)
   }
 }
@@ -37,7 +29,7 @@ watch(codes, (val) => {
       v-for="i in 9"
       :class="{
         active: codes.includes(i),
-        disabled: codes.length > 0 && codes[codes.length - 1] !== i,
+        disabled: codes.length > 0 && codes[codes.length - 1] !== i
       }"
       class="FlatCodeInput-Item"
       @click="inputCode(i)"

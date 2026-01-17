@@ -1,15 +1,15 @@
-import TxAutoSizer from './src/TxAutoSizer.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type {
+  AutoSizerActionOptions,
   AutoSizerActionResult,
   AutoSizerActionTarget,
-  AutoSizerActionOptions,
   AutoSizerDetect,
   AutoSizerObserveTarget,
   AutoSizerProps,
   AutoSizerSnapshot,
   AutoSizerWatchKey,
 } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxAutoSizer from './src/TxAutoSizer.vue'
 
 const AutoSizer = withInstall(TxAutoSizer)
 

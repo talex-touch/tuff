@@ -21,10 +21,14 @@ const props = withDefaults(defineProps<EmptyProps>(), {
 
     <div class="tx-empty__content">
       <div class="tx-empty__title">
-        <slot name="title">{{ title }}</slot>
+        <slot name="title">
+          {{ title }}
+        </slot>
       </div>
       <div v-if="description || $slots.description" class="tx-empty__desc">
-        <slot name="description">{{ description }}</slot>
+        <slot name="description">
+          {{ description }}
+        </slot>
       </div>
 
       <div v-if="$slots.action" class="tx-empty__action">

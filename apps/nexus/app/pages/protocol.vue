@@ -17,7 +17,7 @@ useHead({
   <div class="protocol-surface px-8 py-10 space-y-10">
     <div class="prose prose-neutral dark:prose-invert max-w-none">
       <h1>{{ t('protocol.title') }}</h1>
-      
+
       <p class="text-lg text-gray-600 dark:text-gray-300">
         {{ t('protocol.lastUpdated') }}: {{ new Date().toLocaleDateString() }}
       </p>

@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useAttrs } from 'vue'
-import { useAutoResize } from '../../../../utils/animation/auto-resize'
-import { useFlip } from '../../../../utils/animation/flip'
 import type {
   AutoSizerActionOptions,
   AutoSizerActionResult,
@@ -10,6 +7,9 @@ import type {
   AutoSizerSnapshot,
   AutoSizerWatchKey,
 } from './types'
+import { computed, nextTick, ref, useAttrs } from 'vue'
+import { useAutoResize } from '../../../../utils/animation/auto-resize'
+import { useFlip } from '../../../../utils/animation/flip'
 
 defineOptions({
   name: 'TxAutoSizer',
@@ -94,7 +94,8 @@ function snapshot(el: HTMLElement, watch?: AutoSizerWatchKey[]): AutoSizerSnapsh
   const attrs: Record<string, string | null> = {}
   if (keys.has('attrs')) {
     for (const name of el.getAttributeNames()) {
-      if (name === 'style' || name === 'class') continue
+      if (name === 'style' || name === 'class')
+        continue
       attrs[name] = el.getAttribute(name)
     }
   }
@@ -128,8 +129,9 @@ function defaultDetect(before: AutoSizerSnapshot, after: AutoSizerSnapshot): Aut
 
   const aKeys = Object.keys(before.attrs)
   const bKeys = Object.keys(after.attrs)
-  if (aKeys.length !== bKeys.length)
+  if (aKeys.length !== bKeys.length) {
     changedKeys.push('attrs')
+  }
   else {
     for (const k of aKeys) {
       if (before.attrs[k] !== after.attrs[k]) {

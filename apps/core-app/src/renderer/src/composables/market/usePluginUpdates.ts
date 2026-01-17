@@ -1,9 +1,9 @@
+import type { MarketUpdatesAvailablePayload } from '@talex-touch/utils/transport/events/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createMarketSdk } from '@talex-touch/utils/transport/sdk/domains/market'
-import type { MarketUpdatesAvailablePayload } from '@talex-touch/utils/transport/events/types'
-import { ref, onMounted, onUnmounted } from 'vue'
-import { toast } from 'vue-sonner'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 
 export interface PluginUpdateInfo {
   slug: string

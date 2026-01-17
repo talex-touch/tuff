@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
 
-type FeatureCommandData = {
+interface FeatureCommandData {
   name?: string
   shortcut?: string
   desc?: string

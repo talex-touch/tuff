@@ -1,6 +1,6 @@
-import TxTextTransformer from './src/TxTextTransformer.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { TextTransformerProps } from './src/types.ts'
+import { withInstall } from '../../../utils/withInstall'
+import TxTextTransformer from './src/TxTextTransformer.vue'
 
 const TextTransformer = withInstall(TxTextTransformer)
 

@@ -54,16 +54,24 @@ const treeNodes = [
         :panel-padding="10"
       >
         <template #reference>
-          <TxButton variant="primary">Popover panel</TxButton>
+          <TxButton variant="primary">
+            Popover panel
+          </TxButton>
         </template>
 
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">Popover panel uses TxCard</div>
-          <TxButton size="small" @click="open = false">Close</TxButton>
+          <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+            Popover panel uses TxCard
+          </div>
+          <TxButton size="small" @click="open = false">
+            Close
+          </TxButton>
         </div>
       </TxPopover>
 
-      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">panelVariant/panelBackground/panelShadow/panelRadius/panelPadding</div>
+      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+        panelVariant/panelBackground/panelShadow/panelRadius/panelPadding
+      </div>
     </div>
 
     <TxSearchSelect

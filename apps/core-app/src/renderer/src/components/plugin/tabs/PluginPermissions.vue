@@ -6,13 +6,13 @@
  */
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElTag, ElEmpty } from 'element-plus'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import { ElEmpty, ElTag } from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface Props {
@@ -56,7 +56,7 @@ const permissionTranslations: Record<string, { name: string; desc: string }> = {
   'storage.plugin': { name: '插件存储', desc: '使用插件私有存储空间' },
   'storage.shared': { name: '共享存储', desc: '访问跨插件共享存储' },
   'window.create': { name: '创建窗口', desc: '创建新窗口或视图' },
-  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' },
+  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' }
 }
 
 // Computed
@@ -83,7 +83,7 @@ const permissionList = computed(() => {
       category,
       risk,
       required: status.value!.required.includes(id),
-      granted: status.value!.granted.includes(id),
+      granted: status.value!.granted.includes(id)
     }
   })
 })
@@ -96,7 +96,7 @@ const categoryInfo: Record<string, { name: string; icon: string }> = {
   system: { name: '系统', icon: 'i-carbon-terminal' },
   ai: { name: 'AI 能力', icon: 'i-carbon-bot' },
   storage: { name: '存储', icon: 'i-carbon-data-base' },
-  window: { name: '窗口', icon: 'i-carbon-application' },
+  window: { name: '窗口', icon: 'i-carbon-application' }
 }
 
 // Group permissions by category
@@ -115,13 +115,21 @@ const permissionCategories = computed(() => {
     id,
     name: categoryInfo[id]?.name || id,
     icon: categoryInfo[id]?.icon || 'i-carbon-folder',
-    permissions,
+    permissions
   }))
 })
 
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
   const highRisk = ['fs.write', 'fs.execute', 'system.shell', 'ai.agents', 'window.capture']
-  const mediumRisk = ['fs.read', 'clipboard.read', 'network.internet', 'network.download', 'system.tray', 'ai.advanced', 'storage.shared']
+  const mediumRisk = [
+    'fs.read',
+    'clipboard.read',
+    'network.internet',
+    'network.download',
+    'system.tray',
+    'ai.advanced',
+    'storage.shared'
+  ]
   if (highRisk.includes(permissionId)) return 'high'
   if (mediumRisk.includes(permissionId)) return 'medium'
   return 'low'
@@ -146,26 +154,36 @@ function getPermissionIcon(permissionId: string): string {
     'storage.plugin': 'i-carbon-data-base',
     'storage.shared': 'i-carbon-share',
     'window.create': 'i-carbon-application',
-    'window.capture': 'i-carbon-screen',
+    'window.capture': 'i-carbon-screen'
   }
   return icons[permissionId] || 'i-carbon-checkmark'
 }
 
-function getRiskTagType(risk: 'low' | 'medium' | 'high'): 'success' | 'warning' | 'danger' | 'info' {
+function getRiskTagType(
+  risk: 'low' | 'medium' | 'high'
+): 'success' | 'warning' | 'danger' | 'info' {
   switch (risk) {
-    case 'low': return 'success'
-    case 'medium': return 'warning'
-    case 'high': return 'danger'
-    default: return 'info'
+    case 'low':
+      return 'success'
+    case 'medium':
+      return 'warning'
+    case 'high':
+      return 'danger'
+    default:
+      return 'info'
   }
 }
 
 function getRiskLabel(risk: 'low' | 'medium' | 'high'): string {
   switch (risk) {
-    case 'low': return '低'
-    case 'medium': return '中'
-    case 'high': return '高'
-    default: return risk
+    case 'low':
+      return '低'
+    case 'medium':
+      return '中'
+    case 'high':
+      return '高'
+    default:
+      return risk
   }
 }
 
@@ -181,7 +199,7 @@ async function loadStatus() {
       pluginId: props.plugin.name,
       sdkapi: props.plugin.sdkapi,
       required,
-      optional,
+      optional
     })
     status.value = result
   } catch (e) {
@@ -198,12 +216,12 @@ async function handleToggle(permissionId: string, granted: boolean) {
       await touchChannel.send('permission:grant', {
         pluginId: props.plugin.name,
         permissionId,
-        grantedBy: 'user',
+        grantedBy: 'user'
       })
     } else {
       await touchChannel.send('permission:revoke', {
         pluginId: props.plugin.name,
-        permissionId,
+        permissionId
       })
     }
     await loadStatus()
@@ -219,7 +237,7 @@ async function handleGrantAll() {
     await touchChannel.send('permission:grant-multiple', {
       pluginId: props.plugin.name,
       permissionIds: status.value.missingRequired,
-      grantedBy: 'user',
+      grantedBy: 'user'
     })
     await loadStatus()
   } catch (e) {
@@ -231,7 +249,7 @@ async function handleGrantAll() {
 async function handleRevokeAll() {
   try {
     await touchChannel.send('permission:revoke-all', {
-      pluginId: props.plugin.name,
+      pluginId: props.plugin.name
     })
     await loadStatus()
   } catch (e) {
@@ -254,35 +272,49 @@ onMounted(loadStatus)
     </div>
 
     <!-- No Permissions -->
-    <ElEmpty
-      v-else-if="!hasPermissions"
-      description="此插件未声明任何权限"
-      :image-size="80"
-    />
+    <ElEmpty v-else-if="!hasPermissions" description="此插件未声明任何权限" :image-size="80" />
 
     <!-- Permission Content -->
     <template v-else>
       <!-- Status Overview -->
       <TuffGroupBlock
         name="权限状态"
-        :description="status?.missingRequired.length === 0 ? '所有必需权限已授予' : `缺少 ${status?.missingRequired.length} 个必需权限`"
-        :default-icon="status?.missingRequired.length === 0 ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
-        :active-icon="status?.missingRequired.length === 0 ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
+        :description="
+          status?.missingRequired.length === 0
+            ? '所有必需权限已授予'
+            : `缺少 ${status?.missingRequired.length} 个必需权限`
+        "
+        :default-icon="
+          status?.missingRequired.length === 0
+            ? 'i-carbon-checkmark-filled'
+            : 'i-carbon-warning-filled'
+        "
+        :active-icon="
+          status?.missingRequired.length === 0
+            ? 'i-carbon-checkmark-filled'
+            : 'i-carbon-warning-filled'
+        "
         memory-name="plugin-permissions-status"
       >
         <TuffBlockLine title="必需权限">
           <template #description>
-            <ElTag type="danger" effect="light" size="small">{{ status?.required.length || 0 }}</ElTag>
+            <ElTag type="danger" effect="light" size="small">
+              {{ status?.required.length || 0 }}
+            </ElTag>
           </template>
         </TuffBlockLine>
         <TuffBlockLine title="可选权限">
           <template #description>
-            <ElTag type="info" effect="light" size="small">{{ status?.optional.length || 0 }}</ElTag>
+            <ElTag type="info" effect="light" size="small">
+              {{ status?.optional.length || 0 }}
+            </ElTag>
           </template>
         </TuffBlockLine>
         <TuffBlockLine title="已授予">
           <template #description>
-            <ElTag type="success" effect="light" size="small">{{ status?.granted.length || 0 }}</ElTag>
+            <ElTag type="success" effect="light" size="small">
+              {{ status?.granted.length || 0 }}
+            </ElTag>
           </template>
         </TuffBlockLine>
 
@@ -321,7 +353,9 @@ onMounted(loadStatus)
       >
         <TuffBlockLine title="建议">
           <template #description>
-            <span class="text-[var(--el-color-warning)]">升级到 sdkapi >= 251212 以启用权限校验</span>
+            <span class="text-[var(--el-color-warning)]"
+              >升级到 sdkapi >= 251212 以启用权限校验</span
+            >
           </template>
         </TuffBlockLine>
       </TuffGroupBlock>
@@ -347,8 +381,10 @@ onMounted(loadStatus)
           @change="(val) => handleToggle(perm.id, val)"
         >
           <template #tags>
-            <ElTag v-if="perm.required" type="danger" effect="light" size="small">必需</ElTag>
-            <ElTag :type="getRiskTagType(perm.risk)" effect="light" size="small">{{ getRiskLabel(perm.risk) }}</ElTag>
+            <ElTag v-if="perm.required" type="danger" effect="light" size="small"> 必需 </ElTag>
+            <ElTag :type="getRiskTagType(perm.risk)" effect="light" size="small">
+              {{ getRiskLabel(perm.risk) }}
+            </ElTag>
           </template>
         </TuffBlockSwitch>
       </TuffGroupBlock>

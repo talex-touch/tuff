@@ -37,7 +37,7 @@ export interface DependencyValidationResult {
   /** List of disallowed imports | 不允许的导入列表 */
   disallowedImports: string[]
   /** Validation errors | 验证错误 */
-  errors: Array<{ module: string, message: string }>
+  errors: Array<{ module: string; message: string }>
 }
 
 /**
@@ -58,10 +58,10 @@ export interface IWidgetProcessor {
    * @param context - Compilation context
    * @returns Compiled widget or null on failure
    */
-  compile(
+  compile: (
     source: WidgetSource,
-    context: WidgetCompilationContext,
-  ): Promise<CompiledWidget | null>
+    context: WidgetCompilationContext
+  ) => Promise<CompiledWidget | null>
 
   /**
    * Validate dependencies used in the widget
@@ -69,7 +69,7 @@ export interface IWidgetProcessor {
    * @param source - Widget source code
    * @returns Validation result with allowed/disallowed imports
    */
-  validateDependencies(source: string): DependencyValidationResult
+  validateDependencies: (source: string) => DependencyValidationResult
 }
 
 /**

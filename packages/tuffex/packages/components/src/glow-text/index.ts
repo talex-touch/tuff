@@ -1,6 +1,6 @@
-import TxGlowText from './src/TxGlowText.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { GlowTextProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxGlowText from './src/TxGlowText.vue'
 
 const GlowText = withInstall(TxGlowText)
 

@@ -146,7 +146,7 @@ export class TuffTransportError extends Error {
       eventName?: string
       pluginName?: string
       cause?: Error
-    }
+    },
   ) {
     super(message)
     this.name = 'TuffTransportError'
@@ -192,7 +192,7 @@ export class TuffTransportError extends Error {
       {
         eventName: obj.eventName as string | undefined,
         pluginName: obj.pluginName as string | undefined,
-      }
+      },
     )
     if (obj.stack && typeof obj.stack === 'string') {
       error.stack = obj.stack
@@ -214,8 +214,8 @@ export class TuffTransportError extends Error {
 export function createInvalidEventError(context: string): TuffTransportError {
   return new TuffTransportError(
     TuffTransportErrorCode.INVALID_EVENT,
-    `[${context}] Invalid event. Expected TuffEvent created via defineEvent(), ` +
-    `received a string or invalid object. String event names are not allowed.`
+    `[${context}] Invalid event. Expected TuffEvent created via defineEvent(), `
+    + `received a string or invalid object. String event names are not allowed.`,
   )
 }
 
@@ -230,7 +230,7 @@ export function createTimeoutError(eventName: string, timeoutMs: number): TuffTr
   return new TuffTransportError(
     TuffTransportErrorCode.TIMEOUT,
     `Request "${eventName}" timed out after ${timeoutMs}ms`,
-    { eventName }
+    { eventName },
   )
 }
 
@@ -244,7 +244,7 @@ export function createUnknownEventError(eventName: string): TuffTransportError {
   return new TuffTransportError(
     TuffTransportErrorCode.UNKNOWN_EVENT,
     `No handler registered for event "${eventName}"`,
-    { eventName }
+    { eventName },
   )
 }
 
@@ -260,7 +260,7 @@ export function createInvalidPluginKeyError(pluginName?: string): TuffTransportE
     pluginName
       ? `Invalid or expired security key for plugin "${pluginName}"`
       : 'Invalid or expired plugin security key',
-    { pluginName }
+    { pluginName },
   )
 }
 
@@ -275,7 +275,7 @@ export function createTargetNotFoundError(target: string, eventName?: string): T
   return new TuffTransportError(
     TuffTransportErrorCode.TARGET_NOT_FOUND,
     `Target "${target}" not found or has been destroyed`,
-    { eventName }
+    { eventName },
   )
 }
 
@@ -290,7 +290,7 @@ export function createSerializeError(eventName: string, cause: Error): TuffTrans
   return new TuffTransportError(
     TuffTransportErrorCode.SERIALIZE_FAILED,
     `Failed to serialize payload for "${eventName}": ${cause.message}`,
-    { eventName, cause }
+    { eventName, cause },
   )
 }
 
@@ -305,6 +305,6 @@ export function createStreamCancelledError(eventName: string, streamId: string):
   return new TuffTransportError(
     TuffTransportErrorCode.STREAM_CANCELLED,
     `Stream "${streamId}" for event "${eventName}" was cancelled`,
-    { eventName }
+    { eventName },
   )
 }

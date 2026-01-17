@@ -82,18 +82,18 @@ export interface TuffStorageAuditFilter {
 }
 
 export interface TuffIntelligenceStorageAdapter {
-  saveAuditLog(entry: IntelligenceAuditLog): Promise<void>
-  queryAuditLogs(filter: TuffStorageAuditFilter): Promise<IntelligenceAuditLog[]>
-  saveUsageDelta(caller: string, delta: TuffUsageDelta): Promise<void>
-  getQuota(caller: string): Promise<TuffQuota | null>
-  setQuota(caller: string, quota: TuffQuota): Promise<void>
-  saveProviderConfig(config: IntelligenceProviderConfig): Promise<void>
-  listProviders(): Promise<IntelligenceProviderConfig[]>
-  saveCapabilityConfig(config: IntelligenceCapabilityConfig): Promise<void>
-  listCapabilities(): Promise<IntelligenceCapabilityConfig[]>
-  savePrompt(prompt: PromptTemplate): Promise<void>
-  listPrompts(): Promise<PromptTemplate[]>
-  deletePrompt(id: string): Promise<void>
+  saveAuditLog: (entry: IntelligenceAuditLog) => Promise<void>
+  queryAuditLogs: (filter: TuffStorageAuditFilter) => Promise<IntelligenceAuditLog[]>
+  saveUsageDelta: (caller: string, delta: TuffUsageDelta) => Promise<void>
+  getQuota: (caller: string) => Promise<TuffQuota | null>
+  setQuota: (caller: string, quota: TuffQuota) => Promise<void>
+  saveProviderConfig: (config: IntelligenceProviderConfig) => Promise<void>
+  listProviders: () => Promise<IntelligenceProviderConfig[]>
+  saveCapabilityConfig: (config: IntelligenceCapabilityConfig) => Promise<void>
+  listCapabilities: () => Promise<IntelligenceCapabilityConfig[]>
+  savePrompt: (prompt: PromptTemplate) => Promise<void>
+  listPrompts: () => Promise<PromptTemplate[]>
+  deletePrompt: (id: string) => Promise<void>
 }
 
 export interface TuffIntelligenceConfig {

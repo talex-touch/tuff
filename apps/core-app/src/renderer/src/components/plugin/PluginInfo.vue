@@ -71,14 +71,20 @@ type PluginIndicatorTone = 'none' | 'loading' | 'warning' | 'success' | 'error' 
 const indicatorTone = computed<PluginIndicatorTone>(() => {
   const status = props.plugin.status
 
-  if (status === EPluginStatus.LOADING || status === EPluginStatus.DEV_RECONNECTING) return 'loading'
+  if (status === EPluginStatus.LOADING || status === EPluginStatus.DEV_RECONNECTING)
+    return 'loading'
   if (hasErrors.value) return 'error'
   if (hasIssues.value) return 'warning'
 
   if (status === EPluginStatus.LOAD_FAILED || status === EPluginStatus.CRASHED) return 'error'
   if (status === EPluginStatus.DEV_DISCONNECTED) return 'warning'
   if (status === EPluginStatus.DISABLED || status === EPluginStatus.DISABLING) return 'info'
-  if (status === EPluginStatus.ACTIVE || status === EPluginStatus.ENABLED || status === EPluginStatus.LOADED) return 'success'
+  if (
+    status === EPluginStatus.ACTIVE ||
+    status === EPluginStatus.ENABLED ||
+    status === EPluginStatus.LOADED
+  )
+    return 'success'
 
   return 'none'
 })
@@ -190,16 +196,17 @@ const primaryAction = computed(() => {
   }
 
   if (
-    status === EPluginStatus.ACTIVE
-    || status === EPluginStatus.LOADING
-    || status === EPluginStatus.DISABLING
-    || status === EPluginStatus.DEV_RECONNECTING
+    status === EPluginStatus.ACTIVE ||
+    status === EPluginStatus.LOADING ||
+    status === EPluginStatus.DISABLING ||
+    status === EPluginStatus.DEV_RECONNECTING
   ) {
     return {
       action: 'none' as const,
-      label: status === EPluginStatus.DEV_RECONNECTING
-        ? t('plugin.actions.reconnecting')
-        : t('plugin.actions.running'),
+      label:
+        status === EPluginStatus.DEV_RECONNECTING
+          ? t('plugin.actions.reconnecting')
+          : t('plugin.actions.running'),
       icon: 'i-ri-loader-4-line',
       disabled: true,
       loading: true
@@ -234,7 +241,10 @@ async function handlePrimaryAction(): Promise<void> {
       await pluginSDK.reconnectDevServer(pluginName)
     }
   } catch (error) {
-    console.error(`[PluginInfo] Failed primary action "${action}" for plugin "${pluginName}":`, error)
+    console.error(
+      `[PluginInfo] Failed primary action "${action}" for plugin "${pluginName}":`,
+      error
+    )
     toast.error(t('system.unknownError'))
   } finally {
     loadingStates.value.toggle = false

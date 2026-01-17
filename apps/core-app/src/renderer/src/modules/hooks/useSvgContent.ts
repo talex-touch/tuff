@@ -42,7 +42,7 @@ export function useSvgContent(
     if (source.startsWith('file:') || source.startsWith('tfile:')) return true
     if (source.startsWith('/') && !isApiSource(source)) return true
     if (source.startsWith('\\\\')) return true
-    return /^[a-zA-Z]:[\\/]/.test(source)
+    return /^[a-z]:[\\/]/i.test(source)
   }
 
   async function doFetch(): Promise<string> {
