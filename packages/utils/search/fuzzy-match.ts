@@ -24,7 +24,7 @@ export interface FuzzyMatchResult {
 export function fuzzyMatch(
   target: string,
   query: string,
-  maxErrors = 2
+  maxErrors = 2,
 ): FuzzyMatchResult {
   if (!query || !target) {
     return { matched: false, score: 0, matchedIndices: [] }
@@ -38,7 +38,7 @@ export function fuzzyMatch(
     return {
       matched: true,
       score: 1,
-      matchedIndices: Array.from({ length: target.length }, (_, i) => i)
+      matchedIndices: Array.from({ length: target.length }, (_, i) => i),
     }
   }
 
@@ -48,7 +48,7 @@ export function fuzzyMatch(
     return {
       matched: true,
       score: 0.95,
-      matchedIndices: Array.from({ length: query.length }, (_, i) => substringIndex + i)
+      matchedIndices: Array.from({ length: query.length }, (_, i) => substringIndex + i),
     }
   }
 
@@ -58,7 +58,7 @@ export function fuzzyMatch(
     return {
       matched: true,
       score: 0.8 + (subsequenceResult.matchedIndices.length / target.length) * 0.1,
-      matchedIndices: subsequenceResult.matchedIndices
+      matchedIndices: subsequenceResult.matchedIndices,
     }
   }
 
@@ -77,8 +77,8 @@ export function fuzzyMatch(
  */
 function subsequenceMatch(
   target: string,
-  query: string
-): { matched: boolean; matchedIndices: number[] } {
+  query: string,
+): { matched: boolean, matchedIndices: number[] } {
   const matchedIndices: number[] = []
   let queryIdx = 0
 
@@ -91,7 +91,7 @@ function subsequenceMatch(
 
   return {
     matched: queryIdx === query.length,
-    matchedIndices
+    matchedIndices,
   }
 }
 
@@ -102,13 +102,15 @@ function subsequenceMatch(
 function fuzzyMatchWithErrors(
   target: string,
   query: string,
-  maxErrors: number
+  maxErrors: number,
 ): FuzzyMatchResult {
   const m = query.length
   const n = target.length
 
-  if (m === 0) return { matched: true, score: 1, matchedIndices: [] }
-  if (n === 0) return { matched: false, score: 0, matchedIndices: [] }
+  if (m === 0)
+    return { matched: true, score: 1, matchedIndices: [] }
+  if (n === 0)
+    return { matched: false, score: 0, matchedIndices: [] }
 
   // Allow more errors for longer queries
   const allowedErrors = Math.min(maxErrors, Math.floor(m / 3) + 1)
@@ -135,7 +137,7 @@ function fuzzyMatchWithErrors(
           bestScore = score
           bestStart = start
           // Adjust indices to be relative to the full target string
-          bestMatchedIndices = matchedIndices.map((i) => start + i)
+          bestMatchedIndices = matchedIndices.map(i => start + i)
         }
       }
     }
@@ -145,7 +147,7 @@ function fuzzyMatchWithErrors(
     return {
       matched: true,
       score: bestScore,
-      matchedIndices: bestMatchedIndices
+      matchedIndices: bestMatchedIndices,
     }
   }
 
@@ -157,13 +159,13 @@ function fuzzyMatchWithErrors(
  */
 function editDistanceWithPath(
   s1: string,
-  s2: string
-): { distance: number; matchedIndices: number[] } {
+  s2: string,
+): { distance: number, matchedIndices: number[] } {
   const m = s1.length
   const n = s2.length
 
   // DP table
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0))
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
 
   // Initialize
   for (let i = 0; i <= m; i++) dp[i][0] = i
@@ -174,7 +176,8 @@ function editDistanceWithPath(
     for (let j = 1; j <= n; j++) {
       if (s1[i - 1] === s2[j - 1]) {
         dp[i][j] = dp[i - 1][j - 1]
-      } else {
+      }
+      else {
         dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
       }
     }
@@ -190,14 +193,17 @@ function editDistanceWithPath(
       matchedIndices.unshift(i - 1)
       i--
       j--
-    } else if (dp[i - 1][j - 1] <= dp[i - 1][j] && dp[i - 1][j - 1] <= dp[i][j - 1]) {
+    }
+    else if (dp[i - 1][j - 1] <= dp[i - 1][j] && dp[i - 1][j - 1] <= dp[i][j - 1]) {
       // Substitution
       i--
       j--
-    } else if (dp[i - 1][j] <= dp[i][j - 1]) {
+    }
+    else if (dp[i - 1][j] <= dp[i][j - 1]) {
       // Deletion from s1
       i--
-    } else {
+    }
+    else {
       // Insertion into s1
       j--
     }
@@ -213,7 +219,7 @@ function calculateFuzzyScore(
   editDistance: number,
   queryLength: number,
   matchStart: number,
-  targetLength: number
+  targetLength: number,
 ): number {
   // Base score from edit distance (0.5 - 0.7 range for fuzzy matches)
   const distanceScore = Math.max(0, 1 - editDistance / queryLength) * 0.3 + 0.4
@@ -230,11 +236,12 @@ function calculateFuzzyScore(
 /**
  * Convert matched indices to Range array for highlighting
  */
-export function indicesToRanges(indices: number[]): Array<{ start: number; end: number }> {
-  if (!indices.length) return []
+export function indicesToRanges(indices: number[]): Array<{ start: number, end: number }> {
+  if (!indices.length)
+    return []
 
   const sorted = Array.from(new Set(indices)).sort((a, b) => a - b)
-  const ranges: Array<{ start: number; end: number }> = []
+  const ranges: Array<{ start: number, end: number }> = []
 
   let start = sorted[0]
   let end = sorted[0] + 1
@@ -242,7 +249,8 @@ export function indicesToRanges(indices: number[]): Array<{ start: number; end: 
   for (let i = 1; i < sorted.length; i++) {
     if (sorted[i] === end) {
       end++
-    } else {
+    }
+    else {
       ranges.push({ start, end })
       start = sorted[i]
       end = sorted[i] + 1

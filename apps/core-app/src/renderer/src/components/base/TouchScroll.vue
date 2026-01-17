@@ -27,18 +27,17 @@ const useNative = computed(() => {
   return props.native
 })
 
-const isMacLike = typeof navigator !== 'undefined'
-  && (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
+const isMacLike =
+  typeof navigator !== 'undefined' &&
+  (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
 
 const resolvedBScrollOptions = computed(() => {
   const raw = (attrs as any)?.options
   const options = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 
-  if (!isMacLike)
-    return options
+  if (!isMacLike) return options
 
-  if (Object.prototype.hasOwnProperty.call(options, 'useTransition'))
-    return options
+  if (Object.prototype.hasOwnProperty.call(options, 'useTransition')) return options
 
   return { ...options, useTransition: false }
 })

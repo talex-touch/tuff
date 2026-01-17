@@ -1,19 +1,26 @@
-import type { SearchIndexItem, SearchIndexKeyword } from '../../../search-engine/search-index-service'
 import type { FileParserResult } from '@talex-touch/utils/electron/file-parsers'
-import { parentPort } from 'node:worker_threads'
-import { performance } from 'node:perf_hooks'
+import type {
+  SearchIndexItem,
+  SearchIndexKeyword
+} from '../../../search-engine/search-index-service'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsRequest,
+  WorkerMetricsResponse
+} from './worker-status'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { performance } from 'node:perf_hooks'
+import { parentPort } from 'node:worker_threads'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import {
   CONTENT_INDEXABLE_EXTENSIONS,
   getContentSizeLimitMB,
   getTypeTagsForExtension,
-  KEYWORD_MAP,
+  KEYWORD_MAP
 } from '../constants'
-import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
 
-type IndexFilePayload = {
+interface IndexFilePayload {
   id: number
   path: string
   name: string
@@ -24,7 +31,7 @@ type IndexFilePayload = {
   ctime: number
 }
 
-type IndexRequest = {
+interface IndexRequest {
   type: 'index'
   taskId: string
   dbPath: string
@@ -33,20 +40,20 @@ type IndexRequest = {
   files: IndexFilePayload[]
 }
 
-type IndexDoneMessage = {
+interface IndexDoneMessage {
   type: 'done'
   taskId: string
   processed: number
   failed: number
 }
 
-type IndexErrorMessage = {
+interface IndexErrorMessage {
   type: 'error'
   taskId: string
   error: string
 }
 
-type IndexProgressUpdate = {
+interface IndexProgressUpdate {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped'
   progress: number
   processedBytes: number | null
@@ -56,12 +63,12 @@ type IndexProgressUpdate = {
   updatedAt?: string
 }
 
-type IndexFileUpdate = {
+interface IndexFileUpdate {
   content: string | null
   embeddingStatus: 'pending' | 'completed'
 }
 
-type IndexFileResultMessage = {
+interface IndexFileResultMessage {
   type: 'file'
   taskId: string
   fileId: number
@@ -72,9 +79,10 @@ type IndexFileResultMessage = {
 
 function buildMetricsPayload(): WorkerMetricsPayload {
   const memory = process.memoryUsage()
-  const eventLoop = typeof performance.eventLoopUtilization === 'function'
-    ? performance.eventLoopUtilization()
-    : null
+  const eventLoop =
+    typeof performance.eventLoopUtilization === 'function'
+      ? performance.eventLoopUtilization()
+      : null
   return {
     timestamp: Date.now(),
     memory: {
@@ -82,16 +90,16 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       heapUsed: memory.heapUsed,
       heapTotal: memory.heapTotal,
       external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0,
+      arrayBuffers: memory.arrayBuffers ?? 0
     },
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {
           active: eventLoop.active,
           idle: eventLoop.idle,
-          utilization: eventLoop.utilization,
+          utilization: eventLoop.utilization
         }
-      : null,
+      : null
   }
 }
 
@@ -117,13 +125,13 @@ function buildSearchIndexItem(
   file: IndexFilePayload,
   providerId: string,
   providerType: string,
-  content?: string | null,
+  content?: string | null
 ): SearchIndexItem {
   const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
   const extensionKeywords = KEYWORD_MAP[extension] || []
   const keywords: SearchIndexKeyword[] = extensionKeywords.map((keyword) => ({
     value: keyword,
-    priority: 1.05,
+    priority: 1.05
   }))
 
   const tags = new Set<string>()
@@ -144,7 +152,7 @@ function buildSearchIndexItem(
     extension,
     content: content ?? undefined,
     keywords,
-    tags: tags.size > 0 ? Array.from(tags) : undefined,
+    tags: tags.size > 0 ? Array.from(tags) : undefined
   }
 }
 
@@ -152,7 +160,7 @@ function emitFileResult(message: IndexFileResultMessage): void {
   parentPort?.postMessage(message)
 }
 
-async function handleIndexTask(task: IndexRequest): Promise<{ processed: number, failed: number }> {
+async function handleIndexTask(task: IndexRequest): Promise<{ processed: number; failed: number }> {
   let failed = 0
 
   for (const file of task.files) {
@@ -172,10 +180,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
           processedBytes: 0,
           totalBytes: size ?? null,
           lastError: 'content-indexing-disabled',
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         },
         fileUpdate: null,
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
       })
       continue
     }
@@ -192,10 +200,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
           processedBytes: 0,
           totalBytes: size,
           lastError: 'file-too-large',
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         },
         fileUpdate: null,
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
       })
       continue
     }
@@ -210,10 +218,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
         processedBytes: 0,
         totalBytes: size ?? null,
         startedAt: new Date().toISOString(),
-        lastError: null,
+        lastError: null
       },
       fileUpdate: null,
-      indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+      indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
     })
 
     let result: FileParserResult | null = null
@@ -222,7 +230,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
         filePath: file.path,
         extension,
         size: size ?? 0,
-        maxBytes,
+        maxBytes
       })
     } catch (error) {
       failed += 1
@@ -236,10 +244,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
           processedBytes: 0,
           totalBytes: size ?? null,
           lastError: error instanceof Error ? error.message : 'parser-error',
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         },
         fileUpdate: null,
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
       })
       continue
     }
@@ -255,10 +263,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
           processedBytes: 0,
           totalBytes: size ?? null,
           lastError: 'parser-not-found',
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         },
         fileUpdate: null,
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
       })
       continue
     }
@@ -286,10 +294,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
           processedBytes,
           totalBytes,
           lastError: null,
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         },
         fileUpdate: { content: trimmedContent, embeddingStatus },
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, content),
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, content)
       })
       continue
     }
@@ -305,10 +313,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
           processedBytes,
           totalBytes,
           lastError: result.reason ?? null,
-          updatedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         },
         fileUpdate: null,
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
       })
       continue
     }
@@ -325,10 +333,10 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number,
         processedBytes,
         totalBytes,
         lastError: result.reason ?? null,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       },
       fileUpdate: null,
-      indexItem: buildSearchIndexItem(file, task.providerId, task.providerType),
+      indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
     })
   }
 
@@ -351,13 +359,13 @@ async function processQueue(): Promise<void> {
       type: 'done',
       taskId: next.taskId,
       processed,
-      failed,
+      failed
     } satisfies IndexDoneMessage)
   } catch (error) {
     parentPort?.postMessage({
       type: 'error',
       taskId: next.taskId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     } satisfies IndexErrorMessage)
   } finally {
     running = false
@@ -375,7 +383,7 @@ parentPort?.on('message', (payload: IndexRequest | WorkerMetricsRequest) => {
     parentPort?.postMessage({
       type: 'metrics',
       requestId: payload.requestId,
-      metrics: buildMetricsPayload(),
+      metrics: buildMetricsPayload()
     } satisfies WorkerMetricsResponse)
     return
   }

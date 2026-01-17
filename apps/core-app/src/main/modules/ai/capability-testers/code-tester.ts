@@ -1,16 +1,20 @@
-import type { IntelligenceCodeGenerateResult, IntelligenceCodeReviewResult, AiInvokeResult } from '@talex-touch/utils'
+import type {
+  AiInvokeResult,
+  IntelligenceCodeGenerateResult,
+  IntelligenceCodeReviewResult
+} from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 
 export class CodeGenerateTester extends BaseCapabilityTester {
   readonly capabilityType = 'code-generate'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<unknown> {
     const description = input.userInput || 'Write a function to calculate fibonacci numbers'
     return {
       description,
       language: 'typescript',
-      includeComments: true,
+      includeComments: true
     }
   }
 
@@ -24,7 +28,7 @@ export class CodeGenerateTester extends BaseCapabilityTester {
       textPreview: preview,
       provider: result.provider,
       model: result.model,
-      latency: result.latency,
+      latency: result.latency
     }
   }
 
@@ -40,8 +44,10 @@ export class CodeGenerateTester extends BaseCapabilityTester {
 export class CodeReviewTester extends BaseCapabilityTester {
   readonly capabilityType = 'code-review'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
-    const code = input.userInput || `function add(a, b) {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<unknown> {
+    const code =
+      input.userInput ||
+      `function add(a, b) {
   return a + b
 }
 
@@ -52,7 +58,7 @@ function multiply(x, y) {
     return {
       code,
       language: 'javascript',
-      focusAreas: ['bugs', 'style', 'best-practices'],
+      focusAreas: ['bugs', 'style', 'best-practices']
     }
   }
 
@@ -66,7 +72,7 @@ function multiply(x, y) {
       textPreview: summary,
       provider: result.provider,
       model: result.model,
-      latency: result.latency,
+      latency: result.latency
     }
   }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BottomDialogProps, DialogButton } from './types'
 /**
  * TxBottomDialog Component
  *
@@ -20,11 +21,19 @@
  *
  * @component
  */
-import { ref, watchEffect, onMounted, onUnmounted } from 'vue'
-import type { BottomDialogProps, DialogButton } from './types'
+import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 
 defineOptions({
   name: 'TxBottomDialog',
+})
+
+const props = withDefaults(defineProps<BottomDialogProps>(), {
+  title: '',
+  message: '',
+  stay: 0,
+  btns: () => [],
+  icon: '',
+  index: 0,
 })
 
 /**
@@ -37,15 +46,6 @@ interface ButtonState {
   onClick: () => Promise<boolean> | boolean
   loading?: boolean
 }
-
-const props = withDefaults(defineProps<BottomDialogProps>(), {
-  title: '',
-  message: '',
-  stay: 0,
-  btns: () => [],
-  icon: '',
-  index: 0,
-})
 
 const wholeDom = ref<HTMLElement | null>(null)
 const btnArray = ref<Array<{ value: ButtonState }>>([])
@@ -62,6 +62,7 @@ function sleep(ms: number): Promise<void> {
 /**
  * Handles button click with loading state management.
  * @param btn - The button state object
+ * @param btn.value - The underlying button state
  */
 async function clickBtn(btn: { value: ButtonState }): Promise<void> {
   btn.value.loading = true
@@ -173,16 +174,19 @@ async function forClose(): Promise<void> {
       @keydown.esc="forClose"
     >
       <div class="tx-bottom-dialog__container">
-        <p v-if="title" id="tx-dialog-title" class="tx-bottom-dialog__title">{{ title }}</p>
-        <div v-if="message" id="tx-dialog-message" class="tx-bottom-dialog__content">{{ message }}</div>
+        <p v-if="title" id="tx-dialog-title" class="tx-bottom-dialog__title">
+          {{ title }}
+        </p>
+        <div v-if="message" id="tx-dialog-message" class="tx-bottom-dialog__content">
+          {{ message }}
+        </div>
 
         <div class="tx-bottom-dialog__buttons">
           <button
             v-for="(btn, i) in btnArray"
             :key="i"
             type="button"
-            :class="[
-              'tx-bottom-dialog__btn',
+            class="tx-bottom-dialog__btn" :class="[
               {
                 'tx-bottom-dialog__btn--info': btn.value?.type === 'info',
                 'tx-bottom-dialog__btn--warning': btn.value?.type === 'warning',

@@ -1,14 +1,14 @@
 /* eslint-disable no-console */
 import fs from 'node:fs'
 import { Transform } from 'node:stream'
-import path from 'pathe'
 import compressing from 'compressing'
+import path from 'pathe'
 
 export class CompressLimit {
   /**
-     * 0: no limits
-     * SI: B
-     */
+   * 0: no limits
+   * SI: B
+   */
   size: number
 
   amount: number

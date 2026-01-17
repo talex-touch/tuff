@@ -1,22 +1,22 @@
 <script lang="ts" name="IntelligencePromptsPage" setup>
-import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
+import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
+import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
+import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
+import CapabilityTestInput from '~/components/intelligence/capabilities/CapabilityTestInput.vue'
+import CapabilityTestResult from '~/components/intelligence/capabilities/CapabilityTestResult.vue'
 import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import CapabilityTestInput from '~/components/intelligence/capabilities/CapabilityTestInput.vue'
-import CapabilityTestResult from '~/components/intelligence/capabilities/CapabilityTestResult.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { getPromptManager } from '~/modules/hooks/usePromptManager'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
-import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
-import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
+import { getPromptManager } from '~/modules/hooks/usePromptManager'
 
 type FilterMode = 'all' | 'builtin' | 'custom'
 
@@ -34,7 +34,7 @@ const promptDraft = reactive({
   name: '',
   category: '',
   description: '',
-  content: '',
+  content: ''
 })
 const autoSaveStatus = ref<'idle' | 'pending' | 'saving' | 'saved'>('idle')
 let isApplyingDraft = false
@@ -45,40 +45,43 @@ const promptTestResult = ref<UiCapabilityTestResult | null>(null)
 const promptTesting = ref(false)
 
 const capabilityList = computed<AISDKCapabilityConfig[]>(() =>
-  Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id)),
+  Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id))
 )
 
 watch(
   capabilityList,
   (list) => {
-    if (!list.length)
-      return
+    if (!list.length) return
     if (!list.some((cap) => cap.id === testCapabilityId.value)) {
       testCapabilityId.value = list[0].id
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 const providerMap = computed(
-  () => new Map(providers.value.map((provider) => [provider.id, provider])),
+  () => new Map(providers.value.map((provider) => [provider.id, provider]))
 )
 
 const testEnabledBindings = computed(() => {
   const capability = (capabilities.value || {})[testCapabilityId.value]
-  if (!capability?.providers)
-    return []
+  if (!capability?.providers) return []
   return capability.providers
     .filter((binding) => binding.enabled !== false)
     .map((binding) => ({
       ...binding,
-      provider: providerMap.value.get(binding.providerId),
+      provider: providerMap.value.get(binding.providerId)
     }))
 })
 
-async function handlePromptTest(options: { providerId: string, model?: string, promptVariables?: Record<string, any>, userInput?: string, promptTemplate?: string }): Promise<void> {
-  if (promptTesting.value)
-    return
+async function handlePromptTest(options: {
+  providerId: string
+  model?: string
+  promptVariables?: Record<string, any>
+  userInput?: string
+  promptTemplate?: string
+}): Promise<void> {
+  if (promptTesting.value) return
   promptTesting.value = true
   promptTestResult.value = null
 
@@ -89,22 +92,20 @@ async function handlePromptTest(options: { providerId: string, model?: string, p
       userInput: options.userInput,
       model: options.model,
       promptTemplate: promptDraft.content,
-      promptVariables: options.promptVariables,
+      promptVariables: options.promptVariables
     })
 
     promptTestResult.value = {
       ...(response as any),
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  catch (error) {
+  } catch (error) {
     promptTestResult.value = {
       success: false,
       message: error instanceof Error ? error.message : '能力测试失败',
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  finally {
+  } finally {
     promptTesting.value = false
   }
 }
@@ -112,7 +113,7 @@ async function handlePromptTest(options: { providerId: string, model?: string, p
 const filterOptions = computed(() => [
   { value: 'all', label: t('settings.intelligence.promptFilterAll') },
   { value: 'builtin', label: t('settings.intelligence.builtin') },
-  { value: 'custom', label: t('settings.intelligence.custom') },
+  { value: 'custom', label: t('settings.intelligence.custom') }
 ])
 
 const orderedPrompts = computed<PromptTemplate[]>(() => {
@@ -124,35 +125,33 @@ const orderedPrompts = computed<PromptTemplate[]>(() => {
 const visiblePrompts = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return orderedPrompts.value.filter((prompt) => {
-    const matchesFilter
-      = filterMode.value === 'all'
+    const matchesFilter =
+      filterMode.value === 'all'
         ? true
         : filterMode.value === 'builtin'
           ? prompt.builtin
           : !prompt.builtin
 
-    if (!matchesFilter)
-      return false
-    if (!query)
-      return true
+    if (!matchesFilter) return false
+    if (!query) return true
     return (
-      prompt.name.toLowerCase().includes(query)
-      || (prompt.description && prompt.description.toLowerCase().includes(query))
-      || prompt.content.toLowerCase().includes(query)
+      prompt.name.toLowerCase().includes(query) ||
+      (prompt.description && prompt.description.toLowerCase().includes(query)) ||
+      prompt.content.toLowerCase().includes(query)
     )
   })
 })
 
 const promptListItems = computed(() =>
-  visiblePrompts.value.map(prompt => ({
+  visiblePrompts.value.map((prompt) => ({
     id: prompt.id,
     title: prompt.name,
     description: prompt.description || t('settings.intelligence.promptMetaDescription'),
     badgeLabel: prompt.builtin
       ? t('settings.intelligence.builtin')
       : t('settings.intelligence.custom'),
-    badgeVariant: prompt.builtin ? 'info' : 'success',
-  })),
+    badgeVariant: prompt.builtin ? 'info' : 'success'
+  }))
 )
 
 watch(
@@ -162,17 +161,16 @@ watch(
       selectedPromptId.value = null
       return
     }
-    if (!selectedPromptId.value || !list.some(prompt => prompt.id === selectedPromptId.value)) {
+    if (!selectedPromptId.value || !list.some((prompt) => prompt.id === selectedPromptId.value)) {
       selectedPromptId.value = list[0].id
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 const selectedPrompt = computed<PromptTemplate | null>(() => {
-  if (!selectedPromptId.value)
-    return null
-  return orderedPrompts.value.find(prompt => prompt.id === selectedPromptId.value) ?? null
+  if (!selectedPromptId.value) return null
+  return orderedPrompts.value.find((prompt) => prompt.id === selectedPromptId.value) ?? null
 })
 
 const isBuiltinSelected = computed(() => !!selectedPrompt.value?.builtin)
@@ -206,31 +204,30 @@ watch(
     }
     isApplyingDraft = false
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 const isDirty = computed(() => {
-  if (!selectedPrompt.value || !isCustomEditable.value)
-    return false
+  if (!selectedPrompt.value || !isCustomEditable.value) return false
   return (
-    selectedPrompt.value.name !== promptDraft.name
-    || (selectedPrompt.value.category ?? '') !== promptDraft.category
-    || (selectedPrompt.value.description ?? '') !== promptDraft.description
-    || selectedPrompt.value.content !== promptDraft.content
+    selectedPrompt.value.name !== promptDraft.name ||
+    (selectedPrompt.value.category ?? '') !== promptDraft.category ||
+    (selectedPrompt.value.description ?? '') !== promptDraft.description ||
+    selectedPrompt.value.content !== promptDraft.content
   )
 })
 
 const promptStats = computed(() => ({
   total: orderedPrompts.value.length,
   builtin: promptManager.prompts.builtin.length,
-  custom: promptManager.prompts.custom.length,
+  custom: promptManager.prompts.custom.length
 }))
 
 const totalWordsApprox = computed(() =>
   orderedPrompts.value.reduce((sum, prompt) => {
     const words = prompt.content.trim().split(/\s+/).filter(Boolean).length
     return sum + words
-  }, 0),
+  }, 0)
 )
 
 const autoSaveStatusText = computed(() => {
@@ -264,8 +261,7 @@ function flushPendingPromptChanges(): void {
   autoSaveStatus.value = ok ? 'saved' : 'idle'
   if (ok) {
     window.setTimeout(() => {
-      if (autoSaveStatus.value === 'saved')
-        autoSaveStatus.value = 'idle'
+      if (autoSaveStatus.value === 'saved') autoSaveStatus.value = 'idle'
     }, 1200)
   }
 }
@@ -283,8 +279,7 @@ async function handleOpenFolder(): Promise<void> {
   try {
     await touchChannel.send('app:open-prompts-folder')
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[PromptManager] Failed to open folder', error)
     toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
@@ -293,13 +288,13 @@ async function handleOpenFolder(): Promise<void> {
 function handleCreatePrompt(): void {
   flushPendingPromptChanges()
   const name = t('settings.intelligence.promptNewDefaultName', {
-    index: promptStats.value.custom + 1,
+    index: promptStats.value.custom + 1
   })
   const newId = promptManager.addCustomPrompt({
     name,
     category: 'custom',
     description: t('settings.intelligence.promptDescriptionPlaceholder'),
-    content: '',
+    content: ''
   })
   filterMode.value = 'custom'
   searchQuery.value = ''
@@ -308,8 +303,7 @@ function handleCreatePrompt(): void {
 }
 
 function handleDuplicatePrompt(): void {
-  if (!selectedPrompt.value)
-    return
+  if (!selectedPrompt.value) return
   flushPendingPromptChanges()
   const suffix = t('settings.intelligence.promptDuplicateSuffix')
   const name = `${selectedPrompt.value.name} ${suffix}`.trim()
@@ -317,7 +311,7 @@ function handleDuplicatePrompt(): void {
     name,
     category: selectedPrompt.value.category ?? '',
     description: selectedPrompt.value.description ?? '',
-    content: selectedPrompt.value.content,
+    content: selectedPrompt.value.content
   })
   filterMode.value = 'custom'
   selectedPromptId.value = newId
@@ -325,19 +319,16 @@ function handleDuplicatePrompt(): void {
 }
 
 function persistPrompt(showSuccessToast: boolean, showErrorToast: boolean = true): boolean {
-  if (!selectedPrompt.value || !isCustomEditable.value)
-    return false
+  if (!selectedPrompt.value || !isCustomEditable.value) return false
   const ok = promptManager.updateCustomPrompt(selectedPrompt.value.id, {
     name: promptDraft.name,
     category: promptDraft.category,
     description: promptDraft.description,
-    content: promptDraft.content,
+    content: promptDraft.content
   })
   if (ok) {
-    if (showSuccessToast)
-      toast.success(t('settings.intelligence.promptSaveSuccess'))
-  }
-  else if (showErrorToast) {
+    if (showSuccessToast) toast.success(t('settings.intelligence.promptSaveSuccess'))
+  } else if (showErrorToast) {
     toast.error(t('settings.intelligence.promptSaveFailed'))
   }
   return ok
@@ -348,8 +339,7 @@ function handleSavePrompt(): void {
 }
 
 function scheduleAutoSave(): void {
-  if (!selectedPrompt.value || !isCustomEditable.value || isApplyingDraft)
-    return
+  if (!selectedPrompt.value || !isCustomEditable.value || isApplyingDraft) return
   autoSaveStatus.value = 'pending'
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer)
@@ -384,19 +374,16 @@ function runAutoSave(): void {
 watch(
   () => ({ ...promptDraft }),
   () => {
-    if (isApplyingDraft || !isCustomEditable.value)
-      return
+    if (isApplyingDraft || !isCustomEditable.value) return
     scheduleAutoSave()
   },
-  { deep: true },
+  { deep: true }
 )
 
 function handleDeletePrompt(): void {
-  if (!selectedPrompt.value || !isCustomEditable.value)
-    return
+  if (!selectedPrompt.value || !isCustomEditable.value) return
   flushPendingPromptChanges()
-  if (!window.confirm(t('settings.intelligence.promptDeleteConfirm')))
-    return
+  if (!window.confirm(t('settings.intelligence.promptDeleteConfirm'))) return
   const deletedId = selectedPrompt.value.id
   const deleted = promptManager.deleteCustomPrompt(deletedId)
   if (!deleted) {
@@ -404,18 +391,16 @@ function handleDeletePrompt(): void {
     return
   }
   toast.success(t('settings.intelligence.promptDeleteSuccess'))
-  const next = visiblePrompts.value.find(prompt => prompt.id !== deletedId)
+  const next = visiblePrompts.value.find((prompt) => prompt.id !== deletedId)
   selectedPromptId.value = next?.id ?? orderedPrompts.value[0]?.id ?? null
 }
 
 async function handleCopyContent(): Promise<void> {
-  if (!selectedPrompt.value)
-    return
+  if (!selectedPrompt.value) return
   try {
     await navigator.clipboard.writeText(selectedPrompt.value.content)
     toast.success(t('settings.intelligence.promptCopySuccess'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[PromptManager] Failed to copy prompt', error)
   }
 }
@@ -427,19 +412,16 @@ function triggerImport(): void {
 async function handleImport(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  if (!file)
-    return
+  if (!file) return
   try {
     const text = await file.text()
     const payload = JSON.parse(text)
     const imported = promptManager.importPrompts(payload)
     toast.success(t('settings.intelligence.promptImportSuccess', { count: imported }))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[PromptManager] Failed to import prompts', error)
     toast.error(t('settings.intelligence.promptImportFailed'))
-  }
-  finally {
+  } finally {
     input.value = ''
   }
 }
@@ -589,7 +571,7 @@ onBeforeUnmount(() => {
                 type="text"
                 :placeholder="t('settings.intelligence.promptNamePlaceholder')"
                 :disabled="isBuiltinSelected"
-              >
+              />
             </TuffBlockSlot>
 
             <TuffBlockSlot
@@ -606,7 +588,7 @@ onBeforeUnmount(() => {
                 type="text"
                 :placeholder="t('settings.intelligence.promptCategoryPlaceholder')"
                 :disabled="isBuiltinSelected"
-              >
+              />
             </TuffBlockSlot>
 
             <TuffBlockSlot
@@ -656,11 +638,7 @@ onBeforeUnmount(() => {
                 active-icon="i-carbon-function-math"
               >
                 <select v-model="testCapabilityId" class="prompt-inline-input">
-                  <option
-                    v-for="cap in capabilityList"
-                    :key="cap.id"
-                    :value="cap.id"
-                  >
+                  <option v-for="cap in capabilityList" :key="cap.id" :value="cap.id">
                     {{ cap.id }}
                   </option>
                 </select>
@@ -676,10 +654,7 @@ onBeforeUnmount(() => {
                 @test="handlePromptTest"
               />
 
-              <CapabilityTestResult
-                v-if="promptTestResult"
-                :result="promptTestResult"
-              />
+              <CapabilityTestResult v-if="promptTestResult" :result="promptTestResult" />
             </div>
           </TuffGroupBlock>
 
@@ -795,7 +770,7 @@ onBeforeUnmount(() => {
       type="file"
       accept="application/json"
       @change="handleImport"
-    >
+    />
   </div>
 </template>
 

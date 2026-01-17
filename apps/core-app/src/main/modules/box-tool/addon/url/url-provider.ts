@@ -26,14 +26,20 @@ class URLProvider implements ISearchProvider<ProviderContext> {
   readonly priority = 'deferred' as const
   readonly expectedDuration = 100
 
-  private readonly URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/i
-  private installedBrowsersCache:
-    | Array<{ id: string; name: string; bundleId: string; path: string; icon: string }>
-    | null = null
+  private readonly URL_REGEX = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*$/i
+  private installedBrowsersCache: Array<{
+    id: string
+    name: string
+    bundleId: string
+    path: string
+    icon: string
+  }> | null = null
+
   private installedBrowsersCachedAt = 0
-  private installedBrowsersPromise:
-    | Promise<Array<{ id: string; name: string; bundleId: string; path: string; icon: string }>>
-    | null = null
+  private installedBrowsersPromise: Promise<
+    Array<{ id: string; name: string; bundleId: string; path: string; icon: string }>
+  > | null = null
+
   private readonly installedBrowsersCacheTtlMs = 5 * 60 * 1000
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
@@ -154,7 +160,10 @@ class URLProvider implements ISearchProvider<ProviderContext> {
     }>
   > {
     const now = Date.now()
-    if (this.installedBrowsersCache && now - this.installedBrowsersCachedAt < this.installedBrowsersCacheTtlMs) {
+    if (
+      this.installedBrowsersCache &&
+      now - this.installedBrowsersCachedAt < this.installedBrowsersCacheTtlMs
+    ) {
       return this.installedBrowsersCache
     }
 

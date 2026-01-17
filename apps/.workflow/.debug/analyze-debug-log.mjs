@@ -99,7 +99,8 @@ const bySection = groupBy(h1Sections.map(e => ({ ...e, section: e?.data?.section
 console.log('\n== H1 section timing ==')
 for (const [section, logs] of Array.from(bySection.entries())) {
   const { max } = maxOf(logs, e => Number(e?.data?.durationMs))
-  if (!Number.isFinite(max)) continue
+  if (!Number.isFinite(max))
+    continue
   console.log(`- ${section}: max=${Math.round(max)}ms count=${logs.length}`)
 }
 

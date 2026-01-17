@@ -13,7 +13,7 @@ export type DivisionBoxOpenRequest = DivisionBoxConfig & {
 
 export type DivisionBoxOpenResponse = IPCResponse<SessionInfo>
 
-export type DivisionBoxCloseRequest = {
+export interface DivisionBoxCloseRequest {
   sessionId: string
   options?: CloseOptions
   _sdkapi?: number
@@ -21,7 +21,7 @@ export type DivisionBoxCloseRequest = {
 
 export type DivisionBoxCloseResponse = IPCResponse<{ success: boolean }>
 
-export type DivisionBoxGetStateRequest = {
+export interface DivisionBoxGetStateRequest {
   sessionId: string
   key?: string
   _sdkapi?: number
@@ -29,7 +29,7 @@ export type DivisionBoxGetStateRequest = {
 
 export type DivisionBoxGetStateResponse = IPCResponse<any>
 
-export type DivisionBoxUpdateStateRequest = {
+export interface DivisionBoxUpdateStateRequest {
   sessionId: string
   key: string
   value: any
@@ -38,7 +38,7 @@ export type DivisionBoxUpdateStateRequest = {
 
 export type DivisionBoxUpdateStateResponse = IPCResponse<{ success: boolean }>
 
-export type DivisionBoxGetActiveSessionsRequest = {
+export interface DivisionBoxGetActiveSessionsRequest {
   _sdkapi?: number
 }
 
@@ -46,16 +46,16 @@ export type DivisionBoxGetActiveSessionsResponse = IPCResponse<SessionInfo[]>
 
 export type DivisionBoxStateChangedPayload = StateChangeEvent
 
-export type DivisionBoxSessionDestroyedPayload = { sessionId: string }
+export interface DivisionBoxSessionDestroyedPayload { sessionId: string }
 
-export type DivisionBoxTogglePinRequest = {
+export interface DivisionBoxTogglePinRequest {
   sessionId: string
   _sdkapi?: number
 }
 
 export type DivisionBoxTogglePinResponse = IPCResponse<{ isPinned: boolean }>
 
-export type DivisionBoxSetOpacityRequest = {
+export interface DivisionBoxSetOpacityRequest {
   sessionId: string
   opacity: number
   _sdkapi?: number
@@ -63,14 +63,14 @@ export type DivisionBoxSetOpacityRequest = {
 
 export type DivisionBoxSetOpacityResponse = IPCResponse<{ opacity: number }>
 
-export type DivisionBoxToggleDevToolsRequest = {
+export interface DivisionBoxToggleDevToolsRequest {
   sessionId: string
   _sdkapi?: number
 }
 
 export type DivisionBoxToggleDevToolsResponse = IPCResponse<{ isOpen: boolean }>
 
-export type DivisionBoxGetWindowStateRequest = {
+export interface DivisionBoxGetWindowStateRequest {
   sessionId: string
   _sdkapi?: number
 }
@@ -81,7 +81,7 @@ export type DivisionBoxGetWindowStateResponse = IPCResponse<{
   isDevToolsOpen: boolean
 }>
 
-export type DivisionBoxInputChangeRequest = {
+export interface DivisionBoxInputChangeRequest {
   sessionId: string
   input: string
   query: any
@@ -90,7 +90,7 @@ export type DivisionBoxInputChangeRequest = {
 
 export type DivisionBoxInputChangeResponse = IPCResponse<{ received: boolean }>
 
-export type DivisionBoxFlowTriggerRequest = {
+export interface DivisionBoxFlowTriggerRequest {
   targetId: string
   payload: FlowPayload
   _sdkapi?: number

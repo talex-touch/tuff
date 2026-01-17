@@ -9,8 +9,8 @@ import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 import PluginInfo from '~/components/plugin/PluginInfo.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
-import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 import { appSetting } from '~/modules/channel/storage'
+import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 import PluginNew from './plugin/PluginNew.vue'
 
 const { t } = useI18n()
@@ -19,7 +19,7 @@ const { plugins, curSelect, selectPlugin } = usePluginSelection()
 const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
 const visiblePlugins = computed(() => {
   if (developerMode.value) return plugins.value
-  return plugins.value.filter(p => !p.meta?.internal)
+  return plugins.value.filter((p) => !p.meta?.internal)
 })
 
 const drawerVisible = ref(false)

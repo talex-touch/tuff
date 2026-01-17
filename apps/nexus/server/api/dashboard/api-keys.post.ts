@@ -12,17 +12,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const validScopes = ['plugin:publish', 'plugin:read', 'account:read']
-  const keyScopes = Array.isArray(scopes) 
+  const keyScopes = Array.isArray(scopes)
     ? scopes.filter(s => validScopes.includes(s))
     : ['plugin:publish']
 
-  const expiryDays = typeof expiresInDays === 'number' && expiresInDays > 0 
-    ? Math.min(expiresInDays, 365) 
+  const expiryDays = typeof expiresInDays === 'number' && expiresInDays > 0
+    ? Math.min(expiresInDays, 365)
     : undefined
 
   const apiKey = await createApiKey(event, userId, name.trim(), keyScopes, expiryDays)
 
-  return { 
+  return {
     key: apiKey,
     message: 'API key created. Copy the secret key now - it will not be shown again.',
   }

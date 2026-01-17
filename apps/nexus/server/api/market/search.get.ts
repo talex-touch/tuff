@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
     .map((plugin) => {
       const versions = plugin.versions ?? []
       const latest = versions.find(v => v.id === plugin.latestVersionId) ?? versions[0]
-      if (!latest) return null
+      if (!latest)
+        return null
 
       return {
         ...plugin,

@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
-import { nextTick } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { nextTick } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 
 interface UseFocusOptions {

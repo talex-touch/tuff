@@ -210,10 +210,10 @@ function getShortcutLabel(id: string): string {
       default-icon="i-carbon-list"
       active-icon="i-carbon-list"
     >
-      <TSelectItem :model-value="5">5</TSelectItem>
-      <TSelectItem :model-value="10">10</TSelectItem>
-      <TSelectItem :model-value="15">15</TSelectItem>
-      <TSelectItem :model-value="20">20</TSelectItem>
+      <TSelectItem :model-value="5"> 5 </TSelectItem>
+      <TSelectItem :model-value="10"> 10 </TSelectItem>
+      <TSelectItem :model-value="15"> 15 </TSelectItem>
+      <TSelectItem :model-value="20"> 20 </TSelectItem>
     </TuffBlockSelect>
   </TuffGroupBlock>
 </template>

@@ -6,8 +6,12 @@
     <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="14">
       <template #header>
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-          <div style="font-weight: 600;">Card title</div>
-          <TxButton size="small" variant="text">Action</TxButton>
+          <div style="font-weight: 600;">
+            Card title
+          </div>
+          <TxButton size="small" variant="text">
+            Action
+          </TxButton>
         </div>
       </template>
 
@@ -17,8 +21,12 @@
 
       <template #footer>
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
-          <TxButton size="small" variant="outline">Cancel</TxButton>
-          <TxButton size="small" variant="primary">Confirm</TxButton>
+          <TxButton size="small" variant="outline">
+            Cancel
+          </TxButton>
+          <TxButton size="small" variant="primary">
+            Confirm
+          </TxButton>
         </div>
       </template>
     </TxCard>

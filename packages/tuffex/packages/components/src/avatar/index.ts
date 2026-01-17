@@ -1,7 +1,7 @@
+import type { AvatarEmits, AvatarGroupProps, AvatarProps, AvatarSize, AvatarStatus } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
 import TxAvatarComponent from './src/TxAvatar.vue'
 import TxAvatarGroupComponent from './src/TxAvatarGroup.vue'
-import { withInstall } from '../../../utils/withInstall'
-import type { AvatarEmits, AvatarGroupProps, AvatarProps, AvatarSize, AvatarStatus } from './src/types'
 
 const TxAvatar = withInstall(TxAvatarComponent)
 const TxAvatarGroup = withInstall(TxAvatarGroupComponent)

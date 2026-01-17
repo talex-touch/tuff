@@ -1,5 +1,5 @@
-import { clerkClient } from '@clerk/nuxt/server'
 import type { H3Event } from 'h3'
+import { clerkClient } from '@clerk/nuxt/server'
 import { createError } from 'h3'
 
 export interface AuthContext {
@@ -14,7 +14,8 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
   let auth: any
   try {
     auth = await authFn()
-  } catch (error: any) {
+  }
+  catch (error: any) {
     throw createError({ statusCode: 500, statusMessage: error?.message || 'Clerk auth failed.' })
   }
 
@@ -32,14 +33,16 @@ export async function requireAdmin(event: H3Event) {
   let client: any
   try {
     client = clerkClient(event)
-  } catch (error: any) {
+  }
+  catch (error: any) {
     throw createError({ statusCode: 500, statusMessage: error?.message || 'Clerk client initialization failed.' })
   }
 
   let user: any
   try {
     user = await client.users.getUser(userId)
-  } catch (error: any) {
+  }
+  catch (error: any) {
     const status = typeof error?.status === 'number' ? error.status : undefined
     const statusCode = status === 404 ? 401 : status
 

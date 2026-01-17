@@ -253,7 +253,7 @@ export function useTuffHeroAnimation(options: UseTuffHeroAnimationOptions = {}) 
         {
           borderRadius: isWideViewport ? '3rem' : '1.5rem',
           duration: 1,
-          ease: 'power2.out'
+          ease: 'power2.out',
         },
         0,
       )

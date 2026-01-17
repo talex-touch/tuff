@@ -12,7 +12,7 @@ import type {
   HistogramPayload,
   PluginStats,
   TrackDurationPayload,
-  TrackEventPayload,
+  TrackEventPayload
 } from '@talex-touch/utils/analytics'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type {
@@ -23,26 +23,28 @@ import type {
   PerformanceHistoryEntry,
   PerformanceSummary,
   ReportMetricsRequest,
-  ReportMetricsResponse,
+  ReportMetricsResponse
 } from '@talex-touch/utils/transport/events/types'
-import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
-import { app } from 'electron'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { PerfSummary } from '../../utils/perf-monitor'
+import type { AnalyticsMessageStore } from './message-store'
 import type { StartupHistory, StartupMetrics } from './types'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { app } from 'electron'
 import { getStartupAnalytics } from '.'
 import { setIpcTracer } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
-import { setPerfSummaryReporter, type PerfSummary } from '../../utils/perf-monitor'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { setPerfSummaryReporter } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
-import { getConfig } from '../storage'
 import { pluginModule } from '../plugin/plugin-module'
-import { getAnalyticsMessageStore, type AnalyticsMessageStore } from './message-store'
+import { getConfig } from '../storage'
 import { SystemSampler } from './collectors/system-sampler'
 import { AnalyticsCore } from './core/analytics-core'
+import { getAnalyticsMessageStore } from './message-store'
 import { DbStore } from './storage/db-store'
 import { DEFAULT_RETENTION_MS } from './storage/memory-store'
 
@@ -56,7 +58,7 @@ const ANALYTICS_CLEANUP_TASK_ID = 'analytics.cleanup'
 
 const pollingService = PollingService.getInstance()
 
-type QueuedMessageReport = {
+interface QueuedMessageReport {
   key: string
   message: AnalyticsMessage
   createdAt: number
@@ -84,27 +86,22 @@ export class AnalyticsModule extends BaseModule {
   constructor() {
     super(AnalyticsModule.key, {
       create: true,
-      dirName: 'analytics',
+      dirName: 'analytics'
     })
   }
 
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     this.dbStore = new DbStore(databaseModule.getDb())
     this.core = new AnalyticsCore({ dbStore: this.dbStore })
-    this.sampler = new SystemSampler(sample => this.core.recordSystemSample(sample))
+    this.sampler = new SystemSampler((sample) => this.core.recordSystemSample(sample))
     this.messageStore = getAnalyticsMessageStore()
     if (this.messageStore) {
-      this.disposers.push(
-        this.messageStore.onMessage(message => this.reportMessage(message)),
-      )
+      this.disposers.push(this.messageStore.onMessage((message) => this.reportMessage(message)))
     }
-    setPerfSummaryReporter(summary => this.handlePerfSummary(summary))
+    setPerfSummaryReporter((summary) => this.handlePerfSummary(summary))
 
     const channel = ((ctx.app as any)?.channel ?? ($app as any)?.channel) as any
-    this.transport = getTuffTransportMain(
-      channel,
-      (channel as any)?.keyManager ?? channel,
-    )
+    this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
 
     setIpcTracer((_eventName, durationMs, success) => {
       this.core.trackIPC(durationMs, success)
@@ -132,8 +129,7 @@ export class AnalyticsModule extends BaseModule {
     for (const dispose of this.disposers) {
       try {
         dispose()
-      }
-      catch {
+      } catch {
         // ignore cleanup errors
       }
     }
@@ -141,38 +137,39 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private registerHandlers(): void {
-    if (!this.transport)
-      return
+    if (!this.transport) return
 
     this.disposers.push(
       this.transport.on<AnalyticsSnapshotRequest, AnalyticsSnapshot>(
         AppEvents.analytics.getSnapshot,
-        ({ windowType }) => this.core.getSnapshot(windowType ?? '1m'),
-      ),
+        ({ windowType }) => this.core.getSnapshot(windowType ?? '1m')
+      )
     )
 
     this.disposers.push(
       this.transport.on<AnalyticsRangeRequest, AnalyticsSnapshot[]>(
         AppEvents.analytics.getRange,
-        payload => this.core.getRange({
-          windowType: payload?.windowType ?? '1m',
-          from: payload?.from ?? 0,
-          to: payload?.to ?? Date.now(),
-        }),
-      ),
+        (payload) =>
+          this.core.getRange({
+            windowType: payload?.windowType ?? '1m',
+            from: payload?.from ?? 0,
+            to: payload?.to ?? Date.now()
+          })
+      )
     )
 
     this.disposers.push(
       this.transport.on<AnalyticsExportPayload, AnalyticsExportResult>(
         AppEvents.analytics.export,
-        payload => this.core.exportSnapshots({
-          windowType: payload?.windowType ?? '1m',
-          from: payload?.from ?? 0,
-          to: payload?.to ?? Date.now(),
-          format: payload?.format,
-          dimensions: payload?.dimensions,
-        }),
-      ),
+        (payload) =>
+          this.core.exportSnapshots({
+            windowType: payload?.windowType ?? '1m',
+            from: payload?.from ?? 0,
+            to: payload?.to ?? Date.now(),
+            format: payload?.format,
+            dimensions: payload?.dimensions
+          })
+      )
     )
 
     this.disposers.push(
@@ -181,22 +178,22 @@ export class AnalyticsModule extends BaseModule {
         ({ enabled }) => {
           this.core.setReporting(enabled)
           return { enabled }
-        },
-      ),
+        }
+      )
     )
 
     this.disposers.push(
       this.transport.on<AnalyticsMessageListRequest, AnalyticsMessage[]>(
         AppEvents.analytics.messages.list,
-        payload => this.messageStore?.list(payload) ?? [],
-      ),
+        (payload) => this.messageStore?.list(payload) ?? []
+      )
     )
 
     this.disposers.push(
       this.transport.on<AnalyticsMessageUpdateRequest, AnalyticsMessage | null>(
         AppEvents.analytics.messages.mark,
-        payload => this.messageStore?.updateStatus(payload.id, payload.status) ?? null,
-      ),
+        (payload) => this.messageStore?.updateStatus(payload.id, payload.status) ?? null
+      )
     )
 
     this.disposers.push(
@@ -204,8 +201,7 @@ export class AnalyticsModule extends BaseModule {
         AppEvents.analytics.sdk.trackEvent,
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
-          if (!pluginName)
-            return { ok: true }
+          if (!pluginName) return { ok: true }
           this.core.trackPluginEvent(pluginName, payload.featureId, payload.metadata)
           await this.dbStore?.insertPluginEvent({
             pluginName,
@@ -213,11 +209,11 @@ export class AnalyticsModule extends BaseModule {
             featureId: payload.featureId,
             eventType: payload.eventName,
             metadata: payload.metadata,
-            timestamp: Date.now(),
+            timestamp: Date.now()
           })
           return { ok: true }
-        },
-      ),
+        }
+      )
     )
 
     this.disposers.push(
@@ -225,8 +221,7 @@ export class AnalyticsModule extends BaseModule {
         AppEvents.analytics.sdk.trackDuration,
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
-          if (!pluginName)
-            return { ok: true }
+          if (!pluginName) return { ok: true }
           this.core.trackPluginDuration(pluginName, payload.featureId, payload.durationMs)
           await this.dbStore?.insertPluginEvent({
             pluginName,
@@ -234,11 +229,11 @@ export class AnalyticsModule extends BaseModule {
             featureId: payload.featureId,
             eventType: payload.operationName,
             metadata: { durationMs: payload.durationMs },
-            timestamp: Date.now(),
+            timestamp: Date.now()
           })
           return { ok: true }
-        },
-      ),
+        }
+      )
     )
 
     this.disposers.push(
@@ -254,36 +249,34 @@ export class AnalyticsModule extends BaseModule {
               topFeatures: [],
               counters: {},
               gauges: {},
-              histograms: {},
+              histograms: {}
             }
           }
           return this.core.getPluginStats(pluginName)
-        },
-      ),
+        }
+      )
     )
 
     this.disposers.push(
-      this.transport.on<{ pluginName?: string, featureId: string }, FeatureStats>(
+      this.transport.on<{ pluginName?: string; featureId: string }, FeatureStats>(
         AppEvents.analytics.sdk.getFeatureStats,
         (payload) => {
           const pluginName = this.resolvePluginName(payload)
-          if (!pluginName)
-            return { count: 0, avgDuration: 0 }
+          if (!pluginName) return { count: 0, avgDuration: 0 }
           return this.core.getPluginFeatureStats(pluginName, payload.featureId)
-        },
-      ),
+        }
+      )
     )
 
     this.disposers.push(
-      this.transport.on<{ pluginName?: string, limit?: number }, Array<{ id: string, count: number }>>(
-        AppEvents.analytics.sdk.getTopFeatures,
-        (payload) => {
-          const pluginName = this.resolvePluginName(payload)
-          if (!pluginName)
-            return []
-          return this.core.getTopPluginFeatures(pluginName, payload.limit)
-        },
-      ),
+      this.transport.on<
+        { pluginName?: string; limit?: number },
+        Array<{ id: string; count: number }>
+      >(AppEvents.analytics.sdk.getTopFeatures, (payload) => {
+        const pluginName = this.resolvePluginName(payload)
+        if (!pluginName) return []
+        return this.core.getTopPluginFeatures(pluginName, payload.limit)
+      })
     )
 
     this.disposers.push(
@@ -291,19 +284,18 @@ export class AnalyticsModule extends BaseModule {
         AppEvents.analytics.sdk.incrementCounter,
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
-          if (!pluginName)
-            return { ok: true }
+          if (!pluginName) return { ok: true }
           this.core.incrementPluginCounter(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
             eventType: 'counter',
             metadata: { name: payload.name, value: payload.value },
-            timestamp: Date.now(),
+            timestamp: Date.now()
           })
           return { ok: true }
-        },
-      ),
+        }
+      )
     )
 
     this.disposers.push(
@@ -311,19 +303,18 @@ export class AnalyticsModule extends BaseModule {
         AppEvents.analytics.sdk.setGauge,
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
-          if (!pluginName)
-            return { ok: true }
+          if (!pluginName) return { ok: true }
           this.core.setPluginGauge(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
             eventType: 'gauge',
             metadata: { name: payload.name, value: payload.value },
-            timestamp: Date.now(),
+            timestamp: Date.now()
           })
           return { ok: true }
-        },
-      ),
+        }
+      )
     )
 
     this.disposers.push(
@@ -331,43 +322,39 @@ export class AnalyticsModule extends BaseModule {
         AppEvents.analytics.sdk.recordHistogram,
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
-          if (!pluginName)
-            return { ok: true }
+          if (!pluginName) return { ok: true }
           this.core.recordPluginHistogram(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
             eventType: 'histogram',
             metadata: { name: payload.name, value: payload.value },
-            timestamp: Date.now(),
+            timestamp: Date.now()
           })
           return { ok: true }
-        },
-      ),
+        }
+      )
     )
 
     // Compatibility handlers for existing analytics events
     const startupAnalytics = getStartupAnalytics()
 
     this.disposers.push(
-      this.transport.on<void, CurrentMetrics>(
-        AppEvents.analytics.getCurrent,
-        () => this.toCurrentMetrics(startupAnalytics.getCurrentMetrics()),
-      ),
+      this.transport.on<void, CurrentMetrics>(AppEvents.analytics.getCurrent, () =>
+        this.toCurrentMetrics(startupAnalytics.getCurrentMetrics())
+      )
     )
 
     this.disposers.push(
-      this.transport.on<void, PerformanceHistoryEntry[]>(
-        AppEvents.analytics.getHistory,
-        () => this.toHistory(startupAnalytics.getHistory()),
-      ),
+      this.transport.on<void, PerformanceHistoryEntry[]>(AppEvents.analytics.getHistory, () =>
+        this.toHistory(startupAnalytics.getHistory())
+      )
     )
 
     this.disposers.push(
-      this.transport.on<void, PerformanceSummary>(
-        AppEvents.analytics.getSummary,
-        () => this.toSummary(startupAnalytics.getHistory()),
-      ),
+      this.transport.on<void, PerformanceSummary>(AppEvents.analytics.getSummary, () =>
+        this.toSummary(startupAnalytics.getHistory())
+      )
     )
 
     this.disposers.push(
@@ -377,35 +364,33 @@ export class AnalyticsModule extends BaseModule {
           try {
             await startupAnalytics.reportMetrics(endpoint)
             return { success: true }
-          }
-          catch (error) {
+          } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             analyticsLog.error('Failed to report startup metrics', { error: message })
             return { success: false }
           }
-        },
-      ),
+        }
+      )
     )
   }
 
   private toCurrentMetrics(startup: StartupMetrics | null): CurrentMetrics {
-    if (!startup)
-      return {}
+    if (!startup) return {}
 
     return {
       startupTime: startup.totalStartupTime,
       memoryUsage: startup.renderer?.domContentLoaded,
-      cpuUsage: undefined,
+      cpuUsage: undefined
     }
   }
 
   private toHistory(history: StartupHistory): PerformanceHistoryEntry[] {
     const entries = history?.entries ?? []
-    return entries.map(item => ({
+    return entries.map((item) => ({
       timestamp: item.timestamp,
       metrics: {
-        startupTime: item.totalStartupTime,
-      },
+        startupTime: item.totalStartupTime
+      }
     }))
   }
 
@@ -416,40 +401,43 @@ export class AnalyticsModule extends BaseModule {
     }
 
     const total = entries.reduce((acc, cur) => acc + (cur.totalStartupTime || 0), 0)
-    const timestamps = entries.map(item => item.timestamp)
+    const timestamps = entries.map((item) => item.timestamp)
 
     return {
       sampleCount: entries.length,
       avgStartupTime: total / entries.length,
       timeRange: {
         start: Math.min(...timestamps),
-        end: Math.max(...timestamps),
-      },
+        end: Math.max(...timestamps)
+      }
     }
   }
 
   private resolvePluginName(
     payload: { pluginName?: string },
-    context?: { plugin?: { name?: string } },
+    context?: { plugin?: { name?: string } }
   ): string | undefined {
     return this.resolvePluginInfo(payload, context).pluginName
   }
 
   private resolvePluginInfo(
-    payload: { pluginName?: string, pluginVersion?: string },
-    context?: { plugin?: { name?: string } },
-  ): { pluginName?: string, pluginVersion?: string } {
+    payload: { pluginName?: string; pluginVersion?: string },
+    context?: { plugin?: { name?: string } }
+  ): { pluginName?: string; pluginVersion?: string } {
     const pluginName = payload.pluginName || context?.plugin?.name
-    const pluginVersion = payload.pluginVersion
-      || (pluginName ? pluginModule.pluginManager?.getPluginByName(pluginName)?.version : undefined)
+    const pluginVersion =
+      payload.pluginVersion ||
+      (pluginName ? pluginModule.pluginManager?.getPluginByName(pluginName)?.version : undefined)
     return { pluginName, pluginVersion }
   }
 
-  private getMessageReportConfig(): { enabled: boolean, anonymous: boolean } {
-    const config = getConfig('sentry-config.json') as { enabled?: boolean, anonymous?: boolean } | undefined
+  private getMessageReportConfig(): { enabled: boolean; anonymous: boolean } {
+    const config = getConfig('sentry-config.json') as
+      | { enabled?: boolean; anonymous?: boolean }
+      | undefined
     return {
       enabled: true,
-      anonymous: config?.anonymous ?? true,
+      anonymous: config?.anonymous ?? true
     }
   }
 
@@ -460,8 +448,7 @@ export class AnalyticsModule extends BaseModule {
     }
     try {
       return `${getTelemetryApiBase()}/api/telemetry/messages`
-    }
-    catch {
+    } catch {
       return null
     }
   }
@@ -472,10 +459,10 @@ export class AnalyticsModule extends BaseModule {
     }
 
     const shouldReport =
-      summary.errorCount > 0
-      || summary.kinds.includes('ipc.no_handler')
-      || summary.kinds.includes('channel.send.timeout')
-      || summary.kinds.includes('channel.send.errorReply')
+      summary.errorCount > 0 ||
+      summary.kinds.includes('ipc.no_handler') ||
+      summary.kinds.includes('channel.send.timeout') ||
+      summary.kinds.includes('channel.send.errorReply')
 
     if (!shouldReport) {
       return
@@ -491,8 +478,8 @@ export class AnalyticsModule extends BaseModule {
         total: summary.total,
         errorCount: summary.errorCount,
         topEvents: summary.topEvents,
-        topSlow: summary.topSlow,
-      },
+        topSlow: summary.topSlow
+      }
     })
   }
 
@@ -510,7 +497,7 @@ export class AnalyticsModule extends BaseModule {
       existing.message.meta = {
         ...existing.message.meta,
         count: existing.count,
-        lastAt: now,
+        lastAt: now
       }
       return
     }
@@ -520,7 +507,7 @@ export class AnalyticsModule extends BaseModule {
       message,
       createdAt: now,
       attempts: 0,
-      count: 1,
+      count: 1
     }
 
     this.messageReportQueue.push(entry)
@@ -596,51 +583,51 @@ export class AnalyticsModule extends BaseModule {
             : {
                 ...entry.message.meta,
                 count: entry.count,
-                lastAt: entry.lastAttemptAt ?? entry.createdAt,
+                lastAt: entry.lastAttemptAt ?? entry.createdAt
               },
           status: entry.message.status,
           createdAt: entry.message.createdAt,
           platform: process.platform,
           version: app.getVersion(),
-          isAnonymous: config.anonymous,
-        })),
+          isAnonymous: config.anonymous
+        }))
       }
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       })
       if (!response.ok) {
         const text = await response.text().catch(() => '')
-        throw new Error(`Message report failed: ${response.status} ${response.statusText} ${text}`.trim())
+        throw new Error(
+          `Message report failed: ${response.status} ${response.statusText} ${text}`.trim()
+        )
       }
 
       for (const entry of batch) {
         this.messageReportIndex.delete(entry.key)
       }
       this.messageReportQueue = this.messageReportQueue.filter(
-        entry => !batch.some(done => done.key === entry.key),
+        (entry) => !batch.some((done) => done.key === entry.key)
       )
       this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
-    }
-    catch (error) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       for (const entry of batch) {
         entry.attempts += 1
         entry.lastAttemptAt = now
         entry.message.meta = {
           ...entry.message.meta,
-          lastError: errorMessage,
+          lastError: errorMessage
         }
       }
       this.messageReportBackoffMs = Math.min(
         this.messageReportBackoffMs * 2,
-        MESSAGE_REPORT_MAX_DELAY_MS,
+        MESSAGE_REPORT_MAX_DELAY_MS
       )
       analyticsLog.warn('Failed to report analytics messages', { error: errorMessage })
-    }
-    finally {
+    } finally {
       this.messageReportInFlight = false
       if (this.messageReportQueue.length > 0) {
         this.scheduleMessageReportFlush(this.messageReportBackoffMs, true)
@@ -650,12 +637,12 @@ export class AnalyticsModule extends BaseModule {
 
   private pruneMessageReportQueue(now: number): void {
     const cutoff = now - MESSAGE_REPORT_MAX_AGE_MS
-    const nextQueue = this.messageReportQueue.filter(entry => entry.createdAt >= cutoff)
+    const nextQueue = this.messageReportQueue.filter((entry) => entry.createdAt >= cutoff)
     if (nextQueue.length === this.messageReportQueue.length) {
       return
     }
     this.messageReportQueue = nextQueue
-    this.messageReportIndex = new Map(nextQueue.map(entry => [entry.key, entry]))
+    this.messageReportIndex = new Map(nextQueue.map((entry) => [entry.key, entry]))
   }
 
   private buildMessageReportKey(message: AnalyticsMessage): string {
@@ -663,20 +650,20 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private startCleanup(): void {
-    if (!this.dbStore)
-      return
+    if (!this.dbStore) return
     const run = () =>
-      this.dbStore?.cleanup(DEFAULT_RETENTION_MS, () => Date.now()).catch((error) => {
-        const message = error instanceof Error ? error.message : String(error)
-        analyticsLog.warn('Analytics DB cleanup failed', { error: message })
-      })
+      this.dbStore
+        ?.cleanup(DEFAULT_RETENTION_MS, () => Date.now())
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error)
+          analyticsLog.warn('Analytics DB cleanup failed', { error: message })
+        })
 
     run()
-    pollingService.register(
-      ANALYTICS_CLEANUP_TASK_ID,
-      () => run(),
-      { interval: 60 * 60 * 1000, unit: 'milliseconds' },
-    )
+    pollingService.register(ANALYTICS_CLEANUP_TASK_ID, () => run(), {
+      interval: 60 * 60 * 1000,
+      unit: 'milliseconds'
+    })
     pollingService.start()
   }
 

@@ -67,7 +67,9 @@ export async function checkPluginActiveUI(pluginName: string): Promise<PluginAct
       parts.push('CoreBox')
     }
     if (status.divisionBoxSessions.length > 0) {
-      parts.push(`DivisionBox (${status.divisionBoxSessions.length} session${status.divisionBoxSessions.length > 1 ? 's' : ''})`)
+      parts.push(
+        `DivisionBox (${status.divisionBoxSessions.length} session${status.divisionBoxSessions.length > 1 ? 's' : ''})`
+      )
     }
     status.description = parts.join(', ')
   }
@@ -109,7 +111,10 @@ export async function closePluginActiveUI(pluginName: string): Promise<boolean> 
         try {
           await divisionBoxManager.destroySession(session.sessionId)
         } catch (error) {
-          console.error(`[PluginUIUtils] Failed to destroy DivisionBox session ${session.sessionId}:`, error)
+          console.error(
+            `[PluginUIUtils] Failed to destroy DivisionBox session ${session.sessionId}:`,
+            error
+          )
           allClosed = false
         }
       }

@@ -1,7 +1,7 @@
 import { createError, readBody } from 'h3'
 import { requireAuth } from '../../../../utils/auth'
-import { getPluginBySlug } from '../../../../utils/pluginsStore'
 import { getPluginRatingSummary, upsertPluginRating } from '../../../../utils/pluginRatingStore'
+import { getPluginBySlug } from '../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const slug = event.context.params?.slug
@@ -37,4 +37,3 @@ export default defineEventHandler(async (event) => {
     rating,
   }
 })
-

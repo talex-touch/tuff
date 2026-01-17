@@ -1,5 +1,5 @@
-import process from 'node:process'
 import { dirname, resolve } from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'

@@ -14,7 +14,7 @@ export type RendererPerfReportKind =
   | 'ui.details.total'
   | 'ui.component.load'
 
-export type RendererPerfReport = {
+export interface RendererPerfReport {
   kind: RendererPerfReportKind
   eventName: string
   durationMs: number
@@ -28,8 +28,7 @@ export function reportPerfToMain(report: RendererPerfReport): void {
   try {
     const transport = useTuffTransport()
     void transport.send(AppEvents.analytics.perfReport, report as any).catch(() => {})
-  }
-  catch {
+  } catch {
     // ignore perf reporting failures
   }
 }

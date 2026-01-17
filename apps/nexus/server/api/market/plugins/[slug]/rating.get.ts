@@ -1,6 +1,6 @@
 import { createError } from 'h3'
-import { getPluginBySlug } from '../../../../utils/pluginsStore'
 import { getPluginRatingSummary } from '../../../../utils/pluginRatingStore'
+import { getPluginBySlug } from '../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const slug = event.context.params?.slug
@@ -25,4 +25,3 @@ export default defineEventHandler(async (event) => {
     rating,
   }
 })
-

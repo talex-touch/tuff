@@ -6,8 +6,7 @@ export class PluginRuntimeTracker {
   private readonly workerThreadIds = new Map<PluginName, Set<number>>()
 
   registerWorker(pluginName: string, worker: Worker): void {
-    if (!pluginName)
-      return
+    if (!pluginName) return
 
     const threadId = worker.threadId
     if (!this.workerThreadIds.has(pluginName)) {
@@ -19,12 +18,10 @@ export class PluginRuntimeTracker {
 
     worker.once('exit', () => {
       const set = this.workerThreadIds.get(pluginName)
-      if (!set)
-        return
+      if (!set) return
 
       set.delete(threadId)
-      if (set.size === 0)
-        this.workerThreadIds.delete(pluginName)
+      if (set.size === 0) this.workerThreadIds.delete(pluginName)
     })
   }
 
@@ -34,4 +31,3 @@ export class PluginRuntimeTracker {
 }
 
 export const pluginRuntimeTracker = new PluginRuntimeTracker()
-

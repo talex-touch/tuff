@@ -11,7 +11,7 @@ export type DownloadAddTaskRequest = DownloadRequest
 
 export type DownloadTaskPayload = DownloadTask
 
-export type DownloadOpResponse = {
+export interface DownloadOpResponse {
   success: boolean
   error?: string
 }
@@ -20,7 +20,7 @@ export type DownloadAddTaskResponse = DownloadOpResponse & {
   taskId?: string
 }
 
-export type DownloadTaskIdRequest = {
+export interface DownloadTaskIdRequest {
   taskId: string
 }
 
@@ -56,39 +56,39 @@ export type DownloadGetTempStatsResponse = DownloadOpResponse & {
   stats?: unknown
 }
 
-export type DownloadGetTasksByStatusRequest = {
+export interface DownloadGetTasksByStatusRequest {
   status: DownloadStatus
 }
 
-export type DownloadUpdatePriorityRequest = {
+export interface DownloadUpdatePriorityRequest {
   taskId: string
   priority: number
 }
 
-export type DownloadGetHistoryRequest = {
+export interface DownloadGetHistoryRequest {
   limit?: number
 }
 
-export type DownloadClearHistoryItemRequest = {
+export interface DownloadClearHistoryItemRequest {
   historyId: string
 }
 
-export type DownloadUpdateConfigRequest = {
+export interface DownloadUpdateConfigRequest {
   config: DownloadConfig
 }
 
-export type DownloadUpdateNotificationConfigRequest = {
+export interface DownloadUpdateNotificationConfigRequest {
   config: unknown
 }
 
-export type DownloadTaskRetryingPayload = {
+export interface DownloadTaskRetryingPayload {
   taskId: string
   attempt: number
   error: string
   delay: number
 }
 
-export type DownloadNotificationClickedPayload = {
+export interface DownloadNotificationClickedPayload {
   taskId: string
   action: string
 }

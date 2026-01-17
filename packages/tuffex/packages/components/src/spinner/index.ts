@@ -1,6 +1,6 @@
-import TxSpinner from './src/TxSpinner.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { SpinnerProps } from './src/types.ts'
+import { withInstall } from '../../../utils/withInstall'
+import TxSpinner from './src/TxSpinner.vue'
 
 const Spinner = withInstall(TxSpinner)
 

@@ -112,7 +112,7 @@ export interface StreamController {
    * Cancels the stream.
    * After cancellation, no more data/error/end callbacks will be invoked.
    */
-  cancel(): void
+  cancel: () => void
 
   /**
    * Whether the stream has been cancelled.
@@ -135,24 +135,24 @@ export interface StreamContext<TChunk> {
    * Emits a data chunk to the client.
    * @param chunk - The data to send
    */
-  emit(chunk: TChunk): void
+  emit: (chunk: TChunk) => void
 
   /**
    * Emits an error and closes the stream.
    * @param err - The error to send
    */
-  error(err: Error): void
+  error: (err: Error) => void
 
   /**
    * Signals successful completion of the stream.
    */
-  end(): void
+  end: () => void
 
   /**
    * Checks if the client has cancelled the stream.
    * @returns `true` if cancelled
    */
-  isCancelled(): boolean
+  isCancelled: () => boolean
 
   /**
    * Unique identifier for this stream.
@@ -290,7 +290,7 @@ export interface PluginKeyManager {
    * @param pluginName - Name of the plugin
    * @returns The encrypted key
    */
-  requestKey(pluginName: string): string
+  requestKey: (pluginName: string) => string
 
   /**
    * Revokes a previously issued key.
@@ -298,7 +298,7 @@ export interface PluginKeyManager {
    * @param key - The key to revoke
    * @returns `true` if successfully revoked
    */
-  revokeKey(key: string): boolean
+  revokeKey: (key: string) => boolean
 
   /**
    * Resolves a key to its plugin name.
@@ -306,7 +306,7 @@ export interface PluginKeyManager {
    * @param key - The encrypted key
    * @returns Plugin name or `undefined` if invalid
    */
-  resolveKey(key: string): string | undefined
+  resolveKey: (key: string) => string | undefined
 
   /**
    * Checks if a key is valid.
@@ -314,7 +314,7 @@ export interface PluginKeyManager {
    * @param key - The key to validate
    * @returns `true` if valid
    */
-  isValidKey(key: string): boolean
+  isValidKey: (key: string) => boolean
 }
 
 // ============================================================================
@@ -347,25 +347,15 @@ export interface ITuffTransport {
    * )
    * ```
    */
-  send<TReq, TRes>(
+  send: (<TReq, TRes>(
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
-    options?: SendOptions
-  ): Promise<TRes>
-
-  /**
-   * Sends a request with no payload.
-   *
-   * @typeParam TRes - Response payload type
-   * @param event - The TuffEvent to send
-   * @param options - Send options
-   * @returns Promise resolving to the response
-   */
-  send<TRes>(
+    options?: SendOptions,
+  ) => Promise<TRes>) & (<TRes>(
     event: TuffEvent<void, TRes>,
     payload?: void,
-    options?: SendOptions
-  ): Promise<TRes>
+    options?: SendOptions,
+  ) => Promise<TRes>)
 
   /**
    * Initiates a stream request.
@@ -392,11 +382,11 @@ export interface ITuffTransport {
    * controller.cancel()
    * ```
    */
-  stream<TReq, TChunk>(
+  stream: <TReq, TChunk>(
     event: TuffEvent<TReq, AsyncIterable<TChunk>>,
     payload: TReq,
-    options: StreamOptions<TChunk>
-  ): Promise<StreamController>
+    options: StreamOptions<TChunk>,
+  ) => Promise<StreamController>
 
   /**
    * Registers an event handler (for receiving messages from main process).
@@ -407,21 +397,21 @@ export interface ITuffTransport {
    * @param handler - Handler function
    * @returns Cleanup function to unregister
    */
-  on<TReq, TRes>(
+  on: <TReq, TRes>(
     event: TuffEvent<TReq, TRes>,
-    handler: (payload: TReq) => TRes | Promise<TRes>
-  ): () => void
+    handler: (payload: TReq) => TRes | Promise<TRes>,
+  ) => () => void
 
   /**
    * Forces immediate flush of all pending batch requests.
    * @returns Promise that resolves when all batches are flushed
    */
-  flush(): Promise<void>
+  flush: () => Promise<void>
 
   /**
    * Destroys the transport instance and cleans up resources.
    */
-  destroy(): void
+  destroy: () => void
 }
 
 /**
@@ -441,10 +431,10 @@ export interface ITuffTransportMain {
    * @param handler - Handler function
    * @returns Cleanup function to unregister
    */
-  on<TReq, TRes>(
+  on: <TReq, TRes>(
     event: TuffEvent<TReq, TRes>,
-    handler: (payload: TReq, context: HandlerContext) => TRes | Promise<TRes>
-  ): () => void
+    handler: (payload: TReq, context: HandlerContext) => TRes | Promise<TRes>,
+  ) => () => void
 
   /**
    * Registers a stream handler.
@@ -455,10 +445,10 @@ export interface ITuffTransportMain {
    * @param handler - Handler function
    * @returns Cleanup function to unregister
    */
-  onStream<TReq, TChunk>(
+  onStream: <TReq, TChunk>(
     event: TuffEvent<TReq, AsyncIterable<TChunk>>,
-    handler: (payload: TReq, context: StreamContext<TChunk>) => void | Promise<void>
-  ): () => void
+    handler: (payload: TReq, context: StreamContext<TChunk>) => void | Promise<void>,
+  ) => () => void
 
   /**
    * Sends a message to a specific window.
@@ -470,11 +460,11 @@ export interface ITuffTransportMain {
    * @param payload - Request payload
    * @returns Promise resolving to the response
    */
-  sendToWindow<TReq, TRes>(
+  sendToWindow: <TReq, TRes>(
     windowId: number,
     event: TuffEvent<TReq, TRes>,
-    payload: TReq
-  ): Promise<TRes>
+    payload: TReq,
+  ) => Promise<TRes>
 
   /**
    * Sends a message to a specific WebContents.
@@ -486,11 +476,11 @@ export interface ITuffTransportMain {
    * @param payload - Request payload
    * @returns Promise resolving to the response
    */
-  sendTo<TReq, TRes>(
+  sendTo: <TReq, TRes>(
     webContents: ElectronWebContents,
     event: TuffEvent<TReq, TRes>,
-    payload: TReq
-  ): Promise<TRes>
+    payload: TReq,
+  ) => Promise<TRes>
 
   /**
    * Sends a message to a plugin's renderer.
@@ -502,11 +492,11 @@ export interface ITuffTransportMain {
    * @param payload - Request payload
    * @returns Promise resolving to the response
    */
-  sendToPlugin<TReq, TRes>(
+  sendToPlugin: <TReq, TRes>(
     pluginName: string,
     event: TuffEvent<TReq, TRes>,
-    payload: TReq
-  ): Promise<TRes>
+    payload: TReq,
+  ) => Promise<TRes>
 
   /**
    * Broadcasts a message to all windows.
@@ -515,10 +505,10 @@ export interface ITuffTransportMain {
    * @param event - The TuffEvent to broadcast
    * @param payload - Request payload
    */
-  broadcast<TReq>(
+  broadcast: <TReq>(
     event: TuffEvent<TReq, void>,
-    payload: TReq
-  ): void
+    payload: TReq,
+  ) => void
 
   /**
    * Plugin key manager for security.

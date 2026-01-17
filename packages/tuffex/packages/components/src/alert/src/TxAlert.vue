@@ -1,40 +1,7 @@
-<template>
-  <div
-    :class="[
-      'tx-alert',
-      `tx-alert--${type}`,
-      { 'tx-alert--closable': closable }
-    ]"
-    role="alert"
-  >
-    <div class="tx-alert__icon" v-if="showIcon">
-      <component :is="iconComponent" />
-    </div>
-    
-    <div class="tx-alert__content">
-      <div class="tx-alert__title" v-if="title">
-        {{ title }}
-      </div>
-      <div class="tx-alert__message">
-        <slot>{{ message }}</slot>
-      </div>
-    </div>
-    
-    <button
-      v-if="closable"
-      class="tx-alert__close"
-      @click="handleClose"
-      aria-label="Close"
-    >
-      <TxIcon name="x" />
-    </button>
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { AlertType } from './types'
 import { computed } from 'vue'
 import { TxIcon } from '../../icon'
-import type { AlertType } from './types'
 
 interface Props {
   type?: AlertType
@@ -51,7 +18,7 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   type: 'info',
   closable: true,
-  showIcon: true
+  showIcon: true,
 })
 
 const emit = defineEmits<Emits>()
@@ -61,15 +28,47 @@ const iconComponent = computed(() => {
     success: 'check-circle',
     warning: 'alert-triangle',
     error: 'x-circle',
-    info: 'info'
+    info: 'info',
   }
   return iconMap[props.type]
 })
 
-const handleClose = () => {
+function handleClose() {
   emit('close')
 }
 </script>
+
+<template>
+  <div
+    class="tx-alert" :class="[
+      `tx-alert--${type}`,
+      { 'tx-alert--closable': closable },
+    ]"
+    role="alert"
+  >
+    <div v-if="showIcon" class="tx-alert__icon">
+      <component :is="iconComponent" />
+    </div>
+
+    <div class="tx-alert__content">
+      <div v-if="title" class="tx-alert__title">
+        {{ title }}
+      </div>
+      <div class="tx-alert__message">
+        <slot>{{ message }}</slot>
+      </div>
+    </div>
+
+    <button
+      v-if="closable"
+      class="tx-alert__close"
+      aria-label="Close"
+      @click="handleClose"
+    >
+      <TxIcon name="x" />
+    </button>
+  </div>
+</template>
 
 <style scoped>
 .tx-alert {

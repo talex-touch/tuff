@@ -66,12 +66,12 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
   const providersConfig = await plugin.storage.getFile('providers_config')
   const enabledProviders = providersConfig
     ? Object.entries(providersConfig)
-      .filter(([_id, config]) => config.enabled)
-      .map(([id, config]) => ({ id, ...config }))
+        .filter(([_id, config]) => config.enabled)
+        .map(([id, config]) => ({ id, ...config }))
     : [{ id: 'tuffintelligence', enabled: true }]
 
   const providersToShow = enabledProviders.length > 0 ? enabledProviders : [{ id: 'tuffintelligence', enabled: true }]
-  const pendingItems = providersToShow.map((p) => createPendingTranslationItem(textToTranslate, featureId, p.id, detectedLang, targetLang))
+  const pendingItems = providersToShow.map(p => createPendingTranslationItem(textToTranslate, featureId, p.id, detectedLang, targetLang))
   plugin.feature.pushItems(pendingItems)
 
   Promise.resolve().then(() => translateAndUpsertResults(textToTranslate, featureId, signal, nextSeq, providersToShow, detectedLang, targetLang))
@@ -88,8 +88,10 @@ function md5(string) {
 
 function formatOriginalSnippet(text, maxLen = 56) {
   const normalized = String(text ?? '').replace(/\s+/g, ' ').trim()
-  if (!normalized) return ''
-  if (normalized.length <= maxLen) return normalized
+  if (!normalized)
+    return ''
+  if (normalized.length <= maxLen)
+    return normalized
   return `${normalized.slice(0, maxLen)}…`
 }
 
@@ -186,8 +188,10 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
     }
 
     const runProvider = async (provider) => {
-      if (signal?.aborted) return
-      if (latestRequestSeqByFeature.get(featureId) !== requestSeq) return
+      if (signal?.aborted)
+        return
+      if (latestRequestSeqByFeature.get(featureId) !== requestSeq)
+        return
 
       let result = null
       switch (provider.id) {
@@ -255,8 +259,10 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
           return
       }
 
-      if (signal?.aborted) return
-      if (latestRequestSeqByFeature.get(featureId) !== requestSeq) return
+      if (signal?.aborted)
+        return
+      if (latestRequestSeqByFeature.get(featureId) !== requestSeq)
+        return
 
       if (!result) {
         upsertFeatureItem(buildFailedItem(provider.id, 'translation failed'))
@@ -302,7 +308,7 @@ async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
     const response = await client.invoke('text.translate', payload)
     const translatedText = response?.result
     if (typeof translatedText !== 'string') {
-      throw new Error('Invalid intelligence translate result')
+      throw new TypeError('Invalid intelligence translate result')
     }
 
     return {
@@ -858,7 +864,7 @@ function createTranslationSearchItem(originalText, translationResult, featureId)
 
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
   const originalSnippet = formatOriginalSnippet(originalText)
-  
+
   // Ensure we always show the original text in subtitle
   const providerInfo = provider && model ? ` (${provider}/${model})` : ''
   const subtitle = `原文: ${originalSnippet || originalText} · ${serviceName}${providerInfo}: ${from || 'auto'} → ${to}`
@@ -1022,13 +1028,16 @@ async function translateAndPushResults(textToTranslate, featureId, signal) {
   const results = await Promise.allSettled(translationPromises)
 
   for (let i = 0; i < results.length; i++) {
-    if (signal?.aborted) return
-    if (latestRequestSeqByFeature.get(featureId) !== requestSeq) return
+    if (signal?.aborted)
+      return
+    if (latestRequestSeqByFeature.get(featureId) !== requestSeq)
+      return
 
     const provider = providersToUse[i]
     const settled = results[i]
 
-    if (!provider) continue
+    if (!provider)
+      continue
 
     if (settled.status === 'fulfilled' && settled.value) {
       const item = createTranslationSearchItem(textToTranslate, settled.value, featureId)
@@ -1089,7 +1098,8 @@ const pluginLifecycle = {
         if (signal) {
           if (signal.aborted) {
             controller.abort()
-          } else {
+          }
+          else {
             signal.addEventListener('abort', () => controller.abort(), { once: true })
           }
         }

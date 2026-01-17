@@ -23,7 +23,7 @@ const props = withDefaults(
     readonly: false,
     clearable: false,
     rows: 3,
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -73,8 +73,7 @@ defineExpose({
 
 <template>
   <div
-    :class="[
-      'tx-input fake-background',
+    class="tx-input fake-background" :class="[
       {
         'is-disabled': disabled,
         'is-readonly': readonly,
@@ -111,7 +110,7 @@ defineExpose({
 
     <span v-if="showClear" class="tx-input__clear" @click="handleClear">
       <svg viewBox="0 0 24 24" width="16" height="16">
-        <path fill="currentColor" d="M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z"/>
+        <path fill="currentColor" d="M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.95 4.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z" />
       </svg>
     </span>
 

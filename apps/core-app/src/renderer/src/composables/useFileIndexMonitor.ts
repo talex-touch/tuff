@@ -1,7 +1,10 @@
-import { ref } from 'vue'
-import type { FileIndexRebuildRequest, FileIndexRebuildResult } from '@talex-touch/utils/transport/events/types'
+import type {
+  FileIndexRebuildRequest,
+  FileIndexRebuildResult
+} from '@talex-touch/utils/transport/events/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { ref } from 'vue'
 
 /**
  * 文件索引监控 Composable
@@ -9,9 +12,9 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
  */
 export function useFileIndexMonitor() {
   const transport = useTuffTransport()
-  
+
   const indexProgress = ref<any>(null)
-  
+
   /**
    * 查询当前索引状态
    */
@@ -24,7 +27,7 @@ export function useFileIndexMonitor() {
       return null
     }
   }
-  
+
   /**
    * 查询电池电量
    */
@@ -55,12 +58,12 @@ export function useFileIndexMonitor() {
       return null
     }
   }
-  
+
   /**
    * 手动触发重建索引
    */
   const handleRebuild = async (
-    request?: FileIndexRebuildRequest,
+    request?: FileIndexRebuildRequest
   ): Promise<FileIndexRebuildResult> => {
     try {
       console.log('[FileIndexMonitor] Triggering manual index rebuild...')
@@ -81,7 +84,7 @@ export function useFileIndexMonitor() {
       throw error
     }
   }
-  
+
   /**
    * 订阅索引进度更新
    * 返回取消订阅的函数
@@ -116,7 +119,7 @@ export function useFileIndexMonitor() {
       controller?.cancel()
     }
   }
-  
+
   return {
     getIndexStatus,
     getBatteryLevel,

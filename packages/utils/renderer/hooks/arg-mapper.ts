@@ -36,7 +36,8 @@ declare global {
  * @returns Mapped command line arguments as key-value pairs
  */
 export function useArgMapper(args: string[] = process.argv): IArgMapperOptions {
-  if (window.$argMapper) return window.$argMapper
+  if (window.$argMapper)
+    return window.$argMapper
 
   const mapper: IArgMapperOptions = {}
   for (const arg of args) {

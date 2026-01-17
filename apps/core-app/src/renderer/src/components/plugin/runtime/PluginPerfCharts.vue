@@ -1,9 +1,13 @@
 <script lang="ts" setup name="PluginPerfCharts">
 import { TxCard } from '@talex-touch/tuffex'
 import { computed } from 'vue'
-import { usePluginRuntimeStats } from '~/composables/usePluginRuntimeStats'
+import {
+  formatBytesShort,
+  formatCompactNumber,
+  formatUptimeShort
+} from '~/components/plugin/runtime/format'
 import PluginSparkline from '~/components/plugin/runtime/PluginSparkline.vue'
-import { formatBytesShort, formatCompactNumber, formatUptimeShort } from '~/components/plugin/runtime/format'
+import { usePluginRuntimeStats } from '~/composables/usePluginRuntimeStats'
 
 const props = defineProps<{
   pluginName: string
@@ -14,16 +18,15 @@ const layoutMode = computed(() => props.layout ?? 'card')
 
 const { stats, history, lastUpdatedAt, error } = usePluginRuntimeStats(
   computed(() => props.pluginName),
-  { intervalMs: 1000, maxPoints: 90 },
+  { intervalMs: 1000, maxPoints: 90 }
 )
 
-const memorySeries = computed(() => history.value.map(p => p.memoryBytes))
-const cpuSeries = computed(() => history.value.map(p => p.cpuPercent))
-const workerSeries = computed(() => history.value.map(p => p.workerThreads))
+const memorySeries = computed(() => history.value.map((p) => p.memoryBytes))
+const cpuSeries = computed(() => history.value.map((p) => p.cpuPercent))
+const workerSeries = computed(() => history.value.map((p) => p.workerThreads))
 const requestRateSeries = computed(() => {
   const points = history.value
-  if (points.length === 0)
-    return []
+  if (points.length === 0) return []
   const rates: number[] = [0]
   for (let i = 1; i < points.length; i += 1) {
     rates.push(Math.max(0, points[i].requestCount - points[i - 1].requestCount))
@@ -38,27 +41,21 @@ const requestRate = computed(() => {
 
 const uptimeLabel = computed(() => {
   const v = stats.value?.uptimeMs
-  if (typeof v !== 'number')
-    return '--'
+  if (typeof v !== 'number') return '--'
   return formatUptimeShort(v)
 })
 
 const lastUpdatedAgeLabel = computed(() => {
   const updatedAt = lastUpdatedAt.value
-  if (!updatedAt)
-    return '--'
+  if (!updatedAt) return '--'
   const diff = Math.max(0, Date.now() - updatedAt)
-  if (diff < 1000)
-    return `${diff}ms`
+  if (diff < 1000) return `${diff}ms`
   return `${Math.round(diff / 1000)}s`
 })
 </script>
 
 <template>
-  <div
-    class="PluginPerfCharts"
-    :class="[`layout-${layoutMode}`]"
-  >
+  <div class="PluginPerfCharts" :class="[`layout-${layoutMode}`]">
     <template v-if="layoutMode === 'card'">
       <TxCard
         class="perf-card"
@@ -83,34 +80,67 @@ const lastUpdatedAgeLabel = computed(() => {
           <div class="metric">
             <div class="metric-top">
               <div class="metric-label">REQ/s</div>
-              <PluginSparkline class="metric-chart" :values="requestRateSeries" stroke="var(--el-color-primary)" />
+              <PluginSparkline
+                class="metric-chart"
+                :values="requestRateSeries"
+                stroke="var(--el-color-primary)"
+              />
             </div>
-            <div class="metric-value">{{ formatCompactNumber(requestRate) }}</div>
+            <div class="metric-value">
+              {{ formatCompactNumber(requestRate) }}
+            </div>
             <div class="metric-sub">Total {{ formatCompactNumber(stats?.requestCount ?? 0) }}</div>
           </div>
           <div class="metric">
             <div class="metric-top">
               <div class="metric-label">MEM</div>
-              <PluginSparkline class="metric-chart" :values="memorySeries" stroke="var(--el-color-info)" />
+              <PluginSparkline
+                class="metric-chart"
+                :values="memorySeries"
+                stroke="var(--el-color-info)"
+              />
             </div>
-            <div class="metric-value">{{ stats ? formatBytesShort(stats.usage.memoryBytes) : '--' }}</div>
-            <div class="metric-sub">UI {{ stats?.workers.uiProcessCount ?? '--' }} · Views {{ stats?.workers.cachedViewCount ?? '--' }}</div>
+            <div class="metric-value">
+              {{ stats ? formatBytesShort(stats.usage.memoryBytes) : '--' }}
+            </div>
+            <div class="metric-sub">
+              UI {{ stats?.workers.uiProcessCount ?? '--' }} · Views
+              {{ stats?.workers.cachedViewCount ?? '--' }}
+            </div>
           </div>
           <div class="metric">
             <div class="metric-top">
               <div class="metric-label">CPU</div>
-              <PluginSparkline class="metric-chart" :values="cpuSeries" stroke="var(--el-color-warning)" />
+              <PluginSparkline
+                class="metric-chart"
+                :values="cpuSeries"
+                stroke="var(--el-color-warning)"
+              />
             </div>
-            <div class="metric-value">{{ stats ? `${stats.usage.cpuPercent.toFixed(1)}%` : '--' }}</div>
-            <div class="metric-sub">Last Active {{ stats?.lastActiveAt ? new Date(stats.lastActiveAt).toLocaleTimeString() : '--' }}</div>
+            <div class="metric-value">
+              {{ stats ? `${stats.usage.cpuPercent.toFixed(1)}%` : '--' }}
+            </div>
+            <div class="metric-sub">
+              Last Active
+              {{ stats?.lastActiveAt ? new Date(stats.lastActiveAt).toLocaleTimeString() : '--' }}
+            </div>
           </div>
           <div class="metric">
             <div class="metric-top">
               <div class="metric-label">WORKERS</div>
-              <PluginSparkline class="metric-chart" :values="workerSeries" stroke="var(--el-color-success)" />
+              <PluginSparkline
+                class="metric-chart"
+                :values="workerSeries"
+                stroke="var(--el-color-success)"
+              />
             </div>
-            <div class="metric-value">{{ stats?.workers.threadCount ?? '--' }}</div>
-            <div class="metric-sub">Windows {{ stats?.workers.windowCount ?? '--' }} · DivisionBox {{ stats?.workers.divisionBoxViewCount ?? '--' }}</div>
+            <div class="metric-value">
+              {{ stats?.workers.threadCount ?? '--' }}
+            </div>
+            <div class="metric-sub">
+              Windows {{ stats?.workers.windowCount ?? '--' }} · DivisionBox
+              {{ stats?.workers.divisionBoxViewCount ?? '--' }}
+            </div>
           </div>
         </div>
       </TxCard>
@@ -262,7 +292,9 @@ const lastUpdatedAgeLabel = computed(() => {
   align-items: center;
   gap: 1.5rem;
   color: #e2e8f0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
 }
 
 .metric-item {
@@ -289,4 +321,3 @@ const lastUpdatedAgeLabel = computed(() => {
   color: #64748b;
 }
 </style>
-

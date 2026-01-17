@@ -1,7 +1,7 @@
+import type { SubscriptionPlan } from '../../../utils/subscriptionStore'
 import { clerkClient } from '@clerk/nuxt/server'
 import { requireAuth } from '../../../utils/auth'
 import { getTeamQuota, PLAN_CONFIG } from '../../../utils/teamStore'
-import type { SubscriptionPlan } from '../../../utils/subscriptionStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   try {
     // Get user's organization memberships
     const memberships = await client.users.getOrganizationMembershipList({ userId })
-    
+
     if (memberships.data.length === 0) {
       return {
         hasTeam: false,
@@ -48,7 +48,8 @@ export default defineEventHandler(async (event) => {
         planConfig: PLAN_CONFIG[ownerPlan] || PLAN_CONFIG.FREE,
       },
     }
-  } catch (error: any) {
+  }
+  catch (error: any) {
     if (error.statusCode) {
       throw error
     }

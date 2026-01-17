@@ -11,7 +11,7 @@ export interface CollapseProps {
 
 export interface CollapseEmits {
   'update:modelValue': [value: string | string[]]
-  change: [value: string | string[]]
+  'change': [value: string | string[]]
 }
 
 export interface CollapseItemProps {

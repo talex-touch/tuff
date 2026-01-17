@@ -7,8 +7,12 @@ const active = ref(false)
 <template>
   <div style="display: grid; gap: 12px; width: 520px;">
     <div style="display: flex; gap: 8px; align-items: center;">
-      <TxButton type="primary" @click="active = !active">Toggle</TxButton>
-      <div style="font-size: 12px; color: var(--tx-text-color-secondary);">Click button or hover the fusion area</div>
+      <TxButton type="primary" @click="active = !active">
+        Toggle
+      </TxButton>
+      <div style="font-size: 12px; color: var(--tx-text-color-secondary);">
+        Click button or hover the fusion area
+      </div>
     </div>
 
     <div

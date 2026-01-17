@@ -1,12 +1,12 @@
 <script setup lang="ts" name="SettingMessages">
+import type { AnalyticsMessage } from '@talex-touch/utils/analytics'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
-import type { AnalyticsMessage } from '@talex-touch/utils/analytics'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -14,7 +14,7 @@ const transport = useTuffTransport()
 const messages = ref<AnalyticsMessage[]>([])
 const loading = ref(false)
 
-const unreadCount = computed(() => messages.value.filter(item => item.status === 'unread').length)
+const unreadCount = computed(() => messages.value.filter((item) => item.status === 'unread').length)
 const limitedMessages = computed(() => messages.value.slice(0, 12))
 
 async function loadMessages() {
@@ -22,42 +22,36 @@ async function loadMessages() {
   try {
     const list = await transport.send(AppEvents.analytics.messages.list, {
       status: 'all',
-      limit: 50,
+      limit: 50
     })
     messages.value = Array.isArray(list) ? list : []
-  }
-  catch {
+  } catch {
     messages.value = []
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
 
 async function markMessage(message: AnalyticsMessage) {
-  if (message.status === 'read')
-    return
+  if (message.status === 'read') return
   try {
     const updated = await transport.send(AppEvents.analytics.messages.mark, {
       id: message.id,
-      status: 'read',
+      status: 'read'
     })
     if (updated) {
-      const target = messages.value.find(item => item.id === updated.id)
-      if (target)
-        target.status = updated.status
+      const target = messages.value.find((item) => item.id === updated.id)
+      if (target) target.status = updated.status
     }
-  }
-  catch {
+  } catch {
     // ignore update failures
   }
 }
 
 async function markAllRead() {
-  const unread = messages.value.filter(item => item.status === 'unread')
-  if (!unread.length)
-    return
-  await Promise.all(unread.map(item => markMessage(item)))
+  const unread = messages.value.filter((item) => item.status === 'unread')
+  if (!unread.length) return
+  await Promise.all(unread.map((item) => markMessage(item)))
 }
 
 function formatTime(timestamp: number) {
@@ -137,7 +131,12 @@ onMounted(() => {
     </div>
 
     <ul v-else class="MessageList">
-      <li v-for="item in limitedMessages" :key="item.id" class="MessageItem" :class="severityClass(item.severity)">
+      <li
+        v-for="item in limitedMessages"
+        :key="item.id"
+        class="MessageItem"
+        :class="severityClass(item.severity)"
+      >
         <div class="MessageHeader">
           <div class="MessageTitle">
             <span class="MessageDot" />
@@ -148,7 +147,9 @@ onMounted(() => {
           </div>
           <span class="MessageTime">{{ formatTime(item.createdAt) }}</span>
         </div>
-        <p class="MessageBody">{{ item.message }}</p>
+        <p class="MessageBody">
+          {{ item.message }}
+        </p>
         <div class="MessageFooter">
           <FlatButton mini :disabled="item.status === 'read'" @click="markMessage(item)">
             {{ t('settingMessages.markRead', 'Mark read') }}

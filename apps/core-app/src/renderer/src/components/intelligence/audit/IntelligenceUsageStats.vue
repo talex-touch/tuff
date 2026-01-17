@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { IntelligenceUsageSummary } from '@talex-touch/utils/renderer'
+import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 
 const props = defineProps<{
   callerId?: string
@@ -18,12 +18,11 @@ async function loadStats() {
   try {
     const [today, month] = await Promise.all([
       getTodayStats(props.callerId),
-      getMonthStats(props.callerId),
+      getMonthStats(props.callerId)
     ])
     todayStats.value = today
     monthStats.value = month
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to load stats:', error)
   }
 }
@@ -74,16 +73,28 @@ function formatNumber(num: number): string {
         <div class="stat-content">
           <div class="stat-row">
             <div class="stat-item">
-              <div class="stat-value">{{ todayStats?.requestCount || 0 }}</div>
-              <div class="stat-label">{{ t('intelligence.usage.requests') }}</div>
+              <div class="stat-value">
+                {{ todayStats?.requestCount || 0 }}
+              </div>
+              <div class="stat-label">
+                {{ t('intelligence.usage.requests') }}
+              </div>
             </div>
             <div class="stat-item">
-              <div class="stat-value">{{ formatNumber(todayStats?.totalTokens || 0) }}</div>
-              <div class="stat-label">{{ t('intelligence.usage.tokens') }}</div>
+              <div class="stat-value">
+                {{ formatNumber(todayStats?.totalTokens || 0) }}
+              </div>
+              <div class="stat-label">
+                {{ t('intelligence.usage.tokens') }}
+              </div>
             </div>
             <div class="stat-item">
-              <div class="stat-value">{{ formatCost(todayStats?.totalCost || 0) }}</div>
-              <div class="stat-label">{{ t('intelligence.usage.cost') }}</div>
+              <div class="stat-value">
+                {{ formatCost(todayStats?.totalCost || 0) }}
+              </div>
+              <div class="stat-label">
+                {{ t('intelligence.usage.cost') }}
+              </div>
             </div>
           </div>
           <div class="stat-bar">
@@ -94,7 +105,11 @@ function formatNumber(num: number): string {
             <div class="bar-track">
               <div
                 class="bar-fill"
-                :class="{ success: successRate >= 90, warning: successRate >= 70 && successRate < 90, error: successRate < 70 }"
+                :class="{
+                  success: successRate >= 90,
+                  warning: successRate >= 70 && successRate < 90,
+                  error: successRate < 70
+                }"
                 :style="{ width: `${successRate}%` }"
               />
             </div>
@@ -125,16 +140,28 @@ function formatNumber(num: number): string {
         <div class="stat-content">
           <div class="stat-row">
             <div class="stat-item">
-              <div class="stat-value">{{ formatNumber(monthStats?.requestCount || 0) }}</div>
-              <div class="stat-label">{{ t('intelligence.usage.requests') }}</div>
+              <div class="stat-value">
+                {{ formatNumber(monthStats?.requestCount || 0) }}
+              </div>
+              <div class="stat-label">
+                {{ t('intelligence.usage.requests') }}
+              </div>
             </div>
             <div class="stat-item">
-              <div class="stat-value">{{ formatNumber(monthStats?.totalTokens || 0) }}</div>
-              <div class="stat-label">{{ t('intelligence.usage.tokens') }}</div>
+              <div class="stat-value">
+                {{ formatNumber(monthStats?.totalTokens || 0) }}
+              </div>
+              <div class="stat-label">
+                {{ t('intelligence.usage.tokens') }}
+              </div>
             </div>
             <div class="stat-item">
-              <div class="stat-value">{{ formatCost(monthStats?.totalCost || 0) }}</div>
-              <div class="stat-label">{{ t('intelligence.usage.cost') }}</div>
+              <div class="stat-value">
+                {{ formatCost(monthStats?.totalCost || 0) }}
+              </div>
+              <div class="stat-label">
+                {{ t('intelligence.usage.cost') }}
+              </div>
             </div>
           </div>
           <div class="stat-bar">
@@ -145,7 +172,11 @@ function formatNumber(num: number): string {
             <div class="bar-track">
               <div
                 class="bar-fill"
-                :class="{ success: monthSuccessRate >= 90, warning: monthSuccessRate >= 70 && monthSuccessRate < 90, error: monthSuccessRate < 70 }"
+                :class="{
+                  success: monthSuccessRate >= 90,
+                  warning: monthSuccessRate >= 70 && monthSuccessRate < 90,
+                  error: monthSuccessRate < 70
+                }"
                 :style="{ width: `${monthSuccessRate}%` }"
               />
             </div>
@@ -256,9 +287,15 @@ function formatNumber(num: number): string {
           border-radius: 3px;
           transition: width 0.3s ease;
 
-          &.success { background: var(--el-color-success); }
-          &.warning { background: var(--el-color-warning); }
-          &.error { background: var(--el-color-danger); }
+          &.success {
+            background: var(--el-color-success);
+          }
+          &.warning {
+            background: var(--el-color-warning);
+          }
+          &.error {
+            background: var(--el-color-danger);
+          }
         }
       }
 

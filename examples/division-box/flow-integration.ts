@@ -1,6 +1,6 @@
 /**
  * DivisionBox Flow 集成示例
- * 
+ *
  * 本示例展示如何:
  * 1. 通过 Flow 触发 DivisionBox
  * 2. 接收和处理 Flow 参数
@@ -9,7 +9,8 @@
  * 5. 实现 Flow 链式调用
  */
 
-import { Plugin, TuffQuery, TuffInputType } from '@talex-touch/utils'
+import type { Plugin, TuffQuery } from '@talex-touch/utils'
+import { TuffInputType } from '@talex-touch/utils'
 
 interface FlowContext {
   flowId: string
@@ -50,20 +51,20 @@ export default class FlowIntegrationExample implements Plugin {
             {
               id: 'process',
               label: '处理',
-              icon: 'ri:play-line'
+              icon: 'ri:play-line',
             },
             {
               id: 'export',
               label: '导出',
-              icon: 'ri:download-line'
+              icon: 'ri:download-line',
             },
             {
               id: 'next-step',
               label: '下一步',
-              icon: 'ri:arrow-right-line'
-            }
-          ]
-        }
+              icon: 'ri:arrow-right-line',
+            },
+          ],
+        },
       })
 
       // 保存 Flow 会话映射
@@ -74,7 +75,8 @@ export default class FlowIntegrationExample implements Plugin {
 
       console.log('DivisionBox opened from Flow:', sessionId)
       return sessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to open DivisionBox from Flow:', error)
       throw error
     }
@@ -86,7 +88,7 @@ export default class FlowIntegrationExample implements Plugin {
   private buildFlowUrl(flowContext: FlowContext): string {
     const params = new URLSearchParams({
       flowId: flowContext.flowId,
-      ...flowContext.parameters
+      ...flowContext.parameters,
     })
 
     if (flowContext.previousResult) {
@@ -109,7 +111,7 @@ export default class FlowIntegrationExample implements Plugin {
 
       // 查找图片输入
       const imageInput = inputs.find(i => i.type === TuffInputType.Image)
-      
+
       // 查找文件输入
       const filesInput = inputs.find(i => i.type === TuffInputType.Files)
 
@@ -119,8 +121,8 @@ export default class FlowIntegrationExample implements Plugin {
         parameters: {
           textInput,
           hasImage: !!imageInput,
-          hasFiles: !!filesInput
-        }
+          hasFiles: !!filesInput,
+        },
       }
 
       // 打开 DivisionBox
@@ -137,7 +139,8 @@ export default class FlowIntegrationExample implements Plugin {
       }
 
       return sessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to handle Flow with clipboard:', error)
       throw error
     }
@@ -168,8 +171,8 @@ export default class FlowIntegrationExample implements Plugin {
         data: {
           textLength: flowContext.parameters.textInput?.length || 0,
           hasImage: !!imageData,
-          fileCount: files?.length || 0
-        }
+          fileCount: files?.length || 0,
+        },
       }
 
       // 保存处理结果
@@ -177,7 +180,8 @@ export default class FlowIntegrationExample implements Plugin {
 
       console.log('Flow data processed:', result)
       return result
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to process Flow data:', error)
       throw error
     }
@@ -199,13 +203,14 @@ export default class FlowIntegrationExample implements Plugin {
 
       // 导出为 JSON
       const json = JSON.stringify(result, null, 2)
-      
+
       // 复制到剪贴板
       await navigator.clipboard.writeText(json)
 
       console.log('Flow result exported to clipboard')
       return result
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to export Flow result:', error)
       throw error
     }
@@ -234,8 +239,8 @@ export default class FlowIntegrationExample implements Plugin {
         previousResult: result,
         parameters: {
           step: 'next',
-          previousFlowId: flowContext.flowId
-        }
+          previousFlowId: flowContext.flowId,
+        },
       }
 
       // 关闭当前 DivisionBox
@@ -246,7 +251,8 @@ export default class FlowIntegrationExample implements Plugin {
 
       console.log('Next Flow step triggered:', nextSessionId)
       return nextSessionId
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to trigger next Flow step:', error)
       throw error
     }
@@ -273,8 +279,8 @@ export default class FlowIntegrationExample implements Plugin {
           parameters: {
             step,
             stepIndex: i,
-            totalSteps: steps.length
-          }
+            totalSteps: steps.length,
+          },
         }
 
         // 打开 DivisionBox
@@ -286,7 +292,7 @@ export default class FlowIntegrationExample implements Plugin {
         // 如果不是最后一步,关闭当前 DivisionBox
         if (i < steps.length - 1) {
           await this.plugin.divisionBox.close(currentSessionId)
-          
+
           // 等待一会儿再执行下一步
           await new Promise(resolve => setTimeout(resolve, 500))
         }
@@ -295,9 +301,10 @@ export default class FlowIntegrationExample implements Plugin {
       console.log('Flow chain completed:', currentResult)
       return {
         sessionId: currentSessionId,
-        result: currentResult
+        result: currentResult,
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to execute Flow chain:', error)
       throw error
     }
@@ -314,20 +321,23 @@ export default class FlowIntegrationExample implements Plugin {
         // 处理带剪贴板输入的 Flow
         const tuffQuery = typeof query === 'string' ? { text: query, inputs: [] } : query
         await this.handleFlowWithClipboard(tuffQuery)
-      } else if (featureId === 'flow-chain') {
+      }
+      else if (featureId === 'flow-chain') {
         // 执行 Flow 链
         await this.executeFlowChain(['step1', 'step2', 'step3'])
-      } else {
+      }
+      else {
         // 简单的 Flow 触发
         const flowContext: FlowContext = {
           flowId: `flow-${Date.now()}`,
           parameters: {
-            query: typeof query === 'string' ? query : query.text
-          }
+            query: typeof query === 'string' ? query : query.text,
+          },
         }
         await this.openFromFlow(flowContext)
       }
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Failed to handle feature:', error)
     }
   }

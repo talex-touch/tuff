@@ -1,15 +1,15 @@
-import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
 import Button from '../src/button.vue'
 
-describe('TxButton', () => {
+describe('txButton', () => {
   it('renders correctly', () => {
     const wrapper = mount(Button, {
       slots: {
-        default: 'Test Button'
-      }
+        default: 'Test Button',
+      },
     })
-    
+
     expect(wrapper.text()).toBe('Test Button')
     expect(wrapper.classes()).toContain('tx-button')
   })
@@ -17,30 +17,30 @@ describe('TxButton', () => {
   it('renders different types', () => {
     const wrapper = mount(Button, {
       props: {
-        type: 'primary'
-      }
+        type: 'primary',
+      },
     })
-    
+
     expect(wrapper.classes()).toContain('variant-primary')
   })
 
   it('renders different sizes', () => {
     const wrapper = mount(Button, {
       props: {
-        size: 'large'
-      }
+        size: 'large',
+      },
     })
-    
+
     expect(wrapper.classes()).toContain('tx-size-lg')
   })
 
   it('handles disabled state', () => {
     const wrapper = mount(Button, {
       props: {
-        disabled: true
-      }
+        disabled: true,
+      },
     })
-    
+
     expect(wrapper.classes()).toContain('disabled')
     expect(wrapper.attributes('disabled')).toBeDefined()
   })
@@ -48,53 +48,53 @@ describe('TxButton', () => {
   it('handles loading state', () => {
     const wrapper = mount(Button, {
       props: {
-        loading: true
-      }
+        loading: true,
+      },
     })
-    
+
     expect(wrapper.classes()).toContain('loading')
     expect(wrapper.find('.tx-button__spinner').exists()).toBe(true)
   })
 
   it('emits click event', async () => {
     const wrapper = mount(Button)
-    
+
     await wrapper.trigger('click')
-    
+
     expect(wrapper.emitted('click')).toBeTruthy()
   })
 
   it('does not emit click when disabled', async () => {
     const wrapper = mount(Button, {
       props: {
-        disabled: true
-      }
+        disabled: true,
+      },
     })
-    
+
     await wrapper.trigger('click')
-    
+
     expect(wrapper.emitted('click')).toBeFalsy()
   })
 
   it('does not emit click when loading', async () => {
     const wrapper = mount(Button, {
       props: {
-        loading: true
-      }
+        loading: true,
+      },
     })
-    
+
     await wrapper.trigger('click')
-    
+
     expect(wrapper.emitted('click')).toBeFalsy()
   })
 
   it('renders with icon', () => {
     const wrapper = mount(Button, {
       props: {
-        icon: 'search'
-      }
+        icon: 'search',
+      },
     })
-    
+
     expect(wrapper.find('.tx-button__icon').exists()).toBe(true)
     expect(wrapper.find('.search').exists()).toBe(true)
   })
@@ -103,10 +103,10 @@ describe('TxButton', () => {
     const wrapper = mount(Button, {
       props: {
         circle: true,
-        icon: 'edit'
-      }
+        icon: 'edit',
+      },
     })
-    
+
     expect(wrapper.classes()).toContain('circle')
   })
 
@@ -114,10 +114,10 @@ describe('TxButton', () => {
     const wrapper = mount(Button, {
       props: {
         plain: true,
-        type: 'primary'
-      }
+        type: 'primary',
+      },
     })
-    
+
     expect(wrapper.classes()).toContain('plain')
     expect(wrapper.classes()).toContain('variant-primary')
   })
@@ -125,20 +125,20 @@ describe('TxButton', () => {
   it('renders round button correctly', () => {
     const wrapper = mount(Button, {
       props: {
-        round: true
-      }
+        round: true,
+      },
     })
-    
+
     expect(wrapper.classes()).toContain('round')
   })
 
   it('sets correct native type', () => {
     const wrapper = mount(Button, {
       props: {
-        nativeType: 'submit'
-      }
+        nativeType: 'submit',
+      },
     })
-    
+
     expect(wrapper.attributes('type')).toBe('submit')
   })
 })

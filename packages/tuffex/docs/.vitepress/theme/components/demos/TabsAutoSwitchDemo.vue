@@ -28,15 +28,19 @@ function toggle() {
     >
       <TxTabItem name="Long" activation>
         <div style="padding: 10px;">
-          <div style="font-weight: 600; margin-bottom: 8px;">Long Content</div>
-          <div style="height: 260px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);"></div>
+          <div style="font-weight: 600; margin-bottom: 8px;">
+            Long Content
+          </div>
+          <div style="height: 260px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);" />
         </div>
       </TxTabItem>
 
       <TxTabItem name="Short">
         <div style="padding: 10px;">
-          <div style="font-weight: 600; margin-bottom: 8px;">Short Content</div>
-          <div style="height: 90px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, transparent);"></div>
+          <div style="font-weight: 600; margin-bottom: 8px;">
+            Short Content
+          </div>
+          <div style="height: 90px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, transparent);" />
         </div>
       </TxTabItem>
     </TxTabs>

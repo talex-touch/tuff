@@ -2,7 +2,7 @@ import type {
   MarketPlugin,
   MarketProviderDefinition,
   MarketProviderListOptions,
-  MarketProviderResultMeta,
+  MarketProviderResultMeta
 } from '@talex-touch/utils/market'
 import { marketHttpRequest } from './market-http-client'
 import { createMarketProvider } from './provider-factory'
@@ -22,7 +22,7 @@ export async function fetchMarketCatalog(options: FetchOptions): Promise<MarketC
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
 
   const ctx = {
-    request: marketHttpRequest,
+    request: marketHttpRequest
   }
 
   const settled = await Promise.allSettled(
@@ -31,7 +31,7 @@ export async function fetchMarketCatalog(options: FetchOptions): Promise<MarketC
       if (!provider) {
         return {
           meta: buildMeta(definition, false, 'MARKET_PROVIDER_UNSUPPORTED', 0),
-          plugins: [],
+          plugins: []
         }
       }
 
@@ -39,21 +39,20 @@ export async function fetchMarketCatalog(options: FetchOptions): Promise<MarketC
         const plugins = await provider.list(options)
         return {
           plugins,
-          meta: buildMeta(definition, true, undefined, plugins.length),
+          meta: buildMeta(definition, true, undefined, plugins.length)
         }
-      }
-      catch (error: any) {
+      } catch (error: any) {
         return {
           plugins: [],
           meta: buildMeta(
             definition,
             false,
             typeof error?.message === 'string' ? error.message : 'MARKET_PROVIDER_FAILED',
-            0,
-          ),
+            0
+          )
         }
       }
-    }),
+    })
   )
 
   const plugins: MarketPlugin[] = []
@@ -65,12 +64,11 @@ export async function fetchMarketCatalog(options: FetchOptions): Promise<MarketC
       plugins.push(
         ...providerPlugins.map((plugin) => ({
           ...plugin,
-          providerId: meta.providerId,
-        })),
+          providerId: meta.providerId
+        }))
       )
       stats.push(meta)
-    }
-    else {
+    } else {
       // A rejected promise indicates unexpected failure
       stats.push({
         providerId: 'unknown',
@@ -79,7 +77,7 @@ export async function fetchMarketCatalog(options: FetchOptions): Promise<MarketC
         success: false,
         error: result.reason?.message ?? 'MARKET_PROVIDER_FAILED',
         fetchedAt: Date.now(),
-        itemCount: 0,
+        itemCount: 0
       })
     }
   }
@@ -91,7 +89,7 @@ function buildMeta(
   definition: MarketProviderDefinition,
   success: boolean,
   error: string | undefined,
-  count: number,
+  count: number
 ): MarketProviderResultMeta {
   return {
     providerId: definition.id,
@@ -100,6 +98,6 @@ function buildMeta(
     success,
     error,
     fetchedAt: Date.now(),
-    itemCount: count,
+    itemCount: count
   }
 }

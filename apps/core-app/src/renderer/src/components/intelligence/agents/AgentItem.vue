@@ -14,7 +14,7 @@ function getAgentIcon(agent: AgentDescriptor): string {
     data: 'i-carbon-data-table',
     workflow: 'i-carbon-flow',
     code: 'i-carbon-code',
-    chat: 'i-carbon-chat',
+    chat: 'i-carbon-chat'
   }
 
   // Try to match by agent id or name
@@ -29,16 +29,15 @@ function getAgentIcon(agent: AgentDescriptor): string {
 </script>
 
 <template>
-  <div
-    class="agent-item"
-    :class="{ selected }"
-    role="button"
-    tabindex="0"
-  >
+  <div class="agent-item" :class="{ selected }" role="button" tabindex="0">
     <div class="agent-icon" :class="getAgentIcon(agent)" />
     <div class="agent-info">
-      <div class="agent-name">{{ agent.name }}</div>
-      <div class="agent-desc">{{ agent.description }}</div>
+      <div class="agent-name">
+        {{ agent.name }}
+      </div>
+      <div class="agent-desc">
+        {{ agent.description }}
+      </div>
     </div>
     <div v-if="agent.capabilities?.length" class="agent-badge">
       <el-tag size="small" type="info">

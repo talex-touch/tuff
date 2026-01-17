@@ -1,6 +1,8 @@
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
-import { evaluateExpression, looksLikeExpression, type ExpressionResult } from './expression-evaluator'
-import { parseUnitConversion, looksLikeUnitConversion, type UnitConversionResult } from './unit-converter'
+import type { ExpressionResult } from './expression-evaluator'
+import type { UnitConversionResult } from './unit-converter'
+import { evaluateExpression, looksLikeExpression } from './expression-evaluator'
+import { looksLikeUnitConversion, parseUnitConversion } from './unit-converter'
 
 export type CalculationType = 'expression' | 'unit' | 'none'
 
@@ -37,7 +39,7 @@ export function processCalculation(query: string): CalculationResult {
         success: true,
         query,
         unit: result,
-        previewCard: buildUnitPreviewCard(result),
+        previewCard: buildUnitPreviewCard(result)
       }
     }
   }
@@ -56,7 +58,7 @@ export function processCalculation(query: string): CalculationResult {
         success: true,
         query,
         expression: result,
-        previewCard: buildExpressionPreviewCard(result),
+        previewCard: buildExpressionPreviewCard(result)
       }
     }
   }
@@ -73,7 +75,7 @@ function buildExpressionPreviewCard(result: ExpressionResult): PreviewCardPayloa
     title: result.expression,
     chips: [],
     sections: [],
-    badges: ['mathjs'],
+    badges: ['mathjs']
   }
 }
 
@@ -86,7 +88,7 @@ function buildUnitPreviewCard(result: UnitConversionResult): PreviewCardPayload 
     time: '时间',
     area: '面积',
     volume: '体积',
-    speed: '速度',
+    speed: '速度'
   }
 
   return {
@@ -98,11 +100,9 @@ function buildUnitPreviewCard(result: UnitConversionResult): PreviewCardPayload 
     primaryUnit: result.toUnit,
     secondaryLabel: '原始值',
     secondaryValue: `${result.fromValue} ${result.fromUnit}`,
-    chips: [
-      { label: '类型', value: result.category ?? 'unknown' },
-    ],
+    chips: [{ label: '类型', value: result.category ?? 'unknown' }],
     sections: [],
-    badges: [],
+    badges: []
   }
 }
 

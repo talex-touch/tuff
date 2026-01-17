@@ -1,9 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
+import type { SubscriptionPlan } from './subscriptionStore'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
-import type { SubscriptionPlan } from './subscriptionStore'
 
 const INVITES_TABLE = 'team_invites'
 const TEAM_QUOTA_TABLE = 'team_quotas'
@@ -75,7 +75,8 @@ function getD1Database(event: H3Event): D1Database | null {
 }
 
 async function ensureTeamSchema(db: D1Database) {
-  if (teamSchemaInitialized) return
+  if (teamSchemaInitialized)
+    return
 
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${INVITES_TABLE} (
@@ -168,7 +169,7 @@ function generateInviteCode(): string {
 export async function createInvite(
   event: H3Event,
   userId: string,
-  input: CreateInviteInput
+  input: CreateInviteInput,
 ): Promise<TeamInvite> {
   const db = getD1Database(event)
   if (!db) {
@@ -220,7 +221,7 @@ export async function createInvite(
 
 export async function listInvites(
   event: H3Event,
-  organizationId: string
+  organizationId: string,
 ): Promise<TeamInvite[]> {
   const db = getD1Database(event)
   if (!db) {
@@ -240,7 +241,7 @@ export async function listInvites(
 
 export async function getInviteByCode(
   event: H3Event,
-  code: string
+  code: string,
 ): Promise<TeamInvite | null> {
   const db = getD1Database(event)
   if (!db) {
@@ -258,7 +259,7 @@ export async function getInviteByCode(
 
 export async function getInviteById(
   event: H3Event,
-  id: string
+  id: string,
 ): Promise<TeamInvite | null> {
   const db = getD1Database(event)
   if (!db) {
@@ -276,7 +277,7 @@ export async function getInviteById(
 
 export async function useInvite(
   event: H3Event,
-  code: string
+  code: string,
 ): Promise<TeamInvite> {
   const db = getD1Database(event)
   if (!db) {
@@ -324,7 +325,7 @@ export async function useInvite(
 export async function revokeInvite(
   event: H3Event,
   id: string,
-  userId: string
+  userId: string,
 ): Promise<void> {
   const db = getD1Database(event)
   if (!db) {
@@ -349,7 +350,7 @@ export async function revokeInvite(
 
 export async function deleteInvite(
   event: H3Event,
-  id: string
+  id: string,
 ): Promise<void> {
   const db = getD1Database(event)
   if (!db) {
@@ -430,7 +431,7 @@ function mapQuotaRow(row: D1QuotaRow): TeamQuota {
 export async function getTeamQuota(
   event: H3Event,
   organizationId: string,
-  ownerPlan?: SubscriptionPlan
+  ownerPlan?: SubscriptionPlan,
 ): Promise<TeamQuota> {
   const db = getD1Database(event)
   if (!db) {
@@ -463,7 +464,7 @@ export async function getTeamQuota(
         config.aiRequests,
         config.aiTokens,
         config.seats,
-        organizationId
+        organizationId,
       ).run()
 
       return {
@@ -503,7 +504,7 @@ export async function getTeamQuota(
     1,
     config.seats,
     currentWeek,
-    now
+    now,
   ).run()
 
   return {
@@ -523,7 +524,7 @@ export async function getTeamQuota(
 export async function updateTeamQuotaUsage(
   event: H3Event,
   organizationId: string,
-  usage: { aiRequests?: number; aiTokens?: number }
+  usage: { aiRequests?: number, aiTokens?: number },
 ): Promise<TeamQuota> {
   const db = getD1Database(event)
   if (!db) {
@@ -546,7 +547,7 @@ export async function updateTeamQuotaUsage(
     newRequestsUsed,
     newTokensUsed,
     new Date().toISOString(),
-    organizationId
+    organizationId,
   ).run()
 
   return {
@@ -560,7 +561,7 @@ export async function updateTeamQuotaUsage(
 export async function updateTeamSeats(
   event: H3Event,
   organizationId: string,
-  seatsUsed: number
+  seatsUsed: number,
 ): Promise<void> {
   const db = getD1Database(event)
   if (!db) {
@@ -578,7 +579,7 @@ export async function updateTeamSeats(
 
 export async function deleteTeamQuota(
   event: H3Event,
-  organizationId: string
+  organizationId: string,
 ): Promise<void> {
   const db = getD1Database(event)
   if (!db) {
@@ -606,7 +607,7 @@ export async function deleteTeamQuota(
 export async function getOrInitTeamMemberUsage(
   event: H3Event,
   organizationId: string,
-  userId: string
+  userId: string,
 ): Promise<TeamMemberUsage> {
   const db = getD1Database(event)
   if (!db) {
@@ -663,7 +664,7 @@ export async function addTeamMemberUsage(
   event: H3Event,
   organizationId: string,
   userId: string,
-  usage: { aiRequests?: number; aiTokens?: number }
+  usage: { aiRequests?: number, aiTokens?: number },
 ): Promise<TeamMemberUsage> {
   const db = getD1Database(event)
   if (!db) {

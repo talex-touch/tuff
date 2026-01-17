@@ -3,8 +3,6 @@ import { computed } from 'vue'
 
 defineOptions({ name: 'TxContainer' })
 
-type PaddingPreset = 'small' | 'medium' | 'large'
-
 const props = withDefaults(
   defineProps<{
     fluid?: boolean
@@ -22,15 +20,21 @@ const props = withDefaults(
   },
 )
 
+type PaddingPreset = 'small' | 'medium' | 'large'
+
 function paddingToPx(v: PaddingPreset | number): number {
-  if (typeof v === 'number') return Math.max(0, v)
-  if (v === 'small') return 12
-  if (v === 'large') return 24
+  if (typeof v === 'number')
+    return Math.max(0, v)
+  if (v === 'small')
+    return 12
+  if (v === 'large')
+    return 24
   return 16
 }
 
 function sizeToCss(v: any): string {
-  if (typeof v === 'number') return `${v}px`
+  if (typeof v === 'number')
+    return `${v}px`
   return String(v)
 }
 

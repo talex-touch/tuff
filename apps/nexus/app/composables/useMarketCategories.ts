@@ -1,6 +1,6 @@
+import type { FilterCategory } from '~/types/marketplace'
 import { computed } from 'vue'
 import { PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
-import type { FilterCategory } from '~/types/marketplace'
 
 export function useMarketCategories() {
   const { t } = useI18n()

@@ -1,6 +1,6 @@
 <script lang="ts" name="AppLayoutFlat" setup>
-import FlatController from './FlatController.vue'
 import LayoutFooter from '../shared/LayoutFooter.vue'
+import FlatController from './FlatController.vue'
 import FlatNavBar from './FlatNavBar.vue'
 
 const props = withDefaults(
@@ -8,8 +8,8 @@ const props = withDefaults(
     display?: boolean
   }>(),
   {
-    display: false,
-  },
+    display: false
+  }
 )
 
 const isDisplayMode = computed(() => props.display)

@@ -1,10 +1,14 @@
 import type { FileScanOptions, ScannedFileInfo } from '@talex-touch/utils/common/file-scan-utils'
-import { parentPort } from 'node:worker_threads'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsRequest,
+  WorkerMetricsResponse
+} from './worker-status'
 import { performance } from 'node:perf_hooks'
+import { parentPort } from 'node:worker_threads'
 import { scanDirectory } from '@talex-touch/utils/common/file-scan-utils'
-import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
 
-type FileScanRequest = {
+interface FileScanRequest {
   type: 'scan'
   taskId: string
   paths: string[]
@@ -13,19 +17,19 @@ type FileScanRequest = {
   batchSize?: number
 }
 
-type FileScanBatchMessage = {
+interface FileScanBatchMessage {
   type: 'batch'
   taskId: string
   batch: ScannedFileInfo[]
 }
 
-type FileScanDoneMessage = {
+interface FileScanDoneMessage {
   type: 'done'
   taskId: string
   scannedCount: number
 }
 
-type FileScanErrorMessage = {
+interface FileScanErrorMessage {
   type: 'error'
   taskId: string
   error: string
@@ -33,9 +37,10 @@ type FileScanErrorMessage = {
 
 function buildMetricsPayload(): WorkerMetricsPayload {
   const memory = process.memoryUsage()
-  const eventLoop = typeof performance.eventLoopUtilization === 'function'
-    ? performance.eventLoopUtilization()
-    : null
+  const eventLoop =
+    typeof performance.eventLoopUtilization === 'function'
+      ? performance.eventLoopUtilization()
+      : null
   return {
     timestamp: Date.now(),
     memory: {
@@ -43,16 +48,16 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       heapUsed: memory.heapUsed,
       heapTotal: memory.heapTotal,
       external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0,
+      arrayBuffers: memory.arrayBuffers ?? 0
     },
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {
           active: eventLoop.active,
           idle: eventLoop.idle,
-          utilization: eventLoop.utilization,
+          utilization: eventLoop.utilization
         }
-      : null,
+      : null
   }
 }
 
@@ -83,7 +88,7 @@ async function processQueue(): Promise<void> {
         parentPort?.postMessage({
           type: 'batch',
           taskId: next.taskId,
-          batch,
+          batch
         } satisfies FileScanBatchMessage)
       }
     }
@@ -91,13 +96,13 @@ async function processQueue(): Promise<void> {
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,
-      scannedCount,
+      scannedCount
     } satisfies FileScanDoneMessage)
   } catch (error) {
     parentPort?.postMessage({
       type: 'error',
       taskId: next.taskId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     } satisfies FileScanErrorMessage)
   } finally {
     running = false
@@ -115,7 +120,7 @@ parentPort?.on('message', (payload: FileScanRequest | WorkerMetricsRequest) => {
     parentPort?.postMessage({
       type: 'metrics',
       requestId: payload.requestId,
-      metrics: buildMetricsPayload(),
+      metrics: buildMetricsPayload()
     } satisfies WorkerMetricsResponse)
     return
   }

@@ -2,12 +2,12 @@
  * usePermission - Permission management hooks for renderer process
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type {
+  PermissionDefinition,
   PermissionGrant,
   PluginPermissionStatus,
-  PermissionDefinition,
 } from '../../permission/types'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 /**
  * Send channel message to main process
@@ -40,9 +40,11 @@ export function usePermission(pluginId: string) {
     try {
       const result = await sendChannel<PermissionGrant[]>('permission:get-plugin', { pluginId })
       permissions.value = result || []
-    } catch (e) {
+    }
+    catch (e) {
       error.value = (e as Error).message
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }
@@ -61,7 +63,8 @@ export function usePermission(pluginId: string) {
         await refresh()
       }
       return result?.success || false
-    } catch {
+    }
+    catch {
       return false
     }
   }
@@ -79,7 +82,8 @@ export function usePermission(pluginId: string) {
         await refresh()
       }
       return result?.success || false
-    } catch {
+    }
+    catch {
       return false
     }
   }
@@ -98,7 +102,8 @@ export function usePermission(pluginId: string) {
         await refresh()
       }
       return result?.success || false
-    } catch {
+    }
+    catch {
       return false
     }
   }
@@ -115,7 +120,8 @@ export function usePermission(pluginId: string) {
         await refresh()
       }
       return result?.success || false
-    } catch {
+    }
+    catch {
       return false
     }
   }
@@ -124,13 +130,13 @@ export function usePermission(pluginId: string) {
    * Check if a permission is granted
    */
   function isGranted(permissionId: string): boolean {
-    return permissions.value.some((p) => p.permissionId === permissionId)
+    return permissions.value.some(p => p.permissionId === permissionId)
   }
 
   /**
    * Get granted permission IDs
    */
-  const grantedIds = computed(() => permissions.value.map((p) => p.permissionId))
+  const grantedIds = computed(() => permissions.value.map(p => p.permissionId))
 
   // Listen for permission updates
   let unsubscribe: (() => void) | null = null
@@ -169,7 +175,7 @@ export function usePermission(pluginId: string) {
 export function usePermissionStatus(
   pluginId: string,
   sdkapi: number | undefined,
-  declared: { required: string[]; optional: string[] }
+  declared: { required: string[], optional: string[] },
 ) {
   const status = ref<PluginPermissionStatus | null>(null)
   const loading = ref(true)
@@ -184,9 +190,11 @@ export function usePermissionStatus(
         optional: declared.optional,
       })
       status.value = result
-    } catch {
+    }
+    catch {
       status.value = null
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }
@@ -224,9 +232,11 @@ export function usePermissionRegistry() {
     try {
       const result = await sendChannel<PermissionDefinition[]>('permission:get-registry')
       registry.value = result || []
-    } catch {
+    }
+    catch {
       registry.value = []
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }
@@ -235,21 +245,21 @@ export function usePermissionRegistry() {
    * Get permission by ID
    */
   function getPermission(id: string): PermissionDefinition | undefined {
-    return registry.value.find((p) => p.id === id)
+    return registry.value.find(p => p.id === id)
   }
 
   /**
    * Get permissions by category
    */
   function byCategory(category: string): PermissionDefinition[] {
-    return registry.value.filter((p) => p.category === category)
+    return registry.value.filter(p => p.category === category)
   }
 
   /**
    * Get permissions by risk level
    */
   function byRisk(risk: string): PermissionDefinition[] {
-    return registry.value.filter((p) => p.risk === risk)
+    return registry.value.filter(p => p.risk === risk)
   }
 
   onMounted(() => {
@@ -278,9 +288,11 @@ export function useAllPluginPermissions() {
     try {
       const result = await sendChannel<Record<string, PermissionGrant[]>>('permission:get-all')
       permissions.value = result || {}
-    } catch {
+    }
+    catch {
       permissions.value = {}
-    } finally {
+    }
+    finally {
       loading.value = false
     }
   }

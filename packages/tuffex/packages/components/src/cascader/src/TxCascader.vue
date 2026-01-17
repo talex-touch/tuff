@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import type { CascaderEmits, CascaderNode, CascaderPath, CascaderProps, CascaderValue } from './types'
 import { computed, nextTick, ref, watch } from 'vue'
+import TxCardItem from '../../card-item/src/TxCardItem.vue'
+import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
 import TxTag from '../../tag/src/TxTag.vue'
-import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
-import TxCardItem from '../../card-item/src/TxCardItem.vue'
-import type { CascaderEmits, CascaderNode, CascaderPath, CascaderProps, CascaderValue } from './types'
 
 defineOptions({ name: 'TxCascader' })
 
@@ -41,30 +41,40 @@ function pathKey(path: CascaderPath): string {
 }
 
 function getChildren(node: CascaderNode | null, path: CascaderPath): CascaderNode[] {
-  if (!node) return props.options
-  if (Array.isArray(node.children) && node.children.length) return node.children
+  if (!node)
+    return props.options
+  if (Array.isArray(node.children) && node.children.length)
+    return node.children
   const k = pathKey(path)
   return loadedChildren.value.get(k) ?? []
 }
 
 function isLeaf(node: CascaderNode, path: CascaderPath): boolean {
-  if (node.leaf) return true
+  if (node.leaf)
+    return true
   const children = getChildren(node, path)
-  if (children.length) return false
+  if (children.length)
+    return false
   return !props.load
 }
 
 async function ensureChildren(node: CascaderNode | null, path: CascaderPath, level: number) {
-  if (!props.load) return
-  if (!node) return
-  if (node.leaf) return
+  if (!props.load)
+    return
+  if (!node)
+    return
+  if (node.leaf)
+    return
 
   const direct = node.children
-  if (Array.isArray(direct) && direct.length) return
+  if (Array.isArray(direct) && direct.length)
+    return
 
   const k = pathKey(path)
-  if (loadedChildren.value.has(k)) return
-  if (loadingKeys.value.has(k)) return
+  if (loadedChildren.value.has(k))
+    return
+  if (loadingKeys.value.has(k))
+    return
 
   loadingKeys.value.add(k)
   try {
@@ -78,14 +88,17 @@ async function ensureChildren(node: CascaderNode | null, path: CascaderPath, lev
 
 const selectedPaths = computed<CascaderPath[]>(() => {
   const v = props.modelValue
-  if (props.multiple) return Array.isArray(v) ? (v as CascaderPath[]) : []
+  if (props.multiple)
+    return Array.isArray(v) ? (v as CascaderPath[]) : []
   return Array.isArray(v) ? [v as CascaderPath] : []
 })
 
 function samePath(a: CascaderPath, b: CascaderPath): boolean {
-  if (a.length !== b.length) return false
+  if (a.length !== b.length)
+    return false
   for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false
+    if (a[i] !== b[i])
+      return false
   }
   return true
 }
@@ -96,12 +109,14 @@ function setValue(v: CascaderValue) {
 }
 
 function toggleSelect(path: CascaderPath) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
 
   if (props.multiple) {
     const next = selectedPaths.value.slice()
     const idx = next.findIndex(p => samePath(p, path))
-    if (idx >= 0) next.splice(idx, 1)
+    if (idx >= 0)
+      next.splice(idx, 1)
     else next.push(path)
     setValue(next)
     return
@@ -112,7 +127,8 @@ function toggleSelect(path: CascaderPath) {
 }
 
 function clear() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   setValue(props.multiple ? [] : undefined)
 }
 
@@ -127,7 +143,8 @@ function findNodeByPath(path: CascaderPath): CascaderNode | null {
   for (let i = 0; i < path.length; i++) {
     const v = path[i]
     const n = list.find(x => x.value === v) ?? null
-    if (!n) return null
+    if (!n)
+      return null
     current = n
     list = getChildren(n, path.slice(0, i + 1))
   }
@@ -140,7 +157,8 @@ function formatPath(path: CascaderPath): string {
   for (let i = 0; i < path.length; i++) {
     const v = path[i]
     const n = list.find(x => x.value === v)
-    if (!n) break
+    if (!n)
+      break
     labels.push(n.label)
     list = getChildren(n, path.slice(0, i + 1))
   }
@@ -148,19 +166,22 @@ function formatPath(path: CascaderPath): string {
 }
 
 const displayText = computed(() => {
-  if (props.multiple) return ''
+  if (props.multiple)
+    return ''
   const v = props.modelValue
   const path = Array.isArray(v) ? (v as CascaderPath) : null
-  if (!path || !path.length) return ''
+  if (!path || !path.length)
+    return ''
   return formatPath(path)
 })
 
 const displayTags = computed(() => {
-  if (!props.multiple) return []
+  if (!props.multiple)
+    return []
   return selectedPaths.value.map(p => ({ key: pathKey(p), label: formatPath(p) }))
 })
 
-type ColumnItem = { node: CascaderNode; level: number; path: CascaderPath; leaf: boolean; loading: boolean }
+interface ColumnItem { node: CascaderNode, level: number, path: CascaderPath, leaf: boolean, loading: boolean }
 
 const columns = computed<ColumnItem[][]>(() => {
   const out: ColumnItem[][] = []
@@ -183,32 +204,41 @@ const columns = computed<ColumnItem[][]>(() => {
     out.push(column)
 
     const nextVal = activePath.value[level]
-    if (nextVal === undefined) break
+    if (nextVal === undefined)
+      break
     current = list.find(x => x.value === nextVal) ?? null
-    if (!current) break
+    if (!current)
+      break
 
     const p = activePath.value.slice(0, level + 1)
     list = getChildren(current, p)
 
-    if (!list.length) break
+    if (!list.length)
+      break
   }
 
   return out
 })
 
 async function onHoverItem(item: ColumnItem) {
-  if (props.expandTrigger === 'click') return
-  if (props.disabled || item.node.disabled) return
-  if (item.leaf) return
+  if (props.expandTrigger === 'click')
+    return
+  if (props.disabled || item.node.disabled)
+    return
+  if (item.leaf)
+    return
 
   activePath.value = item.path
-  if (!props.load) return
-  if (item.leaf) return
+  if (!props.load)
+    return
+  if (item.leaf)
+    return
   await ensureChildren(item.node, item.path, item.level + 1)
 }
 
 async function onPick(item: ColumnItem) {
-  if (props.disabled || item.node.disabled) return
+  if (props.disabled || item.node.disabled)
+    return
 
   if (item.leaf) {
     toggleSelect(item.path)
@@ -223,7 +253,7 @@ async function onPick(item: ColumnItem) {
   await ensureChildren(item.node, item.path, item.level + 1)
 }
 
-type SearchHit = { key: string; path: CascaderPath; label: string; disabled: boolean; checked: boolean }
+interface SearchHit { key: string, path: CascaderPath, label: string, disabled: boolean, checked: boolean }
 
 function walkPaths(list: CascaderNode[], prefix: CascaderPath, out: SearchHit[]) {
   for (const n of list) {
@@ -251,7 +281,8 @@ function walkPaths(list: CascaderNode[], prefix: CascaderPath, out: SearchHit[])
 
 const searchHits = computed(() => {
   const q = query.value.trim().toLowerCase()
-  if (!q) return [] as SearchHit[]
+  if (!q)
+    return [] as SearchHit[]
 
   const all: SearchHit[] = []
   walkPaths(props.options, [], all)
@@ -270,7 +301,8 @@ watch(
     await nextTick()
     if (props.load && activePath.value.length) {
       const node = findNodeByPath(activePath.value)
-      if (node) await ensureChildren(node, activePath.value, activePath.value.length)
+      if (node)
+        await ensureChildren(node, activePath.value, activePath.value.length)
     }
   },
   { flush: 'post' },
@@ -279,15 +311,18 @@ watch(
 watch(
   () => props.modelValue,
   (v) => {
-    if (props.multiple) return
+    if (props.multiple)
+      return
     const path = Array.isArray(v) ? (v as CascaderPath) : []
-    if (path.length) activePath.value = path
+    if (path.length)
+      activePath.value = path
   },
   { immediate: true },
 )
 
 function onTriggerKeydown(e: KeyboardEvent) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault()
     open.value = !open.value
@@ -398,7 +433,9 @@ defineExpose({
             <span class="tx-cascader__search-label">{{ hit.label }}</span>
           </template>
         </TxCardItem>
-        <div v-if="!searchHits.length" class="tx-cascader__empty">No results</div>
+        <div v-if="!searchHits.length" class="tx-cascader__empty">
+          No results
+        </div>
       </div>
 
       <div v-else class="tx-cascader__columns">
@@ -412,11 +449,11 @@ defineExpose({
               'is-active': activePath[item.level] === item.node.value,
               'is-checked': selectedPaths.some(p => samePath(p, item.path)),
             }"
-            @mouseenter="onHoverItem(item)"
-            @click="onPick(item)"
             :clickable="!item.node.disabled"
             :disabled="!!item.node.disabled"
             :active="activePath[item.level] === item.node.value || selectedPaths.some(p => samePath(p, item.path))"
+            @mouseenter="onHoverItem(item)"
+            @click="onPick(item)"
           >
             <template v-if="multiple && item.leaf" #avatar>
               <TxCheckbox

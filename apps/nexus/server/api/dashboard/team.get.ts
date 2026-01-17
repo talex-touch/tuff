@@ -93,7 +93,8 @@ export default defineEventHandler(async (event) => {
           expiresAt: inv.expiresAt,
           createdAt: inv.createdAt,
         }))
-    } catch (error) {
+    }
+    catch (error) {
       console.error('Error fetching invites:', error)
     }
   }

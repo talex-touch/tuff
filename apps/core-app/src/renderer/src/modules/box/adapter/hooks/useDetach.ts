@@ -1,9 +1,10 @@
 import type { TuffItem } from '@talex-touch/utils'
-import { onBeforeUnmount, reactive, ref, type ComputedRef, type Ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
+import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
+import { onBeforeUnmount, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 
 interface UseDetachOptions {
   searchVal: Ref<string>
@@ -27,7 +28,11 @@ function buildUrl(item: TuffItem, query: string): string {
   if (item.kind === 'file' && item.meta?.file?.path) {
     return `file://${item.meta.file.path}`
   }
-  const params = new URLSearchParams({ itemId: item.id, query: query || '', source: item.source?.id || '' })
+  const params = new URLSearchParams({
+    itemId: item.id,
+    query: query || '',
+    source: item.source?.id || ''
+  })
   return `tuff://detached?${params.toString()}`
 }
 
@@ -52,7 +57,7 @@ export function useDetach(options: UseDetachOptions) {
     try {
       const interaction = item.meta?.interaction
       const showInput = interaction?.type !== 'widget'
-      
+
       const config = {
         url: buildUrl(item, searchVal.value),
         title: item.render?.basic?.title || 'Detached Item',
@@ -102,7 +107,10 @@ export function useDetach(options: UseDetachOptions) {
     flowPayload.value = {
       type: 'json',
       data: { item, query: searchVal.value },
-      context: { sourcePluginId: item.source?.id || 'corebox', sourceFeatureId: item.meta?.featureId }
+      context: {
+        sourcePluginId: item.source?.id || 'corebox',
+        sourceFeatureId: item.meta?.featureId
+      }
     }
     flowVisible.value = true
   }

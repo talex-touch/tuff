@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import type { SortableListEmits, SortableListItem, SortableListProps } from './types'
 import { computed, ref } from 'vue'
-import type { SortableListItem, SortableListProps, SortableListEmits } from './types'
 
 defineOptions({
   name: 'TxSortableList',
@@ -109,7 +109,9 @@ function onDragEnd(): void {
       @dragend="onDragEnd"
     >
       <slot name="item" :item="item" :dragging="item.id === draggingId">
-        <div class="tx-sortable-list__default">{{ item.id }}</div>
+        <div class="tx-sortable-list__default">
+          {{ item.id }}
+        </div>
       </slot>
     </div>
   </div>

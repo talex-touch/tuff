@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import type { Component, PropType, VNode } from 'vue'
 import {
+
   defineComponent,
   onMounted,
   onUnmounted,
+
   provide,
   ref,
-  type Component,
-  type PropType,
-  type VNode,
+
 } from 'vue'
 
 defineOptions({

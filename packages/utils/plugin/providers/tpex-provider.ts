@@ -5,8 +5,8 @@ import type {
   PluginProvider,
   PluginProviderContext,
 } from './types'
-import { PluginProviderType } from './types'
 import { NEXUS_BASE_URL } from '../../env'
+import { PluginProviderType } from './types'
 
 const DEFAULT_TPEX_API = NEXUS_BASE_URL
 
@@ -73,12 +73,12 @@ export interface TpexDetailResponse {
  * Formats: "tpex:slug", "tpex:slug@version", "slug" (when hintType is TPEX)
  */
 function parseTpexSource(source: string): { slug: string, version?: string } | null {
-  const tpexMatch = source.match(/^tpex:([a-z0-9][a-z0-9\-_.]{1,62}[a-z0-9])(?:@(.+))?$/i)
+  const tpexMatch = source.match(/^tpex:([a-z0-9][\w\-.]{1,62}[a-z0-9])(?:@(.+))?$/i)
   if (tpexMatch) {
     return { slug: tpexMatch[1], version: tpexMatch[2] }
   }
 
-  const slugMatch = source.match(/^([a-z0-9][a-z0-9\-_.]{1,62}[a-z0-9])(?:@(.+))?$/i)
+  const slugMatch = source.match(/^([a-z0-9][\w\-.]{1,62}[a-z0-9])(?:@(.+))?$/i)
   if (slugMatch) {
     return { slug: slugMatch[1], version: slugMatch[2] }
   }
@@ -260,7 +260,8 @@ export class TpexProvider implements PluginProvider {
   async getPlugin(slug: string): Promise<TpexDetailResponse['plugin'] | null> {
     const res = await fetch(`${this.apiBase}/api/market/plugins/${slug}`)
     if (!res.ok) {
-      if (res.status === 404) return null
+      if (res.status === 404)
+        return null
       throw new Error(`Failed to fetch plugin: ${res.statusText}`)
     }
 

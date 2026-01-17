@@ -1,6 +1,6 @@
-import TxStagger from './src/TxStagger.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { StaggerProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxStagger from './src/TxStagger.vue'
 
 const Stagger = withInstall(TxStagger)
 

@@ -1,8 +1,8 @@
 <script lang="ts" name="IntelligenceAuditPage" setup>
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TouchScroll from '~/components/base/TouchScroll.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
+import TouchScroll from '~/components/base/TouchScroll.vue'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
 import IntelligenceUsageChart from '~/components/intelligence/audit/IntelligenceUsageChart.vue'
 import IntelligenceUsageStats from '~/components/intelligence/audit/IntelligenceUsageStats.vue'

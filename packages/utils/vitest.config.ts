@@ -13,13 +13,13 @@ export default defineConfig({
       include: [
         'core-box/**/*.ts',
         'search/**/*.ts',
-        'transport/**/*.ts'
+        'transport/**/*.ts',
       ],
       exclude: [
         '**/*.d.ts',
         '**/index.ts',
-        '**/types.ts'
-      ]
-    }
-  }
+        '**/types.ts',
+      ],
+    },
+  },
 })

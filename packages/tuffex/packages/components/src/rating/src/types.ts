@@ -12,5 +12,5 @@ export interface RatingProps {
 
 export interface RatingEmits {
   'update:modelValue': [value: number]
-  change: [value: number]
+  'change': [value: number]
 }

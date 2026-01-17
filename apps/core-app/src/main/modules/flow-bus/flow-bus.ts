@@ -6,18 +6,18 @@
  */
 
 import type {
-  FlowPayload,
   FlowDispatchOptions,
   FlowDispatchResult,
-  FlowTargetInfo,
-  FlowSession,
   FlowError,
-  FlowPayloadType
+  FlowPayload,
+  FlowPayloadType,
+  FlowSession,
+  FlowTargetInfo
 } from '@talex-touch/utils'
 import { FlowErrorCode } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { flowTargetRegistry } from './target-registry'
 import { flowSessionManager } from './session-manager'
+import { flowTargetRegistry } from './target-registry'
 
 /**
  * Maximum payload size in bytes (5MB)
@@ -35,11 +35,14 @@ export class FlowBus {
   private readonly cleanupTaskId = 'flow-bus.cleanup'
 
   /** Pending target selection callbacks */
-  private pendingSelections: Map<string, {
-    resolve: (targetId: string | null) => void
-    reject: (error: Error) => void
-    timeout: NodeJS.Timeout
-  }> = new Map()
+  private pendingSelections: Map<
+    string,
+    {
+      resolve: (targetId: string | null) => void
+      reject: (error: Error) => void
+      timeout: NodeJS.Timeout
+    }
+  > = new Map()
 
   /** Delivery handlers by plugin ID */
   private deliveryHandlers: Map<string, (session: FlowSession) => Promise<void>> = new Map()
@@ -51,7 +54,7 @@ export class FlowBus {
       () => {
         void flowSessionManager.cleanup()
       },
-      { interval: 60, unit: 'seconds' },
+      { interval: 60, unit: 'seconds' }
     )
     this.pollingService.start()
   }
@@ -415,8 +418,7 @@ export class FlowBus {
    */
   getAvailableTargets(payloadType?: FlowPayloadType): FlowTargetInfo[] {
     if (payloadType) {
-      return flowTargetRegistry.getTargetsByPayloadType(payloadType)
-        .filter(t => t.isEnabled)
+      return flowTargetRegistry.getTargetsByPayloadType(payloadType).filter((t) => t.isEnabled)
     }
     return flowTargetRegistry.getEnabledTargets()
   }

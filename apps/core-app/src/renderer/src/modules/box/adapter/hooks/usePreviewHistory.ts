@@ -1,4 +1,5 @@
-import { onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue'
+import type { Ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { touchChannel } from '~/modules/channel/channel-core'
 
@@ -42,18 +43,28 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
     }
   }
 
-  watch(visible, (val) => {
-    window.__coreboxHistoryVisible = val
-    if (!val) activeIndex.value = -1
-    else ensureSelection(true)
-  }, { immediate: true })
+  watch(
+    visible,
+    (val) => {
+      window.__coreboxHistoryVisible = val
+      if (!val) activeIndex.value = -1
+      else ensureSelection(true)
+    },
+    { immediate: true }
+  )
 
-  watch(() => items.value.length, () => ensureSelection())
+  watch(
+    () => items.value.length,
+    () => ensureSelection()
+  )
 
   async function load(): Promise<void> {
     loading.value = true
     try {
-      const response = await touchChannel.send('clipboard:query', { category: 'preview', limit: 20 })
+      const response = await touchChannel.send('clipboard:query', {
+        category: 'preview',
+        limit: 20
+      })
       console.log('[usePreviewHistory] Query response:', response)
       items.value = Array.isArray(response) ? response : (response?.data ?? [])
       console.log('[usePreviewHistory] Loaded items:', items.value.length)
@@ -108,7 +119,12 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   function handleKeydown(event: KeyboardEvent): void {
     // Debug: log ⌘← events
     if (event.metaKey && event.key === 'ArrowLeft') {
-      console.log('[usePreviewHistory] handleKeydown ⌘←, visible:', visible.value, 'hasClass:', document.body.classList.contains('core-box'))
+      console.log(
+        '[usePreviewHistory] handleKeydown ⌘←, visible:',
+        visible.value,
+        'hasClass:',
+        document.body.classList.contains('core-box')
+      )
     }
     if (!visible.value || !document.body.classList.contains('core-box')) return
     const key = event.key
@@ -119,13 +135,15 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
       return
     }
     if (key === 'ArrowDown' && items.value.length) {
-      activeIndex.value = activeIndex.value < 0 ? 0 : Math.min(activeIndex.value + 1, items.value.length - 1)
+      activeIndex.value =
+        activeIndex.value < 0 ? 0 : Math.min(activeIndex.value + 1, items.value.length - 1)
       event.preventDefault()
       event.stopPropagation()
       return
     }
     if (key === 'ArrowUp' && items.value.length) {
-      activeIndex.value = activeIndex.value < 0 ? items.value.length - 1 : Math.max(activeIndex.value - 1, 0)
+      activeIndex.value =
+        activeIndex.value < 0 ? items.value.length - 1 : Math.max(activeIndex.value - 1, 0)
       event.preventDefault()
       event.stopPropagation()
       return
@@ -152,9 +170,11 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
     try {
       await touchChannel.send('clipboard:write-text', { text: data.value })
       toast.success('结果已复制')
-    } catch { toast.error('复制失败') }
+    } catch {
+      toast.error('复制失败')
+    }
   })
-  
+
   const unregNewItem = touchChannel.regChannel('clipboard:new-item', ({ data }) => {
     if (!data?.meta?.category) return
     if (data.meta.category === 'preview') {

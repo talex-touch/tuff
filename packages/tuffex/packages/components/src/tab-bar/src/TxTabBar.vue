@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { TabBarEmits, TabBarProps, TabBarValue } from './types'
+import { computed } from 'vue'
 
 defineOptions({ name: 'TxTabBar' })
 
@@ -30,8 +30,10 @@ const rootStyle = computed<Record<string, string>>(() => {
 })
 
 function onPick(v: TabBarValue, disabled?: boolean) {
-  if (props.disabled) return
-  if (disabled) return
+  if (props.disabled)
+    return
+  if (disabled)
+    return
   value.value = v
 }
 </script>
@@ -59,7 +61,9 @@ function onPick(v: TabBarValue, disabled?: boolean) {
           <i v-if="it.iconClass" :class="it.iconClass" />
           <span v-if="it.badge != null && it.badge !== ''" class="tx-tab-bar__badge">{{ it.badge }}</span>
         </div>
-        <div class="tx-tab-bar__label">{{ it.label }}</div>
+        <div class="tx-tab-bar__label">
+          {{ it.label }}
+        </div>
       </button>
     </div>
 

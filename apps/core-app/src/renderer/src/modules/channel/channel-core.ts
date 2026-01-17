@@ -208,17 +208,17 @@ class TouchChannel implements ITouchClientChannel {
           payloadPreview: this.formatPayloadPreview(arg),
           stack
         })
-      reportPerfToMain({
-        kind: 'channel.send.timeout',
-        eventName,
-        durationMs: timeoutMs,
-        at: Date.now(),
-        payloadPreview: this.formatPayloadPreview(arg),
-        stack,
-        meta: { timeoutMs, syncId: uniqueId }
-      })
-      reject(error)
-    }, timeoutMs)
+        reportPerfToMain({
+          kind: 'channel.send.timeout',
+          eventName,
+          durationMs: timeoutMs,
+          at: Date.now(),
+          payloadPreview: this.formatPayloadPreview(arg),
+          stack,
+          meta: { timeoutMs, syncId: uniqueId }
+        })
+        reject(error)
+      }, timeoutMs)
 
       this.pendingMap.set(uniqueId, (res) => {
         clearTimeout(timeoutHandle)
@@ -297,10 +297,13 @@ class TouchChannel implements ITouchClientChannel {
       const duration = performance.now() - startedAt
 
       if (duration >= CHANNEL_SENDSYNC_WARN_MS) {
-        console.warn(`[Channel][sendSync][slow] "${eventName}" blocked renderer for ${duration.toFixed(1)}ms`, {
-          payloadPreview: this.formatPayloadPreview(arg),
-          stack: new Error().stack
-        })
+        console.warn(
+          `[Channel][sendSync][slow] "${eventName}" blocked renderer for ${duration.toFixed(1)}ms`,
+          {
+            payloadPreview: this.formatPayloadPreview(arg),
+            stack: new Error().stack
+          }
+        )
         reportPerfToMain({
           kind: 'channel.sendSync.slow',
           eventName,

@@ -1,8 +1,8 @@
-import type { ITuffTransport, SendOptions, StreamController, StreamOptions } from '../types'
 import type { TuffEvent } from '../event/types'
+import type { ITuffTransport, SendOptions, StreamController, StreamOptions } from '../types'
 import { assertTuffEvent } from '../event/builder'
 
-type PluginChannelLike = {
+interface PluginChannelLike {
   send?: (eventName: string, payload?: any) => Promise<any>
   sendToMain?: (eventName: string, payload?: any) => Promise<any>
   regChannel?: (eventName: string, handler: (data: any) => any) => () => void
@@ -59,22 +59,22 @@ export class TuffPluginTransport implements ITuffTransport {
     const eventName = event.toEventName()
 
     if (typeof this.channel.onMain === 'function') {
-      return this.channel.onMain(eventName, (raw) => handler(unwrapPayload<TReq>(raw)))
+      return this.channel.onMain(eventName, raw => handler(unwrapPayload<TReq>(raw)))
     }
 
     if (typeof this.channel.regChannel === 'function') {
-      return this.channel.regChannel(eventName, (raw) => handler(unwrapPayload<TReq>(raw)))
+      return this.channel.regChannel(eventName, raw => handler(unwrapPayload<TReq>(raw)))
     }
 
     throw new Error('[TuffPluginTransport] Channel on function not available')
   }
 
   async flush(): Promise<void> {
-    return
+
   }
 
   destroy(): void {
-    return
+
   }
 }
 

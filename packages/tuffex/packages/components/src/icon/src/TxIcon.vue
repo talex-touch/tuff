@@ -1,6 +1,6 @@
 <script lang="ts" setup>
-import { computed, inject, ref, watch } from 'vue'
 import type { TxIconConfig, TxIconSource } from './types'
+import { computed, inject, ref, watch } from 'vue'
 import { TX_ICON_CONFIG_KEY } from './types'
 
 defineOptions({
@@ -44,19 +44,19 @@ const builtinIcons = {
     viewBox: '0 0 24 24',
     path: 'M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z',
   },
-  close: {
+  'close': {
     viewBox: '0 0 24 24',
     path: 'M12 10.586l4.95-4.95 1.414 1.414-4.95 4.95 4.95 4.95-1.414 1.414-4.95-4.95-4.954.95-1.414-1.414 4.95-4.95-4.95-4.95 1.414-1.414z',
   },
-  search: {
+  'search': {
     viewBox: '0 0 24 24',
     path: 'M10 2a8 8 0 105.293 14.293l4.7074.707 1.414-1.414-4.707-4.707A8 8 0 0010 2zm0 2a6 6 0 11012 6 6 0 010-12z',
   },
-  user: {
+  'user': {
     viewBox: '0 0 24 24',
     path: 'M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z',
   },
-  star: {
+  'star': {
     viewBox: '0 0 24 24',
     path: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.62L12 29.19 8.6229.24l5.46 4.73L5.82 21z',
   },
@@ -97,7 +97,7 @@ const resolvedUrl = computed(() => {
 
   // Use custom resolver if provided
   if (urlResolver.value) {
-    return urlResolver.value(rawValue, icon.type as'url' | 'file')
+    return urlResolver.value(rawValue, icon.type as 'url' | 'file')
   }
 
   // Default resolution: add file protocol for'file' type
@@ -165,7 +165,8 @@ watch(
       return
     }
     svgContent.value = ''
-  },{ immediate: true },
+  },
+  { immediate: true },
 )
 </script>
 
@@ -179,8 +180,8 @@ watch(
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
     <span v-if="!safeIcon.value" class="tuff-icon__empty"><slot name="empty">
-        <img v-if="empty" :alt="alt" :src="empty" />
-      </slot>
+      <img v-if="empty" :alt="alt" :src="empty">
+    </slot>
     </span>
 
     <span v-else-if="isError" class="tuff-icon__error">
@@ -214,7 +215,7 @@ watch(
       </template>
       <!-- Colorful mode: render as img (colorful=true) -->
       <template v-else>
-        <img :alt="alt" :src="resolvedUrl" />
+        <img :alt="alt" :src="resolvedUrl">
       </template>
     </template>
   </span>

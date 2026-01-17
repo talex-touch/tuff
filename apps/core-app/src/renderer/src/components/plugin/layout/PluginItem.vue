@@ -3,8 +3,8 @@ import type { ITouchPlugin } from '@talex-touch/utils'
 import { ElPopover } from 'element-plus'
 import { computed } from 'vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
-import TuffIcon from '~/components/base/TuffIcon.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
 
 const props = defineProps<{
@@ -41,14 +41,14 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
           class="issue-item flex items-start p-1.5 mb-1.5 last:mb-0 rounded"
           :class="{
             'bg-red-500/10': issue.type === 'error',
-            'bg-yellow-500/10': issue.type === 'warning',
+            'bg-yellow-500/10': issue.type === 'warning'
           }"
         >
           <i
             class="flex-shrink-0 mt-0.5"
             :class="{
               'i-ri-close-circle-fill text-red-500': issue.type === 'error',
-              'i-ri-alert-fill text-yellow-500': issue.type === 'warning',
+              'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
             }"
           />
           <div class="ml-2 text-xs">

@@ -4,7 +4,9 @@
 
 <template>
   <div class="touch-text-container">
-    <h1 ref="textRef" class="touch-text" data-text="Tuff">Tuff</h1>
+    <h1 ref="textRef" class="touch-text" data-text="Tuff">
+      Tuff
+    </h1>
   </div>
 </template>
 

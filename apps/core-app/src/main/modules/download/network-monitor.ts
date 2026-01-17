@@ -37,14 +37,13 @@ export class NetworkMonitor {
         speed,
         latency,
         stability,
-        recommendedConcurrency,
+        recommendedConcurrency
       }
 
       this.lastCheckTime = now
       this.networkAvailable = true
       return this.cachedStatus
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Network monitoring failed:', error)
       this.networkAvailable = false
 
@@ -52,7 +51,7 @@ export class NetworkMonitor {
         speed: 1024 * 1024,
         latency: 100,
         stability: 0.5,
-        recommendedConcurrency: 2,
+        recommendedConcurrency: 2
       }
 
       this.cachedStatus = defaultStatus
@@ -71,7 +70,7 @@ export class NetworkMonitor {
         speed: 1024 * 1024,
         latency: 100,
         stability: 0.5,
-        recommendedConcurrency: 2,
+        recommendedConcurrency: 2
       }
     )
   }
@@ -84,8 +83,8 @@ export class NetworkMonitor {
    * @returns Recommended concurrent download count (1-10)
    */
   getRecommendedConcurrency(speed?: number, latency?: number, stability?: number): number {
-    const status
-      = speed !== undefined
+    const status =
+      speed !== undefined
         ? { speed, latency: latency || 100, stability: stability || 0.5 }
         : this.getCurrentStatus()
 
@@ -93,31 +92,25 @@ export class NetworkMonitor {
 
     if (status.speed > 10 * 1024 * 1024) {
       concurrency = 5
-    }
-    else if (status.speed > 5 * 1024 * 1024) {
+    } else if (status.speed > 5 * 1024 * 1024) {
       concurrency = 4
-    }
-    else if (status.speed > 2 * 1024 * 1024) {
+    } else if (status.speed > 2 * 1024 * 1024) {
       concurrency = 3
-    }
-    else if (status.speed > 1024 * 1024) {
+    } else if (status.speed > 1024 * 1024) {
       concurrency = 2
-    }
-    else {
+    } else {
       concurrency = 1
     }
 
     if (status.latency > 500) {
       concurrency = Math.max(1, concurrency - 1)
-    }
-    else if (status.latency < 50) {
+    } else if (status.latency < 50) {
       concurrency = Math.min(10, concurrency + 1)
     }
 
     if (status.stability < 0.3) {
       concurrency = Math.max(1, concurrency - 1)
-    }
-    else if (status.stability > 0.8) {
+    } else if (status.stability > 0.8) {
       concurrency = Math.min(10, concurrency + 1)
     }
 
@@ -137,7 +130,7 @@ export class NetworkMonitor {
     const testUrls = [
       'https://cdn.jsdelivr.net/gh/sindresorhus/github-markdown-css@4/github-markdown.css',
       'https://unpkg.com/vue@latest/dist/vue.global.js',
-      'https://httpbin.org/bytes/1048576',
+      'https://httpbin.org/bytes/1048576'
     ]
 
     for (const testUrl of testUrls) {
@@ -146,7 +139,7 @@ export class NetworkMonitor {
 
         const response = await fetch(testUrl, {
           method: 'GET',
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(5000)
         })
 
         if (!response.ok) {
@@ -162,8 +155,7 @@ export class NetworkMonitor {
         this.addToHistory(this.speedHistory, speed)
         this.networkAvailable = true
         return speed
-      }
-      catch (error) {
+      } catch (error) {
         continue
       }
     }
@@ -190,7 +182,7 @@ export class NetworkMonitor {
     const testUrls = [
       'https://www.google.com/favicon.ico',
       'https://cdn.jsdelivr.net/favicon.ico',
-      'https://httpbin.org/get',
+      'https://httpbin.org/get'
     ]
 
     for (const testUrl of testUrls) {
@@ -199,7 +191,7 @@ export class NetworkMonitor {
 
         const response = await fetch(testUrl, {
           method: 'HEAD',
-          signal: AbortSignal.timeout(3000),
+          signal: AbortSignal.timeout(3000)
         })
 
         if (!response.ok) {
@@ -214,8 +206,7 @@ export class NetworkMonitor {
         this.addToHistory(this.latencyHistory, latency)
         this.networkAvailable = true
         return latency
-      }
-      catch (error) {
+      } catch (error) {
         continue
       }
     }
@@ -243,14 +234,14 @@ export class NetworkMonitor {
     const speedVariance = this.calculateVariance(this.speedHistory)
     const speedStability = Math.max(
       0,
-      1
-      - speedVariance
-      / (this.speedHistory.reduce((sum, s) => sum + s, 0) / this.speedHistory.length),
+      1 -
+        speedVariance /
+          (this.speedHistory.reduce((sum, s) => sum + s, 0) / this.speedHistory.length)
     )
 
     const latencyVariance = this.calculateVariance(this.latencyHistory)
-    const avgLatency
-      = this.latencyHistory.reduce((sum, l) => sum + l, 0) / this.latencyHistory.length
+    const avgLatency =
+      this.latencyHistory.reduce((sum, l) => sum + l, 0) / this.latencyHistory.length
     const latencyStability = Math.max(0, 1 - latencyVariance / avgLatency)
 
     return (speedStability + latencyStability) / 2
@@ -263,8 +254,7 @@ export class NetworkMonitor {
    */
   private calculateVariance(values: number[]): number {
     const mean = values.reduce((sum, value) => sum + value, 0) / values.length
-    const variance
-      = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length
+    const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length
     return Math.sqrt(variance)
   }
 
@@ -290,14 +280,14 @@ export class NetworkMonitor {
     this.pollingService.register(
       taskId,
       async () => {
-      const oldStatus = this.cachedStatus
-      const newStatus = await this.monitorNetwork()
+        const oldStatus = this.cachedStatus
+        const newStatus = await this.monitorNetwork()
 
-      if (oldStatus && this.hasSignificantChange(oldStatus, newStatus)) {
-        callback(newStatus)
-      }
+        if (oldStatus && this.hasSignificantChange(oldStatus, newStatus)) {
+          callback(newStatus)
+        }
       },
-      { interval: 10, unit: 'seconds' },
+      { interval: 10, unit: 'seconds' }
     )
     this.pollingService.start()
   }
@@ -325,14 +315,11 @@ export class NetworkMonitor {
 
     if (status.speed > 5 * 1024 * 1024 && status.latency < 100 && status.stability > 0.8) {
       return 'excellent'
-    }
-    else if (status.speed > 2 * 1024 * 1024 && status.latency < 200 && status.stability > 0.6) {
+    } else if (status.speed > 2 * 1024 * 1024 && status.latency < 200 && status.stability > 0.6) {
       return 'good'
-    }
-    else if (status.speed > 1024 * 1024 && status.latency < 500 && status.stability > 0.4) {
+    } else if (status.speed > 1024 * 1024 && status.latency < 500 && status.stability > 0.4) {
       return 'fair'
-    }
-    else {
+    } else {
       return 'poor'
     }
   }
@@ -345,11 +332,9 @@ export class NetworkMonitor {
   formatSpeed(bytesPerSecond: number): string {
     if (bytesPerSecond >= 1024 * 1024) {
       return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-    }
-    else if (bytesPerSecond >= 1024) {
+    } else if (bytesPerSecond >= 1024) {
       return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-    }
-    else {
+    } else {
       return `${bytesPerSecond.toFixed(0)} B/s`
     }
   }
@@ -362,14 +347,11 @@ export class NetworkMonitor {
   formatSize(bytes: number): string {
     if (bytes >= 1024 * 1024 * 1024) {
       return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-    }
-    else if (bytes >= 1024 * 1024) {
+    } else if (bytes >= 1024 * 1024) {
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    }
-    else if (bytes >= 1024) {
+    } else if (bytes >= 1024) {
       return `${(bytes / 1024).toFixed(1)} KB`
-    }
-    else {
+    } else {
       return `${bytes.toFixed(0)} B`
     }
   }

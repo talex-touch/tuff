@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import { AppIcons, classIcon, getIcon, TuffIcons } from '../../icons'
 
-describe('TuffIcons', () => {
+describe('tuffIcons', () => {
   it('should have common icons defined', () => {
     expect(TuffIcons.Search).toBe('i-ri-search-line')
     expect(TuffIcons.Settings).toBe('i-ri-settings-3-line')
     expect(TuffIcons.Home).toBe('i-ri-home-line')
-    expect(TuffIcons.User).toBe('i-ri-user-line')})
+    expect(TuffIcons.User).toBe('i-ri-user-line')
+  })
 
   it('should have navigation icons', () => {
     expect(TuffIcons.Back).toBe('i-ri-arrow-left-line')
@@ -19,7 +20,8 @@ describe('TuffIcons', () => {
     expect(TuffIcons.Add).toBe('i-ri-add-line')
     expect(TuffIcons.Delete).toBe('i-ri-delete-bin-line')
     expect(TuffIcons.Edit).toBe('i-ri-edit-line')
-    expect(TuffIcons.Copy).toBe('i-ri-file-copy-line')})
+    expect(TuffIcons.Copy).toBe('i-ri-file-copy-line')
+  })
 
   it('should have status icons', () => {
     expect(TuffIcons.Check).toBe('i-ri-check-line')
@@ -31,7 +33,8 @@ describe('TuffIcons', () => {
   it('should have file icons', () => {
     expect(TuffIcons.File).toBe('i-ri-file-line')
     expect(TuffIcons.Folder).toBe('i-ri-folder-line')
-    expect(TuffIcons.FileCode).toBe('i-ri-file-code-line')})
+    expect(TuffIcons.FileCode).toBe('i-ri-file-code-line')
+  })
 
   it('should follow UnoCSS icon naming convention', () => {
     Object.values(TuffIcons).forEach((iconClass) => {
@@ -65,7 +68,7 @@ describe('getIcon', () => {
   })
 })
 
-describe('AppIcons', () => {
+describe('appIcons', () => {
   it('should have app brand icons', () => {
     expect(AppIcons.VSCode).toBe('i-simple-icons-visualstudiocode')
     expect(AppIcons.Chrome).toBe('i-simple-icons-googlechrome')

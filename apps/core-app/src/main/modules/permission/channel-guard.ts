@@ -75,7 +75,7 @@ export function withPermission(
         message,
         permissionId,
         pluginId,
-        showRequest: result.showRequest,
+        showRequest: result.showRequest
       })
     }
 

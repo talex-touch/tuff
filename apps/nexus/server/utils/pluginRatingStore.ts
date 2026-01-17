@@ -76,7 +76,7 @@ export async function getPluginRatingSummary(
         AVG(rating) as average
       FROM ${PLUGIN_RATINGS_TABLE}
       WHERE plugin_id = ?1;
-    `).bind(pluginId).first<{ count: number; average: number }>()
+    `).bind(pluginId).first<{ count: number, average: number }>()
 
     return normalizeRatingSummary(row?.average, row?.count)
   }
@@ -93,7 +93,7 @@ export async function getPluginRatingSummary(
 
 export async function upsertPluginRating(
   event: H3Event,
-  input: { pluginId: string; userId: string; rating: number },
+  input: { pluginId: string, userId: string, rating: number },
 ): Promise<void> {
   const db = getD1Database(event)
   const now = new Date().toISOString()
@@ -142,4 +142,3 @@ export async function upsertPluginRating(
   }
   await writeStoredRatings(items)
 }
-

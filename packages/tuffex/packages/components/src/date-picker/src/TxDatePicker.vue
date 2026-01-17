@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { PickerColumn, PickerValue } from '../../picker/src/types'
+import type { DatePickerEmits, DatePickerProps } from './types'
 import { computed, ref, watch } from 'vue'
 import TxPicker from '../../picker/src/TxPicker.vue'
-import type { PickerColumn, PickerPrimitive, PickerValue } from '../../picker/src/types'
-import type { DatePickerEmits, DatePickerProps } from './types'
 
 defineOptions({ name: 'TxDatePicker' })
 
@@ -29,29 +29,34 @@ function formatYmd(y: number, m: number, d: number): string {
 }
 
 function isValidDateParts(y: number, m: number, d: number): boolean {
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false
-  if (m < 1 || m > 12) return false
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d))
+    return false
+  if (m < 1 || m > 12)
+    return false
   const max = new Date(y, m, 0).getDate()
   return d >= 1 && d <= max
 }
 
-function parseYmd(s: string): { y: number; m: number; d: number } | null {
+function parseYmd(s: string): { y: number, m: number, d: number } | null {
   const raw = (s || '').trim()
-  if (!raw) return null
+  if (!raw)
+    return null
   const m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
-  if (!m) return null
+  if (!m)
+    return null
   const y = Number(m[1])
   const mm = Number(m[2])
   const d = Number(m[3])
-  if (!isValidDateParts(y, mm, d)) return null
+  if (!isValidDateParts(y, mm, d))
+    return null
   return { y, m: mm, d }
 }
 
-function toDateObj(p: { y: number; m: number; d: number }): Date {
+function toDateObj(p: { y: number, m: number, d: number }): Date {
   return new Date(p.y, p.m - 1, p.d)
 }
 
-function clampDate(p: { y: number; m: number; d: number }, min: Date | null, max: Date | null) {
+function clampDate(p: { y: number, m: number, d: number }, min: Date | null, max: Date | null) {
   let y = p.y
   let m = p.m
   let d = p.d
@@ -88,7 +93,7 @@ const maxDate = computed(() => {
   return p ? toDateObj(p) : null
 })
 
-const localParts = ref<{ y: number; m: number; d: number }>({ y: 2025, m: 1, d: 1 })
+const localParts = ref<{ y: number, m: number, d: number }>({ y: 2025, m: 1, d: 1 })
 
 function setFromModel(v: string) {
   const parsed = parseYmd(v)
@@ -102,7 +107,7 @@ function setFromModel(v: string) {
 
 watch(
   () => props.modelValue,
-  (v) => setFromModel(v || ''),
+  v => setFromModel(v || ''),
   { immediate: true },
 )
 
@@ -134,7 +139,7 @@ const pickerColumns = computed<PickerColumn[]>(() => {
   const maxM = max ? max.getMonth() + 1 : null
   const maxD = max ? max.getDate() : null
 
-  const yearOptions = years.value.map((yy) => ({
+  const yearOptions = years.value.map(yy => ({
     value: yy,
     label: String(yy),
     disabled: (minY != null && yy < minY) || (maxY != null && yy > maxY),
@@ -142,18 +147,18 @@ const pickerColumns = computed<PickerColumn[]>(() => {
 
   const monthOptions = Array.from({ length: 12 }).map((_, i) => {
     const mm = i + 1
-    const disabled =
-      (minY != null && minM != null && y === minY && mm < minM) ||
-      (maxY != null && maxM != null && y === maxY && mm > maxM)
+    const disabled
+      = (minY != null && minM != null && y === minY && mm < minM)
+        || (maxY != null && maxM != null && y === maxY && mm > maxM)
     return { value: mm, label: pad2(mm), disabled }
   })
 
   const maxDay = new Date(y, m, 0).getDate()
   const dayOptions = Array.from({ length: maxDay }).map((_, i) => {
     const dd = i + 1
-    const disabled =
-      (minY != null && minM != null && minD != null && y === minY && m === minM && dd < minD) ||
-      (maxY != null && maxM != null && maxD != null && y === maxY && m === maxM && dd > maxD)
+    const disabled
+      = (minY != null && minM != null && minD != null && y === minY && m === minM && dd < minD)
+        || (maxY != null && maxM != null && maxD != null && y === maxY && m === maxM && dd > maxD)
     return { value: dd, label: pad2(dd), disabled }
   })
 

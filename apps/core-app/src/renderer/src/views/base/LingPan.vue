@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ElMessageBox, ElProgress, ElTabPane, ElTabs } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { appSetting } from '~/modules/channel/storage'
 import { touchChannel } from '~/modules/channel/channel-core'
+import { appSetting } from '~/modules/channel/storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 
 interface ActiveAppInfo {
@@ -97,12 +97,12 @@ interface TuffDashboardSnapshot {
   }
   config: {
     total: number
-    entries: Array<{ key: string, value: unknown }>
+    entries: Array<{ key: string; value: unknown }>
   }
   logs: {
     directory: string
     userDataDir: string
-    recentFiles: Array<{ name: string, size: number, updatedAt: string | null }>
+    recentFiles: Array<{ name: string; size: number; updatedAt: string | null }>
   }
   applications: {
     activeApp: ActiveAppInfo | null
@@ -190,12 +190,12 @@ const overallProgress = computed(() => {
   const { stage, progress } = indexingProgress.value
 
   // Stage weights: cleanup 5%, scanning 20%, indexing 60%, reconciliation 15%
-  const stageWeights: Record<string, { start: number, weight: number }> = {
+  const stageWeights: Record<string, { start: number; weight: number }> = {
     cleanup: { start: 0, weight: 5 },
     scanning: { start: 5, weight: 20 },
     indexing: { start: 25, weight: 60 },
     reconciliation: { start: 85, weight: 15 },
-    completed: { start: 100, weight: 0 },
+    completed: { start: 100, weight: 0 }
   }
 
   const stageInfo = stageWeights[stage] || { start: 0, weight: 0 }
@@ -220,7 +220,7 @@ const verboseLogsEnabled = computed({
     }
     appSetting.diagnostics.verboseLogs = value
     ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
-  },
+  }
 })
 
 async function requestVerboseLogs(): Promise<void> {
@@ -234,8 +234,8 @@ async function requestVerboseLogs(): Promise<void> {
       {
         confirmButtonText: '启用',
         cancelButtonText: '暂不',
-        type: 'warning',
-      },
+        type: 'warning'
+      }
     )
     verboseLogsEnabled.value = true
     verboseWarningDismissed.value = true
@@ -282,7 +282,7 @@ function setupIndexingProgressListener(): void {
         stage: progressData.stage,
         current: progressData.current,
         total: progressData.total,
-        progress: progressData.progress,
+        progress: progressData.progress
       }
       // Reset to null when completed
       if (progressData.stage === 'completed') {
@@ -299,7 +299,7 @@ const ocrTimeline = computed(() => ({
   排队: snapshot.value?.ocr.stats.lastQueued ?? null,
   派发: snapshot.value?.ocr.stats.lastDispatch ?? null,
   成功: snapshot.value?.ocr.stats.lastSuccess ?? null,
-  失败: snapshot.value?.ocr.stats.lastFailure ?? null,
+  失败: snapshot.value?.ocr.stats.lastFailure ?? null
 }))
 
 async function load(): Promise<void> {
@@ -315,7 +315,7 @@ async function load(): Promise<void> {
       eventName: '/details:fetch',
       durationMs: fetchDurationMs,
       at: Date.now(),
-      meta: { limit: limit.value, channel: 'tuff:dashboard' },
+      meta: { limit: limit.value, channel: 'tuff:dashboard' }
     })
     if (!response?.ok) {
       throw new Error(response?.error || 'Unknown dashboard error')
@@ -324,7 +324,7 @@ async function load(): Promise<void> {
 
     const renderStartedAt = performance.now()
     await nextTick()
-    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     const renderDurationMs = performance.now() - renderStartedAt
     reportPerfToMain({
       kind: 'ui.details.render',
@@ -333,28 +333,25 @@ async function load(): Promise<void> {
       at: Date.now(),
       meta: {
         limit: limit.value,
-        snapshotGeneratedAt: snapshot.value?.generatedAt ?? null,
-      },
+        snapshotGeneratedAt: snapshot.value?.generatedAt ?? null
+      }
     })
-  }
-  catch (err) {
+  } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
-  }
-  finally {
+  } finally {
     loading.value = false
     reportPerfToMain({
       kind: 'ui.details.total',
       eventName: '/details:total',
       durationMs: performance.now() - startedAt,
       at: Date.now(),
-      meta: { limit: limit.value, ok: error.value === null },
+      meta: { limit: limit.value, ok: error.value === null }
     })
   }
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value)
-    return 'N/A'
+  if (!value) return 'N/A'
   try {
     return new Intl.DateTimeFormat(undefined, {
       year: 'numeric',
@@ -362,17 +359,15 @@ function formatDateTime(value: string | null): string {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit',
+      second: '2-digit'
     }).format(new Date(value))
-  }
-  catch {
+  } catch {
     return value
   }
 }
 
 function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds))
-    return 'N/A'
+  if (!Number.isFinite(seconds)) return 'N/A'
   const hrs = Math.floor(seconds / 3600)
   const mins = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)
@@ -387,10 +382,8 @@ function formatDurationMs(milliseconds: number | null): string {
 }
 
 function formatBytes(value: number | null): string {
-  if (value === null || value === undefined || value < 0)
-    return 'N/A'
-  if (value === 0)
-    return '0 B'
+  if (value === null || value === undefined || value < 0) return 'N/A'
+  if (value === 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const order = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1)
   const num = value / 1024 ** order
@@ -405,12 +398,13 @@ function formatPercent(value: number | null): string {
 }
 
 function formatProgress(value: number | null): string {
-  if (value === null || value < 0)
-    return 'N/A'
+  if (value === null || value < 0) return 'N/A'
   return `${(value * 100).toFixed(1)}%`
 }
 
-function formatTaskSummary(task: TuffDashboardSnapshot['workers']['workers'][number]['lastTask']): string {
+function formatTaskSummary(
+  task: TuffDashboardSnapshot['workers']['workers'][number]['lastTask']
+): string {
   if (!task) {
     return 'N/A'
   }
@@ -427,7 +421,9 @@ function formatTaskSummary(task: TuffDashboardSnapshot['workers']['workers'][num
   return parts.join(' | ')
 }
 
-function formatEventLoop(value: TuffDashboardSnapshot['workers']['workers'][number]['metrics']): string {
+function formatEventLoop(
+  value: TuffDashboardSnapshot['workers']['workers'][number]['metrics']
+): string {
   if (!value?.eventLoop) {
     return 'N/A'
   }
@@ -435,67 +431,52 @@ function formatEventLoop(value: TuffDashboardSnapshot['workers']['workers'][numb
 }
 
 function truncate(value: string, max = 32): string {
-  if (value.length <= max)
-    return value
+  if (value.length <= max) return value
   return `${value.slice(0, max - 3)}...`
 }
 
 function formatStatus(status?: string | null): string {
-  if (!status)
-    return 'UNKNOWN'
+  if (!status) return 'UNKNOWN'
   return status.toUpperCase()
 }
 
 function getWorkerStateIcon(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
-  if (worker.state === 'busy')
-    return 'i-ri-loader-4-line'
-  if (worker.state === 'idle')
-    return 'i-ri-checkbox-circle-line'
-  if (worker.lastError)
-    return 'i-ri-error-warning-line'
+  if (worker.state === 'busy') return 'i-ri-loader-4-line'
+  if (worker.state === 'idle') return 'i-ri-checkbox-circle-line'
+  if (worker.lastError) return 'i-ri-error-warning-line'
   return 'i-ri-pause-circle-line'
 }
 
 function getWorkerStateHint(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
-  if (worker.state === 'busy')
-    return 'Worker 正在处理任务。'
-  if (worker.state === 'idle')
-    return 'Worker 已就绪。'
-  if (worker.lastError)
-    return 'Worker 已离线：发生异常并退出，将在下次任务触发时按需重启。'
+  if (worker.state === 'busy') return 'Worker 正在处理任务。'
+  if (worker.state === 'idle') return 'Worker 已就绪。'
+  if (worker.lastError) return 'Worker 已离线：发生异常并退出，将在下次任务触发时按需重启。'
   return 'Worker 按需启动：未触发任务时不会创建线程，因此显示为 offline。'
 }
 
 function getWorkerStateLabel(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
-  if (worker.state !== 'offline')
-    return worker.state
+  if (worker.state !== 'offline') return worker.state
   return worker.lastError ? 'offline (crashed)' : 'offline (lazy)'
 }
 
 function formatEvent(entry: Record<string, unknown> | null): string {
-  if (!entry)
-    return 'N/A'
+  if (!entry) return 'N/A'
   const at = typeof entry.at === 'string' ? entry.at : null
   const jobId = typeof entry.jobId === 'number' ? entry.jobId : null
   const clipboardId = typeof entry.clipboardId === 'number' ? entry.clipboardId : null
   const hash = typeof entry.payloadHash === 'string' ? entry.payloadHash : null
 
   const parts: string[] = []
-  if (jobId !== null)
-    parts.push(`#${jobId}`)
-  if (clipboardId !== null)
-    parts.push(`Clipboard ${clipboardId}`)
-  if (hash)
-    parts.push(truncate(hash, 12))
-  if (at)
-    parts.push(formatDateTime(at))
+  if (jobId !== null) parts.push(`#${jobId}`)
+  if (clipboardId !== null) parts.push(`Clipboard ${clipboardId}`)
+  if (hash) parts.push(truncate(hash, 12))
+  if (at) parts.push(formatDateTime(at))
 
   return parts.join(' | ') || 'N/A'
 }
 
 function sourceLabel(job: OcrJobEntry): string {
-  if (!job.source)
-    return 'UNKNOWN'
+  if (!job.source) return 'UNKNOWN'
   if (job.source.type === 'file') {
     return job.source.filePath
       ? job.source.filePath.split(/\\|\//).pop() || job.source.filePath
@@ -532,7 +513,7 @@ watch(
   (value) => {
     ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 onMounted(() => {
@@ -556,9 +537,7 @@ onUnmounted(() => {
           <h1 class="debug-title">
             {{ snapshot?.panelName ?? '详细信息' }}
           </h1>
-          <p class="debug-subtitle">
-            System Status Monitor - Real-time Application Health
-          </p>
+          <p class="debug-subtitle">System Status Monitor - Real-time Application Health</p>
         </div>
         <div class="header-controls">
           <div class="control-group">
@@ -585,26 +564,25 @@ onUnmounted(() => {
     </header>
 
     <div v-if="!verboseLogsEnabled && !verboseWarningDismissed" class="warning-panel">
-      <div class="warning-header">
-        注意
-      </div>
+      <div class="warning-header">注意</div>
       <div class="warning-content">
-        启用详细日志会增加 CPU、内存与磁盘占用，并可能记录路径等敏感信息。建议仅在排查问题时短时开启。
+        启用详细日志会增加
+        CPU、内存与磁盘占用，并可能记录路径等敏感信息。建议仅在排查问题时短时开启。
       </div>
       <div class="warning-actions">
-        <button class="warning-btn" type="button" @click="requestVerboseLogs">
-          开启详细日志
-        </button>
-        <button class="warning-btn warning-btn--ghost" type="button" @click="verboseWarningDismissed = true">
+        <button class="warning-btn" type="button" @click="requestVerboseLogs">开启详细日志</button>
+        <button
+          class="warning-btn warning-btn--ghost"
+          type="button"
+          @click="verboseWarningDismissed = true"
+        >
           仅查看
         </button>
       </div>
     </div>
 
     <div v-if="error" class="error-panel">
-      <div class="error-header">
-        ERROR
-      </div>
+      <div class="error-header">ERROR</div>
       <div class="error-content">
         {{ error }}
       </div>
@@ -619,9 +597,7 @@ onUnmounted(() => {
         <div class="progress-header">
           <span class="progress-icon">📁</span>
           <div class="progress-info">
-            <h3 class="progress-title">
-              文件索引
-            </h3>
+            <h3 class="progress-title">文件索引</h3>
             <p class="progress-subtitle">
               {{ getStageText(indexingProgress.stage) }}
               <span v-if="indexingProgress.total > 0">
@@ -646,9 +622,7 @@ onUnmounted(() => {
             <!-- System Overview -->
             <section class="debug-section">
               <div class="section-header">
-                <h2 class="section-title">
-                  [SYSTEM_OVERVIEW]
-                </h2>
+                <h2 class="section-title">[SYSTEM_OVERVIEW]</h2>
                 <div class="timestamp">
                   {{ formatDateTime(snapshot.generatedAt) }}
                 </div>
@@ -660,7 +634,9 @@ onUnmounted(() => {
                 </div>
                 <div class="info-item">
                   <span class="info-key">PLATFORM:</span>
-                  <span class="info-value">{{ snapshot.system.platform }} {{ snapshot.system.release }}</span>
+                  <span class="info-value"
+                    >{{ snapshot.system.platform }} {{ snapshot.system.release }}</span
+                  >
                 </div>
                 <div class="info-item">
                   <span class="info-key">ARCHITECTURE:</span>
@@ -683,18 +659,20 @@ onUnmounted(() => {
 
             <section class="debug-section">
               <div class="section-header">
-                <h2 class="section-title">
-                  [APP_METRICS_SUMMARY]
-                </h2>
+                <h2 class="section-title">[APP_METRICS_SUMMARY]</h2>
               </div>
               <div class="info-grid">
                 <div class="info-item">
                   <span class="info-key">CPU_TOTAL:</span>
-                  <span class="info-value">{{ formatPercent(snapshot.applications.summary.cpu) }}</span>
+                  <span class="info-value">{{
+                    formatPercent(snapshot.applications.summary.cpu)
+                  }}</span>
                 </div>
                 <div class="info-item">
                   <span class="info-key">MEMORY_TOTAL:</span>
-                  <span class="info-value">{{ formatBytes(snapshot.applications.summary.memory) }}</span>
+                  <span class="info-value">{{
+                    formatBytes(snapshot.applications.summary.memory)
+                  }}</span>
                 </div>
                 <div class="info-item">
                   <span class="info-key">PROCESS_COUNT:</span>
@@ -706,15 +684,11 @@ onUnmounted(() => {
             <!-- Active Application -->
             <section class="debug-section">
               <div class="section-header">
-                <h2 class="section-title">
-                  [ACTIVE_APPLICATION]
-                </h2>
+                <h2 class="section-title">[ACTIVE_APPLICATION]</h2>
               </div>
               <div v-if="snapshot.applications.activeApp" class="app-info">
                 <div class="app-header">
-                  <div class="app-icon-placeholder">
-                    📱
-                  </div>
+                  <div class="app-icon-placeholder">📱</div>
                   <div class="app-details">
                     <div class="app-name">
                       {{ snapshot.applications.activeApp.displayName ?? 'UNKNOWN_APP' }}
@@ -733,7 +707,9 @@ onUnmounted(() => {
                   </div>
                   <div class="meta-row">
                     <span class="meta-key">PROCESS_ID:</span>
-                    <span class="meta-value">#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</span>
+                    <span class="meta-value"
+                      >#{{ snapshot.applications.activeApp.processId ?? 'N/A' }}</span
+                    >
                   </div>
                   <div class="meta-row">
                     <span class="meta-key">EXECUTABLE_PATH:</span>
@@ -756,12 +732,11 @@ onUnmounted(() => {
 
             <section class="debug-section">
               <div class="section-header">
-                <h2 class="section-title">
-                  [WORKER_STATUS]
-                </h2>
+                <h2 class="section-title">[WORKER_STATUS]</h2>
               </div>
               <p class="section-hint">
-                OFFLINE 并不一定是错误：文件索引 Worker 默认按需启动；若 LAST_ERROR 不为空，表示 Worker 曾异常退出并会在下一次任务触发时重启。
+                OFFLINE 并不一定是错误：文件索引 Worker 默认按需启动；若 LAST_ERROR 不为空，表示
+                Worker 曾异常退出并会在下一次任务触发时重启。
               </p>
               <div class="stats-grid">
                 <div class="stat-item">
@@ -783,9 +758,7 @@ onUnmounted(() => {
               </div>
 
               <div class="table-section">
-                <div class="table-header">
-                  WORKERS
-                </div>
+                <div class="table-header">WORKERS</div>
                 <div class="table-container">
                   <table class="debug-table">
                     <thead>
@@ -835,9 +808,7 @@ onUnmounted(() => {
                         </td>
                       </tr>
                       <tr v-if="!snapshot.workers.workers.length">
-                        <td colspan="11" class="empty-row">
-                          NO_WORKERS
-                        </td>
+                        <td colspan="11" class="empty-row">NO_WORKERS</td>
                       </tr>
                     </tbody>
                   </table>
@@ -853,9 +824,7 @@ onUnmounted(() => {
             <!-- Indexing Progress -->
             <section class="debug-section">
               <div class="section-header">
-                <h2 class="section-title">
-                  [INDEXING_PROGRESS]
-                </h2>
+                <h2 class="section-title">[INDEXING_PROGRESS]</h2>
                 <div class="watched-paths">
                   <span v-for="path in snapshot.indexing.watchedPaths" :key="path" class="path-tag">
                     {{ path }}
@@ -871,9 +840,7 @@ onUnmounted(() => {
               </div>
 
               <div class="table-section">
-                <div class="table-header">
-                  INDEXING_ENTRIES
-                </div>
+                <div class="table-header">INDEXING_ENTRIES</div>
                 <div class="table-container">
                   <table class="debug-table">
                     <thead>
@@ -909,9 +876,7 @@ onUnmounted(() => {
                         </td>
                       </tr>
                       <tr v-if="!snapshot.indexing.entries.length">
-                        <td colspan="7" class="empty-row">
-                          NO_INDEXING_RECORDS
-                        </td>
+                        <td colspan="7" class="empty-row">NO_INDEXING_RECORDS</td>
                       </tr>
                     </tbody>
                   </table>
@@ -927,9 +892,7 @@ onUnmounted(() => {
             <!-- OCR Status -->
             <section class="debug-section">
               <div class="section-header">
-                <h2 class="section-title">
-                  [OCR_STATUS]
-                </h2>
+                <h2 class="section-title">[OCR_STATUS]</h2>
               </div>
 
               <div class="stats-grid">
@@ -948,9 +911,7 @@ onUnmounted(() => {
               </div>
 
               <div class="timeline-section">
-                <div class="timeline-header">
-                  RECENT_ACTIVITY
-                </div>
+                <div class="timeline-header">RECENT_ACTIVITY</div>
                 <div class="timeline-grid">
                   <div v-for="(value, label) in ocrTimeline" :key="label" class="timeline-item">
                     <span class="timeline-key">{{ label.toUpperCase() }}:</span>
@@ -960,9 +921,7 @@ onUnmounted(() => {
               </div>
 
               <div class="table-section">
-                <div class="table-header">
-                  OCR_JOBS
-                </div>
+                <div class="table-header">OCR_JOBS</div>
                 <div class="table-container">
                   <table class="debug-table">
                     <thead>
@@ -1009,9 +968,7 @@ onUnmounted(() => {
                         </td>
                       </tr>
                       <tr v-if="!ocrJobs.length">
-                        <td colspan="7" class="empty-row">
-                          NO_OCR_TASKS
-                        </td>
+                        <td colspan="7" class="empty-row">NO_OCR_TASKS</td>
                       </tr>
                     </tbody>
                   </table>
@@ -1027,9 +984,7 @@ onUnmounted(() => {
             <!-- Logs Information -->
             <section class="debug-section">
               <div class="section-header">
-                <h2 class="section-title">
-                  [LOGS_INFORMATION]
-                </h2>
+                <h2 class="section-title">[LOGS_INFORMATION]</h2>
               </div>
               <div class="logs-content">
                 <div class="log-paths">
@@ -1047,9 +1002,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div v-if="snapshot.logs.recentFiles.length" class="recent-files">
-                  <div class="files-header">
-                    RECENT_FILES
-                  </div>
+                  <div class="files-header">RECENT_FILES</div>
                   <div class="files-list">
                     <div
                       v-for="file in snapshot.logs.recentFiles"

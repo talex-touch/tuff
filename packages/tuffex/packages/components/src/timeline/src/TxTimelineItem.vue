@@ -1,32 +1,7 @@
-<template>
-  <div
-    :class="[
-      'tx-timeline-item',
-      `tx-timeline-item--${layout}`,
-      { 'tx-timeline-item--active': active }
-    ]"
-  >
-    <div class="tx-timeline-item__dot" :class="`tx-timeline-item__dot--${color}`">
-      <TxIcon v-if="icon" :name="icon" class="tx-timeline-item__icon" />
-    </div>
-    
-    <div class="tx-timeline-item__content">
-      <div v-if="title || time" class="tx-timeline-item__header">
-        <div v-if="title" class="tx-timeline-item__title">{{ title }}</div>
-        <div v-if="time" class="tx-timeline-item__time">{{ time }}</div>
-      </div>
-      
-      <div v-if="$slots.default" class="tx-timeline-item__description">
-        <slot />
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { TimelineContext, TimelineItemColor } from './types'
 import { inject } from 'vue'
 import { TxIcon } from '../../icon'
-import type { TimelineLayout, TimelineContext, TimelineItemColor } from './types'
 
 interface Props {
   title?: string
@@ -38,12 +13,40 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   color: 'default',
-  active: false
+  active: false,
 })
 
 const timeline = inject<TimelineContext>('timeline', { layout: 'vertical' })
 const layout = timeline.layout
 </script>
+
+<template>
+  <div
+    class="tx-timeline-item" :class="[
+      `tx-timeline-item--${layout}`,
+      { 'tx-timeline-item--active': active },
+    ]"
+  >
+    <div class="tx-timeline-item__dot" :class="`tx-timeline-item__dot--${color}`">
+      <TxIcon v-if="icon" :name="icon" class="tx-timeline-item__icon" />
+    </div>
+
+    <div class="tx-timeline-item__content">
+      <div v-if="title || time" class="tx-timeline-item__header">
+        <div v-if="title" class="tx-timeline-item__title">
+          {{ title }}
+        </div>
+        <div v-if="time" class="tx-timeline-item__time">
+          {{ time }}
+        </div>
+      </div>
+
+      <div v-if="$slots.default" class="tx-timeline-item__description">
+        <slot />
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .tx-timeline-item {

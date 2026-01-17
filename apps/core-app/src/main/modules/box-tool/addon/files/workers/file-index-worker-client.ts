@@ -1,10 +1,15 @@
-import { Worker } from 'node:worker_threads'
-import path from 'node:path'
-import { fileProviderLog } from '../../../../../utils/logger'
-import type { WorkerMetricsPayload, WorkerMetricsResponse, WorkerStatusSnapshot, WorkerTaskSnapshot } from './worker-status'
 import type { SearchIndexItem } from '../../../search-engine/search-index-service'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsResponse,
+  WorkerStatusSnapshot,
+  WorkerTaskSnapshot
+} from './worker-status'
+import path from 'node:path'
+import { Worker } from 'node:worker_threads'
+import { fileProviderLog } from '../../../../../utils/logger'
 
-export type IndexWorkerProgressUpdate = {
+export interface IndexWorkerProgressUpdate {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped'
   progress: number
   processedBytes: number | null
@@ -14,12 +19,12 @@ export type IndexWorkerProgressUpdate = {
   updatedAt?: string
 }
 
-export type IndexWorkerFileUpdate = {
+export interface IndexWorkerFileUpdate {
   content: string | null
   embeddingStatus: 'pending' | 'completed'
 }
 
-export type IndexWorkerFileResult = {
+export interface IndexWorkerFileResult {
   type: 'file'
   taskId: string
   fileId: number
@@ -28,7 +33,7 @@ export type IndexWorkerFileResult = {
   indexItem: SearchIndexItem
 }
 
-export type IndexWorkerFile = {
+export interface IndexWorkerFile {
   id: number
   path: string
   name: string
@@ -39,13 +44,13 @@ export type IndexWorkerFile = {
   ctime: number
 }
 
-type PendingIndex = {
-  resolve: (value: { processed: number, failed: number }) => void
+interface PendingIndex {
+  resolve: (value: { processed: number; failed: number }) => void
   reject: (error: Error) => void
   startedAt: number
 }
 
-type PendingMetrics = {
+interface PendingMetrics {
   resolve: (value: WorkerMetricsPayload | null) => void
   timeout: ReturnType<typeof setTimeout>
 }
@@ -64,7 +69,8 @@ export class FileIndexWorkerClient {
   private lastError: string | null = null
   private lastTask: WorkerTaskSnapshot | null = null
   private workerStartedAt: number | null = null
-  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null = null
+  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
+    null
 
   constructor(onFile?: (payload: IndexWorkerFileResult) => void) {
     this.onFile = onFile
@@ -74,13 +80,13 @@ export class FileIndexWorkerClient {
     dbPath: string,
     providerId: string,
     providerType: string,
-    files: IndexWorkerFile[],
-  ): Promise<{ processed: number, failed: number }> {
+    files: IndexWorkerFile[]
+  ): Promise<{ processed: number; failed: number }> {
     const taskId = `index-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
     const worker = this.ensureWorker()
 
-    return new Promise<{ processed: number, failed: number }>((resolve, reject) => {
+    return new Promise<{ processed: number; failed: number }>((resolve, reject) => {
       this.pending.set(taskId, { resolve, reject, startedAt })
 
       worker.postMessage({
@@ -89,7 +95,7 @@ export class FileIndexWorkerClient {
         dbPath,
         providerId,
         providerType,
-        files,
+        files
       })
     })
   }
@@ -106,7 +112,7 @@ export class FileIndexWorkerClient {
       lastTask: this.lastTask,
       lastError: this.lastError,
       uptimeMs: worker && this.workerStartedAt ? Date.now() - this.workerStartedAt : null,
-      metrics: this.toStatusMetrics(metrics),
+      metrics: this.toStatusMetrics(metrics)
     }
   }
 
@@ -167,7 +173,7 @@ export class FileIndexWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: null,
+        error: null
       }
       return
     }
@@ -180,7 +186,7 @@ export class FileIndexWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: message.error,
+        error: message.error
       }
       pending.reject(new Error(message.error))
     }
@@ -205,7 +211,7 @@ export class FileIndexWorkerClient {
     this.workerStartedAt = null
     this.lastError = error.message
     fileProviderLog.warn('[FileIndexWorker] Worker failed, will restart on demand', {
-      error,
+      error
     })
   }
 
@@ -223,7 +229,7 @@ export class FileIndexWorkerClient {
       this.metricsPending.set(requestId, { resolve, timeout })
       worker.postMessage({
         type: 'metrics',
-        requestId,
+        requestId
       })
     })
   }
@@ -239,9 +245,9 @@ export class FileIndexWorkerClient {
       cpu: {
         user: metrics.cpuUsage.user,
         system: metrics.cpuUsage.system,
-        percent,
+        percent
       },
-      eventLoop: metrics.eventLoop,
+      eventLoop: metrics.eventLoop
     }
   }
 

@@ -1,25 +1,25 @@
-<template>
-  <div class="tx-timeline" :class="[`tx-timeline--${layout}`]">
-    <slot />
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { TimelineContext, TimelineLayout } from './types'
 import { provide } from 'vue'
-import type { TimelineLayout, TimelineContext } from './types'
 
 interface Props {
   layout?: TimelineLayout
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  layout: 'vertical'
+  layout: 'vertical',
 })
 
 provide<TimelineContext>('timeline', {
-  layout: props.layout
+  layout: props.layout,
 })
 </script>
+
+<template>
+  <div class="tx-timeline" :class="[`tx-timeline--${layout}`]">
+    <slot />
+  </div>
+</template>
 
 <style scoped>
 .tx-timeline {

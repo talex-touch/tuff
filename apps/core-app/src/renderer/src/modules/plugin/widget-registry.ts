@@ -1,14 +1,14 @@
-import type { Component } from 'vue'
 import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
-import * as Vue from 'vue'
+import type { Component } from 'vue'
 import * as TalexUtils from '@talex-touch/utils'
-import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
-import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
-import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
 import * as TalexUtilsChannel from '@talex-touch/utils/channel'
 import { DataCode } from '@talex-touch/utils/channel'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
+import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
+import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
+import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
+import * as Vue from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
 import { touchChannel } from '~/modules/channel/channel-core'
 
@@ -23,19 +23,19 @@ const ALLOWED_PACKAGES = [
   '@talex-touch/utils/core-box',
   '@talex-touch/utils/channel',
   '@talex-touch/utils/common',
-  '@talex-touch/utils/types',
+  '@talex-touch/utils/types'
 ]
 
 // Pre-loaded module cache using ES imports
 const preloadedModuleCache: Record<string, any> = {
-  'vue': Vue,
+  vue: Vue,
   '@talex-touch/utils': TalexUtils,
   '@talex-touch/utils/plugin': TalexUtilsPlugin,
   '@talex-touch/utils/plugin/sdk': TalexUtilsPluginSdk,
   '@talex-touch/utils/core-box': TalexUtilsCoreBox,
   '@talex-touch/utils/channel': TalexUtilsChannel,
   '@talex-touch/utils/common': TalexUtilsCommon,
-  '@talex-touch/utils/types': TalexUtilsTypes,
+  '@talex-touch/utils/types': TalexUtilsTypes
 }
 
 /**
@@ -60,14 +60,14 @@ function createSandboxRequire(allowedDependencies: string[]): (id: string) => an
   if (unavailableDeps.length > 0) {
     throw new Error(
       `[WidgetSandbox] Cannot create sandbox: dependencies not available: ${unavailableDeps.join(', ')}. ` +
-      `Allowed packages: ${ALLOWED_PACKAGES.join(', ')}`,
+        `Allowed packages: ${ALLOWED_PACKAGES.join(', ')}`
     )
   }
 
   return function sandboxRequire(id: string) {
     if (!allowedDependencies.includes(id)) {
       throw new Error(
-        `[WidgetSandbox] Module "${id}" is not allowed. Available modules: ${allowedDependencies.join(', ')}`,
+        `[WidgetSandbox] Module "${id}" is not allowed. Available modules: ${allowedDependencies.join(', ')}`
       )
     }
 
@@ -90,8 +90,7 @@ function evaluateWidgetComponent(code: string, dependencies: string[] = []): Com
   try {
     const executor = new Function('require', 'module', 'exports', code)
     executor(customRequire, module, module.exports)
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[WidgetRegistry] Widget execution failed:', error)
     throw error
   }
@@ -106,8 +105,7 @@ function evaluateWidgetComponent(code: string, dependencies: string[] = []): Com
 }
 
 function injectStyles(widgetId: string, styles: string): void {
-  if (!styles)
-    return
+  if (!styles) return
 
   const existing = injectedStyles.get(widgetId)
   if (existing) {
@@ -130,8 +128,7 @@ touchChannel.regChannel('plugin:widget:register', ({ data, reply }) => {
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     reply(DataCode.SUCCESS, { widgetId: payload.widgetId })
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[WidgetRegistry] Widget registration failed', error)
     reply(DataCode.ERROR, { message: (error as Error).message })
   }
@@ -145,8 +142,7 @@ touchChannel.regChannel('plugin:widget:update', ({ data, reply }) => {
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     reply(DataCode.SUCCESS, { widgetId: payload.widgetId })
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[WidgetRegistry] Widget update failed', error)
     reply(DataCode.ERROR, { message: (error as Error).message })
   }
@@ -163,8 +159,7 @@ touchChannel.regChannel('plugin:widget:unregister', ({ data, reply }) => {
       injectedStyles.delete(widgetId)
     }
     reply(DataCode.SUCCESS, { widgetId })
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[WidgetRegistry] Widget unregister failed', error)
     reply(DataCode.ERROR, { message: (error as Error).message })
   }

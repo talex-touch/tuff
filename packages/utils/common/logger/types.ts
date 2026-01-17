@@ -5,11 +5,12 @@
  * Uses unified LogLevel from base.
  */
 
+import type { LogLevelStringLower } from '../../base/log-level'
 import {
+  stringToLogLevel as baseStringToLogLevel,
   LogLevel,
-  type LogLevelStringLower,
+
   logLevelToLowerString,
-  stringToLogLevel as baseStringToLogLevel
 } from '../../base/log-level'
 
 // Re-export LogLevel for convenience

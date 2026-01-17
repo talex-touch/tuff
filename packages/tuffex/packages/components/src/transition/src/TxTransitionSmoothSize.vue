@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { TxTransitionSmoothSizeProps } from './types'
 import { computed, useAttrs } from 'vue'
 import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
-import type { TxTransitionSmoothSizeProps } from './types'
 
 defineOptions({
   name: 'TxTransitionSmoothSize',

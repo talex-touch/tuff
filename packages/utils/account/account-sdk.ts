@@ -171,7 +171,8 @@ export class AccountSDK {
 
   private getCached<T>(key: string): T | null {
     const cached = this.cache.get(key)
-    if (!cached) return null
+    if (!cached)
+      return null
 
     const ttl = this.config.cacheTTL || 60000
     if (Date.now() - cached.timestamp > ttl) {
@@ -202,7 +203,8 @@ export class AccountSDK {
    */
   async getProfile(): Promise<UserProfile | null> {
     const cached = this.getCached<UserProfile>('profile')
-    if (cached) return cached
+    if (cached)
+      return cached
 
     try {
       const profile = await this.send<UserProfile | null>('account:get-profile')
@@ -237,7 +239,8 @@ export class AccountSDK {
    */
   async getDisplayName(): Promise<string> {
     const profile = await this.getProfile()
-    if (!profile) return ''
+    if (!profile)
+      return ''
     return profile.displayName || profile.username || profile.email.split('@')[0]
   }
 
@@ -266,7 +269,8 @@ export class AccountSDK {
    */
   async getSubscription(): Promise<Subscription | null> {
     const cached = this.getCached<Subscription>('subscription')
-    if (cached) return cached
+    if (cached)
+      return cached
 
     try {
       const subscription = await this.send<Subscription | null>('account:get-subscription')
@@ -345,7 +349,8 @@ export class AccountSDK {
    */
   async isSubscriptionActive(): Promise<boolean> {
     const subscription = await this.getSubscription()
-    if (!subscription) return false
+    if (!subscription)
+      return false
     return [
       SubscriptionStatus.ACTIVE,
       SubscriptionStatus.TRIALING,
@@ -365,7 +370,8 @@ export class AccountSDK {
    */
   async getDaysRemaining(): Promise<number> {
     const subscription = await this.getSubscription()
-    if (!subscription) return 0
+    if (!subscription)
+      return 0
 
     const now = Date.now()
     const end = subscription.currentPeriodEnd
@@ -378,7 +384,8 @@ export class AccountSDK {
    */
   async getTrialDaysRemaining(): Promise<number> {
     const subscription = await this.getSubscription()
-    if (!subscription?.trialEndAt) return 0
+    if (!subscription?.trialEndAt)
+      return 0
 
     const now = Date.now()
     const days = Math.ceil((subscription.trialEndAt - now) / (1000 * 60 * 60 * 24))
@@ -402,7 +409,8 @@ export class AccountSDK {
    */
   async getUsage(): Promise<UsageStats> {
     const cached = this.getCached<UsageStats>('usage')
-    if (cached) return cached
+    if (cached)
+      return cached
 
     try {
       const usage = await this.send<UsageStats>('account:get-usage')
@@ -523,16 +531,20 @@ export class AccountSDK {
 
     switch (type) {
       case 'aiRequests':
-        if (quota.aiRequestsPerDay === -1) return 0
+        if (quota.aiRequestsPerDay === -1)
+          return 0
         return Math.min(100, (usage.aiRequestsToday / quota.aiRequestsPerDay) * 100)
       case 'aiTokens':
-        if (quota.aiTokensPerMonth === -1) return 0
+        if (quota.aiTokensPerMonth === -1)
+          return 0
         return Math.min(100, (usage.aiTokensThisMonth / quota.aiTokensPerMonth) * 100)
       case 'storage':
-        if (quota.maxStorageBytes === -1) return 0
+        if (quota.maxStorageBytes === -1)
+          return 0
         return Math.min(100, (usage.storageUsedBytes / quota.maxStorageBytes) * 100)
       case 'plugins':
-        if (quota.maxPlugins === -1) return 0
+        if (quota.maxPlugins === -1)
+          return 0
         return Math.min(100, (usage.pluginsInstalled / quota.maxPlugins) * 100)
       default:
         return 0
@@ -684,7 +696,8 @@ export class AccountSDK {
    */
   async getAccountInfo(): Promise<AccountInfo | null> {
     const cached = this.getCached<AccountInfo>('accountInfo')
-    if (cached) return cached
+    if (cached)
+      return cached
 
     try {
       const info = await this.send<AccountInfo | null>('account:get-info')

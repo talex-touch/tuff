@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import TouchAurora from "../../tuff/background/TouchAurora.vue";
-import TouchButton from "./base/TouchButton.vue";
+import TouchAurora from '../../tuff/background/TouchAurora.vue'
+import TouchButton from './base/TouchButton.vue'
 </script>
 
 <template>
@@ -10,7 +10,9 @@ import TouchButton from "./base/TouchButton.vue";
         <span class="beta-text">Pioneer Plan</span>
       </div>
 
-      <h2 class="section-title">Pioneer Testing Program</h2>
+      <h2 class="section-title">
+        Pioneer Testing Program
+      </h2>
       <p class="section-subtitle">
         Be among the first to experience our latest features and innovations
       </p>
@@ -33,7 +35,9 @@ import TouchButton from "./base/TouchButton.vue";
               />
             </svg>
           </div>
-          <h3 class="card-title">Early Access</h3>
+          <h3 class="card-title">
+            Early Access
+          </h3>
           <p class="card-description">
             Get exclusive access to new features before they're released to the
             public.
@@ -48,7 +52,9 @@ import TouchButton from "./base/TouchButton.vue";
               />
             </svg>
           </div>
-          <h3 class="card-title">Direct Influence</h3>
+          <h3 class="card-title">
+            Direct Influence
+          </h3>
           <p class="card-description">
             Your feedback directly shapes the development of upcoming features.
           </p>
@@ -62,7 +68,9 @@ import TouchButton from "./base/TouchButton.vue";
               />
             </svg>
           </div>
-          <h3 class="card-title">Special Recognition</h3>
+          <h3 class="card-title">
+            Special Recognition
+          </h3>
           <p class="card-description">
             Receive special recognition in our release notes and community
             forums.
@@ -83,7 +91,9 @@ import TouchButton from "./base/TouchButton.vue";
               />
             </svg>
           </div>
-          <h3 class="card-title">Priority Support</h3>
+          <h3 class="card-title">
+            Priority Support
+          </h3>
           <p class="card-description">
             Get priority access to our development team for bug reports and
             questions.

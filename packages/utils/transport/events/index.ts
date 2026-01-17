@@ -21,6 +21,24 @@
  */
 
 import type {
+  AgentsCancelRequest,
+  AgentsCancelResponse,
+  AgentsExecuteImmediateRequest,
+  AgentsExecuteImmediateResponse,
+  AgentsExecuteRequest,
+  AgentsExecuteResponse,
+  AgentsGetRequest,
+  AgentsGetResponse,
+  AgentsListResponse,
+  AgentsStatsResponse,
+  AgentsTaskStatusRequest,
+  AgentsTaskStatusResponse,
+  AgentsToolsGetRequest,
+  AgentsToolsGetResponse,
+  AgentsToolsListResponse,
+} from './types/agents'
+
+import type {
   AnalyticsExportPayload,
   AnalyticsExportResult,
   AnalyticsMessage,
@@ -58,58 +76,6 @@ import type {
 } from './types/app'
 
 import type {
-  DownloadAddTaskRequest,
-  DownloadAddTaskResponse,
-  DownloadClearHistoryItemRequest,
-  DownloadGetConfigResponse,
-  DownloadGetErrorStatsResponse,
-  DownloadGetHistoryRequest,
-  DownloadGetHistoryResponse,
-  DownloadGetLogsResponse,
-  DownloadGetNotificationConfigResponse,
-  DownloadGetTaskStatusResponse,
-  DownloadGetTasksByStatusRequest,
-  DownloadGetTasksResponse,
-  DownloadGetTempStatsResponse,
-  DownloadGetStatsResponse,
-  DownloadMigrationNeededResponse,
-  DownloadMigrationRetryResponse,
-  DownloadMigrationStartResponse,
-  DownloadMigrationStatusResponse,
-  DownloadNotificationClickedPayload,
-  DownloadOpResponse,
-  DownloadTaskIdRequest,
-  DownloadTaskPayload,
-  DownloadTaskRetryingPayload,
-  DownloadUpdateConfigRequest,
-  DownloadUpdateNotificationConfigRequest,
-  DownloadUpdatePriorityRequest,
-} from './types/download'
-
-import type {
-  UpdateAutoCheckRequest,
-  UpdateAutoDownloadRequest,
-  UpdateAvailablePayload,
-  UpdateCachedReleaseRequest,
-  UpdateCheckRequest,
-  UpdateCheckResponse,
-  UpdateDownloadRequest,
-  UpdateDownloadResponse,
-  UpdateGetCachedReleaseResponse,
-  UpdateGetSettingsResponse,
-  UpdateGetStatusResponse,
-  UpdateIgnoreVersionRequest,
-  UpdateInstallRequest,
-  UpdateOpResponse,
-  UpdateRecordActionRequest,
-  UpdateUpdateSettingsRequest,
-} from './types/update'
-
-// ============================================================================
-// App Events
-// ============================================================================
-
-import type {
   BoxItem,
   BoxItemBatchDeleteResponse,
   BoxItemBatchUpsertResponse,
@@ -123,7 +89,7 @@ import type {
 } from './types/box-item'
 
 // ============================================================================
-// CoreBox Events
+// App Events
 // ============================================================================
 
 import type {
@@ -138,7 +104,7 @@ import type {
 } from './types/clipboard'
 
 // ============================================================================
-// Storage Events
+// CoreBox Events
 // ============================================================================
 
 import type {
@@ -170,7 +136,150 @@ import type {
 } from './types/core-box'
 
 // ============================================================================
+// Storage Events
+// ============================================================================
+
+import type {
+  DivisionBoxCloseRequest,
+  DivisionBoxCloseResponse,
+  DivisionBoxFlowTriggerRequest,
+  DivisionBoxFlowTriggerResponse,
+  DivisionBoxGetActiveSessionsRequest,
+  DivisionBoxGetActiveSessionsResponse,
+  DivisionBoxGetStateRequest,
+  DivisionBoxGetStateResponse,
+  DivisionBoxGetWindowStateRequest,
+  DivisionBoxGetWindowStateResponse,
+  DivisionBoxInputChangeRequest,
+  DivisionBoxInputChangeResponse,
+  DivisionBoxOpenRequest,
+  DivisionBoxOpenResponse,
+  DivisionBoxSessionDestroyedPayload,
+  DivisionBoxSetOpacityRequest,
+  DivisionBoxSetOpacityResponse,
+  DivisionBoxStateChangedPayload,
+  DivisionBoxToggleDevToolsRequest,
+  DivisionBoxToggleDevToolsResponse,
+  DivisionBoxTogglePinRequest,
+  DivisionBoxTogglePinResponse,
+  DivisionBoxUpdateStateRequest,
+  DivisionBoxUpdateStateResponse,
+} from './types/division-box'
+
+// ============================================================================
 // Plugin Events
+// ============================================================================
+
+import type {
+  DownloadAddTaskRequest,
+  DownloadAddTaskResponse,
+  DownloadClearHistoryItemRequest,
+  DownloadGetConfigResponse,
+  DownloadGetErrorStatsResponse,
+  DownloadGetHistoryRequest,
+  DownloadGetHistoryResponse,
+  DownloadGetLogsResponse,
+  DownloadGetNotificationConfigResponse,
+  DownloadGetStatsResponse,
+  DownloadGetTasksByStatusRequest,
+  DownloadGetTasksResponse,
+  DownloadGetTaskStatusResponse,
+  DownloadGetTempStatsResponse,
+  DownloadMigrationNeededResponse,
+  DownloadMigrationRetryResponse,
+  DownloadMigrationStartResponse,
+  DownloadMigrationStatusResponse,
+  DownloadNotificationClickedPayload,
+  DownloadOpResponse,
+  DownloadTaskIdRequest,
+  DownloadTaskPayload,
+  DownloadTaskRetryingPayload,
+  DownloadUpdateConfigRequest,
+  DownloadUpdateNotificationConfigRequest,
+  DownloadUpdatePriorityRequest,
+} from './types/download'
+
+// ============================================================================
+// BoxItem Events
+// ============================================================================
+
+import type {
+  FileIndexBatteryStatus,
+  FileIndexProgress,
+  FileIndexRebuildRequest,
+  FileIndexRebuildResult,
+  FileIndexStats,
+  FileIndexStatus,
+} from './types/file-index'
+
+// ============================================================================
+// Market Events
+// ============================================================================
+
+import type {
+  FlowAcknowledgeRequest,
+  FlowAcknowledgeResponse,
+  FlowCancelResponse,
+  FlowDeliverPayload,
+  FlowDispatchRequest,
+  FlowDispatchResponse,
+  FlowGetTargetsRequest,
+  FlowGetTargetsResponse,
+  FlowNativeShareRequest,
+  FlowNativeShareResponse,
+  FlowRegisterTargetsRequest,
+  FlowReportErrorRequest,
+  FlowReportErrorResponse,
+  FlowSelectTargetRequest,
+  FlowSelectTargetResponse,
+  FlowSessionUpdatePayload,
+  FlowSetPluginEnabledRequest,
+  FlowSetPluginHandlerRequest,
+  FlowUnregisterTargetsRequest,
+} from './types/flow'
+
+// ============================================================================
+// Permission Events
+// ============================================================================
+
+import type {
+  MarketCheckUpdatesResponse,
+  MarketGetPluginRequest,
+  MarketGetPluginResponse,
+  MarketHttpRequest,
+  MarketHttpRequestResponse,
+  MarketSearchRequest,
+  MarketSearchResponse,
+  MarketUpdatesAvailablePayload,
+} from './types/market'
+
+// ============================================================================
+// Agents Events
+// ============================================================================
+
+import type {
+  PermissionCheckRequest,
+  PermissionCheckResponse,
+  PermissionGetAllResponse,
+  PermissionGetAuditLogsRequest,
+  PermissionGetAuditLogsResponse,
+  PermissionGetPerformanceResponse,
+  PermissionGetPluginRequest,
+  PermissionGetPluginResponse,
+  PermissionGetRegistryResponse,
+  PermissionGetStatusRequest,
+  PermissionGetStatusResponse,
+  PermissionGrantMultipleRequest,
+  PermissionGrantRequest,
+  PermissionOperationResult,
+  PermissionRevokeAllRequest,
+  PermissionRevokeRequest,
+  PermissionStartupRequestPayload,
+  PermissionUpdatedPayload,
+} from './types/permission'
+
+// ============================================================================
+// Tray Events
 // ============================================================================
 
 import type {
@@ -204,6 +313,8 @@ import type {
   PluginApiSaveManifestResponse,
   PluginApiTriggerFeatureRequest,
   PluginApiTriggerFeatureResponse,
+  PluginDevServerStatusRequest,
+  PluginDevServerStatusResponse,
   PluginDisableRequest,
   PluginEnableRequest,
   PluginInfo,
@@ -212,125 +323,30 @@ import type {
   PluginInstallProgressPayload,
   PluginInstallSourceRequest,
   PluginInstallSourceResponse,
-  PluginDevServerStatusRequest,
-  PluginDevServerStatusResponse,
   PluginLoadRequest,
   PluginLogEntry,
+  PluginPerformanceGetMetricsResponse,
+  PluginPerformanceGetPathsResponse,
   PluginPushCrashedPayload,
   PluginPushReloadPayload,
   PluginPushReloadReadmePayload,
   PluginPushStateChangedPayload,
   PluginPushStatusUpdatedPayload,
-  PluginReloadRequest,
   PluginReconnectDevServerRequest,
   PluginReconnectDevServerResponse,
-  PluginPerformanceGetMetricsResponse,
-  PluginPerformanceGetPathsResponse,
+  PluginReloadRequest,
   PluginStorageClearRequest,
   PluginStorageFileDetailsRequest,
   PluginStorageFileRequest,
   PluginStorageListFilesRequest,
-  PluginStorageOpenInEditorRequest,
   PluginStorageOpenFolderRequest,
+  PluginStorageOpenInEditorRequest,
   PluginStorageSetFileRequest,
   PluginStorageStatsRequest,
   PluginStorageTreeRequest,
   PluginStorageUpdatePayload,
   PluginUnloadRequest,
 } from './types/plugin'
-
-// ============================================================================
-// BoxItem Events
-// ============================================================================
-
-import type {
-  PluginStorageDeleteRequest,
-  PluginStorageGetRequest,
-  PluginStorageSetRequest,
-  StorageDeleteRequest,
-  StorageGetRequest,
-  StorageGetVersionedResponse,
-  StorageSaveRequest,
-  StorageSaveResult,
-  StorageSetRequest,
-  StorageUpdateNotification,
-} from './types/storage'
-
-// ============================================================================
-// Market Events
-// ============================================================================
-
-import type {
-  MarketCheckUpdatesResponse,
-  MarketGetPluginRequest,
-  MarketGetPluginResponse,
-  MarketHttpRequest,
-  MarketHttpRequestResponse,
-  MarketSearchRequest,
-  MarketSearchResponse,
-  MarketUpdatesAvailablePayload,
-} from './types/market'
-
-// ============================================================================
-// Permission Events
-// ============================================================================
-
-import type {
-  PermissionCheckRequest,
-  PermissionCheckResponse,
-  PermissionGetAllResponse,
-  PermissionGetAuditLogsRequest,
-  PermissionGetAuditLogsResponse,
-  PermissionGetPerformanceResponse,
-  PermissionGetPluginRequest,
-  PermissionGetPluginResponse,
-  PermissionGetRegistryResponse,
-  PermissionGetStatusRequest,
-  PermissionGetStatusResponse,
-  PermissionGrantMultipleRequest,
-  PermissionGrantRequest,
-  PermissionOperationResult,
-  PermissionRevokeAllRequest,
-  PermissionRevokeRequest,
-  PermissionUpdatedPayload,
-  PermissionStartupRequestPayload,
-} from './types/permission'
-
-// ============================================================================
-// Agents Events
-// ============================================================================
-
-import type {
-  AgentsCancelRequest,
-  AgentsCancelResponse,
-  AgentsExecuteImmediateRequest,
-  AgentsExecuteImmediateResponse,
-  AgentsExecuteRequest,
-  AgentsExecuteResponse,
-  AgentsGetRequest,
-  AgentsGetResponse,
-  AgentsListResponse,
-  AgentsStatsResponse,
-  AgentsTaskStatusRequest,
-  AgentsTaskStatusResponse,
-  AgentsToolsGetRequest,
-  AgentsToolsGetResponse,
-  AgentsToolsListResponse,
-} from './types/agents'
-
-// ============================================================================
-// Tray Events
-// ============================================================================
-
-import type {
-  TrayAutostartGetResponse,
-  TrayAutostartUpdateRequest,
-  TrayAutostartUpdateResponse,
-  TrayHideDockSetResponse,
-  TrayShowGetResponse,
-  TrayShowSetRequest,
-  TrayShowSetResponse,
-} from './types/tray'
 
 // ============================================================================
 // Sentry Events
@@ -346,78 +362,62 @@ import type {
 } from './types/sentry'
 
 import type {
-  FlowAcknowledgeRequest,
-  FlowAcknowledgeResponse,
-  FlowCancelResponse,
-  FlowDeliverPayload,
-  FlowDispatchRequest,
-  FlowDispatchResponse,
-  FlowGetTargetsRequest,
-  FlowGetTargetsResponse,
-  FlowNativeShareRequest,
-  FlowNativeShareResponse,
-  FlowRegisterTargetsRequest,
-  FlowReportErrorRequest,
-  FlowReportErrorResponse,
-  FlowSelectTargetRequest,
-  FlowSelectTargetResponse,
-  FlowSessionUpdatePayload,
-  FlowSetPluginEnabledRequest,
-  FlowSetPluginHandlerRequest,
-  FlowUnregisterTargetsRequest,
-} from './types/flow'
+  PluginStorageDeleteRequest,
+  PluginStorageGetRequest,
+  PluginStorageSetRequest,
+  StorageDeleteRequest,
+  StorageGetRequest,
+  StorageGetVersionedResponse,
+  StorageSaveRequest,
+  StorageSaveResult,
+  StorageSetRequest,
+  StorageUpdateNotification,
+} from './types/storage'
 
 import type {
-  DivisionBoxCloseRequest,
-  DivisionBoxCloseResponse,
-  DivisionBoxFlowTriggerRequest,
-  DivisionBoxFlowTriggerResponse,
-  DivisionBoxGetActiveSessionsRequest,
-  DivisionBoxGetActiveSessionsResponse,
-  DivisionBoxGetWindowStateRequest,
-  DivisionBoxGetWindowStateResponse,
-  DivisionBoxGetStateRequest,
-  DivisionBoxGetStateResponse,
-  DivisionBoxInputChangeRequest,
-  DivisionBoxInputChangeResponse,
-  DivisionBoxOpenRequest,
-  DivisionBoxOpenResponse,
-  DivisionBoxSetOpacityRequest,
-  DivisionBoxSetOpacityResponse,
-  DivisionBoxSessionDestroyedPayload,
-  DivisionBoxStateChangedPayload,
-  DivisionBoxToggleDevToolsRequest,
-  DivisionBoxToggleDevToolsResponse,
-  DivisionBoxTogglePinRequest,
-  DivisionBoxTogglePinResponse,
-  DivisionBoxUpdateStateRequest,
-  DivisionBoxUpdateStateResponse,
-} from './types/division-box'
+  TrayAutostartGetResponse,
+  TrayAutostartUpdateRequest,
+  TrayAutostartUpdateResponse,
+  TrayHideDockSetResponse,
+  TrayShowGetResponse,
+  TrayShowSetRequest,
+  TrayShowSetResponse,
+} from './types/tray'
 
 // ============================================================================
 // Clipboard Events
 // ============================================================================
 
-import { defineEvent, defineRawEvent } from '../event/builder'
+import type {
+  UpdateAutoCheckRequest,
+  UpdateAutoDownloadRequest,
+  UpdateAvailablePayload,
+  UpdateCachedReleaseRequest,
+  UpdateCheckRequest,
+  UpdateCheckResponse,
+  UpdateDownloadRequest,
+  UpdateDownloadResponse,
+  UpdateGetCachedReleaseResponse,
+  UpdateGetSettingsResponse,
+  UpdateGetStatusResponse,
+  UpdateIgnoreVersionRequest,
+  UpdateInstallRequest,
+  UpdateOpResponse,
+  UpdateRecordActionRequest,
+  UpdateUpdateSettingsRequest,
+} from './types/update'
 
 // ============================================================================
 // MetaOverlay Events
 // ============================================================================
 
-import { MetaOverlayEvents } from './meta-overlay'
+import { defineEvent, defineRawEvent } from '../event/builder'
 
 // ============================================================================
 // File Index Events
 // ============================================================================
 
-import type {
-  FileIndexBatteryStatus,
-  FileIndexProgress,
-  FileIndexRebuildRequest,
-  FileIndexRebuildResult,
-  FileIndexStats,
-  FileIndexStatus,
-} from './types/file-index'
+import { MetaOverlayEvents } from './meta-overlay'
 
 // Re-export all types for convenience
 export * from './types'
@@ -1091,7 +1091,7 @@ export const FlowEvents = {
   cancel: defineEvent('flow')
     .module('bus')
     .event('cancel')
-    .define<{ sessionId: string; _sdkapi?: number }, FlowCancelResponse>(),
+    .define<{ sessionId: string, _sdkapi?: number }, FlowCancelResponse>(),
 
   acknowledge: defineEvent('flow')
     .module('bus')
@@ -1733,12 +1733,12 @@ export const PluginEvents = {
     setFile: defineEvent('plugin')
       .module('storage')
       .event('set-file')
-      .define<PluginStorageSetFileRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageSetFileRequest, { success: boolean, error?: string }>(),
 
     deleteFile: defineEvent('plugin')
       .module('storage')
       .event('delete-file')
-      .define<PluginStorageFileRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageFileRequest, { success: boolean, error?: string }>(),
 
     listFiles: defineEvent('plugin')
       .module('storage')
@@ -1763,14 +1763,14 @@ export const PluginEvents = {
     clear: defineEvent('plugin')
       .module('storage')
       .event('clear')
-      .define<PluginStorageClearRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageClearRequest, { success: boolean, error?: string }>(),
 
     openFolder: defineEvent('plugin')
       .module('storage')
       .event('open-folder')
       .define<PluginStorageOpenFolderRequest, void>(),
 
-    openInEditor: defineRawEvent<PluginStorageOpenInEditorRequest, { success: boolean; error?: string }>(
+    openInEditor: defineRawEvent<PluginStorageOpenInEditorRequest, { success: boolean, error?: string }>(
       'plugin:storage:open-in-editor',
     ),
 

@@ -108,7 +108,7 @@ describe('indicesToRanges', () => {
     expect(ranges).toEqual([
       { start: 0, end: 1 },
       { start: 2, end: 3 },
-      { start: 4, end: 5 }
+      { start: 4, end: 5 },
     ])
   })
 
@@ -116,7 +116,7 @@ describe('indicesToRanges', () => {
     const ranges = indicesToRanges([0, 1, 2, 5, 6])
     expect(ranges).toEqual([
       { start: 0, end: 3 },
-      { start: 5, end: 7 }
+      { start: 5, end: 7 },
     ])
   })
 

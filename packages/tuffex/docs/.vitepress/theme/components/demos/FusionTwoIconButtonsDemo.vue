@@ -9,7 +9,7 @@ const active = ref<Record<Variant, boolean>>({
   gummy: true,
 })
 
-const variants: Array<{ key: Variant; title: string; hint: string }> = [
+const variants: Array<{ key: Variant, title: string, hint: string }> = [
   { key: 'membrane', title: 'Membrane', hint: 'icon buttons (like/save)' },
   { key: 'glass', title: 'Glass', hint: 'ui-ish / subtle' },
   { key: 'gummy', title: 'Gummy', hint: 'strong / playful' },
@@ -32,9 +32,15 @@ const variants: Array<{ key: Variant; title: string; hint: string }> = [
     "
   >
     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-      <TxButton size="small" @click="active.membrane = !active.membrane">Toggle membrane</TxButton>
-      <TxButton size="small" @click="active.glass = !active.glass">Toggle glass</TxButton>
-      <TxButton size="small" @click="active.gummy = !active.gummy">Toggle gummy</TxButton>
+      <TxButton size="small" @click="active.membrane = !active.membrane">
+        Toggle membrane
+      </TxButton>
+      <TxButton size="small" @click="active.glass = !active.glass">
+        Toggle glass
+      </TxButton>
+      <TxButton size="small" @click="active.gummy = !active.gummy">
+        Toggle gummy
+      </TxButton>
     </div>
 
     <div style="display: grid; gap: 14px;">
@@ -53,8 +59,12 @@ const variants: Array<{ key: Variant; title: string; hint: string }> = [
         "
       >
         <div style="display: grid; gap: 4px;">
-          <div style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.92);">{{ item.title }}</div>
-          <div style="font-size: 11px; color: rgba(255, 255, 255, 0.60);">{{ item.hint }}</div>
+          <div style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.92);">
+            {{ item.title }}
+          </div>
+          <div style="font-size: 11px; color: rgba(255, 255, 255, 0.60);">
+            {{ item.hint }}
+          </div>
         </div>
 
         <div style="display: grid; place-items: center;">

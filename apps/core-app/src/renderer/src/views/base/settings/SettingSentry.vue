@@ -4,6 +4,7 @@
   Sentry privacy controls and analytics settings
 -->
 <script setup lang="ts" name="SettingSentry">
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -14,7 +15,6 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
 const { t } = useI18n()
 

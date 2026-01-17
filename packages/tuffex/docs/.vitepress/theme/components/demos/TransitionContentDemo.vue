@@ -31,14 +31,18 @@ function toggle() {
           Toggle
         </TxButton>
 
-        <div style="opacity: 0.75; font-size: 12px;">key: <b>{{ contentKey }}</b></div>
+        <div style="opacity: 0.75; font-size: 12px;">
+          key: <b>{{ contentKey }}</b>
+        </div>
       </div>
     </TxCard>
 
     <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
       <TxTransition :preset="preset" :duration="220" mode="out-in">
         <div :key="contentKey" style="padding: 10px 12px;">
-          <div style="font-weight: 600; margin-bottom: 8px;">Panel {{ value }}</div>
+          <div style="font-weight: 600; margin-bottom: 8px;">
+            Panel {{ value }}
+          </div>
           <div
             :style="{
               height: value === 'A' ? '90px' : '180px',
@@ -53,7 +57,9 @@ function toggle() {
     </TxCard>
 
     <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="width: 100%;">
-      <div class="tx-demo__label" style="margin-bottom: 8px;">Semantic Components</div>
+      <div class="tx-demo__label" style="margin-bottom: 8px;">
+        Semantic Components
+      </div>
 
       <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap;">
         <TxTransitionFade :duration="180" mode="out-in">

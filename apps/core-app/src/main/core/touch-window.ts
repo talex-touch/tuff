@@ -1,7 +1,12 @@
 import type { TalexTouch } from '@talex-touch/utils'
-import type { OpenDevToolsOptions, WebContents } from 'electron'
+import type {
+  Event as ElectronEvent,
+  OpenDevToolsOptions,
+  RenderProcessGoneDetails,
+  WebContents
+} from 'electron'
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import { MicaBrowserWindow, IS_WINDOWS_11, WIN10 } from 'talex-mica-electron'
+import { IS_WINDOWS_11, MicaBrowserWindow, WIN10 } from 'talex-mica-electron'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 
 // Determine if we should use MicaBrowserWindow (Windows only)
@@ -11,7 +16,6 @@ const isWindows = process.platform === 'win32'
 // useMicaElectron() must be called once before creating any MicaBrowserWindow
 if (isWindows) {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useMicaElectron } = require('talex-mica-electron') as {
       useMicaElectron: (path?: string) => boolean | void
     }
@@ -34,7 +38,10 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
         this.isMicaWindow = true
         this.applyWindowsEffects()
       } catch (error) {
-        console.warn('[TouchWindow] Failed to create MicaBrowserWindow, falling back to BrowserWindow:', error)
+        console.warn(
+          '[TouchWindow] Failed to create MicaBrowserWindow, falling back to BrowserWindow:',
+          error
+        )
         this.window = new BrowserWindow(options)
         this.isMicaWindow = false
       }
@@ -54,7 +61,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     }
 
     this.window.once('ready-to-show', () => {
-      this.window.webContents.addListener('will-navigate', (event: any, url: string) => {
+      this.window.webContents.addListener('will-navigate', (event: ElectronEvent, url: string) => {
         touchEventBus.emit(TalexEvents.OPEN_EXTERNAL_URL, new OpenExternalUrlEvent(url))
 
         event.preventDefault()
@@ -119,50 +126,53 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   async __beforeLoad(
     target: string,
-    options?: TalexTouch.LoadURLOptions | undefined,
+    options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<void> {
     this.window.webContents.on(
       'did-fail-load',
-      (event: any, errorCode: number, errorDescription: string, url: string) => {
+      (event: ElectronEvent, errorCode: number, errorDescription: string, url: string) => {
         console.error(
           `[TouchWindow] Failed to load from target [${target}] - [${JSON.stringify(
-            options ?? {},
+            options ?? {}
           )}] with error:`,
           errorCode,
           errorDescription,
           url,
-          event,
+          event
         )
-      },
+      }
     )
 
-    this.window.webContents.addListener('render-process-gone', (_event: any, details: any) => {
-      console.error(
-        `[TouchWindow] Render process gone! Reason: ${details.reason}, Exit Code: ${
-          details.exitCode
-        }. Details: ${JSON.stringify(details)}`,
-      )
-
-      // In development mode, if the process is killed, it's likely due to a hot reload
-      if (!app.isPackaged && details.reason === 'killed') {
-        console.log(
-          '[TouchWindow] Development mode: Process killed during hot reload, this is expected.',
+    this.window.webContents.addListener(
+      'render-process-gone',
+      (_event: ElectronEvent, details: RenderProcessGoneDetails) => {
+        console.error(
+          `[TouchWindow] Render process gone! Reason: ${details.reason}, Exit Code: ${
+            details.exitCode
+          }. Details: ${JSON.stringify(details)}`
         )
-        return
-      }
 
-      // Other cases of crashes
-      if (details.reason === 'crashed') {
-        console.error('[TouchWindow] Renderer process crashed unexpectedly!')
+        // In development mode, if the process is killed, it's likely due to a hot reload
+        if (!app.isPackaged && details.reason === 'killed') {
+          console.log(
+            '[TouchWindow] Development mode: Process killed during hot reload, this is expected.'
+          )
+          return
+        }
+
+        // Other cases of crashes
+        if (details.reason === 'crashed') {
+          console.error('[TouchWindow] Renderer process crashed unexpectedly!')
+        }
       }
-    })
+    )
 
     console.debug(`[TouchWindow] Try load webContents from target [${target}]`)
   }
 
   async loadURL(
     url: string,
-    options?: TalexTouch.LoadURLOptions | undefined,
+    options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<WebContents> {
     this.__beforeLoad(url, options)
 
@@ -170,7 +180,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
     if (options && options.devtools) {
       this.window.webContents.openDevTools({
-        mode: options.devtools === true ? 'detach' : options.devtools,
+        mode: options.devtools === true ? 'detach' : options.devtools
       })
     }
 
@@ -179,7 +189,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
   async loadFile(
     filePath: string,
-    options?: TalexTouch.LoadFileOptions | undefined,
+    options?: TalexTouch.LoadFileOptions | undefined
   ): Promise<WebContents> {
     this.__beforeLoad(filePath, options)
 
@@ -187,7 +197,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
 
     if (options && options.devtools) {
       this.window.webContents.openDevTools({
-        mode: options.devtools === true ? 'detach' : options.devtools,
+        mode: options.devtools === true ? 'detach' : options.devtools
       })
     }
 

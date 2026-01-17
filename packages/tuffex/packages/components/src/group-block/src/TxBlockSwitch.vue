@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BlockSwitchEmits, BlockSwitchProps } from './types'
 /**
  * TxBlockSwitch Component
  *
@@ -18,7 +19,6 @@
  * @component
  */
 import { computed } from 'vue'
-import type { BlockSwitchProps, BlockSwitchEmits } from './types'
 
 defineOptions({
   name: 'TxBlockSwitch',
@@ -60,8 +60,12 @@ function toggle(): void {
     <div class="tx-block-switch__content" @click="toggle">
       <i v-if="icon" :class="icon" class="tx-block-switch__icon" aria-hidden="true" />
       <div class="tx-block-switch__label">
-        <h3 class="tx-block-switch__title">{{ title }}</h3>
-        <p class="tx-block-switch__description">{{ description }}</p>
+        <h3 class="tx-block-switch__title">
+          {{ title }}
+        </h3>
+        <p class="tx-block-switch__description">
+          {{ description }}
+        </p>
       </div>
     </div>
 

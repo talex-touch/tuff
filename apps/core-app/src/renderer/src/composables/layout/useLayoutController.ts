@@ -1,6 +1,6 @@
 import type { Composer } from 'vue-i18n'
-import { useI18n } from 'vue-i18n'
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
 
@@ -24,6 +24,6 @@ export function useLayoutController(): {
   return {
     route,
     t,
-    handleUpgradeClick,
+    handleUpgradeClick
   }
 }

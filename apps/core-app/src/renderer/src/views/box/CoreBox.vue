@@ -1,39 +1,39 @@
 <script setup lang="ts" name="CoreBox">
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
-import type { ITuffIcon, IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { IProviderActivate, ITuffIcon, TuffItem } from '@talex-touch/utils'
 import type { StandardChannelData } from '@talex-touch/utils/channel'
-import type { IBoxOptions } from '../../modules/box/adapter'
 import type { ComponentPublicInstance } from 'vue'
+import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 
 import TuffIcon from '~/components/base/TuffIcon.vue'
-import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
-import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
-import BoxGrid from '~/components/render/BoxGrid.vue'
-import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
-import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
 import ActionPanel from '~/components/render/ActionPanel.vue'
+import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
+import BoxGrid from '~/components/render/BoxGrid.vue'
+import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
+import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
+import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
+import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
+import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { BoxMode } from '../../modules/box/adapter'
+import { useActionPanel } from '../../modules/box/adapter/hooks/useActionPanel'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
+import { useDetach } from '../../modules/box/adapter/hooks/useDetach'
 import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
+import { usePreviewHistory } from '../../modules/box/adapter/hooks/usePreviewHistory'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
-import { usePreviewHistory } from '../../modules/box/adapter/hooks/usePreviewHistory'
-import { useActionPanel } from '../../modules/box/adapter/hooks/useActionPanel'
-import { useDetach } from '../../modules/box/adapter/hooks/useDetach'
-import { windowState, isDivisionBoxMode } from '~/modules/hooks/core-box'
-import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import BoxInput from './BoxInput.vue'
+import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
 import TagSection from './tag/TagSection.vue'
-import DivisionBoxHeader from './DivisionBoxHeader.vue'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
@@ -118,7 +118,7 @@ const completionDisplay = computed(() => {
 })
 
 const shouldLog = () => appSetting.diagnostics?.verboseLogs === true
-const logDebug = (...args: unknown[]) => {
+function logDebug(...args: unknown[]) {
   if (!shouldLog()) return
   console.debug(...args)
 }
@@ -371,7 +371,7 @@ const unregUIModeExited = touchChannel.regChannel(
   }
 )
 
-const deactivateProviderVoid = async (id?: string): Promise<void> => {
+async function deactivateProviderVoid(id?: string): Promise<void> {
   await deactivateProvider(id)
 }
 
@@ -512,13 +512,13 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
             <Transition :name="resultTransitionName" mode="out-in">
               <BoxGrid
                 v-if="isGridMode"
-                :key="'grid-' + resultBatchKey"
+                :key="`grid-${resultBatchKey}`"
                 :items="res"
                 :layout="boxOptions.layout"
                 :focus="boxOptions.focus"
                 @select="handleGridSelect"
               />
-              <div v-else :key="'list-' + resultBatchKey" class="item-list">
+              <div v-else :key="`list-${resultBatchKey}`" class="item-list">
                 <CoreBoxRender
                   v-for="(item, index) in res"
                   :key="item.id || index"
@@ -533,7 +533,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
                       newItemIds.has(item.id)
                   }"
                   :style="{
-                    '--stagger-delay': getStaggerDelay(index, res.length) + 's'
+                    '--stagger-delay': `${getStaggerDelay(index, res.length)}s`
                   }"
                   @trigger="handleItemTrigger(index, item)"
                 />

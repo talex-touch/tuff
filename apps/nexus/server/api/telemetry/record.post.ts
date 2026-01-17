@@ -1,5 +1,5 @@
-import { recordTelemetryEvent } from '../../utils/telemetryStore'
 import { guardTelemetryIp } from '../../utils/ipSecurityStore'
+import { recordTelemetryEvent } from '../../utils/telemetryStore'
 
 export default defineEventHandler(async (event) => {
   await guardTelemetryIp(event, { weight: 1, action: 'telemetry.record' })

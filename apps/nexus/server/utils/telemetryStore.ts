@@ -58,7 +58,7 @@ function normalizeString(value: unknown, maxLength = MAX_STRING_LENGTH): string 
 
 function normalizeNumber(
   value: unknown,
-  options: { min?: number; max?: number } = {},
+  options: { min?: number, max?: number } = {},
 ): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value))
     return undefined
@@ -167,7 +167,8 @@ function getD1Database(event: H3Event): D1Database | null {
 }
 
 async function ensureTelemetrySchema(db: D1Database) {
-  if (telemetrySchemaInitialized) return
+  if (telemetrySchemaInitialized)
+    return
 
   // Telemetry events table - stores individual events
   await db.prepare(`
@@ -383,7 +384,7 @@ async function recordTelemetryQuarantine(
  */
 export async function recordTelemetryEvent(
   event: H3Event,
-  telemetry: TelemetryEventInput
+  telemetry: TelemetryEventInput,
 ): Promise<void> {
   const db = getD1Database(event)
   if (!db) {
@@ -432,7 +433,7 @@ export async function recordTelemetryEvent(
     sanitized.inputTypes ? JSON.stringify(sanitized.inputTypes) : null,
     sanitized.metadata ? JSON.stringify(sanitized.metadata) : null,
     sanitized.isAnonymous ? 1 : 0,
-    now
+    now,
   ).run()
 
   // Update daily stats
@@ -458,7 +459,7 @@ export async function recordTelemetryEvent(
     if (sanitized.metadata && typeof sanitized.metadata === 'object') {
       const meta = sanitized.metadata as Record<string, unknown>
       if (meta.kind === 'startup') {
-        const mainProcess = meta.mainProcess as { moduleDetails?: Array<{ name?: string; loadTime?: number }> } | undefined
+        const mainProcess = meta.mainProcess as { moduleDetails?: Array<{ name?: string, loadTime?: number }> } | undefined
         const moduleDetails = Array.isArray(mainProcess?.moduleDetails) ? mainProcess?.moduleDetails : []
         for (const detail of moduleDetails) {
           const moduleName = typeof detail.name === 'string' ? detail.name : 'unknown'
@@ -645,7 +646,7 @@ async function incrementDailyStat(
   date: string,
   statType: string,
   statKey: string,
-  increment: number
+  increment: number,
 ): Promise<void> {
   await db.prepare(`
     INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
@@ -659,7 +660,7 @@ async function updateDailyStatMax(
   date: string,
   statType: string,
   statKey: string,
-  value: number
+  value: number,
 ): Promise<void> {
   await db.prepare(`
     INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
@@ -673,7 +674,7 @@ async function updateDailyStatMin(
   date: string,
   statType: string,
   statKey: string,
-  value: number
+  value: number,
 ): Promise<void> {
   await db.prepare(`
     INSERT INTO ${DAILY_STATS_TABLE} (date, stat_type, stat_key, value)
@@ -687,7 +688,7 @@ async function updateDailyStatMin(
  */
 export async function getAnalyticsSummary(
   event: H3Event,
-  options: { days?: number } = {}
+  options: { days?: number } = {},
 ): Promise<{
   totalEvents: number
   totalUsers: number
@@ -757,10 +758,10 @@ export async function getAnalyticsSummary(
     FROM ${DAILY_STATS_TABLE}
     WHERE date >= ?1
     ORDER BY date DESC;
-  `).bind(startDateStr).all<{ date: string; stat_type: string; stat_key: string; value: number }>()
+  `).bind(startDateStr).all<{ date: string, stat_type: string, stat_key: string, value: number }>()
 
   // Aggregate stats
-  const dailyMap = new Map<string, { visits: number; searches: number; durationTotal: number }>()
+  const dailyMap = new Map<string, { visits: number, searches: number, durationTotal: number }>()
   const deviceDist: Record<string, number> = {}
   const regionDist: Record<string, number> = {}
   const hourlyDist: Record<string, number> = {}
@@ -1035,7 +1036,7 @@ export async function getRealTimeStats(event: H3Event): Promise<{
     FROM ${TELEMETRY_TABLE}
     WHERE created_at >= ?1
     GROUP BY event_type;
-  `).bind(yesterdayStr).all<{ event_type: string; count: number; avg_duration: number | null }>()
+  `).bind(yesterdayStr).all<{ event_type: string, count: number, avg_duration: number | null }>()
 
   let searchesLast24h = 0
   let visitsLast24h = 0
@@ -1045,7 +1046,8 @@ export async function getRealTimeStats(event: H3Event): Promise<{
     if (row.event_type === 'search') {
       searchesLast24h = row.count
       avgLatency = row.avg_duration ? Math.round(row.avg_duration) : 0
-    } else if (row.event_type === 'visit') {
+    }
+    else if (row.event_type === 'visit') {
       visitsLast24h = row.count
     }
   }

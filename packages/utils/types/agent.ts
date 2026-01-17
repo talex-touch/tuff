@@ -312,14 +312,14 @@ export interface SchedulerStats {
 /**
  * Agent event types
  */
-export type AgentEventType =
-  | 'task:started'
-  | 'task:progress'
-  | 'task:completed'
-  | 'task:failed'
-  | 'task:cancelled'
-  | 'tool:called'
-  | 'tool:result'
+export type AgentEventType
+  = | 'task:started'
+    | 'task:progress'
+    | 'task:completed'
+    | 'task:failed'
+    | 'task:cancelled'
+    | 'tool:called'
+    | 'tool:result'
 
 /**
  * Agent event payload

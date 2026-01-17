@@ -1,11 +1,10 @@
 import type { MarketProviderDefinition, MarketSourcesPayload } from '@talex-touch/utils/market'
-import { DEFAULT_MARKET_PROVIDERS, MARKET_SOURCES_STORAGE_KEY } from '@talex-touch/utils/market'
-import { getTpexApiBase } from '@talex-touch/utils/env'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { performMarketHttpRequest } from './market-http.service'
-import { createLogger } from '../utils/logger'
+import { getTpexApiBase, NEXUS_BASE_URL } from '@talex-touch/utils/env'
+import { DEFAULT_MARKET_PROVIDERS, MARKET_SOURCES_STORAGE_KEY } from '@talex-touch/utils/market'
 import { getConfig } from '../modules/storage'
-import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
+import { createLogger } from '../utils/logger'
+import { performMarketHttpRequest } from './market-http.service'
 
 const log = createLogger('MarketApiService')
 
@@ -18,8 +17,7 @@ export function getMarketSources(): MarketProviderDefinition[] {
     if (payload?.sources && Array.isArray(payload.sources)) {
       return payload.sources
     }
-  }
-  catch (error) {
+  } catch (error) {
     log.warn('Failed to read market sources from storage', { error })
   }
   return DEFAULT_MARKET_PROVIDERS
@@ -30,7 +28,8 @@ export function getMarketSources(): MarketProviderDefinition[] {
  */
 export function getEnabledApiSources(): MarketProviderDefinition[] {
   return getMarketSources().filter(
-    source => source.enabled !== false && (source.type === 'tpexApi' || source.type === 'nexusStore'),
+    (source) =>
+      source.enabled !== false && (source.type === 'tpexApi' || source.type === 'nexusStore')
   )
 }
 
@@ -44,7 +43,7 @@ function getDefaultMarketBaseUrl(): string {
 
   // Get enabled API sources sorted by priority
   const sources = getEnabledApiSources()
-    .filter(s => s.type === 'tpexApi')
+    .filter((s) => s.type === 'tpexApi')
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
 
   // Return the highest priority source URL
@@ -103,10 +102,9 @@ export interface PluginWithSource {
  */
 export async function checkPluginUpdates(
   plugins: InstalledPluginInfo[],
-  baseUrl?: string,
+  baseUrl?: string
 ): Promise<UpdateCheckResponse | null> {
-  if (!plugins.length)
-    return null
+  if (!plugins.length) return null
 
   const url = `${baseUrl ?? getDefaultMarketBaseUrl()}/api/market/updates`
 
@@ -116,12 +114,11 @@ export async function checkPluginUpdates(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       data: { plugins },
-      timeout: 30_000,
+      timeout: 30_000
     })
 
     return response.data
-  }
-  catch (error) {
+  } catch (error) {
     log.warn('Failed to check plugin updates', { error })
     return null
   }
@@ -130,10 +127,7 @@ export async function checkPluginUpdates(
 /**
  * Report plugin uninstall to the market (fire and forget)
  */
-export async function reportPluginUninstall(
-  slug: string,
-  baseUrl?: string,
-): Promise<boolean> {
+export async function reportPluginUninstall(slug: string, baseUrl?: string): Promise<boolean> {
   const url = `${baseUrl ?? getDefaultMarketBaseUrl()}/api/market/uninstall`
 
   try {
@@ -142,13 +136,12 @@ export async function reportPluginUninstall(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       data: { slug },
-      timeout: 10_000,
+      timeout: 10_000
     })
 
     log.debug('Plugin uninstall reported', { meta: { slug } })
     return true
-  }
-  catch (error) {
+  } catch (error) {
     log.debug('Failed to report plugin uninstall', { meta: { slug }, error })
     return false
   }
@@ -188,7 +181,7 @@ class PluginUpdateScheduler {
     }
 
     log.info('Starting plugin update scheduler', {
-      meta: { intervalHours: this.checkIntervalMs / (60 * 60 * 1000) },
+      meta: { intervalHours: this.checkIntervalMs / (60 * 60 * 1000) }
     })
 
     PluginUpdateScheduler.pollingService.register(
@@ -196,7 +189,7 @@ class PluginUpdateScheduler {
       async () => {
         await this.checkForUpdates()
       },
-      { interval: this.checkIntervalMs, unit: 'milliseconds', initialDelayMs: 30_000 },
+      { interval: this.checkIntervalMs, unit: 'milliseconds', initialDelayMs: 30_000 }
     )
     PluginUpdateScheduler.pollingService.start()
   }
@@ -238,7 +231,7 @@ class PluginUpdateScheduler {
         allUpdates.push(...updates)
       }
 
-      const withUpdates = allUpdates.filter(u => u.hasUpdate)
+      const withUpdates = allUpdates.filter((u) => u.hasUpdate)
       if (withUpdates.length > 0) {
         log.info('Updates available', { meta: { count: withUpdates.length } })
         this.onUpdatesFound?.(withUpdates)
@@ -299,9 +292,9 @@ class PluginUpdateScheduler {
   }
 
   private async checkOfficialUpdates(plugins: PluginWithSource[]): Promise<PluginUpdateInfo[]> {
-    const input = plugins.map(p => ({
+    const input = plugins.map((p) => ({
       slug: p.installSource?.metadata?.officialId ?? p.name,
-      version: p.version,
+      version: p.version
     }))
 
     const result = await checkPluginUpdates(input)
@@ -310,11 +303,11 @@ class PluginUpdateScheduler {
 
   private async checkThirdPartyUpdates(
     plugins: PluginWithSource[],
-    baseUrl: string,
+    baseUrl: string
   ): Promise<PluginUpdateInfo[]> {
-    const input = plugins.map(p => ({
+    const input = plugins.map((p) => ({
       slug: p.name,
-      version: p.version,
+      version: p.version
     }))
 
     const result = await checkPluginUpdates(input, baseUrl)

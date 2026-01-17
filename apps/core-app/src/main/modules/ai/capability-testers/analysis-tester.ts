@@ -1,15 +1,20 @@
-import type { IntelligenceIntentDetectResult, AiInvokeResult, IntelligenceKeywordsExtractResult, IntelligenceSentimentAnalyzeResult } from '@talex-touch/utils'
+import type {
+  AiInvokeResult,
+  IntelligenceIntentDetectResult,
+  IntelligenceKeywordsExtractResult,
+  IntelligenceSentimentAnalyzeResult
+} from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 
 export class IntentDetectTester extends BaseCapabilityTester {
   readonly capabilityType = 'intent-detect'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<unknown> {
     const text = input.userInput || '帮我打开微信'
     return {
       text,
-      possibleIntents: ['open_app', 'search', 'calculate', 'translate', 'unknown'],
+      possibleIntents: ['open_app', 'search', 'calculate', 'translate', 'unknown']
     }
   }
 
@@ -23,7 +28,7 @@ export class IntentDetectTester extends BaseCapabilityTester {
       textPreview: JSON.stringify(result.result, null, 2),
       provider: result.provider,
       model: result.model,
-      latency: result.latency,
+      latency: result.latency
     }
   }
 
@@ -39,11 +44,11 @@ export class IntentDetectTester extends BaseCapabilityTester {
 export class SentimentAnalyzeTester extends BaseCapabilityTester {
   readonly capabilityType = 'sentiment-analyze'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<unknown> {
     const text = input.userInput || '这个产品真的太棒了，我非常喜欢！'
     return {
       text,
-      granularity: 'document',
+      granularity: 'document'
     }
   }
 
@@ -57,7 +62,7 @@ export class SentimentAnalyzeTester extends BaseCapabilityTester {
       textPreview: JSON.stringify(result.result, null, 2),
       provider: result.provider,
       model: result.model,
-      latency: result.latency,
+      latency: result.latency
     }
   }
 
@@ -73,17 +78,19 @@ export class SentimentAnalyzeTester extends BaseCapabilityTester {
 export class KeywordsExtractTester extends BaseCapabilityTester {
   readonly capabilityType = 'keywords-extract'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
-    const text = input.userInput || '人工智能正在改变我们的生活方式，从智能手机到自动驾驶汽车，AI技术无处不在。'
+  async generateTestPayload(input: CapabilityTestPayload): Promise<unknown> {
+    const text =
+      input.userInput ||
+      '人工智能正在改变我们的生活方式，从智能手机到自动驾驶汽车，AI技术无处不在。'
     return {
       text,
-      maxKeywords: 5,
+      maxKeywords: 5
     }
   }
 
   formatTestResult(result: AiInvokeResult<IntelligenceKeywordsExtractResult>) {
     const keywords = result.result?.keywords || []
-    const keywordList = keywords.map(k => k.term).join(', ')
+    const keywordList = keywords.map((k) => k.term).join(', ')
 
     return {
       success: true,
@@ -91,7 +98,7 @@ export class KeywordsExtractTester extends BaseCapabilityTester {
       textPreview: keywordList || '无关键词',
       provider: result.provider,
       model: result.model,
-      latency: result.latency,
+      latency: result.latency
     }
   }
 

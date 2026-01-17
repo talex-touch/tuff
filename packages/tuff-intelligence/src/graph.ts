@@ -3,13 +3,13 @@ import type {
   IntelligenceProviderConfig,
   PromptTemplate,
 } from '@talex-touch/utils/types/intelligence'
-import { Annotation, END, START, StateGraph } from '@langchain/langgraph'
 import type {
   TuffGraphArtifacts,
   TuffGraphContext,
   TuffGraphStep,
   TuffIntelligenceConfig,
 } from './types'
+import { Annotation, END, START, StateGraph } from '@langchain/langgraph'
 
 export interface BuildGraphOptions {
   config: TuffIntelligenceConfig

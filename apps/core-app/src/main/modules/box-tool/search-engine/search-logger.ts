@@ -1,5 +1,5 @@
-import chalk from 'chalk'
 import { loggerManager } from '@talex-touch/utils/common/logger'
+import chalk from 'chalk'
 import { storageModule } from '../../storage'
 
 /**
@@ -11,7 +11,7 @@ export class SearchLogger {
   private static instance: SearchLogger
   private enabled: boolean = false
   private searchStartTime: number = 0
-  private searchSteps: Array<{ step: string, timestamp: number, duration?: number }> = []
+  private searchSteps: Array<{ step: string; timestamp: number; duration?: number }> = []
   private unsubscribe?: () => void
 
   private constructor() {
@@ -106,7 +106,8 @@ export class SearchLogger {
     try {
       // Update app settings
       const appSettingsData = storageModule.getConfig('app-setting.ini') as any
-      const parsed = typeof appSettingsData === 'object' && appSettingsData ? { ...appSettingsData } : {}
+      const parsed =
+        typeof appSettingsData === 'object' && appSettingsData ? { ...appSettingsData } : {}
       if (!parsed.searchEngine) {
         parsed.searchEngine = {}
       }

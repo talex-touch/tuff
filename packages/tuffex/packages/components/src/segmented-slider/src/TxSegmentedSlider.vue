@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
 import type { SegmentedSliderEmits, SegmentedSliderProps, SegmentedSliderSegment } from './types'
+import { computed, onMounted, ref } from 'vue'
 
 defineOptions({
   name: 'TxSegmentedSlider',
@@ -24,7 +24,8 @@ const currentIndex = computed(() => {
 })
 
 const progressPercent = computed(() => {
-  if (props.segments.length <= 1) return 0
+  if (props.segments.length <= 1)
+    return 0
   return (currentIndex.value / (props.segments.length - 1)) * 100
 })
 
@@ -37,7 +38,8 @@ function segmentLeftPercent(index: number) {
 }
 
 function handleSegmentClick(segment: SegmentedSliderSegment) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('update:modelValue', segment.value)
   emit('change', segment.value)
 }
@@ -69,7 +71,7 @@ onMounted(() => {
     <!-- Track -->
     <div class="tx-segmented-slider__track">
       <div class="tx-segmented-slider__progress" :style="{ width: `${progressPercent}%` }" />
-      
+
       <!-- Segments -->
       <div
         v-for="(segment, index) in segments"

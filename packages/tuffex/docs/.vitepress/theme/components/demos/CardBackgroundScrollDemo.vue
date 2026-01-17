@@ -19,17 +19,21 @@ const glassH = computed(() => Math.max(1, Math.round(cardH.value)))
 
 function updateCardRect() {
   const el = cardHostRef.value
-  if (!el) return
+  if (!el)
+    return
   const rect = el.getBoundingClientRect()
-  if (!rect.width || !rect.height) return
+  if (!rect.width || !rect.height)
+    return
   cardW.value = rect.width
   cardH.value = rect.height
 }
 
 onMounted(() => {
   updateCardRect()
-  if (typeof ResizeObserver === 'undefined') return
-  if (!cardHostRef.value) return
+  if (typeof ResizeObserver === 'undefined')
+    return
+  if (!cardHostRef.value)
+    return
   ro = new ResizeObserver(() => updateCardRect())
   ro.observe(cardHostRef.value)
 })
@@ -43,9 +47,15 @@ onBeforeUnmount(() => {
 <template>
   <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
     <TxRadioGroup v-model="bg">
-      <TxRadio value="blur">blur</TxRadio>
-      <TxRadio value="glass">glass</TxRadio>
-      <TxRadio value="mask">mask</TxRadio>
+      <TxRadio value="blur">
+        blur
+      </TxRadio>
+      <TxRadio value="glass">
+        glass
+      </TxRadio>
+      <TxRadio value="mask">
+        mask
+      </TxRadio>
     </TxRadioGroup>
 
     <div v-if="bg === 'glass'" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
@@ -56,7 +66,7 @@ onBeforeUnmount(() => {
 
       <label v-if="glassBlur" style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
         <span style="opacity: 0.75;">blur</span>
-        <input v-model.number="glassBlurAmount" type="range" min="0" max="40" step="1" />
+        <input v-model.number="glassBlurAmount" type="range" min="0" max="40" step="1">
         <span style="min-width: 30px; text-align: right; opacity: 0.75;">{{ glassBlurAmount }}</span>
       </label>
 
@@ -67,7 +77,7 @@ onBeforeUnmount(() => {
 
       <label v-if="glassOverlay" style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
         <span style="opacity: 0.75;">opacity</span>
-        <input v-model.number="glassOverlayOpacity" type="range" min="0" max="0.6" step="0.02" />
+        <input v-model.number="glassOverlayOpacity" type="range" min="0" max="0.6" step="0.02">
         <span style="min-width: 42px; text-align: right; opacity: 0.75;">{{ glassOverlayOpacity.toFixed(2) }}</span>
       </label>
     </div>
@@ -84,10 +94,14 @@ onBeforeUnmount(() => {
     >
       <div class="tx-card-bg-scroll">
         <article class="tx-card-bg-article">
-          <div class="tx-card-bg-hero"></div>
+          <div class="tx-card-bg-hero" />
 
-          <h3 class="tx-card-bg-title">Behind content: Article layout</h3>
-          <p class="tx-card-bg-meta">Dec 25, 2025 · 5 min read</p>
+          <h3 class="tx-card-bg-title">
+            Behind content: Article layout
+          </h3>
+          <p class="tx-card-bg-meta">
+            Dec 25, 2025 · 5 min read
+          </p>
 
           <p class="tx-card-bg-p">
             This demo intentionally uses neutral text and image blocks to help you judge how
@@ -95,8 +109,8 @@ onBeforeUnmount(() => {
           </p>
 
           <div class="tx-card-bg-grid">
-            <div class="tx-card-bg-img"></div>
-            <div class="tx-card-bg-img is-light"></div>
+            <div class="tx-card-bg-img" />
+            <div class="tx-card-bg-img is-light" />
           </div>
 
           <p class="tx-card-bg-p">
@@ -105,12 +119,14 @@ onBeforeUnmount(() => {
           </p>
 
           <div class="tx-card-bg-grid">
-            <div class="tx-card-bg-img is-wide"></div>
-            <div class="tx-card-bg-img is-wide is-light"></div>
+            <div class="tx-card-bg-img is-wide" />
+            <div class="tx-card-bg-img is-wide is-light" />
           </div>
 
-          <p class="tx-card-bg-p">End.</p>
-          <div style="height: 240px;"></div>
+          <p class="tx-card-bg-p">
+            End.
+          </p>
+          <div style="height: 240px;" />
         </article>
       </div>
 
@@ -142,20 +158,24 @@ onBeforeUnmount(() => {
           >
             <template #header>
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-                <div style="font-weight: 700;">TxCard</div>
-                <div style="font-size: 12px; opacity: 0.7;">bg={{ bg }}</div>
+                <div style="font-weight: 700;">
+                  TxCard
+                </div>
+                <div style="font-size: 12px; opacity: 0.7;">
+                  bg={{ bg }}
+                </div>
               </div>
             </template>
 
             <div style="display: flex; flex-direction: column; gap: 10px;">
-              <div style="height: 12px; border-radius: 999px; background: rgba(0,0,0,0.10);"></div>
-              <div style="height: 12px; width: 78%; border-radius: 999px; background: rgba(0,0,0,0.08);"></div>
-              <div style="height: 12px; width: 64%; border-radius: 999px; background: rgba(0,0,0,0.08);"></div>
+              <div style="height: 12px; border-radius: 999px; background: rgba(0,0,0,0.10);" />
+              <div style="height: 12px; width: 78%; border-radius: 999px; background: rgba(0,0,0,0.08);" />
+              <div style="height: 12px; width: 64%; border-radius: 999px; background: rgba(0,0,0,0.08);" />
               <div style="display: flex; gap: 8px; margin-top: 6px;">
-                <div style="width: 34px; height: 34px; border-radius: 12px; background: rgba(0,0,0,0.10); "></div>
+                <div style="width: 34px; height: 34px; border-radius: 12px; background: rgba(0,0,0,0.10); " />
                 <div style="flex: 1; display: grid; gap: 6px;">
-                  <div style="height: 10px; border-radius: 999px; background: rgba(0,0,0,0.10);"></div>
-                  <div style="height: 10px; width: 70%; border-radius: 999px; background: rgba(0,0,0,0.08);"></div>
+                  <div style="height: 10px; border-radius: 999px; background: rgba(0,0,0,0.10);" />
+                  <div style="height: 10px; width: 70%; border-radius: 999px; background: rgba(0,0,0,0.08);" />
                 </div>
               </div>
             </div>

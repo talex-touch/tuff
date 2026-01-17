@@ -1,9 +1,6 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { ReadFileRequest } from '@talex-touch/utils/transport/events/types'
-import { isLocalhostUrl } from '@talex-touch/utils'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
 import type { TalexTouch } from '../types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -11,8 +8,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { isLocalhostUrl } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow, powerMonitor, shell } from 'electron'
 import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
@@ -23,8 +23,9 @@ import { getStartupAnalytics } from '../modules/analytics'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { buildVerificationModule } from '../modules/build-verification'
 import { activeAppService } from '../modules/system/active-app'
-import { enterPerfContext } from '../utils/perf-context'
+import type { Locale } from '../utils/i18n-helper'
 import { setLocale } from '../utils/i18n-helper'
+import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
 
 const execFileAsync = promisify(execFile)
@@ -35,7 +36,7 @@ const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 
-type ReadFileCacheEntry = {
+interface ReadFileCacheEntry {
   content: string
   size: number
   cachedAt: number
@@ -45,9 +46,79 @@ const readFileCache = new Map<string, ReadFileCacheEntry>()
 const readFileInflight = new Map<string, Promise<string>>()
 let readFileCacheBytes = 0
 
-type BatteryStatusPayload = {
+interface BatteryStatusPayload {
   onBattery: boolean
   percent: number | null
+}
+
+interface OSInformation {
+  arch: ReturnType<typeof os.arch>
+  cpus: ReturnType<typeof os.cpus>
+  endianness: ReturnType<typeof os.endianness>
+  freemem: ReturnType<typeof os.freemem>
+  homedir: ReturnType<typeof os.homedir>
+  hostname: ReturnType<typeof os.hostname>
+  loadavg: ReturnType<typeof os.loadavg>
+  networkInterfaces: ReturnType<typeof os.networkInterfaces>
+  platform: ReturnType<typeof os.platform>
+  release: ReturnType<typeof os.release>
+  tmpdir: ReturnType<typeof os.tmpdir>
+  totalmem: ReturnType<typeof os.totalmem>
+  type: ReturnType<typeof os.type>
+  uptime: ReturnType<typeof os.uptime>
+  userInfo: ReturnType<typeof os.userInfo>
+  version: ReturnType<typeof os.version>
+}
+
+type KeyManagerHolder = { keyManager?: unknown }
+type BroadcastCapable = {
+  broadcastTo?: (
+    window: BrowserWindow,
+    channelType: ChannelType,
+    eventName: string,
+    payload?: unknown
+  ) => void
+}
+
+interface RendererPerfReport {
+  kind: string
+  at: number
+  eventName: string
+  durationMs: number
+  meta?: Record<string, unknown>
+  payloadPreview?: unknown
+  stack?: unknown
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function getOptionalStringProp(value: unknown, key: string): string | undefined {
+  if (!isRecord(value)) return undefined
+  const prop = value[key]
+  return typeof prop === 'string' ? prop : undefined
+}
+
+function isLocale(value: string): value is Locale {
+  return value === 'zh-CN' || value === 'en-US'
+}
+
+function getKeyManager(value: unknown): unknown {
+  if (!isRecord(value)) return undefined
+  if (!('keyManager' in value)) return undefined
+  return (value as KeyManagerHolder).keyManager
+}
+
+function isRendererPerfReport(value: unknown): value is RendererPerfReport {
+  if (!isRecord(value)) return false
+
+  return (
+    typeof value.kind === 'string' &&
+    typeof value.at === 'number' &&
+    typeof value.eventName === 'string' &&
+    typeof value.durationMs === 'number'
+  )
 }
 
 function closeApp(app: TalexTouch.TouchApp): void {
@@ -58,7 +129,7 @@ function closeApp(app: TalexTouch.TouchApp): void {
   process.exit(0)
 }
 
-function getOSInformation(): any {
+function getOSInformation(): OSInformation {
   return {
     arch: os.arch(),
     cpus: os.cpus(),
@@ -83,9 +154,7 @@ function resolveLocalFilePath(source: string): string | null {
   if (!source) return null
 
   if (source.startsWith('file:') || source.startsWith(`${FILE_SCHEMA}:`)) {
-    const fileUrl = source.startsWith('file:')
-      ? source
-      : source.replace(`${FILE_SCHEMA}:`, 'file:')
+    const fileUrl = source.startsWith('file:') ? source : source.replace(`${FILE_SCHEMA}:`, 'file:')
     try {
       return fileURLToPath(fileUrl)
     } catch {
@@ -130,7 +199,7 @@ function setCachedReadFile(path: string, content: string): void {
   readFileCache.set(path, {
     content,
     size,
-    cachedAt: Date.now(),
+    cachedAt: Date.now()
   })
   readFileCacheBytes += size
 
@@ -139,8 +208,8 @@ function setCachedReadFile(path: string, content: string): void {
 
 function pruneReadFileCache(): void {
   while (
-    readFileCache.size > READ_FILE_CACHE_MAX_ENTRIES
-    || readFileCacheBytes > READ_FILE_CACHE_TOTAL_BYTES
+    readFileCache.size > READ_FILE_CACHE_MAX_ENTRIES ||
+    readFileCacheBytes > READ_FILE_CACHE_TOTAL_BYTES
   ) {
     const oldest = readFileCache.keys().next().value as string | undefined
     if (!oldest) {
@@ -173,10 +242,7 @@ export class CommonChannelModule extends BaseModule {
   async onInit({ app }: ModuleInitContext<TalexEvents>): Promise<void> {
     const channel = genTouchChannel(app as TalexTouch.TouchApp)
     this.channel = channel
-    this.transport = getTuffTransportMain(
-      channel,
-      (channel as any)?.keyManager ?? channel,
-    )
+    this.transport = getTuffTransportMain(channel, getKeyManager(channel) ?? channel)
 
     const broadcastBatteryStatus = async (): Promise<void> => {
       const onBattery = safeIsOnBatteryPower()
@@ -186,7 +252,12 @@ export class CommonChannelModule extends BaseModule {
       const windows = BrowserWindow.getAllWindows()
       for (const win of windows) {
         try {
-          ;(channel as any).broadcastTo?.(win, ChannelType.MAIN, 'power:battery-status', payload)
+          ;(channel as unknown as BroadcastCapable).broadcastTo?.(
+            win,
+            ChannelType.MAIN,
+            'power:battery-status',
+            payload
+          )
         } catch {
           // Ignore broadcast errors
         }
@@ -199,11 +270,10 @@ export class CommonChannelModule extends BaseModule {
         return
       }
       // Poll every 2 minutes when on battery to save resources
-      pollingService.register(
-        BATTERY_POLL_TASK_ID,
-        () => broadcastBatteryStatus(),
-        { interval: 120_000, unit: 'milliseconds' }
-      )
+      pollingService.register(BATTERY_POLL_TASK_ID, () => broadcastBatteryStatus(), {
+        interval: 120_000,
+        unit: 'milliseconds'
+      })
       pollingService.start()
     }
 
@@ -225,7 +295,7 @@ export class CommonChannelModule extends BaseModule {
         stopPolling()
         void broadcastBatteryStatus()
       })
-      
+
       powerMonitor.on('on-battery', () => {
         startPolling()
         void broadcastBatteryStatus()
@@ -305,7 +375,11 @@ export class CommonChannelModule extends BaseModule {
       }
     })
 
-    channel.regChannel(ChannelType.MAIN, 'url:open', ({ data }) => onOpenUrl(data as any))
+    channel.regChannel(ChannelType.MAIN, 'url:open', ({ data }) => {
+      if (typeof data === 'string') {
+        void onOpenUrl(data)
+      }
+    })
 
     channel.regChannel(ChannelType.MAIN, 'files:index-progress', async ({ data }) => {
       const paths = Array.isArray(data?.paths) ? data.paths : undefined
@@ -353,11 +427,9 @@ export class CommonChannelModule extends BaseModule {
     })()
 
     function isFrontendLocalUrl(parsed: URL): boolean {
-      if (!isLocalhostUrl(parsed.toString()))
-        return false
+      if (!isLocalhostUrl(parsed.toString())) return false
 
-      if (rendererOrigin && parsed.origin === rendererOrigin)
-        return true
+      if (rendererOrigin && parsed.origin === rendererOrigin) return true
 
       const hash = parsed.hash || ''
       return hash.startsWith('#/') || parsed.pathname.includes('/#/')
@@ -369,8 +441,7 @@ export class CommonChannelModule extends BaseModule {
       let parsed: URL
       try {
         parsed = new URL(url)
-      }
-      catch {
+      } catch {
         return 'skip'
       }
 
@@ -449,13 +520,15 @@ export class CommonChannelModule extends BaseModule {
 
     this.transportDisposers.push(
       this.transport.on(AppEvents.i18n.setLocale, (payload) => {
-        const locale = (payload as any)?.locale
-        if (typeof locale === 'string') {
-          setLocale(locale as any)
+        const locale = getOptionalStringProp(payload, 'locale')
+        if (locale && isLocale(locale)) {
+          setLocale(locale)
         }
       }),
       this.transport.on(AppEvents.analytics.perfReport, (payload) => {
-        perfMonitor.recordRendererReport(payload as any)
+        if (isRendererPerfReport(payload)) {
+          perfMonitor.recordRendererReport(payload)
+        }
       }),
       this.transport.on<ReadFileRequest, string>(AppEvents.system.readFile, async (payload) => {
         const source = payload?.source?.trim()
@@ -479,9 +552,10 @@ export class CommonChannelModule extends BaseModule {
         const dispose = enterPerfContext('system.readFile', {
           fileName,
           ext,
-          cacheHit: false,
+          cacheHit: false
         })
-        const task = fs.readFile(resolvedPath, { encoding: 'utf8' })
+        const task = fs
+          .readFile(resolvedPath, { encoding: 'utf8' })
           .then((content) => {
             setCachedReadFile(resolvedPath, content)
             return content
@@ -496,24 +570,20 @@ export class CommonChannelModule extends BaseModule {
       }),
       this.transport.onStream(AppEvents.fileIndex.progress, (_payload, context) => {
         fileProvider.registerProgressStream(context)
-      }),
+      })
     )
 
     this.transportDisposers.push(
-      this.channel.regChannel(
-        ChannelType.MAIN,
-        AppEvents.fileIndex.status.toEventName(),
-        () => fileProvider.getIndexingStatus(),
+      this.channel.regChannel(ChannelType.MAIN, AppEvents.fileIndex.status.toEventName(), () =>
+        fileProvider.getIndexingStatus()
       ),
-      this.channel.regChannel(
-        ChannelType.MAIN,
-        AppEvents.fileIndex.stats.toEventName(),
-        () => fileProvider.getIndexStats(),
+      this.channel.regChannel(ChannelType.MAIN, AppEvents.fileIndex.stats.toEventName(), () =>
+        fileProvider.getIndexStats()
       ),
       this.channel.regChannel(
         ChannelType.MAIN,
         AppEvents.fileIndex.batteryLevel.toEventName(),
-        () => fileProvider.getBatteryLevel(),
+        () => fileProvider.getBatteryLevel()
       ),
       this.channel.regChannel(
         ChannelType.MAIN,
@@ -525,8 +595,8 @@ export class CommonChannelModule extends BaseModule {
             const message = error instanceof Error ? error.message : String(error)
             return { success: false, error: message }
           }
-        },
-      ),
+        }
+      )
     )
   }
 
@@ -569,7 +639,7 @@ async function safeGetBatteryPercent(): Promise<number | null> {
       if (Number.isNaN(value)) return null
       return Math.max(0, Math.min(100, value))
     }
-    
+
     if (process.platform === 'win32') {
       const { stdout } = await execFileAsync('powershell', [
         '-NoProfile',

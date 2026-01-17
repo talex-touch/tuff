@@ -1,9 +1,9 @@
-import TxTabs from './src/TxTabs.vue'
-import TxTabItem from './src/TxTabItem.vue'
-import TxTabHeader from './src/TxTabHeader.vue'
-import TxTabItemGroup from './src/TxTabItemGroup.vue'
+import type { TabHeaderProps, TabItemGroupProps, TabItemProps, TabsEmits, TabsProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
-import type { TabsEmits, TabsProps, TabHeaderProps, TabItemGroupProps, TabItemProps } from './src/types'
+import TxTabHeader from './src/TxTabHeader.vue'
+import TxTabItem from './src/TxTabItem.vue'
+import TxTabItemGroup from './src/TxTabItemGroup.vue'
+import TxTabs from './src/TxTabs.vue'
 
 const Tabs = withInstall(TxTabs)
 const TabItem = withInstall(TxTabItem)
@@ -11,22 +11,22 @@ const TabHeader = withInstall(TxTabHeader)
 const TabItemGroup = withInstall(TxTabItemGroup)
 
 export {
-  Tabs,
-  TabItem,
   TabHeader,
+  TabItem,
   TabItemGroup,
-  TxTabs,
-  TxTabItem,
+  Tabs,
   TxTabHeader,
+  TxTabItem,
   TxTabItemGroup,
+  TxTabs,
 }
 
 export type {
-  TabsProps,
-  TabsEmits,
-  TabItemProps,
   TabHeaderProps,
   TabItemGroupProps,
+  TabItemProps,
+  TabsEmits,
+  TabsProps,
 }
 
 export type TxTabsInstance = InstanceType<typeof TxTabs>

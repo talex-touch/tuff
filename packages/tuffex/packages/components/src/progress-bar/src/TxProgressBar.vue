@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ProgressBarEmits, ProgressBarProps } from './types'
 /**
  * TxProgressBar Component
  *
@@ -16,7 +17,6 @@
  */
 import { computed, ref, watch } from 'vue'
 import { TxTooltip } from '../../tooltip'
-import type { ProgressBarProps, ProgressBarEmits } from './types'
 
 defineOptions({
   name: 'TxProgressBar',
@@ -208,7 +208,6 @@ watch(
       completedEmitted.value = false
   },
 )
-
 </script>
 
 <template>

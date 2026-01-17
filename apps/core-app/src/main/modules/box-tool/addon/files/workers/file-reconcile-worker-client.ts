@@ -1,9 +1,14 @@
-import { Worker } from 'node:worker_threads'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsResponse,
+  WorkerStatusSnapshot,
+  WorkerTaskSnapshot
+} from './worker-status'
 import path from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { fileProviderLog } from '../../../../../utils/logger'
-import type { WorkerMetricsPayload, WorkerMetricsResponse, WorkerStatusSnapshot, WorkerTaskSnapshot } from './worker-status'
 
-export type ReconcileDiskFile = {
+export interface ReconcileDiskFile {
   path: string
   name: string
   extension: string
@@ -12,25 +17,25 @@ export type ReconcileDiskFile = {
   ctime: number
 }
 
-export type ReconcileDbFile = {
+export interface ReconcileDbFile {
   id: number
   path: string
   mtime: number
 }
 
-export type ReconcileResult = {
+export interface ReconcileResult {
   filesToAdd: ReconcileDiskFile[]
   filesToUpdate: Array<ReconcileDiskFile & { id: number }>
   deletedIds: number[]
 }
 
-type PendingReconcile = {
+interface PendingReconcile {
   resolve: (value: ReconcileResult) => void
   reject: (error: Error) => void
   startedAt: number
 }
 
-type PendingMetrics = {
+interface PendingMetrics {
   resolve: (value: WorkerMetricsPayload | null) => void
   timeout: ReturnType<typeof setTimeout>
 }
@@ -47,12 +52,13 @@ export class FileReconcileWorkerClient {
   private lastError: string | null = null
   private lastTask: WorkerTaskSnapshot | null = null
   private workerStartedAt: number | null = null
-  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null = null
+  private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
+    null
 
   async reconcile(
     diskFiles: ReconcileDiskFile[],
     dbFiles: ReconcileDbFile[],
-    reconciliationPaths: string[],
+    reconciliationPaths: string[]
   ): Promise<ReconcileResult> {
     const taskId = `reconcile-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
@@ -66,7 +72,7 @@ export class FileReconcileWorkerClient {
         taskId,
         diskFiles,
         dbFiles,
-        reconciliationPaths,
+        reconciliationPaths
       })
     })
   }
@@ -83,7 +89,7 @@ export class FileReconcileWorkerClient {
       lastTask: this.lastTask,
       lastError: this.lastError,
       uptimeMs: worker && this.workerStartedAt ? Date.now() - this.workerStartedAt : null,
-      metrics: this.toStatusMetrics(metrics),
+      metrics: this.toStatusMetrics(metrics)
     }
   }
 
@@ -139,7 +145,7 @@ export class FileReconcileWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: null,
+        error: null
       }
       return
     }
@@ -152,7 +158,7 @@ export class FileReconcileWorkerClient {
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: message.error,
+        error: message.error
       }
       pending.reject(new Error(message.error))
     }
@@ -177,7 +183,7 @@ export class FileReconcileWorkerClient {
     this.workerStartedAt = null
     this.lastError = error.message
     fileProviderLog.warn('[FileReconcileWorker] Worker failed, will restart on demand', {
-      error,
+      error
     })
   }
 
@@ -195,7 +201,7 @@ export class FileReconcileWorkerClient {
       this.metricsPending.set(requestId, { resolve, timeout })
       worker.postMessage({
         type: 'metrics',
-        requestId,
+        requestId
       })
     })
   }
@@ -211,9 +217,9 @@ export class FileReconcileWorkerClient {
       cpu: {
         user: metrics.cpuUsage.user,
         system: metrics.cpuUsage.system,
-        percent,
+        percent
       },
-      eventLoop: metrics.eventLoop,
+      eventLoop: metrics.eventLoop
     }
   }
 

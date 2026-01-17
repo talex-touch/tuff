@@ -8,72 +8,72 @@ import type {
   NativeShareResult,
 } from '../../../types/flow'
 
-export type FlowDispatchRequest = {
+export interface FlowDispatchRequest {
   senderId?: string
   payload: FlowPayload
   options?: FlowDispatchOptions
   _sdkapi?: number
 }
 
-export type FlowDispatchResponse = {
+export interface FlowDispatchResponse {
   success: boolean
   data?: FlowDispatchResult
   error?: { message: string }
 }
 
-export type FlowGetTargetsRequest = {
+export interface FlowGetTargetsRequest {
   payloadType?: FlowPayloadType
   _sdkapi?: number
 }
 
-export type FlowGetTargetsResponse = {
+export interface FlowGetTargetsResponse {
   success: boolean
   data?: FlowTargetInfo[]
   error?: { message: string }
 }
 
-export type FlowSessionActionRequest = {
+export interface FlowSessionActionRequest {
   sessionId: string
   _sdkapi?: number
 }
 
-export type FlowCancelResponse = {
+export interface FlowCancelResponse {
   success: boolean
   data?: { cancelled: boolean }
   error?: { message: string }
 }
 
-export type FlowAcknowledgeRequest = {
+export interface FlowAcknowledgeRequest {
   sessionId: string
   ackPayload?: any
   _sdkapi?: number
 }
 
-export type FlowAcknowledgeResponse = {
+export interface FlowAcknowledgeResponse {
   success: boolean
   data?: { acknowledged: boolean }
   error?: { message: string }
 }
 
-export type FlowReportErrorRequest = {
+export interface FlowReportErrorRequest {
   sessionId: string
   message: string
   _sdkapi?: number
 }
 
-export type FlowReportErrorResponse = {
+export interface FlowReportErrorResponse {
   success: boolean
   data?: { reported: boolean }
   error?: { message: string }
 }
 
-export type FlowSetPluginHandlerRequest = {
+export interface FlowSetPluginHandlerRequest {
   pluginId: string
   hasHandler: boolean
   _sdkapi?: number
 }
 
-export type FlowRegisterTargetsRequest = {
+export interface FlowRegisterTargetsRequest {
   pluginId: string
   targets: any[]
   pluginName?: string
@@ -82,18 +82,18 @@ export type FlowRegisterTargetsRequest = {
   _sdkapi?: number
 }
 
-export type FlowUnregisterTargetsRequest = {
+export interface FlowUnregisterTargetsRequest {
   pluginId: string
   _sdkapi?: number
 }
 
-export type FlowSetPluginEnabledRequest = {
+export interface FlowSetPluginEnabledRequest {
   pluginId: string
   enabled: boolean
   _sdkapi?: number
 }
 
-export type FlowNativeShareRequest = {
+export interface FlowNativeShareRequest {
   payload: FlowPayload
   target?: string
   _sdkapi?: number
@@ -101,19 +101,19 @@ export type FlowNativeShareRequest = {
 
 export type FlowNativeShareResponse = NativeShareResult
 
-export type FlowSelectTargetRequest = {
+export interface FlowSelectTargetRequest {
   sessionId: string
   targetId: string | null
   _sdkapi?: number
 }
 
-export type FlowSelectTargetResponse = {
+export interface FlowSelectTargetResponse {
   success: boolean
   data?: { resolved: boolean }
   error?: { message: string }
 }
 
-export type FlowDeliverPayload = {
+export interface FlowDeliverPayload {
   sessionId: string
   payload: FlowPayload
   senderId: string

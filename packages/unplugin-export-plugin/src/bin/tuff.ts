@@ -1,26 +1,25 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
-import process from 'node:process'
+import type { Locale } from '../cli/i18n'
+import type { SelectOption } from '../cli/prompts'
 import { createRequire } from 'node:module'
-import { build } from '../core/exporter'
-import { login, logout, printPublishHelp, runPublish } from '../core/publish'
+import process from 'node:process'
+import { runCreate } from '../cli/commands'
 import {
   initI18n,
-  t,
   setLocale,
-  getLocale,
-  type Locale,
+  t,
 } from '../cli/i18n'
 import {
-  askSelect,
   askLanguageSwitch,
+  askSelect,
+  colors,
   printHeader,
   printInfo,
   styled,
-  colors,
-  type SelectOption,
 } from '../cli/prompts'
-import { runCreate } from '../cli/commands'
+import { build } from '../core/exporter'
+import { login, logout, printPublishHelp, runPublish } from '../core/publish'
 
 const require = createRequire(import.meta.url)
 const pkg = require('../../package.json')
@@ -70,7 +69,7 @@ async function runBuilder() {
 async function runInteractiveMode(): Promise<void> {
   printHeader(
     t('welcome.title'),
-    `${t('welcome.subtitle')} · ${t('welcome.version', { version: pkg.version })}`
+    `${t('welcome.subtitle')} · ${t('welcome.version', { version: pkg.version })}`,
   )
 
   const menuOptions: SelectOption<string>[] = [
@@ -132,7 +131,8 @@ async function runSettings(): Promise<void> {
     printInfo(t('settings.languageChanged', { lang: t(`settings.languages.${newLocale}`) }))
     // Re-run interactive mode with new locale
     await runInteractiveMode()
-  } else {
+  }
+  else {
     await runInteractiveMode()
   }
 }

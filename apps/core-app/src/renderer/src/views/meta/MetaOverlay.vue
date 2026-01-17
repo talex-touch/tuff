@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import type { MetaAction, MetaShowRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { TuffItem } from '@talex-touch/utils'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+import type {
+  MetaAction,
+  MetaShowRequest
+} from '@talex-touch/utils/transport/events/types/meta-overlay'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
-import MetaActionItem from '~/components/meta/MetaActionItem.vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import MetaActionItem from '~/components/meta/MetaActionItem.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -45,7 +48,7 @@ const filteredActions = computed(() => {
   }
 
   const query = searchQuery.value.toLowerCase().trim()
-  return allActions.value.filter(action => {
+  return allActions.value.filter((action) => {
     const title = action.render.basic.title.toLowerCase()
     const subtitle = action.render.basic.subtitle?.toLowerCase() || ''
 
@@ -90,7 +93,7 @@ const unregShow = transport.on(MetaOverlayEvents.ui.show, (data: MetaShowRequest
   const merged: MetaAction[] = [
     ...(data.pluginActions || []),
     ...(data.itemActions || []),
-    ...data.builtinActions,
+    ...data.builtinActions
   ].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
   allActions.value = merged
   visible.value = true
@@ -153,7 +156,7 @@ function handleKeyDown(event: KeyboardEvent) {
   // Check for shortcut matches
   if (event.metaKey || event.ctrlKey) {
     const shortcut = getShortcutString(event)
-    const matchingAction = flatActions.value.find(action => {
+    const matchingAction = flatActions.value.find((action) => {
       if (!action.render.shortcut) return false
       return normalizeShortcut(action.render.shortcut) === normalizeShortcut(shortcut)
     })
@@ -161,7 +164,6 @@ function handleKeyDown(event: KeyboardEvent) {
       handleActionExecute(matchingAction)
       event.preventDefault()
       event.stopPropagation()
-      return
     }
   }
 }
@@ -251,7 +253,9 @@ onBeforeUnmount(() => {
         <!-- Action List -->
         <div class="MetaList">
           <template v-for="group in groupedActions" :key="group.title">
-            <div v-if="group.title" class="GroupTitle">{{ group.title }}</div>
+            <div v-if="group.title" class="GroupTitle">
+              {{ group.title }}
+            </div>
             <MetaActionItem
               v-for="action in group.actions"
               :key="action.id"
@@ -342,7 +346,10 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   background: var(--el-fill-color-dark);
   color: var(--el-text-color-secondary);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   flex-shrink: 0;
 }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DrawerEmits, DrawerProps } from './types'
 /**
  * TxDrawer Component
  *
@@ -14,8 +15,7 @@
  *
  * @component
  */
-import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
-import type { DrawerProps, DrawerEmits } from './types'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxDrawer',
@@ -131,7 +131,9 @@ onUnmounted(() => {
       <div class="tx-drawer__panel">
         <!-- Header -->
         <header class="tx-drawer__header">
-          <h2 class="tx-drawer__title">{{ title }}</h2>
+          <h2 class="tx-drawer__title">
+            {{ title }}
+          </h2>
           <button
             v-if="showClose"
             type="button"

@@ -1,13 +1,13 @@
 /* eslint-disable no-console */
+import type { Options } from '../types'
 import process from 'node:process'
-import path from 'pathe'
-import fs from 'fs-extra'
-import cliProgress from 'cli-progress'
-import { globSync } from 'glob'
 import * as readline from 'node:readline'
+import cliProgress from 'cli-progress'
+import fs from 'fs-extra'
+import { globSync } from 'glob'
+import path from 'pathe'
 import { CompressLimit, TalexCompress } from './compress-util'
 import { generateFilesSha256, generateSignature } from './security-util'
-import type { Options } from '../types'
 
 // Default configuration
 const DEFAULT_OPTIONS: Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>> & Pick<Options, 'assets' | 'versionSync'> = {
@@ -63,7 +63,8 @@ async function promptConfirm(question: string, defaultValue = true): Promise<boo
       const value = answer.trim().toLowerCase()
       if (value === '') {
         resolve(defaultValue)
-      } else {
+      }
+      else {
         resolve(value === 'y' || value === 'yes')
       }
     })
@@ -75,8 +76,8 @@ async function promptConfirm(question: string, defaultValue = true): Promise<boo
  */
 async function checkVersionSync(
   opts: ReturnType<typeof resolveOptions>,
-  chalk: any
-): Promise<{ synced: boolean; version?: string }> {
+  chalk: any,
+): Promise<{ synced: boolean, version?: string }> {
   const packageJsonPath = path.join(opts.root, 'package.json')
   const manifestPath = path.join(opts.root, opts.manifest)
 
@@ -105,8 +106,8 @@ async function checkVersionSync(
   // Versions differ
   console.log('')
   console.info(
-    chalk.bgYellow.black(' VERSION MISMATCH ') +
-    chalk.yellow(` package.json: ${pkgVersion} ≠ manifest.json: ${manifestVersion}`)
+    chalk.bgYellow.black(' VERSION MISMATCH ')
+    + chalk.yellow(` package.json: ${pkgVersion} ≠ manifest.json: ${manifestVersion}`),
   )
 
   const versionSync = opts.versionSync
@@ -116,16 +117,18 @@ async function checkVersionSync(
     if (versionSync.auto) {
       shouldSync = true
       console.info(chalk.cyan('  → Auto-syncing version from package.json'))
-    } else {
+    }
+    else {
       shouldSync = await promptConfirm(
         chalk.cyan('  → Sync version from package.json to manifest.json?'),
-        true
+        true,
       )
     }
-  } else {
+  }
+  else {
     // Not enabled, just inform
     console.info(
-      chalk.gray('  → Use --sync-version or set versionSync.enabled to auto-sync')
+      chalk.gray('  → Use --sync-version or set versionSync.enabled to auto-sync'),
     )
     return { synced: false }
   }
@@ -134,8 +137,8 @@ async function checkVersionSync(
     manifest.version = pkgVersion
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
     console.info(
-      chalk.bgGreen.black(' SYNCED ') +
-      chalk.green(` manifest.json version updated to ${pkgVersion}`)
+      chalk.bgGreen.black(' SYNCED ')
+      + chalk.green(` manifest.json version updated to ${pkgVersion}`),
     )
     return { synced: true, version: pkgVersion }
   }
@@ -153,16 +156,17 @@ function checkPluginSize(tpexPath: string, maxSizeMB: number, chalk: any): void 
   if (sizeMB > maxSizeMB) {
     console.log('')
     console.warn(
-      chalk.bgYellow.black(' WARNING ') +
-      chalk.yellow(` Plugin size (${sizeMB.toFixed(2)} MB) exceeds ${maxSizeMB} MB limit!`)
+      chalk.bgYellow.black(' WARNING ')
+      + chalk.yellow(` Plugin size (${sizeMB.toFixed(2)} MB) exceeds ${maxSizeMB} MB limit!`),
     )
     console.warn(chalk.yellow('  → Consider optimizing assets or splitting into smaller plugins'))
     console.warn(chalk.yellow('  → Large plugins may be rejected by the plugin store'))
     console.log('')
-  } else {
+  }
+  else {
     console.info(
-      chalk.bgBlack.white(' Talex-Touch ') +
-      chalk.gray(` Plugin size: ${sizeMB.toFixed(2)} MB`)
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.gray(` Plugin size: ${sizeMB.toFixed(2)} MB`),
     )
   }
 }
@@ -172,11 +176,11 @@ function checkPluginSize(tpexPath: string, maxSizeMB: number, chalk: any): void 
  */
 async function detectIndexFolder(indexDir: string, opts: ReturnType<typeof resolveOptions>): Promise<IndexBuildConfig | null> {
   const indexDirPath = path.resolve(opts.root, indexDir)
-  
+
   if (!fs.existsSync(indexDirPath)) {
     return null
   }
-  
+
   const entryFiles = ['main.ts', 'main.js', 'index.ts', 'index.js']
   for (const file of entryFiles) {
     const entryPath = path.join(indexDirPath, file)
@@ -187,11 +191,11 @@ async function detectIndexFolder(indexDir: string, opts: ReturnType<typeof resol
         target: 'node18',
         external: opts.external,
         minify: opts.minify,
-        sourcemap: opts.sourcemap
+        sourcemap: opts.sourcemap,
       }
     }
   }
-  
+
   return null
 }
 
@@ -201,14 +205,14 @@ async function detectIndexFolder(indexDir: string, opts: ReturnType<typeof resol
 async function bundleIndexFolder(
   config: IndexBuildConfig,
   buildDir: string,
-  manifest: { name: string; version: string },
-  chalk: any
+  manifest: { name: string, version: string },
+  chalk: any,
 ): Promise<boolean> {
   try {
     const esbuild = await import('esbuild')
-    
+
     console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Bundling index/ folder with esbuild...'))
-    
+
     const startTime = Date.now()
     const result = await esbuild.build({
       entryPoints: [config.entry],
@@ -221,8 +225,8 @@ async function bundleIndexFolder(
       minify: config.minify ?? true,
       sourcemap: config.sourcemap ?? false,
       define: {
-        '__PLUGIN_NAME__': JSON.stringify(manifest.name),
-        '__PLUGIN_VERSION__': JSON.stringify(manifest.version),
+        __PLUGIN_NAME__: JSON.stringify(manifest.name),
+        __PLUGIN_VERSION__: JSON.stringify(manifest.version),
       },
       alias: {
         '@': path.resolve('index'),
@@ -230,26 +234,27 @@ async function bundleIndexFolder(
       },
       logLevel: 'warning',
     })
-    
+
     const duration = Date.now() - startTime
-    
+
     if (result.errors.length > 0) {
       console.error(chalk.bgRed.white(' ERROR ') + chalk.red(' Index folder bundling failed:'))
       result.errors.forEach(err => console.error(chalk.red(`  - ${err.text}`)))
       return false
     }
-    
+
     const outputPath = path.join(buildDir, 'index.js')
     const stats = fs.statSync(outputPath)
     const sizeKb = (stats.size / 1024).toFixed(1)
-    
+
     console.info(
-      chalk.bgBlack.white(' Talex-Touch ') + 
-      chalk.greenBright(` Index folder bundled successfully (${sizeKb}kb) in ${duration}ms`)
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.greenBright(` Index folder bundled successfully (${sizeKb}kb) in ${duration}ms`),
     )
-    
+
     return true
-  } catch (error: any) {
+  }
+  catch (error: any) {
     console.error(chalk.bgRed.white(' ERROR ') + chalk.red(` Failed to bundle index folder: ${error.message}`))
     return false
   }
@@ -258,7 +263,7 @@ async function bundleIndexFolder(
 export async function build(userOptions?: Options) {
   const opts = resolveOptions(userOptions)
   const { default: chalk } = await import('chalk')
-  
+
   const distPath = path.resolve(opts.root, opts.outDir)
   const outDir = path.resolve(opts.root, opts.outDir, 'out')
   const buildDir = path.resolve(opts.root, opts.outDir, 'build')
@@ -320,10 +325,10 @@ export async function build(userOptions?: Options) {
   if (opts.assets?.copy && opts.assets.copy.length > 0) {
     console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Copying custom assets...'))
     for (const pattern of opts.assets.copy) {
-      const files = globSync(pattern, { 
-        cwd: opts.root, 
+      const files = globSync(pattern, {
+        cwd: opts.root,
         nodir: true,
-        ignore: opts.assets.exclude || []
+        ignore: opts.assets.exclude || [],
       })
       for (const file of files) {
         const source = path.resolve(opts.root, file)
@@ -343,12 +348,13 @@ export async function build(userOptions?: Options) {
     // Read manifest early for bundling
     const manifestPath = path.resolve(opts.root, opts.manifest)
     const manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-    
+
     const bundleSuccess = await bundleIndexFolder(indexConfig, buildDir, manifestData, chalk)
     if (!bundleSuccess) {
       throw new Error('Failed to bundle index/ folder')
     }
-  } else {
+  }
+  else {
     // Fallback: copy existing index.js
     const indexSource = path.resolve(opts.root, 'index.js')
     const indexDest = path.join(buildDir, 'index.js')
@@ -437,7 +443,7 @@ async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof
   const srcAssets = srcAssetsExists ? globSync('**/*', { cwd: srcAssetsDir, nodir: true }) : []
 
   // 检测所有冲突（三方冲突检测）
-  const conflicts: Array<{ file: string; sources: string[] }> = []
+  const conflicts: Array<{ file: string, sources: string[] }> = []
 
   // 检查 buildAssets 与 userAssets 的冲突
   for (const file of userAssets) {
@@ -513,7 +519,7 @@ function genInit(_buildDir: string, opts: ReturnType<typeof resolveOptions>): IM
   if (!manifest.id)
     throw new Error('`id` field is required in manifest.json')
 
-  if (!/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+$/.test(manifest.id))
+  if (!/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/i.test(manifest.id))
     throw new Error('`id` field must be in the format of `com.xxx.xxx`')
 
   // manifest.json 会在后续添加签名后再写入，这里只返回解析后的对象

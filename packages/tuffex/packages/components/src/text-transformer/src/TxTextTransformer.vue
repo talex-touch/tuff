@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { TextTransformerProps } from './types'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxTextTransformer',
@@ -49,7 +49,8 @@ async function runTransition(nextText: string) {
 
   if (rootRef.value != null && typeof getComputedStyle !== 'undefined') {
     prevColor.value = getComputedStyle(rootRef.value).color
-  } else {
+  }
+  else {
     prevColor.value = null
   }
 
@@ -60,20 +61,24 @@ async function runTransition(nextText: string) {
 
   await nextTick()
 
-  if (seq !== opSeq) return
+  if (seq !== opSeq)
+    return
 
   if (typeof requestAnimationFrame === 'undefined') {
     animating.value = true
-  } else {
+  }
+  else {
     rafId = requestAnimationFrame(() => {
-      if (seq !== opSeq) return
+      if (seq !== opSeq)
+        return
       animating.value = true
       rafId = null
     })
   }
 
   timer = setTimeout(() => {
-    if (seq !== opSeq) return
+    if (seq !== opSeq)
+      return
     showPrev.value = false
     prevText.value = null
     animating.value = false
@@ -86,13 +91,15 @@ watch(
   () => props.text,
   (v) => {
     const nextText = String(v)
-    if (nextText === currentText.value) return
+    if (nextText === currentText.value)
+      return
     void runTransition(nextText)
   },
 )
 
 onBeforeUnmount(() => {
-  if (timer != null) clearTimeout(timer)
+  if (timer != null)
+    clearTimeout(timer)
   timer = null
 
   if (rafId != null && typeof cancelAnimationFrame !== 'undefined') {

@@ -182,4 +182,3 @@ export interface MetaVisibilityResponse {
    */
   visible: boolean
 }
-

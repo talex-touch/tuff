@@ -5,7 +5,7 @@ const value = ref<string | number>('')
 const query = ref('')
 const loading = ref(false)
 
-const options = ref<Array<{ value: string; label: string }>>([])
+const options = ref<Array<{ value: string, label: string }>>([])
 
 async function onSearch(q: string) {
   query.value = q

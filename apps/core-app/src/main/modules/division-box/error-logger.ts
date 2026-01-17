@@ -1,12 +1,12 @@
 /**
  * ErrorLogger - DivisionBox Error Logging System
- * 
+ *
  * Provides structured error logging with categorization, timestamps, and metadata.
  * Integrates with the main application logger system.
  */
 
-import { createLogger } from '../../utils/logger'
 import type { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
+import { createLogger } from '../../utils/logger'
 
 /**
  * Error log entry structure
@@ -14,42 +14,42 @@ import type { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
 export interface ErrorLogEntry {
   /** Error code */
   code: DivisionBoxErrorCode
-  
+
   /** Error message */
   message: string
-  
+
   /** Associated session ID (if applicable) */
   sessionId?: string
-  
+
   /** Timestamp when error occurred */
   timestamp: number
-  
+
   /** Stack trace (if available) */
   stack?: string
-  
+
   /** Additional metadata */
   meta?: Record<string, any>
 }
 
 /**
  * ErrorLogger class for DivisionBox system
- * 
+ *
  * Provides centralized error logging with categorization and structured output.
  * Uses the application's logger system for consistent formatting.
  */
 export class ErrorLogger {
   /** Logger instance for DivisionBox errors */
   private logger = createLogger('DivisionBox:Error')
-  
+
   /** In-memory error history (limited to last 100 errors) */
   private errorHistory: ErrorLogEntry[] = []
-  
+
   /** Maximum number of errors to keep in history */
   private readonly MAX_HISTORY_SIZE = 100
 
   /**
    * Logs a DivisionBoxError
-   * 
+   *
    * @param error - The error to log
    * @param meta - Additional metadata to include in the log
    */
@@ -68,7 +68,7 @@ export class ErrorLogger {
 
     // Log to console with appropriate level
     const logMessage = this.formatErrorMessage(entry)
-    
+
     this.logger.error(logMessage, {
       meta: {
         code: error.code,
@@ -81,7 +81,7 @@ export class ErrorLogger {
 
   /**
    * Logs a generic error (not a DivisionBoxError)
-   * 
+   *
    * @param code - Error code to categorize the error
    * @param message - Error message
    * @param sessionId - Optional session ID
@@ -109,7 +109,7 @@ export class ErrorLogger {
 
     // Log to console
     const logMessage = this.formatErrorMessage(entry)
-    
+
     this.logger.error(logMessage, {
       meta: {
         code,
@@ -122,7 +122,7 @@ export class ErrorLogger {
 
   /**
    * Logs a warning (non-critical error)
-   * 
+   *
    * @param message - Warning message
    * @param meta - Additional metadata
    */
@@ -132,7 +132,7 @@ export class ErrorLogger {
 
   /**
    * Logs an info message
-   * 
+   *
    * @param message - Info message
    * @param meta - Additional metadata
    */
@@ -142,7 +142,7 @@ export class ErrorLogger {
 
   /**
    * Logs a debug message
-   * 
+   *
    * @param message - Debug message
    * @param meta - Additional metadata
    */
@@ -152,30 +152,30 @@ export class ErrorLogger {
 
   /**
    * Formats an error message for logging
-   * 
+   *
    * @param entry - Error log entry
    * @returns Formatted error message
    */
   private formatErrorMessage(entry: ErrorLogEntry): string {
     const parts = [entry.message]
-    
+
     if (entry.sessionId) {
       parts.push(`[Session: ${entry.sessionId}]`)
     }
-    
+
     return parts.join(' ')
   }
 
   /**
    * Adds an error entry to the history
-   * 
+   *
    * Maintains a circular buffer of the last MAX_HISTORY_SIZE errors.
-   * 
+   *
    * @param entry - Error log entry to add
    */
   private addToHistory(entry: ErrorLogEntry): void {
     this.errorHistory.push(entry)
-    
+
     // Trim history if it exceeds max size
     if (this.errorHistory.length > this.MAX_HISTORY_SIZE) {
       this.errorHistory.shift()
@@ -184,7 +184,7 @@ export class ErrorLogger {
 
   /**
    * Gets the error history
-   * 
+   *
    * @param limit - Maximum number of entries to return (default: all)
    * @returns Array of error log entries
    */
@@ -197,22 +197,22 @@ export class ErrorLogger {
 
   /**
    * Gets errors for a specific session
-   * 
+   *
    * @param sessionId - Session ID to filter by
    * @returns Array of error log entries for the session
    */
   getSessionErrors(sessionId: string): ErrorLogEntry[] {
-    return this.errorHistory.filter(entry => entry.sessionId === sessionId)
+    return this.errorHistory.filter((entry) => entry.sessionId === sessionId)
   }
 
   /**
    * Gets errors by error code
-   * 
+   *
    * @param code - Error code to filter by
    * @returns Array of error log entries with the specified code
    */
   getErrorsByCode(code: DivisionBoxErrorCode): ErrorLogEntry[] {
-    return this.errorHistory.filter(entry => entry.code === code)
+    return this.errorHistory.filter((entry) => entry.code === code)
   }
 
   /**
@@ -225,7 +225,7 @@ export class ErrorLogger {
 
   /**
    * Gets error statistics
-   * 
+   *
    * @returns Object containing error statistics
    */
   getErrorStats(): {
@@ -242,7 +242,7 @@ export class ErrorLogger {
     for (const entry of this.errorHistory) {
       // Count by code
       stats.byCode[entry.code] = (stats.byCode[entry.code] || 0) + 1
-      
+
       // Count by session
       if (entry.sessionId) {
         stats.bySessions[entry.sessionId] = (stats.bySessions[entry.sessionId] || 0) + 1

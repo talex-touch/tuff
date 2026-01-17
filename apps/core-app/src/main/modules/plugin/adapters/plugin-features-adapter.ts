@@ -10,16 +10,17 @@ import type {
   TuffSourceType
 } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { MatchRange } from '@talex-touch/utils/search'
 import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
 import { TuffFactory, TuffInputType } from '@talex-touch/utils'
-import { matchFeature, type MatchRange } from '@talex-touch/utils/search'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import searchEngineCore from '../../box-tool/search-engine/search-core'
-import { pluginModule } from '../plugin-module'
-
-import { PluginViewLoader } from '../view/plugin-view-loader'
+import { matchFeature } from '@talex-touch/utils/search'
 import { genTouchApp } from '../../../core'
+import searchEngineCore from '../../box-tool/search-engine/search-core'
+
+import { pluginModule } from '../plugin-module'
+import { PluginViewLoader } from '../view/plugin-view-loader'
 import { buildFeatureSearchTokens } from './feature-search-tokens'
 
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
@@ -71,6 +72,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     TuffInputType.Files,
     TuffInputType.Html
   ]
+
   public readonly priority = 'fast' as const
   public readonly expectedDuration = 30
 
@@ -197,7 +199,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       const query = args.searchResult?.query
 
       // Determine if input should be shown while webcontent view is attached
-      const hasAcceptedInputTypes = feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
+      const hasAcceptedInputTypes =
+        feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
       const allowInput = feature.interaction?.allowInput === true
       const shouldShowInput = hasAcceptedInputTypes || allowInput
 
@@ -244,7 +247,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     // items pushed during onFeatureTriggered have correct activation state
     if (feature.push) {
       // Determine if input should be shown based on feature config
-      const hasAcceptedInputTypes = feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
+      const hasAcceptedInputTypes =
+        feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
       const allowInput = feature.interaction?.allowInput === true
       const shouldShowInput = hasAcceptedInputTypes || allowInput
 
@@ -346,9 +350,10 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           // Filter out non-serializable fields (functions, RegExp) from commands
           commands: feature.commands.map((cmd) => ({
             type: cmd.type,
-            value: typeof cmd.value === 'function' || cmd.value instanceof RegExp
-              ? String(cmd.value)
-              : cmd.value
+            value:
+              typeof cmd.value === 'function' || cmd.value instanceof RegExp
+                ? String(cmd.value)
+                : cmd.value
           })),
           searchTokens,
           // Match result for UI highlighting
@@ -432,12 +437,15 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         }
 
         const hasInputs = queryInputTypes.length > 0
-        const featureAcceptsInputs = hasInputs && feature.acceptedInputTypes?.some((t) =>
-          queryInputTypes.includes(t as TuffInputType)
-        )
+        const featureAcceptsInputs =
+          hasInputs &&
+          feature.acceptedInputTypes?.some((t) => queryInputTypes.includes(t as TuffInputType))
 
-        const matchesCommand = queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
-        const matchesClipboardCommand = clipboardTextContent && feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
+        const matchesCommand =
+          queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
+        const matchesClipboardCommand =
+          clipboardTextContent &&
+          feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
 
         let matchResult: MatchRange[] | undefined
         let matchScore = 0
@@ -477,9 +485,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     }
 
     // Sort by match score (highest first), then by priority
-    const sortedItems = matchedItems
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .map((m) => m.item)
+    const sortedItems = matchedItems.sort((a, b) => b.matchScore - a.matchScore).map((m) => m.item)
 
     return TuffFactory.createSearchResult(query).setItems(sortedItems).build()
   }

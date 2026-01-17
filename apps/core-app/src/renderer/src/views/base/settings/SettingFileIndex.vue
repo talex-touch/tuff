@@ -1,17 +1,18 @@
 <script setup lang="ts" name="SettingFileIndex">
-import { computed, onMounted, onUnmounted, ref, h } from 'vue'
-import { useI18n } from 'vue-i18n'
+import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events/types'
 import { ElMessage } from 'element-plus'
+import { computed, h, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
-import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events/types'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 
-const { getIndexStatus, getIndexStats, getBatteryLevel, handleRebuild, onProgressUpdate } = useFileIndexMonitor()
+const { getIndexStatus, getIndexStats, getBatteryLevel, handleRebuild, onProgressUpdate } =
+  useFileIndexMonitor()
 const { t, te } = useI18n()
 
 const indexStatus = ref<any>(null)
@@ -19,11 +20,13 @@ const isRebuilding = ref(false)
 const lastChecked = ref<Date | null>(null)
 const estimatedTimeRemaining = ref<number | null>(null)
 const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
-const indexStats = ref<{ totalFiles: number; failedFiles: number; skippedFiles: number } | null>(null)
+const indexStats = ref<{ totalFiles: number; failedFiles: number; skippedFiles: number } | null>(
+  null
+)
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 
-const checkStatus = async () => {
+async function checkStatus() {
   try {
     indexStatus.value = await getIndexStatus()
     lastChecked.value = new Date()
@@ -80,7 +83,9 @@ const statusColor = computed(() => {
   return '#34c759'
 })
 
-const showError = computed(() => indexStatus.value?.initializationFailed && indexStatus.value?.error)
+const showError = computed(
+  () => indexStatus.value?.initializationFailed && indexStatus.value?.error
+)
 
 const isIndexing = computed(() => indexStatus.value?.isInitializing || isRebuilding.value)
 
@@ -100,16 +105,15 @@ const progressText = computed(() => {
   return stageLabel
 })
 
-const openRebuildConfirm = async (payload?: {
+async function openRebuildConfirm(payload?: {
   battery?: FileIndexBatteryStatus | null
   criticalBattery?: number
   minBattery?: number
   showCriticalWarning?: boolean
-}) => {
+}) {
   await new Promise<void>((resolve, reject) => {
-    popperMention(
-      t('settings.settingFileIndex.rebuildTitle'),
-      () => h(RebuildConfirmDialog, {
+    popperMention(t('settings.settingFileIndex.rebuildTitle'), () =>
+      h(RebuildConfirmDialog, {
         battery: payload?.battery ?? null,
         minBattery: payload?.minBattery ?? defaultMinBattery,
         criticalBattery: payload?.criticalBattery ?? defaultCriticalBattery,
@@ -121,7 +125,7 @@ const openRebuildConfirm = async (payload?: {
   })
 }
 
-const triggerRebuild = async () => {
+async function triggerRebuild() {
   if (isRebuilding.value) {
     ElMessage.warning(t('settings.settingFileIndex.alertRebuilding'))
     return
@@ -251,7 +255,11 @@ const triggerRebuild = async () => {
       active-icon="i-carbon-reset"
     >
       <FlatButton primary @click="triggerRebuild">
-        {{ isRebuilding ? t('settings.settingFileIndex.rebuilding') : t('settings.settingFileIndex.rebuildNow') }}
+        {{
+          isRebuilding
+            ? t('settings.settingFileIndex.rebuilding')
+            : t('settings.settingFileIndex.rebuildNow')
+        }}
       </FlatButton>
     </TuffBlockSlot>
 

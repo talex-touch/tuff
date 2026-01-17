@@ -1,6 +1,6 @@
 <script lang="ts" name="AppLayoutSimple" setup>
-import SimpleController from './SimpleController.vue'
 import LayoutFooter from '../shared/LayoutFooter.vue'
+import SimpleController from './SimpleController.vue'
 import SimpleNavBar from './SimpleNavBar.vue'
 
 const props = withDefaults(
@@ -8,8 +8,8 @@ const props = withDefaults(
     display?: boolean
   }>(),
   {
-    display: false,
-  },
+    display: false
+  }
 )
 
 const isDisplayMode = computed(() => props.display)

@@ -33,7 +33,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   const titleLower = title?.toLowerCase() || ''
   const titleLength = titleLower.length
   const rawTokens = item.meta?.extension?.searchTokens
-  const searchTokens = Array.isArray(rawTokens) 
+  const searchTokens = Array.isArray(rawTokens)
     ? rawTokens.filter((t): t is string => typeof t === 'string' && Boolean(t))
     : []
 
@@ -141,12 +141,12 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   // - matchScore: How well the search query matches the item
   // - recency: How recently the item was used
   // - frequency: How often the user executes this item (with time decay)
-  // 
+  //
   // Key insight: frequency should have significant impact to allow
   // frequently-used commands to rank higher than occasionally-matched files.
   // A user who searches "hello" and always picks "翻译" should see it ranked higher
   // than a file named "Hello.txt" they never open.
-  // 
+  //
   // Frequency weight increased from 5000 to 8000 to give more weight to frequently used items
   const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 8000
 

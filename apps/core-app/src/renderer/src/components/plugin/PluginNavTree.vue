@@ -1,13 +1,14 @@
 <script lang="ts" name="PluginNavTree" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { TxTransition, TxTransitionSmoothSize } from '@talex-touch/tuffex'
+import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import StatusIcon from '~/components/base/StatusIcon.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 
 type PluginCategoryId = string
 
@@ -27,13 +28,13 @@ const isPluginRoute = computed(() => route.path.startsWith('/plugin'))
 const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
 const visiblePlugins = computed(() => {
   if (developerMode.value) return plugins.value
-  return plugins.value.filter(p => !p.meta?.internal)
+  return plugins.value.filter((p) => !p.meta?.internal)
 })
 
 const CATEGORY_ALIASES: Record<string, string> = {
   tools: 'utilities',
   tool: 'utilities',
-  dev: 'development',
+  dev: 'development'
 }
 
 const CATEGORY_ORDER: readonly string[] = [
@@ -49,7 +50,7 @@ const CATEGORY_ORDER: readonly string[] = [
   'design',
   'education',
   'finance',
-  'uncategorized',
+  'uncategorized'
 ]
 
 function normalizeCategoryId(raw: unknown): PluginCategoryId {
@@ -81,7 +82,7 @@ const groups = computed<PluginCategoryGroup[]>(() => {
     list.push({
       id,
       label: resolveCategoryLabel(id),
-      plugins: items,
+      plugins: items
     })
   }
 
@@ -107,20 +108,20 @@ watch(
     }
     expanded.value = merged
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 watch(
   () => curSelect.value?.name,
   (name) => {
     if (!name) return
-    const plugin = visiblePlugins.value.find(p => p.name === name)
+    const plugin = visiblePlugins.value.find((p) => p.name === name)
     if (!plugin) return
     const id = normalizeCategoryId(plugin.category)
     if (!expanded.value.has(id)) {
       expanded.value = new Set([...expanded.value, id])
     }
-  },
+  }
 )
 
 function isExpanded(id: PluginCategoryId): boolean {
@@ -142,7 +143,7 @@ async function handleSelectPlugin(plugin: ITouchPlugin): Promise<void> {
 }
 
 function hasError(plugin: ITouchPlugin): boolean {
-  return Boolean(plugin.issues?.some(issue => issue.type === 'error'))
+  return Boolean(plugin.issues?.some((issue) => issue.type === 'error'))
 }
 
 function shortenTooltip(message: string, max = 80): string {
@@ -153,13 +154,13 @@ function shortenTooltip(message: string, max = 80): string {
 
 function getIssueTitle(plugin: ITouchPlugin): string | undefined {
   const issues = plugin.issues ?? []
-  const errors = issues.filter(issue => issue.type === 'error')
+  const errors = issues.filter((issue) => issue.type === 'error')
   if (errors.length > 0) {
     const first = errors[0]?.message ? shortenTooltip(errors[0].message) : ''
     return t('plugin.navTree.badges.error', { count: errors.length, message: first })
   }
 
-  const warnings = issues.filter(issue => issue.type === 'warning')
+  const warnings = issues.filter((issue) => issue.type === 'warning')
   if (warnings.length > 0) {
     const first = warnings[0]?.message ? shortenTooltip(warnings[0].message) : ''
     return t('plugin.navTree.badges.warning', { count: warnings.length, message: first })
@@ -172,16 +173,23 @@ type PluginIndicatorTone = 'none' | 'loading' | 'warning' | 'success' | 'error' 
 
 function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   if (plugin.status === EPluginStatus.LOADING) return 'loading'
-  if (plugin.status === EPluginStatus.LOAD_FAILED || plugin.status === EPluginStatus.CRASHED) return 'error'
+  if (plugin.status === EPluginStatus.LOAD_FAILED || plugin.status === EPluginStatus.CRASHED)
+    return 'error'
   if (plugin.status === EPluginStatus.DEV_RECONNECTING) return 'loading'
 
   const issues = plugin.issues ?? []
-  if (issues.some(issue => issue.type === 'error')) return 'error'
-  if (issues.some(issue => issue.type === 'warning')) return 'warning'
+  if (issues.some((issue) => issue.type === 'error')) return 'error'
+  if (issues.some((issue) => issue.type === 'warning')) return 'warning'
 
   if (plugin.status === EPluginStatus.DEV_DISCONNECTED) return 'warning'
-  if (plugin.status === EPluginStatus.DISABLED || plugin.status === EPluginStatus.DISABLING) return 'info'
-  if (plugin.status === EPluginStatus.ACTIVE || plugin.status === EPluginStatus.ENABLED || plugin.status === EPluginStatus.LOADED) return 'success'
+  if (plugin.status === EPluginStatus.DISABLED || plugin.status === EPluginStatus.DISABLING)
+    return 'info'
+  if (
+    plugin.status === EPluginStatus.ACTIVE ||
+    plugin.status === EPluginStatus.ENABLED ||
+    plugin.status === EPluginStatus.LOADED
+  )
+    return 'success'
 
   return 'none'
 }
@@ -197,11 +205,7 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
       :appear="false"
       :duration="180"
     >
-      <section
-        v-for="group in groups"
-        :key="group.id"
-        class="PluginNavTree-Group"
-      >
+      <section v-for="group in groups" :key="group.id" class="PluginNavTree-Group">
         <button
           type="button"
           class="PluginNavTree-GroupHeader"
@@ -215,7 +219,8 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
           <span
             class="PluginNavTree-GroupCount"
             :title="t('plugin.navTree.groupCount', { count: group.plugins.length })"
-          >{{ group.plugins.length }}</span>
+            >{{ group.plugins.length }}</span
+          >
         </button>
 
         <TxTransitionSmoothSize
@@ -248,6 +253,7 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
                   :alt="plugin.name"
                   :size="18"
                   colorful
+                  :empty="DefaultIcon"
                   :tone="resolveIndicatorTone(plugin)"
                 />
                 <span class="PluginNavTree-ItemName">

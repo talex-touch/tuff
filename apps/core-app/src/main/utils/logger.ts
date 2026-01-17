@@ -161,10 +161,10 @@ class LoggerManager {
     const levels: LogLevel[] = ['debug', 'info', 'success', 'warn', 'error']
     const levelIndex = levels.indexOf(level)
     const configLevelIndex = levels.indexOf(configLevel)
-    
+
     // If level is not found (should not happen), allow it
     if (levelIndex === -1) return true
-    
+
     return levelIndex >= configLevelIndex
   }
 }

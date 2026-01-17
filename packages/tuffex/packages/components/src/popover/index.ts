@@ -1,6 +1,6 @@
-import TxPopover from './src/TxPopover.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { PopoverProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxPopover from './src/TxPopover.vue'
 
 const Popover = withInstall(TxPopover)
 

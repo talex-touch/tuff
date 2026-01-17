@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import { hasWindow } from '../../../../utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 
 defineOptions({ name: 'TxRow' })
-
-type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-
-type Gutter = number | Partial<Record<Breakpoint, number>>
 
 const props = withDefaults(
   defineProps<{
@@ -23,18 +19,27 @@ const props = withDefaults(
   },
 )
 
+type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
+type Gutter = number | Partial<Record<Breakpoint, number>>
+
 const width = ref<number>(hasWindow() ? window.innerWidth : 1024)
 
 function getBp(w: number): Breakpoint {
-  if (w < 640) return 'xs'
-  if (w < 768) return 'sm'
-  if (w < 1024) return 'md'
-  if (w < 1280) return 'lg'
+  if (w < 640)
+    return 'xs'
+  if (w < 768)
+    return 'sm'
+  if (w < 1024)
+    return 'md'
+  if (w < 1280)
+    return 'lg'
   return 'xl'
 }
 
 function resolveGutter(g: Gutter): number {
-  if (typeof g === 'number') return Math.max(0, g)
+  if (typeof g === 'number')
+    return Math.max(0, g)
   const bp = getBp(width.value)
   const v = g[bp] ?? g.md ?? g.sm ?? g.xs ?? 0
   return Math.max(0, Number(v))
@@ -76,9 +81,9 @@ const cls = computed(() => {
   }
 
   const justifyMap: Record<string, string> = {
-    start: 'flex-start',
-    end: 'flex-end',
-    center: 'center',
+    'start': 'flex-start',
+    'end': 'flex-end',
+    'center': 'center',
     'space-around': 'space-around',
     'space-between': 'space-between',
     'space-evenly': 'space-evenly',

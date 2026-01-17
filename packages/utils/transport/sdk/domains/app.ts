@@ -14,7 +14,7 @@ export interface AppSdk {
 
   openExternal: (url: string) => Promise<void>
   showInFolder: (path: string) => Promise<void>
-  openApp: (options: { appName?: string; path?: string }) => Promise<void>
+  openApp: (options: { appName?: string, path?: string }) => Promise<void>
   executeCommand: (options: { command: string }) => Promise<unknown>
   readFile: (path: string) => Promise<string>
 }
@@ -25,16 +25,16 @@ export function createAppSdk(transport: ITuffTransport): AppSdk {
     hide: () => transport.send(AppEvents.window.hide),
     minimize: () => transport.send(AppEvents.window.minimize),
     focus: () => transport.send(AppEvents.window.focus),
-    openDevTools: (options) => transport.send(AppEvents.debug.openDevTools, options as any),
+    openDevTools: options => transport.send(AppEvents.debug.openDevTools, options as any),
 
     getCwd: () => transport.send(AppEvents.system.getCwd),
     getOS: () => transport.send(AppEvents.system.getOS),
     getPackage: () => transport.send(AppEvents.system.getPackage),
 
-    openExternal: (url) => transport.send(AppEvents.system.openExternal, { url }),
-    showInFolder: (path) => transport.send(AppEvents.system.showInFolder, { path }),
-    openApp: (options) => transport.send(AppEvents.system.openApp, options),
-    executeCommand: (options) => transport.send(AppEvents.system.executeCommand, options as any),
-    readFile: (path) => transport.send(AppEvents.system.readFile, { source: path }),
+    openExternal: url => transport.send(AppEvents.system.openExternal, { url }),
+    showInFolder: path => transport.send(AppEvents.system.showInFolder, { path }),
+    openApp: options => transport.send(AppEvents.system.openApp, options),
+    executeCommand: options => transport.send(AppEvents.system.executeCommand, options as any),
+    readFile: path => transport.send(AppEvents.system.readFile, { source: path }),
   }
 }

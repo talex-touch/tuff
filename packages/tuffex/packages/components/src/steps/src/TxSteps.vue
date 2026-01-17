@@ -1,18 +1,6 @@
-<template>
-  <div
-    :class="[
-      'tx-steps',
-      `tx-steps--${direction}`,
-      `tx-steps--${size}`
-    ]"
-  >
-    <slot />
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { StepsContext, StepsDirection, StepsSize } from './types'
 import { provide, ref, watch } from 'vue'
-import type { StepsDirection, StepsSize, StepsContext } from './types'
 
 interface Props {
   direction?: StepsDirection
@@ -23,7 +11,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   direction: 'horizontal',
   size: 'medium',
-  active: 0
+  active: 0,
 })
 
 const activeStep = ref(props.active)
@@ -38,9 +26,20 @@ provide<StepsContext>('steps', {
   activeStep,
   setActiveStep: (step: number | string) => {
     activeStep.value = step
-  }
+  },
 })
 </script>
+
+<template>
+  <div
+    class="tx-steps" :class="[
+      `tx-steps--${direction}`,
+      `tx-steps--${size}`,
+    ]"
+  >
+    <slot />
+  </div>
+</template>
 
 <style scoped>
 .tx-steps {

@@ -1,6 +1,6 @@
 import type { MarketPlugin } from '@talex-touch/utils/market'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { getAuthToken, isAuthenticated } from '~/modules/market/auth-token-service'
 
 const NEXUS_URL = getTuffBaseUrl()
@@ -22,9 +22,9 @@ export function useUserPlugins() {
     const all = plugins.value
     return {
       total: all.length,
-      approved: all.filter(p => (p.metadata as any)?.status === 'approved').length,
-      pending: all.filter(p => (p.metadata as any)?.status === 'pending').length,
-      draft: all.filter(p => (p.metadata as any)?.status === 'draft').length,
+      approved: all.filter((p) => (p.metadata as any)?.status === 'approved').length,
+      pending: all.filter((p) => (p.metadata as any)?.status === 'pending').length,
+      draft: all.filter((p) => (p.metadata as any)?.status === 'draft').length
     }
   })
 
@@ -51,15 +51,14 @@ export function useUserPlugins() {
         method: 'GET',
         headers: {
           Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+          Authorization: `Bearer ${token}`
+        }
       })
 
       if (!response.ok) {
         if (response.status === 401) {
           error.value = 'UNAUTHORIZED'
-        }
-        else {
+        } else {
           error.value = `HTTP_ERROR_${response.status}`
         }
         return
@@ -68,12 +67,10 @@ export function useUserPlugins() {
       const data = await response.json()
       plugins.value = normalizePlugins(data.plugins || [])
       lastUpdated.value = Date.now()
-    }
-    catch (err) {
+    } catch (err) {
       console.error('[useUserPlugins] Failed to load:', err)
       error.value = err instanceof Error ? err.message : 'UNKNOWN_ERROR'
-    }
-    finally {
+    } finally {
       loading.value = false
     }
   }
@@ -93,16 +90,18 @@ export function useUserPlugins() {
         installs: plugin.installs,
         badges: plugin.badges,
         isOfficial: plugin.isOfficial,
-        homepage: plugin.homepage,
+        homepage: plugin.homepage
       },
-      readmeUrl: plugin.readmeMarkdown ? `${NEXUS_URL}/api/market/plugins/${plugin.slug}/readme` : undefined,
+      readmeUrl: plugin.readmeMarkdown
+        ? `${NEXUS_URL}/api/market/plugins/${plugin.slug}/readme`
+        : undefined,
       homepage: plugin.homepage ?? undefined,
       downloadUrl: plugin.latestVersion?.packageUrl ?? '',
       install: plugin.latestVersion?.packageUrl
         ? {
             type: 'url' as const,
             url: plugin.latestVersion.packageUrl,
-            format: 'tpex',
+            format: 'tpex'
           }
         : undefined,
       providerId: 'nexus',
@@ -110,7 +109,7 @@ export function useUserPlugins() {
       providerType: 'tpexApi',
       providerTrustLevel: 'official' as const,
       trusted: true,
-      official: plugin.isOfficial || false,
+      official: plugin.isOfficial || false
     }))
   }
 
@@ -127,6 +126,6 @@ export function useUserPlugins() {
     error,
     lastUpdated,
     loadUserPlugins,
-    clear,
+    clear
   }
 }

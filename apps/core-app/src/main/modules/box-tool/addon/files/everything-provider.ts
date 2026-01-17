@@ -5,6 +5,7 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
+import type { Primitive } from '../../../../utils/logger'
 import type { ProviderContext } from '../../search-engine/types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -15,9 +16,8 @@ import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { shell } from 'electron'
 import { fileProviderLog, formatDuration } from '../../../../utils/logger'
-import type { Primitive } from '../../../../utils/logger'
-import { searchLogger } from '../../search-engine/search-logger'
 import { storageModule } from '../../../storage'
+import { searchLogger } from '../../search-engine/search-logger'
 import { mapFileToTuffItem } from './utils'
 
 const execFileAsync = promisify(execFile)
@@ -33,13 +33,13 @@ interface EverythingSearchResult {
 
 /**
  * Everything Provider for Windows
- * 
+ *
  * Integrates with Everything search engine (voidtools) for ultra-fast file searching on Windows.
- * 
+ *
  * Requirements:
  * - Everything must be installed and running
  * - Everything Command-line Interface (es.exe) must be available
- * 
+ *
  * Installation:
  * 1. Download Everything from https://www.voidtools.com/
  * 2. Download Everything Command-line Interface (es.exe)
@@ -131,7 +131,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private async loadSettings(_context: ProviderContext): Promise<void> {
     try {
-      const settings = storageModule.getConfig('everything-settings.json') as { enabled?: boolean } | undefined
+      const settings = storageModule.getConfig('everything-settings.json') as
+        | { enabled?: boolean }
+        | undefined
       if (settings && typeof settings.enabled === 'boolean') {
         this.isEnabled = settings.enabled
       } else {
@@ -146,9 +148,12 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private saveSettings(): void {
     try {
-      storageModule.saveConfig('everything-settings.json', JSON.stringify({
-        enabled: this.isEnabled
-      }))
+      storageModule.saveConfig(
+        'everything-settings.json',
+        JSON.stringify({
+          enabled: this.isEnabled
+        })
+      )
     } catch (error) {
       this.logError('Failed to save settings', error)
     }
@@ -170,7 +175,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
     channel.regChannel(ChannelType.MAIN, 'everything:toggle', async ({ data }) => {
       if (typeof data?.enabled !== 'boolean') {
-        throw new Error('Invalid enabled value')
+        throw new TypeError('Invalid enabled value')
       }
 
       this.isEnabled = data.enabled
@@ -226,9 +231,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         if (stdout.includes('es') || stdout.includes('Everything')) {
           this.esPath = esPath
           this.everythingVersion = this.parseVersion(stdout)
-          this.logInfo('Found Everything CLI', { 
+          this.logInfo('Found Everything CLI', {
             path: esPath,
-            version: this.everythingVersion 
+            version: this.everythingVersion
           })
           return
         }
@@ -237,7 +242,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    throw new Error('Everything Command-line Interface (es.exe) not found. Please install Everything from https://www.voidtools.com/')
+    throw new Error(
+      'Everything Command-line Interface (es.exe) not found. Please install Everything from https://www.voidtools.com/'
+    )
   }
 
   private parseVersion(versionOutput: string): string | null {
@@ -248,13 +255,16 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   /**
    * Search files using Everything
    */
-  private async searchEverything(query: string, maxResults = 50): Promise<EverythingSearchResult[]> {
+  private async searchEverything(
+    query: string,
+    maxResults = 50
+  ): Promise<EverythingSearchResult[]> {
     if (!this.esPath) {
       throw new Error('Everything CLI not initialized')
     }
 
     const searchStart = performance.now()
-    
+
     // Everything search options:
     // -n <num>: Maximum number of results
     // -s: Sort by path
@@ -262,15 +272,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     // -size: Show file size
     // -dm: Show date modified
     // -dc: Show date created
-    const args = [
-      query,
-      '-n', maxResults.toString(),
-      '-s', 'path',
-      '-path',
-      '-size',
-      '-dm',
-      '-dc'
-    ]
+    const args = [query, '-n', maxResults.toString(), '-s', 'path', '-path', '-size', '-dm', '-dc']
 
     try {
       const { stdout } = await execFileAsync(this.esPath, args, {
@@ -280,7 +282,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       })
 
       const results = this.parseEverythingOutput(stdout)
-      
+
       this.logDebug('Everything search completed', {
         query,
         results: results.length,
@@ -309,21 +311,21 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     for (const line of lines) {
       try {
         // Everything output format: "path","size","date_modified","date_created"
-        const parts = line.split(',').map(part => part.trim().replace(/^"|"$/g, ''))
-        
+        const parts = line.split(',').map((part) => part.trim().replace(/^"|"$/g, ''))
+
         if (parts.length < 4) {
           continue
         }
 
         const [filePath, sizeStr, mtimeStr, ctimeStr] = parts
-        
+
         if (!filePath) {
           continue
         }
 
         const name = path.basename(filePath)
         const extension = path.extname(filePath).toLowerCase().replace(/^\./, '')
-        const size = parseInt(sizeStr, 10) || 0
+        const size = Number.parseInt(sizeStr, 10) || 0
         const mtime = new Date(mtimeStr || Date.now())
         const ctime = new Date(ctimeStr || Date.now())
 
@@ -352,14 +354,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     // - Use wildcards: * (any characters), ? (single character)
     // - Use operators: AND, OR, NOT
     // - Use filters: ext:, size:, dm:, dc:, etc.
-    
+
     const trimmed = searchText.trim()
-    
+
     // If query contains spaces, treat as phrase search
     if (trimmed.includes(' ') && !trimmed.includes('"')) {
       return `"${trimmed}"`
     }
-    
+
     return trimmed
   }
 
@@ -383,7 +385,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
 
     searchLogger.logProviderSearch('everything-provider', query.text, 'Everything')
-    
+
     const searchText = query.text.trim()
     if (!searchText) {
       return new TuffSearchResultBuilder(query).build()
@@ -391,10 +393,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
     const searchStart = performance.now()
     const everythingQuery = this.buildEverythingQuery(searchText)
-    
+
     try {
       const results = await this.searchEverything(everythingQuery, 50)
-      
+
       if (results.length === 0) {
         return new TuffSearchResultBuilder(query).build()
       }
@@ -449,7 +451,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       })
 
       const result = new TuffSearchResultBuilder(query).setItems(items).build()
-      
+
       this.logDebug('Everything search completed', {
         query: searchText,
         items: items.length,

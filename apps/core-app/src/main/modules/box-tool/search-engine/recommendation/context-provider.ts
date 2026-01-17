@@ -1,10 +1,10 @@
-import * as crypto from 'node:crypto'
 import type { ContextSignal, TimePattern } from '@talex-touch/utils/core-box'
+import * as crypto from 'node:crypto'
 
 /**
  * Context provider for recommendation engine.
  * Gathers temporal, clipboard, and foreground app state for intelligent matching.
- * 
+ *
  * @remarks
  * Uses dynamic imports to avoid circular dependencies with clipboard and activeApp modules.
  * This is intentional - see plan.prd for future refactoring.
@@ -17,14 +17,14 @@ export class ContextProvider {
     const [clipboard, foregroundApp, systemState] = await Promise.all([
       this.getClipboardContext(),
       this.getForegroundAppContext(),
-      this.getSystemContext(),
+      this.getSystemContext()
     ])
 
     return {
       time: this.getTimeContext(),
       clipboard,
       foregroundApp,
-      systemState,
+      systemState
     }
   }
 
@@ -37,33 +37,29 @@ export class ContextProvider {
     const dayOfWeek = now.getDay()
 
     let timeSlot: TimePattern['timeSlot']
-    if (hour >= 6 && hour < 12)
-      timeSlot = 'morning'
-    else if (hour >= 12 && hour < 18)
-      timeSlot = 'afternoon'
-    else if (hour >= 18 && hour < 22)
-      timeSlot = 'evening'
-    else
-      timeSlot = 'night'
+    if (hour >= 6 && hour < 12) timeSlot = 'morning'
+    else if (hour >= 12 && hour < 18) timeSlot = 'afternoon'
+    else if (hour >= 18 && hour < 22) timeSlot = 'evening'
+    else timeSlot = 'night'
 
     return {
       hourOfDay: hour,
       dayOfWeek,
       isWorkingHours: hour >= 9 && hour < 18 && dayOfWeek >= 1 && dayOfWeek <= 5,
-      timeSlot,
+      timeSlot
     }
   }
 
   /**
    * Retrieves clipboard context if content is recent (within 5 seconds).
-   * 
+   *
    * @remarks
    * Dynamic import prevents circular dependency with clipboard module.
    */
   private async getClipboardContext(): Promise<ContextSignal['clipboard']> {
     try {
       const { clipboardModule } = await import('../../../clipboard')
-      
+
       const latest = clipboardModule.getLatestItem()
       if (!latest || !latest.timestamp) {
         return undefined
@@ -78,10 +74,9 @@ export class ContextProvider {
         type: latest.type,
         content: this.hashContent(latest.content || ''),
         timestamp: new Date(latest.timestamp).getTime(),
-        ...this.detectClipboardContentType(latest),
+        ...this.detectClipboardContentType(latest)
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.debug('[ContextProvider] Failed to get clipboard context:', error)
       return undefined
     }
@@ -109,8 +104,7 @@ export class ContextProvider {
           meta.isUrl = true
           meta.urlDomain = url.hostname
           meta.protocol = url.protocol
-        }
-        catch {
+        } catch {
           // Not a valid URL
         }
       }
@@ -145,8 +139,7 @@ export class ContextProvider {
             meta.language = fileTypeInfo.language
           }
         }
-      }
-      catch {}
+      } catch {}
     }
 
     return { contentType, meta }
@@ -180,7 +173,7 @@ export class ContextProvider {
       ['css', 'css'],
       ['scss', 'scss'],
       ['vue', 'vue'],
-      ['svelte', 'svelte'],
+      ['svelte', 'svelte']
     ])
 
     const textExts = new Set(['txt', 'md', 'markdown', 'log', 'json', 'xml', 'yaml', 'yml'])
@@ -198,7 +191,7 @@ export class ContextProvider {
 
   /**
    * Retrieves foreground application context.
-   * 
+   *
    * @remarks
    * Dynamic import prevents circular dependency with activeApp module.
    */
@@ -213,10 +206,9 @@ export class ContextProvider {
 
       return {
         bundleId: activeApp.bundleId,
-        name: activeApp.displayName || activeApp.identifier || '',
+        name: activeApp.displayName || activeApp.identifier || ''
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.debug('[ContextProvider] Failed to get foreground app context:', error)
       return undefined
     }
@@ -231,7 +223,7 @@ export class ContextProvider {
 
   /**
    * Retrieves system state context.
-   * 
+   *
    * @remarks
    * Placeholder implementation - see plan.prd for future enhancement.
    */
@@ -239,7 +231,7 @@ export class ContextProvider {
     return {
       isOnline: true,
       batteryLevel: 100,
-      isDNDEnabled: false,
+      isDNDEnabled: false
     }
   }
 
@@ -247,10 +239,7 @@ export class ContextProvider {
    * Generates cache key from context signal.
    */
   generateCacheKey(context: ContextSignal): string {
-    const parts: string[] = [
-      context.time.timeSlot,
-      context.time.dayOfWeek.toString(),
-    ]
+    const parts: string[] = [context.time.timeSlot, context.time.dayOfWeek.toString()]
 
     if (context.clipboard) {
       parts.push(`cb:${context.clipboard.type}:${context.clipboard.content}`)
@@ -264,4 +253,4 @@ export class ContextProvider {
   }
 }
 
-export { TimePattern, ContextSignal }
+export { ContextSignal, TimePattern }

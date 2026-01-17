@@ -1,4 +1,5 @@
 <script setup lang="ts" name="MarketGridView">
+import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 /**
  * MarketGridView - Grid/List view for displaying market plugins
  *
@@ -10,7 +11,6 @@
 import gsap from 'gsap'
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { hasUpgradeAvailable } from '~/composables/market/useVersionCompare'
 import MarketItemCard from './MarketItemCard.vue'
@@ -28,13 +28,13 @@ const props = defineProps<{
   installedVersions?: Map<string, string>
 }>()
 
-// Get install task tracker
-const { getInstallTask } = useMarketInstall()
-
 const emit = defineEmits<{
   install: [plugin: MarketPluginListItem]
   'open-detail': [plugin: MarketPluginListItem]
 }>()
+
+// Get install task tracker
+const { getInstallTask } = useMarketInstall()
 
 const { t } = useI18n()
 const gridRef = ref<HTMLElement | null>(null)

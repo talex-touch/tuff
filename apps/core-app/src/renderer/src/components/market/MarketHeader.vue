@@ -1,6 +1,6 @@
 <script setup lang="ts" name="MarketHeader">
-import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
 import type { MarketProviderResultMeta } from '@talex-touch/utils/market'
+import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'

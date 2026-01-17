@@ -1,5 +1,5 @@
-import TxGridLayout from './src/TxGridLayout.vue'
 import { withInstall } from '../../../utils/withInstall'
+import TxGridLayout from './src/TxGridLayout.vue'
 
 export interface GridLayoutProps {
   minItemWidth?: string

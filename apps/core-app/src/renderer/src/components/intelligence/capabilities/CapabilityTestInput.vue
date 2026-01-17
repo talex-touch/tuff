@@ -9,13 +9,25 @@ const props = defineProps<{
   capabilityId: string
   isTesting: boolean
   disabled: boolean
-  enabledBindings?: Array<{ providerId: string, provider?: IntelligenceProviderConfig, models?: string[] }>
+  enabledBindings?: Array<{
+    providerId: string
+    provider?: IntelligenceProviderConfig
+    models?: string[]
+  }>
   promptTemplate?: string
   showPromptSelector?: boolean
 }>()
 
 const emits = defineEmits<{
-  test: [options: { providerId: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }]
+  test: [
+    options: {
+      providerId: string
+      model?: string
+      promptTemplate?: string
+      promptVariables?: Record<string, any>
+      userInput?: string
+    }
+  ]
 }>()
 
 const { t } = useI18n()
@@ -32,7 +44,7 @@ const availableProviders = computed(() => props.enabledBindings || [])
 
 const availableModels = computed(() => {
   if (!selectedProviderId.value) return []
-  const binding = availableProviders.value.find(b => b.providerId === selectedProviderId.value)
+  const binding = availableProviders.value.find((b) => b.providerId === selectedProviderId.value)
   return binding?.models || []
 })
 
@@ -54,10 +66,8 @@ function handleTest(): void {
   if (raw) {
     try {
       const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
-        promptVariables = parsed
-    }
-    catch {
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) promptVariables = parsed
+    } catch {
       promptVariables = undefined
     }
   }
@@ -66,10 +76,10 @@ function handleTest(): void {
     providerId: selectedProviderId.value,
     model: selectedModel.value || undefined,
     promptTemplate: resolvedShowPromptSelector.value
-      ? (promptTemplate.value || undefined)
-      : (props.promptTemplate || undefined),
+      ? promptTemplate.value || undefined
+      : props.promptTemplate || undefined,
     promptVariables,
-    userInput: userInput.value.trim() || undefined,
+    userInput: userInput.value.trim() || undefined
   })
 }
 
@@ -85,7 +95,9 @@ if (availableProviders.value.length > 0) {
   <div class="capability-test-input">
     <div class="input-section">
       <div v-if="resolvedShowPromptSelector" class="input-field">
-        <label class="input-label">{{ t('settings.intelligence.capabilityPromptSectionTitle') }}</label>
+        <label class="input-label">{{
+          t('settings.intelligence.capabilityPromptSectionTitle')
+        }}</label>
         <IntelligencePromptSelector v-model="promptTemplate" />
       </div>
 
@@ -115,11 +127,7 @@ if (availableProviders.value.length > 0) {
     <div class="config-section">
       <div class="input-field">
         <label class="input-label">{{ t('settings.intelligence.selectProvider') }}</label>
-        <select
-          v-model="selectedProviderId"
-          class="input-select"
-          :disabled="disabled || isTesting"
-        >
+        <select v-model="selectedProviderId" class="input-select" :disabled="disabled || isTesting">
           <option
             v-for="binding in availableProviders"
             :key="binding.providerId"
@@ -132,17 +140,11 @@ if (availableProviders.value.length > 0) {
 
       <div v-if="availableModels.length > 0" class="input-field">
         <label class="input-label">{{ t('settings.intelligence.selectModel') }}</label>
-        <select
-          v-model="selectedModel"
-          class="input-select"
-          :disabled="disabled || isTesting"
-        >
-          <option value="">{{ t('settings.intelligence.defaultModel') }}</option>
-          <option
-            v-for="model in availableModels"
-            :key="model"
-            :value="model"
-          >
+        <select v-model="selectedModel" class="input-select" :disabled="disabled || isTesting">
+          <option value="">
+            {{ t('settings.intelligence.defaultModel') }}
+          </option>
+          <option v-for="model in availableModels" :key="model" :value="model">
             {{ model }}
           </option>
         </select>
@@ -150,13 +152,7 @@ if (availableProviders.value.length > 0) {
     </div>
 
     <div class="action-section">
-      <FlatButton
-        primary
-        block
-        :disabled="!canTest"
-        :loading="isTesting"
-        @click="handleTest"
-      >
+      <FlatButton primary block :disabled="!canTest" :loading="isTesting" @click="handleTest">
         <i v-if="!isTesting" class="i-carbon-play-filled" aria-hidden="true" />
         <i v-else class="i-carbon-circle-dash animate-spin" aria-hidden="true" />
         <span>{{ testButtonText }}</span>
@@ -246,7 +242,11 @@ if (availableProviders.value.length > 0) {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

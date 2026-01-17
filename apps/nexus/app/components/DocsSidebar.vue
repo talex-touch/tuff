@@ -62,18 +62,18 @@ function isCurrentLocaleItem(item: any): boolean {
   const path = item.path as string
   const currentLocale = locale.value
   const otherLocale = currentLocale === 'en' ? 'zh' : 'en'
-  
+
   // If path ends with other locale suffix, filter it out
   if (path.endsWith(`.${otherLocale}`))
     return false
-  
+
   return true
 }
 
 function filterByLocale(items: any[]): any[] {
   return items
     .filter(isCurrentLocaleItem)
-    .map(item => {
+    .map((item) => {
       if (Array.isArray(item.children) && item.children.length > 0) {
         return {
           ...item,
@@ -116,24 +116,24 @@ const sections = computed(() => {
   const data = currentSectionData.value
   if (!data)
     return []
-  
+
   const children = filterByLocale(data.children ?? [])
-  
+
   // If there are subdirectories (features, scenes, api, etc.), show them as sections
   // Otherwise, show the files directly as a flat list
   const hasSubdirs = children.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
-  
+
   // Sort sections alphabetically by title
   const sortedChildren = [...children].sort((a, b) => {
     const titleA = (a.title || '').toLowerCase()
     const titleB = (b.title || '').toLowerCase()
     return titleA.localeCompare(titleB)
   })
-  
+
   if (hasSubdirs) {
     return sortedChildren
   }
-  
+
   // For flat file lists, wrap them in a single section
   return [{
     title: data.title,
@@ -257,64 +257,63 @@ watch(
         </NuxtLink>
       </div>
     </div>
-    
+
     <!-- Scrollable content -->
     <div class="flex flex-col gap-1">
-
-    <template v-if="pending">
-      <div v-for="index in 6" :key="index" class="h-8 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
-    </template>
-    <template v-else-if="error">
-      <div class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300">
-        {{ t('docsSidebar.error') }}
-      </div>
-    </template>
-    <template v-else-if="sections.length === 0">
-      <!-- Show direct links when no subsections -->
-      <div v-if="currentSectionData" class="flex flex-col gap-1">
-        <NuxtLink
-          v-if="linkTarget(currentSectionData)"
-          :to="localePath(linkTarget(currentSectionData)!)"
-          class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium no-underline transition-colors"
-          :class="isLinkActive(linkTarget(currentSectionData) || '')
-            ? 'bg-primary/10 text-primary'
-            : 'text-black/70 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white'"
-        >
-          {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
-        </NuxtLink>
-      </div>
-    </template>
-    <template v-else>
-      <DocSection
-        v-for="section in sections"
-        :key="sectionKey(section)"
-        :active="isSectionExpanded(section)"
-        :link="linkTarget(section) || undefined"
-        :list="section.children?.length || 0"
-        @click="toggleSection(section)"
-      >
-        <template #header>
-          <span class="flex-1 truncate">{{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}</span>
-        </template>
-        <li
-          v-for="(child, index) in section.children"
-          :key="child.path ?? child.title"
-          class="docs-tree-item relative"
-          :class="{ 'docs-tree-last': index === section.children.length - 1 }"
-        >
+      <template v-if="pending">
+        <div v-for="index in 6" :key="index" class="h-8 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
+      </template>
+      <template v-else-if="error">
+        <div class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300">
+          {{ t('docsSidebar.error') }}
+        </div>
+      </template>
+      <template v-else-if="sections.length === 0">
+        <!-- Show direct links when no subsections -->
+        <div v-if="currentSectionData" class="flex flex-col gap-1">
           <NuxtLink
-            v-if="linkTarget(child)"
-            :to="localePath(linkTarget(child)!)"
-            class="group/link relative flex items-center py-1.5 pl-4 pr-2 text-[13px] no-underline transition-all duration-150"
-            :class="isLinkActive(linkTarget(child) || child.path || '')
-              ? 'text-black font-medium dark:text-white'
-              : 'text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80'"
+            v-if="linkTarget(currentSectionData)"
+            :to="localePath(linkTarget(currentSectionData)!)"
+            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium no-underline transition-colors"
+            :class="isLinkActive(linkTarget(currentSectionData) || '')
+              ? 'bg-primary/10 text-primary'
+              : 'text-black/70 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white'"
           >
-            <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
+            {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
           </NuxtLink>
-        </li>
-      </DocSection>
-    </template>
+        </div>
+      </template>
+      <template v-else>
+        <DocSection
+          v-for="section in sections"
+          :key="sectionKey(section)"
+          :active="isSectionExpanded(section)"
+          :link="linkTarget(section) || undefined"
+          :list="section.children?.length || 0"
+          @click="toggleSection(section)"
+        >
+          <template #header>
+            <span class="flex-1 truncate">{{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}</span>
+          </template>
+          <li
+            v-for="(child, index) in section.children"
+            :key="child.path ?? child.title"
+            class="docs-tree-item relative"
+            :class="{ 'docs-tree-last': index === section.children.length - 1 }"
+          >
+            <NuxtLink
+              v-if="linkTarget(child)"
+              :to="localePath(linkTarget(child)!)"
+              class="group/link relative flex items-center py-1.5 pl-4 pr-2 text-[13px] no-underline transition-all duration-150"
+              :class="isLinkActive(linkTarget(child) || child.path || '')
+                ? 'text-black font-medium dark:text-white'
+                : 'text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80'"
+            >
+              <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
+            </NuxtLink>
+          </li>
+        </DocSection>
+      </template>
     </div>
   </nav>
 </template>

@@ -10,8 +10,7 @@ async function getMathJs() {
     try {
       const m = await import('mathjs')
       mathjs = m.create(m.all, { number: 'BigNumber', precision: 64 })
-    }
-    catch {
+    } catch {
       return null
     }
   }
@@ -38,7 +37,7 @@ const DANGEROUS_PATTERNS = [
   /eval\s*\(/i,
   /Function\s*\(/i,
   /\bprocess\b/i,
-  /\bglobal\b/i,
+  /\bglobal\b/i
 ]
 
 function isSafe(expr: string): boolean {
@@ -83,11 +82,13 @@ export class AdvancedExpressionAbility extends BasePreviewAbility {
 
     // Must have operator or function
     const hasOperator = /[+\-*/%^×÷]/.test(text)
-    const hasFunction = /\b(sqrt|sin|cos|tan|log|ln|abs|round|ceil|floor|pow|exp|pi|e)\s*\(/i.test(text)
+    const hasFunction = /\b(sqrt|sin|cos|tan|log|ln|abs|round|ceil|floor|pow|exp|pi|e)\s*\(/i.test(
+      text
+    )
     const hasPower = /\^/.test(text)
 
     // Exclude paths and URLs
-    if (/^[\/~]/.test(text) || /^https?:\/\//i.test(text)) return false
+    if (/^[/~]/.test(text) || /^https?:\/\//i.test(text)) return false
     // Exclude version numbers
     if (/^\d+\.\d+\.\d+/.test(text)) return false
 
@@ -125,21 +126,20 @@ export class AdvancedExpressionAbility extends BasePreviewAbility {
           {
             rows: [
               { label: '表达式', value: text },
-              { label: '标准化', value: normalized },
-            ],
-          },
+              { label: '标准化', value: normalized }
+            ]
+          }
         ],
-        badges: ['mathjs'],
+        badges: ['mathjs']
       }
 
       return {
         abilityId: this.id,
         confidence: 0.75,
         payload,
-        durationMs: performance.now() - startedAt,
+        durationMs: performance.now() - startedAt
       }
-    }
-    catch {
+    } catch {
       return null
     }
   }

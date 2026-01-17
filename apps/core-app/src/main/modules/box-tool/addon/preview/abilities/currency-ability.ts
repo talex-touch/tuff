@@ -22,19 +22,18 @@ const CURRENCY_NAMES: Record<string, string> = {
   INR: '印度卢比',
   CHF: '瑞士法郎',
   BTC: '比特币',
-  ETH: '以太坊',
+  ETH: '以太坊'
 }
 
-const CURRENCY_PATTERN
-  = /^\s*(?:([$€¥£₩₫฿₿Ξ]|[a-z]{3})\s*)?([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:([a-z]{3})\s*)?(?:to|in|=|->|转|换)\s*([a-z\u4e00-\u9fa5]{2,})\s*$/i
+const CURRENCY_PATTERN =
+  /^\s*(?:([$€¥£₩₫฿₿Ξ]|[a-z]{3})\s*)?([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:([a-z]{3})\s*)?(?:to|in|[=转换]|->)\s*([a-z\u4E00-\u9FA5]{2,})\s*$/i
 
 export class CurrencyPreviewAbility extends BasePreviewAbility {
   readonly id = 'preview.currency'
   readonly priority = 40
 
   override canHandle(query: { text?: string }): boolean {
-    if (!query.text)
-      return false
+    if (!query.text) return false
     return CURRENCY_PATTERN.test(query.text)
   }
 
@@ -42,13 +41,11 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
     const startedAt = performance.now()
     const text = this.getNormalizedQuery(context.query)
     const match = text.match(CURRENCY_PATTERN)
-    if (!match)
-      return null
+    if (!match) return null
 
     const [, symbol, amountRaw, sourceCode, targetCodeRaw] = match
     const amount = Number(amountRaw)
-    if (Number.isNaN(amount))
-      return null
+    if (Number.isNaN(amount)) return null
 
     // Normalize currencies using FxRateProvider
     const sourceInput = sourceCode || symbol || 'USD'
@@ -93,23 +90,23 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
       secondaryValue: usdValue.toFixed(4),
       chips: [
         { label: '汇率', value: `1 ${source} = ${rate.rate.toFixed(6)} ${target}` },
-        { label: '数据源', value: status.source.toUpperCase() },
+        { label: '数据源', value: status.source.toUpperCase() }
       ],
       sections: [
         {
           rows: [
             { label: '源金额', value: `${amount} ${source}` },
-            { label: '目标金额', value: `${converted.toFixed(4)} ${target}` },
-          ],
-        },
-      ],
+            { label: '目标金额', value: `${converted.toFixed(4)} ${target}` }
+          ]
+        }
+      ]
     }
 
     return {
       abilityId: this.id,
       confidence: 0.75,
       payload,
-      durationMs: performance.now() - startedAt,
+      durationMs: performance.now() - startedAt
     }
   }
 }

@@ -5,16 +5,16 @@
  * Works with both Vue i18n and standalone usage.
  */
 
-import { I18N_PREFIX, isI18nMessage, parseI18nMessage } from './message-keys'
 import enMessages from './locales/en.json'
 import zhMessages from './locales/zh.json'
+import { I18N_PREFIX, isI18nMessage, parseI18nMessage } from './message-keys'
 
 type MessageLocale = 'en' | 'zh'
 type Messages = typeof enMessages
 
 const locales: Record<MessageLocale, Messages> = {
   en: enMessages,
-  zh: zhMessages
+  zh: zhMessages,
 }
 
 /**
@@ -40,7 +40,8 @@ function getNestedValue(obj: Record<string, unknown>, path: string): string | un
  * @param params Parameters to interpolate
  */
 function interpolate(message: string, params?: Record<string, unknown>): string {
-  if (!params) return message
+  if (!params)
+    return message
 
   return message.replace(/\{(\w+)\}/g, (_, key) => {
     return params[key] !== undefined ? String(params[key]) : `{${key}}`
@@ -76,7 +77,7 @@ export class I18nResolver {
   addMessages(locale: MessageLocale, messages: Record<string, unknown>): void {
     this.customMessages[locale] = {
       ...this.customMessages[locale],
-      ...messages
+      ...messages,
     }
   }
 
@@ -124,7 +125,7 @@ export class I18nResolver {
     // Try custom messages first
     const customMessage = getNestedValue(
       this.customMessages[locale] as Record<string, unknown> || {},
-      key
+      key,
     )
     if (customMessage) {
       return customMessage
@@ -173,7 +174,7 @@ export function useI18nResolver() {
     setLocale: (locale: MessageLocale) => i18nResolver.setLocale(locale),
     getLocale: () => i18nResolver.getLocale(),
     addMessages: (locale: MessageLocale, messages: Record<string, unknown>) =>
-      i18nResolver.addMessages(locale, messages)
+      i18nResolver.addMessages(locale, messages),
   }
 }
 

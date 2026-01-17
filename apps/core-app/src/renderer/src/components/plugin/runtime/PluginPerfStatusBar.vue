@@ -2,8 +2,8 @@
 import type { StatusTone } from '@talex-touch/tuffex'
 import { TxStatusBadge } from '@talex-touch/tuffex'
 import { computed } from 'vue'
-import { usePluginRuntimeStats } from '~/composables/usePluginRuntimeStats'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
+import { usePluginRuntimeStats } from '~/composables/usePluginRuntimeStats'
 
 const props = defineProps<{
   pluginName: string
@@ -11,103 +11,83 @@ const props = defineProps<{
 
 type Trend = 'up' | 'down' | 'flat'
 
-function calcTrend(values: number[], deadband = 0): { trend: Trend, delta: number } {
-  if (!values || values.length < 2)
-    return { trend: 'flat', delta: 0 }
+function calcTrend(values: number[], deadband = 0): { trend: Trend; delta: number } {
+  if (!values || values.length < 2) return { trend: 'flat', delta: 0 }
   const last = values[values.length - 1]
   const prev = values[values.length - 2]
   const delta = last - prev
-  if (!Number.isFinite(delta))
-    return { trend: 'flat', delta: 0 }
-  if (Math.abs(delta) <= deadband)
-    return { trend: 'flat', delta }
+  if (!Number.isFinite(delta)) return { trend: 'flat', delta: 0 }
+  if (Math.abs(delta) <= deadband) return { trend: 'flat', delta }
   return { trend: delta > 0 ? 'up' : 'down', delta }
 }
 
 function trendIcon(trend: Trend): string {
-  if (trend === 'up')
-    return 'i-ri-arrow-up-line'
-  if (trend === 'down')
-    return 'i-ri-arrow-down-line'
+  if (trend === 'up') return 'i-ri-arrow-up-line'
+  if (trend === 'down') return 'i-ri-arrow-down-line'
   return 'i-ri-arrow-right-line'
 }
 
 function toneWeight(tone: StatusTone): number {
-  if (tone === 'danger')
-    return 3
-  if (tone === 'warning')
-    return 2
-  if (tone === 'success')
-    return 1
+  if (tone === 'danger') return 3
+  if (tone === 'warning') return 2
+  if (tone === 'success') return 1
   return 0
 }
 
 function worstTone(tones: StatusTone[]): StatusTone {
   let worst: StatusTone = 'muted'
   for (const tone of tones) {
-    if (toneWeight(tone) > toneWeight(worst))
-      worst = tone
+    if (toneWeight(tone) > toneWeight(worst)) worst = tone
   }
   return worst
 }
 
 function toneForMemory(bytes: number): StatusTone {
   const mb = bytes / 1024 / 1024
-  if (!Number.isFinite(mb) || mb <= 0)
-    return 'muted'
-  if (mb >= 512)
-    return 'danger'
-  if (mb >= 256)
-    return 'warning'
+  if (!Number.isFinite(mb) || mb <= 0) return 'muted'
+  if (mb >= 512) return 'danger'
+  if (mb >= 256) return 'warning'
   return 'success'
 }
 
 function toneForCpu(cpuPercent: number): StatusTone {
-  if (!Number.isFinite(cpuPercent) || cpuPercent < 0)
-    return 'muted'
-  if (cpuPercent >= 60)
-    return 'danger'
-  if (cpuPercent >= 30)
-    return 'warning'
+  if (!Number.isFinite(cpuPercent) || cpuPercent < 0) return 'muted'
+  if (cpuPercent >= 60) return 'danger'
+  if (cpuPercent >= 30) return 'warning'
   return 'success'
 }
 
 const { stats, history, lastUpdatedAt, error } = usePluginRuntimeStats(
   computed(() => props.pluginName),
-  { intervalMs: 1000, maxPoints: 60 },
+  { intervalMs: 1000, maxPoints: 60 }
 )
 
-const memorySeries = computed(() => history.value.map(p => p.memoryBytes))
-const cpuSeries = computed(() => history.value.map(p => p.cpuPercent))
+const memorySeries = computed(() => history.value.map((p) => p.memoryBytes))
+const cpuSeries = computed(() => history.value.map((p) => p.cpuPercent))
 
 const memoryLabel = computed(() => {
   const v = stats.value?.usage.memoryBytes
-  if (typeof v !== 'number')
-    return '--'
+  if (typeof v !== 'number') return '--'
   return formatBytesShort(v)
 })
 
 const cpuLabel = computed(() => {
   const v = stats.value?.usage.cpuPercent
-  if (typeof v !== 'number')
-    return '--'
+  if (typeof v !== 'number') return '--'
   return `${v.toFixed(1)}%`
 })
 
 const lastUpdatedAgeLabel = computed(() => {
   const updatedAt = lastUpdatedAt.value
-  if (!updatedAt)
-    return '--'
+  if (!updatedAt) return '--'
   const diff = Math.max(0, Date.now() - updatedAt)
-  if (diff < 1000)
-    return `${diff}ms`
+  if (diff < 1000) return `${diff}ms`
   return `${Math.round(diff / 1000)}s`
 })
 
 const isStale = computed(() => {
   const updatedAt = lastUpdatedAt.value
-  if (!updatedAt)
-    return true
+  if (!updatedAt) return true
   return Date.now() - updatedAt > 3500
 })
 
@@ -122,7 +102,7 @@ const health = computed(() => {
     return {
       tone: 'danger' as const,
       text: 'RUNTIME ERROR',
-      icon: 'i-ri-wifi-off-line',
+      icon: 'i-ri-wifi-off-line'
     }
   }
 
@@ -130,7 +110,7 @@ const health = computed(() => {
     return {
       tone: 'muted' as const,
       text: 'NO DATA',
-      icon: 'i-ri-question-line',
+      icon: 'i-ri-question-line'
     }
   }
 
@@ -307,5 +287,4 @@ const health = computed(() => {
   justify-content: flex-end;
   min-width: 96px;
 }
-
 </style>

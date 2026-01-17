@@ -93,7 +93,7 @@ function isPinnedSection(section: TuffSection): boolean {
           class="BoxGrid p-4"
           :style="{
             '--grid-cols': gridConfig.columns,
-            '--grid-gap': gridConfig.gap + 'px'
+            '--grid-gap': `${gridConfig.gap}px`
           }"
           :class="`size-${gridConfig.itemSize}`"
         >
@@ -117,7 +117,7 @@ function isPinnedSection(section: TuffSection): boolean {
         class="BoxGrid p-4"
         :style="{
           '--grid-cols': gridConfig.columns,
-          '--grid-gap': gridConfig.gap + 'px'
+          '--grid-gap': `${gridConfig.gap}px`
         }"
         :class="`size-${gridConfig.itemSize}`"
       >

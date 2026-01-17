@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
+import type { AssetArch, AssetPlatform } from '../../../utils/releasesStore'
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { createError, readFormData } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
-import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStore'
-import type { AssetArch, AssetPlatform } from '../../../utils/releasesStore'
 import { uploadReleaseAsset } from '../../../utils/releaseAssetStorage'
+import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStore'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 

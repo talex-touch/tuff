@@ -5,7 +5,7 @@ const log = createLogger('DbWriteScheduler')
 
 const taskContext = new AsyncLocalStorage<boolean>()
 
-export type DbWriteTask<T> = {
+export interface DbWriteTask<T> {
   label: string
   operation: () => Promise<T>
   resolve: (value: T) => void
@@ -14,10 +14,14 @@ export type DbWriteTask<T> = {
 }
 
 export class DbWriteScheduler {
-  private queue: DbWriteTask<any>[] = []
+  private queue: DbWriteTask<unknown>[] = []
   private processing = false
   private currentTaskLabel: string | null = null
   private drainResolvers: Array<() => void> = []
+
+  private enqueue<T>(task: DbWriteTask<T>): void {
+    this.queue.push(task as DbWriteTask<unknown>)
+  }
 
   async schedule<T>(label: string, operation: () => Promise<T>): Promise<T> {
     if (taskContext.getStore()) {
@@ -25,12 +29,12 @@ export class DbWriteScheduler {
     }
 
     return new Promise<T>((resolve, reject) => {
-      this.queue.push({
+      this.enqueue({
         label,
         operation,
         resolve,
         reject,
-        enqueuedAt: Date.now(),
+        enqueuedAt: Date.now()
       })
       this.kick()
     })
@@ -40,13 +44,12 @@ export class DbWriteScheduler {
     return {
       queued: this.queue.length,
       processing: this.processing,
-      currentTaskLabel: this.currentTaskLabel,
+      currentTaskLabel: this.currentTaskLabel
     }
   }
 
   async drain(): Promise<void> {
-    if (!this.processing && this.queue.length === 0)
-      return
+    if (!this.processing && this.queue.length === 0) return
 
     await new Promise<void>((resolve) => {
       this.drainResolvers.push(resolve)
@@ -55,17 +58,14 @@ export class DbWriteScheduler {
   }
 
   private kick(): void {
-    if (this.processing)
-      return
-    if (this.queue.length === 0)
-      return
+    if (this.processing) return
+    if (this.queue.length === 0) return
 
     void this.processLoop()
   }
 
   private async processLoop(): Promise<void> {
-    if (this.processing)
-      return
+    if (this.processing) return
 
     this.processing = true
 
@@ -81,11 +81,9 @@ export class DbWriteScheduler {
       try {
         const result = await taskContext.run(true, task.operation)
         task.resolve(result)
-      }
-      catch (error) {
+      } catch (error) {
         task.reject(error)
-      }
-      finally {
+      } finally {
         this.currentTaskLabel = null
       }
     }

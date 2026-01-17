@@ -1,5 +1,5 @@
-import { isCoreBox } from '@talex-touch/utils/renderer'
 import type { Component } from 'vue'
+import { isCoreBox } from '@talex-touch/utils/renderer'
 import { createVNode, getCurrentInstance, render } from 'vue'
 import PlatformCompatibilityWarning from '~/components/base/dialog/PlatformCompatibilityWarning.vue'
 import { useDialogManager } from './dialog-manager'
@@ -26,16 +26,16 @@ export function capturePlatformWarningContext(): void {
 function renderWithGlobalContext(
   component: Component,
   props: Record<string, any>,
-  container: HTMLElement,
+  container: HTMLElement
 ): () => void {
   const vnode = createVNode(component, props)
-  
+
   if (globalAppContext) {
     vnode.appContext = globalAppContext
   }
-  
+
   render(vnode, container)
-  
+
   return () => {
     render(null, container)
   }
@@ -78,9 +78,9 @@ export async function showPlatformCompatibilityWarning(warningMessage: string): 
           cleanup()
           document.body.removeChild(root)
           resolve()
-        },
+        }
       },
-      root,
+      root
     )
 
     document.body.appendChild(root)
@@ -92,7 +92,7 @@ export async function showPlatformCompatibilityWarning(warningMessage: string): 
       props: { warningMessage },
       container: root,
       cleanup,
-      allowInCoreBox: false,
+      allowInCoreBox: false
     })
   })
 }

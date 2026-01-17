@@ -1,6 +1,6 @@
-import TxGradualBlur from './src/TxGradualBlur.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { GradualBlurProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxGradualBlur from './src/TxGradualBlur.vue'
 
 const GradualBlur = withInstall(TxGradualBlur)
 

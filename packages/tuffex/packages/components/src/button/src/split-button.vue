@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { SplitButtonEmits, SplitButtonProps } from './split-button'
 import { computed, ref, useSlots, watch } from 'vue'
-import Spinner from '../../spinner'
 import TxPopover from '../../popover/src/TxPopover.vue'
+import Spinner from '../../spinner'
 
 defineOptions({ name: 'TxSplitButton' })
 
@@ -24,7 +24,7 @@ const emit = defineEmits<SplitButtonEmits>()
 const open = ref(false)
 const slots = useSlots()
 
-watch(open, (v) => emit('menuOpenChange', v))
+watch(open, v => emit('menuOpenChange', v))
 
 const hasMenu = computed(() => !!slots.menu)
 

@@ -31,7 +31,7 @@ const props = withDefaults(
     remote: false,
     dropdownMaxHeight: 280,
     dropdownOffset: 6,
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -99,7 +99,8 @@ const currentValue = computed({
 })
 
 function toggle() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   isOpen.value = !isOpen.value
 }
 
@@ -128,17 +129,21 @@ function registerOption(value: string | number, label: string) {
 }
 
 function handleClickOutside(event: MouseEvent) {
-  if (!isOpen.value) return
+  if (!isOpen.value)
+    return
 
   const target = event.target as Node | null
   const inReference = !!selectRef.value && !!target && selectRef.value.contains(target)
   const inFloating = !!dropdownRef.value && !!target && dropdownRef.value.contains(target)
-  if (!inReference && !inFloating) close()
+  if (!inReference && !inFloating)
+    close()
 }
 
 function handleEsc(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return
-  if (!isOpen.value) return
+  if (event.key !== 'Escape')
+    return
+  if (!isOpen.value)
+    return
   close()
 }
 
@@ -147,9 +152,11 @@ async function updatePosition() {
 }
 
 function scrollSelectedIntoView() {
-  if (!dropdownRef.value) return
+  if (!dropdownRef.value)
+    return
   const el = dropdownRef.value.querySelector<HTMLElement>('.tuff-select-item.is-selected')
-  if (!el) return
+  if (!el)
+    return
 
   requestAnimationFrame(() => {
     el.scrollIntoView({ block: 'nearest' })
@@ -187,9 +194,10 @@ watch(
   (val) => {
     currentValue.value = val as any
     const label = optionLabelMap.value.get(val as any)
-    if (label) selectedLabel.value = label
+    if (label)
+      selectedLabel.value = label
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 watch(
@@ -221,7 +229,7 @@ watch(
     await nextTick()
     scrollSelectedIntoView()
   },
-  { flush: 'post' }
+  { flush: 'post' },
 )
 
 watch(
@@ -242,8 +250,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="selectRef"
-    :class="[
-      'tuff-select',
+    class="tuff-select" :class="[
       {
         'is-open': isOpen,
         'is-disabled': disabled,
@@ -262,7 +269,7 @@ onBeforeUnmount(() => {
         <template #suffix>
           <span class="tuff-select__arrow">
             <svg viewBox="0 0 24 24" width="16" height="16">
-              <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z"/>
+              <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" />
             </svg>
           </span>
         </template>

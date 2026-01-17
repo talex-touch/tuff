@@ -2,7 +2,7 @@ import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/ut
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
 import type {
   StorageSaveRequest,
-  StorageUpdateNotification,
+  StorageUpdateNotification
 } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
@@ -12,9 +12,9 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
+import { appTaskGate } from '../../service/app-task-gate'
 import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
-import { appTaskGate } from '../../service/app-task-gate'
 import { BaseModule } from '../abstract-base-module'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
@@ -93,20 +93,20 @@ export class StorageModule extends BaseModule {
   constructor() {
     super(StorageModule.key, {
       create: true,
-      dirName: 'config',
+      dirName: 'config'
     })
 
     this.pollingService = new StoragePollingService(
       this.cache,
-      async name => await this.persistConfig(name),
+      async (name) => await this.persistConfig(name)
     )
 
     this.lruManager = new StorageLRUManager(
       this.cache,
-      async name => await this.evictConfig(name),
+      async (name) => await this.evictConfig(name),
       60000, // evictionTimeout
       30000, // cleanupInterval
-      this.hotConfigs, // Pass hot configs to LRU manager
+      this.hotConfigs // Pass hot configs to LRU manager
     )
   }
 
@@ -121,10 +121,7 @@ export class StorageModule extends BaseModule {
     this.setupListeners()
 
     const channel = ((app as any)?.channel ?? ($app as any)?.channel) as any
-    this.transport = getTuffTransportMain(
-      channel,
-      (channel as any)?.keyManager ?? channel,
-    )
+    this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
     this.registerTransportHandlers()
 
     storageUpdateEmitter = (name, version) => {
@@ -165,7 +162,7 @@ export class StorageModule extends BaseModule {
       key: name,
       timestamp: Date.now(),
       version,
-      source: 'local',
+      source: 'local'
     }
 
     for (const stream of Array.from(this.updateStreams)) {
@@ -188,7 +185,7 @@ export class StorageModule extends BaseModule {
           return {}
         }
         return this.getConfig(request.key)
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -197,7 +194,7 @@ export class StorageModule extends BaseModule {
           return null
         }
         return this.getConfigWithVersion(request.key)
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -211,9 +208,9 @@ export class StorageModule extends BaseModule {
           false,
           false,
           context?.sender?.id,
-          undefined,
+          undefined
         )
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -221,9 +218,7 @@ export class StorageModule extends BaseModule {
         if (!request?.key || typeof request.key !== 'string') {
           return { success: false, version: 0 }
         }
-        const payload = typeof request.content === 'string'
-          ? request.content
-          : request.value
+        const payload = typeof request.content === 'string' ? request.content : request.value
 
         return this.saveConfig(
           request.key,
@@ -231,9 +226,9 @@ export class StorageModule extends BaseModule {
           request.clear,
           request.force,
           context?.sender?.id,
-          request.version,
+          request.version
         )
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -241,21 +236,14 @@ export class StorageModule extends BaseModule {
         if (!request?.key || typeof request.key !== 'string') {
           return
         }
-        this.saveConfig(
-          request.key,
-          JSON.stringify({}),
-          true,
-          true,
-          context?.sender?.id,
-          undefined,
-        )
-      }),
+        this.saveConfig(request.key, JSON.stringify({}), true, true, context?.sender?.id, undefined)
+      })
     )
 
     this.transportDisposers.push(
       this.transport.onStream(StorageEvents.app.updated, (_payload, context) => {
         this.updateStreams.add(context)
-      }),
+      })
     )
   }
 
@@ -265,8 +253,7 @@ export class StorageModule extends BaseModule {
    * @returns Configuration data (deep copy)
    */
   getConfig(name: string): object {
-    if (!this.filePath)
-      throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
+    if (!this.filePath) throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
 
     // Hot configs skip invalidation check and always stay in cache
     const isHot = this.hotConfigs.has(name)
@@ -301,8 +288,7 @@ export class StorageModule extends BaseModule {
             file = JSON.parse(content)
             serialized = content
           }
-        }
-        catch (error) {
+        } catch (error) {
           storageLog.error(`Failed to parse config ${name}`, { error })
         }
       }
@@ -328,7 +314,7 @@ export class StorageModule extends BaseModule {
    * @param name - Configuration name
    * @returns Configuration data with version, or null if not found
    */
-  getConfigWithVersion(name: string): { data: object, version: number } | null {
+  getConfigWithVersion(name: string): { data: object; version: number } | null {
     // Ensure config is loaded
     this.getConfig(name)
     const result = this.cache.getWithVersion(name)
@@ -345,8 +331,7 @@ export class StorageModule extends BaseModule {
   }
 
   reloadConfig(name: string): object {
-    if (!this.filePath)
-      throw new Error(`Config ${name} not found`)
+    if (!this.filePath) throw new Error(`Config ${name} not found`)
 
     const filePath = path.resolve(this.filePath, name)
     let file = {}
@@ -412,10 +397,9 @@ export class StorageModule extends BaseModule {
     clear?: boolean,
     force?: boolean,
     sourceWebContentsId?: number,
-    clientVersion?: number,
-  ): { success: boolean, version: number, conflict?: boolean } {
-    if (!this.filePath)
-      throw new Error(`Config ${name} not found`)
+    clientVersion?: number
+  ): { success: boolean; version: number; conflict?: boolean } {
+    if (!this.filePath) throw new Error(`Config ${name} not found`)
 
     this.frequencyMonitor.trackSave(name)
 
@@ -425,7 +409,7 @@ export class StorageModule extends BaseModule {
     }
 
     const currentVersion = this.cache.getVersion(name)
-    let parsed: unknown = undefined
+    let parsed: unknown
     let serialized: string | undefined
 
     if (typeof payload === 'string') {
@@ -450,7 +434,9 @@ export class StorageModule extends BaseModule {
 
     // Conflict detection: if client has older version, reject the save
     if (clientVersion !== undefined && clientVersion < currentVersion) {
-      storageLog.warn(`Conflict detected for ${name}: client v${clientVersion} < server v${currentVersion}`)
+      storageLog.warn(
+        `Conflict detected for ${name}: client v${clientVersion} < server v${currentVersion}`
+      )
       return { success: false, version: currentVersion, conflict: true }
     }
 
@@ -561,8 +547,7 @@ export class StorageModule extends BaseModule {
     if (currentData) {
       try {
         callback(currentData)
-      }
-      catch (error) {
+      } catch (error) {
         storageLog.error(`Subscriber callback error for "${name}"`, { error })
       }
     }
@@ -606,8 +591,7 @@ export class StorageModule extends BaseModule {
     callbacks.forEach((callback) => {
       try {
         callback(data)
-      }
-      catch (error) {
+      } catch (error) {
         storageLog.error(`Subscriber callback error for "${name}"`, { error })
       }
     })
@@ -618,23 +602,27 @@ export class StorageModule extends BaseModule {
 
     // Get config data (returns data only for backward compatibility)
     channel.regChannel(ChannelType.MAIN, 'storage:get', ({ data }) => {
-      if (!data || typeof data !== 'string')
-        return {}
+      if (!data || typeof data !== 'string') return {}
       return this.getConfig(data)
     })
 
     // Get config data with version info
     channel.regChannel(ChannelType.MAIN, 'storage:get-versioned', ({ data }) => {
-      if (!data || typeof data !== 'string')
-        return null
+      if (!data || typeof data !== 'string') return null
       return this.getConfigWithVersion(data)
     })
 
     // Save config with version tracking and conflict detection
     channel.regChannel(ChannelType.MAIN, 'storage:save', ({ data, header }) => {
-      if (!data || typeof data !== 'object')
-        return { success: false, version: 0 }
-      const { key, content, value, clear, force, version: clientVersion } = data as {
+      if (!data || typeof data !== 'object') return { success: false, version: 0 }
+      const {
+        key,
+        content,
+        value,
+        clear,
+        force,
+        version: clientVersion
+      } = data as {
         key?: string
         content?: string
         value?: unknown
@@ -642,8 +630,7 @@ export class StorageModule extends BaseModule {
         force?: boolean
         version?: number
       }
-      if (typeof key !== 'string')
-        return { success: false, version: 0 }
+      if (typeof key !== 'string') return { success: false, version: 0 }
 
       // Get source webContents ID to exclude from broadcast
       const sender = header?.event?.sender
@@ -655,8 +642,7 @@ export class StorageModule extends BaseModule {
 
     // Reload config from disk
     channel.regChannel(ChannelType.MAIN, 'storage:reload', ({ data }) => {
-      if (!data || typeof data !== 'string')
-        return {}
+      if (!data || typeof data !== 'string') return {}
       const result = this.reloadConfig(data)
       const version = this.cache.getVersion(data)
       broadcastUpdate(data, version)
@@ -670,9 +656,15 @@ export class StorageModule extends BaseModule {
 
     // Sync save (for window close) - immediate persist to disk
     channel.regChannel(ChannelType.MAIN, 'storage:save-sync', ({ data, header }) => {
-      if (!data || typeof data !== 'object')
-        return { success: false, version: 0 }
-      const { key, content, value, clear, force, version: clientVersion } = data as {
+      if (!data || typeof data !== 'object') return { success: false, version: 0 }
+      const {
+        key,
+        content,
+        value,
+        clear,
+        force,
+        version: clientVersion
+      } = data as {
         key?: string
         content?: string
         value?: unknown
@@ -680,8 +672,7 @@ export class StorageModule extends BaseModule {
         force?: boolean
         version?: number
       }
-      if (typeof key !== 'string')
-        return { success: false, version: 0 }
+      if (typeof key !== 'string') return { success: false, version: 0 }
 
       const sender = header?.event?.sender
       const sourceWebContentsId = sender && 'id' in sender ? sender.id : undefined

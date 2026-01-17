@@ -7,24 +7,45 @@
 
 import type {
   AgentDescriptor,
+  AgentMessage,
   AgentPlan,
   AgentResult,
   AgentStatus,
   AgentTask,
   AgentTool,
-  TaskProgress,
+  TaskProgress
 } from '@talex-touch/utils'
-import chalk from 'chalk'
+import type { AgentExecutor, IntelligenceSDKInterface } from './agent-executor'
+import type { AgentImpl, AgentRegistry } from './agent-registry'
+import type { AgentScheduler } from './agent-scheduler'
+import type { ToolExecutorFn, ToolRegistry } from './tool-registry'
 import { EventEmitter } from 'node:events'
-import type { AgentImpl } from './agent-registry'
-import { agentRegistry, AgentRegistry } from './agent-registry'
-import { agentScheduler, AgentScheduler } from './agent-scheduler'
-import { agentExecutor, AgentExecutor, type IntelligenceSDKInterface } from './agent-executor'
-import { toolRegistry, ToolRegistry, type ToolExecutorFn } from './tool-registry'
+import chalk from 'chalk'
+import { agentExecutor } from './agent-executor'
+import { agentRegistry } from './agent-registry'
+import { agentScheduler } from './agent-scheduler'
+import { toolRegistry } from './tool-registry'
 
 const TAG = chalk.hex('#9c27b0').bold('[AgentManager]')
-const logInfo = (...args: any[]) => console.log(TAG, ...args)
-const logWarn = (...args: any[]) => console.warn(TAG, chalk.yellow(...args))
+const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
+const logWarn = (...args: unknown[]) =>
+  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isAgentMessage(value: unknown): value is AgentMessage {
+  if (!isRecord(value)) return false
+
+  const role = value.role
+  const content = value.content
+
+  return (
+    (role === 'user' || role === 'assistant' || role === 'system' || role === 'tool') &&
+    typeof content === 'string'
+  )
+}
 
 /**
  * Agent Manager configuration
@@ -197,7 +218,7 @@ export class AgentManager extends EventEmitter {
 
     const planTask: AgentTask = {
       ...task,
-      type: 'plan',
+      type: 'plan'
     }
 
     const result = await this.executor.executeTask(planTask)
@@ -225,17 +246,17 @@ export class AgentManager extends EventEmitter {
     if (agent.impl.chat) {
       const context = {
         taskId: `chat_${Date.now()}`,
-        sessionId: undefined,
+        sessionId: undefined
       }
       yield* agent.impl.chat(messages, context)
-    }
-    else {
+    } else {
       // Fallback to execute
+      const agentMessages = messages.filter(isAgentMessage)
       const result = await this.executeTaskImmediate({
         agentId,
         type: 'chat',
         input: messages,
-        context: { messages: messages as any },
+        context: agentMessages.length > 0 ? { messages: agentMessages } : undefined
       })
 
       if (result.success && result.output) {
@@ -327,7 +348,7 @@ export class AgentManager extends EventEmitter {
     return {
       agents: this.registry.getStats(),
       scheduler: this.scheduler.getStats(),
-      tools: this.tools.getStats(),
+      tools: this.tools.getStats()
     }
   }
 

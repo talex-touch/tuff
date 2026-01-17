@@ -1,39 +1,36 @@
+import { setRuntimeEnv } from '@talex-touch/utils/env'
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
 import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
-import ElementPlus from 'element-plus'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 
+import ElementPlus from 'element-plus'
 import { createPinia } from 'pinia'
+import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-element'
 import VWave from 'v-wave'
 import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import { baseNodeApi } from '~/modules/channel/main/node'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { storageManager } from '~/modules/channel/storage'
-import { setupI18n } from '~/modules/lang'
-import '~/modules/plugin/widget-registry'
 
-import {
-  createSharedElementDirective,
-  SharedElementRouteGuard
-} from 'v-shared-element'
+import { setupI18n } from '~/modules/lang'
 
 import { usePluginStore } from '~/stores/plugin'
 import App from './App.vue'
 
 import router from './base/router'
+import '~/modules/plugin/widget-registry'
 import './assets/main.css'
 import '@talex-touch/tuffex/style.css'
 import '~/styles/element/index.scss'
 import '~/styles/index.scss'
-import '~/styles/accessibility.scss'
 
+import '~/styles/accessibility.scss'
 import 'vue-sonner/style.css'
 import 'uno.css'
-import 'virtual:unocss-devtools'
 
-import { setRuntimeEnv } from '@talex-touch/utils/env'
+import 'virtual:unocss-devtools'
 
 window.$nodeApi = baseNodeApi
 window.$shortconApi = shortconApi

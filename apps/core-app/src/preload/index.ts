@@ -1,18 +1,21 @@
-import type { StartupInfo } from '../shared/types/startup-info'
 import type { LoadingEvent, LoadingMode, PreloadAPI } from '@talex-touch/utils/preload'
+import type { StartupInfo } from '../shared/types/startup-info'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { electronAPI } from '@electron-toolkit/preload'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { hasWindow } from '@talex-touch/utils/env'
+import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
 import {
-
-  PRELOAD_LOADING_CHANNEL,
-
-} from '@talex-touch/utils/preload'
-import { isCoreBox, isDivisionBox, isMainWindow, useInitialize, useArgMapper } from '@talex-touch/utils/renderer'
+  isCoreBox,
+  isDivisionBox,
+  isMainWindow,
+  useArgMapper,
+  useInitialize
+} from '@talex-touch/utils/renderer'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge, ipcRenderer } from 'electron'
+import appLogoAsset from '../../public/logo.png?asset'
 
 declare global {
   interface Window {
@@ -23,11 +26,9 @@ declare global {
     $isMetaOverlay?: boolean
   }
 }
-import appLogoAsset from '../../public/logo.png?asset'
 
 function resolveAssetSource(asset: string): string {
-  if (!asset)
-    return asset
+  if (!asset) return asset
 
   if (/^(?:https?:\/\/|file:|data:)/.test(asset)) {
     return asset
@@ -74,15 +75,14 @@ function requestStartupInfo(): StartupInfo | undefined {
       name: 'app-ready',
       header: {
         status: 'request',
-        type: ChannelType.MAIN,
-      },
+        type: ChannelType.MAIN
+      }
     })
 
     if (response?.header?.status === 'reply' && response.data) {
       return response.data as StartupInfo
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[preload] Failed to request startup info', error)
   }
 
@@ -104,7 +104,7 @@ const api: PreloadAPI = {
    */
   sendPreloadEvent(event: LoadingEvent) {
     window.postMessage({ channel: PRELOAD_LOADING_CHANNEL, data: event }, '*')
-  },
+  }
 } satisfies PreloadAPI
 
 if (process.contextIsolated) {
@@ -114,12 +114,10 @@ if (process.contextIsolated) {
     if (startupInfo) {
       contextBridge.exposeInMainWorld('$startupInfo', startupInfo)
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error(error)
   }
-}
-else {
+} else {
   // @ts-ignore (define in dts)
   window.electron = electronAPI
   // @ts-ignore (define in dts)
@@ -139,8 +137,7 @@ function domReady(condition: DocumentReadyState[] = ['complete', 'interactive'])
   return new Promise((resolve) => {
     if (condition.includes(document.readyState)) {
       resolve(true)
-    }
-    else {
+    } else {
       document.addEventListener('readystatechange', () => {
         if (condition.includes(document.readyState)) {
           resolve(true)
@@ -152,15 +149,15 @@ function domReady(condition: DocumentReadyState[] = ['complete', 'interactive'])
 
 const safeDOM = {
   append(parent: HTMLElement, child: HTMLElement) {
-    if (!Array.from(parent.children).find(e => e === child)) {
+    if (!Array.from(parent.children).find((e) => e === child)) {
       parent.appendChild(child)
     }
   },
   remove(parent: HTMLElement, child: HTMLElement) {
-    if (Array.from(parent.children).find(e => e === child)) {
+    if (Array.from(parent.children).find((e) => e === child)) {
       parent.removeChild(child)
     }
-  },
+  }
 }
 
 interface LoadingOptions {
@@ -392,8 +389,7 @@ function useLoading(options: LoadingOptions) {
   }
 
   const simulateProgress = () => {
-    if (!progressLoop)
-      return
+    if (!progressLoop) return
     const delta = Math.random() * 0.035 + 0.01
     updateProgress(progressValue + delta)
     rafId = window.setTimeout(simulateProgress, 700 + Math.random() * 900)
@@ -460,8 +456,7 @@ function useLoading(options: LoadingOptions) {
   }
 
   const cleanupOverlay = () => {
-    if (removalCompleted)
-      return
+    if (removalCompleted) return
     removalCompleted = true
     clearFinalizeTimer()
     clearFadeTimer()
@@ -477,8 +472,7 @@ function useLoading(options: LoadingOptions) {
     container.dataset.status = 'hidden'
 
     const handleTransitionEnd = (event: TransitionEvent) => {
-      if (event.target !== container || event.propertyName !== 'opacity')
-        return
+      if (event.target !== container || event.propertyName !== 'opacity') return
       container.removeEventListener('transitionend', handleTransitionEnd)
       transitionCleanup = null
       cleanupOverlay()
@@ -494,8 +488,7 @@ function useLoading(options: LoadingOptions) {
   }
 
   const startRemovalSequence = () => {
-    if (isRemoving || removalCompleted)
-      return
+    if (isRemoving || removalCompleted) return
 
     isRemoving = true
     container.dataset.status = 'completing'
@@ -510,17 +503,14 @@ function useLoading(options: LoadingOptions) {
   }
 
   const attemptFinalize = () => {
-    if (isRemoving || removalCompleted)
-      return
-    if (!removalRequested || !windowLoaded || !rendererFinished)
-      return
+    if (isRemoving || removalCompleted) return
+    if (!removalRequested || !windowLoaded || !rendererFinished) return
     startRemovalSequence()
   }
 
   const ensureDebugPanel = () => {
     const existing = container.querySelector(`.${className}__debug`)
-    if (existing)
-      return existing
+    if (existing) return existing
 
     const wrapper = document.createElement('div')
     wrapper.className = `${className}__debug`
@@ -539,8 +529,7 @@ function useLoading(options: LoadingOptions) {
   const renderDebugMessages = () => {
     const debugWrapper = ensureDebugPanel()
     const body = debugWrapper.querySelector(`.${className}__debug-body`)
-    if (!body)
-      return
+    if (!body) return
 
     body.innerHTML = debugList
       .slice(-12)
@@ -558,8 +547,7 @@ function useLoading(options: LoadingOptions) {
         container.dataset.mode = event.mode
         if (event.mode === 'progress') {
           progressBar.className = `${className}__progress`
-        }
-        else {
+        } else {
           progressBar.className = `${className}__bar`
         }
         if (event.mode === 'debug') {
@@ -575,8 +563,7 @@ function useLoading(options: LoadingOptions) {
       case 'progress':
         if (typeof event.delta === 'number') {
           updateProgress(progressValue + event.delta)
-        }
-        else if (event.reset) {
+        } else if (event.reset) {
           updateProgress(0.05)
         }
         break
@@ -602,11 +589,9 @@ function useLoading(options: LoadingOptions) {
   }
 
   const messageListener = (ev: MessageEvent) => {
-    if (ev.data?.channel !== PRELOAD_LOADING_CHANNEL)
-      return
+    if (ev.data?.channel !== PRELOAD_LOADING_CHANNEL) return
     const payload = ev.data.data as LoadingEvent | undefined
-    if (!payload)
-      return
+    if (!payload) return
 
     handleEvent(payload)
   }
@@ -634,8 +619,7 @@ function useLoading(options: LoadingOptions) {
       }
     },
     removeLoading() {
-      if (removalCompleted)
-        return
+      if (removalCompleted) return
       removalRequested = true
 
       if (!rendererFinished) {
@@ -673,27 +657,28 @@ function useLoading(options: LoadingOptions) {
         updateProgress(FINALIZE_PROGRESS_VALUE, true)
       }
       attemptFinalize()
-    },
+    }
   }
 }
 
 const detectedMode: LoadingMode = isDebugMode ? 'debug' : 'progress'
 
 const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoaded } = useLoading({
-  mode: detectedMode,
+  mode: detectedMode
 })
 
 domReady().then(() => {
   const info = useInitialize()
-  
+
   const argMapper = useArgMapper()
-  
+
   // Check if this is MetaOverlay by URL hash or command line args
   // Priority: 1. URL hash (#/meta-overlay), 2. command line args (--meta-overlay=true)
-  const isMetaOverlayByHash = window.location.hash === '#/meta-overlay' || window.location.hash === '#meta-overlay'
+  const isMetaOverlayByHash =
+    window.location.hash === '#/meta-overlay' || window.location.hash === '#meta-overlay'
   const isMetaOverlayByArgs = argMapper.metaOverlay === 'true'
   const isMetaOverlay = isMetaOverlayByHash || isMetaOverlayByArgs
-  
+
   // Set global flag for AppEntrance to check
   window.$isMetaOverlay = isMetaOverlay
 
@@ -703,16 +688,18 @@ domReady().then(() => {
     console.log('[preload] touchType:', argMapper.touchType)
     console.log('[preload] isMainWindow:', isMainWindow())
     console.log('[preload] isCoreBox:', isCoreBox())
-    console.log('[preload] isMetaOverlay:', isMetaOverlay, { byHash: isMetaOverlayByHash, byArgs: isMetaOverlayByArgs })
+    console.log('[preload] isMetaOverlay:', isMetaOverlay, {
+      byHash: isMetaOverlayByHash,
+      byArgs: isMetaOverlayByArgs
+    })
   }
-  
+
   if (isMainWindow()) {
     appendLoading()
-  }
-  else if (isCoreBox()) {
+  } else if (isCoreBox()) {
     document.body.classList.add('core-box')
   }
-  
+
   if (isMetaOverlay) {
     document.body.classList.add('meta-overlay')
   }
@@ -721,8 +708,7 @@ domReady().then(() => {
 })
 
 window.onmessage = (ev) => {
-  if (!ev.data)
-    return
+  if (!ev.data) return
   if (ev.data.payload === 'removeLoading') {
     removeLoading()
     return

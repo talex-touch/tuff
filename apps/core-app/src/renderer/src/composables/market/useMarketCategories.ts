@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
-import { computed, ref } from 'vue'
 import type { MarketPluginListItem } from './useMarketData'
+import { computed, ref } from 'vue'
 
 interface CategoryTag {
   tag: string
@@ -34,16 +34,16 @@ export function useMarketCategories(plugins: Ref<MarketPluginListItem[]>) {
 
     for (const category of categories) {
       const lower = category.toLowerCase()
-      
+
       // Map common category names to i18n keys
       const categoryKeyMap: Record<string, string> = {
-        'tools': 'market.categories.utilities',
-        'productivity': 'market.categories.productivity',
-        'development': 'market.categories.development',
-        'design': 'market.categories.design',
-        'media': 'market.categories.media',
-        'writing': 'market.categories.writing',
-        'dev': 'market.categories.dev'
+        tools: 'market.categories.utilities',
+        productivity: 'market.categories.productivity',
+        development: 'market.categories.development',
+        design: 'market.categories.design',
+        media: 'market.categories.media',
+        writing: 'market.categories.writing',
+        dev: 'market.categories.dev'
       }
 
       const tag = categoryKeyMap[lower] || ''

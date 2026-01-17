@@ -1,12 +1,12 @@
 import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
+import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { desc, sql } from 'drizzle-orm'
+import * as schema from '../../../../db/schema'
 import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
-import type { ParsedItemTimeStats } from '../time-stats-aggregator'
-import * as schema from '../../../../db/schema'
-import { desc, sql } from 'drizzle-orm'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -44,7 +44,7 @@ export class RecommendationEngine {
           console.error('[RecommendationEngine] Background refresh failed', error)
         }
       },
-      { interval: this.REFRESH_INTERVAL_MS, unit: 'milliseconds' },
+      { interval: this.REFRESH_INTERVAL_MS, unit: 'milliseconds' }
     )
     this.pollingService.start()
   }
@@ -145,16 +145,17 @@ export class RecommendationEngine {
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
     const filteredItems = items.filter((item) => {
       const meta = item.meta as any
-      const originalKey = meta?._originalSourceId && meta?._originalItemId
-        ? `${meta._originalSourceId}:${meta._originalItemId}`
-        : `${item.source.id}:${item.id}`
+      const originalKey =
+        meta?._originalSourceId && meta?._originalItemId
+          ? `${meta._originalSourceId}:${meta._originalItemId}`
+          : `${item.source.id}:${item.id}`
       return !pinnedKeys.has(originalKey)
     })
 
     for (const item of filteredItems) {
       if (!item.meta) item.meta = {}
       if (!(item.meta as any).recommendation) {
-        (item.meta as any).recommendation = { source: 'frequent' }
+        ;(item.meta as any).recommendation = { source: 'frequent' }
       }
     }
 
@@ -557,7 +558,6 @@ export class RecommendationEngine {
         })
       }
     }
-
 
     return trending
       .sort((a, b) => b.growthScore - a.growthScore)

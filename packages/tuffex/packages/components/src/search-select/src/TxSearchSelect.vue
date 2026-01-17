@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import type { TxSearchSelectEmits, TxSearchSelectOption, TxSearchSelectProps } from './types'
 import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import TxCard from '../../card/src/TxCard.vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
+import TxCard from '../../card/src/TxCard.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxSpinner from '../../spinner/src/TxSpinner.vue'
-import type { TxSearchSelectEmits, TxSearchSelectOption, TxSearchSelectProps } from './types'
 
 defineOptions({ name: 'TxSearchSelect' })
 
@@ -54,7 +54,8 @@ const selectedOption = computed(() => optionsMap.value.get(props.modelValue ?? '
 watch(
   selectedOption,
   (opt) => {
-    if (!opt) return
+    if (!opt)
+      return
     inputText.value = opt.label
   },
   { immediate: true },
@@ -62,9 +63,11 @@ watch(
 
 const filteredOptions = computed(() => {
   const list = props.options ?? []
-  if (props.remote) return list
+  if (props.remote)
+    return list
   const q = inputText.value.trim().toLowerCase()
-  if (!q) return list
+  if (!q)
+    return list
   return list.filter(o => o.label.toLowerCase().includes(q))
 })
 
@@ -76,8 +79,10 @@ function clearSearchTimer() {
 }
 
 function emitSearch(q: string) {
-  if (!props.remote) return
-  if (props.disabled) return
+  if (!props.remote)
+    return
+  if (props.disabled)
+    return
   emit('search', q)
 }
 
@@ -88,7 +93,8 @@ function onInput(v: string) {
     emit('open')
   }
 
-  if (!props.remote) return
+  if (!props.remote)
+    return
 
   clearSearchTimer()
   const delay = Math.max(0, props.searchDebounce ?? 0)
@@ -103,7 +109,8 @@ function onEnter() {
 }
 
 function onFocus() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   if (!open.value) {
     open.value = true
     emit('open')
@@ -111,7 +118,8 @@ function onFocus() {
 }
 
 function close() {
-  if (!open.value) return
+  if (!open.value)
+    return
   open.value = false
   emit('close')
 }
@@ -123,7 +131,8 @@ function onClear() {
 }
 
 function onPick(opt: TxSearchSelectOption) {
-  if (opt.disabled) return
+  if (opt.disabled)
+    return
   emit('update:modelValue', opt.value)
   emit('change', opt.value)
   emit('select', opt)
@@ -132,25 +141,32 @@ function onPick(opt: TxSearchSelectOption) {
 }
 
 function isEventInside(e: Event, el: HTMLElement | null): boolean {
-  if (!el) return false
+  if (!el)
+    return false
   const anyE = e as any
   const path: EventTarget[] | undefined = typeof anyE.composedPath === 'function' ? anyE.composedPath() : undefined
-  if (path && path.length) return path.includes(el)
+  if (path && path.length)
+    return path.includes(el)
   const t = (e.target ?? null) as Node | null
   return !!t && el.contains(t)
 }
 
 function handleOutside(e: Event) {
-  if (!open.value) return
-  if (performance.now() - lastOpenedAt.value < 60) return
+  if (!open.value)
+    return
+  if (performance.now() - lastOpenedAt.value < 60)
+    return
   const inRef = isEventInside(e, referenceRef.value)
   const inFloat = isEventInside(e, floatingRef.value)
-  if (!inRef && !inFloat) close()
+  if (!inRef && !inFloat)
+    close()
 }
 
 function handleEsc(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
-  if (!open.value) return
+  if (e.key !== 'Escape')
+    return
+  if (!open.value)
+    return
   close()
 }
 
@@ -214,7 +230,8 @@ onBeforeUnmount(() => {
 
 defineExpose({
   open: () => {
-    if (props.disabled) return
+    if (props.disabled)
+      return
     if (!open.value) {
       open.value = true
       emit('open')

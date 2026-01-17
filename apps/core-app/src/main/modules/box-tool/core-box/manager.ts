@@ -51,12 +51,15 @@ export class CoreBoxManager {
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'CoreBoxManager Event',
-          `Provider deactivated: ${deactivationEvent.providerId}, isPluginFeature: ${deactivationEvent.isPluginFeature}, allDeactivated: ${deactivationEvent.allProvidersDeactivated}`,
+          `Provider deactivated: ${deactivationEvent.providerId}, isPluginFeature: ${deactivationEvent.isPluginFeature}, allDeactivated: ${deactivationEvent.allProvidersDeactivated}`
         )
       }
 
       // If a plugin feature was deactivated or all providers were deactivated, exit UI mode
-      if ((deactivationEvent.isPluginFeature || deactivationEvent.allProvidersDeactivated) && this.isUIMode) {
+      if (
+        (deactivationEvent.isPluginFeature || deactivationEvent.allProvidersDeactivated) &&
+        this.isUIMode
+      ) {
         if (searchLogger.isEnabled()) {
           searchLogger.logSearchPhase('CoreBoxManager Event', 'Exiting UI mode')
         }
@@ -121,8 +124,7 @@ export class CoreBoxManager {
           }
           return
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[CoreBoxManager] Failed to check initialization status:', error)
         // If we can't check, allow CoreBox to open (fail-open approach)
       }
@@ -139,8 +141,7 @@ export class CoreBoxManager {
     if (show) {
       this.applyExpandState()
       windowManager.show(options?.triggeredByShortcut ?? false)
-    }
-    else {
+    } else {
       if (!this._isUIMode) {
         this._isCollapsed = true
         this._expandState = {}
@@ -173,7 +174,7 @@ export class CoreBoxManager {
     url: string,
     plugin?: TouchPlugin,
     feature?: IPluginFeature,
-    query?: TuffQueryBase | string,
+    query?: TuffQueryBase | string
   ): void {
     this._isUIMode = true
     this.currentFeature = feature || null
@@ -191,12 +192,9 @@ export class CoreBoxManager {
 
       const coreBoxWindow = windowManager.current?.window
       if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-        genTouchApp().channel.sendTo(
-          coreBoxWindow,
-          ChannelType.MAIN,
-          'core-box:ui-mode-exited',
-          { resetInput: true }
-        )
+        genTouchApp().channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:ui-mode-exited', {
+          resetInput: true
+        })
 
         setTimeout(() => {
           if (!coreBoxWindow.isDestroyed()) {
@@ -204,8 +202,7 @@ export class CoreBoxManager {
           }
         }, 100)
       }
-    }
-    else {
+    } else {
       console.warn('[CoreBoxManager] Not in UI mode, no need to exit.')
     }
   }
@@ -226,14 +223,9 @@ export class CoreBoxManager {
   public async search(query: TuffQuery): Promise<TuffSearchResult> {
     try {
       return await this.searchEngine.search(query)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[CoreBoxManager] Search failed:', error)
-      return new TuffSearchResultBuilder(query)
-        .setItems([])
-        .setDuration(0)
-        .setSources([])
-        .build()
+      return new TuffSearchResultBuilder(query).setItems([]).setDuration(0).setSources([]).build()
     }
   }
 }

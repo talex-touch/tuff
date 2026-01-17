@@ -21,7 +21,8 @@ export class TuffIntelligenceProvider implements TranslationProvider {
         provider: response.provider,
         model: response.model,
       }
-    } catch (error) {
+    }
+    catch (error) {
       return {
         text: `[TuffIntelligence Failed] ${text}`,
         from,

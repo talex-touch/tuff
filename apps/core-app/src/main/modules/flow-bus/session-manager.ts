@@ -5,10 +5,10 @@
  */
 
 import type {
+  FlowError,
+  FlowPayload,
   FlowSession,
   FlowSessionState,
-  FlowPayload,
-  FlowError,
   FlowSessionUpdate
 } from '@talex-touch/utils'
 

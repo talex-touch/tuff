@@ -1,7 +1,7 @@
 <script lang="ts" setup>
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { useAuth } from '~/modules/auth/useAuth'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 
 const { currentUser, isLoggedIn } = useAuth()
 
@@ -26,7 +26,7 @@ function openUserProfile() {
           :src="currentUser.avatar"
           :alt="currentUser.name"
           class="avatar-image"
-        >
+        />
         <div v-else class="avatar-placeholder">
           {{ currentUser.name.charAt(0).toUpperCase() }}
         </div>

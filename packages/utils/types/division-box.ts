@@ -1,6 +1,6 @@
 /**
  * DivisionBox Type Definitions
- * 
+ *
  * Shared types for DivisionBox system across main and renderer processes.
  * These types define the contract for inter-process communication and state management.
  */
@@ -15,7 +15,7 @@ export enum DivisionBoxState {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
   DETACH = 'detach',
-  DESTROY = 'destroy'
+  DESTROY = 'destroy',
 }
 
 /**
@@ -29,7 +29,7 @@ export enum DivisionBoxErrorCode {
   CONFIG_ERROR = 'CONFIG_ERROR',
   INVALID_TRANSITION = 'INVALID_TRANSITION',
   SESSION_NOT_FOUND = 'SESSION_NOT_FOUND',
-  LIMIT_EXCEEDED = 'LIMIT_EXCEEDED'
+  LIMIT_EXCEEDED = 'LIMIT_EXCEEDED',
 }
 
 /**
@@ -43,7 +43,7 @@ export const ERROR_MESSAGES: Record<DivisionBoxErrorCode, string> = {
   [DivisionBoxErrorCode.CONFIG_ERROR]: 'Invalid configuration provided',
   [DivisionBoxErrorCode.INVALID_TRANSITION]: 'Invalid state transition attempted',
   [DivisionBoxErrorCode.SESSION_NOT_FOUND]: 'Session not found',
-  [DivisionBoxErrorCode.LIMIT_EXCEEDED]: 'Resource limit exceeded'
+  [DivisionBoxErrorCode.LIMIT_EXCEEDED]: 'Resource limit exceeded',
 }
 
 /**
@@ -54,13 +54,13 @@ export class DivisionBoxError extends Error {
     public readonly code: DivisionBoxErrorCode,
     message: string,
     public readonly sessionId?: string,
-    public readonly timestamp: number = Date.now()
+    public readonly timestamp: number = Date.now(),
   ) {
     super(message)
     this.name = 'DivisionBoxError'
     Error.captureStackTrace(this, DivisionBoxError)
   }
-  
+
   /**
    * Gets a user-friendly error message
    */
@@ -99,13 +99,13 @@ export type DivisionBoxSize = 'compact' | 'medium' | 'expanded'
 export interface DivisionBoxUIConfig {
   /** Show the search input in header */
   showInput?: boolean
-  
+
   /** Placeholder text for search input */
   inputPlaceholder?: string
-  
+
   /** Show result list area */
   showResults?: boolean
-  
+
   /** Initial input value */
   initialInput?: string
 }
@@ -116,28 +116,28 @@ export interface DivisionBoxUIConfig {
 export interface DivisionBoxConfig {
   /** URL to load in the WebContentsView */
   url: string
-  
+
   /** Associated plugin ID (optional) */
   pluginId?: string
-  
+
   /** Display title */
   title: string
-  
+
   /** Icon (supports iconify format) */
   icon?: string
-  
+
   /** Size preset */
   size?: DivisionBoxSize
-  
+
   /** Enable keepAlive caching mode */
   keepAlive?: boolean
-  
+
   /** Header configuration */
   header?: HeaderConfig
-  
+
   /** UI configuration for CoreBox header display */
   ui?: DivisionBoxUIConfig
-  
+
   /** WebContentsView preferences (main process only) */
   webPreferences?: any
 }
@@ -148,22 +148,22 @@ export interface DivisionBoxConfig {
 export interface SessionMeta {
   /** Associated plugin ID */
   pluginId?: string
-  
+
   /** Display title */
   title: string
-  
+
   /** Icon */
   icon?: string
-  
+
   /** Size preset */
   size: DivisionBoxSize
-  
+
   /** KeepAlive mode enabled */
   keepAlive: boolean
-  
+
   /** Creation timestamp */
   createdAt: number
-  
+
   /** Last accessed timestamp */
   lastAccessedAt: number
 }
@@ -184,13 +184,13 @@ export interface DivisionBoxBounds {
 export interface SessionInfo {
   /** Unique session identifier */
   sessionId: string
-  
+
   /** Current lifecycle state */
   state: DivisionBoxState
-  
+
   /** Session metadata */
   meta: SessionMeta
-  
+
   /** Position and size bounds */
   bounds?: DivisionBoxBounds
 }
@@ -201,10 +201,10 @@ export interface SessionInfo {
 export interface CloseOptions {
   /** Delay before closing (milliseconds) */
   delay?: number
-  
+
   /** Play closing animation */
   animation?: boolean
-  
+
   /** Force close (ignore keepAlive) */
   force?: boolean
 }
@@ -229,7 +229,7 @@ export enum DivisionBoxIPCChannel {
   UPDATE_STATE = 'division-box:update-state',
   GET_ACTIVE_SESSIONS = 'division-box:get-active-sessions',
   STATE_CHANGED = 'division-box:state-changed',
-  SESSION_DESTROYED = 'division-box:session-destroyed'
+  SESSION_DESTROYED = 'division-box:session-destroyed',
 }
 
 /**
@@ -252,10 +252,10 @@ export interface IPCResponse<T = any> {
 export interface ManifestDivisionBoxConfig {
   /** Default size preset for DivisionBox instances */
   defaultSize?: DivisionBoxSize
-  
+
   /** Enable keepAlive caching mode by default */
   keepAlive?: boolean
-  
+
   /** Default header configuration */
   header?: {
     /** Whether to show the header by default */

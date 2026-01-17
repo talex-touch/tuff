@@ -32,6 +32,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceKeywordsExtractPayload,
   IntelligenceKeywordsExtractResult,
+  IntelligenceMessage,
   IntelligenceProviderConfig,
   IntelligenceRAGQueryPayload,
   IntelligenceRAGQueryResult,
@@ -46,7 +47,6 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
-  IntelligenceMessage,
 } from '../../types/intelligence'
 import { ref } from 'vue'
 import { useChannel } from './use-channel'
@@ -269,7 +269,7 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
           }),
         ),
 
-      chatLangChain: (params) =>
+      chatLangChain: params =>
         withLoadingState(() =>
           sendChannelRequest<IntelligenceInvokeResult<string>>('intelligence:chat-langchain', params),
         ),

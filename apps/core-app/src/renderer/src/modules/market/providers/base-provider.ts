@@ -1,19 +1,15 @@
 import type {
+  MarketHttpRequestOptions,
+  MarketHttpResponse,
   MarketPlugin,
   MarketProviderDefinition,
   MarketProviderListOptions,
-  MarketProviderTrustLevel,
-} from '@talex-touch/utils/market'
-import type {
-  MarketHttpRequestOptions,
-  MarketHttpResponse,
+  MarketProviderTrustLevel
 } from '@talex-touch/utils/market'
 import { marketHttpRequest } from '../market-http-client'
 
 export interface MarketProviderContext {
-  request<T = unknown>(
-    options: MarketHttpRequestOptions,
-  ): Promise<MarketHttpResponse<T>>
+  request: <T = unknown>(options: MarketHttpRequestOptions) => Promise<MarketHttpResponse<T>>
   logger?: Console
 }
 
@@ -39,7 +35,7 @@ export abstract class BaseMarketProvider {
   }
 
   protected async request<T = unknown>(
-    options: MarketHttpRequestOptions,
+    options: MarketHttpRequestOptions
   ): Promise<MarketHttpResponse<T>> {
     if (this.ctx.request) {
       return await this.ctx.request<T>(options)

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { nextTick, watch } from 'vue'
 import { useEventListener, useThrottleFn } from '@vueuse/core'
+import { nextTick, watch } from 'vue'
 
 interface TocLink {
   id: string
@@ -183,12 +183,13 @@ watch(activeHash, () => {
 watch(
   () => route.fullPath,
   () => {
-    if (!import.meta.client) return
+    if (!import.meta.client)
+      return
     // Reset state on route change
     headingElements.value = {}
     activeHash.value = ''
     hasActive.value = false
-    
+
     // Wait for DOM to be ready with new content
     nextTick(() => {
       setTimeout(() => {
@@ -211,17 +212,17 @@ watch(
     <nav v-if="hasOutline" ref="navRef" class="outline-nav relative">
       <!-- Main track line -->
       <div class="absolute top-0 bottom-0 left-0 w-px bg-black/10 dark:bg-white/10" />
-      
+
       <!-- Sliding Marker -->
       <div
         class="absolute left-0 w-0.5 rounded-full bg-primary transition-all duration-300 ease-out"
         :style="{
           top: `${markerTop}px`,
           height: `${markerHeight}px`,
-          opacity: hasActive ? 1 : 0
+          opacity: hasActive ? 1 : 0,
         }"
       />
-      
+
       <div
         v-for="entry in outlineEntries"
         :key="entry.id"
@@ -229,8 +230,8 @@ watch(
         :class="{ 'outline-item-nested': entry.indent > 0 }"
       >
         <!-- Nested indent line -->
-        <div 
-          v-if="entry.indent > 0" 
+        <div
+          v-if="entry.indent > 0"
           class="absolute top-0 bottom-0 w-px bg-black/10 dark:bg-white/10"
           :style="{ left: `${entry.indent * 12}px` }"
         />

@@ -11,7 +11,7 @@ const target = ref<ITouchPlugin | null>(null)
 const searchQuery = ref('')
 
 const runningPlugins = computed(() =>
-  props.plugins.filter(plugin => plugin.status === 3 || plugin.status === 4),
+  props.plugins.filter((plugin) => plugin.status === 3 || plugin.status === 4)
 )
 
 // Filtered plugins based on search query
@@ -21,9 +21,9 @@ const filteredRunningPlugins = computed(() => {
   }
 
   return runningPlugins.value.filter(
-    plugin =>
-      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-      || plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase()),
+    (plugin) =>
+      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 })
 
@@ -33,15 +33,15 @@ const filteredAllPlugins = computed(() => {
   }
 
   return props.plugins.filter(
-    plugin =>
-      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-      || plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase()),
+    (plugin) =>
+      plugin.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      plugin.desc?.toLowerCase().includes(searchQuery.value.toLowerCase())
   )
 })
 
 watch(
   () => target.value,
-  () => emits('select', target.value),
+  () => emits('select', target.value)
 )
 </script>
 
@@ -55,20 +55,26 @@ watch(
           type="text"
           placeholder="Search plugins..."
           class="search-input"
-        >
+        />
         <i v-if="searchQuery" class="i-ri-close-line clear-icon" @click="searchQuery = ''" />
       </div>
     </div>
 
-    <PluginListModule :model-value="target" @update:model-value="val => target = val" :shrink="true" :plugins="filteredRunningPlugins">
-      <template #name>
-        Running
-      </template>
+    <PluginListModule
+      :model-value="target"
+      :shrink="true"
+      :plugins="filteredRunningPlugins"
+      @update:model-value="(val) => (target = val)"
+    >
+      <template #name> Running </template>
     </PluginListModule>
-    <PluginListModule :model-value="target" @update:model-value="val => target = val" :shrink="false" :plugins="filteredAllPlugins">
-      <template #name>
-        All
-      </template>
+    <PluginListModule
+      :model-value="target"
+      :shrink="false"
+      :plugins="filteredAllPlugins"
+      @update:model-value="(val) => (target = val)"
+    >
+      <template #name> All </template>
     </PluginListModule>
 
     <div class="PluginList-Add transition-cubic fake-background">

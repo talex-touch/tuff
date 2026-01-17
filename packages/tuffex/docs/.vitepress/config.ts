@@ -1,8 +1,8 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitepress'
-import UnoCSS from 'unocss/vite'
 import { presetIcons, presetUno } from 'unocss'
+import UnoCSS from 'unocss/vite'
+import { defineConfig } from 'vitepress'
 
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..')
 
@@ -24,7 +24,8 @@ export default defineConfig({
           }),
         ],
       }),
-    ],resolve: {
+    ],
+    resolve: {
       alias: {
         '@tuffex': PACKAGE_ROOT,
       },
@@ -32,7 +33,8 @@ export default defineConfig({
   },
 
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }],],
+    ['link', { rel: 'icon', href: '/favicon.ico' }],
+  ],
 
   themeConfig: {
     logo: '/logo.svg',
@@ -48,7 +50,8 @@ export default defineConfig({
           { text: 'GitHub', link: 'https://github.com/talex-touch/touchx-ui' },
           { text: 'NPM', link: 'https://www.npmjs.com/package/@talex-touch/tuffex' },
         ],
-      },],
+      },
+    ],
 
     sidebar: {
       '/components/': [
@@ -113,7 +116,9 @@ export default defineConfig({
             { text: '分组块 GroupBlock', link: '/components/group-block' },
             { text: '滚动 Scroll', link: '/components/scroll' },
             { text: '网格布局 GridLayout', link: '/components/grid-layout' },
-            { text: '布局骨架 LayoutSkeleton', link: '/components/layout-skeleton' },{ text: '智能体列表Agents', link: '/components/agents' },],
+            { text: '布局骨架 LayoutSkeleton', link: '/components/layout-skeleton' },
+            { text: '智能体列表Agents', link: '/components/agents' },
+          ],
         },
         {
           text: '反馈',
@@ -123,14 +128,17 @@ export default defineConfig({
             { text: '加载 Spinner', link: '/components/spinner' },
             { text: '加载遮罩 LoadingOverlay', link: '/components/loading-overlay' },
             { text: '骨架屏 Skeleton', link: '/components/skeleton' },
-            { text: '提示 Toast', link: '/components/toast' },],
-        },{
+            { text: '提示 Toast', link: '/components/toast' },
+          ],
+        },
+        {
           text: '覆盖层',
           items: [
             { text: '抽屉 Drawer', link: '/components/drawer' },
             { text: '对话框 Dialog', link: '/components/dialog' },
           ],
-        },{
+        },
+        {
           text: '动效',
           items: [
             { text: '自适应尺寸 AutoSizer', link: '/components/auto-sizer' },
@@ -150,7 +158,8 @@ export default defineConfig({
             { text: '图片上传 ImageUploader', link: '/components/image-uploader' },
             { text: '图片预览 ImageGallery', link: '/components/image-gallery' },
           ],
-        },{
+        },
+        {
           text: '视觉',
           items: [
             { text: '玻璃拟态 GlassSurface', link: '/components/glass-surface' },
@@ -158,7 +167,8 @@ export default defineConfig({
             { text: '渐变边框 GradientBorder', link: '/components/gradient-border' },
             { text: '扫光 GlowText', link: '/components/glow-text' },
           ],
-        },],
+        },
+      ],
 
       '/design/': [
         {
@@ -169,7 +179,8 @@ export default defineConfig({
             { text: '间距', link: '/design/spacing' },
             { text: '阴影', link: '/design/shadows' },
           ],
-        },],
+        },
+      ],
     },
 
     socialLinks: [
@@ -183,15 +194,19 @@ export default defineConfig({
 
     outline: {
       label: '本页目录',
-      level: [2, 3],},docFooter: {
+      level: [2, 3],
+    },
+    docFooter: {
       prev: '上一篇',
       next: '下一篇',
     },
 
     lastUpdated: {
-      text: '最后更新于',},
+      text: '最后更新于',
+    },
 
-    returnToTopLabel: '返回顶部',sidebarMenuLabel: '菜单',
+    returnToTopLabel: '返回顶部',
+    sidebarMenuLabel: '菜单',
     darkModeSwitchLabel: '主题',
     lightModeSwitchTitle: '切换到浅色模式',
     darkModeSwitchTitle: '切换到深色模式',

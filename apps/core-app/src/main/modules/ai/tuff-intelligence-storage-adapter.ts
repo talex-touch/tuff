@@ -1,15 +1,15 @@
 import type {
-  IntelligenceAuditLog,
-  IntelligenceCapabilityConfig,
-  IntelligenceProviderConfig,
-  PromptTemplate,
-} from '@talex-touch/utils/types/intelligence'
-import type {
   TuffIntelligenceStorageAdapter,
   TuffQuota,
   TuffStorageAuditFilter,
-  TuffUsageDelta,
+  TuffUsageDelta
 } from '@talex-touch/tuff-intelligence'
+import type {
+  IntelligenceAuditLog,
+  IntelligenceCapabilityConfig,
+  IntelligenceProviderConfig,
+  PromptTemplate
+} from '@talex-touch/utils/types/intelligence'
 import { eq } from 'drizzle-orm'
 import { config } from '../../db/schema'
 import { databaseModule } from '../database'
@@ -19,16 +19,14 @@ import { intelligenceQuotaManager } from './intelligence-quota-manager'
 const CONFIG_KEYS = {
   providers: 'intelligence/providers',
   capabilities: 'intelligence/capabilities',
-  prompts: 'intelligence/prompts',
+  prompts: 'intelligence/prompts'
 } as const
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value)
-    return fallback
+  if (!value) return fallback
   try {
     return JSON.parse(value) as T
-  }
-  catch {
+  } catch {
     return fallback
   }
 }
@@ -41,7 +39,7 @@ async function upsertConfig(key: string, value: unknown): Promise<void> {
     .values({ key, value: serialized })
     .onConflictDoUpdate({
       target: config.key,
-      set: { value: serialized },
+      set: { value: serialized }
     })
 }
 
@@ -67,16 +65,14 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
       provider: filter.providerId,
       success: filter.success,
       limit: filter.limit,
-      offset: filter.offset,
+      offset: filter.offset
     })
 
     return logs.filter((log) => {
-      if (filter.model && log.model !== filter.model)
-        return false
+      if (filter.model && log.model !== filter.model) return false
       if (filter.promptId) {
         const promptId = (log as any).metadata?.promptId
-        if (promptId !== filter.promptId)
-          return false
+        if (promptId !== filter.promptId) return false
       }
       return true
     }) as any
@@ -96,28 +92,34 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
       usage: {
         promptTokens: delta.promptTokens ?? 0,
         completionTokens: delta.completionTokens ?? 0,
-        totalTokens: delta.totalTokens ?? (delta.promptTokens ?? 0) + (delta.completionTokens ?? 0),
+        totalTokens: delta.totalTokens ?? (delta.promptTokens ?? 0) + (delta.completionTokens ?? 0)
       },
       latency: delta.latency ?? 0,
       success: delta.success ?? true,
       error: delta.success === false ? 'usage_delta_failed' : undefined,
       metadata: {
         ...delta.metadata,
-        promptId: delta.promptId,
-      },
+        promptId: delta.promptId
+      }
     } as any)
   }
 
   async getQuota(caller: string): Promise<TuffQuota | null> {
     const quota = await intelligenceQuotaManager.getQuota(caller, 'plugin')
-    if (!quota)
-      return null
+    if (!quota) return null
 
     return {
       requestLimit: quota.requestsPerMinute ?? quota.requestsPerDay ?? quota.requestsPerMonth,
       tokenLimit: quota.tokensPerMinute ?? quota.tokensPerDay ?? quota.tokensPerMonth,
       costLimit: quota.costLimitPerDay ?? quota.costLimitPerMonth,
-      windowSeconds: quota.requestsPerMinute || quota.tokensPerMinute ? 60 : quota.requestsPerDay || quota.tokensPerDay ? 86400 : quota.requestsPerMonth || quota.tokensPerMonth ? 2592000 : undefined,
+      windowSeconds:
+        quota.requestsPerMinute || quota.tokensPerMinute
+          ? 60
+          : quota.requestsPerDay || quota.tokensPerDay
+            ? 86400
+            : quota.requestsPerMonth || quota.tokensPerMonth
+              ? 2592000
+              : undefined
     }
   }
 
@@ -132,23 +134,29 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
       callerType: 'plugin',
       requestsPerMinute: useMinute ? quota.requestLimit : undefined,
       tokensPerMinute: useMinute ? quota.tokenLimit : undefined,
-      requestsPerDay: useDay ? quota.requestLimit : (!useMinute && !useMonth ? quota.requestLimit : undefined),
-      tokensPerDay: useDay ? quota.tokenLimit : (!useMinute && !useMonth ? quota.tokenLimit : undefined),
+      requestsPerDay: useDay
+        ? quota.requestLimit
+        : !useMinute && !useMonth
+          ? quota.requestLimit
+          : undefined,
+      tokensPerDay: useDay
+        ? quota.tokenLimit
+        : !useMinute && !useMonth
+          ? quota.tokenLimit
+          : undefined,
       requestsPerMonth: useMonth ? quota.requestLimit : undefined,
       tokensPerMonth: useMonth ? quota.tokenLimit : undefined,
       costLimitPerDay: useMonth ? undefined : quota.costLimit,
       costLimitPerMonth: useMonth ? quota.costLimit : undefined,
-      enabled: true,
+      enabled: true
     })
   }
 
   async saveProviderConfig(cfg: IntelligenceProviderConfig): Promise<void> {
     const list = await this.listProviders()
-    const idx = list.findIndex(p => p.id === cfg.id)
-    if (idx >= 0)
-      list[idx] = cfg
-    else
-      list.push(cfg)
+    const idx = list.findIndex((p) => p.id === cfg.id)
+    if (idx >= 0) list[idx] = cfg
+    else list.push(cfg)
 
     await upsertConfig(CONFIG_KEYS.providers, list)
   }
@@ -160,11 +168,9 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
 
   async saveCapabilityConfig(cfg: IntelligenceCapabilityConfig): Promise<void> {
     const list = await this.listCapabilities()
-    const idx = list.findIndex(c => c.id === cfg.id)
-    if (idx >= 0)
-      list[idx] = cfg
-    else
-      list.push(cfg)
+    const idx = list.findIndex((c) => c.id === cfg.id)
+    if (idx >= 0) list[idx] = cfg
+    else list.push(cfg)
 
     await upsertConfig(CONFIG_KEYS.capabilities, list)
   }
@@ -176,11 +182,9 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
 
   async savePrompt(prompt: PromptTemplate): Promise<void> {
     const list = await this.listPrompts()
-    const idx = list.findIndex(p => p.id === prompt.id)
-    if (idx >= 0)
-      list[idx] = prompt
-    else
-      list.push(prompt)
+    const idx = list.findIndex((p) => p.id === prompt.id)
+    if (idx >= 0) list[idx] = prompt
+    else list.push(prompt)
 
     await upsertConfig(CONFIG_KEYS.prompts, list)
   }
@@ -194,7 +198,7 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
     const list = await this.listPrompts()
     await upsertConfig(
       CONFIG_KEYS.prompts,
-      list.filter(p => p.id !== id),
+      list.filter((p) => p.id !== id)
     )
   }
 }

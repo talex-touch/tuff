@@ -5,7 +5,7 @@
  * to share data with other plugins.
  */
 
-import type { TuffQuery, FlowPayload, FlowTargetInfo } from '@talex-touch/utils'
+import type { FlowPayload, FlowTargetInfo, TuffQuery } from '@talex-touch/utils'
 import { createFlowSDK, extractFlowData, isFlowTriggered } from '@talex-touch/utils/plugin/sdk'
 
 // Simulated channel for example purposes
@@ -13,7 +13,7 @@ const mockChannel = {
   send: async (event: string, data?: any) => {
     console.log(`[IPC] ${event}:`, data)
     return { success: true, data: {} }
-  }
+  },
 }
 
 // Create Flow SDK instance
@@ -29,26 +29,27 @@ async function sendTextToPlugin() {
     context: {
       sourcePluginId: 'example-plugin',
       metadata: {
-        timestamp: Date.now()
-      }
-    }
+        timestamp: Date.now(),
+      },
+    },
   }
 
   try {
     // Option A: Let user select target
     const result = await flow.dispatch(payload, {
       title: 'Share Text',
-      description: 'Send this text to another plugin'
+      description: 'Send this text to another plugin',
     })
     console.log('Flow dispatched:', result)
 
     // Option B: Send to specific target
     const directResult = await flow.dispatch(payload, {
       preferredTarget: 'notes-plugin.quick-capture',
-      skipSelector: true
+      skipSelector: true,
     })
     console.log('Direct flow:', directResult)
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Flow failed:', error)
   }
 }
@@ -63,19 +64,19 @@ async function sendStructuredData() {
       title: 'Meeting Notes',
       content: 'Discussed project roadmap...',
       tags: ['meeting', 'important'],
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     },
     context: {
       sourcePluginId: 'example-plugin',
-      sourceFeatureId: 'create-note'
-    }
+      sourceFeatureId: 'create-note',
+    },
   }
 
   const result = await flow.dispatch(payload, {
     title: 'Save Note',
     requireAck: true, // Wait for target to acknowledge
     timeout: 10000,
-    fallbackAction: 'copy' // Copy to clipboard if flow fails
+    fallbackAction: 'copy', // Copy to clipboard if flow fails
   })
 
   if (result.state === 'ACKED') {
@@ -118,7 +119,8 @@ function handleFeatureTrigger(featureId: string, query: TuffQuery) {
       // Process the flow data
       processFlowPayload(flowData.sessionId, flowData.payload)
     }
-  } else {
+  }
+  else {
     // Normal feature trigger (not from Flow)
     console.log('Normal trigger with query:', query.text)
   }
@@ -150,13 +152,14 @@ async function processFlowPayload(sessionId: string, payload: FlowPayload) {
     await flow.acknowledge(sessionId, {
       success: true,
       noteId: result.id,
-      message: 'Note saved successfully'
+      message: 'Note saved successfully',
     })
-  } catch (error) {
+  }
+  catch (error) {
     // Report error to sender
     await flow.reportError(
       sessionId,
-      error instanceof Error ? error.message : 'Failed to process flow'
+      error instanceof Error ? error.message : 'Failed to process flow',
     )
   }
 }
@@ -173,7 +176,7 @@ async function saveStructuredNote(data: object) {
 }
 
 async function saveImage(dataUrl: string) {
-  console.log('Saving image:', dataUrl.substring(0, 50) + '...')
+  console.log('Saving image:', `${dataUrl.substring(0, 50)}...`)
   return { id: 'image-789' }
 }
 
@@ -211,9 +214,9 @@ async function saveImage(dataUrl: string) {
 
 // Export for demonstration
 export {
-  sendTextToPlugin,
-  sendStructuredData,
-  listAvailableTargets,
   handleFeatureTrigger,
-  processFlowPayload
+  listAvailableTargets,
+  processFlowPayload,
+  sendStructuredData,
+  sendTextToPlugin,
 }

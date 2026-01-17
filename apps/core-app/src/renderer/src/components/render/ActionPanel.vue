@@ -36,8 +36,8 @@ const actions = computed<ActionItem[]>(() => {
   // Pin/Unpin action
   list.push({
     id: 'toggle-pin',
-    label: props.isPinned 
-      ? t('corebox.actions.unpin', '取消固定') 
+    label: props.isPinned
+      ? t('corebox.actions.unpin', '取消固定')
       : t('corebox.actions.pin', '固定到推荐'),
     icon: props.isPinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line',
     shortcut: isMac ? '↵' : 'Enter'
@@ -74,11 +74,14 @@ const actions = computed<ActionItem[]>(() => {
   return list
 })
 
-watch(() => props.visible, (visible) => {
-  if (visible) {
-    activeIndex.value = 0
+watch(
+  () => props.visible,
+  (visible) => {
+    if (visible) {
+      activeIndex.value = 0
+    }
   }
-})
+)
 
 function handleKeyDown(event: KeyboardEvent) {
   if (!props.visible) return
@@ -111,7 +114,6 @@ function handleKeyDown(event: KeyboardEvent) {
     }
     event.preventDefault()
     event.stopPropagation()
-    return
   }
 }
 
@@ -143,7 +145,7 @@ onBeforeUnmount(() => {
               v-for="(action, index) in actions"
               :key="action.id"
               class="ActionPanel-Item"
-              :class="{ 
+              :class="{
                 active: index === activeIndex,
                 disabled: action.disabled,
                 danger: action.danger
@@ -249,7 +251,10 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   background: var(--el-fill-color-dark);
   color: var(--el-text-color-secondary);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 .panel-fade-enter-active,

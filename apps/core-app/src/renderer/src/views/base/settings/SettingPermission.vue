@@ -5,13 +5,23 @@
   Allows users to view and manage plugin permissions
 -->
 <script setup lang="ts" name="SettingPermission">
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElEmpty, ElInput, ElSelect, ElOption, ElButton, ElCollapse, ElCollapseItem, ElTag, ElIcon } from 'element-plus'
-import { Search, Clock, Delete, Refresh, Check, Warning, InfoFilled } from '@element-plus/icons-vue'
+import { Check, Clock, Delete, InfoFilled, Refresh, Search, Warning } from '@element-plus/icons-vue'
+import {
+  ElButton,
+  ElCollapse,
+  ElCollapseItem,
+  ElEmpty,
+  ElIcon,
+  ElInput,
+  ElOption,
+  ElSelect,
+  ElTag
+} from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
 
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { PermissionList } from '~/components/permission'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 import { touchChannel } from '~/modules/channel/channel-core'
 
@@ -78,7 +88,7 @@ const permissionTranslations: Record<string, { name: string; desc: string }> = {
   'storage.plugin': { name: '插件存储', desc: '使用插件私有存储空间' },
   'storage.shared': { name: '共享存储', desc: '访问跨插件共享存储' },
   'window.create': { name: '创建窗口', desc: '创建新窗口或视图' },
-  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' },
+  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' }
 }
 
 // Filtered plugins
@@ -88,17 +98,16 @@ const filteredPlugins = computed(() => {
   // Search filter
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    result = result.filter(p =>
-      p.name.toLowerCase().includes(query) ||
-      p.id.toLowerCase().includes(query)
+    result = result.filter(
+      (p) => p.name.toLowerCase().includes(query) || p.id.toLowerCase().includes(query)
     )
   }
 
   // Status filter
   if (filterStatus.value === 'granted') {
-    result = result.filter(p => p.missingRequired.length === 0)
+    result = result.filter((p) => p.missingRequired.length === 0)
   } else if (filterStatus.value === 'missing') {
-    result = result.filter(p => p.missingRequired.length > 0)
+    result = result.filter((p) => p.missingRequired.length > 0)
   }
 
   return result
@@ -107,8 +116,8 @@ const filteredPlugins = computed(() => {
 // Stats
 const stats = computed(() => {
   const total = plugins.value.length
-  const withMissing = plugins.value.filter(p => p.missingRequired.length > 0).length
-  const legacy = plugins.value.filter(p => !p.enforcePermissions).length
+  const withMissing = plugins.value.filter((p) => p.missingRequired.length > 0).length
+  const legacy = plugins.value.filter((p) => !p.enforcePermissions).length
   return { total, withMissing, legacy }
 })
 
@@ -130,7 +139,7 @@ async function loadData() {
           pluginId: plugin.name,
           sdkapi: plugin.sdkapi,
           required: plugin.declaredPermissions?.required || [],
-          optional: plugin.declaredPermissions?.optional || [],
+          optional: plugin.declaredPermissions?.optional || []
         })
 
         return {
@@ -142,7 +151,7 @@ async function loadData() {
           optional: status?.optional || [],
           granted: status?.granted || [],
           missingRequired: status?.missingRequired || [],
-          warning: status?.warning,
+          warning: status?.warning
         }
       })
     )
@@ -158,7 +167,7 @@ function getPermissionList(plugin: PluginPermissionInfo) {
   const all = [...plugin.required, ...plugin.optional]
   const unique = [...new Set(all)]
 
-  return unique.map(id => {
+  return unique.map((id) => {
     const trans = permissionTranslations[id]
     const category = id.split('.')[0]
     const risk = getRisk(id)
@@ -170,14 +179,22 @@ function getPermissionList(plugin: PluginPermissionInfo) {
       category,
       risk,
       required: plugin.required.includes(id),
-      granted: plugin.granted.includes(id),
+      granted: plugin.granted.includes(id)
     }
   })
 }
 
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
   const highRisk = ['fs.write', 'fs.execute', 'system.shell', 'ai.agents', 'window.capture']
-  const mediumRisk = ['fs.read', 'clipboard.read', 'network.internet', 'network.download', 'system.tray', 'ai.advanced', 'storage.shared']
+  const mediumRisk = [
+    'fs.read',
+    'clipboard.read',
+    'network.internet',
+    'network.download',
+    'system.tray',
+    'ai.advanced',
+    'storage.shared'
+  ]
   if (highRisk.includes(permissionId)) return 'high'
   if (mediumRisk.includes(permissionId)) return 'medium'
   return 'low'
@@ -190,7 +207,7 @@ async function handleToggle(pluginId: string, permissionId: string, granted: boo
       await touchChannel.send('permission:grant', {
         pluginId,
         permissionId,
-        grantedBy: 'user',
+        grantedBy: 'user'
       })
     } else {
       await touchChannel.send('permission:revoke', { pluginId, permissionId })
@@ -208,7 +225,7 @@ async function handleGrantAll(plugin: PluginPermissionInfo) {
     await touchChannel.send('permission:grant-multiple', {
       pluginId: plugin.id,
       permissionIds: plugin.missingRequired,
-      grantedBy: 'user',
+      grantedBy: 'user'
     })
     await loadData()
   } catch (e) {
@@ -232,7 +249,7 @@ async function loadAuditLogs() {
   try {
     const result = await touchChannel.send('permission:get-audit-logs', {
       action: auditLogFilter.value === 'all' ? undefined : auditLogFilter.value,
-      limit: 100,
+      limit: 100
     })
     auditLogs.value = result?.logs || []
     auditLogsTotal.value = result?.total || 0
@@ -261,28 +278,37 @@ function formatTime(timestamp: number) {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
+    second: '2-digit'
   })
 }
 
 // Get action label
 function getActionLabel(action: string) {
   switch (action) {
-    case 'grant': return '授予'
-    case 'revoke': return '撤销'
-    case 'check': return '检查'
-    case 'deny': return '拒绝'
-    default: return action
+    case 'grant':
+      return '授予'
+    case 'revoke':
+      return '撤销'
+    case 'check':
+      return '检查'
+    case 'deny':
+      return '拒绝'
+    default:
+      return action
   }
 }
 
 // Get action type for tag
 function getActionType(action: string) {
   switch (action) {
-    case 'grant': return 'success'
-    case 'revoke': return 'warning'
-    case 'deny': return 'danger'
-    default: return 'info'
+    case 'grant':
+      return 'success'
+    case 'revoke':
+      return 'warning'
+    case 'deny':
+      return 'danger'
+    default:
+      return 'info'
   }
 }
 
@@ -339,33 +365,31 @@ onMounted(() => {
           <ElOption value="granted" label="权限完整" />
           <ElOption value="missing" label="缺少权限" />
         </ElSelect>
-        <ElButton :icon="Refresh" :loading="loading" @click="loadData">
-          刷新
-        </ElButton>
+        <ElButton :icon="Refresh" :loading="loading" @click="loadData"> 刷新 </ElButton>
       </div>
 
       <!-- Plugin List -->
-      <div v-if="loading" class="loading-state">
-        加载中...
-      </div>
+      <div v-if="loading" class="loading-state">加载中...</div>
 
-      <ElEmpty
-        v-else-if="filteredPlugins.length === 0"
-        description="没有找到插件"
-      />
+      <ElEmpty v-else-if="filteredPlugins.length === 0" description="没有找到插件" />
 
       <ElCollapse v-else v-model="expandedPlugins" class="plugin-list">
-        <ElCollapseItem
-          v-for="plugin in filteredPlugins"
-          :key="plugin.id"
-          :name="plugin.id"
-        >
+        <ElCollapseItem v-for="plugin in filteredPlugins" :key="plugin.id" :name="plugin.id">
           <template #title>
             <div class="plugin-header">
               <div class="plugin-info">
-                <ElIcon v-if="plugin.missingRequired.length === 0 && plugin.enforcePermissions" class="status-icon success"><Check /></ElIcon>
-                <ElIcon v-else-if="plugin.missingRequired.length > 0" class="status-icon danger"><Warning /></ElIcon>
-                <ElIcon v-else class="status-icon warning"><InfoFilled /></ElIcon>
+                <ElIcon
+                  v-if="plugin.missingRequired.length === 0 && plugin.enforcePermissions"
+                  class="status-icon success"
+                >
+                  <Check />
+                </ElIcon>
+                <ElIcon v-else-if="plugin.missingRequired.length > 0" class="status-icon danger">
+                  <Warning />
+                </ElIcon>
+                <ElIcon v-else class="status-icon warning">
+                  <InfoFilled />
+                </ElIcon>
                 <span class="plugin-name">{{ plugin.name }}</span>
                 <ElTag v-if="!plugin.enforcePermissions" type="warning" size="small" effect="plain">
                   旧版 SDK
@@ -399,12 +423,7 @@ onMounted(() => {
               >
                 授予全部必需权限
               </ElButton>
-              <ElButton
-                type="danger"
-                size="small"
-                plain
-                @click.stop="handleRevokeAll(plugin.id)"
-              >
+              <ElButton type="danger" size="small" plain @click.stop="handleRevokeAll(plugin.id)">
                 撤销全部权限
               </ElButton>
             </div>
@@ -425,10 +444,7 @@ onMounted(() => {
   <TuffGroupBlock name="审计日志" description="查看权限操作历史记录">
     <TuffBlockSlot>
       <div class="audit-header">
-        <ElButton
-          :icon="Clock"
-          @click="toggleAuditLogs"
-        >
+        <ElButton :icon="Clock" @click="toggleAuditLogs">
           {{ showAuditLogs ? '收起日志' : '查看日志' }}
         </ElButton>
 
@@ -440,57 +456,34 @@ onMounted(() => {
             <ElOption value="deny" label="拒绝" />
           </ElSelect>
 
-          <ElButton
-            :icon="Refresh"
-            :loading="auditLogsLoading"
-            @click="loadAuditLogs"
-          >
+          <ElButton :icon="Refresh" :loading="auditLogsLoading" @click="loadAuditLogs">
             刷新
           </ElButton>
 
-          <ElButton
-            :icon="Delete"
-            type="danger"
-            plain
-            @click="clearAuditLogs"
-          >
-            清空
-          </ElButton>
+          <ElButton :icon="Delete" type="danger" plain @click="clearAuditLogs"> 清空 </ElButton>
         </template>
       </div>
 
       <div v-if="showAuditLogs" class="audit-content">
-        <div v-if="auditLogsLoading" class="loading-state">
-          加载中...
-        </div>
+        <div v-if="auditLogsLoading" class="loading-state">加载中...</div>
 
-        <ElEmpty
-          v-else-if="auditLogs.length === 0"
-          description="暂无操作记录"
-          :image-size="60"
-        />
+        <ElEmpty v-else-if="auditLogs.length === 0" description="暂无操作记录" :image-size="60" />
 
         <div v-else class="audit-list">
-          <div class="audit-summary">
-            共 {{ auditLogsTotal }} 条记录
-          </div>
+          <div class="audit-summary">共 {{ auditLogsTotal }} 条记录</div>
 
-          <div
-            v-for="log in auditLogs"
-            :key="log.id"
-            class="audit-item"
-          >
-            <div class="audit-time">{{ formatTime(log.timestamp) }}</div>
-            <ElTag
-              :type="getActionType(log.action)"
-              size="small"
-              class="audit-action"
-            >
+          <div v-for="log in auditLogs" :key="log.id" class="audit-item">
+            <div class="audit-time">
+              {{ formatTime(log.timestamp) }}
+            </div>
+            <ElTag :type="getActionType(log.action)" size="small" class="audit-action">
               {{ getActionLabel(log.action) }}
             </ElTag>
             <span class="audit-plugin">{{ log.pluginId }}</span>
             <span class="audit-arrow">→</span>
-            <span class="audit-permission">{{ permissionTranslations[log.permissionId]?.name || log.permissionId }}</span>
+            <span class="audit-permission">{{
+              permissionTranslations[log.permissionId]?.name || log.permissionId
+            }}</span>
             <span v-if="log.details" class="audit-details">({{ log.details }})</span>
           </div>
         </div>

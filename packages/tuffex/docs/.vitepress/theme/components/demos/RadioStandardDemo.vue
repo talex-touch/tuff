@@ -13,7 +13,9 @@ const value = ref<'a' | 'b' | 'c'>('a')
     </TxRadioGroup>
 
     <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-      <div class="tx-demo__meta">selected: {{ value }}</div>
+      <div class="tx-demo__meta">
+        selected: {{ value }}
+      </div>
     </TxCard>
   </div>
 </template>

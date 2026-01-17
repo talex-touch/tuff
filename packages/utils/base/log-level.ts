@@ -13,7 +13,7 @@ export enum LogLevel {
   INFO = 1,
   WARN = 2,
   ERROR = 3,
-  NONE = 4
+  NONE = 4,
 }
 
 /**
@@ -99,7 +99,7 @@ export function getLogLevelName(level: LogLevel): string {
     [LogLevel.INFO]: 'Info',
     [LogLevel.WARN]: 'Warning',
     [LogLevel.ERROR]: 'Error',
-    [LogLevel.NONE]: 'None'
+    [LogLevel.NONE]: 'None',
   }
   return names[level] ?? 'Unknown'
 }

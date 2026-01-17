@@ -1,6 +1,6 @@
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { WebContentsView } from 'electron'
 import type { TouchPlugin } from '../../plugin/plugin'
-import { WebContentsView } from 'electron'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('ViewCache')
@@ -47,7 +47,9 @@ export class ViewCacheManager {
     if (typeof config.hotCacheDurationMs === 'number') {
       this.config.hotCacheDurationMs = config.hotCacheDurationMs
     }
-    log.debug(`Config updated: maxCachedViews=${this.config.maxCachedViews}, hotCacheDurationMs=${this.config.hotCacheDurationMs}`)
+    log.debug(
+      `Config updated: maxCachedViews=${this.config.maxCachedViews}, hotCacheDurationMs=${this.config.hotCacheDurationMs}`
+    )
   }
 
   private getCacheKey(plugin: TouchPlugin, feature?: IPluginFeature): string {
@@ -56,23 +58,18 @@ export class ViewCacheManager {
 
   private getWebContents(view: WebContentsView | null | undefined): Electron.WebContents | null {
     const webContents = (view as any)?.webContents
-    if (!webContents)
-      return null
-    if (typeof webContents.isDestroyed !== 'function')
-      return null
+    if (!webContents) return null
+    if (typeof webContents.isDestroyed !== 'function') return null
     return webContents as Electron.WebContents
   }
 
   private isCachedAlive(cached: CachedView | null | undefined): boolean {
-    if (!cached)
-      return false
+    if (!cached) return false
 
     const webContents = this.getWebContents(cached.view)
-    if (!webContents)
-      return false
+    if (!webContents) return false
 
-    if (webContents.id !== cached.webContentsId)
-      return false
+    if (webContents.id !== cached.webContentsId) return false
 
     return !webContents.isDestroyed()
   }
@@ -97,13 +94,11 @@ export class ViewCacheManager {
 
   private removeEntry(key: string, options: { close: boolean } = { close: true }): void {
     const cached = this.cache.get(key)
-    if (!cached)
-      return
+    if (!cached) return
 
     try {
       cached.dispose?.()
-    }
-    finally {
+    } finally {
       cached.dispose = null
     }
 
@@ -111,8 +106,7 @@ export class ViewCacheManager {
     if (options.close && webContents && !webContents.isDestroyed()) {
       try {
         webContents.close()
-      }
-      catch {
+      } catch {
         log.warn(`Failed to close view: ${key}`)
       }
     }
@@ -167,7 +161,7 @@ export class ViewCacheManager {
       lastUsedAt: Date.now(),
       usageCount: 1,
       webContentsId: webContents.id,
-      dispose,
+      dispose
     })
 
     log.debug(`Cached view: ${key} (total: ${this.cache.size})`)
@@ -181,7 +175,7 @@ export class ViewCacheManager {
 
   public releasePlugin(pluginName: string): void {
     const prefix = `${pluginName}:`
-    const keys = Array.from(this.cache.keys()).filter(key => key.startsWith(prefix))
+    const keys = Array.from(this.cache.keys()).filter((key) => key.startsWith(prefix))
     if (keys.length === 0) return
 
     for (const key of keys) {
@@ -206,13 +200,11 @@ export class ViewCacheManager {
   }
 
   public getCachedViewsByPlugin(pluginName: string): WebContentsView[] {
-    if (!pluginName)
-      return []
+    if (!pluginName) return []
 
     const views: WebContentsView[] = []
     for (const [key, cached] of this.cache.entries()) {
-      if (cached.plugin.name !== pluginName)
-        continue
+      if (cached.plugin.name !== pluginName) continue
 
       if (!this.isCachedAlive(cached)) {
         this.removeEntry(key, { close: false })

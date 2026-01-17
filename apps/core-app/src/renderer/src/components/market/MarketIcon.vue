@@ -1,7 +1,7 @@
 <script lang="ts" name="MarketIcon" setup>
+import type { ITuffIcon } from '@talex-touch/utils'
 import { computed } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-import type { ITuffIcon } from '@talex-touch/utils'
 
 interface MarketIconProps {
   item?: {

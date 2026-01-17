@@ -15,11 +15,10 @@ export async function useUrlProcessor(): Promise<void> {
       if (!url) return
 
       event.preventDefault()
-      
-      const isExternal = !isLocalhostUrl(url) 
-        && !url.startsWith(window.location.origin) 
-        && !url.startsWith('/')
-      
+
+      const isExternal =
+        !isLocalhostUrl(url) && !url.startsWith(window.location.origin) && !url.startsWith('/')
+
       if (isExternal) {
         touchChannel.send('open-external', { url })
       } else {

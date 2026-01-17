@@ -24,7 +24,7 @@ watch(searchTerm, async (newTerm) => {
       placeholder="Search..."
       aria-label="Search"
       class="w-full rounded-2xl border border-transparent bg-dark/5 py-2.5 pl-10 pr-4 text-sm text-black/80 outline-none transition focus:border-primary/30 focus:bg-white/90 focus:text-black focus:shadow-[0_8px_24px_rgba(24,24,28,0.12)] focus:ring-0 dark:bg-light/5 dark:text-light/80 dark:focus:border-light/30 dark:focus:bg-dark/80 dark:focus:text-light"
-    />
+    >
     <ul
       v-if="searchResults.length"
       class="absolute inset-x-0 top-[calc(100%+0.5rem)] z-20 max-h-64 overflow-y-auto rounded-2xl border border-primary/10 bg-white/95 shadow-xl backdrop-blur-sm dark:border-light/10 dark:bg-dark/90"

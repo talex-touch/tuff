@@ -94,8 +94,8 @@ export interface SetInputVisibilityRequest {
 export { TuffInputType } from '../../../core-box/tuff/tuff-dsl'
 
 export type {
-  TuffQuery,
   TuffQueryInput as TuffInput,
+  TuffQuery,
 } from '../../../core-box/tuff/tuff-dsl'
 
 export interface CoreBoxSearchUpdatePayload {

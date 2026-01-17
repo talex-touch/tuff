@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { PickerColumn, PickerEmits, PickerProps, PickerValue } from './types'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 defineOptions({ name: 'TxPicker' })
 
@@ -24,7 +24,7 @@ const emit = defineEmits<PickerEmits>()
 
 const open = computed({
   get: () => !!props.visible,
-  set: (v) => emit('update:visible', v),
+  set: v => emit('update:visible', v),
 })
 
 const mountedOnce = ref(false)
@@ -80,7 +80,7 @@ watch(
 const colRefs = ref<Array<HTMLElement | null>>([])
 const isDragging = ref(false)
 
-type ScrollState = {
+interface ScrollState {
   rafId: number | null
   debounceId: number | null
 }
@@ -89,7 +89,8 @@ const scrollStates = ref<ScrollState[]>([])
 
 function ensureStates() {
   const n = columns.value.length
-  if (scrollStates.value.length === n) return
+  if (scrollStates.value.length === n)
+    return
   scrollStates.value = Array.from({ length: n }).map(() => ({ rafId: null, debounceId: null }))
 }
 
@@ -101,20 +102,23 @@ function getIndexForValue(colIndex: number, v: any): number {
 
 function clampIndex(colIndex: number, idx: number): number {
   const len = (columns.value[colIndex]?.options ?? []).length
-  if (len <= 0) return 0
+  if (len <= 0)
+    return 0
   return Math.min(len - 1, Math.max(0, idx))
 }
 
 function scrollToIndex(colIndex: number, idx: number, behavior: ScrollBehavior = 'auto') {
   const el = colRefs.value[colIndex]
-  if (!el) return
+  if (!el)
+    return
   const top = idx * itemHeightPx.value
   el.scrollTo({ top, behavior })
 }
 
 function pickIndexFromScroll(colIndex: number) {
   const el = colRefs.value[colIndex]
-  if (!el) return
+  if (!el)
+    return
 
   const raw = el.scrollTop / itemHeightPx.value
   const idx = clampIndex(colIndex, Math.round(raw))
@@ -123,7 +127,7 @@ function pickIndexFromScroll(colIndex: number) {
 
   if (option?.disabled) {
     const next = opts.findIndex((o, i) => i >= idx && !o.disabled)
-    const prev = [...opts].reverse().findIndex((o) => !o.disabled)
+    const prev = [...opts].reverse().findIndex(o => !o.disabled)
     const prevIdx = prev >= 0 ? opts.length - 1 - prev : -1
 
     const fallback = next >= 0 ? next : prevIdx
@@ -139,7 +143,8 @@ function pickIndexFromScroll(colIndex: number) {
 
 function settleScroll(colIndex: number) {
   const el = colRefs.value[colIndex]
-  if (!el) return
+  if (!el)
+    return
 
   const idx = clampIndex(colIndex, Math.round(el.scrollTop / itemHeightPx.value))
   scrollToIndex(colIndex, idx, 'smooth')
@@ -158,26 +163,31 @@ function onScroll(colIndex: number) {
   ensureStates()
   const state = scrollStates.value[colIndex]
 
-  if (state.rafId != null) cancelAnimationFrame(state.rafId)
+  if (state.rafId != null)
+    cancelAnimationFrame(state.rafId)
   state.rafId = requestAnimationFrame(() => {
     state.rafId = null
     pickIndexFromScroll(colIndex)
   })
 
-  if (state.debounceId != null) window.clearTimeout(state.debounceId)
+  if (state.debounceId != null)
+    window.clearTimeout(state.debounceId)
   state.debounceId = window.setTimeout(() => {
     state.debounceId = null
-    if (!isDragging.value) settleScroll(colIndex)
+    if (!isDragging.value)
+      settleScroll(colIndex)
   }, 120)
 }
 
 function onPointerDown() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   isDragging.value = true
 }
 
 function onPointerUp() {
-  if (!isDragging.value) return
+  if (!isDragging.value)
+    return
   isDragging.value = false
   for (let i = 0; i < columns.value.length; i++) settleScroll(i)
 }
@@ -211,7 +221,8 @@ watch(
 watch(
   () => props.modelValue,
   () => {
-    if (!open.value && props.popup) return
+    if (!open.value && props.popup)
+      return
     syncScrollPositions('auto')
   },
 )
@@ -219,7 +230,8 @@ watch(
 watch(
   columns,
   () => {
-    if (!open.value && props.popup) return
+    if (!open.value && props.popup)
+      return
     syncScrollPositions('auto')
   },
 )
@@ -229,7 +241,8 @@ function close() {
 }
 
 function onMaskClick() {
-  if (!props.closeOnClickMask) return
+  if (!props.closeOnClickMask)
+    return
   close()
 }
 
@@ -251,8 +264,10 @@ defineExpose({
 
 onBeforeUnmount(() => {
   for (const s of scrollStates.value) {
-    if (s.rafId != null) cancelAnimationFrame(s.rafId)
-    if (s.debounceId != null) window.clearTimeout(s.debounceId)
+    if (s.rafId != null)
+      cancelAnimationFrame(s.rafId)
+    if (s.debounceId != null)
+      window.clearTimeout(s.debounceId)
   }
 })
 </script>
@@ -260,9 +275,15 @@ onBeforeUnmount(() => {
 <template>
   <div v-if="!popup" class="tx-picker" :class="{ 'is-disabled': disabled }">
     <div v-if="showToolbar" class="tx-picker__toolbar">
-      <button type="button" class="tx-picker__btn" :disabled="disabled" @click="onCancel">{{ cancelText }}</button>
-      <div class="tx-picker__title">{{ title }}</div>
-      <button type="button" class="tx-picker__btn is-primary" :disabled="disabled" @click="onConfirm">{{ confirmText }}</button>
+      <button type="button" class="tx-picker__btn" :disabled="disabled" @click="onCancel">
+        {{ cancelText }}
+      </button>
+      <div class="tx-picker__title">
+        {{ title }}
+      </div>
+      <button type="button" class="tx-picker__btn is-primary" :disabled="disabled" @click="onConfirm">
+        {{ confirmText }}
+      </button>
     </div>
 
     <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px` }">
@@ -306,9 +327,15 @@ onBeforeUnmount(() => {
 
         <div class="tx-picker-popup__panel" :class="{ 'is-disabled': disabled }">
           <div v-if="showToolbar" class="tx-picker__toolbar">
-            <button type="button" class="tx-picker__btn" :disabled="disabled" @click="onCancel">{{ cancelText }}</button>
-            <div class="tx-picker__title">{{ title }}</div>
-            <button type="button" class="tx-picker__btn is-primary" :disabled="disabled" @click="onConfirm">{{ confirmText }}</button>
+            <button type="button" class="tx-picker__btn" :disabled="disabled" @click="onCancel">
+              {{ cancelText }}
+            </button>
+            <div class="tx-picker__title">
+              {{ title }}
+            </div>
+            <button type="button" class="tx-picker__btn is-primary" :disabled="disabled" @click="onConfirm">
+              {{ confirmText }}
+            </button>
           </div>
 
           <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px` }">

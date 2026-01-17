@@ -30,13 +30,11 @@ const defaultIcon = {
     @click="emit('click')"
     @mouseenter="emit('mouseenter')"
   >
-    <TuffIcon
-      :icon="props.action.render.basic.icon || defaultIcon"
-      :size="18"
-      class="ActionIcon"
-    />
+    <TuffIcon :icon="props.action.render.basic.icon || defaultIcon" :size="18" class="ActionIcon" />
     <div class="ActionContent">
-      <div class="ActionTitle">{{ props.action.render.basic.title }}</div>
+      <div class="ActionTitle">
+        {{ props.action.render.basic.title }}
+      </div>
       <div v-if="props.action.render.basic.subtitle" class="ActionSubtitle">
         {{ props.action.render.basic.subtitle }}
       </div>
@@ -111,8 +109,10 @@ const defaultIcon = {
   border-radius: 4px;
   background: var(--el-fill-color-dark);
   color: var(--el-text-color-secondary);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   flex-shrink: 0;
 }
 </style>
-

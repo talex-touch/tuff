@@ -1,36 +1,3 @@
-<template>
-  <div class="division-box-header">
-    <div class="header-left">
-      <!-- Icon -->
-      <i v-if="icon" :class="iconClass" class="header-icon" />
-      
-      <!-- Title -->
-      <span class="header-title">{{ title }}</span>
-    </div>
-    
-    <div class="header-right">
-      <!-- Pin button -->
-      <button 
-        class="header-action-btn"
-        :class="{ 'is-pinned': isPinned }"
-        :title="isPinned ? 'Unpin' : 'Pin'"
-        @click="handlePin"
-      >
-        <i class="i-ri-pushpin-line" />
-      </button>
-      
-      <!-- Close button -->
-      <button 
-        class="header-action-btn header-close-btn"
-        title="Close"
-        @click="handleClose"
-      >
-        <i class="i-ri-close-line" />
-      </button>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useDivisionBoxStore } from '../store/division-box'
@@ -41,10 +8,10 @@ import { useDivisionBoxStore } from '../store/division-box'
 interface Props {
   /** Session ID */
   sessionId: string
-  
+
   /** Display title */
   title: string
-  
+
   /** Icon (iconify format or class) */
   icon?: string
 }
@@ -65,12 +32,12 @@ const store = useDivisionBoxStore()
 // Computed
 const iconClass = computed(() => {
   if (!props.icon) return ''
-  
+
   // If it's already a class (starts with 'i-' or contains space), use it directly
   if (props.icon.startsWith('i-') || props.icon.includes(' ')) {
     return props.icon
   }
-  
+
   // Otherwise, assume it's an iconify format (e.g., 'ri:magic-line')
   // Convert to UnoCSS format: 'ri:magic-line' -> 'i-ri-magic-line'
   return `i-${props.icon.replace(':', '-')}`
@@ -81,14 +48,43 @@ const isPinned = computed(() => {
 })
 
 // Methods
-const handleClose = () => {
+function handleClose() {
   emit('close')
 }
 
-const handlePin = () => {
+function handlePin() {
   emit('pin')
 }
 </script>
+
+<template>
+  <div class="division-box-header">
+    <div class="header-left">
+      <!-- Icon -->
+      <i v-if="icon" :class="iconClass" class="header-icon" />
+
+      <!-- Title -->
+      <span class="header-title">{{ title }}</span>
+    </div>
+
+    <div class="header-right">
+      <!-- Pin button -->
+      <button
+        class="header-action-btn"
+        :class="{ 'is-pinned': isPinned }"
+        :title="isPinned ? 'Unpin' : 'Pin'"
+        @click="handlePin"
+      >
+        <i class="i-ri-pushpin-line" />
+      </button>
+
+      <!-- Close button -->
+      <button class="header-action-btn header-close-btn" title="Close" @click="handleClose">
+        <i class="i-ri-close-line" />
+      </button>
+    </div>
+  </div>
+</template>
 
 <style scoped lang="scss">
 .division-box-header {
@@ -101,7 +97,7 @@ const handlePin = () => {
   cursor: move;
   user-select: none;
   min-height: 40px;
-  
+
   &:hover {
     background: var(--el-fill-color-light);
   }
@@ -150,23 +146,23 @@ const handlePin = () => {
   cursor: pointer;
   color: var(--el-text-color-regular);
   transition: all 0.2s ease;
-  
+
   i {
     font-size: 16px;
   }
-  
+
   &:hover {
     background: var(--el-fill-color);
     color: var(--el-text-color-primary);
   }
-  
+
   &:active {
     transform: scale(0.95);
   }
-  
+
   &.is-pinned {
     color: var(--el-color-primary);
-    
+
     i {
       transform: rotate(45deg);
     }

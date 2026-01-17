@@ -1,28 +1,22 @@
 /**
  * DivisionBoxSession - Main Process
- * 
+ *
  * Manages a single DivisionBox instance lifecycle, state, and resources.
  * Uses TouchWindow + WebContentsView (attached) pattern, similar to CoreBox.
  * Implements a six-state lifecycle: prepare → attach → active → inactive → detach → destroy
  */
 
-import { app, WebContentsView } from 'electron'
+import type { DivisionBoxConfig, SessionMeta, StateChangeEvent } from '@talex-touch/utils'
 import type { WebPreferences } from 'electron'
-import path from 'node:path'
-import os from 'node:os'
-import fse from 'fs-extra'
-import {
-  DivisionBoxState,
-  DivisionBoxError,
-  DivisionBoxErrorCode,
-  type DivisionBoxConfig,
-  type SessionMeta,
-  type StateChangeEvent
-} from '@talex-touch/utils'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { TouchWindow } from '../../core/touch-window'
-import { genTouchApp } from '../../core'
+import type { TouchWindow } from '../../core/touch-window'
 import type { TouchPlugin } from '../plugin/plugin'
+import os from 'node:os'
+import path from 'node:path'
+import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { app, WebContentsView } from 'electron'
+import fse from 'fs-extra'
+import { genTouchApp } from '../../core'
 import { pluginModule } from '../plugin/plugin-module'
 
 /**
@@ -36,15 +30,23 @@ type StateChangeListener = (event: StateChangeEvent) => void
 const VALID_TRANSITIONS: Record<DivisionBoxState, DivisionBoxState[]> = {
   [DivisionBoxState.PREPARE]: [DivisionBoxState.ATTACH, DivisionBoxState.DESTROY],
   [DivisionBoxState.ATTACH]: [DivisionBoxState.ACTIVE, DivisionBoxState.DESTROY],
-  [DivisionBoxState.ACTIVE]: [DivisionBoxState.INACTIVE, DivisionBoxState.DETACH, DivisionBoxState.DESTROY],
-  [DivisionBoxState.INACTIVE]: [DivisionBoxState.ACTIVE, DivisionBoxState.DETACH, DivisionBoxState.DESTROY],
+  [DivisionBoxState.ACTIVE]: [
+    DivisionBoxState.INACTIVE,
+    DivisionBoxState.DETACH,
+    DivisionBoxState.DESTROY
+  ],
+  [DivisionBoxState.INACTIVE]: [
+    DivisionBoxState.ACTIVE,
+    DivisionBoxState.DETACH,
+    DivisionBoxState.DESTROY
+  ],
   [DivisionBoxState.DETACH]: [DivisionBoxState.DESTROY],
   [DivisionBoxState.DESTROY]: []
 }
 
 /**
  * DivisionBoxSession class
- * 
+ *
  * Manages the lifecycle, state, and resources of a single DivisionBox instance.
  * Creates a TouchWindow and attaches a WebContentsView for plugin UI.
  */
@@ -96,7 +98,7 @@ export class DivisionBoxSession {
 
   /**
    * Gets the current lifecycle state
-   * 
+   *
    * @returns Current state
    */
   getState(): DivisionBoxState {
@@ -105,10 +107,10 @@ export class DivisionBoxSession {
 
   /**
    * Sets the lifecycle state with validation
-   * 
+   *
    * Validates the state transition against the state machine rules.
    * Triggers state change listeners on successful transition.
-   * 
+   *
    * @param newState - Target state to transition to
    * @throws {DivisionBoxError} If the transition is invalid
    */
@@ -148,7 +150,7 @@ export class DivisionBoxSession {
 
   /**
    * Checks if a state transition is valid according to the state machine
-   * 
+   *
    * @param from - Current state
    * @param to - Target state
    * @returns True if transition is valid
@@ -160,11 +162,11 @@ export class DivisionBoxSession {
 
   /**
    * Notifies all registered state change listeners
-   * 
+   *
    * @param event - State change event data
    */
   private notifyStateChange(event: StateChangeEvent): void {
-    this.stateChangeListeners.forEach(listener => {
+    this.stateChangeListeners.forEach((listener) => {
       try {
         listener(event)
       } catch (error) {
@@ -175,7 +177,7 @@ export class DivisionBoxSession {
 
   /**
    * Registers a state change listener
-   * 
+   *
    * @param listener - Callback to invoke on state changes
    */
   onStateChange(listener: StateChangeListener): void {
@@ -184,7 +186,7 @@ export class DivisionBoxSession {
 
   /**
    * Removes a state change listener
-   * 
+   *
    * @param listener - Callback to remove
    */
   removeStateChangeListener(listener: StateChangeListener): void {
@@ -197,7 +199,7 @@ export class DivisionBoxSession {
    */
   async createWindow(): Promise<void> {
     console.log(`[DivisionBoxSession] createWindow called: ${this.sessionId}`)
-    
+
     if (this.touchWindow) {
       throw new DivisionBoxError(
         DivisionBoxErrorCode.STATE_ERROR,
@@ -221,10 +223,10 @@ export class DivisionBoxSession {
         if (!win.isVisible()) win.show()
         if (!win.isFocused()) win.focus()
       }
-      
+
       // Update window title with unique identifier for Windows taskbar grouping
       this.touchWindow.window.setTitle(`${this.config.title} - Tuff Division`)
-      
+
       // Windows-specific: Set unique AppUserModelId to ensure separate taskbar entries
       if (process.platform === 'win32') {
         try {
@@ -244,17 +246,12 @@ export class DivisionBoxSession {
       }
 
       // Notify renderer about DivisionBox trigger via unified channel
-      genTouchApp().channel.sendTo(
-        this.touchWindow.window,
-        ChannelType.MAIN,
-        'core-box:trigger',
-        {
-          type: 'division-box',
-          sessionId: this.sessionId,
-          config: this.config,
-          meta: this.meta
-        }
-      )
+      genTouchApp().channel.sendTo(this.touchWindow.window, ChannelType.MAIN, 'core-box:trigger', {
+        type: 'division-box',
+        sessionId: this.sessionId,
+        config: this.config,
+        meta: this.meta
+      })
 
       // Handle window close
       this.touchWindow.window.on('closed', () => {
@@ -263,7 +260,7 @@ export class DivisionBoxSession {
           windowPool.release(this.touchWindow.window)
         }
         this.touchWindow = null
-        this.destroy().catch(err => {
+        this.destroy().catch((err) => {
           console.error('[DivisionBoxSession] Error in destroy after close:', err)
         })
       })
@@ -296,7 +293,7 @@ export class DivisionBoxSession {
    */
   private updateUIViewBounds(): void {
     if (!this.touchWindow || !this.uiView) return
-    
+
     const bounds = this.touchWindow.window.getBounds()
     const headerHeight = 64 // Match .CoreBox height in CoreBox.vue
     this.uiView.setBounds({
@@ -412,7 +409,9 @@ export class DivisionBoxSession {
     await this.setState(DivisionBoxState.ACTIVE)
 
     // Log metrics for performance tracking
-    console.log(`[DivisionBoxSession] UI view attached: ${this.sessionId} | preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms loadUrl=${metrics.loadUrl.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`)
+    console.log(
+      `[DivisionBoxSession] UI view attached: ${this.sessionId} | preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms loadUrl=${metrics.loadUrl.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`
+    )
   }
 
   /**
@@ -537,17 +536,12 @@ export class DivisionBoxSession {
 
     // Send trigger to notify renderer about DivisionBox mode
     // This populates windowState.divisionBox in the renderer
-    genTouchApp().channel.sendTo(
-      this.touchWindow.window,
-      ChannelType.MAIN,
-      'core-box:trigger',
-      {
-        type: 'division-box',
-        sessionId: this.sessionId,
-        config: this.config,
-        meta: this.meta
-      }
-    )
+    genTouchApp().channel.sendTo(this.touchWindow.window, ChannelType.MAIN, 'core-box:trigger', {
+      type: 'division-box',
+      sessionId: this.sessionId,
+      config: this.config,
+      meta: this.meta
+    })
 
     await this.setState(DivisionBoxState.ACTIVE)
 
@@ -614,10 +608,10 @@ export class DivisionBoxSession {
    */
   toggleAlwaysOnTop(): boolean {
     if (!this.touchWindow) return false
-    
+
     const current = this.touchWindow.window.isAlwaysOnTop()
     this.touchWindow.window.setAlwaysOnTop(!current)
-    
+
     console.log(`[DivisionBoxSession] Always on top: ${!current}`)
     return !current
   }
@@ -634,7 +628,7 @@ export class DivisionBoxSession {
    */
   setOpacity(opacity: number): void {
     if (!this.touchWindow) return
-    
+
     const clampedOpacity = Math.max(0.1, Math.min(1.0, opacity))
     this.touchWindow.window.setOpacity(clampedOpacity)
   }
@@ -671,7 +665,6 @@ export class DivisionBoxSession {
     return this.uiView?.webContents.isDevToolsOpened() ?? false
   }
 
-
   /**
    * @deprecated Use getUIView() instead
    */
@@ -681,7 +674,7 @@ export class DivisionBoxSession {
 
   /**
    * Sets a value in the session state
-   * 
+   *
    * @param key - State key
    * @param value - State value
    */
@@ -691,7 +684,7 @@ export class DivisionBoxSession {
 
   /**
    * Gets a value from the session state
-   * 
+   *
    * @param key - State key
    * @returns State value or undefined
    */
@@ -708,7 +701,7 @@ export class DivisionBoxSession {
 
   /**
    * Starts the keepAlive timer
-   * 
+   *
    * Used in INACTIVE state to maintain the view for quick recovery.
    */
   startKeepAliveTimer(): void {

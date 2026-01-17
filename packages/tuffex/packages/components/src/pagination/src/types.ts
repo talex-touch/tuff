@@ -11,5 +11,5 @@ export interface PaginationProps {
 
 export interface PaginationEmits {
   'update:currentPage': [page: number]
-  pageChange: [page: number]
+  'pageChange': [page: number]
 }

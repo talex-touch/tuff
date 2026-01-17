@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 // 顶点着色器
 const vertSource = `
@@ -83,7 +83,8 @@ let startTime: number = Date.now()
 // 创建着色器
 function createShader(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type)
-  if (!shader) return null
+  if (!shader)
+    return null
 
   gl.shaderSource(shader, source)
   gl.compileShader(shader)
@@ -100,7 +101,8 @@ function createShader(gl: WebGLRenderingContext, type: number, source: string): 
 // 创建着色器程序
 function createProgram(gl: WebGLRenderingContext, vertexShader: WebGLShader, fragmentShader: WebGLShader): WebGLProgram | null {
   const program = gl.createProgram()
-  if (!program) return null
+  if (!program)
+    return null
 
   gl.attachShader(program, vertexShader)
   gl.attachShader(program, fragmentShader)
@@ -117,7 +119,8 @@ function createProgram(gl: WebGLRenderingContext, vertexShader: WebGLShader, fra
 
 // 调整画布大小
 function resizeCanvas() {
-  if (!canvasRef.value) return
+  if (!canvasRef.value)
+    return
 
   const canvas = canvasRef.value
   const rect = canvas.getBoundingClientRect()
@@ -134,7 +137,8 @@ function resizeCanvas() {
 
 // 渲染循环
 function render() {
-  if (!gl || !program || !canvasRef.value) return
+  if (!gl || !program || !canvasRef.value)
+    return
 
   const canvas = canvasRef.value
   const time = (Date.now() - startTime) / 1000
@@ -160,10 +164,22 @@ function render() {
 
   // 创建单位矩阵
   const identityMatrix = new Float32Array([
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
   ])
 
   gl.uniformMatrix4fv(projectionMatrixLocation, false, identityMatrix)
@@ -178,7 +194,8 @@ function render() {
 
 // 初始化 WebGL
 function initWebGL() {
-  if (!canvasRef.value) return
+  if (!canvasRef.value)
+    return
 
   const canvas = canvasRef.value
   gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl') as WebGLRenderingContext | null
@@ -193,29 +210,44 @@ function initWebGL() {
 
   // 创建顶点着色器
   const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertSource)
-  if (!vertexShader) return
+  if (!vertexShader)
+    return
 
   // 创建片段着色器
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragSource)
-  if (!fragmentShader) return
+  if (!fragmentShader)
+    return
 
   // 创建着色器程序
   program = createProgram(gl, vertexShader, fragmentShader)
-  if (!program) return
+  if (!program)
+    return
 
   // 创建顶点数据（覆盖整个屏幕的四边形）
   const positions = new Float32Array([
-    -1.0, -1.0, 0.0,
-     1.0, -1.0, 0.0,
-    -1.0,  1.0, 0.0,
-     1.0,  1.0, 0.0
+    -1.0,
+    -1.0,
+    0.0,
+    1.0,
+    -1.0,
+    0.0,
+    -1.0,
+    1.0,
+    0.0,
+    1.0,
+    1.0,
+    0.0,
   ])
 
   const texCoords = new Float32Array([
-    0.0, 0.0,
-    1.0, 0.0,
-    0.0, 1.0,
-    1.0, 1.0
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0,
+    1.0,
+    1.0,
   ])
 
   // 创建顶点缓冲区
@@ -271,13 +303,13 @@ onUnmounted(() => {
       <slot name="core-box" />
     </div>
 
-    <canvas ref="canvasRef" class="banner-canvas"></canvas>
+    <canvas ref="canvasRef" class="banner-canvas" />
 
     <div class="touch-center">
-      <slot name="center"/>
+      <slot name="center" />
     </div>
 
-    <div class="mask-overlay"></div>
+    <div class="mask-overlay" />
   </div>
 </template>
 
@@ -344,7 +376,7 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  
+
   /* 使用渐变作为背景 */
   background: radial-gradient(
     circle at center,
@@ -352,21 +384,21 @@ onUnmounted(() => {
     rgba(0, 0, 0, 0.8) 60%,
     rgba(0, 0, 0, 0.9) 100%
   );
-  
+
   /* 使用 mask 创建圆形镂空效果 */
   mask: radial-gradient(
     circle at center,
     transparent 50%,  /* 中间圆形镂空区域 */
     black 60%       /* 渐变边缘 */
   );
-  
+
   /* 兼容性前缀 */
   -webkit-mask: radial-gradient(
     circle at center,
     transparent 50%,
     black 55%
   );
-  
+
   opacity: 1;
   pointer-events: none;
   transition: opacity 0.3s ease;

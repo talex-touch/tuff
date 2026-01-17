@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * DemoBlock 组件
- * 
+ *
  * 用于在文档中展示组件的实时预览效果
  */
 import { computed, ref, useSlots } from 'vue'
@@ -38,7 +38,7 @@ function decodeEntities(input: string): string {
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'")
+    .replaceAll('&#39;', '\'')
 }
 
 const codeContent = computed(() => {
@@ -65,7 +65,9 @@ function toggleCode() {
 
 <template>
   <div class="demo-block">
-    <div v-if="title" class="demo-block__title">{{ title }}</div>
+    <div v-if="title" class="demo-block__title">
+      {{ title }}
+    </div>
     <div class="demo-block__preview">
       <slot name="preview" />
     </div>

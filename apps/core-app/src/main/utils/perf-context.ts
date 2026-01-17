@@ -1,4 +1,4 @@
-type PerfContextEntry = {
+interface PerfContextEntry {
   label: string
   startedAt: number
   meta?: Record<string, unknown>
@@ -19,14 +19,14 @@ export function enterPerfContext(label: string, meta?: Record<string, unknown>):
 }
 
 export function getPerfContextSnapshot(
-  limit = 3,
-): Array<{ label: string, durationMs: number, meta?: Record<string, unknown> }> {
+  limit = 3
+): Array<{ label: string; durationMs: number; meta?: Record<string, unknown> }> {
   const now = Date.now()
   return Array.from(contexts.values())
-    .map(entry => ({
+    .map((entry) => ({
       label: entry.label,
       durationMs: Math.max(0, now - entry.startedAt),
-      meta: entry.meta,
+      meta: entry.meta
     }))
     .sort((a, b) => b.durationMs - a.durationMs)
     .slice(0, Math.max(0, limit))

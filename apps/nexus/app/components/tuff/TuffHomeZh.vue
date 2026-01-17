@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import TuffBanner from './TuffBanner.vue'
 import TuffLandingFooter from './landing/TuffLandingFooter.vue'
+import TuffBanner from './TuffBanner.vue'
 
 const heroPoints = [
   '统一指挥所有工作区的启动、自动化与上下文。',

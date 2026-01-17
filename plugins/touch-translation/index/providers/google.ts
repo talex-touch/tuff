@@ -34,7 +34,8 @@ export class GoogleProvider implements TranslationProvider {
       let translatedText = ''
       if (Array.isArray(data[0])) {
         translatedText = data[0].map((item: any) => (item && item[0] ? item[0] : '')).join('')
-      } else {
+      }
+      else {
         translatedText = data[0] || text
       }
 
@@ -46,7 +47,8 @@ export class GoogleProvider implements TranslationProvider {
         to,
         service: this.id,
       }
-    } catch (error) {
+    }
+    catch (error) {
       return {
         text: `[Translation Failed] ${text}`,
         from,

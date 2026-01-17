@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { ImageGalleryEmits, ImageGalleryItem, ImageGalleryProps } from './types'
 import { computed, ref, watch } from 'vue'
 import TxModal from '../../modal/src/TxModal.vue'
-import type { ImageGalleryEmits, ImageGalleryItem, ImageGalleryProps } from './types'
 
 defineOptions({
   name: 'TxImageGallery',
@@ -78,7 +78,9 @@ function next(): void {
           <button type="button" class="tx-image-gallery__nav" :disabled="index <= 0" @click="prev">
             Prev
           </button>
-          <div class="tx-image-gallery__count">{{ index + 1 }} / {{ list.length }}</div>
+          <div class="tx-image-gallery__count">
+            {{ index + 1 }} / {{ list.length }}
+          </div>
           <button type="button" class="tx-image-gallery__nav" :disabled="index >= list.length - 1" @click="next">
             Next
           </button>

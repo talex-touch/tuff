@@ -1,4 +1,5 @@
 <script lang="ts" name="MarketDetail" setup>
+import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 /**
  * MarketDetail - Plugin detail page component
  *
@@ -11,13 +12,12 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import MarketDetailSkeleton from '~/components/market/MarketDetailSkeleton.vue'
 import MarketIcon from '~/components/market/MarketIcon.vue'
 import MarketInstallButton from '~/components/market/MarketInstallButton.vue'
-import MarketDetailSkeleton from '~/components/market/MarketDetailSkeleton.vue'
-import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 import { useMarketData } from '~/composables/market/useMarketData'
-import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { useMarketDetail } from '~/composables/market/useMarketDetail'
+import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { useMarketRating } from '~/composables/market/useMarketRating'
 import { useMarketReadme } from '~/composables/market/useMarketReadme'
 import { usePluginVersionStatus } from '~/composables/market/usePluginVersionStatus'
@@ -245,7 +245,9 @@ onBeforeUnmount(() => {
                   <i :class="meta.icon" />
                   <span>{{ meta.label }}</span>
                 </div>
-                <div class="meta-value" :title="meta.value">{{ meta.value }}</div>
+                <div class="meta-value" :title="meta.value">
+                  {{ meta.value }}
+                </div>
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { CardItemProps } from './types.ts'
+import { computed } from 'vue'
 
 defineOptions({
   name: 'TxCardItem',
@@ -54,7 +54,7 @@ const avatarStyle = computed(() => {
     <div v-if="$slots.avatar || avatarUrl || iconClass || avatarText" class="tx-card-item__left" :style="avatarStyle">
       <slot name="avatar">
         <div v-if="avatarUrl" class="tx-card-item__avatar" aria-hidden="true">
-          <img class="tx-card-item__avatar-img" :src="avatarUrl" alt="" />
+          <img class="tx-card-item__avatar-img" :src="avatarUrl" alt="">
         </div>
         <div v-else-if="iconClass" class="tx-card-item__avatar tx-card-item__avatar--icon" aria-hidden="true">
           <i :class="iconClass" />
@@ -69,10 +69,14 @@ const avatarStyle = computed(() => {
       <div class="tx-card-item__top">
         <div class="tx-card-item__title-area">
           <div class="tx-card-item__title">
-            <slot name="title">{{ title }}</slot>
+            <slot name="title">
+              {{ title }}
+            </slot>
           </div>
           <div v-if="subtitle || $slots.subtitle" class="tx-card-item__subtitle">
-            <slot name="subtitle">{{ subtitle }}</slot>
+            <slot name="subtitle">
+              {{ subtitle }}
+            </slot>
           </div>
         </div>
 
@@ -82,7 +86,9 @@ const avatarStyle = computed(() => {
       </div>
 
       <div v-if="description || $slots.description" class="tx-card-item__desc">
-        <slot name="description">{{ description }}</slot>
+        <slot name="description">
+          {{ description }}
+        </slot>
       </div>
     </div>
   </div>

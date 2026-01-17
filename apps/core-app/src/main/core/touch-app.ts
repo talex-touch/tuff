@@ -11,13 +11,13 @@ import { checkDirWithCreate, checkPlatformCompatibility } from '../utils/common-
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
 import { genTouchChannel } from './channel-core'
+import { AppStartEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 import {
   getDisplayLayoutSignature,
   normalizeBoundsToDisplays,
   pickBestMainWindowBounds,
   upsertMainWindowStateProfile
 } from './main-window-state'
-import { AppStartEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 import { ModuleManager } from './module-manager'
 import { innerRootPath } from './precore'
 import { TouchConfig } from './touch-config'

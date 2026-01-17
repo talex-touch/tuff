@@ -1,12 +1,12 @@
-import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
-import { transform } from 'esbuild'
+import type { WidgetSource } from '../widget-loader'
 import type {
   CompiledWidget,
   DependencyValidationResult,
   IWidgetProcessor,
-  WidgetCompilationContext,
+  WidgetCompilationContext
 } from '../widget-processor'
-import type { WidgetSource } from '../widget-loader'
+import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
+import { transform } from 'esbuild'
 
 /**
  * Allowed packages in widget sandbox
@@ -20,7 +20,7 @@ const ALLOWED_PACKAGES = [
   '@talex-touch/utils/core-box',
   '@talex-touch/utils/channel',
   '@talex-touch/utils/common',
-  '@talex-touch/utils/types',
+  '@talex-touch/utils/types'
 ] as const
 
 /**
@@ -36,7 +36,8 @@ export class WidgetVueProcessor implements IWidgetProcessor {
    */
   validateDependencies(source: string): DependencyValidationResult {
     // Match import statements: import ... from 'module'
-    const importRegex = /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g
+    const importRegex =
+      /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g
 
     // Match require calls: require('module')
     const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g
@@ -80,17 +81,16 @@ export class WidgetVueProcessor implements IWidgetProcessor {
 
     const allowed: string[] = []
     const disallowed: string[] = []
-    const errors: Array<{ module: string, message: string }> = []
+    const errors: Array<{ module: string; message: string }> = []
 
     for (const module of imports) {
       if (this.isAllowedModule(module)) {
         allowed.push(module)
-      }
-      else {
+      } else {
         disallowed.push(module)
         errors.push({
           module,
-          message: `Module "${module}" is not available in widget sandbox. Allowed packages: ${ALLOWED_PACKAGES.join(', ')}`,
+          message: `Module "${module}" is not available in widget sandbox. Allowed packages: ${ALLOWED_PACKAGES.join(', ')}`
         })
       }
     }
@@ -99,7 +99,7 @@ export class WidgetVueProcessor implements IWidgetProcessor {
       valid: disallowed.length === 0,
       allowedImports: allowed,
       disallowedImports: disallowed,
-      errors,
+      errors
     }
   }
 
@@ -109,7 +109,7 @@ export class WidgetVueProcessor implements IWidgetProcessor {
    */
   async compile(
     source: WidgetSource,
-    context: WidgetCompilationContext,
+    context: WidgetCompilationContext
   ): Promise<CompiledWidget | null> {
     const { plugin, feature } = context
 
@@ -125,13 +125,13 @@ export class WidgetVueProcessor implements IWidgetProcessor {
           source: `feature:${feature.id}`,
           meta: { module: err.module },
           suggestion: `Only these packages are allowed: ${ALLOWED_PACKAGES.join(', ')}`,
-          timestamp: Date.now(),
+          timestamp: Date.now()
         })
       })
 
       plugin.logger.error(
         `[WidgetVueProcessor] Dependency validation failed for widget "${source.widgetId}":`,
-        validation.errors,
+        validation.errors
       )
 
       return null
@@ -147,11 +147,10 @@ export class WidgetVueProcessor implements IWidgetProcessor {
       if (descriptor.script || descriptor.scriptSetup) {
         const compiledScript = compileScript(descriptor, {
           id: source.widgetId,
-          inlineTemplate: false,
+          inlineTemplate: false
         })
         scriptCode = compiledScript.content
-      }
-      else {
+      } else {
         scriptCode = 'export default {}'
       }
 
@@ -163,8 +162,8 @@ export class WidgetVueProcessor implements IWidgetProcessor {
           filename: source.filePath,
           source: descriptor.template.content,
           compilerOptions: {
-            mode: 'function',
-          },
+            mode: 'function'
+          }
         })
         templateCode = compiledTemplate.code
       }
@@ -187,26 +186,28 @@ module.exports = __component
       const transformed = await transform(finalBundle, {
         loader,
         format: 'cjs',
-        target: 'node18',
+        target: 'node18'
       })
 
       // Step 8: Extract styles
-      const styles = descriptor.styles.map(style => style.content || '').join('\n').trim()
+      const styles = descriptor.styles
+        .map((style) => style.content || '')
+        .join('\n')
+        .trim()
 
       plugin.logger.info(
-        `[WidgetVueProcessor] ✅ Successfully compiled widget "${source.widgetId}"`,
+        `[WidgetVueProcessor] ✅ Successfully compiled widget "${source.widgetId}"`
       )
 
       return {
         code: transformed.code,
         styles,
-        dependencies: validation.allowedImports,
+        dependencies: validation.allowedImports
       }
-    }
-    catch (error) {
+    } catch (error) {
       plugin.logger.error(
         `[WidgetVueProcessor] ❌ Compilation failed for widget "${source.widgetId}":`,
-        error as Error,
+        error as Error
       )
 
       plugin.issues.push({
@@ -215,7 +216,7 @@ module.exports = __component
         message: `Failed to compile Vue widget: ${(error as Error).message}`,
         source: `feature:${feature.id}`,
         meta: { error: (error as Error).stack },
-        timestamp: Date.now(),
+        timestamp: Date.now()
       })
 
       return null
@@ -233,9 +234,7 @@ module.exports = __component
     }
 
     // Check if module matches any allowed package
-    return ALLOWED_PACKAGES.some(pkg =>
-      module === pkg || module.startsWith(`${pkg}/`),
-    )
+    return ALLOWED_PACKAGES.some((pkg) => module === pkg || module.startsWith(`${pkg}/`))
   }
 
   /**
@@ -243,17 +242,13 @@ module.exports = __component
    * 根据脚本语言解析 esbuild loader
    */
   private resolveLoader(lang: string | undefined): 'js' | 'ts' | 'tsx' | 'jsx' {
-    if (!lang)
-      return 'js'
+    if (!lang) return 'js'
 
     const lower = lang.toLowerCase()
 
-    if (lower === 'ts')
-      return 'ts'
-    if (lower === 'tsx')
-      return 'tsx'
-    if (lower === 'jsx')
-      return 'jsx'
+    if (lower === 'ts') return 'ts'
+    if (lower === 'tsx') return 'tsx'
+    if (lower === 'jsx') return 'jsx'
 
     return 'js'
   }

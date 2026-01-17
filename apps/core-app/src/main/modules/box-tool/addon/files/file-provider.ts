@@ -28,13 +28,21 @@ import type {
 import type { ProviderContext } from '../../search-engine/types'
 import type { FileTypeTag } from './constants'
 import type { ScannedFileInfo } from './types'
+import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
+import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcile-worker-client'
+import type { WorkerStatusSnapshot } from './workers/worker-status'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { promisify } from 'node:util'
-import { StorageList, timingLogger, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import {
+  StorageList,
+  timingLogger,
+  TuffInputType,
+  TuffSearchResultBuilder
+} from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -44,6 +52,7 @@ import { app, powerMonitor, shell } from 'electron'
 import extractFileIcon from 'extract-file-icon'
 import plist from 'plist'
 import { FileAddedEvent, TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
+import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import {
   fileExtensions,
   fileIndexProgress,
@@ -51,9 +60,9 @@ import {
   keywordMappings,
   scanProgress
 } from '../../../../db/schema'
-import { createDbUtils } from '../../../../db/utils'
-import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { createDbUtils } from '../../../../db/utils'
+import { appTaskGate } from '../../../../service/app-task-gate'
 import {
   AppUsageActivityTracker,
   BackgroundTaskService
@@ -63,10 +72,9 @@ import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
 import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
 import { fileProviderLog, formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
+import { getConfig, saveConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import { searchLogger } from '../../search-engine/search-logger'
-import { getConfig, saveConfig } from '../../../storage'
-import { appTaskGate } from '../../../../service/app-task-gate'
 import {
   CONTENT_INDEXABLE_EXTENSIONS,
   getContentSizeLimitMB,
@@ -75,17 +83,10 @@ import {
   TYPE_TAG_EXTENSION_MAP
 } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
-import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
-import type {
-  ReconcileDbFile,
-  ReconcileDiskFile
-} from './workers/file-reconcile-worker-client'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
-import type { IndexWorkerFile } from './workers/file-index-worker-client'
-import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
+import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { IconWorkerClient } from './workers/icon-worker-client'
-import type { WorkerStatusSnapshot } from './workers/worker-status'
 
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
@@ -102,7 +103,7 @@ interface IconCacheEntry {
   meta?: IconCacheMeta
 }
 
-type FileUpdateRecord = {
+interface FileUpdateRecord {
   id: number
   path: string
   name: string
@@ -255,7 +256,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
-  private readonly fileIndexWorker = new FileIndexWorkerClient(payload => this.handleIndexWorkerFile(payload))
+  private readonly fileIndexWorker = new FileIndexWorkerClient((payload) =>
+    this.handleIndexWorkerFile(payload)
+  )
   private readonly iconWorker = new IconWorkerClient()
   private readonly openerCache = new Map<string, ResolvedOpener>()
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
@@ -274,6 +277,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     number,
     { progress: number; processedBytes: number; totalBytes: number; updatedAt: Date }
   >()
+
   private contentProgressFlushTimer: NodeJS.Timeout | null = null
 
   private backgroundTaskService: BackgroundTaskService | null = null
@@ -393,9 +397,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.failedContentCache.delete(fileId)
   }
 
-  private normalizeFileIndexSettings(
-    raw?: Partial<FileIndexSettings> | null
-  ): FileIndexSettings {
+  private normalizeFileIndexSettings(raw?: Partial<FileIndexSettings> | null): FileIndexSettings {
     const data = raw && typeof raw === 'object' ? raw : {}
     const clampPercent = (value: unknown, fallback: number) => {
       if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -454,14 +456,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private loadFileIndexSettings(): void {
     try {
-      const raw = getConfig(StorageList.FILE_INDEX_SETTINGS) as Partial<FileIndexSettings> | undefined
+      const raw = getConfig(StorageList.FILE_INDEX_SETTINGS) as
+        | Partial<FileIndexSettings>
+        | undefined
       this.fileIndexSettings = this.normalizeFileIndexSettings(raw)
 
       if (!raw || Object.keys(raw).length === 0) {
-        saveConfig(
-          StorageList.FILE_INDEX_SETTINGS,
-          JSON.stringify(this.fileIndexSettings, null, 2)
-        )
+        saveConfig(StorageList.FILE_INDEX_SETTINGS, JSON.stringify(this.fileIndexSettings, null, 2))
       }
     } catch (error) {
       this.fileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
@@ -566,16 +567,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const newPaths = this.WATCH_PATHS.filter(path => !completedMap.has(path))
+    const newPaths = this.WATCH_PATHS.filter((path) => !completedMap.has(path))
     const intervalMs = this.fileIndexSettings.autoScanIntervalMs
     const now = Date.now()
-    const stalePaths = intervalMs <= 0
-      ? Array.from(completedMap.keys()).filter(path => this.WATCH_PATHS.includes(path))
-      : this.WATCH_PATHS.filter((path) => {
-        const last = completedMap.get(path)
-        if (!last) return false
-        return now - last >= intervalMs
-      })
+    const stalePaths =
+      intervalMs <= 0
+        ? Array.from(completedMap.keys()).filter((path) => this.WATCH_PATHS.includes(path))
+        : this.WATCH_PATHS.filter((path) => {
+            const last = completedMap.get(path)
+            if (!last) return false
+            return now - last >= intervalMs
+          })
 
     return { newPaths, stalePaths, lastScannedAt }
   }
@@ -832,7 +834,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // Windows 平台暂时禁用文件索引，避免权限问题导致闪退
     // TODO: Phase 2 将使用 Everything SDK 替代
     if (process.platform === 'win32') {
-      this.logInfo('File indexing disabled on Windows platform (Everything SDK integration planned)')
+      this.logInfo(
+        'File indexing disabled on Windows platform (Everything SDK integration planned)'
+      )
       this.dbUtils = createDbUtils(context.databaseManager.getDb())
       this.searchIndex = context.searchIndex
       this.touchApp = context.touchApp
@@ -997,7 +1001,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-
   /**
    * 获取索引统计信息
    */
@@ -1039,15 +1042,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { totalFiles, failedFiles, skippedFiles }
   }
 
-
   /**
    * Get battery level and charging status
    */
   public async getBatteryLevel(): Promise<FileIndexBatteryStatus | null> {
     try {
-      const onBattery = typeof powerMonitor.isOnBatteryPower === 'function'
-        ? powerMonitor.isOnBatteryPower()
-        : ((powerMonitor as any)?.onBatteryPower ?? false)
+      const onBattery =
+        typeof powerMonitor.isOnBatteryPower === 'function'
+          ? powerMonitor.isOnBatteryPower()
+          : ((powerMonitor as any)?.onBatteryPower ?? false)
 
       // For macOS, we can get more detailed battery info
       if (process.platform === 'darwin') {
@@ -1055,7 +1058,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
           const match = /\d+%/.exec(stdout)
           if (match) {
-            const level = parseInt(match[0].replace('%', ''), 10)
+            const level = Number.parseInt(match[0].replace('%', ''), 10)
             return {
               level,
               charging: !onBattery
@@ -1073,7 +1076,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             '-Command',
             'Get-CimInstance -ClassName Win32_Battery | Select-Object -ExpandProperty EstimatedChargeRemaining | Select-Object -First 1'
           ])
-          const value = parseInt(stdout.trim(), 10)
+          const value = Number.parseInt(stdout.trim(), 10)
           if (!Number.isNaN(value)) {
             const level = Math.max(0, Math.min(100, value))
             return { level, charging: !onBattery }
@@ -1091,7 +1094,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           if (battery) {
             const capacityPath = path.join(powerSupplyPath, battery, 'capacity')
             const content = await fs.readFile(capacityPath, 'utf8')
-            const value = parseInt(content.trim(), 10)
+            const value = Number.parseInt(content.trim(), 10)
             if (!Number.isNaN(value)) {
               const level = Math.max(0, Math.min(100, value))
               return { level, charging: !onBattery }
@@ -1120,9 +1123,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   /**
    * 手动触发重建索引（清空 scan_progress 强制全量扫描）
    */
-  public async rebuildIndex(
-    request?: FileIndexRebuildRequest
-  ): Promise<FileIndexRebuildResult> {
+  public async rebuildIndex(request?: FileIndexRebuildRequest): Promise<FileIndexRebuildResult> {
     if (this.isInitializing) {
       return {
         success: false,
@@ -1143,11 +1144,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const batteryStatus = await this.getBatteryLevel()
     const criticalThreshold = this.fileIndexSettings.manualBlockBatteryBelowPercent
 
-    if (
-      batteryStatus
-      && batteryStatus.level < criticalThreshold
-      && !force
-    ) {
+    if (batteryStatus && batteryStatus.level < criticalThreshold && !force) {
       return {
         success: false,
         requiresConfirm: true,
@@ -1184,8 +1181,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * 注册索引管理相关的 IPC 通道
    */
   private registerIndexingChannels(context: ProviderContext): void {
-    if (this.indexingChannelsRegistered)
-      return
+    if (this.indexingChannelsRegistered) return
     this.indexingChannelsRegistered = true
 
     const channel = context.touchApp.channel
@@ -1268,7 +1264,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           this.clearProgressCleanupTimer()
         }
       },
-      { interval: 30_000, unit: 'milliseconds' },
+      { interval: 30_000, unit: 'milliseconds' }
     )
     pollingService.start()
   }
@@ -1371,10 +1367,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { filesToAdd, filesToUpdate, deletedIds }
   }
 
-  private scheduleIndexing(
-    files: (typeof filesSchema.$inferSelect)[],
-    reason: string
-  ): void {
+  private scheduleIndexing(files: (typeof filesSchema.$inferSelect)[], reason: string): void {
     if (!this.databaseFilePath || !this.searchIndex) {
       return
     }
@@ -1438,7 +1431,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.pendingIndexWorkerResults.clear()
 
     const db = this.dbUtils.getDb()
-    const indexItems = entries.map(entry => entry.indexItem)
+    const indexItems = entries.map((entry) => entry.indexItem)
 
     await dbWriteScheduler.schedule('file-index.worker.persist', async () => {
       await withSqliteRetry(
@@ -1452,7 +1445,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                   .update(filesSchema)
                   .set({
                     content: entry.fileUpdate.content,
-                    embeddingStatus: entry.fileUpdate.embeddingStatus,
+                    embeddingStatus: entry.fileUpdate.embeddingStatus
                   })
                   .where(eq(filesSchema.id, entry.fileId))
               }
@@ -1467,7 +1460,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                   totalBytes: progress.totalBytes,
                   lastError: progress.lastError,
                   startedAt: progress.startedAt ? new Date(progress.startedAt) : null,
-                  updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date(),
+                  updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date()
                 })
                 .onConflictDoUpdate({
                   target: fileIndexProgress.fileId,
@@ -1478,12 +1471,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                     totalBytes: progress.totalBytes,
                     lastError: progress.lastError,
                     startedAt: progress.startedAt ? new Date(progress.startedAt) : null,
-                    updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date(),
-                  },
+                    updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date()
+                  }
                 })
             }
           }),
-        { label: 'file-index.worker.persist' },
+        { label: 'file-index.worker.persist' }
       )
 
       await this.searchIndex!.indexItems(indexItems)
@@ -1642,12 +1635,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         .values({
           fileId,
           key: 'icon',
-          value: logo,
+          value: logo
         })
         .onConflictDoUpdate({
           target: [fileExtensions.fileId, fileExtensions.key],
-          set: { value: logo },
-        }),
+          set: { value: logo }
+        })
     ).catch((error) => {
       this.logWarn('Failed to persist opener icon', error, { fileId })
     })
@@ -1664,12 +1657,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const next = { ...existing, ...opener }
 
       if (
-        existing
-        && existing.logo === next.logo
-        && existing.bundleId === next.bundleId
-        && existing.name === next.name
-        && existing.path === next.path
-        && existing.lastResolvedAt === next.lastResolvedAt
+        existing &&
+        existing.logo === next.logo &&
+        existing.bundleId === next.bundleId &&
+        existing.name === next.name &&
+        existing.path === next.path &&
+        existing.lastResolvedAt === next.lastResolvedAt
       ) {
         return
       }
@@ -2213,10 +2206,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               size: sql`excluded.size`,
               mtime: sql`excluded.mtime`,
               ctime: sql`excluded.ctime`,
-              lastIndexedAt: sql`excluded.last_indexed_at`,
-            },
+              lastIndexedAt: sql`excluded.last_indexed_at`
+            }
           })
-          .returning(),
+          .returning()
       )
 
       await this.processFileExtensions(inserted)
@@ -2476,8 +2469,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                         size: sql`excluded.size`,
                         mtime: sql`excluded.mtime`,
                         ctime: sql`excluded.ctime`,
-                        lastIndexedAt: sql`excluded.last_indexed_at`,
-                      },
+                        lastIndexedAt: sql`excluded.last_indexed_at`
+                      }
                     })
                     .returning()
                 )
@@ -2507,20 +2500,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
     if (reconciliationPaths.length > 0) {
       const reconciliationContext = enterPerfContext('FileProvider.reconciliation', {
-        paths: reconciliationPaths.length,
+        paths: reconciliationPaths.length
       })
       const reconciliationStart = performance.now()
       try {
         this.logInfo('Starting reconciliation scan', {
           count: reconciliationPaths.length,
-          sample: reconciliationPaths.slice(0, 3).join(', '),
+          sample: reconciliationPaths.slice(0, 3).join(', ')
         })
 
         this.emitIndexingProgress('reconciliation', 0, reconciliationPaths.length)
         await appTaskGate.waitForIdle()
 
-        const pathFilters = reconciliationPaths.map(targetPath =>
-          sql`${filesSchema.path} LIKE ${`${targetPath}%`}`,
+        const pathFilters = reconciliationPaths.map(
+          (targetPath) => sql`${filesSchema.path} LIKE ${`${targetPath}%`}`
         )
         const pathWhere = pathFilters.length > 0 ? or(...pathFilters) : undefined
 
@@ -2528,16 +2521,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .select({
             id: filesSchema.id,
             path: filesSchema.path,
-            mtime: filesSchema.mtime,
+            mtime: filesSchema.mtime
           })
           .from(filesSchema)
           .where(
-            pathWhere
-              ? and(eq(filesSchema.type, 'file'), pathWhere)
-              : eq(filesSchema.type, 'file'),
+            pathWhere ? and(eq(filesSchema.type, 'file'), pathWhere) : eq(filesSchema.type, 'file')
           )
 
-        const yieldToEventLoop = () => new Promise<void>(resolve => setImmediate(resolve))
+        const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
 
         const diskFiles: ScannedFileInfo[] = []
         let reconciledPaths = 0
@@ -2552,19 +2543,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           this.emitIndexingProgress('reconciliation', reconciledPaths, reconciliationPaths.length)
         }
 
-        const diskPayload: ReconcileDiskFile[] = diskFiles.map(file => ({
+        const diskPayload: ReconcileDiskFile[] = diskFiles.map((file) => ({
           path: file.path,
           name: file.name,
           extension: file.extension,
           size: file.size,
           mtime: this.toTimestamp(file.mtime) ?? 0,
-          ctime: this.toTimestamp(file.ctime) ?? 0,
+          ctime: this.toTimestamp(file.ctime) ?? 0
         }))
 
-        const dbPayload: ReconcileDbFile[] = dbFiles.map(file => ({
+        const dbPayload: ReconcileDbFile[] = dbFiles.map((file) => ({
           id: file.id,
           path: file.path,
-          mtime: this.toTimestamp(file.mtime) ?? 0,
+          mtime: this.toTimestamp(file.mtime) ?? 0
         }))
 
         let reconcileResult: {
@@ -2576,22 +2567,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           reconcileResult = await this.reconcileWorker.reconcile(
             diskPayload,
             dbPayload,
-            reconciliationPaths,
+            reconciliationPaths
           )
-        }
-        catch (error) {
+        } catch (error) {
           this.logWarn('File reconcile worker failed, falling back to main-thread diff', error, {
-            files: diskPayload.length,
+            files: diskPayload.length
           })
           reconcileResult = this.computeReconciliationDiff(
             diskPayload,
             dbPayload,
-            reconciliationPaths,
+            reconciliationPaths
           )
         }
 
         const filesToAdd = reconcileResult.filesToAdd
-        const filesToUpdate = reconcileResult.filesToUpdate.map(file => ({
+        const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
           id: file.id,
           path: file.path,
           name: file.name,
@@ -2600,7 +2590,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           mtime: new Date(file.mtime),
           ctime: new Date(file.ctime),
           type: 'file',
-          isDir: false,
+          isDir: false
         }))
         const deletedFileIds = reconcileResult.deletedIds
 
@@ -2614,14 +2604,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           for (const chunk of deleteChunks) {
             await appTaskGate.waitForIdle()
             await this.withDbWrite('file-index.reconcile.delete', () =>
-              db.delete(filesSchema).where(inArray(filesSchema.id, chunk)),
+              db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
             )
           }
 
           const deletedIdSet = new Set(deletedFileIds)
           const removedPaths = dbFiles
-            .filter(file => deletedIdSet.has(file.id))
-            .map(file => file.path)
+            .filter((file) => deletedIdSet.has(file.id))
+            .map((file) => file.path)
 
           if (removedPaths.length > 0) {
             const pathChunks: string[][] = []
@@ -2641,7 +2631,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
 
         if (filesToAdd.length > 0) {
-          const newFileRecords = filesToAdd.map(file => ({
+          const newFileRecords = filesToAdd.map((file) => ({
             path: file.path,
             name: file.name,
             extension: file.extension,
@@ -2650,7 +2640,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             ctime: new Date(file.ctime),
             lastIndexedAt: new Date(),
             isDir: false,
-            type: 'file',
+            type: 'file'
           }))
 
           const chunkSize = 500
@@ -2678,15 +2668,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                       size: sql`excluded.size`,
                       mtime: sql`excluded.mtime`,
                       ctime: sql`excluded.ctime`,
-                      lastIndexedAt: sql`excluded.last_indexed_at`,
-                    },
+                      lastIndexedAt: sql`excluded.last_indexed_at`
+                    }
                   })
-                  .returning(),
+                  .returning()
               )
               this.logDebug('Reconciliation chunk inserted', {
                 chunk: `${chunkIndex + 1}/${chunks.length}`,
                 size: chunk.length,
-                duration: formatDuration(performance.now() - chunkStart),
+                duration: formatDuration(performance.now() - chunkStart)
               })
               await this.processFileExtensions(inserted)
               this.scheduleIndexing(inserted, 'reconciliation-insert')
@@ -2695,8 +2685,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             },
             {
               estimatedTaskTimeMs: 6,
-              label: 'FileProvider::reconciliationInsert',
-            },
+              label: 'FileProvider::reconciliationInsert'
+            }
           )
         }
 
@@ -2704,21 +2694,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         await this.withDbWrite('file-index.scan-progress.bulk-upsert', () =>
           db
             .insert(scanProgress)
-            .values(reconciliationPaths.map(path => ({ path, lastScanned: scanTime })))
+            .values(reconciliationPaths.map((path) => ({ path, lastScanned: scanTime })))
             .onConflictDoUpdate({
               target: scanProgress.path,
-              set: { lastScanned: scanTime },
-            }),
+              set: { lastScanned: scanTime }
+            })
         )
 
         this.logInfo('Reconciliation completed', {
           duration: formatDuration(performance.now() - reconciliationStart),
           added: filesToAdd.length,
           updated: filesToUpdate.length,
-          deleted: deletedFileIds.length,
+          deleted: deletedFileIds.length
         })
-      }
-      finally {
+      } finally {
         reconciliationContext()
       }
     }
@@ -2729,10 +2718,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  private async _processFileUpdates(
-    filesToUpdate: FileUpdateRecord[],
-    chunkSize = 10
-  ) {
+  private async _processFileUpdates(filesToUpdate: FileUpdateRecord[], chunkSize = 10) {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
 
@@ -2762,17 +2748,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               name: file.name,
               type: file.type,
               isDir: file.isDir,
-              lastIndexedAt: new Date(),
+              lastIndexedAt: new Date()
             })
-            .where(eq(filesSchema.id, file.id)),
+            .where(eq(filesSchema.id, file.id))
         )
         await Promise.all(updatePromises)
 
-        const ids = chunk.map(file => file.id)
-        const refreshed = await db
-          .select()
-          .from(filesSchema)
-          .where(inArray(filesSchema.id, ids))
+        const ids = chunk.map((file) => file.id)
+        const refreshed = await db.select().from(filesSchema).where(inArray(filesSchema.id, ids))
 
         await this.processFileExtensions(refreshed)
         this.scheduleIndexing(refreshed, 'file-update')
@@ -2921,8 +2904,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       )
 
       if (extensionsToAdd.length > 0) {
-        await this.withDbWrite('file-index.extensions.upsert', () =>
-          this.dbUtils!.addFileExtensions(extensionsToAdd) as any,
+        await this.withDbWrite(
+          'file-index.extensions.upsert',
+          () => this.dbUtils!.addFileExtensions(extensionsToAdd) as any
         )
       }
     } catch (error) {
@@ -3046,7 +3030,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         progress: Math.min(99, Math.round((percentage || 0) * 100)),
         processedBytes: processed,
         totalBytes: total,
-        updatedAt: new Date(),
+        updatedAt: new Date()
       })
 
       if (!this.contentProgressFlushTimer) {
@@ -3082,7 +3066,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               progress: payload.progress,
               processedBytes: payload.processedBytes,
               totalBytes: payload.totalBytes,
-              updatedAt: payload.updatedAt,
+              updatedAt: payload.updatedAt
             })
             .onConflictDoUpdate({
               target: fileIndexProgress.fileId,
@@ -3090,11 +3074,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                 progress: payload.progress,
                 processedBytes: payload.processedBytes,
                 totalBytes: payload.totalBytes,
-                updatedAt: payload.updatedAt,
-              },
+                updatedAt: payload.updatedAt
+              }
             })
         }
-      }),
+      })
     )
   }
 
@@ -3114,7 +3098,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             processedBytes: 0,
             totalBytes: file.size ?? null,
             lastError: 'content-indexing-disabled',
-            updatedAt: new Date(),
+            updatedAt: new Date()
           })
           .onConflictDoUpdate({
             target: fileIndexProgress.fileId,
@@ -3124,9 +3108,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               processedBytes: 0,
               totalBytes: file.size ?? null,
               lastError: 'content-indexing-disabled',
-              updatedAt: new Date(),
-            },
-          }),
+              updatedAt: new Date()
+            }
+          })
       )
       this.clearContentFailure(file.id)
       return
@@ -3146,7 +3130,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             processedBytes: 0,
             totalBytes: size,
             lastError: 'file-too-large',
-            updatedAt: new Date(),
+            updatedAt: new Date()
           })
           .onConflictDoUpdate({
             target: fileIndexProgress.fileId,
@@ -3156,9 +3140,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               processedBytes: 0,
               totalBytes: size,
               lastError: 'file-too-large',
-              updatedAt: new Date(),
-            },
-          }),
+              updatedAt: new Date()
+            }
+          })
       )
       this.clearContentFailure(file.id)
       file.content = null
@@ -3181,7 +3165,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           totalBytes: size ?? null,
           startedAt: new Date(),
           lastError: null,
-          updatedAt: new Date(),
+          updatedAt: new Date()
         })
         .onConflictDoUpdate({
           target: fileIndexProgress.fileId,
@@ -3192,9 +3176,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             totalBytes: size ?? null,
             startedAt: new Date(),
             lastError: null,
-            updatedAt: new Date(),
-          },
-        }),
+            updatedAt: new Date()
+          }
+        })
     )
     this.clearContentFailure(file.id)
 
@@ -3225,7 +3209,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             processedBytes: 0,
             totalBytes: size ?? null,
             lastError: error instanceof Error ? error.message : 'parser-error',
-            updatedAt: new Date(),
+            updatedAt: new Date()
           })
           .onConflictDoUpdate({
             target: fileIndexProgress.fileId,
@@ -3235,9 +3219,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               processedBytes: 0,
               totalBytes: size ?? null,
               lastError: error instanceof Error ? error.message : 'parser-error',
-              updatedAt: new Date(),
-            },
-          }),
+              updatedAt: new Date()
+            }
+          })
       )
       this.recordContentFailure(file.id, error instanceof Error ? error.message : 'parser-error')
       file.content = null
@@ -3255,7 +3239,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             processedBytes: 0,
             totalBytes: size ?? null,
             lastError: 'parser-not-found',
-            updatedAt: new Date(),
+            updatedAt: new Date()
           })
           .onConflictDoUpdate({
             target: fileIndexProgress.fileId,
@@ -3265,9 +3249,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               processedBytes: 0,
               totalBytes: size ?? null,
               lastError: 'parser-not-found',
-              updatedAt: new Date(),
-            },
-          }),
+              updatedAt: new Date()
+            }
+          })
       )
       this.clearContentFailure(file.id)
       file.content = null
@@ -3307,7 +3291,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             .update(filesSchema)
             .set({
               content: trimmedContent,
-              embeddingStatus,
+              embeddingStatus
             })
             .where(eq(filesSchema.id, fileId))
 
@@ -3320,7 +3304,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               processedBytes,
               totalBytes,
               lastError: null,
-              updatedAt: new Date(),
+              updatedAt: new Date()
             })
             .onConflictDoUpdate({
               target: fileIndexProgress.fileId,
@@ -3330,10 +3314,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                 processedBytes,
                 totalBytes,
                 lastError: null,
-                updatedAt: new Date(),
-              },
+                updatedAt: new Date()
+              }
             })
-        }),
+        })
       )
 
       file.content = trimmedContent
@@ -3371,15 +3355,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .values({
             fileId,
             status: 'skipped',
-            ...progressPayload,
+            ...progressPayload
           })
           .onConflictDoUpdate({
             target: fileIndexProgress.fileId,
             set: {
               status: 'skipped',
-              ...progressPayload,
-            },
-          }),
+              ...progressPayload
+            }
+          })
       )
       this.clearContentFailure(fileId)
       file.content = null
@@ -3392,15 +3376,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         .values({
           fileId,
           status: 'failed',
-          ...progressPayload,
+          ...progressPayload
         })
         .onConflictDoUpdate({
           target: fileIndexProgress.fileId,
           set: {
             status: 'failed',
-            ...progressPayload,
-          },
-        }),
+            ...progressPayload
+          }
+        })
     )
     this.recordContentFailure(fileId, result.reason ?? null)
     file.content = null
@@ -3417,10 +3401,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       if (file.id && this.dbUtils) {
         const db = this.dbUtils.getDb()
         await this.withDbWrite('file-index.file-size.update', () =>
-          db
-            .update(filesSchema)
-            .set({ size: stats.size })
-            .where(eq(filesSchema.id, file.id!)),
+          db.update(filesSchema).set({ size: stats.size }).where(eq(filesSchema.id, file.id!))
         )
       }
       return stats.size
@@ -3655,7 +3636,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.fileScanWorker.getStatus(),
       this.fileIndexWorker.getStatus(),
       this.reconcileWorker.getStatus(),
-      this.iconWorker.getStatus(),
+      this.iconWorker.getStatus()
     ])
 
     const summary = workers.reduce(
@@ -3670,7 +3651,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
         return acc
       },
-      { total: 0, busy: 0, idle: 0, offline: 0 },
+      { total: 0, busy: 0, idle: 0, offline: 0 }
     )
 
     return { summary, workers }

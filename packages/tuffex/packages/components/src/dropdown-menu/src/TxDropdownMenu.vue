@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { DropdownMenuProps } from './types'
 import { computed, provide } from 'vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
-import type { DropdownMenuProps } from './types'
 
 defineOptions({ name: 'TxDropdownMenu' })
 

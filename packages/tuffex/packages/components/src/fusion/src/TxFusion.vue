@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, getCurrentInstance, ref } from 'vue'
 import type { FusionProps } from './types'
+import { computed, getCurrentInstance, ref } from 'vue'
 
 defineOptions({ name: 'TxFusion' })
 
@@ -163,5 +163,4 @@ const matrixValues = computed(() => {
 .tx-fusion.is-dir-y.is-active .tx-fusion__blob--b {
   transform: translate3d(0, 0, 0) scale(1.02);
 }
-
 </style>

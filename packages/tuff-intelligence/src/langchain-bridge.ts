@@ -4,8 +4,8 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
 } from '@talex-touch/utils/types/intelligence'
-import { PromptTemplate } from '@langchain/core/prompts'
 import type { TuffIntelligenceConfig } from './types'
+import { PromptTemplate } from '@langchain/core/prompts'
 
 export interface IntelligenceInvoker {
   (capabilityId: string, payload: any, options?: IntelligenceInvokeOptions): Promise<IntelligenceInvokeResult<any>>
@@ -28,7 +28,7 @@ export interface LangChainChatOptions {
 
 function extractMustacheVariables(template: string): string[] {
   const vars = new Set<string>()
-  const regex = /{{\s*([a-zA-Z0-9_\.]+)\s*}}/g
+  const regex = /\{\{\s*([\w.]+)\s*\}\}/g
   let match: RegExpExecArray | null
   while ((match = regex.exec(template))) {
     if (match[1])

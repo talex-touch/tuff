@@ -1,5 +1,6 @@
+import type { Ref } from 'vue'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'
-import { ref, watch, type Ref } from 'vue'
+import { ref, watch } from 'vue'
 import { getAuthToken } from '~/modules/market/auth-token-service'
 
 const NEXUS_URL = getTuffBaseUrl()
@@ -36,7 +37,7 @@ export function useMarketRating(slug: Ref<string | undefined>) {
     try {
       const response = await fetch(`${NEXUS_URL}/api/market/plugins/${currentSlug}/rating`, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json' }
       })
 
       if (!response.ok) {
@@ -44,14 +45,12 @@ export function useMarketRating(slug: Ref<string | undefined>) {
         return
       }
 
-      const data = await response.json() as RatingApiResponse
+      const data = (await response.json()) as RatingApiResponse
       average.value = data.rating.average
       count.value = data.rating.count
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'UNKNOWN_ERROR'
-    }
-    finally {
+    } finally {
       loading.value = false
     }
   }
@@ -83,37 +82,38 @@ export function useMarketRating(slug: Ref<string | undefined>) {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ rating: normalized }),
+        body: JSON.stringify({ rating: normalized })
       })
 
       if (!response.ok) {
         if (response.status === 401) {
           error.value = 'UNAUTHORIZED'
-        }
-        else {
+        } else {
           error.value = `HTTP_ERROR_${response.status}`
         }
         return
       }
 
-      const data = await response.json() as RatingApiResponse
+      const data = (await response.json()) as RatingApiResponse
       userRating.value = normalized
       average.value = data.rating.average
       count.value = data.rating.count
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'UNKNOWN_ERROR'
-    }
-    finally {
+    } finally {
       submitting.value = false
     }
   }
 
-  watch(slug, () => {
-    void load()
-  }, { immediate: true })
+  watch(
+    slug,
+    () => {
+      void load()
+    },
+    { immediate: true }
+  )
 
   return {
     loading,
@@ -123,7 +123,6 @@ export function useMarketRating(slug: Ref<string | undefined>) {
     count,
     userRating,
     load,
-    submit,
+    submit
   }
 }
-

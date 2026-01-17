@@ -1,19 +1,11 @@
-import type {
-  DownloadRequest,
-  GitHubRelease,
-  UpdateCheckResult,
-} from '@talex-touch/utils'
+import type { DownloadRequest, GitHubRelease, UpdateCheckResult } from '@talex-touch/utils'
 import * as crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import {
-  AppPreviewChannel,
-  DownloadModule,
-  DownloadPriority,
-} from '@talex-touch/utils'
+import { AppPreviewChannel, DownloadModule, DownloadPriority } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { app, shell } from 'electron'
 import axios from 'axios'
+import { app, shell } from 'electron'
 import { getAppVersionSafe } from '../../utils/version-util'
 
 /**
@@ -86,7 +78,7 @@ export class UpdateSystem {
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
-    [AppPreviewChannel.SNAPSHOT]: 2,
+    [AppPreviewChannel.SNAPSHOT]: 2
   }
 
   /**
@@ -104,7 +96,7 @@ export class UpdateSystem {
       checkFrequency: 'startup',
       ignoredVersions: [],
       updateChannel: this.currentVersion.channel,
-      ...config,
+      ...config
     }
   }
 
@@ -127,7 +119,7 @@ export class UpdateSystem {
         return {
           hasUpdate: false,
           error: `No releases found for channel: ${targetChannel}`,
-          source: 'GitHub',
+          source: 'GitHub'
         }
       }
 
@@ -142,7 +134,7 @@ export class UpdateSystem {
           return {
             hasUpdate: false,
             error: 'Version ignored by user',
-            source: 'GitHub',
+            source: 'GitHub'
           }
         }
 
@@ -150,29 +142,28 @@ export class UpdateSystem {
         if (this.notificationService) {
           this.notificationService.showUpdateAvailableNotification(
             latestRelease.tag_name,
-            latestRelease.body,
+            latestRelease.body
           )
         }
 
         return {
           hasUpdate: true,
           release: latestRelease,
-          source: 'GitHub',
+          source: 'GitHub'
         }
       }
 
       return {
         hasUpdate: false,
         error: 'No update available',
-        source: 'GitHub',
+        source: 'GitHub'
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateSystem] Failed to check for updates:', error)
       return {
         hasUpdate: false,
         error: error instanceof Error ? error.message : 'Unknown error',
-        source: 'GitHub',
+        source: 'GitHub'
       }
     }
   }
@@ -201,9 +192,9 @@ export class UpdateSystem {
         metadata: {
           version: release.tag_name,
           releaseDate: release.published_at,
-          checksum: asset.checksum,
+          checksum: asset.checksum
         },
-        checksum: asset.checksum,
+        checksum: asset.checksum
       }
 
       // Add download task to DownloadCenter
@@ -214,8 +205,7 @@ export class UpdateSystem {
 
       console.log(`[UpdateSystem] Update download started: ${taskId}`)
       return taskId
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateSystem] Failed to download update:', error)
       throw error
     }
@@ -232,26 +222,29 @@ export class UpdateSystem {
       this.pollingService.unregister(pollTaskId)
     }
 
-    this.pollingService.register(pollTaskId, () => {
-      const task = this.downloadCenterModule.getTaskStatus(taskId)
+    this.pollingService.register(
+      pollTaskId,
+      () => {
+        const task = this.downloadCenterModule.getTaskStatus(taskId)
 
-      if (!task) {
-        this.pollingService.unregister(pollTaskId)
-        return
-      }
-
-      if (task.status === 'completed') {
-        this.pollingService.unregister(pollTaskId)
-
-        // Show update download complete notification
-        if (this.notificationService) {
-          this.notificationService.showUpdateDownloadCompleteNotification(version, taskId)
+        if (!task) {
+          this.pollingService.unregister(pollTaskId)
+          return
         }
-      }
-      else if (task.status === 'failed' || task.status === 'cancelled') {
-        this.pollingService.unregister(pollTaskId)
-      }
-    }, { interval: 1, unit: 'seconds' })
+
+        if (task.status === 'completed') {
+          this.pollingService.unregister(pollTaskId)
+
+          // Show update download complete notification
+          if (this.notificationService) {
+            this.notificationService.showUpdateDownloadCompleteNotification(version, taskId)
+          }
+        } else if (task.status === 'failed' || task.status === 'cancelled') {
+          this.pollingService.unregister(pollTaskId)
+        }
+      },
+      { interval: 1, unit: 'seconds' }
+    )
     this.pollingService.start()
   }
 
@@ -285,8 +278,7 @@ export class UpdateSystem {
       await this.triggerInstallation(task.destination, task.filename)
 
       console.log(`[UpdateSystem] Update installation triggered for task: ${taskId}`)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateSystem] Failed to install update:', error)
       throw error
     }
@@ -329,8 +321,8 @@ export class UpdateSystem {
     const version2 = this.parseVersion(v2)
 
     // Compare channel priority first
-    const channelDiff
-      = this.channelPriority[version1.channel] - this.channelPriority[version2.channel]
+    const channelDiff =
+      this.channelPriority[version1.channel] - this.channelPriority[version2.channel]
     if (channelDiff !== 0) {
       return channelDiff > 0 ? 1 : -1
     }
@@ -386,9 +378,9 @@ export class UpdateSystem {
       const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
         timeout: 10000,
         headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'TalexTouch-Updater/2.0',
-        },
+          Accept: 'application/vnd.github.v3+json',
+          'User-Agent': 'TalexTouch-Updater/2.0'
+        }
       })
 
       if (!response.data || !Array.isArray(response.data)) {
@@ -396,8 +388,7 @@ export class UpdateSystem {
       }
 
       return response.data
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateSystem] Failed to fetch GitHub releases:', error)
       throw error
     }
@@ -412,14 +403,14 @@ export class UpdateSystem {
     const versionNum = parts[0]
     const channelLabel = parts.length >= 2 ? parts[1] : undefined
 
-    const [major, minor, patch] = versionNum.split('.').map(n => Number.parseInt(n, 10))
+    const [major, minor, patch] = versionNum.split('.').map((n) => Number.parseInt(n, 10))
 
     return {
       channel: this.parseChannelLabel(channelLabel),
       major: major || 0,
       minor: minor || 0,
       patch: patch || 0,
-      raw: versionStr,
+      raw: versionStr
     }
   }
 
@@ -494,7 +485,7 @@ export class UpdateSystem {
     const platformMap: Record<string, string> = {
       darwin: 'mac',
       win32: 'win',
-      linux: 'linux',
+      linux: 'linux'
     }
 
     const platformName = platformMap[platform] || platform
@@ -522,7 +513,7 @@ export class UpdateSystem {
         size: asset.size,
         platform: platformName,
         arch,
-        checksum: undefined, // Will be extracted from release notes if available
+        checksum: undefined // Will be extracted from release notes if available
       }
     }
 
@@ -537,8 +528,7 @@ export class UpdateSystem {
 
     try {
       await fs.mkdir(downloadPath, { recursive: true })
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateSystem] Failed to create download directory:', error)
     }
 
@@ -556,8 +546,7 @@ export class UpdateSystem {
       const actualChecksum = hash.digest('hex')
 
       return actualChecksum.toLowerCase() === expectedChecksum.toLowerCase()
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UpdateSystem] Failed to verify checksum:', error)
       return false
     }

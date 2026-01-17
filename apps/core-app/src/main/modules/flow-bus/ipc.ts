@@ -42,10 +42,7 @@ export class FlowBusIPC {
 
   private registerTransportHandlers(): void {
     const channel = this.channel as any
-    const transport = getTuffTransportMain(
-      channel,
-      channel?.keyManager ?? channel,
-    )
+    const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
 
     this.transport = transport
 
@@ -64,10 +61,14 @@ export class FlowBusIPC {
     this.transportDisposers.push(
       transport.on(FlowEvents.dispatch, async (payload: any, context: any) => {
         enforce(context, 'flow:bus:dispatch', payload?._sdkapi)
-        return await flowBus.dispatch(payload.senderId, payload.payload, payload.options)
+        return await flowBus
+          .dispatch(payload.senderId, payload.payload, payload.options)
           .then((result) => ({ success: result.state !== 'FAILED', data: result }))
-          .catch((error: any) => ({ success: false, error: { message: error instanceof Error ? error.message : 'Unknown error' } }))
-      }),
+          .catch((error: any) => ({
+            success: false,
+            error: { message: error instanceof Error ? error.message : 'Unknown error' }
+          }))
+      })
     )
 
     this.transportDisposers.push(
@@ -75,7 +76,7 @@ export class FlowBusIPC {
         enforce(context, 'flow:bus:get-targets', payload?._sdkapi)
         const targets = flowBus.getAvailableTargets(payload?.payloadType)
         return { success: true, data: targets }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -83,7 +84,7 @@ export class FlowBusIPC {
         enforce(context, 'flow:bus:cancel', payload?._sdkapi)
         const success = flowBus.cancel(payload.sessionId)
         return { success, data: { cancelled: success } }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -91,7 +92,7 @@ export class FlowBusIPC {
         enforce(context, 'flow:bus:acknowledge', payload?._sdkapi)
         const success = flowBus.acknowledge(payload.sessionId, payload.ackPayload)
         return { success, data: { acknowledged: success } }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -99,7 +100,7 @@ export class FlowBusIPC {
         enforce(context, 'flow:bus:report-error', payload?._sdkapi)
         const success = flowBus.reportError(payload.sessionId, payload.message || 'Unknown error')
         return { success, data: { reported: success } }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -110,16 +111,16 @@ export class FlowBusIPC {
         if (!sessionId) {
           return {
             success: false,
-            error: { message: 'sessionId is required' },
+            error: { message: 'sessionId is required' }
           }
         }
 
         flowBus.resolveTargetSelection(sessionId, targetId)
         return {
           success: true,
-          data: { resolved: true },
+          data: { resolved: true }
         }
-      }),
+      })
     )
   }
 
@@ -127,7 +128,7 @@ export class FlowBusIPC {
    * Unregisters all IPC handlers
    */
   unregisterHandlers(): void {
-    this.unregisterFunctions.forEach(unregister => unregister())
+    this.unregisterFunctions.forEach((unregister) => unregister())
     this.unregisterFunctions = []
 
     this.transportDisposers.forEach((dispose) => {
@@ -161,7 +162,9 @@ export class FlowBusIPC {
         this.transport.sendToPlugin(senderId, FlowEvents.sessionUpdate, update).catch(() => {})
       }
       if (targetPluginId) {
-        this.transport.sendToPlugin(targetPluginId, FlowEvents.sessionUpdate, update).catch(() => {})
+        this.transport
+          .sendToPlugin(targetPluginId, FlowEvents.sessionUpdate, update)
+          .catch(() => {})
       }
     }
   }

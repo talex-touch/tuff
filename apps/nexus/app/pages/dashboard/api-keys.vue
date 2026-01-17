@@ -38,7 +38,7 @@ const newKeyScopes = ref<string[]>(['plugin:publish'])
 const newKeyExpiry = ref<number | null>(null)
 
 // Newly created key (show once)
-const newlyCreatedKey = ref<{ name: string; secretKey: string } | null>(null)
+const newlyCreatedKey = ref<{ name: string, secretKey: string } | null>(null)
 const copied = ref(false)
 
 async function fetchKeys() {
@@ -47,16 +47,19 @@ async function fetchKeys() {
   try {
     const data = await $fetch<{ keys: ApiKey[] }>('/api/dashboard/api-keys')
     keys.value = data.keys
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.data?.message || 'Failed to load API keys'
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
 
 async function createKey() {
-  if (!newKeyName.value.trim()) return
-  
+  if (!newKeyName.value.trim())
+    return
+
   creating.value = true
   try {
     const data = await $fetch<NewKeyResponse>('/api/dashboard/api-keys', {
@@ -67,21 +70,23 @@ async function createKey() {
         expiresInDays: newKeyExpiry.value,
       },
     })
-    
+
     newlyCreatedKey.value = {
       name: data.key.name,
       secretKey: data.key.secretKey,
     }
-    
+
     showCreateModal.value = false
     newKeyName.value = ''
     newKeyScopes.value = ['plugin:publish']
     newKeyExpiry.value = null
-    
+
     await fetchKeys()
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.data?.message || 'Failed to create API key'
-  } finally {
+  }
+  finally {
     creating.value = false
   }
 }
@@ -90,29 +95,33 @@ async function deleteKey(keyId: string) {
   if (!confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
     return
   }
-  
+
   try {
     await $fetch(`/api/dashboard/api-keys/${keyId}`, { method: 'DELETE' })
     await fetchKeys()
-  } catch (e: any) {
+  }
+  catch (e: any) {
     error.value = e.data?.message || 'Failed to delete API key'
   }
 }
 
 async function copyKey() {
-  if (!newlyCreatedKey.value) return
+  if (!newlyCreatedKey.value)
+    return
   await navigator.clipboard.writeText(newlyCreatedKey.value.secretKey)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
 }
 
 function formatDate(date: string | null): string {
-  if (!date) return '-'
+  if (!date)
+    return '-'
   return new Date(date).toLocaleDateString()
 }
 
 function isExpired(date: string | null): boolean {
-  if (!date) return false
+  if (!date)
+    return false
   return new Date(date) < new Date()
 }
 
@@ -140,8 +149,12 @@ const expiryOptions = [
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-semibold text-black dark:text-light">API Keys</h1>
-        <p class="text-sm text-black/50 dark:text-light/50">Manage API keys for CLI tools and integrations</p>
+        <h1 class="text-xl font-semibold text-black dark:text-light">
+          API Keys
+        </h1>
+        <p class="text-sm text-black/50 dark:text-light/50">
+          Manage API keys for CLI tools and integrations
+        </p>
       </div>
       <button
         class="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-light dark:text-black dark:hover:bg-light/80"
@@ -206,7 +219,9 @@ const expiryOptions = [
             <span class="i-carbon-password text-lg text-black/60 dark:text-light/60" />
           </div>
           <div>
-            <p class="font-medium text-black dark:text-light">{{ key.name }}</p>
+            <p class="font-medium text-black dark:text-light">
+              {{ key.name }}
+            </p>
             <div class="flex items-center gap-2 text-xs text-black/40 dark:text-light/40">
               <code class="font-mono">{{ key.keyPrefix }}</code>
               <span>·</span>
@@ -247,7 +262,9 @@ const expiryOptions = [
       <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black/5 dark:bg-light/5">
         <span class="i-carbon-password text-2xl text-black/30 dark:text-light/30" />
       </div>
-      <h3 class="font-medium text-black dark:text-light">No API Keys</h3>
+      <h3 class="font-medium text-black dark:text-light">
+        No API Keys
+      </h3>
       <p class="mt-1 text-sm text-black/50 dark:text-light/50">
         Create an API key to use with tuffcli and other integrations
       </p>
@@ -267,7 +284,9 @@ const expiryOptions = [
         @click.self="showCreateModal = false"
       >
         <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-dark">
-          <h3 class="text-lg font-semibold text-black dark:text-light">Create API Key</h3>
+          <h3 class="text-lg font-semibold text-black dark:text-light">
+            Create API Key
+          </h3>
           <p class="mt-1 text-sm text-black/50 dark:text-light/50">
             Generate a new API key for CLI tools
           </p>
@@ -283,7 +302,7 @@ const expiryOptions = [
                 type="text"
                 placeholder="e.g., My Laptop, CI/CD"
                 class="w-full rounded-lg border-0 bg-black/5 px-3 py-2 text-sm text-black outline-none dark:bg-light/5 dark:text-light"
-              />
+              >
             </div>
 
             <!-- Scopes -->
@@ -302,7 +321,7 @@ const expiryOptions = [
                     type="checkbox"
                     :value="scope.id"
                     class="mt-0.5"
-                  />
+                  >
                   <div>
                     <p class="text-sm font-medium text-black dark:text-light">{{ scope.label }}</p>
                     <p class="text-xs text-black/50 dark:text-light/50">{{ scope.description }}</p>

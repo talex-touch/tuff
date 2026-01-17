@@ -1,46 +1,3 @@
-<template>
-  <TBottomDialog v-model="visible" title="文件索引初始化失败" class="file-index-fail-dialog" :close="handleLater">
-    <div class="dialog-content">
-      <div class="error-icon">⚠️</div>
-      
-      <p class="error-message">
-        文件索引初始化失败，可能导致搜索功能无法正常使用。
-      </p>
-      
-      <details v-if="errorDetail" class="error-detail">
-        <summary>查看错误详情</summary>
-        <pre>{{ errorDetail }}</pre>
-      </details>
-      
-      <div v-if="rebuilding" class="progress-section">
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: `${progress}%` }" />
-        </div>
-        <span class="progress-text">{{ progressText }}</span>
-      </div>
-      
-      <div class="actions">
-        <button 
-          class="btn-rebuild" 
-          :disabled="rebuilding"
-          @click="handleRebuild"
-        >
-          {{ rebuilding ? '重建中...' : '重新建立索引' }}
-        </button>
-        
-        <button class="btn-later" @click="handleLater">
-          稍后处理
-        </button>
-        
-        <label class="checkbox-label">
-          <input v-model="dontRemindAgain" type="checkbox">
-          <span>不再提醒</span>
-        </label>
-      </div>
-    </div>
-  </TBottomDialog>
-</template>
-
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import TBottomDialog from '../base/dialog/TBottomDialog.vue'
@@ -52,8 +9,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'rebuild': []
-  'dismiss': [dontRemind: boolean]
+  rebuild: []
+  dismiss: [dontRemind: boolean]
 }>()
 
 const visible = computed({
@@ -66,21 +23,21 @@ const progress = ref(0)
 const progressText = ref('')
 const dontRemindAgain = ref(false)
 
-const handleRebuild = () => {
+function handleRebuild() {
   rebuilding.value = true
   emit('rebuild')
 }
 
-const handleLater = () => {
+function handleLater() {
   emit('dismiss', dontRemindAgain.value)
   visible.value = false
 }
 
 // 更新进度（由父组件调用）
-const updateProgress = (current: number, total: number, stage: string) => {
+function updateProgress(current: number, total: number, stage: string) {
   progress.value = total > 0 ? Math.round((current / total) * 100) : 0
   progressText.value = `${stage}: ${current}/${total}`
-  
+
   if (progress.value >= 100) {
     setTimeout(() => {
       rebuilding.value = false
@@ -91,6 +48,46 @@ const updateProgress = (current: number, total: number, stage: string) => {
 
 defineExpose({ updateProgress })
 </script>
+
+<template>
+  <TBottomDialog
+    v-model="visible"
+    title="文件索引初始化失败"
+    class="file-index-fail-dialog"
+    :close="handleLater"
+  >
+    <div class="dialog-content">
+      <div class="error-icon">⚠️</div>
+
+      <p class="error-message">文件索引初始化失败，可能导致搜索功能无法正常使用。</p>
+
+      <details v-if="errorDetail" class="error-detail">
+        <summary>查看错误详情</summary>
+        <pre>{{ errorDetail }}</pre>
+      </details>
+
+      <div v-if="rebuilding" class="progress-section">
+        <div class="progress-bar">
+          <div class="progress-fill" :style="{ width: `${progress}%` }" />
+        </div>
+        <span class="progress-text">{{ progressText }}</span>
+      </div>
+
+      <div class="actions">
+        <button class="btn-rebuild" :disabled="rebuilding" @click="handleRebuild">
+          {{ rebuilding ? '重建中...' : '重新建立索引' }}
+        </button>
+
+        <button class="btn-later" @click="handleLater">稍后处理</button>
+
+        <label class="checkbox-label">
+          <input v-model="dontRemindAgain" type="checkbox" />
+          <span>不再提醒</span>
+        </label>
+      </div>
+    </div>
+  </TBottomDialog>
+</template>
 
 <style scoped>
 .file-index-fail-dialog .dialog-content {
@@ -105,8 +102,13 @@ defineExpose({ updateProgress })
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .error-message {
@@ -223,7 +225,7 @@ defineExpose({ updateProgress })
   user-select: none;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-label input[type='checkbox'] {
   cursor: pointer;
 }
 </style>

@@ -1,13 +1,13 @@
 import type {
-  IntelligenceChatPayload,
-  IntelligenceEmbeddingPayload,
   AiInvokeOptions,
   AiInvokeResult,
   AiStreamChunk,
-  IntelligenceTranslatePayload,
   AiUsageInfo,
+  IntelligenceChatPayload,
+  IntelligenceEmbeddingPayload,
+  IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
-  IntelligenceVisionOcrResult,
+  IntelligenceVisionOcrResult
 } from '@talex-touch/utils'
 import { readFile } from 'node:fs/promises'
 
@@ -28,19 +28,25 @@ export class SiliconflowProvider extends IntelligenceProvider {
   private get headers(): HeadersInit {
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.config.apiKey}`,
+      Authorization: `Bearer ${this.config.apiKey}`
     }
   }
 
-  async chat(payload: IntelligenceChatPayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async chat(
+    payload: IntelligenceChatPayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
-    const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
+    const model =
+      options.modelPreference?.[0] ||
+      this.config.defaultModel ||
+      'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions',
+      endpoint: '/chat/completions'
     })
 
     const body = {
@@ -51,16 +57,20 @@ export class SiliconflowProvider extends IntelligenceProvider {
       top_p: payload.topP,
       presence_penalty: payload.presencePenalty,
       frequency_penalty: payload.frequencyPenalty,
-      stop: payload.stop,
+      stop: payload.stop
     }
 
-    const data = await this.post<{ choices: any[], usage?: any, model?: string }>('/chat/completions', body, options.timeout)
+    const data = await this.post<{ choices: any[]; usage?: any; model?: string }>(
+      '/chat/completions',
+      body,
+      options.timeout
+    )
     const latency = Date.now() - startTime
 
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.prompt_tokens ?? 0,
       completionTokens: data.usage?.completion_tokens ?? 0,
-      totalTokens: data.usage?.total_tokens ?? 0,
+      totalTokens: data.usage?.total_tokens ?? 0
     }
 
     return {
@@ -69,20 +79,23 @@ export class SiliconflowProvider extends IntelligenceProvider {
       model: data.model || body.model,
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  async* chatStream(
+  async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions,
+    options: AiInvokeOptions
   ): AsyncGenerator<AiStreamChunk> {
     this.validateApiKey()
 
-    const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
+    const model =
+      options.modelPreference?.[0] ||
+      this.config.defaultModel ||
+      'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions (stream)',
+      endpoint: '/chat/completions (stream)'
     })
 
     const body = {
@@ -90,14 +103,14 @@ export class SiliconflowProvider extends IntelligenceProvider {
       messages: payload.messages,
       temperature: payload.temperature,
       max_tokens: payload.maxTokens,
-      stream: true,
+      stream: true
     }
 
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(body),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined,
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
 
     if (!response.ok || !response.body) {
@@ -111,18 +124,15 @@ export class SiliconflowProvider extends IntelligenceProvider {
     try {
       while (true) {
         const { done, value } = await reader.read()
-        if (done)
-          break
+        if (done) break
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
         for (const line of lines) {
-          if (!line.trim() || line.trim() === 'data: [DONE]')
-            continue
-          if (!line.startsWith('data: '))
-            continue
+          if (!line.trim() || line.trim() === 'data: [DONE]') continue
+          if (!line.startsWith('data: ')) continue
 
           try {
             const data = JSON.parse(line.substring(6))
@@ -130,47 +140,49 @@ export class SiliconflowProvider extends IntelligenceProvider {
             if (delta) {
               yield { delta, done: false }
             }
-          }
-          catch (error) {
+          } catch (error) {
             console.error('[SiliconflowProvider] Stream parse error:', error)
           }
         }
       }
 
       yield { delta: '', done: true }
-    }
-    finally {
+    } finally {
       reader.releaseLock()
     }
   }
 
-  async embedding(payload: IntelligenceEmbeddingPayload, options: AiInvokeOptions): Promise<AiInvokeResult<number[]>> {
+  async embedding(
+    payload: IntelligenceEmbeddingPayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<number[]>> {
     this.validateApiKey()
     const traceId = this.generateTraceId()
     const startTime = Date.now()
 
-    const model = payload.model || this.config.defaultModel || 'netease-youdao/bce-embedding-base_v1'
+    const model =
+      payload.model || this.config.defaultModel || 'netease-youdao/bce-embedding-base_v1'
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/embeddings',
+      endpoint: '/embeddings'
     })
 
     const body = {
       input: payload.text,
-      model,
+      model
     }
 
-    const data = await this.post<{ data: Array<{ embedding: number[] }>, usage?: any, model?: string }>(
-      '/embeddings',
-      body,
-      options.timeout,
-    )
+    const data = await this.post<{
+      data: Array<{ embedding: number[] }>
+      usage?: any
+      model?: string
+    }>('/embeddings', body, options.timeout)
 
     const latency = Date.now() - startTime
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.prompt_tokens ?? 0,
       completionTokens: 0,
-      totalTokens: data.usage?.total_tokens ?? data.usage?.prompt_tokens ?? 0,
+      totalTokens: data.usage?.total_tokens ?? data.usage?.prompt_tokens ?? 0
     }
 
     return {
@@ -179,22 +191,25 @@ export class SiliconflowProvider extends IntelligenceProvider {
       model: data.model || body.model,
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
-  async translate(payload: IntelligenceTranslatePayload, options: AiInvokeOptions): Promise<AiInvokeResult<string>> {
+  async translate(
+    payload: IntelligenceTranslatePayload,
+    options: AiInvokeOptions
+  ): Promise<AiInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
           role: 'system',
-          content: `You are a professional translator. Always return only the translated text in ${payload.targetLang}.`,
+          content: `You are a professional translator. Always return only the translated text in ${payload.targetLang}.`
         },
         {
           role: 'user',
-          content: payload.text,
-        },
-      ],
+          content: payload.text
+        }
+      ]
     }
 
     return this.chat(chatPayload, options)
@@ -202,20 +217,21 @@ export class SiliconflowProvider extends IntelligenceProvider {
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,
-    options: AiInvokeOptions,
+    options: AiInvokeOptions
   ): Promise<AiInvokeResult<IntelligenceVisionOcrResult>> {
     this.validateApiKey()
     const traceId = this.generateTraceId()
     const startTime = Date.now()
 
     const imageDataUrl = await this.getImageData(payload.source)
-    const prompt = payload.prompt || 'Extract all text from this image and return as structured JSON.'
+    const prompt =
+      payload.prompt || 'Extract all text from this image and return as structured JSON.'
     const modelFromBinding = options.modelPreference?.[0]
 
     const model = modelFromBinding || this.config.defaultModel || DEFAULT_VISION_MODEL
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
-      endpoint: '/chat/completions (vision)',
+      endpoint: '/chat/completions (vision)'
     })
 
     const body = {
@@ -223,35 +239,35 @@ export class SiliconflowProvider extends IntelligenceProvider {
       messages: [
         {
           role: 'system',
-          content: prompt,
+          content: prompt
         },
         {
           role: 'user',
           content: [
             {
               type: 'text',
-              text: '请识别给定图片的所有文本，并严格按照系统提示返回 JSON。',
+              text: '请识别给定图片的所有文本，并严格按照系统提示返回 JSON。'
             },
             {
               type: 'image_url',
-              image_url: { url: imageDataUrl },
-            },
-          ],
-        },
-      ],
+              image_url: { url: imageDataUrl }
+            }
+          ]
+        }
+      ]
     }
 
-    const data = await this.post<{ choices: any[], usage?: any, model?: string }>(
+    const data = await this.post<{ choices: any[]; usage?: any; model?: string }>(
       '/chat/completions',
       body,
-      options.timeout,
+      options.timeout
     )
 
     const latency = Date.now() - startTime
     const usage: AiUsageInfo = {
       promptTokens: data.usage?.prompt_tokens ?? 0,
       completionTokens: data.usage?.completion_tokens ?? 0,
-      totalTokens: data.usage?.total_tokens ?? 0,
+      totalTokens: data.usage?.total_tokens ?? 0
     }
 
     const rawContent = this.extractMessageContent(data.choices[0]?.message?.content)
@@ -264,12 +280,12 @@ export class SiliconflowProvider extends IntelligenceProvider {
           language: parsed.language,
           keywords: parsed.keywords ?? [],
           blocks: parsed.blocks,
-          raw: parsed,
+          raw: parsed
         }
       : {
           text: rawContent,
           keywords: this.generateKeywords(rawContent),
-          raw: rawContent,
+          raw: rawContent
         }
 
     return {
@@ -278,7 +294,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
       model: data.model || body.model,
       latency,
       traceId,
-      provider: this.type,
+      provider: this.type
     }
   }
 
@@ -287,7 +303,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(body),
-      signal: timeout ? AbortSignal.timeout(timeout) : undefined,
+      signal: timeout ? AbortSignal.timeout(timeout) : undefined
     })
 
     if (!response.ok) {
@@ -331,20 +347,15 @@ export class SiliconflowProvider extends IntelligenceProvider {
   }
 
   private extractMessageContent(content: unknown): string {
-    if (!content)
-      return ''
-    if (typeof content === 'string')
-      return content
+    if (!content) return ''
+    if (typeof content === 'string') return content
     if (Array.isArray(content)) {
       return content
         .map((item) => {
-          if (typeof item === 'string')
-            return item
+          if (typeof item === 'string') return item
           if (typeof item === 'object' && item) {
-            if ('text' in item && typeof item.text === 'string')
-              return item.text
-            if ('content' in item && typeof item.content === 'string')
-              return item.content
+            if ('text' in item && typeof item.text === 'string') return item.text
+            if ('content' in item && typeof item.content === 'string') return item.content
           }
           return ''
         })
@@ -358,26 +369,22 @@ export class SiliconflowProvider extends IntelligenceProvider {
   }
 
   protected override safeParseJson(content: string): any | null {
-    if (!content)
-      return null
+    if (!content) return null
     const trimmed = content.trim()
-    if (!trimmed.startsWith('{') && !trimmed.startsWith('['))
-      return null
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
     try {
       return JSON.parse(trimmed)
-    }
-    catch {
+    } catch {
       return null
     }
   }
 
   private generateKeywords(text: string): string[] {
-    if (!text)
-      return []
+    if (!text) return []
     const tokens = text
       .split(/[\s,.;，。；、]+/)
-      .map(token => token.trim())
-      .filter(token => token.length > 2)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 2)
       .slice(0, 5)
     return Array.from(new Set(tokens))
   }

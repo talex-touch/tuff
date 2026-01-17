@@ -1,2 +1,2 @@
 export { default as TxBreadcrumb } from './TxBreadcrumb.vue'
-export type { BreadcrumbItem, BreadcrumbProps, BreadcrumbEmits } from './types'
+export type { BreadcrumbEmits, BreadcrumbItem, BreadcrumbProps } from './types'

@@ -1,6 +1,6 @@
 import type { MarketPlugin, MarketProviderListOptions } from '@talex-touch/utils/market'
-import { BaseMarketProvider } from './base-provider'
 import { getAuthToken } from '../auth-token-service'
+import { BaseMarketProvider } from './base-provider'
 
 interface TpexApiPlugin {
   id: string
@@ -51,7 +51,7 @@ export class TpexApiProvider extends BaseMarketProvider {
     const response = await this.request<TpexApiResponse>({
       url: apiUrl,
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json' }
     })
 
     if (!response.data?.plugins || !Array.isArray(response.data.plugins)) {
@@ -94,7 +94,7 @@ export class TpexApiProvider extends BaseMarketProvider {
         installs: entry.installs,
         badges: entry.badges,
         isOfficial: entry.isOfficial,
-        homepage: entry.homepage,
+        homepage: entry.homepage
       },
       readmeUrl: entry.readmeUrl ?? undefined,
       homepage: entry.homepage ?? undefined,
@@ -103,7 +103,7 @@ export class TpexApiProvider extends BaseMarketProvider {
         ? {
             type: 'url',
             url: downloadUrl,
-            format: 'tpex',
+            format: 'tpex'
           }
         : undefined,
       providerId: this.definition.id,
@@ -111,7 +111,7 @@ export class TpexApiProvider extends BaseMarketProvider {
       providerType: this.definition.type,
       providerTrustLevel: this.trustLevel,
       trusted: this.isTrusted,
-      official: entry.isOfficial || this.trustLevel === 'official',
+      official: entry.isOfficial || this.trustLevel === 'official'
     }
   }
 
@@ -137,8 +137,8 @@ export class TpexApiProvider extends BaseMarketProvider {
       method: 'GET',
       headers: {
         Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+        Authorization: `Bearer ${token}`
+      }
     })
 
     if (!response.data?.plugins || !Array.isArray(response.data.plugins)) {

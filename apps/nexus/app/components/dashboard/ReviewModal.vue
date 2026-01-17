@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import Modal from '~/components/ui/Modal.vue'
 import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
+import Modal from '~/components/ui/Modal.vue'
 
 type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
 type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
@@ -67,19 +67,21 @@ watch(() => props.isOpen, (isOpen) => {
   }
 })
 
-
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const dateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { dateStyle: 'medium' }))
 
 function formatDate(value?: string | null) {
-  if (!value) return '—'
+  if (!value)
+    return '—'
   const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
+  if (Number.isNaN(parsed.getTime()))
+    return value
   return dateFormatter.value.format(parsed)
 }
 
 function formatSize(bytes?: number | null) {
-  if (!bytes) return '—'
+  if (!bytes)
+    return '—'
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 

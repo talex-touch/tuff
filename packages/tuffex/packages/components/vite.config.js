@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
 
 export default defineConfig({
@@ -36,19 +36,19 @@ export default defineConfig({
         //   dir: '../../dist/umd',
         //   entryFileNames: '[name].js',
         // }
-      ]
+      ],
     },
     lib: {
       entry: 'src/index.ts',
       name: 'vuecomp',
-      formats: ['es', 'cjs', 'umd']
+      formats: ['es', 'cjs', 'umd'],
     },
   },
   plugins: [
     vue(),
     dts({
       entryRoot: './src',
-      outDir: '../../dist/es'
-    })
-  ]
+      outDir: '../../dist/es',
+    }),
+  ],
 })

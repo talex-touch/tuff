@@ -1,32 +1,7 @@
-<template>
-  <div class="tx-collapse-item">
-    <div
-      class="tx-collapse-item__header"
-      :class="{ 'tx-collapse-item__header--active': isActive }"
-      @click="handleHeaderClick"
-    >
-      <TxIcon 
-        :name="arrowIcon" 
-        class="tx-collapse-item__arrow"
-        :class="{ 'tx-collapse-item__arrow--active': isActive }"
-      />
-      <slot name="title">{{ title }}</slot>
-    </div>
-    
-    <Transition name="tx-collapse">
-      <div v-show="isActive" class="tx-collapse-item__content">
-        <div class="tx-collapse-item__content-inner">
-          <slot />
-        </div>
-      </div>
-    </Transition>
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { CollapseContext } from './types'
 import { computed, inject } from 'vue'
 import { TxIcon } from '../../icon'
-import type { CollapseContext } from './types'
 
 interface Props {
   title?: string
@@ -36,7 +11,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  arrowIcon: 'chevron-down'
+  arrowIcon: 'chevron-down',
 })
 
 const collapse = inject<CollapseContext>('collapse')
@@ -47,11 +22,39 @@ const isActive = computed(() => {
   return collapse?.activeNames.value.includes(itemName.value) || false
 })
 
-const handleHeaderClick = () => {
-  if (props.disabled || !collapse) return
+function handleHeaderClick() {
+  if (props.disabled || !collapse)
+    return
   collapse.handleItemClick(itemName.value)
 }
 </script>
+
+<template>
+  <div class="tx-collapse-item">
+    <div
+      class="tx-collapse-item__header"
+      :class="{ 'tx-collapse-item__header--active': isActive }"
+      @click="handleHeaderClick"
+    >
+      <TxIcon
+        :name="arrowIcon"
+        class="tx-collapse-item__arrow"
+        :class="{ 'tx-collapse-item__arrow--active': isActive }"
+      />
+      <slot name="title">
+        {{ title }}
+      </slot>
+    </div>
+
+    <Transition name="tx-collapse">
+      <div v-show="isActive" class="tx-collapse-item__content">
+        <div class="tx-collapse-item__content-inner">
+          <slot />
+        </div>
+      </div>
+    </Transition>
+  </div>
+</template>
 
 <style scoped>
 .tx-collapse-item {

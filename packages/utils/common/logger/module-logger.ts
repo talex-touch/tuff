@@ -5,28 +5,29 @@
  * Supports log levels, timing, grouping, and zero-overhead when disabled.
  */
 
-import { LogLevel, type ModuleLoggerOptions } from './types'
+import type { ModuleLoggerOptions } from './types'
+import { LogLevel } from './types'
 
 /**
  * ANSI color codes for terminal output
  */
 const COLORS: Record<string, string> = {
-  reset: '\x1b[0m',
-  gray: '\x1b[90m',
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  magenta: '\x1b[35m',
-  cyan: '\x1b[36m',
-  white: '\x1b[37m',
-  bgRed: '\x1b[41m',
-  bgGreen: '\x1b[42m',
-  bgYellow: '\x1b[43m',
-  bgBlue: '\x1b[44m',
-  bgMagenta: '\x1b[45m',
-  bgCyan: '\x1b[46m',
-  bold: '\x1b[1m'
+  reset: '\x1B[0m',
+  gray: '\x1B[90m',
+  red: '\x1B[31m',
+  green: '\x1B[32m',
+  yellow: '\x1B[33m',
+  blue: '\x1B[34m',
+  magenta: '\x1B[35m',
+  cyan: '\x1B[36m',
+  white: '\x1B[37m',
+  bgRed: '\x1B[41m',
+  bgGreen: '\x1B[42m',
+  bgYellow: '\x1B[43m',
+  bgBlue: '\x1B[44m',
+  bgMagenta: '\x1B[45m',
+  bgCyan: '\x1B[46m',
+  bold: '\x1B[1m',
 }
 
 /**
@@ -37,7 +38,7 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
   [LogLevel.INFO]: 'blue',
   [LogLevel.WARN]: 'yellow',
   [LogLevel.ERROR]: 'red',
-  [LogLevel.NONE]: 'white'
+  [LogLevel.NONE]: 'white',
 }
 
 /**
@@ -48,7 +49,7 @@ const LEVEL_LABELS: Record<LogLevel, string> = {
   [LogLevel.INFO]: 'INFO ',
   [LogLevel.WARN]: 'WARN ',
   [LogLevel.ERROR]: 'ERROR',
-  [LogLevel.NONE]: 'NONE '
+  [LogLevel.NONE]: 'NONE ',
 }
 
 /**
@@ -152,7 +153,8 @@ export class ModuleLogger {
    * Start a timer
    */
   time(label: string): void {
-    if (!this.shouldLog(LogLevel.DEBUG)) return
+    if (!this.shouldLog(LogLevel.DEBUG))
+      return
     this.timers.set(label, performance.now())
   }
 
@@ -160,7 +162,8 @@ export class ModuleLogger {
    * End a timer and log duration
    */
   timeEnd(label: string): number {
-    if (!this.shouldLog(LogLevel.DEBUG)) return 0
+    if (!this.shouldLog(LogLevel.DEBUG))
+      return 0
     const start = this.timers.get(label)
     if (start === undefined) {
       this.warn(`Timer "${label}" does not exist`)
@@ -176,7 +179,8 @@ export class ModuleLogger {
    * Start a log group
    */
   group(label: string): void {
-    if (!this.shouldLog(LogLevel.DEBUG)) return
+    if (!this.shouldLog(LogLevel.DEBUG))
+      return
     this.info(label)
     this.groupDepth++
   }
@@ -199,7 +203,7 @@ export class ModuleLogger {
       color: this.color,
       enabled: this.enabled,
       level: this.level,
-      prefix: this.prefix
+      prefix: this.prefix,
     })
   }
 
@@ -214,7 +218,8 @@ export class ModuleLogger {
    * Core logging method
    */
   private log(level: LogLevel, message: string, ...args: unknown[]): void {
-    if (!this.shouldLog(level)) return
+    if (!this.shouldLog(level))
+      return
 
     const timestamp = this.formatTimestamp()
     const levelLabel = LEVEL_LABELS[level]

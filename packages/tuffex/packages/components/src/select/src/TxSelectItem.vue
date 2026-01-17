@@ -1,6 +1,6 @@
 <script lang="ts" setup>
+import { computed, inject, onMounted } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
-import { inject, computed, onMounted } from 'vue'
 
 defineOptions({
   name: 'TuffSelectItem',
@@ -14,7 +14,7 @@ const props = withDefaults(
   }>(),
   {
     disabled: false,
-  }
+  },
 )
 
 const txSelect = inject<{
@@ -35,13 +35,15 @@ const isSelected = computed(() => {
 
 const visible = computed(() => {
   const q = (txSelect?.searchQuery?.value ?? '').trim().toLowerCase()
-  if (!q) return true
+  if (!q)
+    return true
   const label = (props.label || String(props.value)).toLowerCase()
   return label.includes(q)
 })
 
 function handleClick() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   txSelect?.handleSelect(props.value, props.label || String(props.value))
 }
 </script>

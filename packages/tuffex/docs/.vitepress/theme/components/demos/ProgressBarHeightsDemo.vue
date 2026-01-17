@@ -1,17 +1,23 @@
 <template>
   <div class="demo">
     <div class="demo__row">
-      <div class="demo__title">height="4px"</div>
+      <div class="demo__title">
+        height="4px"
+      </div>
       <TxProgressBar :percentage="75" height="4px" show-text mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">height="10px"</div>
+      <div class="demo__title">
+        height="10px"
+      </div>
       <TxProgressBar :percentage="75" height="10px" show-text mask-background="glass" />
     </div>
 
     <div class="demo__row">
-      <div class="demo__title">height="20px"</div>
+      <div class="demo__title">
+        height="20px"
+      </div>
       <TxProgressBar :percentage="75" height="20px" show-text mask-background="glass" />
     </div>
   </div>

@@ -9,12 +9,26 @@ import type {
   PluginInstallRequest,
   PluginInstallSummary
 } from '@talex-touch/utils/plugin/providers'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type {
+  PluginInstallSourceResponse,
+  PluginPerformanceGetPathsResponse
+} from '@talex-touch/utils/transport/events/types'
 import type { FSWatcher } from 'chokidar'
+import type { PluginWithSource } from '../../service/market-api.service'
 import { exec } from 'node:child_process'
 import path from 'node:path'
 import * as util from 'node:util'
 import { sleep } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils/plugin'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import {
+  CoreBoxEvents,
+  MarketEvents,
+  PermissionEvents,
+  PluginEvents
+} from '@talex-touch/utils/transport/events'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
@@ -23,42 +37,28 @@ import { TuffIconImpl } from '../../core/tuff-icon'
 import { createDbUtils } from '../../db/utils'
 import { internalPlugins } from '../../plugins/internal'
 import { fileWatchService } from '../../service/file-watch.service'
-import { getOfficialPlugins } from '../../service/official-plugin.service'
-import { performMarketHttpRequest } from '../../service/market-http.service'
 import {
   reportPluginUninstall,
   startUpdateScheduler,
   stopUpdateScheduler,
-  triggerUpdateCheck,
-  type PluginWithSource
+  triggerUpdateCheck
 } from '../../service/market-api.service'
-import { createLogger } from '../../utils/logger'
+import { performMarketHttpRequest } from '../../service/market-http.service'
+import { getOfficialPlugins } from '../../service/official-plugin.service'
 import { debounce } from '../../utils/common-util'
+import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
-import {
-  CoreBoxEvents,
-  MarketEvents,
-  PermissionEvents,
-  PluginEvents
-} from '@talex-touch/utils/transport/events'
-import type {
-  PluginInstallSourceResponse,
-  PluginPerformanceGetPathsResponse
-} from '@talex-touch/utils/transport/events/types'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
+import { getPermissionModule } from '../permission'
 import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
 import { PluginInstaller } from './plugin-installer'
-import { createPluginLoader } from './plugin-loaders'
-import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 
+import { createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
-import { getPermissionModule } from '../permission'
-import { viewCacheManager } from '../box-tool/core-box/view-cache'
+import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 
 const pluginLog = createLogger('PluginModule')
 const devWatcherLog = pluginLog.child('DevWatcher')
@@ -73,7 +73,7 @@ type WindowNewPayload = TalexTouch.TouchWindowConstructorOptions & {
   url?: string
 }
 
-type IndexCommunicatePayload = {
+interface IndexCommunicatePayload {
   key?: string
   info?: unknown
 }
@@ -1169,7 +1169,7 @@ export class PluginModule extends BaseModule {
     const mainWindowId = (app as { window?: { window?: { id?: unknown } } } | null | undefined)
       ?.window?.window?.id
     if (typeof mainWindowId !== 'number') {
-      throw new Error('[PluginModule] Main window id is not available')
+      throw new TypeError('[PluginModule] Main window id is not available')
     }
 
     const keyManager =

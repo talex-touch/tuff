@@ -1,10 +1,10 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
-import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChannel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
+import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChannel'
 
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
@@ -249,7 +249,7 @@ export function useClipboard(
             initClipboardChannel()
           }
         },
-        { interval: 50, unit: 'milliseconds' },
+        { interval: 50, unit: 'milliseconds' }
       )
       pollingService.start()
       // Cleanup poller after 5 seconds

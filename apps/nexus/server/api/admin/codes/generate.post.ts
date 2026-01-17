@@ -1,6 +1,6 @@
+import type { SubscriptionPlan } from '../../../utils/subscriptionStore'
 import { requireAdmin } from '../../../utils/auth'
 import { createActivationCode } from '../../../utils/subscriptionStore'
-import type { SubscriptionPlan } from '../../../utils/subscriptionStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAdmin(event)
@@ -39,7 +39,8 @@ export default defineEventHandler(async (event) => {
       success: true,
       codes,
     }
-  } catch (error: any) {
+  }
+  catch (error: any) {
     console.error('[admin/codes/generate] Error:', error)
     throw createError({
       statusCode: 500,

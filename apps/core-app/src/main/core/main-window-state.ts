@@ -48,8 +48,9 @@ function toBounds(value: unknown): WindowBounds | null {
     !Number.isFinite(y) ||
     !Number.isFinite(width) ||
     !Number.isFinite(height)
-  )
+  ) {
     return null
+  }
 
   return { x, y, width, height }
 }

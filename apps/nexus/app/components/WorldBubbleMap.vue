@@ -25,7 +25,7 @@ const landShapes = [
   'M220 40 L270 20 L320 40 L280 70 Z',
 ]
 
-const countryCenters: Record<string, { lat: number; lon: number }> = {
+const countryCenters: Record<string, { lat: number, lon: number }> = {
   US: { lat: 37, lon: -95 },
   CA: { lat: 56, lon: -106 },
   MX: { lat: 23, lon: -102 },
@@ -82,7 +82,8 @@ const maxCount = computed(() => Math.max(0, ...topCountries.value.map(([, count]
 const displayNames = computed(() => {
   try {
     return new Intl.DisplayNames([locale.value], { type: 'region' })
-  } catch {
+  }
+  catch {
     return null
   }
 })
@@ -119,14 +120,14 @@ const bubbles = computed(() => {
       }
     })
     .filter(Boolean) as Array<{
-      code: string
-      name: string
-      count: number
-      pct: number
-      x: number
-      y: number
-      r: number
-    }>
+    code: string
+    name: string
+    count: number
+    pct: number
+    x: number
+    y: number
+    r: number
+  }>
 })
 
 const activeCode = ref<string | null>(null)
@@ -196,7 +197,9 @@ function clearActive() {
       class="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-lg border border-black/10 bg-white/90 px-3 py-2 text-xs text-black shadow-md backdrop-blur dark:border-white/10 dark:bg-black/70 dark:text-light"
       :style="tooltipStyle"
     >
-      <p class="font-semibold">{{ activeBubble.name }}</p>
+      <p class="font-semibold">
+        {{ activeBubble.name }}
+      </p>
       <p class="text-[11px] text-black/60 dark:text-light/60">
         {{ activeBubble.count }} · {{ activeBubble.pct.toFixed(1) }}%
       </p>

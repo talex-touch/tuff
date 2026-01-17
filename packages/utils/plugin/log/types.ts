@@ -1,11 +1,12 @@
+import type { LogLevelString as BaseLogLevelString } from '../../base/log-level'
 /**
  * Re-export unified LogLevel from base
  */
 import {
   LogLevel as BaseLogLevel,
-  type LogLevelString as BaseLogLevelString,
+
   logLevelToString as baseLogLevelToString,
-  stringToLogLevel as baseStringToLogLevel
+  stringToLogLevel as baseStringToLogLevel,
 } from '../../base/log-level'
 
 export const LogLevel = BaseLogLevel

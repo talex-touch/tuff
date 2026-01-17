@@ -59,9 +59,12 @@ export function getEnvOrDefault(key: string, fallback: string): string {
 
 export function getBooleanEnv(key: string, fallback = false): boolean {
   const raw = getEnv(key)
-  if (raw === undefined) return fallback
-  if (raw === '1' || raw === 'true') return true
-  if (raw === '0' || raw === 'false') return false
+  if (raw === undefined)
+    return fallback
+  if (raw === '1' || raw === 'true')
+    return true
+  if (raw === '0' || raw === 'false')
+    return false
   return fallback
 }
 

@@ -1,11 +1,12 @@
 import type { TuffSection } from '@talex-touch/utils'
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
-import { BoxMode } from '..'
+import type { ForwardedKeyEvent } from '../transport/key-transport'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { onBeforeUnmount } from 'vue'
 import { touchChannel } from '~/modules/channel/channel-core'
-import { createCoreBoxKeyTransport, type ForwardedKeyEvent } from '../transport/key-transport'
-import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
+import { BoxMode } from '..'
+import { createCoreBoxKeyTransport } from '../transport/key-transport'
 
 interface SectionRange {
   start: number
@@ -82,11 +83,7 @@ function navigateGridDown(
 }
 
 /** Navigate up in multi-section grid */
-function navigateGridUp(
-  currentIndex: number,
-  cols: number,
-  sections: TuffSection[]
-): number {
+function navigateGridUp(currentIndex: number, cols: number, sections: TuffSection[]): number {
   const ranges = buildSectionRanges(sections)
   if (ranges.length === 0) return currentIndex
 
@@ -290,7 +287,10 @@ function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
   }
 
   // Never forward ⌘←/⌘→ - reserved for CoreBox history panel
-  if ((event.metaKey || event.ctrlKey) && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+  if (
+    (event.metaKey || event.ctrlKey) &&
+    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+  ) {
     return false
   }
 
@@ -351,7 +351,7 @@ export function useKeyboard(
   clearClipboard: (options?: { remember?: boolean }) => void,
   activeActivations: Ref<any>,
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
-  itemRefs: Ref<any[]>,
+  itemRefs: Ref<any[]>
 ) {
   const keyTransport = createCoreBoxKeyTransport(touchChannel)
 
@@ -384,7 +384,12 @@ export function useKeyboard(
   function onKeyDown(event: KeyboardEvent): void {
     // Debug: log all meta+arrow events at entry point
     if (event.metaKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      console.log('[useKeyboard] META+ARROW at entry, key:', event.key, 'hasClass:', document.body.classList.contains('core-box'))
+      console.log(
+        '[useKeyboard] META+ARROW at entry, key:',
+        event.key,
+        'hasClass:',
+        document.body.classList.contains('core-box')
+      )
     }
 
     if (!document.body.classList.contains('core-box')) {
@@ -397,7 +402,12 @@ export function useKeyboard(
     const inputHidden = uiMode && !inputAllowed
 
     // Command/Ctrl+K: Open MetaOverlay action panel (should work even in UI mode)
-    if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === 'k' || event.key === 'K')) {
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      !event.shiftKey &&
+      (event.key === 'k' || event.key === 'K')
+    ) {
       const currentItem = res.value[boxOptions.focus]
       if (!currentItem) {
         event.preventDefault()
@@ -421,7 +431,12 @@ export function useKeyboard(
 
     // Debug: log ⌘← events
     if (event.metaKey && event.key === 'ArrowLeft') {
-      console.log('[useKeyboard] ⌘← after class check, uiMode:', uiMode, 'shouldForward:', shouldForwardKey(event, inputHidden))
+      console.log(
+        '[useKeyboard] ⌘← after class check, uiMode:',
+        uiMode,
+        'shouldForward:',
+        shouldForwardKey(event, inputHidden)
+      )
     }
 
     // Forward keys to plugin UI view when in UI mode
@@ -461,8 +476,7 @@ export function useKeyboard(
       const target = res.value[boxOptions.focus]
 
       handleExecute(target)
-    }
-    else if (event.key === 'ArrowDown') {
+    } else if (event.key === 'ArrowDown') {
       const isGrid = boxOptions.layout?.mode === 'grid'
       const cols = boxOptions.layout?.grid?.columns || 5
       const sections = boxOptions.layout?.sections
@@ -478,12 +492,11 @@ export function useKeyboard(
         if (nextIndex < res.value.length) {
           boxOptions.focus = nextIndex
         } else if (res.value.length <= 20) {
-          boxOptions.focus = isGrid ? (boxOptions.focus % cols) : 0
+          boxOptions.focus = isGrid ? boxOptions.focus % cols : 0
         }
       }
       event.preventDefault()
-    }
-    else if (event.key === 'ArrowUp') {
+    } else if (event.key === 'ArrowUp') {
       const isGrid = boxOptions.layout?.mode === 'grid'
       const cols = boxOptions.layout?.grid?.columns || 5
       const sections = boxOptions.layout?.sections
@@ -502,12 +515,11 @@ export function useKeyboard(
           const lastRowStart = Math.floor((res.value.length - 1) / cols) * cols
           const targetCol = boxOptions.focus % cols
           const targetIndex = Math.min(lastRowStart + targetCol, res.value.length - 1)
-          boxOptions.focus = isGrid ? targetIndex : (res.value.length - 1)
+          boxOptions.focus = isGrid ? targetIndex : res.value.length - 1
         }
       }
       event.preventDefault()
-    }
-    else if (event.key === 'ArrowLeft') {
+    } else if (event.key === 'ArrowLeft') {
       // Meta+Left: show calculation history (check first to ensure it works in all modes)
       if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
         console.log('[useKeyboard] Dispatching corebox:show-calculation-history event')
@@ -524,8 +536,7 @@ export function useKeyboard(
         event.preventDefault()
         return
       }
-    }
-    else if (event.key === 'ArrowRight') {
+    } else if (event.key === 'ArrowRight') {
       const isGrid = boxOptions.layout?.mode === 'grid'
       // Grid mode: move right
       if (isGrid && !event.metaKey) {
@@ -543,13 +554,12 @@ export function useKeyboard(
           return
         }
       }
-    }
-    else if (event.key === 'Tab') {
+    } else if (event.key === 'Tab') {
       if (res.value[boxOptions.focus]) {
-        const completion
-          = res.value[boxOptions.focus].render.completion
-            ?? res.value[boxOptions.focus].render.basic?.title
-            ?? ''
+        const completion =
+          res.value[boxOptions.focus].render.completion ??
+          res.value[boxOptions.focus].render.basic?.title ??
+          ''
         searchVal.value = completion
 
         if (inputEl.value) {
@@ -559,8 +569,7 @@ export function useKeyboard(
         }
       }
       event.preventDefault()
-    }
-    else if (event.key === 'd' || event.key === 'D') {
+    } else if (event.key === 'd' || event.key === 'D') {
       /**
        * Command/Ctrl+D: Detach current item to DivisionBox
        *
@@ -578,20 +587,23 @@ export function useKeyboard(
 
         if (event.shiftKey) {
           // Command+Shift+D: Flow transfer to another plugin
-          window.dispatchEvent(new CustomEvent(COREBOX_FLOW_EVENT, {
-            detail: { item: currentItem, query: searchVal.value }
-          }))
+          window.dispatchEvent(
+            new CustomEvent(COREBOX_FLOW_EVENT, {
+              detail: { item: currentItem, query: searchVal.value }
+            })
+          )
         } else {
           // Command+D: Detach to DivisionBox
-          window.dispatchEvent(new CustomEvent(COREBOX_DETACH_EVENT, {
-            detail: { item: currentItem, query: searchVal.value }
-          }))
+          window.dispatchEvent(
+            new CustomEvent(COREBOX_DETACH_EVENT, {
+              detail: { item: currentItem, query: searchVal.value }
+            })
+          )
         }
         event.preventDefault()
         return
       }
-    }
-    else if (event.key === 'Escape') {
+    } else if (event.key === 'Escape') {
       /**
        * ESC key strict sequential handling (UPDATED):
        * 1. Close MetaOverlay if visible (HIGHEST PRIORITY)
@@ -611,7 +623,6 @@ export function useKeyboard(
             await touchChannel.send(MetaOverlayEvents.ui.hide.toEventName())
             event.preventDefault()
             event.stopPropagation()
-            return
           }
         } catch {
           // If check fails, continue with normal ESC handling
@@ -651,8 +662,7 @@ export function useKeyboard(
 
     if (boxOptions.focus < 0) {
       boxOptions.focus = 0
-    }
-    else if (boxOptions.focus > res.value.length - 1) {
+    } else if (boxOptions.focus > res.value.length - 1) {
       boxOptions.focus = res.value.length - 1
     }
 
@@ -682,8 +692,7 @@ export function useKeyboard(
 
         if (itemTop < scrollTop) {
           sb.scrollTo(0, itemTop)
-        }
-        else if (itemTop + itemHeight > scrollTop + effectiveHeight) {
+        } else if (itemTop + itemHeight > scrollTop + effectiveHeight) {
           sb.scrollTo(0, itemTop + itemHeight - effectiveHeight)
         }
       }

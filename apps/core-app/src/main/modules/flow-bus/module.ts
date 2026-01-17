@@ -8,18 +8,19 @@
 import type { MaybePromise } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { FlowBusIPC } from './ipc'
+import { FlowEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
 import { genTouchApp } from '../../core'
 import { BaseModule } from '../abstract-base-module'
-import { shortcutModule } from '../global-shortcon'
-import { FlowBusIPC, initializeFlowBusIPC } from './ipc'
-import { flowTargetRegistry } from './target-registry'
-import { nativeShareService } from './native-share'
-import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
 import { DivisionBoxManager } from '../division-box/manager'
-import { FlowEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { shortcutModule } from '../global-shortcon'
 import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
+import { initializeFlowBusIPC } from './ipc'
+import { nativeShareService } from './native-share'
+import { flowTargetRegistry } from './target-registry'
 
 const LOG_PREFIX = '[FlowBus]'
 
@@ -72,10 +73,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   }
 
   private registerTransportHandlers(channel: ITouchChannel): void {
-    const tx = getTuffTransportMain(
-      channel as any,
-      (channel as any)?.keyManager ?? channel,
-    )
+    const tx = getTuffTransportMain(channel as any, (channel as any)?.keyManager ?? channel)
 
     const enforce = (context: any, apiName: string, sdkapi?: number) => {
       const pluginId = context?.plugin?.name
@@ -97,11 +95,11 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
           flowTargetRegistry.registerPluginTargets(pluginId, targets, {
             pluginName,
             pluginIcon,
-            isEnabled,
+            isEnabled
           })
         }
         return { success: true }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -109,7 +107,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         enforce(context, 'flow:plugin:unregister-targets', payload?._sdkapi)
         flowTargetRegistry.unregisterPluginTargets(payload.pluginId)
         return { success: true }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -117,7 +115,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         enforce(context, 'flow:plugin:set-plugin-enabled', payload?._sdkapi)
         flowTargetRegistry.setPluginEnabled(payload.pluginId, payload.enabled)
         return { success: true }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -136,17 +134,19 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
           if (hasHandler) {
             const dispose = flowBus.registerDeliveryHandler(pluginId, async (session) => {
-              await tx.sendToPlugin(pluginId, FlowEvents.deliver, {
-                sessionId: session.sessionId,
-                payload: session.payload,
-                senderId: session.senderId,
-              }).catch(() => {})
+              await tx
+                .sendToPlugin(pluginId, FlowEvents.deliver, {
+                  sessionId: session.sessionId,
+                  payload: session.payload,
+                  senderId: session.senderId
+                })
+                .catch(() => {})
             })
             this.flowDeliveryDisposers.set(pluginId, dispose)
           }
         }
         return { success: true }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -157,7 +157,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
           options.target = payload.target as any
         }
         return await nativeShareService.share(options)
-      }),
+      })
     )
   }
 
@@ -166,19 +166,15 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    */
   private registerNativeShareTargets(): void {
     const targets = nativeShareService.getAvailableTargets()
-    
+
     for (const target of targets) {
-      flowTargetRegistry.registerTarget(
-        'native',
-        target,
-        {
-          pluginName: '系统分享',
-          pluginIcon: 'ri:share-forward-line',
-          isEnabled: true,
-          hasFlowHandler: true, // Native share always has handler
-          isNativeShare: true
-        }
-      )
+      flowTargetRegistry.registerTarget('native', target, {
+        pluginName: '系统分享',
+        pluginIcon: 'ri:share-forward-line',
+        isEnabled: true,
+        hasFlowHandler: true, // Native share always has handler
+        isNativeShare: true
+      })
     }
 
     console.log(LOG_PREFIX, `Registered ${targets.length} native share targets`)
@@ -189,29 +185,27 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    */
   private registerShortcuts(): void {
     // Command+D: Detach current item to DivisionBox
-    shortcutModule.registerMainShortcut(
-      FLOW_SHORTCUT_IDS.DETACH,
-      'CommandOrControl+D',
-      () => {
-        if (coreBoxManager.isUIMode) {
-          this.triggerDetach()
-          return
-        }
-
-        const coreBoxWindow = getCoreBoxWindow()
-        if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-          console.warn('[FlowBusModule] CoreBox window not available for detach')
-          return
-        }
-
-        const tx = getTuffTransportMain(
-          genTouchApp().channel as any,
-          (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel,
-        )
-
-        tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined as any).catch(() => {})
+    shortcutModule.registerMainShortcut(FLOW_SHORTCUT_IDS.DETACH, 'CommandOrControl+D', () => {
+      if (coreBoxManager.isUIMode) {
+        this.triggerDetach()
+        return
       }
-    )
+
+      const coreBoxWindow = getCoreBoxWindow()
+      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+        console.warn('[FlowBusModule] CoreBox window not available for detach')
+        return
+      }
+
+      const tx = getTuffTransportMain(
+        genTouchApp().channel as any,
+        (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel
+      )
+
+      tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined as any).catch(
+        () => {}
+      )
+    })
 
     // Command+Shift+D: Transfer current item to another plugin
     shortcutModule.registerMainShortcut(
@@ -281,7 +275,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
       // Reset CoreBox to default state (shrink, exit UI mode flag)
       coreBoxManager.exitUIMode()
-      
+
       // Hide CoreBox
       if (!coreBoxWindow.window.isDestroyed()) coreBoxWindow.window.hide()
 
@@ -317,19 +311,19 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
     const tx = getTuffTransportMain(
       genTouchApp().channel as any,
-      (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel,
+      (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel
     )
 
-    tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined as any).catch(() => {})
+    tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined as any).catch(
+      () => {}
+    )
     console.log('[FlowBusModule] Triggered flow transfer shortcut')
   }
 
   /**
    * Sets up integration with plugin system
    */
-  private setupPluginIntegration(): void {
-    return
-  }
+  private setupPluginIntegration(): void {}
 
   /**
    * Cleans up the Flow Bus module

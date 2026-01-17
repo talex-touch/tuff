@@ -1,8 +1,8 @@
 <script lang="ts" name="AISDKCapabilityDetails" setup>
 import type {
   AiCapabilityProviderBinding,
-  IntelligenceProviderConfig,
   AISDKCapabilityConfig,
+  IntelligenceProviderConfig
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks/use-intelligence'
@@ -30,7 +30,7 @@ const emits = defineEmits<{
   toggleProvider: [providerId: string, enabled: boolean]
   updateModels: [providerId: string, value: string[]]
   updatePrompt: [prompt: string]
-  test: [params?: { providerId?: string, userInput?: string }]
+  test: [params?: { providerId?: string; userInput?: string }]
   reorderProviders: [bindings: AiCapabilityProviderBinding[]]
 }>()
 
@@ -46,14 +46,14 @@ let promptTimer: number | null = null
 let syncingFromProps = false
 
 const providerMetaMap = computed(
-  () => new Map(props.providers.map(provider => [provider.id, provider])),
+  () => new Map(props.providers.map((provider) => [provider.id, provider]))
 )
 
 const selectedProviderIds = computed(() => {
   return new Set(
     (props.capability.providers || [])
-      .filter(binding => binding.enabled !== false)
-      .map(binding => binding.providerId),
+      .filter((binding) => binding.enabled !== false)
+      .map((binding) => binding.providerId)
   )
 })
 
@@ -69,35 +69,35 @@ const bindingMap = computed(() => {
 
 const enabledBindings = computed<CapabilityBinding[]>(() => {
   return (props.capability.providers || [])
-    .filter(binding => binding.enabled !== false)
+    .filter((binding) => binding.enabled !== false)
     .slice()
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-    .map(binding => ({
+    .map((binding) => ({
       ...binding,
-      provider: providerMetaMap.value.get(binding.providerId),
+      provider: providerMetaMap.value.get(binding.providerId)
     }))
 })
 
 const disabledProviders = computed<CapabilityBinding[]>(() => {
-  const enabledIds = new Set(enabledBindings.value.map(binding => binding.providerId))
+  const enabledIds = new Set(enabledBindings.value.map((binding) => binding.providerId))
   const disabledSet = new Set<string>()
   const leftover = (props.capability.providers || [])
-    .filter(binding => binding.enabled === false)
+    .filter((binding) => binding.enabled === false)
     .map((binding) => {
       disabledSet.add(binding.providerId)
       return {
         ...binding,
-        provider: providerMetaMap.value.get(binding.providerId),
+        provider: providerMetaMap.value.get(binding.providerId)
       }
     })
 
   const remaining = props.providers
-    .filter(provider => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
-    .map(provider => ({
+    .filter((provider) => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
+    .map((provider) => ({
       providerId: provider.id,
       enabled: false,
       priority: undefined,
-      provider,
+      provider
     }))
 
   return [...leftover, ...remaining]
@@ -110,16 +110,15 @@ watch(
   (list) => {
     sortableEnabledBindings.value = list
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 )
 
 const focusedProvider = computed(
-  () => props.providers.find(provider => provider.id === focusedProviderId.value) || null,
+  () => props.providers.find((provider) => provider.id === focusedProviderId.value) || null
 )
 
 const focusedBinding = computed(() => {
-  if (!focusedProviderId.value)
-    return null
+  if (!focusedProviderId.value) return null
   return bindingMap.value.get(focusedProviderId.value) ?? null
 })
 
@@ -171,21 +170,17 @@ const modelTransferDescription = computed(() => {
 })
 
 const testSummary = computed(() => {
-  if (!props.testResult)
-    return ''
+  if (!props.testResult) return ''
   const pieces: string[] = []
-  if (props.testResult.provider)
-    pieces.push(props.testResult.provider)
-  if (props.testResult.model)
-    pieces.push(props.testResult.model)
-  if (props.testResult.latency)
-    pieces.push(`${props.testResult.latency}ms`)
+  if (props.testResult.provider) pieces.push(props.testResult.provider)
+  if (props.testResult.model) pieces.push(props.testResult.model)
+  if (props.testResult.latency) pieces.push(`${props.testResult.latency}ms`)
   return pieces.join(' · ')
 })
 
 const enabledProvidersForTest = computed(() => {
-  return props.providers.filter(provider =>
-    selectedProviderIds.value.has(provider.id) && provider.enabled,
+  return props.providers.filter(
+    (provider) => selectedProviderIds.value.has(provider.id) && provider.enabled
   )
 })
 
@@ -195,18 +190,16 @@ watch(
     syncingFromProps = true
     promptValue.value = value || ''
     syncingFromProps = false
-  },
+  }
 )
 
 function flushPrompt(): void {
-  if (syncingFromProps)
-    return
+  if (syncingFromProps) return
   emits('updatePrompt', promptValue.value)
 }
 
 function schedulePromptSync(): void {
-  if (syncingFromProps)
-    return
+  if (syncingFromProps) return
   if (promptTimer) {
     clearTimeout(promptTimer)
   }
@@ -224,7 +217,7 @@ watch(
   () => props.capability.id,
   () => {
     flushPrompt()
-  },
+  }
 )
 
 function handleProviderToggle(providerId: string, enabled: boolean): void {
@@ -245,21 +238,19 @@ function emitProvidersOrder(): void {
     const { provider, ...rest } = binding
     return {
       ...rest,
-      priority: index + 1,
+      priority: index + 1
     }
   })
   emits('reorderProviders', reordered)
 }
 
 function handleModelTransferUpdates(models: string[]): void {
-  if (!focusedProviderId.value)
-    return
+  if (!focusedProviderId.value) return
   emits('updateModels', focusedProviderId.value, models)
 }
 
 function openModelDrawer(): void {
-  if (!canEditModels.value)
-    return
+  if (!canEditModels.value) return
   showModelDrawer.value = true
 }
 
@@ -268,16 +259,14 @@ function openPromptDrawer(): void {
 }
 
 async function handleTest(): Promise<void> {
-  if (props.isTesting)
-    return
+  if (props.isTesting) return
 
   // 获取测试元数据
   try {
     const meta = await intelligence.getCapabilityTestMeta({ capabilityId: props.capability.id })
     testMeta.value = meta
     showTestDialog.value = true
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to get test meta:', error)
     // 如果获取失败，使用默认值并继续
     testMeta.value = { requiresUserInput: false, inputHint: '' }
@@ -298,17 +287,17 @@ watch(
       return
     }
     if (
-      focusedProviderId.value
-      && props.providers.some(provider => provider.id === focusedProviderId.value)
+      focusedProviderId.value &&
+      props.providers.some((provider) => provider.id === focusedProviderId.value)
     ) {
       return
     }
     const firstActive = props.capability.providers?.find(
-      binding => binding.enabled !== false,
+      (binding) => binding.enabled !== false
     )?.providerId
     focusedProviderId.value = firstActive ?? props.providers[0].id
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 )
 
 onBeforeUnmount(() => {
@@ -342,7 +331,7 @@ onBeforeUnmount(() => {
               <i class="i-carbon-catalog" aria-hidden="true" />
               {{
                 t('settings.intelligence.capabilityBindingsStat', {
-                  count: capability.providers?.length || 0,
+                  count: capability.providers?.length || 0
                 })
               }}
             </span>
@@ -407,7 +396,7 @@ onBeforeUnmount(() => {
                       type="button"
                       class="provider-card"
                       :class="{
-                        'is-focused': focusedProviderId === element.providerId,
+                        'is-focused': focusedProviderId === element.providerId
                       }"
                       @click="handleProviderCardClick(element.providerId)"
                     >
@@ -421,7 +410,7 @@ onBeforeUnmount(() => {
                             ·
                             {{
                               t('settings.intelligence.capabilityModelCount', {
-                                count: element.models.length,
+                                count: element.models.length
                               })
                             }}
                           </span>

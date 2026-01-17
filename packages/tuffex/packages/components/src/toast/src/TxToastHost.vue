@@ -14,8 +14,12 @@ const items = computed(() => toastStore.items)
     <div class="tx-toast-host" role="region" aria-label="Notifications">
       <div v-for="t in items" :key="t.id" class="tx-toast" :class="`tx-toast--${t.variant || 'default'}`">
         <div class="tx-toast__content">
-          <div v-if="t.title" class="tx-toast__title">{{ t.title }}</div>
-          <div v-if="t.description" class="tx-toast__desc">{{ t.description }}</div>
+          <div v-if="t.title" class="tx-toast__title">
+            {{ t.title }}
+          </div>
+          <div v-if="t.description" class="tx-toast__desc">
+            {{ t.description }}
+          </div>
         </div>
         <button class="tx-toast__close" type="button" @click="dismissToast(t.id)">
           <i class="i-carbon-close" />

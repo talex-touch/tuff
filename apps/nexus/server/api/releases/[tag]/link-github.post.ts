@@ -1,7 +1,7 @@
+import type { AssetArch, AssetPlatform } from '../../../utils/releasesStore'
 import { createError, readBody } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStore'
-import type { AssetArch, AssetPlatform } from '../../../utils/releasesStore'
 
 interface LinkGitHubAssetInput {
   platform: AssetPlatform

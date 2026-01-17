@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { TxStatusIconProps } from './status-icon'
 import { computed } from 'vue'
 import TxIcon from './TxIcon.vue'
-import type { TxStatusIconProps } from './status-icon'
 
 defineOptions({ name: 'TxStatusIcon' })
 
@@ -18,7 +18,8 @@ const props = withDefaults(defineProps<TxStatusIconProps>(), {
 })
 
 const indicatorSize = computed(() => {
-  if (typeof props.indicatorSize === 'number' && props.indicatorSize > 0) return props.indicatorSize
+  if (typeof props.indicatorSize === 'number' && props.indicatorSize > 0)
+    return props.indicatorSize
   const base = Math.round((props.size ?? 18) * 0.32)
   return Math.max(6, Math.min(12, base))
 })
@@ -125,4 +126,3 @@ const indicatorSize = computed(() => {
   }
 }
 </style>
-

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TxRadioGroupProps, TxRadioIndicatorVariant, TxRadioValue } from './types'
-import { hasWindow } from '../../../../utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 import { TxGlassSurface } from '../../glass-surface'
 
 defineOptions({ name: 'TxRadioGroup' })
@@ -28,9 +28,12 @@ const { disabled, type } = toRefs(props)
 
 const resolvedIndicatorVariant = computed<TxRadioIndicatorVariant>(() => {
   const v = props.indicatorVariant
-  if (v) return v
-  if (props.glass) return 'glass'
-  if (props.blur) return 'blur'
+  if (v)
+    return v
+  if (props.glass)
+    return 'glass'
+  if (props.blur)
+    return 'blur'
   return 'solid'
 })
 
@@ -873,7 +876,7 @@ watch(
       `tx-radio-group--${type}`,
       `tx-radio-group--dir-${resolvedDirection}`,
       `tx-radio-group--indicator-${resolvedIndicatorVariant}`,
-      { 'is-motion': motionActive }
+      { 'is-motion': motionActive },
     ]"
   >
     <span v-if="type === 'button'" class="tx-radio-group__indicator-outline" :style="outlineStyle" aria-hidden="true" />

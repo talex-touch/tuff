@@ -14,11 +14,11 @@ let currentLocale: Locale = 'en'
 export function detectSystemLocale(): Locale {
   const env = process.env
   const langEnv = env.LANG || env.LANGUAGE || env.LC_ALL || env.LC_MESSAGES || ''
-  
+
   if (langEnv.toLowerCase().startsWith('zh')) {
     return 'zh'
   }
-  
+
   // Also check for Chinese locale on different platforms
   if (process.platform === 'darwin') {
     // macOS: check AppleLocale
@@ -27,7 +27,7 @@ export function detectSystemLocale(): Locale {
       return 'zh'
     }
   }
-  
+
   return 'en'
 }
 
@@ -64,7 +64,8 @@ function getNestedValue(obj: any, path: string): string | undefined {
   for (const key of keys) {
     if (value && typeof value === 'object' && key in value) {
       value = value[key]
-    } else {
+    }
+    else {
       return undefined
     }
   }
@@ -77,23 +78,23 @@ function getNestedValue(obj: any, path: string): string | undefined {
 export function t(key: string, params?: Record<string, string | number>): string {
   const messages = locales[currentLocale]
   let text = getNestedValue(messages, key)
-  
+
   if (!text) {
     // Fallback to English
     text = getNestedValue(locales.en, key)
   }
-  
+
   if (!text) {
     return key
   }
-  
+
   // Interpolate params
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
     }
   }
-  
+
   return text
 }
 

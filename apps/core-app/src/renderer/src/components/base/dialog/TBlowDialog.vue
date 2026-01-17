@@ -1,5 +1,5 @@
 <script lang="ts" name="TBlowDialog" setup>
-import { type Component, VNode } from 'vue'
+import type { Component, VNode } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
 
 /**
@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
   comp: undefined,
-  render: undefined,
+  render: undefined
 })
 
 /** Reactive reference to control dialog closing state */
@@ -52,7 +52,7 @@ onMounted(() => {
 
   if (props.render) {
     renderComp.value = defineComponent({
-      render: props.render,
+      render: props.render
     })
   }
 
@@ -79,8 +79,7 @@ function setFocusToDialog(): void {
   const confirmButton = dialogWrapper.value?.querySelector('.TBlowDialog-Confirm')
   if (confirmButton instanceof HTMLElement) {
     confirmButton.focus()
-  }
-  else if (dialogWrapper.value) {
+  } else if (dialogWrapper.value) {
     // Otherwise, focus on the dialog wrapper
     dialogWrapper.value.setAttribute('tabindex', '-1')
     dialogWrapper.value.focus()
@@ -102,20 +101,18 @@ function restoreFocus(): void {
  */
 function applyBackgroundBlur(apply: boolean): void {
   const app = document.getElementById('app')
-  if (!app)
-    return
+  if (!app) return
 
   if (apply) {
     Object.assign(app.style, {
       transition: '.75s',
       transform: 'scale(1.25)',
-      opacity: '.75',
+      opacity: '.75'
     })
-  }
-  else {
+  } else {
     Object.assign(app.style, {
       transform: 'scale(1)',
-      opacity: '1',
+      opacity: '1'
     })
   }
 }

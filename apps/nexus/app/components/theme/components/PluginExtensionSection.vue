@@ -9,51 +9,71 @@ import TouchButton from './base/TouchButton.vue'
       <div class="beta-tag">
         <span class="beta-text">EXTENSIBLE</span>
       </div>
-      
-      <h2 class="section-title">Powerful Plugin System</h2>
-      <p class="section-subtitle">Lightweight plugins for simple tweaks, advanced builds for immersive customization</p>
-      
+
+      <h2 class="section-title">
+        Powerful Plugin System
+      </h2>
+      <p class="section-subtitle">
+        Lightweight plugins for simple tweaks, advanced builds for immersive customization
+      </p>
+
       <div class="introduction">
         <p>Polyglot Toolbox features a sophisticated plugin architecture that allows you to tailor the application to your exact needs. From simple lightweight plugins to advanced automation suites, our system provides unparalleled flexibility and power.</p>
       </div>
-      
+
       <div class="features-grid">
         <div class="feature-card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24" width="48" height="48">
-              <path fill="rgba(255, 255, 255, 0.8)" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-3.5l6-4.5-6-4.5z"/>
+              <path fill="rgba(255, 255, 255, 0.8)" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-3.5l6-4.5-6-4.5z" />
             </svg>
           </div>
-          <h3 class="card-title">Lightweight Plugins</h3>
-          <p class="card-description">Simple, focused plugins that add specific functionality without overhead. Perfect for quick enhancements and minor customizations.</p>
+          <h3 class="card-title">
+            Lightweight Plugins
+          </h3>
+          <p class="card-description">
+            Simple, focused plugins that add specific functionality without overhead. Perfect for quick enhancements and minor customizations.
+          </p>
         </div>
         <div class="feature-card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24" width="48" height="48">
-              <path fill="rgba(255, 255, 255, 0.8)" d="M7 2v11h3v9l7-12h-4l4-8z"/>
+              <path fill="rgba(255, 255, 255, 0.8)" d="M7 2v11h3v9l7-12h-4l4-8z" />
             </svg>
           </div>
-          <h3 class="card-title">Advanced Builds</h3>
-          <p class="card-description">Comprehensive plugins that transform the core functionality of the application. Build entire new workflows and capabilities.</p>
+          <h3 class="card-title">
+            Advanced Builds
+          </h3>
+          <p class="card-description">
+            Comprehensive plugins that transform the core functionality of the application. Build entire new workflows and capabilities.
+          </p>
         </div>
         <div class="feature-card">
           <div class="card-icon">
             <svg viewBox="0 0 24 24" width="48" height="48">
-              <path fill="rgba(255, 255, 255, 0.8)" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+              <path fill="rgba(255, 255, 255, 0.8)" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
             </svg>
           </div>
-          <h3 class="card-title">Seamless Integration</h3>
-          <p class="card-description">All plugins integrate smoothly with the core application, maintaining performance and consistency.</p>
+          <h3 class="card-title">
+            Seamless Integration
+          </h3>
+          <p class="card-description">
+            All plugins integrate smoothly with the core application, maintaining performance and consistency.
+          </p>
         </div>
         <div class="feature-card">
           <div class="card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 26 26"><!-- Icon from Garden SVG Icons by Zendesk - https://github.com/zendeskgarden/svg-icons/blob/main/LICENSE.md --><path fill="currentColor" d="m22.475 18.881l-8.891 4.925c-.525.259-.643.259-1.168 0l-8.89-4.925c-1.164-.644-.195-2.385.97-1.74L13 21.85l8.505-4.71c1.164-.645 2.133 1.096.97 1.74zm0-5l-8.891 4.925c-.525.259-.643.259-1.168 0l-8.89-4.925c-1.164-.644-.195-2.385.97-1.74L13 16.85l8.505-4.71c1.164-.645 2.133 1.096.97 1.74zM3.515 8.89a1 1 0 0 1-.002-1.749l9-5.015a1 1 0 0 1 .974 0l9 5.015a1 1 0 0 1-.003 1.749l-9.007 4.985a1 1 0 0 1-.97 0z"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 26 26"><!-- Icon from Garden SVG Icons by Zendesk - https://github.com/zendeskgarden/svg-icons/blob/main/LICENSE.md --><path fill="currentColor" d="m22.475 18.881l-8.891 4.925c-.525.259-.643.259-1.168 0l-8.89-4.925c-1.164-.644-.195-2.385.97-1.74L13 21.85l8.505-4.71c1.164-.645 2.133 1.096.97 1.74zm0-5l-8.891 4.925c-.525.259-.643.259-1.168 0l-8.89-4.925c-1.164-.644-.195-2.385.97-1.74L13 16.85l8.505-4.71c1.164-.645 2.133 1.096.97 1.74zM3.515 8.89a1 1 0 0 1-.002-1.749l9-5.015a1 1 0 0 1 .974 0l9 5.015a1 1 0 0 1-.003 1.749l-9.007 4.985a1 1 0 0 1-.97 0z" /></svg>
           </div>
-          <h3 class="card-title">Developer Friendly</h3>
-          <p class="card-description">Comprehensive SDK and documentation make it easy for developers to create their own plugins.</p>
+          <h3 class="card-title">
+            Developer Friendly
+          </h3>
+          <p class="card-description">
+            Comprehensive SDK and documentation make it easy for developers to create their own plugins.
+          </p>
         </div>
       </div>
-      
+
       <div class="cta-section">
         <TouchButton>
           Explore Plugins
@@ -199,7 +219,7 @@ import TouchButton from './base/TouchButton.vue'
   .section-title {
     font-size: 1.5rem;
   }
-  
+
   .section-subtitle {
     font-size: 1rem;
   }

@@ -1,7 +1,15 @@
 // src/db/schema.ts
 
 import { sql } from 'drizzle-orm'
-import { customType, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import {
+  customType,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text
+} from 'drizzle-orm/sqlite-core'
 
 // --- 自定义类型 (Custom Types) ---
 
@@ -9,7 +17,7 @@ import { customType, index, integer, primaryKey, real, sqliteTable, text } from 
  * 自定义向量类型，用于在应用代码中的 number[] 数组和
  * SQLite TEXT 列中的 JSON 字符串之间进行转换。
  */
-const vectorType = customType<{ data: number[], driverData: string }>({
+const vectorType = customType<{ data: number[]; driverData: string }>({
   dataType() {
     return 'text' // 在数据库中以 TEXT 类型存储
   },
@@ -20,7 +28,7 @@ const vectorType = customType<{ data: number[], driverData: string }>({
   fromDriver(value: string): number[] {
     // 从数据库读取时，将 JSON 字符串解析回数组
     return JSON.parse(value)
-  },
+  }
 })
 
 // =============================================================================
@@ -44,7 +52,7 @@ export const keywordMappings = sqliteTable('keyword_mappings', {
   providerId: text('provider_id').notNull().default(''),
 
   // 用于排序的静态权重，可由插件或用户定义
-  priority: real('priority').notNull().default(1.0),
+  priority: real('priority').notNull().default(1.0)
 })
 
 // =============================================================================
@@ -72,7 +80,7 @@ export const files = sqliteTable('files', {
   content: text('content'), // 仅对需要深度索引的文件类型存储内容
   embeddingStatus: text('embedding_status', { enum: ['none', 'pending', 'completed'] })
     .notNull()
-    .default('none'),
+    .default('none')
 })
 
 /**
@@ -85,11 +93,11 @@ export const fileExtensions = sqliteTable(
       .notNull()
       .references(() => files.id, { onDelete: 'cascade' }),
     key: text('key').notNull(),
-    value: text('value'),
+    value: text('value')
   },
-  table => ({
-    pk: primaryKey({ columns: [table.fileId, table.key] }),
-  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.fileId, table.key] })
+  })
 )
 
 export const fileIndexProgress = sqliteTable(
@@ -99,7 +107,7 @@ export const fileIndexProgress = sqliteTable(
       .notNull()
       .references(() => files.id, { onDelete: 'cascade' }),
     status: text('status', {
-      enum: ['pending', 'processing', 'completed', 'skipped', 'failed'],
+      enum: ['pending', 'processing', 'completed', 'skipped', 'failed']
     })
       .notNull()
       .default('pending'),
@@ -108,11 +116,11 @@ export const fileIndexProgress = sqliteTable(
     totalBytes: integer('total_bytes'),
     lastError: text('last_error'),
     startedAt: integer('started_at', { mode: 'timestamp' }),
-    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date(0)),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date(0))
   },
-  table => ({
-    pk: primaryKey({ columns: [table.fileId] }),
-  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.fileId] })
+  })
 )
 
 // =============================================================================
@@ -132,7 +140,7 @@ export const embeddings = sqliteTable('embeddings', {
   contentHash: text('content_hash'), // 源内容的哈希，用于检测变化以决定是否更新向量
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
-    .default(sql`(strftime('%s', 'now'))`),
+    .default(sql`(strftime('%s', 'now'))`)
 })
 
 /**
@@ -149,7 +157,7 @@ export const contextualEmbeddings = sqliteTable('contextual_embeddings', {
 
   embedding: vectorType('embedding').notNull(), // 行为上下文的向量表示
   model: text('model').notNull(),
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull()
 })
 
 // =============================================================================
@@ -169,7 +177,7 @@ export const usageLogs = sqliteTable('usage_logs', {
   keyword: text('keyword'),
   timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
   // 以JSON字符串形式存储更多上下文信息
-  context: text('context'), // e.g., { "prev_app": "com.figma.Desktop", "window_title": "..." }
+  context: text('context') // e.g., { "prev_app": "com.figma.Desktop", "window_title": "..." }
 })
 
 /**
@@ -179,7 +187,7 @@ export const usageLogs = sqliteTable('usage_logs', {
 export const usageSummary = sqliteTable('usage_summary', {
   itemId: text('item_id').primaryKey(),
   clickCount: integer('click_count').notNull().default(0),
-  lastUsed: integer('last_used', { mode: 'timestamp' }).notNull(),
+  lastUsed: integer('last_used', { mode: 'timestamp' }).notNull()
 })
 
 /**
@@ -204,11 +212,11 @@ export const itemUsageStats = sqliteTable(
       .default(sql`(strftime('%s', 'now'))`),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .notNull()
-      .default(sql`(strftime('%s', 'now'))`),
+      .default(sql`(strftime('%s', 'now'))`)
   },
-  table => ({
-    pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
-  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.sourceId, table.itemId] })
+  })
 )
 
 /**
@@ -226,7 +234,7 @@ export const queryCompletions = sqliteTable('query_completions', {
   avgQueryLength: real('avg_query_length').notNull().default(0), // 平均查询长度
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
-    .default(sql`(strftime('%s', 'now'))`),
+    .default(sql`(strftime('%s', 'now'))`)
 })
 
 /**
@@ -237,11 +245,11 @@ export const pluginData = sqliteTable(
   {
     pluginId: text('plugin_id').notNull(),
     key: text('key').notNull(),
-    value: text('value'), // 存储为 JSON string
+    value: text('value') // 存储为 JSON string
   },
-  table => ({
-    pk: primaryKey({ columns: [table.pluginId, table.key] }),
-  }),
+  (table) => ({
+    pk: primaryKey({ columns: [table.pluginId, table.key] })
+  })
 )
 
 /**
@@ -249,7 +257,7 @@ export const pluginData = sqliteTable(
  */
 export const config = sqliteTable('config', {
   key: text('key').primaryKey(),
-  value: text('value'), // 存储为 JSON string
+  value: text('value') // 存储为 JSON string
 })
 
 /**
@@ -257,7 +265,7 @@ export const config = sqliteTable('config', {
  */
 export const scanProgress = sqliteTable('scan_progress', {
   path: text('path').primaryKey(), // 已经完成全量扫描的目录路径
-  lastScanned: integer('last_scanned', { mode: 'timestamp' }).notNull().default(new Date(0)),
+  lastScanned: integer('last_scanned', { mode: 'timestamp' }).notNull().default(new Date(0))
 })
 
 /**
@@ -279,7 +287,7 @@ export const clipboardHistory = sqliteTable('clipboard_history', {
 
   // 用户交互与元数据
   isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),
-  metadata: text('metadata'), // 存储其他元数据 (JSON string)
+  metadata: text('metadata') // 存储其他元数据 (JSON string)
 })
 
 /**
@@ -295,7 +303,7 @@ export const clipboardHistoryMeta = sqliteTable('clipboard_history_meta', {
   value: text('value'),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
-    .default(sql`(strftime('%s', 'now'))`),
+    .default(sql`(strftime('%s', 'now'))`)
 })
 
 /**
@@ -304,10 +312,10 @@ export const clipboardHistoryMeta = sqliteTable('clipboard_history_meta', {
 export const ocrJobs = sqliteTable('ocr_jobs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   clipboardId: integer('clipboard_id').references(() => clipboardHistory.id, {
-    onDelete: 'cascade',
+    onDelete: 'cascade'
   }),
   status: text('status', {
-    enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+    enum: ['pending', 'processing', 'completed', 'failed', 'cancelled']
   })
     .notNull()
     .default('pending'),
@@ -321,7 +329,7 @@ export const ocrJobs = sqliteTable('ocr_jobs', {
     .notNull()
     .default(sql`(strftime('%s', 'now'))`),
   startedAt: integer('started_at', { mode: 'timestamp' }),
-  finishedAt: integer('finished_at', { mode: 'timestamp' }),
+  finishedAt: integer('finished_at', { mode: 'timestamp' })
 })
 
 /**
@@ -339,7 +347,7 @@ export const ocrResults = sqliteTable('ocr_results', {
   extra: text('extra'),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
-    .default(sql`(strftime('%s', 'now'))`),
+    .default(sql`(strftime('%s', 'now'))`)
 })
 
 // =============================================================================
@@ -349,72 +357,83 @@ export const ocrResults = sqliteTable('ocr_results', {
 /**
  * 下载任务表，用于管理文件下载队列。
  */
-export const downloadTasks = sqliteTable('download_tasks', {
-  id: text('id').primaryKey(),
-  url: text('url').notNull(),
-  destination: text('destination').notNull(),
-  filename: text('filename').notNull(),
-  priority: integer('priority').notNull(),
-  module: text('module').notNull(),
-  status: text('status').notNull(),
-  totalSize: integer('total_size'),
-  downloadedSize: integer('downloaded_size').default(0),
-  checksum: text('checksum'),
-  metadata: text('metadata'), // JSON string
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-  completedAt: integer('completed_at'),
-  error: text('error'),
-}, table => ({
-  statusIdx: index('idx_tasks_status').on(table.status),
-  createdAtIdx: index('idx_tasks_created').on(table.createdAt),
-  priorityIdx: index('idx_tasks_priority').on(table.priority),
-  statusPriorityIdx: index('idx_tasks_status_priority').on(table.status, table.priority),
-}))
+export const downloadTasks = sqliteTable(
+  'download_tasks',
+  {
+    id: text('id').primaryKey(),
+    url: text('url').notNull(),
+    destination: text('destination').notNull(),
+    filename: text('filename').notNull(),
+    priority: integer('priority').notNull(),
+    module: text('module').notNull(),
+    status: text('status').notNull(),
+    totalSize: integer('total_size'),
+    downloadedSize: integer('downloaded_size').default(0),
+    checksum: text('checksum'),
+    metadata: text('metadata'), // JSON string
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    completedAt: integer('completed_at'),
+    error: text('error')
+  },
+  (table) => ({
+    statusIdx: index('idx_tasks_status').on(table.status),
+    createdAtIdx: index('idx_tasks_created').on(table.createdAt),
+    priorityIdx: index('idx_tasks_priority').on(table.priority),
+    statusPriorityIdx: index('idx_tasks_status_priority').on(table.status, table.priority)
+  })
+)
 
 /**
  * 下载分块表，用于支持分块下载和断点续传。
  */
-export const downloadChunks = sqliteTable('download_chunks', {
-  id: text('id').primaryKey(),
-  taskId: text('task_id')
-    .notNull()
-    .references(() => downloadTasks.id),
-  index: integer('index').notNull(),
-  start: integer('start').notNull(),
-  end: integer('end').notNull(),
-  size: integer('size').notNull(),
-  downloaded: integer('downloaded').default(0),
-  status: text('status').notNull(),
-  filePath: text('file_path').notNull(),
-  createdAt: integer('created_at').notNull(),
-  updatedAt: integer('updated_at').notNull(),
-}, table => ({
-  taskIdIdx: index('idx_chunks_task').on(table.taskId),
-  taskIdIndexIdx: index('idx_chunks_task_index').on(table.taskId, table.index),
-}))
+export const downloadChunks = sqliteTable(
+  'download_chunks',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => downloadTasks.id),
+    index: integer('index').notNull(),
+    start: integer('start').notNull(),
+    end: integer('end').notNull(),
+    size: integer('size').notNull(),
+    downloaded: integer('downloaded').default(0),
+    status: text('status').notNull(),
+    filePath: text('file_path').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    taskIdIdx: index('idx_chunks_task').on(table.taskId),
+    taskIdIndexIdx: index('idx_chunks_task_index').on(table.taskId, table.index)
+  })
+)
 
 /**
  * 下载历史记录表，用于保存已完成下载的统计信息。
  */
-export const downloadHistory = sqliteTable('download_history', {
-  id: text('id').primaryKey(),
-  taskId: text('task_id').notNull(),
-  url: text('url').notNull(),
-  filename: text('filename').notNull(),
-  module: text('module').notNull(),
-  status: text('status').notNull(),
-  totalSize: integer('total_size'),
-  downloadedSize: integer('downloaded_size'),
-  duration: integer('duration'), // seconds
-  averageSpeed: integer('average_speed'), // bytes/s
-  createdAt: integer('created_at').notNull(),
-  completedAt: integer('completed_at'),
-}, table => ({
-  createdAtIdx: index('idx_history_created').on(table.createdAt),
-  completedAtIdx: index('idx_history_completed').on(table.completedAt),
-}))
-
+export const downloadHistory = sqliteTable(
+  'download_history',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    url: text('url').notNull(),
+    filename: text('filename').notNull(),
+    module: text('module').notNull(),
+    status: text('status').notNull(),
+    totalSize: integer('total_size'),
+    downloadedSize: integer('downloaded_size'),
+    duration: integer('duration'), // seconds
+    averageSpeed: integer('average_speed'), // bytes/s
+    createdAt: integer('created_at').notNull(),
+    completedAt: integer('completed_at')
+  },
+  (table) => ({
+    createdAtIdx: index('idx_history_created').on(table.createdAt),
+    completedAtIdx: index('idx_history_completed').on(table.completedAt)
+  })
+)
 
 // =============================================================================
 // 8. 智能推荐系统 (Intelligent Recommendation System)
@@ -434,12 +453,12 @@ export const itemTimeStats = sqliteTable(
     timeSlotDistribution: text('time_slot_distribution').notNull(), // JSON object: { morning, afternoon, evening, night }
     lastUpdated: integer('last_updated', { mode: 'timestamp' })
       .notNull()
-      .default(sql`(strftime('%s', 'now'))`),
+      .default(sql`(strftime('%s', 'now'))`)
   },
-  table => ({
+  (table) => ({
     pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
-    updatedIdx: index('idx_item_time_stats_updated').on(table.lastUpdated),
-  }),
+    updatedIdx: index('idx_item_time_stats_updated').on(table.lastUpdated)
+  })
 )
 
 /**
@@ -454,11 +473,11 @@ export const recommendationCache = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .default(sql`(strftime('%s', 'now'))`),
-    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(), // 过期时间
+    expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull() // 过期时间
   },
-  table => ({
-    expiresIdx: index('idx_recommendation_cache_expires').on(table.expiresAt),
-  }),
+  (table) => ({
+    expiresIdx: index('idx_recommendation_cache_expires').on(table.expiresAt)
+  })
 )
 
 // =============================================================================
@@ -478,12 +497,12 @@ export const pinnedItems = sqliteTable(
     pinnedAt: integer('pinned_at', { mode: 'timestamp' })
       .notNull()
       .default(sql`(strftime('%s', 'now'))`),
-    order: integer('order').notNull().default(0),
+    order: integer('order').notNull().default(0)
   },
-  table => ({
+  (table) => ({
     pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
-    orderIdx: index('idx_pinned_items_order').on(table.order),
-  }),
+    orderIdx: index('idx_pinned_items_order').on(table.order)
+  })
 )
 
 // =============================================================================
@@ -513,14 +532,14 @@ export const intelligenceAuditLogs = sqliteTable(
     latency: integer('latency').notNull(),
     success: integer('success', { mode: 'boolean' }).notNull(),
     error: text('error'),
-    metadata: text('metadata'), // JSON string for additional info
+    metadata: text('metadata') // JSON string for additional info
   },
-  table => ({
+  (table) => ({
     timestampIdx: index('idx_audit_timestamp').on(table.timestamp),
     callerIdx: index('idx_audit_caller').on(table.caller),
     capabilityIdx: index('idx_audit_capability').on(table.capabilityId),
-    providerIdx: index('idx_audit_provider').on(table.provider),
-  }),
+    providerIdx: index('idx_audit_provider').on(table.provider)
+  })
 )
 
 /**
@@ -551,11 +570,11 @@ export const intelligenceQuotas = sqliteTable(
       .default(sql`(strftime('%s', 'now'))`),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .notNull()
-      .default(sql`(strftime('%s', 'now'))`),
+      .default(sql`(strftime('%s', 'now'))`)
   },
-  table => ({
-    callerIdx: index('idx_quota_caller').on(table.callerId, table.callerType),
-  }),
+  (table) => ({
+    callerIdx: index('idx_quota_caller').on(table.callerId, table.callerType)
+  })
 )
 
 /**
@@ -580,12 +599,12 @@ export const intelligenceUsageStats = sqliteTable(
     avgLatency: real('avg_latency').notNull().default(0),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .notNull()
-      .default(sql`(strftime('%s', 'now'))`),
+      .default(sql`(strftime('%s', 'now'))`)
   },
-  table => ({
+  (table) => ({
     pk: primaryKey({ columns: [table.callerId, table.callerType, table.period] }),
-    periodIdx: index('idx_usage_period').on(table.periodType, table.period),
-  }),
+    periodIdx: index('idx_usage_period').on(table.periodType, table.period)
+  })
 )
 
 // =============================================================================
@@ -599,11 +618,14 @@ export const analyticsSnapshots = sqliteTable(
     windowType: text('window_type').notNull(),
     timestamp: integer('timestamp').notNull(),
     metrics: text('metrics').notNull(),
-    createdAt: integer('created_at').default(sql`(unixepoch())`),
+    createdAt: integer('created_at').default(sql`(unixepoch())`)
   },
-  table => ({
-    windowTimeIdx: index('idx_analytics_snapshots_window_time').on(table.windowType, table.timestamp),
-  }),
+  (table) => ({
+    windowTimeIdx: index('idx_analytics_snapshots_window_time').on(
+      table.windowType,
+      table.timestamp
+    )
+  })
 )
 
 export const pluginAnalytics = sqliteTable(
@@ -616,16 +638,16 @@ export const pluginAnalytics = sqliteTable(
     eventType: text('event_type').notNull(),
     count: integer('count').default(1),
     metadata: text('metadata'),
-    timestamp: integer('timestamp').notNull(),
+    timestamp: integer('timestamp').notNull()
   },
-  table => ({
+  (table) => ({
     pluginIdx: index('idx_plugin_analytics_plugin_time').on(table.pluginName, table.timestamp),
     pluginVersionIdx: index('idx_plugin_analytics_plugin_version_time').on(
       table.pluginName,
       table.pluginVersion,
-      table.timestamp,
-    ),
-  }),
+      table.timestamp
+    )
+  })
 )
 
 export const analyticsReportQueue = sqliteTable(
@@ -637,26 +659,23 @@ export const analyticsReportQueue = sqliteTable(
     createdAt: integer('created_at').notNull(),
     retryCount: integer('retry_count').notNull().default(0),
     lastAttemptAt: integer('last_attempt_at'),
-    lastError: text('last_error'),
+    lastError: text('last_error')
   },
-  table => ({
-    createdAtIdx: index('idx_analytics_report_queue_created_at').on(table.createdAt),
-  }),
+  (table) => ({
+    createdAtIdx: index('idx_analytics_report_queue_created_at').on(table.createdAt)
+  })
 )
 
-export const telemetryUploadStats = sqliteTable(
-  'telemetry_upload_stats',
-  {
-    id: integer('id').primaryKey(),
-    searchCount: integer('search_count').notNull().default(0),
-    totalUploads: integer('total_uploads').notNull().default(0),
-    failedUploads: integer('failed_uploads').notNull().default(0),
-    lastUploadTime: integer('last_upload_time'),
-    lastFailureAt: integer('last_failure_at'),
-    lastFailureMessage: text('last_failure_message'),
-    updatedAt: integer('updated_at').notNull().default(0),
-  },
-)
+export const telemetryUploadStats = sqliteTable('telemetry_upload_stats', {
+  id: integer('id').primaryKey(),
+  searchCount: integer('search_count').notNull().default(0),
+  totalUploads: integer('total_uploads').notNull().default(0),
+  failedUploads: integer('failed_uploads').notNull().default(0),
+  lastUploadTime: integer('last_upload_time'),
+  lastFailureAt: integer('last_failure_at'),
+  lastFailureMessage: text('last_failure_message'),
+  updatedAt: integer('updated_at').notNull().default(0)
+})
 
 // =============================================================================
 // 12. 应用更新记录 (App Update Records)
@@ -674,14 +693,14 @@ export const appUpdateRecords = sqliteTable(
     fetchedAt: integer('fetched_at').notNull(),
     payload: text('payload').notNull(),
     status: text('status', {
-      enum: ['pending', 'skipped', 'snoozed', 'acknowledged'],
+      enum: ['pending', 'skipped', 'snoozed', 'acknowledged']
     })
       .notNull()
       .default('pending'),
     snoozeUntil: integer('snooze_until'),
-    lastActionAt: integer('last_action_at'),
+    lastActionAt: integer('last_action_at')
   },
-  table => ({
-    channelIdx: index('idx_app_update_records_channel').on(table.channel, table.fetchedAt),
-  }),
+  (table) => ({
+    channelIdx: index('idx_app_update_records_channel').on(table.channel, table.fetchedAt)
+  })
 )

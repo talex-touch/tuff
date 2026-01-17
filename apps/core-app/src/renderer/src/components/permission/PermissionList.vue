@@ -5,20 +5,20 @@
  * Displays a list of permissions with their grant status.
  */
 
-import { computed } from 'vue'
-import { ElSwitch, ElTooltip, ElTag, ElEmpty, ElIcon } from 'element-plus'
 import {
   Check,
-  Warning,
+  Coin,
+  Connection,
+  Cpu,
   Document,
   DocumentCopy,
-  Connection,
-  Monitor,
-  Cpu,
-  Coin,
-  Platform,
   InfoFilled,
+  Monitor,
+  Platform,
+  Warning
 } from '@element-plus/icons-vue'
+import { ElEmpty, ElIcon, ElSwitch, ElTag, ElTooltip } from 'element-plus'
+import { computed } from 'vue'
 
 interface PermissionItem {
   id: string
@@ -39,7 +39,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   readonly: false,
-  showEmpty: true,
+  showEmpty: true
 })
 
 const emit = defineEmits<{
@@ -66,7 +66,7 @@ const categoryNames: Record<string, string> = {
   system: '系统',
   ai: 'AI 能力',
   storage: '存储',
-  window: '窗口',
+  window: '窗口'
 }
 
 const categoryIcons: Record<string, any> = {
@@ -76,7 +76,7 @@ const categoryIcons: Record<string, any> = {
   system: Cpu,
   ai: Coin,
   storage: Platform,
-  window: Monitor,
+  window: Monitor
 }
 
 function getRiskColor(risk: string) {
@@ -118,13 +118,11 @@ function handleToggle(id: string, granted: boolean) {
       :image-size="60"
     />
 
-    <div
-      v-for="(perms, category) in groupedPermissions"
-      :key="category"
-      class="permission-group"
-    >
+    <div v-for="(perms, category) in groupedPermissions" :key="category" class="permission-group">
       <div class="group-header">
-        <ElIcon :size="16"><component :is="categoryIcons[category] || Check" /></ElIcon>
+        <ElIcon :size="16">
+          <component :is="categoryIcons[category] || Check" />
+        </ElIcon>
         <span>{{ categoryNames[category] || category }}</span>
       </div>
 
@@ -138,25 +136,18 @@ function handleToggle(id: string, granted: boolean) {
           <div class="item-main">
             <div class="item-header">
               <span class="item-name">{{ perm.name }}</span>
-              <ElTag
-                v-if="perm.required"
-                size="small"
-                type="danger"
-                effect="plain"
-              >
-                必需
-              </ElTag>
-              <ElTag
-                :type="getRiskColor(perm.risk)"
-                size="small"
-                effect="light"
-              >
+              <ElTag v-if="perm.required" size="small" type="danger" effect="plain"> 必需 </ElTag>
+              <ElTag :type="getRiskColor(perm.risk)" size="small" effect="light">
                 {{ getRiskLabel(perm.risk) }}
               </ElTag>
             </div>
-            <p class="item-desc">{{ perm.desc }}</p>
+            <p class="item-desc">
+              {{ perm.desc }}
+            </p>
             <div v-if="perm.reason" class="item-reason">
-              <ElIcon :size="12"><InfoFilled /></ElIcon>
+              <ElIcon :size="12">
+                <InfoFilled />
+              </ElIcon>
               <span>{{ perm.reason }}</span>
             </div>
           </div>
@@ -167,13 +158,13 @@ function handleToggle(id: string, granted: boolean) {
               content="此权限为必需权限"
               placement="top"
             >
-              <ElIcon :size="18" class="required-icon"><Warning /></ElIcon>
+              <ElIcon :size="18" class="required-icon">
+                <Warning />
+              </ElIcon>
             </ElTooltip>
-            <ElIcon
-              v-else-if="perm.granted"
-              :size="18"
-              class="granted-icon"
-            ><Check /></ElIcon>
+            <ElIcon v-else-if="perm.granted" :size="18" class="granted-icon">
+              <Check />
+            </ElIcon>
             <ElSwitch
               v-if="!readonly"
               :model-value="perm.granted"

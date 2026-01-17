@@ -1,32 +1,35 @@
-import type { TuffQuery, TuffItem } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
+import type { TuffItem, TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
-import type { TouchApp } from '../../../core/touch-app'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import type {
-  AllowClipboardRequest,
   ActivationState,
+  AllowClipboardRequest,
   DeactivateProviderRequest,
   EnterUIModeRequest,
   ExpandOptions,
   GetProviderDetailsRequest,
   ProviderDetail,
   SetInputRequest,
-  SetInputVisibilityRequest,
+  SetInputVisibilityRequest
 } from '@talex-touch/utils/transport/events/types'
+import type {
+  MetaActionExecuteRequest,
+  MetaShowRequest
+} from '@talex-touch/utils/transport/events/types/meta-overlay'
+import type { TouchApp } from '../../../core/touch-app'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { genTouchApp } from '../../../core'
+import { createLogger } from '../../../utils/logger'
 import { pluginModule } from '../../plugin/plugin-module'
+import { BOX_ITEM_CHANNELS, getBoxItemManager } from '../item-sdk'
 import searchEngineCore from '../search-engine/search-core'
-import { coreBoxManager } from './manager'
 import { coreBoxInputTransport } from './input-transport'
 import { coreBoxKeyTransport } from './key-transport'
-import { getCoreBoxWindow, windowManager } from './window'
-import { BOX_ITEM_CHANNELS, getBoxItemManager } from '../item-sdk'
+import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
-import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
-import type { MetaShowRequest, MetaActionExecuteRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
-import { createLogger } from '../../../utils/logger'
+import { getCoreBoxWindow, windowManager } from './window'
 
 const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
 
@@ -59,7 +62,9 @@ export class IpcManager {
     }
 
     if (this.transport) {
-      await this.transport.sendTo(coreBoxWindow.window.webContents, CoreBoxEvents.input.setQuery, { value })
+      await this.transport.sendTo(coreBoxWindow.window.webContents, CoreBoxEvents.input.setQuery, {
+        value
+      })
       return
     }
 
@@ -103,8 +108,7 @@ export class IpcManager {
         return
       }
       coreBoxManager.expand({ length: data })
-    }
-    else {
+    } else {
       coreBoxManager.shrink()
     }
   }
@@ -119,7 +123,7 @@ export class IpcManager {
       const result = await this.transport.sendTo(
         coreBoxWindow.window.webContents,
         CoreBoxEvents.input.requestValue,
-        undefined,
+        undefined
       )
       return result?.input || ''
     }
@@ -127,7 +131,7 @@ export class IpcManager {
     const result = await this.touchApp.channel.sendToMain(
       coreBoxWindow.window,
       'core-box:request-input-value',
-      {},
+      {}
     )
     return result?.data?.input || result?.input || ''
   }
@@ -142,7 +146,7 @@ export class IpcManager {
       await this.transport.sendTo(
         coreBoxWindow.window.webContents,
         CoreBoxEvents.input.setVisibility,
-        { visible },
+        { visible }
       )
       return
     }
@@ -151,7 +155,7 @@ export class IpcManager {
       coreBoxWindow.window,
       ChannelType.MAIN,
       'core-box:set-input-visibility',
-      { visible },
+      { visible }
     )
   }
 
@@ -167,12 +171,8 @@ export class IpcManager {
     // - Renderer process (MAIN)
     // - Plugin WebContentsView (PLUGIN)
     const registerCoreBoxVisibility = (type: ChannelType): void => {
-      this.touchApp.channel.regChannel(type, 'core-box:hide', () =>
-        coreBoxManager.trigger(false)
-      )
-      this.touchApp.channel.regChannel(type, 'core-box:show', () =>
-        coreBoxManager.trigger(true)
-      )
+      this.touchApp.channel.regChannel(type, 'core-box:hide', () => coreBoxManager.trigger(false))
+      this.touchApp.channel.regChannel(type, 'core-box:show', () => coreBoxManager.trigger(true))
     }
     registerCoreBoxVisibility(ChannelType.MAIN)
     registerCoreBoxVisibility(ChannelType.PLUGIN)
@@ -183,9 +183,9 @@ export class IpcManager {
       }
       reply(DataCode.SUCCESS, { focused: true })
     })
-      this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
-        this.handleExpandRequest(data as ExpandOptions | number)
-      })
+    this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
+      this.handleExpandRequest(data as ExpandOptions | number)
+    })
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
       'core-box:query',
@@ -243,7 +243,7 @@ export class IpcManager {
         const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
           id: p.id,
           name: p.name ?? p.id,
-          icon: p.icon as any,
+          icon: p.icon as any
         }))
 
         const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
@@ -258,7 +258,7 @@ export class IpcManager {
             return {
               id: plugin.name,
               name: plugin.name,
-              icon: plugin.icon as any,
+              icon: plugin.icon as any
             }
           })
           .filter((p): p is ProviderDetail => p !== null)
@@ -463,15 +463,11 @@ export class IpcManager {
     coreBoxKeyTransport.register()
 
     // BoxItem SDK sync channel
-    this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
-      BOX_ITEM_CHANNELS.SYNC,
-      ({ reply }) => {
-        const boxItemManager = getBoxItemManager()
-        boxItemManager.handleSyncRequest()
-        reply(DataCode.SUCCESS, {})
-      }
-    )
+    this.touchApp.channel.regChannel(ChannelType.MAIN, BOX_ITEM_CHANNELS.SYNC, ({ reply }) => {
+      const boxItemManager = getBoxItemManager()
+      boxItemManager.handleSyncRequest()
+      reply(DataCode.SUCCESS, {})
+    })
 
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
@@ -625,10 +621,7 @@ export class IpcManager {
     }
 
     const channel = this.touchApp.channel as any
-    this.transport = getTuffTransportMain(
-      channel,
-      channel?.keyManager ?? channel,
-    )
+    this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
 
     if (!this.transport) {
       return
@@ -639,19 +632,19 @@ export class IpcManager {
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.show, () => {
         coreBoxManager.trigger(true)
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.hide, () => {
         coreBoxManager.trigger(false)
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.expand, (payload) => {
         this.handleExpandRequest(payload as ExpandOptions | number)
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -661,13 +654,13 @@ export class IpcManager {
           window.window.focus()
         }
         return { focused: true }
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.search.query, async ({ query }) => {
         return await coreBoxManager.search(query)
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -677,14 +670,14 @@ export class IpcManager {
           return { cancelled: true }
         }
         return { cancelled: false }
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.input.get, async () => {
         const input = await this.requestInputValue()
         return { input }
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -692,41 +685,49 @@ export class IpcManager {
         const value = typeof request?.value === 'string' ? request.value : ''
         await this.sendInputValueToRenderer(value)
         return { value }
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.input.clear, async () => {
         await this.sendInputValueToRenderer('')
         return { cleared: true }
-      }),
+      })
     )
 
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.input.setVisibility, async (request: SetInputVisibilityRequest) => {
-        await this.setInputVisibility(Boolean(request?.visible))
-      }),
-    )
-
-    this.transportDisposers.push(
-      transport.on(CoreBoxEvents.provider.deactivate, async (request: DeactivateProviderRequest) => {
-        const { id } = request
-        if (id?.startsWith('plugin-features:')) {
-          const pluginName = id.substring('plugin-features:'.length)
-          const boxItemManager = getBoxItemManager()
-          boxItemManager.clear(pluginName)
+      transport.on(
+        CoreBoxEvents.input.setVisibility,
+        async (request: SetInputVisibilityRequest) => {
+          await this.setInputVisibility(Boolean(request?.visible))
         }
+      )
+    )
 
-        searchEngineCore.deactivateProvider(id)
-        const activeProviders = (searchEngineCore.getActivationState() ?? []).map((activation: any) => {
-          if (activation?.id === 'plugin-features' && activation?.meta?.pluginName) {
-            return `${activation.id}:${activation.meta.pluginName}`
+    this.transportDisposers.push(
+      transport.on(
+        CoreBoxEvents.provider.deactivate,
+        async (request: DeactivateProviderRequest) => {
+          const { id } = request
+          if (id?.startsWith('plugin-features:')) {
+            const pluginName = id.substring('plugin-features:'.length)
+            const boxItemManager = getBoxItemManager()
+            boxItemManager.clear(pluginName)
           }
-          return String(activation?.id ?? '')
-        }).filter(Boolean)
 
-        return { activeProviders } satisfies ActivationState
-      }),
+          searchEngineCore.deactivateProvider(id)
+          const activeProviders = (searchEngineCore.getActivationState() ?? [])
+            .map((activation: any) => {
+              if (activation?.id === 'plugin-features' && activation?.meta?.pluginName) {
+                return `${activation.id}:${activation.meta.pluginName}`
+              }
+              return String(activation?.id ?? '')
+            })
+            .filter(Boolean)
+
+          return { activeProviders } satisfies ActivationState
+        }
+      )
     )
 
     this.transportDisposers.push(
@@ -735,40 +736,43 @@ export class IpcManager {
         boxItemManager.clear()
         searchEngineCore.deactivateProviders()
         return { activeProviders: [] } satisfies ActivationState
-      }),
+      })
     )
 
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.provider.getDetails, async (request: GetProviderDetailsRequest) => {
-        const { providerIds } = request
-        if (!providerIds || providerIds.length === 0) {
-          return []
+      transport.on(
+        CoreBoxEvents.provider.getDetails,
+        async (request: GetProviderDetailsRequest) => {
+          const { providerIds } = request
+          if (!providerIds || providerIds.length === 0) {
+            return []
+          }
+
+          const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
+          const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
+            id: p.id,
+            name: p.name ?? p.id,
+            icon: p.icon as any
+          }))
+
+          const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
+          const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
+
+          const pluginDetails: ProviderDetail[] = pluginIdsToFetch
+            .map((id): ProviderDetail | null => {
+              const plugin = pluginModule.pluginManager!.plugins.get(id)
+              if (!plugin) return null
+              return {
+                id: plugin.name,
+                name: plugin.name,
+                icon: plugin.icon as any
+              }
+            })
+            .filter((p): p is ProviderDetail => p !== null)
+
+          return [...nativeProviderDetails, ...pluginDetails]
         }
-
-        const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
-        const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
-          id: p.id,
-          name: p.name ?? p.id,
-          icon: p.icon as any,
-        }))
-
-        const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
-        const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
-
-        const pluginDetails: ProviderDetail[] = pluginIdsToFetch
-          .map((id): ProviderDetail | null => {
-            const plugin = pluginModule.pluginManager!.plugins.get(id)
-            if (!plugin) return null
-            return {
-              id: plugin.name,
-              name: plugin.name,
-              icon: plugin.icon as any,
-            }
-          })
-          .filter((p): p is ProviderDetail => p !== null)
-
-        return [...nativeProviderDetails, ...pluginDetails]
-      }),
+      )
     )
 
     this.transportDisposers.push(
@@ -777,13 +781,13 @@ export class IpcManager {
         if (url) {
           coreBoxManager.enterUIMode(url)
         }
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.uiMode.exit, () => {
         coreBoxManager.exitUIMode()
-      }),
+      })
     )
 
     this.transportDisposers.push(
@@ -791,14 +795,14 @@ export class IpcManager {
         const types = request?.types ?? 0
         windowManager.enableClipboardMonitoring(types)
         return { enabled: true, types }
-      }),
+      })
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.inputMonitoring.allow, () => {
         windowManager.enableInputMonitoring()
         return { enabled: true }
-      }),
+      })
     )
   }
 }

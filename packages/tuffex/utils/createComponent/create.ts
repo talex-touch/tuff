@@ -20,22 +20,24 @@ export function createComponent(componentsPath: string, compName: string) {
   insertComponent(`${componentsPath}/components.ts`, compName)
 
   fs.mkdir(dirName, {
-    recursive: true
+    recursive: true,
   }, (err) => {
     if (!err) {
       createFile(indexTsName, indexTemplate)
       createFile(vueName, vueTemplate)
       createFile(styleName, '')
-    } else {
+    }
+    else {
       console.log('创建组件失败', err)
     }
   })
-  const mainStylePath ='./packages/components/style/index.scss'
+  const mainStylePath = './packages/components/style/index.scss'
   const importStyleContent = `@use '../src/${compName}/src/style/index.scss' as *;`
-  fs.writeFile(mainStylePath, importStyleContent,{ encoding: 'utf8', flag: 'a' }, err => {
+  fs.writeFile(mainStylePath, importStyleContent, { encoding: 'utf8', flag: 'a' }, (err) => {
     if (err) {
       console.log('全局样式引入局部样式失败')
-    } else {
+    }
+    else {
       console.log(`全局样式引入局部样式成功`)
     }
   })
@@ -45,7 +47,8 @@ function createFile(dir: string, template: string) {
   fs.writeFile(dir, template, (err) => {
     if (!err) {
       console.log(`${dir}文件创建成功`)
-    } else {
+    }
+    else {
       console.log(`${dir}文件创建失败`, err)
     }
   })
@@ -54,17 +57,19 @@ function createFile(dir: string, template: string) {
 export function componentExist(compRoot: string) {
   if (fs.existsSync(compRoot)) {
     return false
-  } else {
+  }
+  else {
     return true
   }
 }
 
 function insertComponent(path: string, compName: string) {
   const content = `\nexport * from './${compName}/index';`
-  fs.writeFile(path, content,{ encoding: 'utf8', flag: 'a' }, err => {
+  fs.writeFile(path, content, { encoding: 'utf8', flag: 'a' }, (err) => {
     if (err) {
       console.log('component注入失败')
-    } else {
+    }
+    else {
       console.log(`${path}注入组件成功`)
     }
   })

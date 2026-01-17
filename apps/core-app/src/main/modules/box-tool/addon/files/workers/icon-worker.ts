@@ -1,21 +1,25 @@
-import { parentPort } from 'node:worker_threads'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsRequest,
+  WorkerMetricsResponse
+} from './worker-status'
 import { performance } from 'node:perf_hooks'
+import { parentPort } from 'node:worker_threads'
 import extractFileIcon from 'extract-file-icon'
-import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
 
-type IconRequest = {
+interface IconRequest {
   type: 'extract'
   taskId: string
   filePath: string
 }
 
-type IconResultMessage = {
+interface IconResultMessage {
   type: 'done'
   taskId: string
   buffer: Buffer | null
 }
 
-type IconErrorMessage = {
+interface IconErrorMessage {
   type: 'error'
   taskId: string
   error: string
@@ -23,9 +27,10 @@ type IconErrorMessage = {
 
 function buildMetricsPayload(): WorkerMetricsPayload {
   const memory = process.memoryUsage()
-  const eventLoop = typeof performance.eventLoopUtilization === 'function'
-    ? performance.eventLoopUtilization()
-    : null
+  const eventLoop =
+    typeof performance.eventLoopUtilization === 'function'
+      ? performance.eventLoopUtilization()
+      : null
   return {
     timestamp: Date.now(),
     memory: {
@@ -33,16 +38,16 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       heapUsed: memory.heapUsed,
       heapTotal: memory.heapTotal,
       external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0,
+      arrayBuffers: memory.arrayBuffers ?? 0
     },
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {
           active: eventLoop.active,
           idle: eventLoop.idle,
-          utilization: eventLoop.utilization,
+          utilization: eventLoop.utilization
         }
-      : null,
+      : null
   }
 }
 
@@ -64,13 +69,13 @@ async function processQueue(): Promise<void> {
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,
-      buffer: buffer && buffer.length > 0 ? buffer : null,
+      buffer: buffer && buffer.length > 0 ? buffer : null
     } satisfies IconResultMessage)
   } catch (error) {
     parentPort?.postMessage({
       type: 'error',
       taskId: next.taskId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     } satisfies IconErrorMessage)
   } finally {
     running = false
@@ -88,7 +93,7 @@ parentPort?.on('message', (payload: IconRequest | WorkerMetricsRequest) => {
     parentPort?.postMessage({
       type: 'metrics',
       requestId: payload.requestId,
-      metrics: buildMetricsPayload(),
+      metrics: buildMetricsPayload()
     } satisfies WorkerMetricsResponse)
     return
   }

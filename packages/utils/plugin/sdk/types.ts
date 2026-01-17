@@ -144,7 +144,6 @@ export interface PluginClipboardSearchResponse {
   pageSize: number
 }
 
-
 export interface ActiveAppSnapshot {
   identifier: string | null
   displayName: string | null

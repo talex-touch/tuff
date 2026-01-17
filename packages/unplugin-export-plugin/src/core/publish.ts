@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
-import process from 'node:process'
-import consola from 'consola'
-import fs from 'fs-extra'
-import path from 'node:path'
-import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { createHash } from 'node:crypto'
+import path from 'node:path'
+import process from 'node:process'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
+import fs from 'fs-extra'
 
 interface PublishOptions {
   tag?: string
@@ -189,8 +188,10 @@ export async function publish(options: PublishOptions = {}): Promise<void> {
   // Determine tag and channel
   const tag = options.tag || `v${pkg.version}`
   const channel = options.channel || (
-    tag.includes('snapshot') || tag.includes('alpha') ? 'SNAPSHOT'
-      : tag.includes('beta') ? 'BETA'
+    tag.includes('snapshot') || tag.includes('alpha')
+      ? 'SNAPSHOT'
+      : tag.includes('beta')
+        ? 'BETA'
         : 'RELEASE'
   )
 
@@ -301,7 +302,7 @@ export async function publish(options: PublishOptions = {}): Promise<void> {
     const publishRes = await fetch(`${apiUrl}/${encodeURIComponent(tag)}/publish`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     })
 

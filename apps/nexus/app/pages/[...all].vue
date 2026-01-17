@@ -6,7 +6,7 @@ definePageMeta({
 const router = useRouter()
 const route = useRoute()
 
-const goBack = () => {
+function goBack() {
   if (window.history.length > 2) {
     router.back()
   }
@@ -15,7 +15,7 @@ const goBack = () => {
   }
 }
 
-const goHome = () => {
+function goHome() {
   router.push('/')
 }
 </script>

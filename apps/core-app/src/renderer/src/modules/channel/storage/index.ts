@@ -72,7 +72,7 @@ export class StorageManager {
     await touchChannel.send('storage:save', {
       key: name,
       value: toRaw(unref(data) as object),
-      clear,
+      clear
     })
   }
 }

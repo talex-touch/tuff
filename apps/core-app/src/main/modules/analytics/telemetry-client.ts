@@ -5,8 +5,7 @@ const TELEMETRY_CLIENT_CONFIG = 'telemetry-client.json'
 let cachedClientId: string | null = null
 
 export function getOrCreateTelemetryClientId(): string {
-  if (cachedClientId)
-    return cachedClientId
+  if (cachedClientId) return cachedClientId
 
   try {
     const config = getConfig(TELEMETRY_CLIENT_CONFIG) as { clientId?: unknown }
@@ -15,20 +14,17 @@ export function getOrCreateTelemetryClientId(): string {
       cachedClientId = existing
       return cachedClientId
     }
-  }
-  catch {
+  } catch {
     // ignore read errors
   }
 
   const next = randomUUID()
   try {
     saveConfig(TELEMETRY_CLIENT_CONFIG, JSON.stringify({ clientId: next }), undefined, true)
-  }
-  catch {
+  } catch {
     // ignore write errors
   }
 
   cachedClientId = next
   return cachedClientId
 }
-

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import type { CSSProperties } from 'vue'
 import type { GridLayoutProps } from '../index'
+import { ref } from 'vue'
 
 defineOptions({
   name: 'TxGridLayout',
@@ -17,8 +17,10 @@ const props = withDefaults(defineProps<GridLayoutProps>(), {
 const gridContainer = ref<HTMLElement | null>(null)
 
 function handleMove(event: MouseEvent) {
-  if (!props.interactive) return
-  if (!gridContainer.value) return
+  if (!props.interactive)
+    return
+  if (!gridContainer.value)
+    return
 
   const { pageX: mouseX, pageY: mouseY } = event
   const elements = gridContainer.value.querySelectorAll('.tx-grid-layout__item')
@@ -39,8 +41,10 @@ function handleMove(event: MouseEvent) {
 }
 
 function cancelColor() {
-  if (!props.interactive) return
-  if (!gridContainer.value) return
+  if (!props.interactive)
+    return
+  if (!gridContainer.value)
+    return
 
   gridContainer.value.querySelectorAll('.tx-grid-layout__item').forEach((element) => {
     ;(element as HTMLElement).style.setProperty('--tx-grid-op', '0')

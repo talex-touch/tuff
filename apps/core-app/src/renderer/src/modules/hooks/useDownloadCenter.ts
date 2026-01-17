@@ -29,16 +29,13 @@ export function useDownloadCenter() {
 
       if (response.success) {
         return response.taskId || ''
-      }
-      else {
+      } else {
         throw new Error(response.error || 'Failed to add download task')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
-    }
-    finally {
+    } finally {
       loading.value = false
     }
   }
@@ -55,8 +52,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to pause task')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -74,8 +70,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to resume task')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -93,8 +88,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to cancel task')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -112,12 +106,10 @@ export function useDownloadCenter() {
         const tasks = response.tasks || []
         downloadTasks.value = tasks
         return tasks
-      }
-      else {
+      } else {
         throw new Error(response.error || 'Failed to get tasks')
       }
-    }
-    catch (err: any) {
+    } catch (err: any) {
       // Ignore timeout errors during startup - module may not be ready yet
       if (err?.message?.includes('timed out')) {
         console.debug('[DownloadCenter] Tasks fetch timed out, module may be initializing')
@@ -139,12 +131,10 @@ export function useDownloadCenter() {
 
       if (response.success) {
         return response.task ?? null
-      }
-      else {
+      } else {
         throw new Error(response.error || 'Failed to get task status')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -162,8 +152,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to update config')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -181,8 +170,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to retry task')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -199,8 +187,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to pause all tasks')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -217,8 +204,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to resume all tasks')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -235,8 +221,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to cancel all tasks')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -254,8 +239,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to open file')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -273,8 +257,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to show in folder')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -294,12 +277,11 @@ export function useDownloadCenter() {
       }
 
       // Remove from local tasks list
-      const index = downloadTasks.value.findIndex(t => t.id === taskId)
+      const index = downloadTasks.value.findIndex((t) => t.id === taskId)
       if (index !== -1) {
         downloadTasks.value.splice(index, 1)
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -319,12 +301,11 @@ export function useDownloadCenter() {
       }
 
       // Also remove from local list
-      const index = downloadTasks.value.findIndex(t => t.id === taskId)
+      const index = downloadTasks.value.findIndex((t) => t.id === taskId)
       if (index !== -1) {
         downloadTasks.value.splice(index, 1)
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -340,7 +321,7 @@ export function useDownloadCenter() {
     try {
       const response = await transport.send(DownloadEvents.task.updatePriority, {
         taskId,
-        priority,
+        priority
       })
 
       if (!response.success) {
@@ -348,12 +329,11 @@ export function useDownloadCenter() {
       }
 
       // Update local task
-      const task = downloadTasks.value.find(t => t.id === taskId)
+      const task = downloadTasks.value.find((t) => t.id === taskId)
       if (task) {
         task.priority = priority
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -370,12 +350,10 @@ export function useDownloadCenter() {
 
       if (response.success) {
         return response.history || []
-      }
-      else {
+      } else {
         throw new Error(response.error || 'Failed to get history')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -392,8 +370,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear history')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -411,8 +388,7 @@ export function useDownloadCenter() {
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear history item')
       }
-    }
-    catch (err) {
+    } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
       throw err
     }
@@ -423,11 +399,10 @@ export function useDownloadCenter() {
    * @param task - The task to update
    */
   const updateTaskInList = (task: DownloadTask): void => {
-    const index = downloadTasks.value.findIndex(t => t.id === task.id)
+    const index = downloadTasks.value.findIndex((t) => t.id === task.id)
     if (index !== -1) {
       downloadTasks.value[index] = task
-    }
-    else {
+    } else {
       downloadTasks.value.push(task)
     }
   }
@@ -441,7 +416,7 @@ export function useDownloadCenter() {
       transport.on(DownloadEvents.push.taskProgress, (task) => updateTaskInList(task)),
       transport.on(DownloadEvents.push.taskCompleted, (task) => updateTaskInList(task)),
       transport.on(DownloadEvents.push.taskFailed, (task) => updateTaskInList(task)),
-      transport.on(DownloadEvents.push.taskUpdated, (task) => updateTaskInList(task)),
+      transport.on(DownloadEvents.push.taskUpdated, (task) => updateTaskInList(task))
     )
   }
 
@@ -452,12 +427,12 @@ export function useDownloadCenter() {
     const tasks = downloadTasks.value
     return {
       total: tasks.length,
-      pending: tasks.filter(t => t.status === DownloadStatus.PENDING).length,
-      downloading: tasks.filter(t => t.status === DownloadStatus.DOWNLOADING).length,
-      completed: tasks.filter(t => t.status === DownloadStatus.COMPLETED).length,
-      failed: tasks.filter(t => t.status === DownloadStatus.FAILED).length,
-      paused: tasks.filter(t => t.status === DownloadStatus.PAUSED).length,
-      cancelled: tasks.filter(t => t.status === DownloadStatus.CANCELLED).length,
+      pending: tasks.filter((t) => t.status === DownloadStatus.PENDING).length,
+      downloading: tasks.filter((t) => t.status === DownloadStatus.DOWNLOADING).length,
+      completed: tasks.filter((t) => t.status === DownloadStatus.COMPLETED).length,
+      failed: tasks.filter((t) => t.status === DownloadStatus.FAILED).length,
+      paused: tasks.filter((t) => t.status === DownloadStatus.PAUSED).length,
+      cancelled: tasks.filter((t) => t.status === DownloadStatus.CANCELLED).length
     }
   })
 
@@ -467,12 +442,12 @@ export function useDownloadCenter() {
   const tasksByStatus = computed(() => {
     const tasks = downloadTasks.value
     return {
-      pending: tasks.filter(t => t.status === DownloadStatus.PENDING),
-      downloading: tasks.filter(t => t.status === DownloadStatus.DOWNLOADING),
-      completed: tasks.filter(t => t.status === DownloadStatus.COMPLETED),
-      failed: tasks.filter(t => t.status === DownloadStatus.FAILED),
-      paused: tasks.filter(t => t.status === DownloadStatus.PAUSED),
-      cancelled: tasks.filter(t => t.status === DownloadStatus.CANCELLED),
+      pending: tasks.filter((t) => t.status === DownloadStatus.PENDING),
+      downloading: tasks.filter((t) => t.status === DownloadStatus.DOWNLOADING),
+      completed: tasks.filter((t) => t.status === DownloadStatus.COMPLETED),
+      failed: tasks.filter((t) => t.status === DownloadStatus.FAILED),
+      paused: tasks.filter((t) => t.status === DownloadStatus.PAUSED),
+      cancelled: tasks.filter((t) => t.status === DownloadStatus.CANCELLED)
     }
   })
 
@@ -480,7 +455,7 @@ export function useDownloadCenter() {
    * Computed high priority tasks
    */
   const highPriorityTasks = computed(() => {
-    return downloadTasks.value.filter(t => t.priority >= DownloadPriority.HIGH)
+    return downloadTasks.value.filter((t) => t.priority >= DownloadPriority.HIGH)
   })
 
   /**
@@ -499,11 +474,9 @@ export function useDownloadCenter() {
   const formatSpeed = (bytesPerSecond: number): string => {
     if (bytesPerSecond >= 1024 * 1024) {
       return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-    }
-    else if (bytesPerSecond >= 1024) {
+    } else if (bytesPerSecond >= 1024) {
       return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-    }
-    else {
+    } else {
       return `${bytesPerSecond.toFixed(0)} B/s`
     }
   }
@@ -516,14 +489,11 @@ export function useDownloadCenter() {
   const formatSize = (bytes: number): string => {
     if (bytes >= 1024 * 1024 * 1024) {
       return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-    }
-    else if (bytes >= 1024 * 1024) {
+    } else if (bytes >= 1024 * 1024) {
       return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    }
-    else if (bytes >= 1024) {
+    } else if (bytes >= 1024) {
       return `${(bytes / 1024).toFixed(1)} KB`
-    }
-    else {
+    } else {
       return `${bytes.toFixed(0)} B`
     }
   }
@@ -536,12 +506,10 @@ export function useDownloadCenter() {
   const formatRemainingTime = (seconds: number): string => {
     if (seconds < 60) {
       return `${Math.round(seconds)}秒`
-    }
-    else if (seconds < 3600) {
+    } else if (seconds < 3600) {
       const minutes = Math.round(seconds / 60)
       return `${minutes}分钟`
-    }
-    else {
+    } else {
       const hours = Math.round(seconds / 3600)
       return `${hours}小时`
     }
@@ -606,8 +574,7 @@ export function useDownloadCenter() {
     for (const dispose of transportDisposers) {
       try {
         dispose()
-      }
-      catch {
+      } catch {
         // ignore cleanup errors
       }
     }
@@ -650,6 +617,6 @@ export function useDownloadCenter() {
     formatSize,
     formatRemainingTime,
     getTaskStatusColor,
-    getTaskStatusIcon,
+    getTaskStatusIcon
   }
 }

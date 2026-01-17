@@ -4,8 +4,8 @@
  * Defines all available permissions in the system.
  */
 
-import { PermissionCategory, PermissionRiskLevel } from './types'
 import type { PermissionDefinition } from './types'
+import { PermissionCategory, PermissionRiskLevel } from './types'
 
 /**
  * All permission definitions
@@ -178,7 +178,7 @@ export class PermissionRegistry {
 
   constructor() {
     // Register all built-in permissions
-    PERMISSIONS.forEach((p) => this.permissions.set(p.id, p))
+    PERMISSIONS.forEach(p => this.permissions.set(p.id, p))
   }
 
   /**
@@ -199,14 +199,14 @@ export class PermissionRegistry {
    * Get permissions by category
    */
   byCategory(category: PermissionCategory): PermissionDefinition[] {
-    return this.all().filter((p) => p.category === category)
+    return this.all().filter(p => p.category === category)
   }
 
   /**
    * Get permissions by risk level
    */
   byRisk(risk: PermissionRiskLevel): PermissionDefinition[] {
-    return this.all().filter((p) => p.risk === risk)
+    return this.all().filter(p => p.risk === risk)
   }
 
   /**

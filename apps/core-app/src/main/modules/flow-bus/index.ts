@@ -5,13 +5,13 @@
  */
 
 export { flowBus, FlowBus } from './flow-bus'
-export { flowTargetRegistry, FlowTargetRegistry } from './target-registry'
-export { flowSessionManager, FlowSessionManager } from './session-manager'
 export { FlowBusIPC, initializeFlowBusIPC } from './ipc'
 export { flowBusModule, FlowBusModule } from './module'
-export { nativeShareService, NativeShareService, NATIVE_SHARE_TARGETS } from './native-share'
+export { NATIVE_SHARE_TARGETS, nativeShareService, NativeShareService } from './native-share'
+export { flowSessionManager, FlowSessionManager } from './session-manager'
 export {
+  type ShareNotificationConfig,
   shareNotificationService,
-  ShareNotificationService,
-  type ShareNotificationConfig
+  ShareNotificationService
 } from './share-notification'
+export { flowTargetRegistry, FlowTargetRegistry } from './target-registry'

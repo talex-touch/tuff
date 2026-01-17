@@ -91,8 +91,7 @@ interface DashboardImage {
 
 export function useDashboardPluginsData() {
   const state = useAsyncData('dashboard-plugins', () =>
-    $fetch<DashboardPluginResponse>('/api/dashboard/plugins'),
-  )
+    $fetch<DashboardPluginResponse>('/api/dashboard/plugins'))
 
   const plugins = computed(() => state.data.value?.plugins ?? [])
   const featured = computed(() => state.data.value?.featured ?? [])
@@ -108,8 +107,7 @@ export function useDashboardPluginsData() {
 
 export function useDashboardUpdatesData() {
   const state = useAsyncData('dashboard-updates', () =>
-    $fetch<{ updates: DashboardUpdate[] }>('/api/dashboard/updates'),
-  )
+    $fetch<{ updates: DashboardUpdate[] }>('/api/dashboard/updates'))
 
   const updates = computed(() => state.data.value?.updates ?? [])
 
@@ -121,8 +119,7 @@ export function useDashboardUpdatesData() {
 
 export function useDashboardTeamData() {
   const state = useAsyncData('dashboard-team', () =>
-    $fetch<{ team: DashboardTeam }>('/api/dashboard/team'),
-  )
+    $fetch<{ team: DashboardTeam }>('/api/dashboard/team'))
 
   const team = computed(() => state.data.value?.team)
 
@@ -157,8 +154,8 @@ interface SubscriptionStatus {
   activatedAt: string | null
   isActive: boolean
   features: {
-    aiRequests: { limit: number; used: number }
-    aiTokens: { limit: number; used: number }
+    aiRequests: { limit: number, used: number }
+    aiTokens: { limit: number, used: number }
     customModels: boolean
     prioritySupport: boolean
     apiAccess: boolean
@@ -167,8 +164,7 @@ interface SubscriptionStatus {
 
 export function useSubscriptionData() {
   const state = useAsyncData('subscription-status', () =>
-    $fetch<SubscriptionStatus>('/api/subscription/status'),
-  )
+    $fetch<SubscriptionStatus>('/api/subscription/status'))
 
   const subscription = computed(() => state.data.value)
   const plan = computed(() => state.data.value?.plan ?? 'FREE')
@@ -194,8 +190,7 @@ interface TeamInvite {
 
 export function useTeamInvitesData() {
   const state = useAsyncData('team-invites', () =>
-    $fetch<{ invites: TeamInvite[] }>('/api/dashboard/team/invites'),
-  )
+    $fetch<{ invites: TeamInvite[] }>('/api/dashboard/team/invites'))
 
   const invites = computed(() => state.data.value?.invites ?? [])
 

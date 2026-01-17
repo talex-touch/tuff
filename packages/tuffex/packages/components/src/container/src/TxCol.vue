@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { hasWindow } from '../../../../utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { hasWindow } from '../../../../utils/env'
 
 defineOptions({ name: 'TxCol' })
-
-type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
 const props = withDefaults(
   defineProps<{
@@ -27,13 +25,19 @@ const props = withDefaults(
   },
 )
 
+type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+
 const width = ref<number>(hasWindow() ? window.innerWidth : 1024)
 
 function getBp(w: number): Breakpoint {
-  if (w < 640) return 'xs'
-  if (w < 768) return 'sm'
-  if (w < 1024) return 'md'
-  if (w < 1280) return 'lg'
+  if (w < 640)
+    return 'xs'
+  if (w < 768)
+    return 'sm'
+  if (w < 1024)
+    return 'md'
+  if (w < 1280)
+    return 'lg'
   return 'xl'
 }
 
@@ -67,7 +71,8 @@ function resolveSpan(): number {
 
   const v = map[bp] ?? props.span
   const n = Number(v)
-  if (!Number.isFinite(n)) return 24
+  if (!Number.isFinite(n))
+    return 24
   return Math.min(24, Math.max(0, n))
 }
 

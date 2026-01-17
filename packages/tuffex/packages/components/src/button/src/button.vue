@@ -192,8 +192,8 @@ if (props.autofocus) {
     <span ref="innerRef" class="tx-button__inner" :style="innerStyle">
       <template v-if="isIconOnly">
         <Spinner
-          class="tx-button__spinner"
-          :class="{ 'is-overlay': true }"
+          class="tx-button__spinner is-overlay"
+
           :visible="loading"
           :size="spinnerSize"
         />

@@ -29,17 +29,15 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: IntelligenceProviderConfig]
-  'change': []
+  change: []
 }>()
 
 const { t } = useI18n()
 
 const localRequestsPerMinute = ref<number | undefined>(
-  props.modelValue.rateLimit?.requestsPerMinute,
+  props.modelValue.rateLimit?.requestsPerMinute
 )
-const localTokensPerMinute = ref<number | undefined>(
-  props.modelValue.rateLimit?.tokensPerMinute,
-)
+const localTokensPerMinute = ref<number | undefined>(props.modelValue.rateLimit?.tokensPerMinute)
 const requestsPerMinuteError = ref('')
 const tokensPerMinuteError = ref('')
 
@@ -48,14 +46,14 @@ watch(
   () => props.modelValue.rateLimit?.requestsPerMinute,
   (newValue) => {
     localRequestsPerMinute.value = newValue
-  },
+  }
 )
 
 watch(
   () => props.modelValue.rateLimit?.tokensPerMinute,
   (newValue) => {
     localTokensPerMinute.value = newValue
-  },
+  }
 )
 
 function validateRequestsPerMinute(value: number | undefined): boolean {
@@ -83,8 +81,7 @@ function validateTokensPerMinute(value: number | undefined): boolean {
 function handleRequestsPerMinuteBlur() {
   if (validateRequestsPerMinute(localRequestsPerMinute.value)) {
     emitUpdate()
-  }
-  else {
+  } else {
     // Reset to previous valid value
     localRequestsPerMinute.value = props.modelValue.rateLimit?.requestsPerMinute
   }
@@ -93,8 +90,7 @@ function handleRequestsPerMinuteBlur() {
 function handleTokensPerMinuteBlur() {
   if (validateTokensPerMinute(localTokensPerMinute.value)) {
     emitUpdate()
-  }
-  else {
+  } else {
     // Reset to previous valid value
     localTokensPerMinute.value = props.modelValue.rateLimit?.tokensPerMinute
   }
@@ -106,8 +102,8 @@ function emitUpdate() {
     rateLimit: {
       ...props.modelValue.rateLimit,
       requestsPerMinute: localRequestsPerMinute.value,
-      tokensPerMinute: localTokensPerMinute.value,
-    },
+      tokensPerMinute: localTokensPerMinute.value
+    }
   }
   emits('update:modelValue', updated)
   emits('change')
@@ -119,13 +115,15 @@ function emitUpdate() {
     <!-- Requests Per Minute -->
     <TuffBlockInput
       :model-value="localRequestsPerMinute ?? ''"
-      @update:model-value="val => localRequestsPerMinute = val !== '' ? Number(val) : undefined"
       :title="t('intelligence.config.rateLimit.requestsPerMinute')"
-      :description="requestsPerMinuteError || t('intelligence.config.rateLimit.requestsPerMinuteHint')"
+      :description="
+        requestsPerMinuteError || t('intelligence.config.rateLimit.requestsPerMinuteHint')
+      "
       :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
       default-icon="i-carbon-request-quote"
       active-icon="i-carbon-request-quote"
       :disabled="disabled"
+      @update:model-value="(val) => (localRequestsPerMinute = val !== '' ? Number(val) : undefined)"
       @blur="handleRequestsPerMinuteBlur"
     >
       <template #control="{ modelValue, update, focus, blur }">
@@ -137,10 +135,19 @@ function emitUpdate() {
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
-            @input="update(($event.target as HTMLInputElement).value !== '' ? Number(($event.target as HTMLInputElement).value) : '')"
+            @input="
+              update(
+                ($event.target as HTMLInputElement).value !== ''
+                  ? Number(($event.target as HTMLInputElement).value)
+                  : ''
+              )
+            "
             @focus="focus"
-            @blur="blur(); handleRequestsPerMinuteBlur()"
-          >
+            @blur="
+              blur()
+              handleRequestsPerMinuteBlur()
+            "
+          />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
             {{ t('intelligence.config.rateLimit.requestsUnit') }}
           </span>
@@ -151,13 +158,13 @@ function emitUpdate() {
     <!-- Tokens Per Minute -->
     <TuffBlockInput
       :model-value="localTokensPerMinute ?? ''"
-      @update:model-value="val => localTokensPerMinute = val !== '' ? Number(val) : undefined"
       :title="t('intelligence.config.rateLimit.tokensPerMinute')"
       :description="tokensPerMinuteError || t('intelligence.config.rateLimit.tokensPerMinuteHint')"
       :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
       default-icon="i-carbon-data-1"
       active-icon="i-carbon-data-1"
       :disabled="disabled"
+      @update:model-value="(val) => (localTokensPerMinute = val !== '' ? Number(val) : undefined)"
       @blur="handleTokensPerMinuteBlur"
     >
       <template #control="{ modelValue, update, focus, blur }">
@@ -169,10 +176,19 @@ function emitUpdate() {
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
-            @input="update(($event.target as HTMLInputElement).value !== '' ? Number(($event.target as HTMLInputElement).value) : '')"
+            @input="
+              update(
+                ($event.target as HTMLInputElement).value !== ''
+                  ? Number(($event.target as HTMLInputElement).value)
+                  : ''
+              )
+            "
             @focus="focus"
-            @blur="blur(); handleTokensPerMinuteBlur()"
-          >
+            @blur="
+              blur()
+              handleTokensPerMinuteBlur()
+            "
+          />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
             {{ t('intelligence.config.rateLimit.tokensUnit') }}
           </span>

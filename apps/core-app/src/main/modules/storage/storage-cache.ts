@@ -58,7 +58,7 @@ export class StorageCache {
       this.lastAccessTime.set(name, Date.now())
       return {
         data: structuredClone(entry.data),
-        version: entry.version,
+        version: entry.version
       }
     }
     return undefined
@@ -87,12 +87,7 @@ export class StorageCache {
    * @param incrementVersion - Whether to increment version (default: true)
    * @returns The new version number
    */
-  set(
-    name: string,
-    data: object,
-    incrementVersion: boolean = true,
-    serialized?: string,
-  ): number {
+  set(name: string, data: object, incrementVersion: boolean = true, serialized?: string): number {
     const currentVersion = this.cache.get(name)?.version ?? 0
     const newVersion = incrementVersion ? currentVersion + 1 : currentVersion
     this.cache.set(name, { data, version: newVersion })

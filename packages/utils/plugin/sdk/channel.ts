@@ -1,6 +1,6 @@
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
-import { hasWindow } from '@talex-touch/utils/env'
 import type { IPluginRendererChannel, PluginChannelHandler } from './types'
+import { hasWindow } from '@talex-touch/utils/env'
 import { genChannel } from '../channel'
 
 const ensureClientChannel = (): ITouchClientChannel => genChannel()

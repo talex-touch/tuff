@@ -83,9 +83,10 @@ const progressValue = computed(() => {
 })
 
 /** Whether to show circular progress indicator */
-const showProgressCircle = computed(() =>
-  (installStage.value === 'downloading' || installStage.value === 'verifying') &&
-  progressValue.value !== null
+const showProgressCircle = computed(
+  () =>
+    (installStage.value === 'downloading' || installStage.value === 'verifying') &&
+    progressValue.value !== null
 )
 
 /** CSS variable for progress circle */
@@ -101,9 +102,7 @@ const progressDisplay = computed(() =>
 )
 
 /** Whether to show spinning loader */
-const showSpinner = computed(() =>
-  installStage.value === 'installing' && !showProgressCircle.value
-)
+const showSpinner = computed(() => installStage.value === 'installing' && !showProgressCircle.value)
 
 /** Button icon based on current state */
 const buttonIcon = computed(() => {

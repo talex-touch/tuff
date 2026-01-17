@@ -1,9 +1,9 @@
-import { clerkClient } from '@clerk/nuxt/server'
 import { Buffer } from 'node:buffer'
+import { clerkClient } from '@clerk/nuxt/server'
 import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../utils/auth'
-import { createPlugin } from '../../utils/pluginsStore'
 import { uploadImage, uploadImageFromBuffer } from '../../utils/imageStorage'
+import { createPlugin } from '../../utils/pluginsStore'
 import { extractTpexMetadata } from '../../utils/tpex'
 
 const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
@@ -169,7 +169,7 @@ export default defineEventHandler(async (event) => {
     console.error('[plugins.post] Failed to create plugin:', {
       error: errorMessage,
       stack: errorStack,
-      slug: slug,
+      slug,
       userId,
     })
     throw createError({ statusCode: 500, statusMessage: `Failed to create plugin: ${errorMessage}` })

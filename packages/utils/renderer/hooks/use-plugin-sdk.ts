@@ -14,4 +14,3 @@ export function usePluginSdkScope() {
   onUnmounted(() => disposables.dispose())
   return { sdk, disposables }
 }
-

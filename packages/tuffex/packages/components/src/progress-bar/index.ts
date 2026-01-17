@@ -1,6 +1,6 @@
-import TxProgressBar from './src/TxProgressBar.vue'
+import type { ProgressBarEmits, ProgressBarProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
-import type { ProgressBarProps, ProgressBarEmits } from './src/types'
+import TxProgressBar from './src/TxProgressBar.vue'
 
 /**
  * TxProgressBar component with Vue plugin installation support.
@@ -19,7 +19,7 @@ import type { ProgressBarProps, ProgressBarEmits } from './src/types'
 const ProgressBar = withInstall(TxProgressBar)
 
 export { ProgressBar, TxProgressBar }
-export type { ProgressBarProps, ProgressBarEmits }
+export type { ProgressBarEmits, ProgressBarProps }
 export type TxProgressBarInstance = InstanceType<typeof TxProgressBar>
 
 export default ProgressBar

@@ -37,8 +37,12 @@ const placeholder = computed(() => (multiple.value ? 'Select multiple' : 'Select
 <template>
   <div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
     <div style="display: flex; gap: 8px; align-items: center;">
-      <TxButton size="small" variant="secondary" @click="multiple = !multiple">Toggle multiple</TxButton>
-      <TxButton size="small" variant="secondary" @click="value = multiple ? [] : undefined">Clear</TxButton>
+      <TxButton size="small" variant="secondary" @click="multiple = !multiple">
+        Toggle multiple
+      </TxButton>
+      <TxButton size="small" variant="secondary" @click="value = multiple ? [] : undefined">
+        Clear
+      </TxButton>
     </div>
 
     <TxTreeSelect

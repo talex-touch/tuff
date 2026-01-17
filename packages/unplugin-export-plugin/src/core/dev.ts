@@ -1,10 +1,9 @@
-
 /* eslint-disable no-console */
-import process from 'node:process'
-import path from 'pathe'
-import fs from 'fs-extra'
 import type { ViteDevServer } from 'vite'
 import type { Options } from '../types'
+import process from 'node:process'
+import fs from 'fs-extra'
+import path from 'pathe'
 
 export async function dev(options?: Options, server?: ViteDevServer) {
   if (!server) {

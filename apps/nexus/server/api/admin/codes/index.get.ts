@@ -53,7 +53,8 @@ export default defineEventHandler(async (event) => {
         totalPages: Math.ceil(total / limit),
       },
     }
-  } catch (error: any) {
+  }
+  catch (error: any) {
     console.error('[admin/codes] Error:', error)
     throw createError({
       statusCode: 500,

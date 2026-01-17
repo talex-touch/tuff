@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-touch/utils/plugin/providers'
 import { computed, ref, watch } from 'vue'
-import Drawer from '~/components/ui/Drawer.vue'
 import Button from '~/components/ui/Button.vue'
+import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 
@@ -55,7 +55,6 @@ watch(() => props.isOpen, (isOpen) => {
     manifestPreview.value = null
   }
 })
-
 
 // Workflow Steps
 type Step = 'form' | 'warning' | 'license'
@@ -116,7 +115,7 @@ async function handlePackageInput(event: Event) {
 function onFormSubmit() {
   if (!formData.value.version || !formData.value.packageFile || !formData.value.changelog)
     return
-  
+
   // Start review workflow
   step.value = 'warning'
 }
@@ -131,12 +130,12 @@ function onLicenseSubmit() {
   }
 }
 
-const channelDescription = computed(() => 
-  t(`dashboard.sections.plugins.channels.${formData.value.channel}.description`)
+const channelDescription = computed(() =>
+  t(`dashboard.sections.plugins.channels.${formData.value.channel}.description`),
 )
 
-const channelVisibility = computed(() => 
-  t(`dashboard.sections.plugins.channels.${formData.value.channel}.visibility`)
+const channelVisibility = computed(() =>
+  t(`dashboard.sections.plugins.channels.${formData.value.channel}.visibility`),
 )
 </script>
 
@@ -187,15 +186,25 @@ const channelVisibility = computed(() =>
                 v-model="formData.channel"
                 class="w-full appearance-none border-b border-black/10 bg-transparent py-2 text-sm text-black outline-none transition focus:border-black dark:border-white/10 dark:text-white dark:focus:border-white"
               >
-                <option value="RELEASE">RELEASE</option>
-                <option value="BETA">BETA</option>
-                <option value="SNAPSHOT">SNAPSHOT</option>
+                <option value="RELEASE">
+                  RELEASE
+                </option>
+                <option value="BETA">
+                  BETA
+                </option>
+                <option value="SNAPSHOT">
+                  SNAPSHOT
+                </option>
               </select>
               <span class="i-carbon-chevron-down absolute right-0 top-1/2 -translate-y-1/2 text-black/40 dark:text-white/40" />
             </div>
             <div class="mt-2 rounded bg-black/5 p-3 text-xs dark:bg-white/5">
-              <p class="mb-1 text-black/70 dark:text-white/70">{{ channelDescription }}</p>
-              <p class="font-medium text-black dark:text-white">{{ channelVisibility }}</p>
+              <p class="mb-1 text-black/70 dark:text-white/70">
+                {{ channelDescription }}
+              </p>
+              <p class="font-medium text-black dark:text-white">
+                {{ channelVisibility }}
+              </p>
             </div>
           </div>
 
@@ -219,16 +228,24 @@ const channelVisibility = computed(() =>
                 </span>
               </div>
             </div>
-            <p v-if="packageError" class="text-xs text-red-500">{{ packageError }}</p>
+            <p v-if="packageError" class="text-xs text-red-500">
+              {{ packageError }}
+            </p>
 
             <div v-if="manifestPreview" class="mt-2 rounded-lg bg-black/5 p-3 dark:bg-white/5">
               <p class="mb-2 text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
                 {{ t('dashboard.sections.plugins.manifestPreview') }}
               </p>
               <div class="space-y-1 text-xs text-black/70 dark:text-white/70">
-                <p v-if="manifestPreview.name"><span class="font-medium">Name:</span> {{ manifestPreview.name }}</p>
-                <p v-if="manifestPreview.version"><span class="font-medium">Version:</span> {{ manifestPreview.version }}</p>
-                <p v-if="manifestPreview.channel"><span class="font-medium">Channel:</span> {{ manifestPreview.channel }}</p>
+                <p v-if="manifestPreview.name">
+                  <span class="font-medium">Name:</span> {{ manifestPreview.name }}
+                </p>
+                <p v-if="manifestPreview.version">
+                  <span class="font-medium">Version:</span> {{ manifestPreview.version }}
+                </p>
+                <p v-if="manifestPreview.channel">
+                  <span class="font-medium">Channel:</span> {{ manifestPreview.channel }}
+                </p>
               </div>
             </div>
           </div>
@@ -245,7 +262,9 @@ const channelVisibility = computed(() =>
               <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
               {{ t('dashboard.sections.plugins.versionForm.submit') }}
             </Button>
-            <p v-if="error" class="mt-2 text-center text-xs text-red-500">{{ error }}</p>
+            <p v-if="error" class="mt-2 text-center text-xs text-red-500">
+              {{ error }}
+            </p>
           </div>
         </form>
 

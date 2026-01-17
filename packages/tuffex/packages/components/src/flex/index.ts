@@ -1,6 +1,6 @@
-import TxFlex from './src/TxFlex.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { FlexProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxFlex from './src/TxFlex.vue'
 
 const Flex = withInstall(TxFlex)
 

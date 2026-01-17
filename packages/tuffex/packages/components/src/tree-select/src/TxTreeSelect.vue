@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import TxPopover from '../../popover/src/TxPopover.vue'
-import TuffInput from '../../input/src/TxInput.vue'
-import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
-import TxTag from '../../tag/src/TxTag.vue'
-import TxCardItem from '../../card-item/src/TxCardItem.vue'
-import TxTransition from '../../transition/src/TxTransition.vue'
 import type { TreeSelectEmits, TreeSelectKey, TreeSelectNode, TreeSelectProps, TreeSelectValue } from './types'
+import { computed, nextTick, ref, watch } from 'vue'
+import TxCardItem from '../../card-item/src/TxCardItem.vue'
+import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
+import TuffInput from '../../input/src/TxInput.vue'
+import TxPopover from '../../popover/src/TxPopover.vue'
+import TxTag from '../../tag/src/TxTag.vue'
+import TxTransition from '../../transition/src/TxTransition.vue'
 
 defineOptions({ name: 'TxTreeSelect' })
 
@@ -36,7 +36,8 @@ const expanded = ref<Set<TreeSelectKey>>(new Set(props.defaultExpandedKeys))
 function walk(nodes: TreeSelectNode[], cb: (n: TreeSelectNode) => void) {
   for (const n of nodes) {
     cb(n)
-    if (n.children?.length) walk(n.children, cb)
+    if (n.children?.length)
+      walk(n.children, cb)
   }
 }
 
@@ -61,7 +62,8 @@ const selectedLabels = computed(() => {
   const labels: string[] = []
   for (const k of selectedKeys.value) {
     const l = labelMap.value.get(k)
-    if (l) labels.push(l)
+    if (l)
+      labels.push(l)
   }
   return labels
 })
@@ -72,11 +74,13 @@ function setValue(v: TreeSelectValue) {
 }
 
 function toggleKey(key: TreeSelectKey) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
 
   if (props.multiple) {
     const next = new Set(selectedKeys.value)
-    if (next.has(key)) next.delete(key)
+    if (next.has(key))
+      next.delete(key)
     else next.add(key)
     setValue(Array.from(next))
     return
@@ -87,7 +91,8 @@ function toggleKey(key: TreeSelectKey) {
 }
 
 function clear() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   setValue(props.multiple ? [] : undefined)
 }
 
@@ -105,18 +110,21 @@ function isExpanded(node: TreeSelectNode) {
 }
 
 function toggleExpand(node: TreeSelectNode) {
-  if (!node.children?.length) return
+  if (!node.children?.length)
+    return
   const next = new Set(expanded.value)
-  if (next.has(node.key)) next.delete(node.key)
+  if (next.has(node.key))
+    next.delete(node.key)
   else next.add(node.key)
   expanded.value = next
 }
 
-type FilterResult = { nodes: TreeSelectNode[]; expandKeys: Set<TreeSelectKey> }
+interface FilterResult { nodes: TreeSelectNode[], expandKeys: Set<TreeSelectKey> }
 
 function filterTree(nodes: TreeSelectNode[], q: string): FilterResult {
   const query = q.trim().toLowerCase()
-  if (!query) return { nodes, expandKeys: new Set() }
+  if (!query)
+    return { nodes, expandKeys: new Set() }
 
   const expandKeys = new Set<TreeSelectKey>()
 
@@ -127,10 +135,13 @@ function filterTree(nodes: TreeSelectNode[], q: string): FilterResult {
       const selfMatch = label.includes(query)
       const kids = n.children?.length ? loop(n.children, [...ancestors, n.key]) : []
       const hit = selfMatch || kids.length > 0
-      if (!hit) continue
+      if (!hit)
+        continue
 
-      if (ancestors.length) ancestors.forEach(k => expandKeys.add(k))
-      if (kids.length) expandKeys.add(n.key)
+      if (ancestors.length)
+        ancestors.forEach(k => expandKeys.add(k))
+      if (kids.length)
+        expandKeys.add(n.key)
 
       out.push({ ...n, children: kids.length ? kids : n.children })
     }
@@ -151,14 +162,15 @@ const effectiveExpanded = computed(() => {
   return expanded.value
 })
 
-type FlatItem = { node: TreeSelectNode; level: number; hasChildren: boolean; expanded: boolean }
+interface FlatItem { node: TreeSelectNode, level: number, hasChildren: boolean, expanded: boolean }
 
 function flatten(nodes: TreeSelectNode[], level: number, out: FlatItem[]) {
   for (const n of nodes) {
     const hasChildren = !!n.children?.length
     const exp = hasChildren && effectiveExpanded.value.has(n.key)
     out.push({ node: n, level, hasChildren, expanded: exp })
-    if (hasChildren && exp) flatten(n.children || [], level + 1, out)
+    if (hasChildren && exp)
+      flatten(n.children || [], level + 1, out)
   }
 }
 
@@ -178,13 +190,15 @@ watch(
     if (v && props.searchable) {
       await nextTick()
     }
-    if (!v) query.value = ''
+    if (!v)
+      query.value = ''
   },
   { flush: 'post' },
 )
 
 function onTriggerKeydown(e: KeyboardEvent) {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault()
     open.value = !open.value
@@ -272,60 +286,62 @@ defineExpose({
         <TuffInput v-model="query" placeholder="Search" clearable />
       </div>
 
-    <div class="tx-tree-select__list">
-      <TxTransition group preset="slide-fade" tag="div" :appear="false" :duration="160">
-        <TxCardItem
-          v-for="item in flatItems"
-          :key="item.node.key"
-          class="tx-tree-select__item"
-          :class="{ 'is-disabled': item.node.disabled, 'is-selected': isChecked(item.node) }"
-          :clickable="!item.node.disabled"
-          :disabled="!!item.node.disabled"
-          :active="isChecked(item.node)"
-          :style="{ paddingLeft: `${10 + item.level * 16}px` }"
-          @click="toggleKey(item.node.key)"
-        >
-          <template #avatar>
-            <div class="tx-tree-select__left" @click.stop>
-              <button
-                v-if="item.hasChildren"
-                type="button"
-                class="tx-tree-select__caret"
-                :aria-label="item.expanded ? 'Collapse' : 'Expand'"
-                @click.stop="toggleExpand(item.node)"
+      <div class="tx-tree-select__list">
+        <TxTransition group preset="slide-fade" tag="div" :appear="false" :duration="160">
+          <TxCardItem
+            v-for="item in flatItems"
+            :key="item.node.key"
+            class="tx-tree-select__item"
+            :class="{ 'is-disabled': item.node.disabled, 'is-selected': isChecked(item.node) }"
+            :clickable="!item.node.disabled"
+            :disabled="!!item.node.disabled"
+            :active="isChecked(item.node)"
+            :style="{ paddingLeft: `${10 + item.level * 16}px` }"
+            @click="toggleKey(item.node.key)"
+          >
+            <template #avatar>
+              <div class="tx-tree-select__left" @click.stop>
+                <button
+                  v-if="item.hasChildren"
+                  type="button"
+                  class="tx-tree-select__caret"
+                  :aria-label="item.expanded ? 'Collapse' : 'Expand'"
+                  @click.stop="toggleExpand(item.node)"
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" :style="{ transform: item.expanded ? 'rotate(90deg)' : 'rotate(0deg)' }">
+                    <path fill="currentColor" d="M10 6l6 6-6 6" />
+                  </svg>
+                </button>
+                <span v-else class="tx-tree-select__caret-placeholder" aria-hidden="true" />
+
+                <TxCheckbox
+                  v-if="multiple"
+                  :model-value="isChecked(item.node)"
+                  :disabled="!!item.node.disabled"
+                  aria-label="Select"
+                  @click.stop
+                  @update:model-value="() => toggleKey(item.node.key)"
+                />
+              </div>
+            </template>
+
+            <template #title>
+              <slot
+                name="node"
+                :node="item.node"
+                :level="item.level"
+                :expanded="item.expanded"
+                :selected="isChecked(item.node)"
               >
-                <svg viewBox="0 0 24 24" width="14" height="14" :style="{ transform: item.expanded ? 'rotate(90deg)' : 'rotate(0deg)' }">
-                  <path fill="currentColor" d="M10 6l6 6-6 6" />
-                </svg>
-              </button>
-              <span v-else class="tx-tree-select__caret-placeholder" aria-hidden="true" />
+                <span class="tx-tree-select__label">{{ item.node.label }}</span>
+              </slot>
+            </template>
+          </TxCardItem>
+        </TxTransition>
 
-              <TxCheckbox
-                v-if="multiple"
-                :model-value="isChecked(item.node)"
-                :disabled="!!item.node.disabled"
-                aria-label="Select"
-                @click.stop
-                @update:model-value="() => toggleKey(item.node.key)"
-              />
-            </div>
-          </template>
-
-          <template #title>
-            <slot
-              name="node"
-              :node="item.node"
-              :level="item.level"
-              :expanded="item.expanded"
-              :selected="isChecked(item.node)"
-            >
-              <span class="tx-tree-select__label">{{ item.node.label }}</span>
-            </slot>
-          </template>
-        </TxCardItem>
-      </TxTransition>
-
-        <div v-if="!flatItems.length" class="tx-tree-select__empty">No results</div>
+        <div v-if="!flatItems.length" class="tx-tree-select__empty">
+          No results
+        </div>
       </div>
     </div>
   </TxPopover>

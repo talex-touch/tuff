@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import Drawer from '~/components/ui/Drawer.vue'
 import Button from '~/components/ui/Button.vue'
+import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
-import Tag from '~/components/ui/Tag.vue'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
+import Tag from '~/components/ui/Tag.vue'
 
 type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
 type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
@@ -75,14 +75,17 @@ function formatNumber(count: number) {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return '—'
+  if (!value)
+    return '—'
   const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
+  if (Number.isNaN(parsed.getTime()))
+    return value
   return dateFormatter.value.format(parsed)
 }
 
 function formatSize(bytes?: number | null) {
-  if (!bytes) return '—'
+  if (!bytes)
+    return '—'
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 
@@ -122,17 +125,20 @@ function channelTone(channel: PluginChannel) {
 }
 
 const canSubmitReview = computed(() => {
-  if (!props.plugin || !props.isOwner) return false
+  if (!props.plugin || !props.isOwner)
+    return false
   return props.plugin.status === 'draft' || props.plugin.status === 'rejected'
 })
 
 const canWithdrawReview = computed(() => {
-  if (!props.plugin || !props.isOwner) return false
+  if (!props.plugin || !props.isOwner)
+    return false
   return props.plugin.status === 'pending'
 })
 
 const canPublishVersion = computed(() => {
-  if (!props.plugin || !props.isOwner) return false
+  if (!props.plugin || !props.isOwner)
+    return false
   return props.plugin.status === 'approved'
 })
 

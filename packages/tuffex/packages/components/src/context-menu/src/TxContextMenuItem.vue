@@ -19,7 +19,8 @@ const emit = defineEmits<{
 const ctx = inject<{ close: () => void } | null>('txContextMenu', null)
 
 function onClick() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('select')
   ctx?.close?.()
 }

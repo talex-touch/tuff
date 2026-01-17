@@ -35,7 +35,8 @@ export default defineEventHandler(async (event) => {
       organizationId: invite.organizationId,
     })
     organizationName = org.name
-  } catch {
+  }
+  catch {
     // Organization might not be accessible
   }
 

@@ -32,9 +32,9 @@ const descriptor: AgentDescriptor = {
           query: { type: 'string', description: '搜索关键词' },
           path: { type: 'string', description: '搜索路径' },
           extensions: { type: 'array', items: { type: 'string' }, description: '文件扩展名过滤' },
-          maxResults: { type: 'number', description: '最大结果数' },
+          maxResults: { type: 'number', description: '最大结果数' }
         },
-        required: ['query'],
+        required: ['query']
       },
       outputSchema: {
         type: 'array',
@@ -44,10 +44,10 @@ const descriptor: AgentDescriptor = {
             path: { type: 'string' },
             name: { type: 'string' },
             size: { type: 'number' },
-            modifiedAt: { type: 'string' },
-          },
-        },
-      },
+            modifiedAt: { type: 'string' }
+          }
+        }
+      }
     },
     {
       id: 'file.rename',
@@ -63,22 +63,22 @@ const descriptor: AgentDescriptor = {
               type: 'object',
               properties: {
                 source: { type: 'string' },
-                target: { type: 'string' },
-              },
-            },
+                target: { type: 'string' }
+              }
+            }
           },
-          pattern: { type: 'string', description: '重命名模式' },
+          pattern: { type: 'string', description: '重命名模式' }
         },
-        required: ['files'],
+        required: ['files']
       },
       outputSchema: {
         type: 'object',
         properties: {
           success: { type: 'number' },
           failed: { type: 'number' },
-          results: { type: 'array' },
-        },
-      },
+          results: { type: 'array' }
+        }
+      }
     },
     {
       id: 'file.organize',
@@ -95,22 +95,22 @@ const descriptor: AgentDescriptor = {
               type: 'object',
               properties: {
                 match: { type: 'string', description: '匹配规则 (glob 或正则)' },
-                targetFolder: { type: 'string', description: '目标文件夹' },
-              },
-            },
+                targetFolder: { type: 'string', description: '目标文件夹' }
+              }
+            }
           },
-          dryRun: { type: 'boolean', description: '仅预览不执行' },
+          dryRun: { type: 'boolean', description: '仅预览不执行' }
         },
-        required: ['sourcePath'],
+        required: ['sourcePath']
       },
       outputSchema: {
         type: 'object',
         properties: {
           moved: { type: 'number' },
           skipped: { type: 'number' },
-          details: { type: 'array' },
-        },
-      },
+          details: { type: 'array' }
+        }
+      }
     },
     {
       id: 'file.duplicates',
@@ -122,9 +122,9 @@ const descriptor: AgentDescriptor = {
         properties: {
           path: { type: 'string', description: '扫描路径' },
           recursive: { type: 'boolean', description: '是否递归' },
-          minSize: { type: 'number', description: '最小文件大小 (bytes)' },
+          minSize: { type: 'number', description: '最小文件大小 (bytes)' }
         },
-        required: ['path'],
+        required: ['path']
       },
       outputSchema: {
         type: 'object',
@@ -136,15 +136,15 @@ const descriptor: AgentDescriptor = {
               properties: {
                 hash: { type: 'string' },
                 size: { type: 'number' },
-                files: { type: 'array', items: { type: 'string' } },
-              },
-            },
+                files: { type: 'array', items: { type: 'string' } }
+              }
+            }
           },
           totalDuplicates: { type: 'number' },
-          potentialSavings: { type: 'number' },
-        },
-      },
-    },
+          potentialSavings: { type: 'number' }
+        }
+      }
+    }
   ],
   tools: [
     { toolId: 'file.read' },
@@ -154,14 +154,14 @@ const descriptor: AgentDescriptor = {
     { toolId: 'file.copy' },
     { toolId: 'file.delete' },
     { toolId: 'file.info' },
-    { toolId: 'file.exists' },
+    { toolId: 'file.exists' }
   ],
-  enabled: true,
+  enabled: true
 }
 
 const implementation: AgentImpl = {
   async execute(input: unknown, ctx: AgentExecutionContext): Promise<unknown> {
-    const { capability, ...params } = input as { capability: string, [key: string]: unknown }
+    const { capability, ...params } = input as { capability: string; [key: string]: unknown }
 
     switch (capability) {
       case 'file.search':
@@ -183,12 +183,17 @@ const implementation: AgentImpl = {
     // Simple plan generation based on goal keywords
     const steps: AgentPlanStep[] = []
 
-    if (goal.includes('搜索') || goal.includes('查找') || goal.includes('search') || goal.includes('find')) {
+    if (
+      goal.includes('搜索') ||
+      goal.includes('查找') ||
+      goal.includes('search') ||
+      goal.includes('find')
+    ) {
       steps.push({
         id: 'search',
         toolId: 'file.search',
         input: { query: goal },
-        description: '搜索符合条件的文件',
+        description: '搜索符合条件的文件'
       })
     }
 
@@ -198,7 +203,7 @@ const implementation: AgentImpl = {
         toolId: 'file.rename',
         input: {},
         description: '批量重命名文件',
-        dependsOn: steps.length > 0 ? [steps[steps.length - 1].id] : undefined,
+        dependsOn: steps.length > 0 ? [steps[steps.length - 1].id] : undefined
       })
     }
 
@@ -207,7 +212,7 @@ const implementation: AgentImpl = {
         id: 'organize',
         toolId: 'file.organize',
         input: {},
-        description: '按规则整理文件',
+        description: '按规则整理文件'
       })
     }
 
@@ -216,12 +221,12 @@ const implementation: AgentImpl = {
         id: 'duplicates',
         toolId: 'file.duplicates',
         input: {},
-        description: '检测重复文件',
+        description: '检测重复文件'
       })
     }
 
     return steps
-  },
+  }
 }
 
 // ============================================================================
@@ -230,9 +235,14 @@ const implementation: AgentImpl = {
 
 async function executeSearch(
   params: Record<string, unknown>,
-  ctx: AgentExecutionContext,
+  ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { query, path = '.', extensions, maxResults = 100 } = params as {
+  const {
+    query,
+    path = '.',
+    extensions,
+    maxResults = 100
+  } = params as {
     query: string
     path?: string
     extensions?: string[]
@@ -240,17 +250,21 @@ async function executeSearch(
   }
 
   // Use file.list tool to get files
-  const listResult = await toolRegistry.executeTool('file.list', { path, recursive: true }, {
-    taskId: ctx.taskId,
-    agentId: FILE_AGENT_ID,
-    workingDirectory: ctx.workingDirectory,
-  })
+  const listResult = await toolRegistry.executeTool(
+    'file.list',
+    { path, recursive: true },
+    {
+      taskId: ctx.taskId,
+      agentId: FILE_AGENT_ID,
+      workingDirectory: ctx.workingDirectory
+    }
+  )
 
   if (!listResult.success) {
     throw new Error(listResult.error || 'Failed to list files')
   }
 
-  const files = listResult.output as Array<{ name: string, path: string, type: string }>
+  const files = listResult.output as Array<{ name: string; path: string; type: string }>
   const queryLower = query.toLowerCase()
 
   // Filter files by query and extensions
@@ -269,20 +283,20 @@ async function executeSearch(
   return {
     query,
     total: results.length,
-    files: results,
+    files: results
   }
 }
 
 async function executeRename(
   params: Record<string, unknown>,
-  ctx: AgentExecutionContext,
+  ctx: AgentExecutionContext
 ): Promise<unknown> {
   const { files, pattern } = params as {
-    files: Array<{ source: string, target: string }>
+    files: Array<{ source: string; target: string }>
     pattern?: string
   }
 
-  const results: Array<{ source: string, target: string, success: boolean, error?: string }> = []
+  const results: Array<{ source: string; target: string; success: boolean; error?: string }> = []
   let success = 0
   let failed = 0
 
@@ -303,22 +317,30 @@ async function executeRename(
         .replace('{index}', String(results.length + 1))
     }
 
-    const moveResult = await toolRegistry.executeTool('file.move', {
-      source: file.source,
-      destination: targetName,
-    }, {
-      taskId: ctx.taskId,
-      agentId: FILE_AGENT_ID,
-      workingDirectory: ctx.workingDirectory,
-    })
+    const moveResult = await toolRegistry.executeTool(
+      'file.move',
+      {
+        source: file.source,
+        destination: targetName
+      },
+      {
+        taskId: ctx.taskId,
+        agentId: FILE_AGENT_ID,
+        workingDirectory: ctx.workingDirectory
+      }
+    )
 
     if (moveResult.success) {
       success++
       results.push({ source: file.source, target: targetName, success: true })
-    }
-    else {
+    } else {
       failed++
-      results.push({ source: file.source, target: targetName, success: false, error: moveResult.error })
+      results.push({
+        source: file.source,
+        target: targetName,
+        success: false,
+        error: moveResult.error
+      })
     }
   }
 
@@ -327,11 +349,15 @@ async function executeRename(
 
 async function executeOrganize(
   params: Record<string, unknown>,
-  ctx: AgentExecutionContext,
+  ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { sourcePath, rules, dryRun = false } = params as {
+  const {
+    sourcePath,
+    rules,
+    dryRun = false
+  } = params as {
     sourcePath: string
-    rules?: Array<{ match: string, targetFolder: string }>
+    rules?: Array<{ match: string; targetFolder: string }>
     dryRun?: boolean
   }
 
@@ -341,22 +367,26 @@ async function executeOrganize(
     { match: '*.{mp4,avi,mkv,mov}', targetFolder: 'Videos' },
     { match: '*.{mp3,wav,flac,aac}', targetFolder: 'Audio' },
     { match: '*.{doc,docx,pdf,txt,md}', targetFolder: 'Documents' },
-    { match: '*.{zip,rar,7z,tar,gz}', targetFolder: 'Archives' },
+    { match: '*.{zip,rar,7z,tar,gz}', targetFolder: 'Archives' }
   ]
 
   // List files
-  const listResult = await toolRegistry.executeTool('file.list', { path: sourcePath }, {
-    taskId: ctx.taskId,
-    agentId: FILE_AGENT_ID,
-    workingDirectory: ctx.workingDirectory,
-  })
+  const listResult = await toolRegistry.executeTool(
+    'file.list',
+    { path: sourcePath },
+    {
+      taskId: ctx.taskId,
+      agentId: FILE_AGENT_ID,
+      workingDirectory: ctx.workingDirectory
+    }
+  )
 
   if (!listResult.success) {
     throw new Error(listResult.error || 'Failed to list files')
   }
 
-  const files = listResult.output as Array<{ name: string, path: string, type: string }>
-  const details: Array<{ file: string, action: string, target?: string }> = []
+  const files = listResult.output as Array<{ name: string; path: string; type: string }>
+  const details: Array<{ file: string; action: string; target?: string }> = []
   let moved = 0
   let skipped = 0
 
@@ -371,22 +401,24 @@ async function executeOrganize(
 
         if (dryRun) {
           details.push({ file: file.path, action: 'would_move', target: targetPath })
-        }
-        else {
-          const moveResult = await toolRegistry.executeTool('file.move', {
-            source: file.path,
-            destination: targetPath,
-          }, {
-            taskId: ctx.taskId,
-            agentId: FILE_AGENT_ID,
-            workingDirectory: ctx.workingDirectory,
-          })
+        } else {
+          const moveResult = await toolRegistry.executeTool(
+            'file.move',
+            {
+              source: file.path,
+              destination: targetPath
+            },
+            {
+              taskId: ctx.taskId,
+              agentId: FILE_AGENT_ID,
+              workingDirectory: ctx.workingDirectory
+            }
+          )
 
           if (moveResult.success) {
             moved++
             details.push({ file: file.path, action: 'moved', target: targetPath })
-          }
-          else {
+          } else {
             details.push({ file: file.path, action: 'failed', target: targetPath })
           }
         }
@@ -407,26 +439,34 @@ async function executeOrganize(
 
 async function executeDuplicates(
   params: Record<string, unknown>,
-  ctx: AgentExecutionContext,
+  ctx: AgentExecutionContext
 ): Promise<unknown> {
-  const { path, recursive = true, minSize = 1024 } = params as {
+  const {
+    path,
+    recursive = true,
+    minSize = 1024
+  } = params as {
     path: string
     recursive?: boolean
     minSize?: number
   }
 
   // List files
-  const listResult = await toolRegistry.executeTool('file.list', { path, recursive }, {
-    taskId: ctx.taskId,
-    agentId: FILE_AGENT_ID,
-    workingDirectory: ctx.workingDirectory,
-  })
+  const listResult = await toolRegistry.executeTool(
+    'file.list',
+    { path, recursive },
+    {
+      taskId: ctx.taskId,
+      agentId: FILE_AGENT_ID,
+      workingDirectory: ctx.workingDirectory
+    }
+  )
 
   if (!listResult.success) {
     throw new Error(listResult.error || 'Failed to list files')
   }
 
-  const files = listResult.output as Array<{ name: string, path: string, type: string }>
+  const files = listResult.output as Array<{ name: string; path: string; type: string }>
 
   // Group by size first (quick filter)
   const sizeGroups = new Map<number, string[]>()
@@ -434,11 +474,15 @@ async function executeDuplicates(
   for (const file of files) {
     if (file.type !== 'file') continue
 
-    const infoResult = await toolRegistry.executeTool('file.info', { path: file.path }, {
-      taskId: ctx.taskId,
-      agentId: FILE_AGENT_ID,
-      workingDirectory: ctx.workingDirectory,
-    })
+    const infoResult = await toolRegistry.executeTool(
+      'file.info',
+      { path: file.path },
+      {
+        taskId: ctx.taskId,
+        agentId: FILE_AGENT_ID,
+        workingDirectory: ctx.workingDirectory
+      }
+    )
 
     if (infoResult.success) {
       const info = infoResult.output as { size: number }
@@ -451,7 +495,7 @@ async function executeDuplicates(
   }
 
   // Find groups with more than one file (potential duplicates)
-  const groups: Array<{ size: number, files: string[] }> = []
+  const groups: Array<{ size: number; files: string[] }> = []
   let totalDuplicates = 0
   let potentialSavings = 0
 
@@ -467,7 +511,7 @@ async function executeDuplicates(
     groups,
     totalDuplicates,
     potentialSavings,
-    potentialSavingsFormatted: formatBytes(potentialSavings),
+    potentialSavingsFormatted: formatBytes(potentialSavings)
   }
 }
 

@@ -1,8 +1,8 @@
 <script lang="ts" name="IntelligenceCapabilityInfo" setup>
 import type {
   AiCapabilityProviderBinding,
-  IntelligenceProviderConfig,
   AISDKCapabilityConfig,
+  IntelligenceProviderConfig
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { useI18n } from 'vue-i18n'
@@ -30,7 +30,15 @@ const emits = defineEmits<{
   toggleProvider: [providerId: string, enabled: boolean]
   updateModels: [providerId: string, value: string[]]
   updatePrompt: [prompt: string]
-  test: [options?: { providerId?: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }]
+  test: [
+    options?: {
+      providerId?: string
+      model?: string
+      promptTemplate?: string
+      promptVariables?: Record<string, any>
+      userInput?: string
+    }
+  ]
   reorderProviders: [bindings: AiCapabilityProviderBinding[]]
 }>()
 
@@ -44,14 +52,14 @@ let promptTimer: number | null = null
 let syncingFromProps = false
 
 const providerMetaMap = computed(
-  () => new Map(props.providers.map(provider => [provider.id, provider])),
+  () => new Map(props.providers.map((provider) => [provider.id, provider]))
 )
 
 const selectedProviderIds = computed(() => {
   return new Set(
     (props.capability.providers || [])
-      .filter(binding => binding.enabled !== false)
-      .map(binding => binding.providerId),
+      .filter((binding) => binding.enabled !== false)
+      .map((binding) => binding.providerId)
   )
 })
 
@@ -59,7 +67,7 @@ const activeBindingCount = computed(() => selectedProviderIds.value.size)
 
 const totalModelsCount = computed(() => {
   return (props.capability.providers || [])
-    .filter(binding => binding.enabled !== false)
+    .filter((binding) => binding.enabled !== false)
     .reduce((sum, binding) => sum + (binding.models?.length || 0), 0)
 })
 
@@ -73,47 +81,46 @@ const bindingMap = computed(() => {
 
 const enabledBindings = computed<CapabilityBinding[]>(() => {
   return (props.capability.providers || [])
-    .filter(binding => binding.enabled !== false)
+    .filter((binding) => binding.enabled !== false)
     .slice()
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
-    .map(binding => ({
+    .map((binding) => ({
       ...binding,
-      provider: providerMetaMap.value.get(binding.providerId),
+      provider: providerMetaMap.value.get(binding.providerId)
     }))
 })
 
 const disabledProviders = computed<CapabilityBinding[]>(() => {
-  const enabledIds = new Set(enabledBindings.value.map(binding => binding.providerId))
+  const enabledIds = new Set(enabledBindings.value.map((binding) => binding.providerId))
   const disabledSet = new Set<string>()
   const leftover = (props.capability.providers || [])
-    .filter(binding => binding.enabled === false)
+    .filter((binding) => binding.enabled === false)
     .map((binding) => {
       disabledSet.add(binding.providerId)
       return {
         ...binding,
-        provider: providerMetaMap.value.get(binding.providerId),
+        provider: providerMetaMap.value.get(binding.providerId)
       }
     })
 
   const remaining = props.providers
-    .filter(provider => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
-    .map(provider => ({
+    .filter((provider) => !enabledIds.has(provider.id) && !disabledSet.has(provider.id))
+    .map((provider) => ({
       providerId: provider.id,
       enabled: false,
       priority: undefined,
-      provider,
+      provider
     }))
 
   return [...leftover, ...remaining]
 })
 
 const focusedProvider = computed(
-  () => props.providers.find(provider => provider.id === focusedProviderId.value) || null,
+  () => props.providers.find((provider) => provider.id === focusedProviderId.value) || null
 )
 
 const focusedBinding = computed(() => {
-  if (!focusedProviderId.value)
-    return null
+  if (!focusedProviderId.value) return null
   return bindingMap.value.get(focusedProviderId.value) ?? null
 })
 
@@ -170,18 +177,16 @@ watch(
     syncingFromProps = true
     promptValue.value = value || ''
     syncingFromProps = false
-  },
+  }
 )
 
 function flushPrompt(): void {
-  if (syncingFromProps)
-    return
+  if (syncingFromProps) return
   emits('updatePrompt', promptValue.value)
 }
 
 function schedulePromptSync(): void {
-  if (syncingFromProps)
-    return
+  if (syncingFromProps) return
   if (promptTimer) {
     clearTimeout(promptTimer)
   }
@@ -199,7 +204,7 @@ watch(
   () => props.capability.id,
   () => {
     flushPrompt()
-  },
+  }
 )
 
 function handleProviderToggle(providerId: string, enabled: boolean): void {
@@ -220,21 +225,19 @@ function emitProvidersOrder(bindings: CapabilityBinding[]): void {
     const { provider, ...rest } = binding
     return {
       ...rest,
-      priority: index + 1,
+      priority: index + 1
     }
   })
   emits('reorderProviders', reordered)
 }
 
 function handleModelTransferUpdates(models: string[]): void {
-  if (!focusedProviderId.value)
-    return
+  if (!focusedProviderId.value) return
   emits('updateModels', focusedProviderId.value, models)
 }
 
 function openModelDrawer(): void {
-  if (!canEditModels.value)
-    return
+  if (!canEditModels.value) return
   showModelDrawer.value = true
 }
 
@@ -242,9 +245,14 @@ function openPromptDrawer(): void {
   showPromptDrawer.value = true
 }
 
-function handleTest(options?: { providerId?: string, model?: string, promptTemplate?: string, promptVariables?: Record<string, any>, userInput?: string }): void {
-  if (props.isTesting)
-    return
+function handleTest(options?: {
+  providerId?: string
+  model?: string
+  promptTemplate?: string
+  promptVariables?: Record<string, any>
+  userInput?: string
+}): void {
+  if (props.isTesting) return
   emits('test', options)
 }
 
@@ -256,17 +264,17 @@ watch(
       return
     }
     if (
-      focusedProviderId.value
-      && props.providers.some(provider => provider.id === focusedProviderId.value)
+      focusedProviderId.value &&
+      props.providers.some((provider) => provider.id === focusedProviderId.value)
     ) {
       return
     }
     const firstActive = props.capability.providers?.find(
-      binding => binding.enabled !== false,
+      (binding) => binding.enabled !== false
     )?.providerId
     focusedProviderId.value = firstActive ?? props.providers[0].id
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 )
 
 onBeforeUnmount(() => {

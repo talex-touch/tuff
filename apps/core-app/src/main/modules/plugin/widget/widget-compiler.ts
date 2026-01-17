@@ -1,11 +1,11 @@
-import path from 'node:path'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetSource } from './widget-loader'
-import { WidgetVueProcessor } from './processors/vue-processor'
-import { WidgetTsxProcessor } from './processors/tsx-processor'
-import { WidgetScriptProcessor } from './processors/script-processor'
-import { widgetProcessorRegistry } from './widget-processor'
 import type { CompiledWidget, WidgetCompilationContext } from './widget-processor'
+import path from 'node:path'
+import { WidgetScriptProcessor } from './processors/script-processor'
+import { WidgetTsxProcessor } from './processors/tsx-processor'
+import { WidgetVueProcessor } from './processors/vue-processor'
+import { widgetProcessorRegistry } from './widget-processor'
 
 // Register default processors
 widgetProcessorRegistry.register(new WidgetVueProcessor())
@@ -31,7 +31,7 @@ interface LegacyCompiledWidget {
  */
 export async function compileWidgetSource(
   source: WidgetSource,
-  context: WidgetCompilationContext,
+  context: WidgetCompilationContext
 ): Promise<CompiledWidget | null> {
   const ext = path.extname(source.filePath)
 
@@ -44,11 +44,11 @@ export async function compileWidgetSource(
       message: `Unsupported widget file type: ${ext}`,
       source: `feature:${context.feature.id}`,
       suggestion: `Supported extensions: ${widgetProcessorRegistry.getSupportedExtensions().join(', ')}`,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     })
 
     context.plugin.logger.error(
-      `[WidgetCompiler] Unsupported file type "${ext}" for widget "${source.widgetId}"`,
+      `[WidgetCompiler] Unsupported file type "${ext}" for widget "${source.widgetId}"`
     )
 
     return null
@@ -66,11 +66,11 @@ export async function compileWidgetSource(
 export async function compileWidgetSourceLegacy(
   source: WidgetSource,
   plugin: ITouchPlugin,
-  feature: IPluginFeature,
+  feature: IPluginFeature
 ): Promise<LegacyCompiledWidget | null> {
   const context: WidgetCompilationContext = {
     plugin,
-    feature,
+    feature
   }
 
   const result = await compileWidgetSource(source, context)
@@ -82,7 +82,7 @@ export async function compileWidgetSourceLegacy(
   // Convert to legacy format (without dependencies)
   return {
     code: result.code,
-    styles: result.styles,
+    styles: result.styles
   }
 }
 

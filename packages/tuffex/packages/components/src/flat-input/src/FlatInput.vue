@@ -36,13 +36,14 @@ const value = computed({
 const capsLockOn = ref(false)
 
 function onKeyDown(e: KeyboardEvent) {
-  if (!props.password) return
+  if (!props.password)
+    return
 
   const keyCode = (e as any).keyCode ? (e as any).keyCode : (e as any).which
   const shift = (e as any).shiftKey ? (e as any).shiftKey : keyCode === 16
 
-  capsLockOn.value =
-    ((keyCode >= 65 && keyCode <= 90) && !shift) || ((keyCode >= 97 && keyCode <= 122) && shift)
+  capsLockOn.value
+    = ((keyCode >= 65 && keyCode <= 90) && !shift) || ((keyCode >= 97 && keyCode <= 122) && shift)
 }
 </script>
 
@@ -50,7 +51,7 @@ function onKeyDown(e: KeyboardEvent) {
   <div
     tabindex="0"
     class="flat-input fake-background"
-    :class="{ 'none-prefix': !$slots?.default, win: nonWin !== true, area }"
+    :class="{ 'none-prefix': !$slots?.default, 'win': nonWin !== true, area }"
     @keydown="onKeyDown"
   >
     <span v-if="$slots.default" class="flat-input__prefix">

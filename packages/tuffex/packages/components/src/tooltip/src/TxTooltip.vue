@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { TooltipProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import type { TooltipProps } from './types'
 
 defineOptions({ name: 'TxTooltip' })
 
@@ -75,9 +75,9 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
         })
       },
     }),
-    arrow({ 
+    arrow({
       element: computed(() => arrowRef.value),
-      padding: 6 
+      padding: 6,
     }),
   ],
 })
@@ -149,14 +149,17 @@ let openTimer: number | null = null
 let closeTimer: number | null = null
 
 function clearTimers() {
-  if (openTimer) window.clearTimeout(openTimer)
-  if (closeTimer) window.clearTimeout(closeTimer)
+  if (openTimer)
+    window.clearTimeout(openTimer)
+  if (closeTimer)
+    window.clearTimeout(closeTimer)
   openTimer = null
   closeTimer = null
 }
 
 function scheduleOpen() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   clearTimers()
   openTimer = window.setTimeout(async () => {
     lastOpenedAt.value = performance.now()
@@ -250,8 +253,10 @@ function handleOutside(e: Event): void {
 }
 
 function onEsc(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
-  if (!open.value) return
+  if (e.key !== 'Escape')
+    return
+  if (!open.value)
+    return
   open.value = false
 }
 
@@ -278,7 +283,7 @@ watch(
 onMounted(async () => {
   document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', onEsc)
-  
+
   // Pre-calculate position even when closed to avoid jump on first open
   await nextTick()
   if (referenceRef.value) {
@@ -297,37 +302,39 @@ onBeforeUnmount(() => {
 const arrowStyle = computed<Record<string, string>>(() => {
   if (!props.showArrow || !arrowRef.value)
     return { display: 'none' }
-    
+
   const data = (middlewareData.value as any)?.arrow
-  
+
   // Ensure arrow data is stable and valid
   if (!data || (data.x == null && data.y == null)) {
     return { display: 'none' }
   }
-  
+
   const x = data.x
   const y = data.y
   const side = String(placement.value || props.placement || 'top').split('-')[0]
-  
+
   const base: Record<string, string> = {
     display: 'block',
     position: 'absolute',
   }
-  
+
   // Only set position if we have valid coordinates
-  if (x != null) base.left = `${x}px`
-  if (y != null) base.top = `${y}px`
-  
+  if (x != null)
+    base.left = `${x}px`
+  if (y != null)
+    base.top = `${y}px`
+
   const staticSide = {
     top: 'bottom',
-    right: 'left', 
+    right: 'left',
     bottom: 'top',
     left: 'right',
   }[side] as string
 
   const half = Math.round((props.arrowSize || 12) / 2)
   base[staticSide] = `calc(-${half}px + 1px)`
-  
+
   return base
 })
 
@@ -342,7 +349,8 @@ function onBeforeEnter(el: Element) {
 
   const node = el as HTMLElement
   const refEl = referenceRef.value
-  if (!refEl) return
+  if (!refEl)
+    return
 
   const refRect = refEl.getBoundingClientRect()
   const side = arrowSide.value
@@ -358,10 +366,14 @@ function onBeforeEnter(el: Element) {
     const arrowRect = arrowEl.getBoundingClientRect()
     tipX = arrowRect.left + arrowRect.width * 0.5
     tipY = arrowRect.top + arrowRect.height * 0.5
-    if (side === 'top') tipY = arrowRect.bottom
-    if (side === 'bottom') tipY = arrowRect.top
-    if (side === 'left') tipX = arrowRect.right
-    if (side === 'right') tipX = arrowRect.left
+    if (side === 'top')
+      tipY = arrowRect.bottom
+    if (side === 'bottom')
+      tipY = arrowRect.top
+    if (side === 'left')
+      tipX = arrowRect.right
+    if (side === 'right')
+      tipX = arrowRect.left
   }
   else {
     const floatRect = node.getBoundingClientRect()

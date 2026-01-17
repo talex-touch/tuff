@@ -1,6 +1,6 @@
 <script name="UnifiedFileTag" setup lang="ts">
-import { computed } from 'vue'
 import path from 'path-browserify'
+import { computed } from 'vue'
 
 /**
  * Unified file tag component that handles both FILE mode and clipboard files
@@ -20,12 +20,10 @@ const props = defineProps<{
  * Filters out IDs, placeholders, and malformed paths
  */
 function isValidFilePath(str: string): boolean {
-  if (!str || typeof str !== 'string')
-    return false
+  if (!str || typeof str !== 'string') return false
 
   // Reject file IDs and placeholders
-  if (str.includes('file/id=') || str.includes('/.file/id='))
-    return false
+  if (str.includes('file/id=') || str.includes('/.file/id=')) return false
 
   // Must be an absolute path or valid relative path
   const trimmed = str.trim()
@@ -48,8 +46,7 @@ const filePaths = computed(() => {
       if (Array.isArray(parsed)) {
         return parsed.filter(isValidFilePath)
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UnifiedFileTag] Failed to parse clipboard file data:', error)
     }
   }
@@ -66,8 +63,7 @@ const fileCount = computed(() => filePaths.value.length)
  * First file name for display
  */
 const firstFileName = computed(() => {
-  if (filePaths.value.length === 0)
-    return '文件准备中...'
+  if (filePaths.value.length === 0) return '文件准备中...'
   return path.basename(filePaths.value[0])
 })
 
@@ -103,14 +99,23 @@ const thumbnail = computed(() => {
 })
 </script>
 
-
 <template>
   <div class="UnifiedFileTag" :class="{ loading: isLoading }">
     <div class="icon-container">
       <!-- Priority 1: Clipboard thumbnail (for videos) -->
-      <img v-if="thumbnail && !isLoading" :src="thumbnail" class="file-icon thumbnail" alt="file thumbnail">
+      <img
+        v-if="thumbnail && !isLoading"
+        :src="thumbnail"
+        class="file-icon thumbnail"
+        alt="file thumbnail"
+      />
       <!-- Priority 2: File icon via tfile:// protocol -->
-      <img v-else-if="fileIconUrl && !isLoading" :src="fileIconUrl" class="file-icon" alt="file icon">
+      <img
+        v-else-if="fileIconUrl && !isLoading"
+        :src="fileIconUrl"
+        class="file-icon"
+        alt="file icon"
+      />
       <!-- Priority 3: Fallback icon -->
       <i v-else class="ri-file-line file-icon-fallback" />
     </div>

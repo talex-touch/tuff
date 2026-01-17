@@ -10,9 +10,7 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const resultIcon = computed(() => {
-  return props.result.success
-    ? 'i-carbon-checkmark-filled'
-    : 'i-carbon-warning-filled'
+  return props.result.success ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'
 })
 
 const resultClass = computed(() => {
@@ -25,7 +23,11 @@ const resultClass = computed(() => {
     <div class="test-result__header">
       <i :class="resultIcon" class="test-result__icon" />
       <span class="test-result__title">
-        {{ result.success ? t('settings.intelligence.testSuccess') : t('settings.intelligence.testFailed') }}
+        {{
+          result.success
+            ? t('settings.intelligence.testSuccess')
+            : t('settings.intelligence.testFailed')
+        }}
       </span>
     </div>
 

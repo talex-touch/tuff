@@ -18,7 +18,8 @@ export class TuffIntelligenceTranslateProvider implements TranslationProvider {
       })
 
       const translatedText = response?.text
-      if (typeof translatedText !== 'string') throw new Error('Invalid intelligence translate result')
+      if (typeof translatedText !== 'string')
+        throw new Error('Invalid intelligence translate result')
 
       const provider = response?.provider || 'Unknown'
       const model = response?.model || 'Unknown'

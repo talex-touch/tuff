@@ -15,7 +15,7 @@ const props = withDefaults(
       content: string
       createdAt?: number
       avatarUrl?: string
-      attachments?: Array<{ type: 'image'; url: string; name?: string }>
+      attachments?: Array<{ type: 'image', url: string, name?: string }>
     }>
     markdown?: boolean
     stagger?: boolean
@@ -41,7 +41,7 @@ const list = computed(() => props.messages ?? [])
         :key="m.id"
         :message="m"
         :markdown="markdown"
-        @imageClick="emit('imageClick', $event)"
+        @image-click="emit('imageClick', $event)"
       />
     </TxStagger>
 
@@ -51,7 +51,7 @@ const list = computed(() => props.messages ?? [])
         :key="m.id"
         :message="m"
         :markdown="markdown"
-        @imageClick="emit('imageClick', $event)"
+        @image-click="emit('imageClick', $event)"
       />
     </div>
   </div>

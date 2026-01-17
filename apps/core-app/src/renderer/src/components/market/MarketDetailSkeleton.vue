@@ -19,7 +19,12 @@ defineOptions({
 
     <div class="detail-content-skeleton">
       <div class="readme-skeleton">
-        <div v-for="i in 8" :key="i" class="skeleton-line" :style="{ width: `${Math.random() * 40 + 50}%`, height: '16px' }" />
+        <div
+          v-for="i in 8"
+          :key="i"
+          class="skeleton-line"
+          :style="{ width: `${Math.random() * 40 + 50}%`, height: '16px' }"
+        />
       </div>
 
       <div class="sidebar-skeleton">

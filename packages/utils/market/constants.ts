@@ -1,11 +1,11 @@
-import { StorageList } from '../common/storage/constants'
-import { NEXUS_BASE_URL } from '../env'
 import type {
   MarketProviderDefinition,
+  MarketProviderTrustLevel,
   MarketSourcesPayload,
   MarketSourcesStorageInfo,
-  MarketProviderTrustLevel,
 } from './types'
+import { StorageList } from '../common/storage/constants'
+import { NEXUS_BASE_URL } from '../env'
 
 export const MARKET_SOURCES_STORAGE_KEY = StorageList.MARKET_SOURCES
 export const MARKET_SOURCES_STORAGE_VERSION = 1

@@ -1,5 +1,5 @@
-import { getQuery } from 'h3'
 import type { ReleaseChannel, ReleaseStatus } from '../../utils/releasesStore'
+import { getQuery } from 'h3'
 import { listReleases } from '../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {

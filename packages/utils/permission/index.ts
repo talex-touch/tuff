@@ -4,21 +4,21 @@
  * Plugin permission management system.
  */
 
-export * from './types'
-export * from './registry'
-export * from './legacy'
-
+import type { SdkApiVersion } from '../plugin'
 import type {
-  ManifestPermissions,
   ManifestPermissionReasons,
+  ManifestPermissions,
   PluginPermissionStatus,
 } from './types'
-import { DEFAULT_PERMISSIONS, permissionRegistry } from './registry'
 import {
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
 } from '../plugin/sdk-version'
-import type { SdkApiVersion } from '../plugin'
+import { DEFAULT_PERMISSIONS, permissionRegistry } from './registry'
+
+export * from './legacy'
+export * from './registry'
+export * from './types'
 
 /**
  * Parse permissions from manifest
@@ -26,22 +26,23 @@ import type { SdkApiVersion } from '../plugin'
 export function parseManifestPermissions(manifest: {
   permissions?: ManifestPermissions | string[]
   permissionReasons?: ManifestPermissionReasons
-}): { required: string[]; optional: string[]; reasons: ManifestPermissionReasons } {
+}): { required: string[], optional: string[], reasons: ManifestPermissionReasons } {
   let required: string[] = []
   let optional: string[] = []
 
   if (Array.isArray(manifest.permissions)) {
     // Legacy format: string[]
     required = manifest.permissions
-  } else if (manifest.permissions) {
+  }
+  else if (manifest.permissions) {
     // New format: { required, optional }
     required = manifest.permissions.required || []
     optional = manifest.permissions.optional || []
   }
 
   // Validate permission IDs
-  required = required.filter((id) => permissionRegistry.has(id))
-  optional = optional.filter((id) => permissionRegistry.has(id))
+  required = required.filter(id => permissionRegistry.has(id))
+  optional = optional.filter(id => permissionRegistry.has(id))
 
   return {
     required,
@@ -56,20 +57,20 @@ export function parseManifestPermissions(manifest: {
 export function getPluginPermissionStatus(
   pluginId: string,
   sdkapi: SdkApiVersion | undefined,
-  declaredPermissions: { required: string[]; optional: string[] },
-  grantedPermissions: string[]
+  declaredPermissions: { required: string[], optional: string[] },
+  grantedPermissions: string[],
 ): PluginPermissionStatus {
   const sdkCompat = checkSdkCompatibility(sdkapi, pluginId)
 
   // Calculate missing required permissions
   const missingRequired = declaredPermissions.required.filter(
-    (p) => !grantedPermissions.includes(p) && !DEFAULT_PERMISSIONS.includes(p)
+    p => !grantedPermissions.includes(p) && !DEFAULT_PERMISSIONS.includes(p),
   )
 
   // Calculate denied (not in granted and not default)
   const allDeclared = [...declaredPermissions.required, ...declaredPermissions.optional]
   const denied = allDeclared.filter(
-    (p) => !grantedPermissions.includes(p) && !DEFAULT_PERMISSIONS.includes(p)
+    p => !grantedPermissions.includes(p) && !DEFAULT_PERMISSIONS.includes(p),
   )
 
   return {
@@ -90,7 +91,7 @@ export function getPluginPermissionStatus(
  */
 export function hasPermission(
   status: PluginPermissionStatus,
-  permissionId: string
+  permissionId: string,
 ): boolean {
   // If enforcement is disabled, allow all
   if (!status.enforcePermissions) {
@@ -105,8 +106,8 @@ export function hasPermission(
  * Generate permission issue for plugin
  */
 export function generatePermissionIssue(
-  status: PluginPermissionStatus
-): { type: 'error' | 'warning'; message: string; code: string; suggestion?: string } | null {
+  status: PluginPermissionStatus,
+): { type: 'error' | 'warning', message: string, code: string, suggestion?: string } | null {
   // SDK version warning
   if (status.warning && !status.enforcePermissions) {
     return {

@@ -1,6 +1,6 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { eq } from 'drizzle-orm'
 import type * as schema from '../../db/schema'
+import { eq } from 'drizzle-orm'
 import * as dbSchema from '../../db/schema'
 
 export interface TelemetryUploadStatsRecord {

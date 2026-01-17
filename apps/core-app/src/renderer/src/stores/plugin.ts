@@ -13,14 +13,14 @@ export const usePluginStore = defineStore('plugin', () => {
   const notifiedCategoryMissing = new Set<string>()
 
   function maybeNotifyPluginIssues(plugin: ITouchPlugin): void {
-    const hasCategoryMissing = plugin.issues?.some(issue => issue.code === 'CATEGORY_MISSING')
+    const hasCategoryMissing = plugin.issues?.some((issue) => issue.code === 'CATEGORY_MISSING')
     if (!hasCategoryMissing) return
 
     if (notifiedCategoryMissing.has(plugin.name)) return
     notifiedCategoryMissing.add(plugin.name)
 
     toast.error(`插件「${plugin.name}」缺少分类字段 category，已拒绝启动`, {
-      description: '请在 manifest.json 补充 "category": "utilities"（sdkapi >= 260114 必填）。',
+      description: '请在 manifest.json 补充 "category": "utilities"（sdkapi >= 260114 必填）。'
     })
   }
 
@@ -107,8 +107,7 @@ export const usePluginStore = defineStore('plugin', () => {
     const plugin = getPlugin(name)
     if (plugin) {
       plugin.status = status
-    }
-    else {
+    } else {
       console.warn(`[PluginStore] Plugin "${name}" not found when updating status`)
     }
   }
@@ -141,8 +140,7 @@ export const usePluginStore = defineStore('plugin', () => {
         return unsubscribe
       }
       initPlugins(pluginList)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PluginStore] Failed to load initial plugin list:', error)
     }
 
@@ -158,6 +156,6 @@ export const usePluginStore = defineStore('plugin', () => {
     handleStateEvent,
     updatePluginStatus,
     updatePluginReadme,
-    initialize,
+    initialize
   }
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { NavBarEmits, NavBarProps } from './types'
+import { computed } from 'vue'
 
 defineOptions({ name: 'TxNavBar' })
 
@@ -22,18 +22,21 @@ const rootStyle = computed<Record<string, string>>(() => {
 })
 
 function onBack() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('back')
   emit('click-left')
 }
 
 function onLeftClick() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('click-left')
 }
 
 function onRightClick() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('click-right')
 }
 </script>
@@ -64,7 +67,9 @@ function onRightClick() {
 
       <div class="tx-nav-bar__center">
         <slot name="title">
-          <div class="tx-nav-bar__title">{{ title }}</div>
+          <div class="tx-nav-bar__title">
+            {{ title }}
+          </div>
         </slot>
       </div>
 

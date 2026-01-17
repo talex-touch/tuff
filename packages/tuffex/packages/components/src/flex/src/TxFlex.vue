@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { FlexProps } from './types'
+import { computed } from 'vue'
 
 defineOptions({ name: 'TxFlex' })
 

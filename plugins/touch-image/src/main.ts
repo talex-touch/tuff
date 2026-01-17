@@ -1,11 +1,11 @@
 import { init, initBridge } from '@talex-touch/utils/plugin/preload'
 import { createApp } from 'vue'
+
 import { createI18n } from 'vue-i18n'
 import App from './App.vue'
 import './style.css'
 import 'uno.css'
 import 'virtual:unocss-devtools'
-
 const { ipcRenderer } = require('electron')
 
 ipcRenderer.on('@loaded', (_event: any, _name: string) => {

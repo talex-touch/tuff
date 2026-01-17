@@ -1,7 +1,10 @@
 <script lang="ts" setup name="PluginSparkline">
 import { computed } from 'vue'
 
-type Point = { x: number, y: number }
+interface Point {
+  x: number
+  y: number
+}
 
 const props = withDefaults(
   defineProps<{
@@ -19,14 +22,14 @@ const props = withDefaults(
     stroke: 'var(--el-color-primary)',
     strokeWidth: 2,
     padding: 4,
-    showArea: true,
-  },
+    showArea: true
+  }
 )
 
 const gradientId = `plugin-sparkline-fill-${Math.random().toString(36).slice(2)}`
 
 const normalized = computed(() => {
-  const values = (props.values || []).filter(v => Number.isFinite(v))
+  const values = (props.values || []).filter((v) => Number.isFinite(v))
   const max = values.length ? Math.max(...values) : 1
   const min = values.length ? Math.min(...values) : 0
   const range = max - min
@@ -42,7 +45,7 @@ const points = computed<Point[]>(() => {
   if (values.length === 0) {
     return [
       { x: pad, y: h / 2 },
-      { x: w - pad, y: h / 2 },
+      { x: w - pad, y: h / 2 }
     ]
   }
 
@@ -50,7 +53,7 @@ const points = computed<Point[]>(() => {
     const y = pad + (1 - (values[0] - min) / range) * (h - pad * 2)
     return [
       { x: pad, y },
-      { x: w - pad, y },
+      { x: w - pad, y }
     ]
   }
 
@@ -65,18 +68,16 @@ const points = computed<Point[]>(() => {
   })
 })
 
-const polyline = computed(() => points.value.map(p => `${p.x},${p.y}`).join(' '))
+const polyline = computed(() => points.value.map((p) => `${p.x},${p.y}`).join(' '))
 
 const areaPath = computed(() => {
-  if (!props.showArea)
-    return ''
+  if (!props.showArea) return ''
   const pts = points.value
-  if (pts.length < 2)
-    return ''
+  if (pts.length < 2) return ''
   const h = Math.max(1, props.height)
   const pad = Math.max(0, props.padding)
   const start = `M ${pts[0].x} ${h - pad}`
-  const line = pts.map(p => `L ${p.x} ${p.y}`).join(' ')
+  const line = pts.map((p) => `L ${p.x} ${p.y}`).join(' ')
   const end = `L ${pts[pts.length - 1].x} ${h - pad} Z`
   return `${start} ${line} ${end}`
 })
@@ -99,11 +100,7 @@ const areaPath = computed(() => {
       </linearGradient>
     </defs>
 
-    <path
-      v-if="areaPath"
-      :d="areaPath"
-      :fill="`url(#${gradientId})`"
-    />
+    <path v-if="areaPath" :d="areaPath" :fill="`url(#${gradientId})`" />
 
     <polyline
       :points="polyline"

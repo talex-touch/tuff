@@ -1,71 +1,13 @@
-<template>
-  <nav class="tx-pagination" aria-label="Pagination">
-    <ul class="tx-pagination__list">
-      <!-- Previous button -->
-      <li class="tx-pagination__item">
-        <button
-          class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--disabled': currentPage <= 1 }"
-          :disabled="currentPage <= 1"
-          @click="handlePageChange(currentPage - 1)"
-          aria-label="Previous page"
-        >
-          <TxIcon :name="prevIcon" />
-        </button>
-      </li>
-
-      <!-- Page numbers -->
-      <li
-        v-for="page in visiblePages"
-        :key="page"
-        class="tx-pagination__item"
-      >
-        <button
-          v-if="page !== '...'"
-          class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--active': page === currentPage }"
-          @click="handlePageChange(page as number)"
-          :aria-current="page === currentPage ? 'page' : undefined"
-        >
-          {{ page }}
-        </button>
-        <span v-else class="tx-pagination__ellipsis">...</span>
-      </li>
-
-      <!-- Next button -->
-      <li class="tx-pagination__item">
-        <button
-          class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--disabled': currentPage >= totalPages }"
-          :disabled="currentPage >= totalPages"
-          @click="handlePageChange(currentPage + 1)"
-          aria-label="Next page"
-        >
-          <TxIcon :name="nextIcon" />
-        </button>
-      </li>
-    </ul>
-
-    <!-- Page info -->
-    <div v-if="showInfo" class="tx-pagination__info">
-      <slot name="info" :currentPage="currentPage" :totalPages="totalPages" :total="total">
-        Page {{ currentPage }} of {{ totalPages }}
-        <span v-if="total">({{ total }} items)</span>
-      </slot>
-    </div>
-  </nav>
-</template>
-
 <script setup lang="ts">
+import type { PaginationProps } from './types'
 import { computed } from 'vue'
 import { TxIcon } from '../../icon'
-import type { PaginationProps } from './types'
 
 interface Props extends PaginationProps {}
 
 interface Emits {
   'update:currentPage': [page: number]
-  pageChange: [page: number]
+  'pageChange': [page: number]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -74,7 +16,7 @@ const props = withDefaults(defineProps<Props>(), {
   prevIcon: 'chevron-left',
   nextIcon: 'chevron-right',
   showInfo: false,
-  showFirstLast: false
+  showFirstLast: false,
 })
 
 const emit = defineEmits<Emits>()
@@ -90,25 +32,28 @@ const visiblePages = computed(() => {
   const pages: (number | string)[] = []
   const current = props.currentPage
   const total = totalPages.value
-  
+
   if (total <= 7) {
     for (let i = 1; i <= total; i++) {
       pages.push(i)
     }
-  } else {
+  }
+  else {
     if (current <= 4) {
       for (let i = 1; i <= 5; i++) {
         pages.push(i)
       }
       pages.push('...')
       pages.push(total)
-    } else if (current >= total - 3) {
+    }
+    else if (current >= total - 3) {
       pages.push(1)
       pages.push('...')
       for (let i = total - 4; i <= total; i++) {
         pages.push(i)
       }
-    } else {
+    }
+    else {
       pages.push(1)
       pages.push('...')
       for (let i = current - 1; i <= current + 1; i++) {
@@ -118,17 +63,76 @@ const visiblePages = computed(() => {
       pages.push(total)
     }
   }
-  
+
   return pages
 })
 
-const handlePageChange = (page: number) => {
-  if (page < 1 || page > totalPages.value) return
-  
+function handlePageChange(page: number) {
+  if (page < 1 || page > totalPages.value)
+    return
+
   emit('update:currentPage', page)
   emit('pageChange', page)
 }
 </script>
+
+<template>
+  <nav class="tx-pagination" aria-label="Pagination">
+    <ul class="tx-pagination__list">
+      <!-- Previous button -->
+      <li class="tx-pagination__item">
+        <button
+          class="tx-pagination__button"
+          :class="{ 'tx-pagination__button--disabled': currentPage <= 1 }"
+          :disabled="currentPage <= 1"
+          aria-label="Previous page"
+          @click="handlePageChange(currentPage - 1)"
+        >
+          <TxIcon :name="prevIcon" />
+        </button>
+      </li>
+
+      <!-- Page numbers -->
+      <li
+        v-for="page in visiblePages"
+        :key="page"
+        class="tx-pagination__item"
+      >
+        <button
+          v-if="page !== '...'"
+          class="tx-pagination__button"
+          :class="{ 'tx-pagination__button--active': page === currentPage }"
+          :aria-current="page === currentPage ? 'page' : undefined"
+          @click="handlePageChange(page as number)"
+        >
+          {{ page }}
+        </button>
+        <span v-else class="tx-pagination__ellipsis">...</span>
+      </li>
+
+      <!-- Next button -->
+      <li class="tx-pagination__item">
+        <button
+          class="tx-pagination__button"
+          :class="{ 'tx-pagination__button--disabled': currentPage >= totalPages }"
+          :disabled="currentPage >= totalPages"
+          aria-label="Next page"
+          @click="handlePageChange(currentPage + 1)"
+        >
+          <TxIcon :name="nextIcon" />
+        </button>
+      </li>
+    </ul>
+
+    <!-- Page info -->
+    <div v-if="showInfo" class="tx-pagination__info">
+      <slot name="info" :current-page="currentPage" :total-pages="totalPages" :total="total">
+        Page {{ currentPage }} of {{ totalPages }}
+        <span v-if="total">({{ total }} items)</span>
+      </slot>
+    </div>
+  </nav>
+</template>
 
 <style scoped>
 .tx-pagination {

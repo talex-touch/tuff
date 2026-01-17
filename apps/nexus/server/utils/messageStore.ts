@@ -12,7 +12,8 @@ function getD1Database(event: H3Event): D1Database | null {
 }
 
 async function ensureMessageSchema(db: D1Database) {
-  if (messageSchemaInitialized) return
+  if (messageSchemaInitialized)
+    return
 
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${MESSAGE_TABLE} (
@@ -188,7 +189,8 @@ function safeParseMeta(raw: string): Record<string, unknown> {
     if (parsed && typeof parsed === 'object') {
       return parsed as Record<string, unknown>
     }
-  } catch {
+  }
+  catch {
     // ignore parse errors
   }
   return {}

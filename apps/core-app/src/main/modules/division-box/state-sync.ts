@@ -1,12 +1,13 @@
 /**
  * State Synchronization with Retry Logic
- * 
+ *
  * Provides robust state synchronization between main and renderer processes
  * with exponential backoff retry mechanism.
  */
 
+import type { StateChangeEvent } from '@talex-touch/utils'
+import { DivisionBoxErrorCode } from '@talex-touch/utils'
 import { BrowserWindow } from 'electron'
-import { DivisionBoxErrorCode, type StateChangeEvent } from '@talex-touch/utils'
 import { errorLogger } from './error-logger'
 
 /**
@@ -15,13 +16,13 @@ import { errorLogger } from './error-logger'
 interface RetryConfig {
   /** Maximum number of retry attempts */
   maxRetries: number
-  
+
   /** Initial delay in milliseconds */
   initialDelay: number
-  
+
   /** Backoff multiplier (exponential) */
   backoffMultiplier: number
-  
+
   /** Maximum delay cap in milliseconds */
   maxDelay: number
 }
@@ -32,9 +33,9 @@ interface RetryConfig {
  */
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxRetries: 3,
-  initialDelay: 1000,      // 1 second
-  backoffMultiplier: 2,    // Double each time
-  maxDelay: 4000           // Cap at 4 seconds
+  initialDelay: 1000, // 1 second
+  backoffMultiplier: 2, // Double each time
+  maxDelay: 4000 // Cap at 4 seconds
 }
 
 /**
@@ -48,7 +49,7 @@ interface SyncResult {
 
 /**
  * StateSyncManager - Handles state synchronization with retry logic
- * 
+ *
  * Implements exponential backoff retry for failed state synchronization
  * operations between main and renderer processes.
  */
@@ -61,7 +62,7 @@ export class StateSyncManager {
 
   /**
    * Broadcasts a state change event to all renderer processes with retry
-   * 
+   *
    * @param event - State change event to broadcast
    * @param windows - Array of BrowserWindows to send to (if empty, sends to all)
    * @returns Promise resolving to sync result
@@ -71,7 +72,7 @@ export class StateSyncManager {
     windows?: BrowserWindow[]
   ): Promise<SyncResult> {
     const targetWindows = windows || BrowserWindow.getAllWindows()
-    
+
     if (targetWindows.length === 0) {
       errorLogger.logWarning('No windows available for state broadcast', {
         sessionId: event.sessionId
@@ -102,7 +103,7 @@ export class StateSyncManager {
 
   /**
    * Sends a session destroyed event to all renderer processes with retry
-   * 
+   *
    * @param sessionId - ID of the destroyed session
    * @param windows - Array of BrowserWindows to send to (if empty, sends to all)
    * @returns Promise resolving to sync result
@@ -112,7 +113,7 @@ export class StateSyncManager {
     windows?: BrowserWindow[]
   ): Promise<SyncResult> {
     const targetWindows = windows || BrowserWindow.getAllWindows()
-    
+
     if (targetWindows.length === 0) {
       errorLogger.logWarning('No windows available for session destroyed broadcast', {
         sessionId
@@ -141,7 +142,7 @@ export class StateSyncManager {
 
   /**
    * Executes an operation with exponential backoff retry
-   * 
+   *
    * @param operation - Async operation to execute
    * @param context - Context information for logging
    * @returns Promise resolving to sync result
@@ -163,24 +164,21 @@ export class StateSyncManager {
       try {
         // Execute the operation
         await operation()
-        
+
         // Success!
         if (attempt > 0) {
           // Log successful retry
-          errorLogger.logInfo(
-            `${context.operationName} succeeded after ${attempt} retries`,
-            {
-              sessionId: context.sessionId || 'N/A',
-              attempts: attempt + 1,
-              ...context.meta
-            }
-          )
+          errorLogger.logInfo(`${context.operationName} succeeded after ${attempt} retries`, {
+            sessionId: context.sessionId || 'N/A',
+            attempts: attempt + 1,
+            ...context.meta
+          })
         }
-        
+
         return { success: true, attempts }
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
-        
+
         // Log the failure
         errorLogger.logGenericError(
           DivisionBoxErrorCode.IPC_ERROR,
@@ -201,18 +199,15 @@ export class StateSyncManager {
 
         // Calculate delay with exponential backoff
         const delay = Math.min(
-          this.config.initialDelay * Math.pow(this.config.backoffMultiplier, attempt),
+          this.config.initialDelay * this.config.backoffMultiplier ** attempt,
           this.config.maxDelay
         )
 
-        errorLogger.logDebug(
-          `Retrying ${context.operationName} in ${delay}ms`,
-          {
-            sessionId: context.sessionId || 'N/A',
-            delay,
-            nextAttempt: attempt + 2
-          }
-        )
+        errorLogger.logDebug(`Retrying ${context.operationName} in ${delay}ms`, {
+          sessionId: context.sessionId || 'N/A',
+          delay,
+          nextAttempt: attempt + 2
+        })
 
         // Wait before retrying
         await this.delay(delay)
@@ -240,17 +235,17 @@ export class StateSyncManager {
 
   /**
    * Delays execution for the specified duration
-   * 
+   *
    * @param ms - Milliseconds to delay
    * @returns Promise that resolves after the delay
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   /**
    * Updates the retry configuration
-   * 
+   *
    * @param config - Partial configuration to update
    */
   updateConfig(config: Partial<RetryConfig>): void {
@@ -265,7 +260,7 @@ export class StateSyncManager {
 
   /**
    * Gets the current retry configuration
-   * 
+   *
    * @returns Current retry configuration
    */
   getConfig(): RetryConfig {

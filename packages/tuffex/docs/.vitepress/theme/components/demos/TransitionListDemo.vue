@@ -37,8 +37,12 @@ function remove() {
           </TuffSelect>
         </label>
 
-        <TxButton size="small" @click="add">Add</TxButton>
-        <TxButton size="small" @click="remove">Remove</TxButton>
+        <TxButton size="small" @click="add">
+          Add
+        </TxButton>
+        <TxButton size="small" @click="remove">
+          Remove
+        </TxButton>
       </div>
     </TxCard>
 

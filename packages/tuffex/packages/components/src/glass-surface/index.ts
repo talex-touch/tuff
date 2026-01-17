@@ -1,5 +1,5 @@
-import TxGlassSurface from './src/TxGlassSurface.vue'
 import { withInstall } from '../../../utils/withInstall'
+import TxGlassSurface from './src/TxGlassSurface.vue'
 
 export interface GlassSurfaceProps {
   width?: string | number

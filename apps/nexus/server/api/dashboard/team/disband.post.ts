@@ -9,14 +9,14 @@ export default defineEventHandler(async (event) => {
   try {
     // Get user's organization memberships
     const memberships = await client.users.getOrganizationMembershipList({ userId })
-    
+
     if (memberships.data.length === 0) {
       throw createError({ statusCode: 400, statusMessage: 'You are not part of any team' })
     }
 
     // Find the organization where user is admin/owner
-    const adminMembership = memberships.data.find(m => 
-      m.role === 'org:admin' || m.role === 'admin'
+    const adminMembership = memberships.data.find(m =>
+      m.role === 'org:admin' || m.role === 'admin',
     )
 
     if (!adminMembership) {
@@ -50,7 +50,8 @@ export default defineEventHandler(async (event) => {
       success: true,
       message: 'Team has been disbanded',
     }
-  } catch (error: any) {
+  }
+  catch (error: any) {
     if (error.statusCode) {
       throw error
     }

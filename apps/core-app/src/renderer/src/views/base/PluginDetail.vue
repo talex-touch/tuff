@@ -13,7 +13,7 @@ const { plugins, curSelect, selectPlugin } = usePluginSelection()
 const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
 const visiblePlugins = computed(() => {
   if (developerMode.value) return plugins.value
-  return plugins.value.filter(p => !p.meta?.internal)
+  return plugins.value.filter((p) => !p.meta?.internal)
 })
 
 const routePluginName = computed(() => {
@@ -25,7 +25,7 @@ const routePluginName = computed(() => {
 
 const routePlugin = computed(() => {
   if (!routePluginName.value) return null
-  return visiblePlugins.value.find(p => p.name === routePluginName.value) ?? null
+  return visiblePlugins.value.find((p) => p.name === routePluginName.value) ?? null
 })
 
 const displayedPlugin = computed(() => {
@@ -39,12 +39,12 @@ watch(
   () => [routePluginName.value, visiblePlugins.value.length] as const,
   async ([name]) => {
     if (!name) return
-    const exists = visiblePlugins.value.some(p => p.name === name)
+    const exists = visiblePlugins.value.some((p) => p.name === name)
     if (exists) {
       await selectPlugin(name)
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 </script>
 
@@ -56,4 +56,3 @@ watch(
     <PluginEmptyState v-else />
   </div>
 </template>
-

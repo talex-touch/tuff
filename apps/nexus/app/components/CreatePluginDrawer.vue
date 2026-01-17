@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
 import { computed, ref, watch } from 'vue'
-import Drawer from '~/components/ui/Drawer.vue'
 import Button from '~/components/ui/Button.vue'
+import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
-import { PLUGIN_CATEGORIES, isPluginCategoryId } from '~/utils/plugin-categories'
+import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
 
 interface Props {
   isOpen: boolean
@@ -96,7 +96,6 @@ watch(() => props.isOpen, (isOpen) => {
     inputMode.value = 'upload'
   }
 })
-
 
 const PLUGIN_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/
 
@@ -235,12 +234,12 @@ const hasIconPreview = computed(() => !!displayIconUrl.value)
 const canSubmit = computed(() => {
   const { slug, name, summary, readme, category } = formData.value
   return (
-    slug.trim().length > 0 &&
-    PLUGIN_IDENTIFIER_PATTERN.test(slug.trim()) &&
-    name.trim().length > 0 &&
-    summary.trim().length > 0 &&
-    readme.trim().length > 0 &&
-    isPluginCategoryId(category)
+    slug.trim().length > 0
+    && PLUGIN_IDENTIFIER_PATTERN.test(slug.trim())
+    && name.trim().length > 0
+    && summary.trim().length > 0
+    && readme.trim().length > 0
+    && isPluginCategoryId(category)
   )
 })
 
@@ -324,7 +323,9 @@ function onSubmit() {
                   </div>
                 </div>
               </div>
-              <p v-if="packageError" class="text-xs text-red-500">{{ packageError }}</p>
+              <p v-if="packageError" class="text-xs text-red-500">
+                {{ packageError }}
+              </p>
             </div>
 
             <div v-if="manifestPreview" class="rounded-lg bg-black/5 p-4 dark:bg-white/5">
@@ -332,10 +333,18 @@ function onSubmit() {
                 {{ t('dashboard.sections.plugins.manifestPreview') }}
               </p>
               <div class="space-y-1 text-xs text-black/70 dark:text-white/70">
-                <p v-if="manifestPreview.id"><span class="font-medium">ID:</span> {{ manifestPreview.id }}</p>
-                <p v-if="manifestPreview.name"><span class="font-medium">Name:</span> {{ manifestPreview.name }}</p>
-                <p v-if="manifestPreview.version"><span class="font-medium">Version:</span> {{ manifestPreview.version }}</p>
-                <p v-if="manifestPreview.channel"><span class="font-medium">Channel:</span> {{ manifestPreview.channel }}</p>
+                <p v-if="manifestPreview.id">
+                  <span class="font-medium">ID:</span> {{ manifestPreview.id }}
+                </p>
+                <p v-if="manifestPreview.name">
+                  <span class="font-medium">Name:</span> {{ manifestPreview.name }}
+                </p>
+                <p v-if="manifestPreview.version">
+                  <span class="font-medium">Version:</span> {{ manifestPreview.version }}
+                </p>
+                <p v-if="manifestPreview.channel">
+                  <span class="font-medium">Channel:</span> {{ manifestPreview.channel }}
+                </p>
               </div>
             </div>
 
@@ -468,7 +477,9 @@ function onSubmit() {
               <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
               {{ t('dashboard.sections.plugins.createSubmit') }}
             </Button>
-            <p v-if="error" class="mt-2 text-center text-xs text-red-500">{{ error }}</p>
+            <p v-if="error" class="mt-2 text-center text-xs text-red-500">
+              {{ error }}
+            </p>
           </div>
         </form>
       </div>

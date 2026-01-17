@@ -1,6 +1,6 @@
-import TxTooltip from './src/TxTooltip.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { TooltipProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxTooltip from './src/TxTooltip.vue'
 
 const Tooltip = withInstall(TxTooltip)
 

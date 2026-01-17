@@ -5,13 +5,13 @@
  * Displays available Flow targets for user selection.
  * Used when dispatching a flow without a preferred target.
  */
-import type { FlowTargetInfo, FlowPayload } from '@talex-touch/utils'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+import type { FlowPayload, FlowTargetInfo } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 
 interface Props {
   visible: boolean
@@ -54,7 +54,7 @@ async function loadTargets(): Promise<void> {
   loading.value = true
   try {
     const response = await transport.send(FlowEvents.getTargets, {
-      payloadType: props.payload?.type,
+      payloadType: props.payload?.type
     })
 
     if (response?.success) {
@@ -142,12 +142,12 @@ function getPayloadPreview(): string {
 
   const { type, data } = props.payload
   if (type === 'text' && typeof data === 'string') {
-    return data.length > 100 ? data.slice(0, 100) + '...' : data
+    return data.length > 100 ? `${data.slice(0, 100)}...` : data
   }
   if (type === 'json') {
     try {
       const str = JSON.stringify(data)
-      return str.length > 100 ? str.slice(0, 100) + '...' : str
+      return str.length > 100 ? `${str.slice(0, 100)}...` : str
     } catch {
       return '[JSON Data]'
     }

@@ -26,37 +26,37 @@
  * ```
  */
 
+// Locale data
+export { default as enMessages } from './locales/en.json'
+
+export { default as zhMessages } from './locales/zh.json'
+
 // Message keys and utilities for backend
 export {
-  I18N_PREFIX,
+  type DevServerKey,
   DevServerKeys,
+  type FlowTransferKey,
   FlowTransferKeys,
-  PluginKeys,
-  WidgetKeys,
-  SystemKeys,
-  MessageKeys,
+  I18N_PREFIX,
   i18nMsg,
   i18nMsgWithParams,
   isI18nMessage,
+  MessageKeys,
   parseI18nMessage,
-  type DevServerKey,
-  type FlowTransferKey,
   type PluginKey,
+  PluginKeys,
+  type SystemKey,
+  SystemKeys,
   type WidgetKey,
-  type SystemKey
+  WidgetKeys,
 } from './message-keys'
-
 // Resolver for frontend
 export {
+  createI18nMessage,
   I18nResolver,
   i18nResolver,
-  resolveI18nMessage,
-  createI18nMessage,
-  useI18nResolver,
   type MessageLocale,
-  type Messages
+  type Messages,
+  resolveI18nMessage,
+  useI18nResolver,
 } from './resolver'
-
-// Locale data
-export { default as enMessages } from './locales/en.json'
-export { default as zhMessages } from './locales/zh.json'

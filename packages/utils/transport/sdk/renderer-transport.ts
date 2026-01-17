@@ -3,18 +3,18 @@
  * @module @talex-touch/utils/transport/sdk/renderer-transport
  */
 
+import type { TuffEvent } from '../event/types'
 import type {
   ITuffTransport,
   SendOptions,
   StreamController,
   StreamOptions,
 } from '../types'
-import type { TuffEvent } from '../event/types'
 import { useChannel } from '../../renderer/hooks/use-channel'
 import { assertTuffEvent } from '../event/builder'
 import { STREAM_SUFFIXES } from './constants'
 
-type BatchEntry<TRes> = {
+interface BatchEntry<TRes> {
   key: string
   payload: unknown
   resolvers: Array<{
@@ -23,7 +23,7 @@ type BatchEntry<TRes> = {
   }>
 }
 
-type BatchQueue<TRes> = {
+interface BatchQueue<TRes> {
   timer: ReturnType<typeof setTimeout> | null
   mergeStrategy: 'queue' | 'dedupe' | 'latest'
   windowMs: number
@@ -96,7 +96,8 @@ export class TuffRendererTransport implements ITuffTransport {
     try {
       const shouldPassPayload = payload !== undefined
       return await this.channel.send(eventName, shouldPassPayload ? payload : undefined)
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       throw new Error(`[TuffTransport] Failed to send "${eventName}": ${errorMessage}`)
     }
@@ -123,7 +124,8 @@ export class TuffRendererTransport implements ITuffTransport {
         latest: null,
       }
       this.batchQueues.set(eventName, queue)
-    } else {
+    }
+    else {
       queue.mergeStrategy = mergeStrategy
       queue.windowMs = windowMs
       queue.maxSize = maxSize
@@ -137,18 +139,22 @@ export class TuffRendererTransport implements ITuffTransport {
       if (queue!.mergeStrategy === 'latest') {
         if (!queue!.latest) {
           queue!.latest = { key: '__latest__', payload, resolvers: [entryResolver] }
-        } else {
+        }
+        else {
           queue!.latest.payload = payload
           queue!.latest.resolvers.push(entryResolver)
         }
-      } else if (queue!.mergeStrategy === 'dedupe') {
+      }
+      else if (queue!.mergeStrategy === 'dedupe') {
         const existing = queue!.dedupe.get(key)
         if (existing) {
           existing.resolvers.push(entryResolver)
-        } else {
+        }
+        else {
           queue!.dedupe.set(key, { key, payload, resolvers: [entryResolver] })
         }
-      } else {
+      }
+      else {
         queue!.queue.push({ key, payload, resolvers: [entryResolver] })
       }
 
@@ -183,7 +189,8 @@ export class TuffRendererTransport implements ITuffTransport {
       return `str:${payload}`
     try {
       return `json:${JSON.stringify(payload)}`
-    } catch {
+    }
+    catch {
       return `ref:${Object.prototype.toString.call(payload)}`
     }
   }
@@ -216,7 +223,7 @@ export class TuffRendererTransport implements ITuffTransport {
 
     await queue.queue.reduce<Promise<void>>(
       (promise, entry) => promise.then(() => this.flushEntry(eventName, entry)),
-      Promise.resolve()
+      Promise.resolve(),
     )
   }
 
@@ -227,7 +234,8 @@ export class TuffRendererTransport implements ITuffTransport {
       for (const { resolve } of entry.resolvers) {
         resolve(result as TRes)
       }
-    } catch (error) {
+    }
+    catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       const wrapped = new Error(`[TuffTransport] Failed to send "${eventName}": ${errorMessage}`)
       for (const { reject } of entry.resolvers) {
@@ -238,7 +246,7 @@ export class TuffRendererTransport implements ITuffTransport {
 
   /**
    * Initiates a stream request.
-   * 
+   *
    * @remarks
    * Phase 1 implementation uses IPC events to simulate streaming.
    * Future versions will use MessagePort for true streaming.
@@ -267,7 +275,7 @@ export class TuffRendererTransport implements ITuffTransport {
         if (cancelled)
           return
 
-        const data = this.unwrapChannelPayload<{ chunk?: TChunk; error?: string }>(raw)
+        const data = this.unwrapChannelPayload<{ chunk?: TChunk, error?: string }>(raw)
 
         if (data?.error) {
           options.onError?.(new Error(data.error))
@@ -388,7 +396,7 @@ export class TuffRendererTransport implements ITuffTransport {
 
   /**
    * Forces immediate flush of all pending batch requests.
-   * 
+   *
    * @remarks
    * Phase 1: No-op. Batching will be implemented in Phase 2.
    */

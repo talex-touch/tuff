@@ -1,8 +1,8 @@
 import type { App } from 'vue'
+import { withInstall } from '../../../utils/withInstall'
 import TuffIcon from './src/TxIcon.vue'
 import TxStatusIconComponent from './src/TxStatusIcon.vue'
 import { TX_ICON_CONFIG_KEY } from './src/types'
-import { withInstall } from '../../../utils/withInstall'
 
 const TxStatusIcon = withInstall(TxStatusIconComponent)
 
@@ -13,14 +13,14 @@ TuffIcon.install = (app: App) => {
 }
 
 const TxIcon = TuffIcon
-export { TuffIcon, TxIcon, TxStatusIcon, TX_ICON_CONFIG_KEY }
+export { TuffIcon, TX_ICON_CONFIG_KEY, TxIcon, TxStatusIcon }
+export type { TxStatusIconProps, TxStatusIconTone } from './src/status-icon'
 export type {
-  TxIconSource,
-  TxIconType,
-  TxIconStatus,
   TxIconConfig,
-  TxIconUrlResolver,
+  TxIconSource,
+  TxIconStatus,
   TxIconSvgFetcher,
+  TxIconType,
+  TxIconUrlResolver,
 } from './src/types'
-export type { TxStatusIconTone, TxStatusIconProps } from './src/status-icon'
 export default TuffIcon

@@ -1,10 +1,11 @@
-import { ref, watch, type Ref } from 'vue'
+import type { Ref } from 'vue'
 import { marked } from 'marked'
+import { ref, watch } from 'vue'
 
 // Configure marked for safe rendering
 marked.setOptions({
   breaks: true,
-  gfm: true,
+  gfm: true
 })
 
 export function useMarketReadme(readmeUrl: Ref<string | undefined>, t: (key: string) => string) {

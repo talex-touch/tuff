@@ -1,8 +1,12 @@
-import { parentPort } from 'node:worker_threads'
+import type {
+  WorkerMetricsPayload,
+  WorkerMetricsRequest,
+  WorkerMetricsResponse
+} from './worker-status'
 import { performance } from 'node:perf_hooks'
-import type { WorkerMetricsPayload, WorkerMetricsRequest, WorkerMetricsResponse } from './worker-status'
+import { parentPort } from 'node:worker_threads'
 
-type ReconcileDiskFile = {
+interface ReconcileDiskFile {
   path: string
   name: string
   extension: string
@@ -11,13 +15,13 @@ type ReconcileDiskFile = {
   ctime: number
 }
 
-type ReconcileDbFile = {
+interface ReconcileDbFile {
   id: number
   path: string
   mtime: number
 }
 
-type ReconcileRequest = {
+interface ReconcileRequest {
   type: 'reconcile'
   taskId: string
   diskFiles: ReconcileDiskFile[]
@@ -25,19 +29,19 @@ type ReconcileRequest = {
   reconciliationPaths: string[]
 }
 
-type ReconcileResult = {
+interface ReconcileResult {
   filesToAdd: ReconcileDiskFile[]
   filesToUpdate: Array<ReconcileDiskFile & { id: number }>
   deletedIds: number[]
 }
 
-type ReconcileDoneMessage = {
+interface ReconcileDoneMessage {
   type: 'done'
   taskId: string
   result: ReconcileResult
 }
 
-type ReconcileErrorMessage = {
+interface ReconcileErrorMessage {
   type: 'error'
   taskId: string
   error: string
@@ -45,9 +49,10 @@ type ReconcileErrorMessage = {
 
 function buildMetricsPayload(): WorkerMetricsPayload {
   const memory = process.memoryUsage()
-  const eventLoop = typeof performance.eventLoopUtilization === 'function'
-    ? performance.eventLoopUtilization()
-    : null
+  const eventLoop =
+    typeof performance.eventLoopUtilization === 'function'
+      ? performance.eventLoopUtilization()
+      : null
   return {
     timestamp: Date.now(),
     memory: {
@@ -55,16 +60,16 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       heapUsed: memory.heapUsed,
       heapTotal: memory.heapTotal,
       external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0,
+      arrayBuffers: memory.arrayBuffers ?? 0
     },
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {
           active: eventLoop.active,
           idle: eventLoop.idle,
-          utilization: eventLoop.utilization,
+          utilization: eventLoop.utilization
         }
-      : null,
+      : null
   }
 }
 
@@ -127,13 +132,13 @@ async function processQueue(): Promise<void> {
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,
-      result: { filesToAdd, filesToUpdate, deletedIds },
+      result: { filesToAdd, filesToUpdate, deletedIds }
     } satisfies ReconcileDoneMessage)
   } catch (error) {
     parentPort?.postMessage({
       type: 'error',
       taskId: next.taskId,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     } satisfies ReconcileErrorMessage)
   } finally {
     running = false
@@ -151,7 +156,7 @@ parentPort?.on('message', (payload: ReconcileRequest | WorkerMetricsRequest) => 
     parentPort?.postMessage({
       type: 'metrics',
       requestId: payload.requestId,
-      metrics: buildMetricsPayload(),
+      metrics: buildMetricsPayload()
     } satisfies WorkerMetricsResponse)
     return
   }

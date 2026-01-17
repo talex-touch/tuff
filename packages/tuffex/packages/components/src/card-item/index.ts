@@ -1,6 +1,6 @@
-import TxCardItem from './src/TxCardItem.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type { CardItemProps } from './src/types.ts'
+import { withInstall } from '../../../utils/withInstall'
+import TxCardItem from './src/TxCardItem.vue'
 
 const CardItem = withInstall(TxCardItem)
 

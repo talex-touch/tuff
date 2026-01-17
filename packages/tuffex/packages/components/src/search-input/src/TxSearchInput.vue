@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { SearchInputEmits, SearchInputProps } from './types'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import TuffInput from '../../input/src/TxInput.vue'
-import type { SearchInputEmits, SearchInputProps } from './types'
 
 defineOptions({ name: 'TxSearchInput' })
 
@@ -29,8 +29,10 @@ const value = computed({
 const searchTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 function emitRemoteSearch(v: string) {
-  if (!props.remote) return
-  if (props.disabled) return
+  if (!props.remote)
+    return
+  if (props.disabled)
+    return
   emit('search', v)
 }
 
@@ -41,7 +43,8 @@ function onEnter() {
 watch(
   value,
   (v) => {
-    if (!props.remote) return
+    if (!props.remote)
+      return
     if (searchTimer.value) {
       clearTimeout(searchTimer.value)
       searchTimer.value = null

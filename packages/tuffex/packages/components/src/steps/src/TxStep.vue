@@ -1,38 +1,7 @@
-<template>
-  <div
-    :class="[
-      'tx-step',
-      `tx-step--${direction}`,
-      `tx-step--${size}`,
-      {
-        'tx-step--active': isActive,
-        'tx-step--completed': isCompleted,
-        'tx-step--clickable': clickable && !disabled
-      }
-    ]"
-    @click="handleClick"
-  >
-    <div class="tx-step__head">
-      <div class="tx-step__icon" :class="`tx-step__icon--${status}`">
-        <TxIcon v-if="status === 'completed'" :name="completedIcon" />
-        <TxIcon v-else-if="icon" :name="icon" />
-        <span v-else class="tx-step__number">{{ stepNumber }}</span>
-      </div>
-      
-      <div class="tx-step__line" v-if="showLine && !isLast"></div>
-    </div>
-    
-    <div class="tx-step__content">
-      <div class="tx-step__title">{{ title }}</div>
-      <div v-if="description" class="tx-step__description">{{ description }}</div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
+import type { StepsContext, StepStatus } from './types'
 import { computed, inject } from 'vue'
 import { TxIcon } from '../../icon'
-import type { StepsDirection, StepsSize, StepsContext, StepStatus } from './types'
 
 interface Props {
   title?: string
@@ -50,7 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   status: 'wait',
   clickable: true,
   showLine: true,
-  completedIcon: 'check'
+  completedIcon: 'check',
 })
 
 const steps = inject<StepsContext>('steps')
@@ -63,15 +32,17 @@ const isActive = computed(() => {
 })
 
 const isCompleted = computed(() => {
-  return props.status === 'completed' || (steps?.activeStep.value !== undefined && 
-    typeof props.step === 'number' && 
-    typeof steps.activeStep.value === 'number' && 
-    props.step < steps.activeStep.value)
+  return props.status === 'completed' || (steps?.activeStep.value !== undefined
+    && typeof props.step === 'number'
+    && typeof steps.activeStep.value === 'number'
+    && props.step < steps.activeStep.value)
 })
 
 const status = computed(() => {
-  if (isActive.value) return 'active'
-  if (isCompleted.value) return 'completed'
+  if (isActive.value)
+    return 'active'
+  if (isCompleted.value)
+    return 'completed'
   return props.status
 })
 
@@ -86,13 +57,47 @@ const isLast = computed(() => {
   return false
 })
 
-const handleClick = () => {
+function handleClick() {
   if (props.clickable && !props.disabled && steps) {
     if (props.step !== undefined)
       steps.setActiveStep(props.step)
   }
 }
 </script>
+
+<template>
+  <div
+    class="tx-step" :class="[
+      `tx-step--${direction}`,
+      `tx-step--${size}`,
+      {
+        'tx-step--active': isActive,
+        'tx-step--completed': isCompleted,
+        'tx-step--clickable': clickable && !disabled,
+      },
+    ]"
+    @click="handleClick"
+  >
+    <div class="tx-step__head">
+      <div class="tx-step__icon" :class="`tx-step__icon--${status}`">
+        <TxIcon v-if="status === 'completed'" :name="completedIcon" />
+        <TxIcon v-else-if="icon" :name="icon" />
+        <span v-else class="tx-step__number">{{ stepNumber }}</span>
+      </div>
+
+      <div v-if="showLine && !isLast" class="tx-step__line" />
+    </div>
+
+    <div class="tx-step__content">
+      <div class="tx-step__title">
+        {{ title }}
+      </div>
+      <div v-if="description" class="tx-step__description">
+        {{ description }}
+      </div>
+    </div>
+  </div>
+</template>
 
 <style scoped>
 .tx-step {

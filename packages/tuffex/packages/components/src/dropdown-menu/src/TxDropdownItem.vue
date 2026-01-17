@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { DropdownItemProps } from './types'
 import { inject } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
-import type { DropdownItemProps } from './types'
 
 defineOptions({ name: 'TxDropdownItem' })
 
@@ -16,12 +16,14 @@ const emit = defineEmits<{
   (e: 'select'): void
 }>()
 
-const ctx = inject<{ close: () => void; closeOnSelect: boolean }>('txDropdownMenu')
+const ctx = inject<{ close: () => void, closeOnSelect: boolean }>('txDropdownMenu')
 
 function onClick() {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('select')
-  if (ctx?.closeOnSelect) ctx?.close()
+  if (ctx?.closeOnSelect)
+    ctx?.close()
 }
 </script>
 

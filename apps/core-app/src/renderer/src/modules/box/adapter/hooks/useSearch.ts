@@ -5,24 +5,24 @@ import type {
   TuffQueryInput,
   TuffSearchResult
 } from '@talex-touch/utils'
+import type { ActivationState } from '@talex-touch/utils/transport/events/types'
 import type { IBoxOptions } from '..'
 import type { IUseSearch } from '../types'
 import type { IClipboardOptions } from './types'
 import { TuffInputType } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
-import type { ActivationState } from '@talex-touch/utils/transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
-import { createCoreBoxInputTransport } from '../transport/input-transport'
-import { BoxMode } from '..'
-import { useResize } from './useResize'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
+import { BoxMode } from '..'
+import { createCoreBoxInputTransport } from '../transport/input-transport'
+import { useResize } from './useResize'
 
-type SearchEndData = {
+interface SearchEndData {
   searchId: string
   cancelled?: boolean
   activate?: TuffSearchResult['activate']
@@ -630,7 +630,6 @@ export function useSearch(
 
     if (payload.searchId === currentSearchId.value) {
       applySearchEnd(payload as SearchEndData)
-      return
     }
   })
 

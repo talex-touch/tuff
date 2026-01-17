@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { TagEmits, TagProps } from './types'
 /**
  * TxTag Component
  *
@@ -15,7 +16,6 @@
  * @component
  */
 import { computed } from 'vue'
-import type { TagProps, TagEmits } from './types'
 
 defineOptions({
   name: 'TxTag',
@@ -53,7 +53,8 @@ const safeColor = computed(() => {
  * Uses color-mix to create a semi-transparent background if not explicitly provided.
  */
 const resolvedBackground = computed(() => {
-  if (props.background) return props.background
+  if (props.background)
+    return props.background
   return `color-mix(in srgb, ${safeColor.value} 12%, transparent)`
 })
 
@@ -62,7 +63,8 @@ const resolvedBackground = computed(() => {
  * Uses color-mix to create a semi-transparent border if not explicitly provided.
  */
 const resolvedBorder = computed(() => {
-  if (props.border) return props.border
+  if (props.border)
+    return props.border
   return `color-mix(in srgb, ${safeColor.value} 32%, transparent)`
 })
 
@@ -80,7 +82,8 @@ const styleVars = computed(() => ({
  * @param event - The mouse event
  */
 function handleClick(event: MouseEvent): void {
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('click', event)
 }
 
@@ -91,7 +94,8 @@ function handleClick(event: MouseEvent): void {
  */
 function handleClose(event: MouseEvent): void {
   event.stopPropagation()
-  if (props.disabled) return
+  if (props.disabled)
+    return
   emit('close')
 }
 </script>

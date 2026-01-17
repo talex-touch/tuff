@@ -7,9 +7,9 @@ export type AutoSizerActionTarget = 'inner' | 'outer'
 export type AutoSizerObserveTarget = 'inner' | 'outer' | 'both'
 
 export interface AutoSizerSnapshot {
-  rect: { width: number; height: number }
-  box: { clientWidth: number; clientHeight: number; offsetWidth: number; offsetHeight: number }
-  scroll: { scrollWidth: number; scrollHeight: number }
+  rect: { width: number, height: number }
+  box: { clientWidth: number, clientHeight: number, offsetWidth: number, offsetHeight: number }
+  scroll: { scrollWidth: number, scrollHeight: number }
   className: string
   style: string | null
   attrs: Record<string, string | null>

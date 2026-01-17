@@ -14,7 +14,7 @@
  *
  * @component
  */
-import type { BlockSlotProps, BlockSlotEmits } from './types'
+import type { BlockSlotEmits, BlockSlotProps } from './types'
 
 defineOptions({
   name: 'TxBlockSlot',
@@ -48,12 +48,16 @@ function handleClick(event: MouseEvent): void {
       <div class="tx-block-slot__label">
         <slot name="label">
           <div class="tx-block-slot__title-row">
-            <h5 class="tx-block-slot__title">{{ title }}</h5>
+            <h5 class="tx-block-slot__title">
+              {{ title }}
+            </h5>
             <div v-if="$slots.tags" class="tx-block-slot__tags">
               <slot name="tags" />
             </div>
           </div>
-          <p class="tx-block-slot__description">{{ description }}</p>
+          <p class="tx-block-slot__description">
+            {{ description }}
+          </p>
         </slot>
       </div>
     </div>

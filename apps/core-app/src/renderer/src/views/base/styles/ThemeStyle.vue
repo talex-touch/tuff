@@ -8,9 +8,9 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
+import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
-import { touchChannel } from '~/modules/channel/channel-core'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
 
@@ -29,7 +29,7 @@ const routeTransitionStyle = computed({
       themeStyle.value.theme.transition = { route: 'slide' as RouteTransitionStyle }
     }
     themeStyle.value.theme.transition.route = val
-  },
+  }
 })
 
 // Background source mapping: 0=bing, 1=custom, 2=none
@@ -74,11 +74,11 @@ const lowBatteryThreshold = computed({
         resultTransition: true,
         coreBoxResize: false,
         autoDisableOnLowBattery: true,
-        lowBatteryThreshold: 20,
+        lowBatteryThreshold: 20
       }
     }
     appSetting.animation.lowBatteryThreshold = val
-  },
+  }
 })
 
 watchEffect(() => {
@@ -109,9 +109,7 @@ async function selectBackgroundImage() {
   try {
     const result = await touchChannel.send('dialog:open-file', {
       title: t('themeStyle.selectBackgroundImage', 'Select Background Image'),
-      filters: [
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }
-      ],
+      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }],
       properties: ['openFile']
     })
     if (result && result.filePaths && result.filePaths.length > 0) {
@@ -238,7 +236,9 @@ function clearBackgroundImage() {
         <div v-if="customBgPath" class="mt-4 space-y-3">
           <div>
             <div class="flex items-center justify-between text-xs">
-              <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.blur', 'Blur') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{
+                t('themeStyle.blur', 'Blur')
+              }}</span>
               <span class="font-medium text-black/80 dark:text-white/80">{{ bgBlur }}px</span>
             </div>
             <input
@@ -251,7 +251,9 @@ function clearBackgroundImage() {
           </div>
           <div>
             <div class="flex items-center justify-between text-xs">
-              <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.opacity', 'Opacity') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{
+                t('themeStyle.opacity', 'Opacity')
+              }}</span>
               <span class="font-medium text-black/80 dark:text-white/80">{{ bgOpacity }}%</span>
             </div>
             <input
@@ -330,7 +332,9 @@ function clearBackgroundImage() {
       <TuffBlockSelect
         v-model="routeTransitionStyle"
         :title="t('themeStyle.routeTransition', '页面切换动效')"
-        :description="t('themeStyle.routeTransitionDesc', '控制应用页面路由切换动画（可能影响性能）。')"
+        :description="
+          t('themeStyle.routeTransitionDesc', '控制应用页面路由切换动画（可能影响性能）。')
+        "
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="transition" :active="active" />
@@ -350,13 +354,20 @@ function clearBackgroundImage() {
       <TuffBlockSwitch
         v-model="appSetting.animation.coreBoxResize"
         :title="t('themeStyle.coreBoxResize', 'CoreBox Window Animation')"
-        :description="t('themeStyle.coreBoxResizeDesc', 'Smooth expand/collapse animation for the search window')"
+        :description="
+          t(
+            'themeStyle.coreBoxResizeDesc',
+            'Smooth expand/collapse animation for the search window'
+          )
+        "
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="transition" :active="active" />
         </template>
         <template #suffix>
-          <span class="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+          <span
+            class="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400"
+          >
             Beta
           </span>
         </template>
@@ -374,7 +385,9 @@ function clearBackgroundImage() {
       >
         <div class="flex items-center justify-between text-xs">
           <span class="text-black/60 dark:text-white/60">Low battery threshold</span>
-          <span class="font-medium text-black/80 dark:text-white/80">{{ lowBatteryThreshold }}%</span>
+          <span class="font-medium text-black/80 dark:text-white/80"
+            >{{ lowBatteryThreshold }}%</span
+          >
         </div>
         <input
           v-model.number="lowBatteryThreshold"

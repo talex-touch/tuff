@@ -9,8 +9,12 @@ const visible = ref(true)
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;">
     <div style="display: flex; flex-direction: column; gap: 10px;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <div style="font-weight: 600;">v-if (no built-in transition)</div>
-        <TxButton size="small" @click="showByIf = !showByIf">Toggle</TxButton>
+        <div style="font-weight: 600;">
+          v-if (no built-in transition)
+        </div>
+        <TxButton size="small" @click="showByIf = !showByIf">
+          Toggle
+        </TxButton>
       </div>
       <div style="display: flex; align-items: center; gap: 10px; height: 28px;">
         <TxSpinner v-if="showByIf" />
@@ -20,8 +24,12 @@ const visible = ref(true)
 
     <div style="display: flex; flex-direction: column; gap: 10px;">
       <div style="display: flex; align-items: center; justify-content: space-between;">
-        <div style="font-weight: 600;">:visible (built-in transition)</div>
-        <TxButton size="small" @click="visible = !visible">Toggle</TxButton>
+        <div style="font-weight: 600;">
+          :visible (built-in transition)
+        </div>
+        <TxButton size="small" @click="visible = !visible">
+          Toggle
+        </TxButton>
       </div>
       <div style="display: flex; align-items: center; gap: 10px; height: 28px;">
         <TxSpinner :visible="visible" />

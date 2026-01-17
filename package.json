@@ -98,37 +98,37 @@
   },
   "lint-staged": {
     "apps/core-app/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"apps/core-app\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"apps/core-app\" exec eslint --cache --fix --no-warn-ignored"
     ],
     "apps/nexus/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"apps/nexus\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"apps/nexus\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/test/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"packages/test\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"packages/test\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/tuff-intelligence/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"packages/tuff-intelligence\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"packages/tuff-intelligence\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/tuffex/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"packages/tuffex\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"packages/tuffex\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "packages/unplugin-export-plugin/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"packages/unplugin-export-plugin\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -w exec eslint --cache --fix --max-warnings=0 --no-warn-ignored --config \"packages/unplugin-export-plugin/eslint.config.js\""
     ],
     "packages/utils/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"packages/utils\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"packages/utils\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "plugins/touch-image/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"plugins/touch-image\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"plugins/touch-image\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "plugins/touch-music/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"plugins/touch-music\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"plugins/touch-music\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "plugins/touch-translation/**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}": [
-      "pnpm -C \"plugins/touch-translation\" exec eslint --cache --fix --max-warnings=0"
+      "pnpm -C \"plugins/touch-translation\" exec eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ],
     "scripts/**/*.{js,jsx,ts,tsx,mjs,cjs,cts,mts}": [
-      "eslint --cache --fix --max-warnings=0"
+      "eslint --cache --fix --max-warnings=0 --no-warn-ignored"
     ]
   }
 }

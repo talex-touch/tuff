@@ -3,19 +3,14 @@ import { pluginRuntimeTracker } from './plugin-runtime-tracker'
 
 const WORKER_THREAD_MODULE_IDS = new Set(['worker_threads', 'node:worker_threads'])
 
-const instrumentedWorkerThreadsModuleCache = new Map<
-  string,
-  typeof import('node:worker_threads')
->()
+const instrumentedWorkerThreadsModuleCache = new Map<string, typeof import('node:worker_threads')>()
 
 function getInstrumentedWorkerThreadsModule(
-  pluginName: string,
+  pluginName: string
 ): typeof import('node:worker_threads') {
   const cached = instrumentedWorkerThreadsModuleCache.get(pluginName)
-  if (cached)
-    return cached
+  if (cached) return cached
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const workerThreads = require('node:worker_threads') as typeof import('node:worker_threads')
 
   class InstrumentedWorker extends workerThreads.Worker {
@@ -27,7 +22,7 @@ function getInstrumentedWorkerThreadsModule(
 
   const module = {
     ...workerThreads,
-    Worker: InstrumentedWorker as unknown as typeof workerThreads.Worker,
+    Worker: InstrumentedWorker as unknown as typeof workerThreads.Worker
   }
 
   instrumentedWorkerThreadsModuleCache.set(pluginName, module)
@@ -35,7 +30,6 @@ function getInstrumentedWorkerThreadsModule(
 }
 
 export function createPluginRequire(pluginName: string): NodeRequire {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const baseRequire = require as NodeRequire
 
   const pluginRequire = ((id: string) => {
@@ -52,4 +46,3 @@ export function createPluginRequire(pluginName: string): NodeRequire {
 
   return pluginRequire
 }
-

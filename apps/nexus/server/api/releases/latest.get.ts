@@ -1,5 +1,5 @@
-import { getQuery } from 'h3'
 import type { AssetPlatform, ReleaseChannel } from '../../utils/releasesStore'
+import { getQuery } from 'h3'
 import { getLatestRelease } from '../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {

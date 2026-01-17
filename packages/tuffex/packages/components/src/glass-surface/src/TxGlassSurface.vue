@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { hasDocument, hasNavigator, hasWindow } from '../../../../utils/env'
-import type { CSSProperties } from 'vue'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { GlassSurfaceProps } from '../index'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { hasDocument, hasNavigator, hasWindow } from '../../../../utils/env'
 
 defineOptions({
   name: 'TxGlassSurface',
@@ -49,7 +48,8 @@ let resizeObserver: ResizeObserver | null = null
 let cleanupDarkMode: (() => void) | undefined
 
 function updateDarkMode() {
-  if (!hasWindow()) return
+  if (!hasWindow())
+    return
 
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   isDarkMode.value = mediaQuery.matches
@@ -64,20 +64,24 @@ function updateDarkMode() {
 }
 
 function supportsSVGFilters() {
-  if (!hasWindow() || !hasNavigator() || !hasDocument()) return false
+  if (!hasWindow() || !hasNavigator() || !hasDocument())
+    return false
 
   const isWebkit = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
   const isFirefox = /Firefox/.test(navigator.userAgent)
 
-  if (isWebkit || isFirefox) return false
+  if (isWebkit || isFirefox)
+    return false
 
   const value = `url(#${filterId})`
-  if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') return false
+  if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function')
+    return false
   return CSS.supports('backdrop-filter', value) || CSS.supports('-webkit-backdrop-filter', value)
 }
 
 function supportsBackdropFilter() {
-  if (!hasWindow()) return false
+  if (!hasWindow())
+    return false
   return CSS.supports('backdrop-filter', 'blur(10px)')
 }
 

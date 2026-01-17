@@ -34,11 +34,11 @@ import {
 } from '../../../../db/schema'
 
 import { createDbUtils } from '../../../../db/utils'
+import { appTaskGate } from '../../../../service/app-task-gate'
 import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
 import { formatLog, LogStyle } from './app-utils'
-import { appTaskGate } from '../../../../service/app-task-gate'
 import { processSearchResults } from './search-processing-service'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
@@ -1194,7 +1194,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private _subscribeToFSEvents(): void {
     // Windows: 跳过文件系统事件订阅，避免权限问题
     if (process.platform === 'win32') {
-      console.log(formatLog('AppProvider', 'Skipping FS event subscription on Windows', LogStyle.info))
+      console.log(
+        formatLog('AppProvider', 'Skipping FS event subscription on Windows', LogStyle.info)
+      )
       return
     }
 
@@ -1224,7 +1226,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private _registerWatchPaths(): void {
     // Windows: 跳过目录监视，避免 EPERM 权限错误
     if (process.platform === 'win32') {
-      console.log(formatLog('AppProvider', 'Skipping watch path registration on Windows', LogStyle.info))
+      console.log(
+        formatLog('AppProvider', 'Skipping watch path registration on Windows', LogStyle.info)
+      )
       return
     }
 
@@ -1488,7 +1492,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         return
       }
 
-      const { updatedApps, updatedCount, deletedApps } = await appScanner.runMdlsUpdateScan(allDbApps)
+      const { updatedApps, updatedCount, deletedApps } =
+        await appScanner.runMdlsUpdateScan(allDbApps)
 
       // 处理更新的 app
       if (updatedCount > 0 && updatedApps.length > 0) {

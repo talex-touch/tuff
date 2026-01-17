@@ -29,12 +29,12 @@ const storageStats = ref<StorageStats>({
   fileCount: 0,
   dirCount: 0,
   maxSize: 10 * 1024 * 1024,
-  usagePercent: 0,
+  usagePercent: 0
 })
 const storagePath = ref('')
 const storagePathFull = ref('')
 
-type StorageEntry = {
+interface StorageEntry {
   name: string
   path: string
   type: 'file' | 'directory'
@@ -47,32 +47,26 @@ const entries = ref<StorageEntry[]>([])
 // Computed
 const usageColorClass = computed(() => {
   const percent = storageStats.value.usagePercent
-  if (percent >= 90)
-    return 'text-[var(--el-color-danger)]'
-  if (percent >= 70)
-    return 'text-[var(--el-color-warning)]'
+  if (percent >= 90) return 'text-[var(--el-color-danger)]'
+  if (percent >= 70) return 'text-[var(--el-color-warning)]'
   return 'text-[var(--el-color-success)]'
 })
 
 // Methods
 function toMB(bytes: number): string {
-  if (!bytes || !Number.isFinite(bytes))
-    return '0.00'
+  if (!bytes || !Number.isFinite(bytes)) return '0.00'
   return (bytes / (1024 * 1024)).toFixed(2)
 }
 
 function formatSize(bytes: number): string {
-  if (!bytes || !Number.isFinite(bytes))
-    return '0 MB'
+  if (!bytes || !Number.isFinite(bytes)) return '0 MB'
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
 function shortenPath(fullPath: string): string {
-  if (!fullPath)
-    return ''
+  if (!fullPath) return ''
   const parts = fullPath.split(/[/\\]/).filter(Boolean)
-  if (parts.length <= 3)
-    return fullPath
+  if (parts.length <= 3) return fullPath
   return `.../${parts.slice(-3).join('/')}/`
 }
 
@@ -81,8 +75,7 @@ async function loadStoragePath(): Promise<void> {
     const paths = await pluginSDK.getPaths(props.plugin.name)
     storagePathFull.value = paths?.configPath ?? ''
     storagePath.value = storagePathFull.value ? shortenPath(storagePathFull.value) : ''
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[PluginStorage] Failed to load storage path:', error)
     storagePath.value = ''
     storagePathFull.value = ''
@@ -94,7 +87,7 @@ async function loadStorageData(): Promise<void> {
   try {
     const [statsResponse, treeResponse] = await Promise.all([
       window.$channel.send('plugin:storage:get-stats', { pluginName: props.plugin.name }),
-      window.$channel.send('plugin:storage:get-tree', { pluginName: props.plugin.name }),
+      window.$channel.send('plugin:storage:get-tree', { pluginName: props.plugin.name })
     ])
 
     if (statsResponse && typeof statsResponse === 'object') {
@@ -103,26 +96,24 @@ async function loadStorageData(): Promise<void> {
         fileCount: Number(statsResponse.fileCount) || 0,
         dirCount: Number(statsResponse.dirCount) || 0,
         maxSize: Number(statsResponse.maxSize) || 10 * 1024 * 1024,
-        usagePercent: Number(statsResponse.usagePercent) || 0,
+        usagePercent: Number(statsResponse.usagePercent) || 0
       }
     }
 
     if (treeResponse && Array.isArray(treeResponse)) {
       entries.value = flattenTree(treeResponse)
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to load storage data:', error)
     toast.error(t('plugin.storage.message.loadFailed'))
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
 
 function flattenTree(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes: any[],
+  nodes: any[]
 ): StorageEntry[] {
   const items: StorageEntry[] = []
 
@@ -135,7 +126,7 @@ function flattenTree(
         path: node.path,
         type,
         size: node.size || 0,
-        modified: node.modified || Date.now(),
+        modified: node.modified || Date.now()
       })
       if (node.children && Array.isArray(node.children)) {
         traverse(node.children)
@@ -145,8 +136,7 @@ function flattenTree(
 
   traverse(nodes)
   return items.sort((a, b) => {
-    if (a.type !== b.type)
-      return a.type === 'directory' ? -1 : 1
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
     return a.name.localeCompare(b.name)
   })
 }
@@ -168,7 +158,7 @@ function getFileIcon(fileName: string): string {
     jpeg: 'i-ri-image-line',
     gif: 'i-ri-image-line',
     webp: 'i-ri-image-line',
-    svg: 'i-ri-image-line',
+    svg: 'i-ri-image-line'
   }
   return iconMap[ext || ''] || 'i-ri-file-line'
 }
@@ -185,37 +175,33 @@ function getFileColor(fileName: string): string {
     jpeg: 'var(--el-color-primary)',
     gif: 'var(--el-color-primary)',
     webp: 'var(--el-color-primary)',
-    svg: 'var(--el-color-primary)',
+    svg: 'var(--el-color-primary)'
   }
   return colorMap[ext || ''] || 'var(--el-text-color-secondary)'
 }
 
 function getEntryIcon(entry: StorageEntry): string {
-  if (entry.type === 'directory')
-    return 'i-ri-folder-2-line'
+  if (entry.type === 'directory') return 'i-ri-folder-2-line'
   return getFileIcon(entry.name)
 }
 
 function getEntryColor(entry: StorageEntry): string {
-  if (entry.type === 'directory')
-    return 'var(--el-color-warning)'
+  if (entry.type === 'directory') return 'var(--el-color-warning)'
   return getFileColor(entry.name)
 }
 
 function getEntryTypeLabel(entry: StorageEntry): string {
-  if (entry.type === 'directory')
-    return 'DIR'
+  if (entry.type === 'directory') return 'DIR'
   const ext = entry.name.split('.').pop()?.toUpperCase()
-  return ext ? ext : 'FILE'
+  return ext || 'FILE'
 }
 
 async function handleOpenInEditor(): Promise<void> {
   try {
     await window.$channel.send('plugin:storage:open-in-editor', {
-      pluginName: props.plugin.name,
+      pluginName: props.plugin.name
     })
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to open in editor:', error)
     toast.error(t('plugin.storage.message.openEditorFailed'))
   }
@@ -229,29 +215,26 @@ async function handleClearStorage(): Promise<void> {
       {
         confirmButtonText: t('plugin.storage.confirm.clearConfirm'),
         cancelButtonText: t('plugin.storage.confirm.cancel'),
-        type: 'error',
-      },
+        type: 'error'
+      }
     )
 
     clearing.value = true
     const response = await window.$channel.send('plugin:storage:clear', {
-      pluginName: props.plugin.name,
+      pluginName: props.plugin.name
     })
 
     if (response.success) {
       toast.success(t('plugin.storage.message.clearSuccess'))
       await refreshData()
-    }
-    else {
+    } else {
       toast.error(response.error || t('plugin.storage.message.clearFailed'))
     }
-  }
-  catch (error) {
+  } catch (error) {
     if (error !== 'cancel') {
       toast.error(t('plugin.storage.message.clearFailed'))
     }
-  }
-  finally {
+  } finally {
     clearing.value = false
   }
 }
@@ -259,10 +242,9 @@ async function handleClearStorage(): Promise<void> {
 async function handleOpenFolder(): Promise<void> {
   try {
     await window.$channel.send('plugin:storage:open-folder', {
-      pluginName: props.plugin.name,
+      pluginName: props.plugin.name
     })
-  }
-  catch {
+  } catch {
     toast.error(t('plugin.storage.message.openFolderFailed'))
   }
 }
@@ -283,7 +265,7 @@ watch(
     entries.value = []
     loadStorageData()
     loadStoragePath()
-  },
+  }
 )
 </script>
 
@@ -291,34 +273,48 @@ watch(
   <div class="PluginStorage w-full h-full flex flex-col gap-6">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div class="PluginStorage-StatCard">
-        <div class="PluginStorage-StatIcon bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300">
+        <div
+          class="PluginStorage-StatIcon bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300"
+        >
           <i class="i-ri-database-2-line" />
         </div>
         <div class="min-w-0">
-          <div class="PluginStorage-StatValue">{{ loading ? '--' : toMB(storageStats.totalSize || 0) }}</div>
+          <div class="PluginStorage-StatValue">
+            {{ loading ? '--' : toMB(storageStats.totalSize || 0) }}
+          </div>
           <div class="PluginStorage-StatLabel">STORAGE (MB)</div>
         </div>
       </div>
       <div class="PluginStorage-StatCard">
-        <div class="PluginStorage-StatIcon bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-300">
+        <div
+          class="PluginStorage-StatIcon bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-300"
+        >
           <i class="i-ri-file-2-line" />
         </div>
         <div class="min-w-0">
-          <div class="PluginStorage-StatValue">{{ loading ? '--' : String(storageStats.fileCount || 0) }}</div>
+          <div class="PluginStorage-StatValue">
+            {{ loading ? '--' : String(storageStats.fileCount || 0) }}
+          </div>
           <div class="PluginStorage-StatLabel">TOTAL FILES</div>
         </div>
       </div>
       <div class="PluginStorage-StatCard">
-        <div class="PluginStorage-StatIcon bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300">
+        <div
+          class="PluginStorage-StatIcon bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300"
+        >
           <i class="i-ri-folder-2-line" />
         </div>
         <div class="min-w-0">
-          <div class="PluginStorage-StatValue">{{ loading ? '--' : String(storageStats.dirCount || 0) }}</div>
+          <div class="PluginStorage-StatValue">
+            {{ loading ? '--' : String(storageStats.dirCount || 0) }}
+          </div>
           <div class="PluginStorage-StatLabel">DIRECTORIES</div>
         </div>
       </div>
       <div class="PluginStorage-StatCard">
-        <div class="PluginStorage-StatIcon bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300">
+        <div
+          class="PluginStorage-StatIcon bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300"
+        >
           <i class="i-ri-pie-chart-2-line" />
         </div>
         <div class="min-w-0">
@@ -334,14 +330,8 @@ watch(
       <div class="PluginStorage-CardHeader flex items-center justify-between">
         <div class="flex items-center gap-2 min-w-0">
           <i class="i-ri-folder-5-line text-xl text-[var(--el-color-primary)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">
-            Storage Files
-          </h3>
-          <span
-            v-if="storagePath"
-            class="PluginStorage-Path"
-            :title="storagePathFull"
-          >
+          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Storage Files</h3>
+          <span v-if="storagePath" class="PluginStorage-Path" :title="storagePathFull">
             {{ storagePath }}
           </span>
         </div>
@@ -425,11 +415,7 @@ watch(
           </div>
           <TouchScroll no-padding class="flex-1" @scroll="emit('scroll', $event)">
             <div class="divide-y divide-[var(--el-border-color-lighter)]">
-              <div
-                v-for="entry in entries"
-                :key="entry.path"
-                class="PluginStorage-Row"
-              >
+              <div v-for="entry in entries" :key="entry.path" class="PluginStorage-Row">
                 <div class="flex items-center gap-3 min-w-0">
                   <i
                     class="text-lg"
@@ -454,16 +440,16 @@ watch(
                 <div class="text-xs text-[var(--el-text-color-secondary)]">
                   {{ formatDate(entry.modified) }}
                 </div>
-                <div class="text-xs text-right text-[var(--el-text-color-secondary)]">
-                  --
-                </div>
+                <div class="text-xs text-right text-[var(--el-text-color-secondary)]">--</div>
               </div>
             </div>
           </TouchScroll>
         </div>
       </div>
 
-      <div class="PluginStorage-Footer flex items-center justify-between mt-4 pt-3 border-t border-[var(--el-border-color-lighter)]">
+      <div
+        class="PluginStorage-Footer flex items-center justify-between mt-4 pt-3 border-t border-[var(--el-border-color-lighter)]"
+      >
         <div class="flex items-center gap-3 text-xs text-[var(--el-text-color-secondary)]">
           <span class="flex items-center gap-1">
             <i class="i-ri-checkbox-circle-fill text-[var(--el-color-success)] text-[10px]" />
@@ -473,7 +459,8 @@ watch(
         </div>
         <div class="flex items-center gap-3 text-xs text-[var(--el-text-color-secondary)]">
           <span>
-            Space: {{ (storageStats.usagePercent || 0).toFixed(1) }}% / {{ formatSize(storageStats.maxSize) }}
+            Space: {{ (storageStats.usagePercent || 0).toFixed(1) }}% /
+            {{ formatSize(storageStats.maxSize) }}
           </span>
           <TxProgressBar
             class="w-36"

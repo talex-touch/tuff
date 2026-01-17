@@ -1,125 +1,125 @@
-import DefaultTheme from 'vitepress/theme'
 import type { Theme } from 'vitepress'
-import 'virtual:uno.css'
-import './style/index.scss'
-import '../../../packages/components/style/index.scss'
-
+import DefaultTheme from 'vitepress/theme'
 // 导入 TuffEx 组件
 import {
-  TxTag,
-  TxStatusBadge,
+  TouchScroll,
+  TuffCheckbox,
+  TuffFlatButton,
+  TuffInput,
+  TuffProgress,
+  TuffSelect,
+  TuffSelectItem,
+  TuffSwitch,
+  TxAgentItem,
+  TxAgentsList,
+  TxAutoSizer,
   TxAvatar,
   TxAvatarGroup,
-  TxDrawer,
-  TxGroupBlock,
   TxBlockLine,
   TxBlockSlot,
   TxBlockSwitch,
-  TxBottomDialog,
   TxBlowDialog,
-  TxPopperDialog,
-  TxTouchTip,
-  TxProgressBar,
+  TxBottomDialog,
   TxButton,
   TxCard,
-  TxIcon,
-  TuffSwitch,
-  TuffInput,
-  TuffCheckbox,
-  TuffSelect,
-  TuffSelectItem,
-  TxSearchInput,
-  TxSearchSelect,
-  TxTreeSelect,
-  TxCascader,
-  TuffProgress,
-  TuffFlatButton,
-  TxScroll,
-  TouchScroll,
-  TxSlider,
-  TxSegmentedSlider,
-  TxSpinner,
-  TxLoadingOverlay,
-  TxSkeleton,
-  TxCardSkeleton,
-  TxListItemSkeleton,
-  TxToastHost,
-  TxGlassSurface,
-  TxGradualBlur,
-  TxGradientBorder,
-  TxGlowText,
-  TxGridLayout,
-  TxLayoutSkeleton,
-  TxStatCard,
   TxCardItem,
-  TxAutoSizer,
-  TxTextTransformer,
-  TxTabs,
-  TxTabItem,
-  TxTabHeader,
-  TxTooltip,
-  TxPopover,
-  TxDropdownMenu,
-  TxDropdownItem,
-  TxContextMenu,
-  TxContextMenuItem,
-  TxEmpty,
-  TxRadio,
-  TxRadioGroup,
-  TxAgentsList,
-  TxAgentItem,
-  TxStagger,
-  TxSortableList,
-  TxMarkdownView,
+  TxCardSkeleton,
+  TxCascader,
+  TxChatComposer,
   TxChatList,
   TxChatMessage,
-  TxChatComposer,
-  TxTypingIndicator,
-  TxImageUploader,
-  TxImageGallery,
-  TxTransition,
-  TxTransitionFade,
-  TxTransitionSlideFade,
-  TxTransitionRebound,
-  TxTransitionSmoothSize,
-  TxFusion,
-  TxPicker,
+  TxCol,
+  TxContainer,
+  TxContextMenu,
+  TxContextMenuItem,
   TxDatePicker,
-  TxNavBar,
-  TxTabBar,
-  TxSplitter,
-  TxStack,
+  TxDrawer,
+  TxDropdownItem,
+  TxDropdownMenu,
+  TxEmpty,
   TxFlex,
+  TxFusion,
+  TxGlassSurface,
+  TxGlowText,
+  TxGradientBorder,
+  TxGradualBlur,
   TxGrid,
   TxGridItem,
-  TxContainer,
+  TxGridLayout,
+  TxGroupBlock,
+  TxIcon,
+  TxImageGallery,
+  TxImageUploader,
+  TxLayoutSkeleton,
+  TxListItemSkeleton,
+  TxLoadingOverlay,
+  TxMarkdownView,
+  TxNavBar,
+  TxPicker,
+  TxPopover,
+  TxPopperDialog,
+  TxProgressBar,
+  TxRadio,
+  TxRadioGroup,
   TxRow,
-  TxCol,
+  TxScroll,
+  TxSearchInput,
+  TxSearchSelect,
+  TxSegmentedSlider,
+  TxSkeleton,
+  TxSlider,
+  TxSortableList,
+  TxSpinner,
+  TxSplitter,
+  TxStack,
+  TxStagger,
+  TxStatCard,
+  TxStatusBadge,
+  TxTabBar,
+  TxTabHeader,
+  TxTabItem,
+  TxTabs,
+  TxTag,
+  TxTextTransformer,
+  TxToastHost,
+  TxTooltip,
+  TxTouchTip,
+  TxTransition,
+  TxTransitionFade,
+  TxTransitionRebound,
+  TxTransitionSlideFade,
+  TxTransitionSmoothSize,
+  TxTreeSelect,
+  TxTypingIndicator,
 } from '../../../packages/components/src'
-
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
-import IconPreview from './components/IconPreview.vue'
-import GradualBlurAnimatedDemo from './components/demos/GradualBlurAnimatedDemo.vue'
-import ScrollBasicDemo from './components/demos/ScrollBasicDemo.vue'
-import ScrollHorizontalDemo from './components/demos/ScrollHorizontalDemo.vue'
-import ScrollBounceScrollbarDemo from './components/demos/ScrollBounceScrollbarDemo.vue'
-import ScrollChainingDemo from './components/demos/ScrollChainingDemo.vue'
-import ScrollNativeDemo from './components/demos/ScrollNativeDemo.vue'
-import ScrollPullDownUpDemo from './components/demos/ScrollPullDownUpDemo.vue'
-import CardVariantsDemo from './components/demos/CardVariantsDemo.vue'
-import CardBackgroundScrollDemo from './components/demos/CardBackgroundScrollDemo.vue'
-import CardEmptyDemo from './components/demos/CardEmptyDemo.vue'
-import CardCompositionsDemo from './components/demos/CardCompositionsDemo.vue'
-import CardBasicDemo from './components/demos/CardBasicDemo.vue'
-import CardHeaderDemo from './components/demos/CardHeaderDemo.vue'
 import CardActionsDemo from './components/demos/CardActionsDemo.vue'
+
+import CardBackgroundScrollDemo from './components/demos/CardBackgroundScrollDemo.vue'
+
+import CardBasicDemo from './components/demos/CardBasicDemo.vue'
 import CardBasicSlotsDemo from './components/demos/CardBasicSlotsDemo.vue'
+import CardCompositionsDemo from './components/demos/CardCompositionsDemo.vue'
+import CardEmptyDemo from './components/demos/CardEmptyDemo.vue'
+import CardHeaderDemo from './components/demos/CardHeaderDemo.vue'
+import CardInertialDemo from './components/demos/CardInertialDemo.vue'
+import CardLayoutPropsDemo from './components/demos/CardLayoutPropsDemo.vue'
 import CardModeDemo from './components/demos/CardModeDemo.vue'
 import CardSizeDemo from './components/demos/CardSizeDemo.vue'
-import CardLayoutPropsDemo from './components/demos/CardLayoutPropsDemo.vue'
 import CardStatesDemo from './components/demos/CardStatesDemo.vue'
-import CardInertialDemo from './components/demos/CardInertialDemo.vue'
+import CardVariantsDemo from './components/demos/CardVariantsDemo.vue'
+import GradualBlurAnimatedDemo from './components/demos/GradualBlurAnimatedDemo.vue'
+import ScrollBasicDemo from './components/demos/ScrollBasicDemo.vue'
+import ScrollBounceScrollbarDemo from './components/demos/ScrollBounceScrollbarDemo.vue'
+import ScrollChainingDemo from './components/demos/ScrollChainingDemo.vue'
+import ScrollHorizontalDemo from './components/demos/ScrollHorizontalDemo.vue'
+import ScrollNativeDemo from './components/demos/ScrollNativeDemo.vue'
+import ScrollPullDownUpDemo from './components/demos/ScrollPullDownUpDemo.vue'
+import IconPreview from './components/IconPreview.vue'
+import 'virtual:uno.css'
+import './style/index.scss'
+import '../../../packages/components/style/index.scss'
 
 export default {
   extends: DefaultTheme,

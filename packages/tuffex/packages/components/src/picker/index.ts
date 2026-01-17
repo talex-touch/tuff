@@ -1,5 +1,3 @@
-import TxPicker from './src/TxPicker.vue'
-import { withInstall } from '../../../utils/withInstall'
 import type {
   PickerColumn,
   PickerEmits,
@@ -7,6 +5,8 @@ import type {
   PickerProps,
   PickerValue,
 } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxPicker from './src/TxPicker.vue'
 
 const Picker = withInstall(TxPicker)
 

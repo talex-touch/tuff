@@ -24,7 +24,7 @@ class AppTaskGate {
     const current = this.activeLabels.get(label) ?? 0
     this.activeLabels.set(label, current + 1)
     const disposeContext = enterPerfContext(`AppTask:${label}`, {
-      activeCount: this.activeCount,
+      activeCount: this.activeCount
     })
     try {
       return await task()
@@ -40,7 +40,7 @@ class AppTaskGate {
       if (this.activeCount === 0 && this.waiters.length > 0) {
         const waiters = this.waiters
         this.waiters = []
-        waiters.forEach(resolve => resolve())
+        waiters.forEach((resolve) => resolve())
       }
     }
   }
@@ -49,7 +49,7 @@ class AppTaskGate {
     if (!this.isActive()) {
       return
     }
-    await new Promise<void>(resolve => this.waiters.push(resolve))
+    await new Promise<void>((resolve) => this.waiters.push(resolve))
   }
 }
 

@@ -23,8 +23,8 @@ const linkable = computed(() => props.list <= 0)
       v-if="linkable"
       :to="link"
       class="DocSection-Header group w-full flex cursor-pointer items-center py-1.5 text-[13px] font-normal transition-colors no-underline"
-      :class="active 
-        ? 'text-black dark:text-white' 
+      :class="active
+        ? 'text-black dark:text-white'
         : 'text-black/50 hover:text-black/70 dark:text-white/50 dark:hover:text-white/70'"
       @click="emit('click')"
     >
@@ -36,8 +36,8 @@ const linkable = computed(() => props.list <= 0)
       v-else
       type="button"
       class="DocSection-Header group w-full flex cursor-pointer items-center justify-between rounded-xl px-3 py-2.5 text-[11px] font-semibold tracking-wider uppercase transition-all duration-150"
-      :class="active 
-        ? 'text-black/55 dark:text-white/55' 
+      :class="active
+        ? 'text-black/55 dark:text-white/55'
         : 'text-black/30 hover:text-black/40 dark:text-white/30 dark:hover:text-white/40'"
       :aria-expanded="active"
       @click="emit('click')"
@@ -50,7 +50,7 @@ const linkable = computed(() => props.list <= 0)
         :class="active ? '' : '-rotate-90'"
       />
     </button>
-    
+
     <div
       class="grid transition-[grid-template-rows] duration-200 ease-out"
       :style="{ gridTemplateRows: active && list > 0 ? '1fr' : '0fr' }"
@@ -63,4 +63,3 @@ const linkable = computed(() => props.list <= 0)
     </div>
   </div>
 </template>
-

@@ -15,7 +15,7 @@ const props = withDefaults(
     mini: false,
     disabled: false,
     loading: false,
-  }
+  },
 )
 
 const emit = defineEmits<{
@@ -23,13 +23,15 @@ const emit = defineEmits<{
 }>()
 
 function handleClick(event: MouseEvent) {
-  if (props.disabled || props.loading) return
+  if (props.disabled || props.loading)
+    return
   emit('click', event)
 }
 
 function handleKeyActivate(event: KeyboardEvent) {
-  if (props.disabled || props.loading) return
-  ;(event.currentTarget as HTMLElement | null)?.click()
+  if (props.disabled || props.loading) {
+    return
+  }(event.currentTarget as HTMLElement | null)?.click()
 }
 </script>
 
@@ -38,8 +40,7 @@ function handleKeyActivate(event: KeyboardEvent) {
     role="button"
     :tabindex="disabled || loading ? -1 : 0"
     :aria-disabled="disabled || loading || undefined"
-    :class="[
-      'tuff-flat-button',
+    class="tuff-flat-button" :class="[
       {
         'is-primary': primary,
         'fake-background': !primary,

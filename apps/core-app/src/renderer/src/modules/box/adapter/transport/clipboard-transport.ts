@@ -4,8 +4,9 @@
  * @since v0.9.0
  */
 
+import type { ClipboardItem, ClipboardQueryRequest } from '@talex-touch/utils/transport/events'
 import { createTuffRendererTransport } from '@talex-touch/utils/transport'
-import { ClipboardEvents, ClipboardQueryRequest, ClipboardItem } from '@talex-touch/utils/transport/events'
+import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 
 const transport = createTuffRendererTransport('clipboard')
 
@@ -53,11 +54,11 @@ export async function setFavorite(id: number, isFavorite: boolean) {
 }
 
 /**
-* Subscribe to clipboard changes.
-*
-* @param onData - Callback function to handle incoming clipboard change payloads.
-* @returns A controller to manage the stream subscription.
-*/
+ * Subscribe to clipboard changes.
+ *
+ * @param onData - Callback function to handle incoming clipboard change payloads.
+ * @returns A controller to manage the stream subscription.
+ */
 export function onClipboardChange(onData: (data: any) => void) {
   return transport.stream(ClipboardEvents.change, undefined, { onData })
 }
@@ -68,5 +69,5 @@ export const clipboardTransport = {
   apply,
   delete: del,
   setFavorite,
-  onClipboardChange,
+  onClipboardChange
 }

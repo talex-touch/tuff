@@ -92,9 +92,13 @@ const blendModes = [
             >
               Glass Journal
             </div>
-            <div style="font-size: 12px; opacity: 0.6;">scroll to preview depth</div>
+            <div style="font-size: 12px; opacity: 0.6;">
+              scroll to preview depth
+            </div>
           </div>
-          <div style="font-size: 18px; font-weight: 600;">Light, texture, and a quiet sense of depth</div>
+          <div style="font-size: 18px; font-weight: 600;">
+            Light, texture, and a quiet sense of depth
+          </div>
           <div style="font-size: 13px; line-height: 1.6; opacity: 0.78;">
             A glass surface should feel breathable. Subtle blur, soft light dispersion, and layered
             gradients turn a flat panel into something you want to hover over.
@@ -109,7 +113,7 @@ const blendModes = [
                   radial-gradient(circle at 20% 20%, rgba(255, 208, 164, 0.7), transparent 55%);
                 border: 1px solid rgba(0, 0, 0, 0.08);
               "
-            ></div>
+            />
             <div
               style="
                 height: 120px;
@@ -119,7 +123,7 @@ const blendModes = [
                   radial-gradient(circle at 80% 20%, rgba(168, 214, 255, 0.7), transparent 55%);
                 border: 1px solid rgba(0, 0, 0, 0.08);
               "
-            ></div>
+            />
           </div>
           <div
             style="
@@ -140,7 +144,7 @@ const blendModes = [
               tint: warm + cool
             </div>
           </div>
-          <div style="height: 120px;"></div>
+          <div style="height: 120px;" />
         </div>
 
         <div
@@ -182,7 +186,9 @@ const blendModes = [
                 color: rgba(0, 0, 0, 0.68);
               "
             >
-              <div style="font-size: 16px;">GlassSurface</div>
+              <div style="font-size: 16px;">
+                GlassSurface
+              </div>
               <div style="font-size: 12px; opacity: 0.7;">
                 Layered clarity with adjustable optics
               </div>
@@ -200,59 +206,87 @@ const blendModes = [
       "
     >
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">width (px)</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          width (px)
+        </div>
         <TxSlider v-model="width" :min="200" :max="560" :step="10" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">height (px)</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          height (px)
+        </div>
         <TxSlider v-model="height" :min="120" :max="320" :step="10" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">borderRadius</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          borderRadius
+        </div>
         <TxSlider v-model="borderRadius" :min="0" :max="64" :step="1" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">borderWidth</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          borderWidth
+        </div>
         <TxSlider v-model="borderWidth" :min="0" :max="0.3" :step="0.01" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">brightness</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          brightness
+        </div>
         <TxSlider v-model="brightness" :min="0" :max="140" :step="1" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">opacity</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          opacity
+        </div>
         <TxSlider v-model="opacity" :min="0" :max="1" :step="0.01" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">blur (px)</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          blur (px)
+        </div>
         <TxSlider v-model="blur" :min="0" :max="24" :step="1" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">displace</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          displace
+        </div>
         <TxSlider v-model="displace" :min="0" :max="6" :step="0.1" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">backgroundOpacity</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          backgroundOpacity
+        </div>
         <TxSlider v-model="backgroundOpacity" :min="0" :max="0.5" :step="0.01" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">saturation</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          saturation
+        </div>
         <TxSlider v-model="saturation" :min="0.5" :max="2.4" :step="0.05" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">distortionScale</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          distortionScale
+        </div>
         <TxSlider v-model="distortionScale" :min="-600" :max="0" :step="10" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">redOffset</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          redOffset
+        </div>
         <TxSlider v-model="redOffset" :min="-80" :max="80" :step="1" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">greenOffset</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          greenOffset
+        </div>
         <TxSlider v-model="greenOffset" :min="-80" :max="80" :step="1" show-value />
       </div>
       <div>
-        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">blueOffset</div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+          blueOffset
+        </div>
         <TxSlider v-model="blueOffset" :min="-80" :max="80" :step="1" show-value />
       </div>
     </div>

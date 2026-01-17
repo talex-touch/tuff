@@ -1,9 +1,9 @@
-import type { ComputedRef, Ref } from 'vue'
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
 import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/events/types'
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 
 interface UseResizeOptions {
   results: ComputedRef<TuffItem[]>
@@ -23,20 +23,21 @@ function clampHeight(height: number): number {
 }
 
 function calculateDesiredHeight(resultCount: number): number {
-  if (resultCount === 0)
-    return MIN_HEIGHT
+  if (resultCount === 0) return MIN_HEIGHT
 
   const scrollRoot = document.querySelector('.CoreBoxRes-Main .touch-scroll')
-  if (!scrollRoot)
-    return MIN_HEIGHT
+  if (!scrollRoot) return MIN_HEIGHT
 
-  const nativeWrap = scrollRoot.querySelector('.native-scroll-wrapper, .tx-scroll__native') as HTMLElement | null
-  const legacyElWrap = scrollRoot.querySelector('.el-scroll-wrapper .el-scrollbar__wrap') as HTMLElement | null
+  const nativeWrap = scrollRoot.querySelector(
+    '.native-scroll-wrapper, .tx-scroll__native'
+  ) as HTMLElement | null
+  const legacyElWrap = scrollRoot.querySelector(
+    '.el-scroll-wrapper .el-scrollbar__wrap'
+  ) as HTMLElement | null
   const txWrapper = scrollRoot.querySelector('.tx-scroll__wrapper') as HTMLElement | null
   const txContent = scrollRoot.querySelector('.tx-scroll__content') as HTMLElement | null
   const wrap = nativeWrap ?? legacyElWrap ?? txWrapper ?? txContent
-  if (!wrap)
-    return MIN_HEIGHT
+  if (!wrap) return MIN_HEIGHT
 
   const scrollHeight = txContent?.scrollHeight ?? wrap.scrollHeight
   const clientHeight = wrap.clientHeight
@@ -71,12 +72,12 @@ export function useResize(options: UseResizeOptions): void {
     }
 
     if (
-      lastPayload
-      && Math.abs(lastPayload.height - payload.height) < 2
-      && lastPayload.resultCount === payload.resultCount
-      && lastPayload.loading === payload.loading
-      && lastPayload.recommendationPending === payload.recommendationPending
-      && lastPayload.activationCount === payload.activationCount
+      lastPayload &&
+      Math.abs(lastPayload.height - payload.height) < 2 &&
+      lastPayload.resultCount === payload.resultCount &&
+      lastPayload.loading === payload.loading &&
+      lastPayload.recommendationPending === payload.recommendationPending &&
+      lastPayload.activationCount === payload.activationCount
     ) {
       return
     }
@@ -87,8 +88,7 @@ export function useResize(options: UseResizeOptions): void {
 
   function scheduleLayoutUpdate(source: string): void {
     pendingSource = source
-    if (rafId)
-      return
+    if (rafId) return
     rafId = requestAnimationFrame(() => {
       rafId = 0
       sendLayoutUpdate(pendingSource ?? 'raf')
@@ -120,8 +120,7 @@ export function useResize(options: UseResizeOptions): void {
   watch(
     () => results.value,
     (newResults, oldResults) => {
-      if (newResults === oldResults)
-        return
+      if (newResults === oldResults) return
       scheduleLayoutUpdate('results')
     },
     { deep: true }

@@ -19,7 +19,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  close: []
+  'close': []
 }>()
 
 const visible = computed({
@@ -40,7 +40,9 @@ function close() {
         <div class="tx-modal__content" :style="{ width }">
           <header v-if="title || $slots.header" class="tx-modal__header">
             <slot name="header">
-              <h3 class="tx-modal__title">{{ title }}</h3>
+              <h3 class="tx-modal__title">
+                {{ title }}
+              </h3>
             </slot>
             <button type="button" class="tx-modal__close" @click="close">
               <i class="i-carbon-close" />
