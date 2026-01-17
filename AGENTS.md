@@ -2,6 +2,14 @@
 
 This file provides guidance to Qoder (qoder.com) when working with code in this repository.
 
+## Monorepo 维护标准（精简版）
+
+- **根目录保持简洁**：只放 workspace 必需入口与全局质量门禁；workspace 专属配置放到各自目录。
+- **统一工具链**：`husky + commitlint + lint-staged` 仅在根维护，避免子项目写入 `.git/hooks`。
+- **脚本一致性**：workspace 至少提供 `lint`/`lint:fix`，按需提供 `typecheck`/`test`。
+- **依赖升级策略**：先工具链→构建→业务；默认不做高风险大版本升级（需单独验证计划）。
+- 详细规范与现状建议：`docs/engineering/monorepo-standards.md`
+
 ## 常用开发命令
 
 ### 核心应用开发

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "lint": "pnpm exec eslint --cache .",
+    "lint:fix": "pnpm exec eslint --cache --fix .",
     "preview": "vite preview"
   },
   "talex-touch": {

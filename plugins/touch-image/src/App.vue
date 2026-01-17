@@ -32,7 +32,7 @@ onMounted(() => {
       const file = files[i]
 
       if (file.type.startsWith('image')) {
-        // @ts-ignore
+        // @ts-expect-error Electron provides File.path at runtime
         addImage(file.path)
       }
     }

@@ -6,13 +6,13 @@ import type {
   PlanComparisonItem,
   PlanQuota,
   QuotaCheckResult,
+  SocialConnection,
   Subscription,
   Team,
   UpgradeOption,
   UsageStats,
   UserProfile,
 } from './types'
-import type { SocialConnection } from './types'
 import {
   BillingCycle,
   SubscriptionPlan,

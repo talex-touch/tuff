@@ -1,1 +1,4 @@
 pnpm sync:core-pkg
+git add "apps/core-app/package.json" >/dev/null 2>&1 || true
+
+pnpm lint:staged

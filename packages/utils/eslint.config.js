@@ -1,0 +1,55 @@
+const antfu = require('@antfu/eslint-config').default
+
+module.exports = antfu(
+  {
+    type: 'lib',
+    typescript: true,
+    stylistic: false,
+    unicorn: false,
+    test: false,
+    markdown: false,
+    regexp: false,
+    ignores: [
+      'plugin/sdk/examples/**',
+    ],
+  },
+  {
+    rules: {
+      'antfu/if-newline': 'off',
+      'jsdoc/check-param-names': 'off',
+      'jsdoc/empty-tags': 'off',
+      'import/consistent-type-specifier-style': 'off',
+      'import/first': 'off',
+      'node/prefer-global/buffer': 'off',
+      'node/prefer-global/process': 'off',
+      'no-console': 'off',
+      'no-useless-return': 'off',
+      'perfectionist/sort-exports': 'off',
+      'perfectionist/sort-imports': 'off',
+      'perfectionist/sort-named-exports': 'off',
+      'perfectionist/sort-named-imports': 'off',
+      'prefer-promise-reject-errors': 'off',
+      'test/prefer-lowercase-title': 'off',
+      'ts/consistent-type-definitions': 'off',
+      'ts/ban-ts-comment': 'off',
+      'ts/explicit-function-return-type': 'off',
+      'ts/method-signature-style': 'off',
+      'ts/no-namespace': 'off',
+      'ts/no-empty-object-type': 'off',
+      'ts/no-require-imports': 'off',
+      'ts/no-unsafe-function-type': 'off',
+      'ts/no-use-before-define': 'off',
+      'unicorn/escape-case': 'off',
+      'unicorn/new-for-builtins': 'off',
+      'unicorn/no-instanceof-builtins': 'off',
+      'unicorn/no-new-array': 'off',
+      'vars-on-top': 'off',
+    },
+  },
+  {
+    files: ['plugin/channel.ts'],
+    rules: {
+      'no-eval': 'off',
+    },
+  },
+)

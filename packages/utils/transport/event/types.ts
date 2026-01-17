@@ -12,7 +12,7 @@
  * This ensures type-level distinction from plain objects.
  * @internal
  */
-declare const TuffEventBrand: unique symbol
+declare const _TuffEventBrand: unique symbol
 
 // ============================================================================
 // Configuration Types

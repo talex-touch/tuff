@@ -13,6 +13,7 @@ This repository contains multiple documentation collections.
 
 - `docs/analytics-data-prd.md` - Analytics data PRD
 - `docs/clipboard-mechanism-analysis.md` - Clipboard mechanism analysis
+- `docs/engineering/monorepo-standards.md` - Monorepo engineering standards
 - `docs/everything-integration.md` - Everything integration guide
 - `docs/nexus-everything-integration.md` - Nexus + Everything integration guide
 - `docs/updates-module.md` - Updates module notes
@@ -39,4 +40,3 @@ This repository contains multiple documentation collections.
 ## Migration References
 
 - `plan-prd/04-implementation/TuffTransportMigration260111.md` - TuffTransport migration checklist
-

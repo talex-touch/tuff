@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * @module polling
  * A high-precision, efficient, singleton polling service for scheduling periodic tasks.
@@ -185,7 +184,7 @@ export class PollingService {
         }
       }
     }
-    catch (error) {
+    catch {
       // Not in Electron environment or Electron not available
       // This is fine, just skip the quit listener setup
     }

@@ -18,6 +18,8 @@
   "main": "index.ts",
   "module": "./index.ts",
   "scripts": {
+    "lint": "pnpm exec eslint --cache .",
+    "lint:fix": "pnpm exec eslint --cache --fix .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

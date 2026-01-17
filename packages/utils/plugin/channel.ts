@@ -28,7 +28,7 @@ function resolveIpcRenderer(): IpcRenderer | null {
     if (electron?.ipcRenderer)
       return electron.ipcRenderer as IpcRenderer
   }
-  catch (error) {
+  catch {
     // ignore – will throw below if no ipcRenderer is resolved
   }
 

@@ -246,7 +246,6 @@ export function useAutoResize(
     if (props.includes('height'))
       styleEl.style.height = `${prev.height}px`
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     styleEl.offsetWidth
 
     styleEl.style.transitionDuration = `${opt.durationMs}ms`

@@ -8,7 +8,7 @@ import 'virtual:unocss-devtools'
 
 const { ipcRenderer } = require('electron')
 
-ipcRenderer.on('@loaded', (event: any, name: string) => {
+ipcRenderer.on('@loaded', (_event: any, _name: string) => {
   init(window)
 
   const i18n = createI18n({

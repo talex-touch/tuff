@@ -60,7 +60,6 @@ export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = 
       el.style.transitionTimingFunction = ''
       el.style.width = `${freezeRect.width}px`
       el.style.height = `${freezeRect.height}px`
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       el.offsetWidth
     }
 
@@ -76,7 +75,6 @@ export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = 
   }
 
   const forceReflow = (el: HTMLElement) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     el.offsetWidth
   }
 
