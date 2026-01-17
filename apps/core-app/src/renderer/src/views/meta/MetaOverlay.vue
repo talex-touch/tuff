@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MetaAction } from '@talex-touch/utils/transport/events/types/meta-overlay'
+import type { MetaAction, MetaShowRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { TuffItem } from '@talex-touch/utils'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -85,42 +85,32 @@ const flatActions = computed(() => {
 })
 
 // Listen for show/hide messages from main process via IPC
-onMounted(() => {
-  // Listen for IPC messages from main process
-  const handleShow = (_event: any, data: any) => {
-    if (data?.type === 'meta-overlay:show') {
-      const { item: itemData, actions } = data
-      item.value = itemData
-      allActions.value = actions || []
-      visible.value = true
-    }
-  }
+const unregShow = transport.on(MetaOverlayEvents.ui.show, (data: MetaShowRequest) => {
+  item.value = data.item as any
+  const merged: MetaAction[] = [
+    ...(data.pluginActions || []),
+    ...(data.itemActions || []),
+    ...data.builtinActions,
+  ].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+  allActions.value = merged
+  visible.value = true
+})
 
-  const handleHide = () => {
-    visible.value = false
-    searchQuery.value = ''
+const unregHide = transport.on(MetaOverlayEvents.ui.hide, () => {
+  visible.value = false
+  searchQuery.value = ''
+  activeIndex.value = 0
+})
+
+// Focus search input when visible
+watch(visible, (newVisible) => {
+  if (newVisible) {
     activeIndex.value = 0
+    searchQuery.value = ''
+    setTimeout(() => {
+      searchInput.value?.focus()
+    }, 100)
   }
-
-  window.electron.ipcRenderer.on('meta-overlay:show', handleShow)
-  window.electron.ipcRenderer.on('meta-overlay:hide', handleHide)
-
-  // Focus search input when visible
-  watch(visible, (newVisible) => {
-    if (newVisible) {
-      activeIndex.value = 0
-      searchQuery.value = ''
-      setTimeout(() => {
-        searchInput.value?.focus()
-      }, 100)
-    }
-  })
-
-  // Cleanup on unmount
-  onBeforeUnmount(() => {
-    window.electron.ipcRenderer.removeAllListeners('meta-overlay:show')
-    window.electron.ipcRenderer.removeAllListeners('meta-overlay:hide')
-  })
 })
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -228,6 +218,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  unregShow()
+  unregHide()
   window.removeEventListener('keydown', handleKeyDown, true)
 })
 </script>

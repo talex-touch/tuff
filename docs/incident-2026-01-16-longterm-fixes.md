@@ -1,5 +1,9 @@
 # Incident: 2026-01-16 Error Log Long-term Fix Plan
 
+## References
+
+- Docs Index: `docs/INDEX.md`
+
 ## Scope
 Source log:
 - `apps/core-app/tuff/logs/E.2026-01-16.err`

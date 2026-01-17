@@ -5,6 +5,8 @@
 
 import { watch } from 'vue'
 import { useLanguage } from './useLanguage'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 
 /**
  * Setup language synchronization with main process
@@ -12,16 +14,13 @@ import { useLanguage } from './useLanguage'
  */
 export function setupLanguageSync() {
   const { currentLanguage } = useLanguage()
+  const transport = useTuffTransport()
 
   // Watch for language changes and notify main process
   watch(
     currentLanguage,
     (newLang) => {
-      // Send language change to main process via IPC
-      if (window.electron?.ipcRenderer) {
-        window.electron.ipcRenderer.send('app:set-locale', newLang)
-        console.log(`[LanguageSync] Notified main process of language change: ${newLang}`)
-      }
+      void transport.send(AppEvents.i18n.setLocale, { locale: newLang as any }).catch(() => {})
     },
     { immediate: true },
   )

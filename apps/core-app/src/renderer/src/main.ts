@@ -1,6 +1,8 @@
 import { preloadDebugStep, preloadLog, preloadState } from '@talex-touch/utils/preload'
 import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import ElementPlus from 'element-plus'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 
 import { createPinia } from 'pinia'
 import VWave from 'v-wave'
@@ -39,20 +41,19 @@ window.$storage = storageManager
 
 setRuntimeEnv(import.meta.env as any)
 
-const ipcRenderer = (window as any)?.electron?.ipcRenderer
-if (ipcRenderer) {
-  ipcRenderer.on('navigate-to', (_event: unknown, path: unknown) => {
-    const target = typeof path === 'string' ? path : ''
-    const normalized = target === '/clipboard' ? '/details' : target
-    if (normalized) {
-      router.push(normalized).catch(() => {})
-    }
-  })
+const transport = useTuffTransport()
 
-  ipcRenderer.on('open-download-center', () => {
-    router.push('/downloads').catch(() => {})
-  })
-}
+transport.on(AppEvents.window.navigate, (payload) => {
+  const target = typeof payload?.path === 'string' ? payload.path : ''
+  const normalized = target === '/clipboard' ? '/details' : target
+  if (normalized) {
+    router.push(normalized).catch(() => {})
+  }
+})
+
+transport.on(AppEvents.window.openDownloadCenter, () => {
+  router.push('/downloads').catch(() => {})
+})
 
 preloadState('start')
 preloadLog('Bootstrapping Talex Touch renderer...')

@@ -1,5 +1,18 @@
 # Analytics 数据与埋点 PRD（主进程 / 渲染 / 插件 / 官网）
 
+## Scope
+
+- Main / Renderer / Plugin / Website analytics collection and persistence.
+
+## Summary
+
+- Event transport: TuffTransport (`analytics.*`, `analytics.sdk.*`).
+- Storage: MemoryStore + SQLite cold storage.
+
+## References
+
+- Docs Index: `docs/INDEX.md`
+
 ## 目标
 - 统一采集路径：IPC、搜索、模块生命周期、插件调用、系统资源。
 - 统一事件通道：TuffTransport（analytics.*，analytics.sdk.*）。

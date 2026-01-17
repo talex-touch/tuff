@@ -1,3 +1,6 @@
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
+
 export type RendererPerfReportKind =
   | 'channel.sendSync.slow'
   | 'channel.send.slow'
@@ -21,11 +24,10 @@ export type RendererPerfReport = {
   meta?: Record<string, unknown>
 }
 
-export const PERF_REPORT_CHANNEL = 'touch:perf-report'
-
 export function reportPerfToMain(report: RendererPerfReport): void {
   try {
-    window.electron.ipcRenderer.send(PERF_REPORT_CHANNEL, report)
+    const transport = useTuffTransport()
+    void transport.send(AppEvents.analytics.perfReport, report as any).catch(() => {})
   }
   catch {
     // ignore perf reporting failures

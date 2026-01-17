@@ -6,7 +6,8 @@
 -->
 <script setup lang="ts" name="SettingDownload">
 import type { DownloadConfig } from '@talex-touch/utils'
-import { getTouchSDK } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -23,7 +24,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 
 const { t } = useI18n()
-const touchSDK = getTouchSDK()
+const transport = useTuffTransport()
 
 // Download center hook
 const { updateConfig } = useDownloadCenter()
@@ -66,7 +67,7 @@ onMounted(async () => {
 async function loadConfig() {
   loading.value = true
   try {
-    const response = await touchSDK.rawChannel.send('download:get-config')
+    const response = await transport.send(DownloadEvents.config.get)
     if (response.success && response.config) {
       downloadConfig.value = response.config
     }
@@ -136,7 +137,7 @@ async function restoreDefaults() {
 async function cleanupTempFiles() {
   cleaningTemp.value = true
   try {
-    const response = await touchSDK.rawChannel.send('download:cleanup-temp')
+    const response = await transport.send(DownloadEvents.maintenance.cleanupTemp)
     if (response.success) {
       toast.success(t('settings.settingDownload.messages.tempCleaned'))
     }

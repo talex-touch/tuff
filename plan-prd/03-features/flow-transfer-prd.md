@@ -89,7 +89,7 @@
 ### 6.1 API 与 SDK 扩展
 
 - `packages/utils/plugin/sdk/system.ts` 增加 `flow` 工具模块，暴露 `dispatch`、`onSessionUpdate`、`cancel` 等方法。
-- `system.ts` 内部通过 `channel.send('flow:dispatch', ...)` 调用主进程。
+- SDK 内部通过 **TuffTransport** 事件调用主进程（例如 `FlowEvents.dispatch`）。
 - TypeScript 类型定义扩展 `FlowPayload`, `FlowDispatchOptions`, `FlowSessionUpdate`。
 
 ### 6.2 主进程 Flow Bus

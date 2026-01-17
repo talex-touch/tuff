@@ -91,6 +91,14 @@ Tuff 的操作非常简单直观，让用户可以轻松完成各种任务。您
 
 如果您正在寻找一款跨平台、设计精美且易于使用的桌面软件，Tuff 是您的不二之选。它不仅提供了丰富的功能，还拥有良好的用户体验和开放的社区生态。欢迎使用 Tuff，体验全新的桌面交互！
 
+## 📚 文档
+
+- **Docs Index**：`./docs/INDEX.md`
+- **项目 PRD / Plans**：`./plan-prd/README.md`
+- **仓库 Docs**：`./docs/`
+- **贡献指南**：`./.github/docs/contribution/CONTRIBUTING.md`
+- **架构 / Agent 说明**：`./AGENTS.md`
+
 ## 🤝 开源协议
 
 本项目基于 **MIT 许可证** 开源。

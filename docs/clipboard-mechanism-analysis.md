@@ -1,5 +1,17 @@
 # CoreBox 剪贴板机制与 AutoPaste 完整梳理
 
+## Scope
+
+- CoreBox clipboard ingestion, pin/recommendation interaction, and AutoPaste behavior.
+
+## Summary
+
+- Root cause analysis focuses on pinned item dedupe inconsistency.
+
+## References
+
+- Docs Index: `docs/INDEX.md`
+
 ## 一、重复 Pin 项目问题分析
 
 ### 问题根源

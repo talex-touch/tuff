@@ -6,6 +6,8 @@ import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 
 /**
  * TrayMenuBuilder - Tray menu builder
@@ -112,7 +114,9 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          mainWindow.webContents.send('open-download-center')
+          const channel = $app.channel as any
+          const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+          tx.sendTo(mainWindow.webContents, AppEvents.window.openDownloadCenter, undefined as any).catch(() => {})
         },
       },
     ]
@@ -130,7 +134,9 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          mainWindow.webContents.send('navigate-to', '/details')
+          const channel = $app.channel as any
+          const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, { path: '/details' } as any).catch(() => {})
         },
       },
       {
@@ -144,7 +150,9 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          mainWindow.webContents.send('navigate-to', '/setting')
+          const channel = $app.channel as any
+          const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, { path: '/setting' } as any).catch(() => {})
         },
       },
     ]

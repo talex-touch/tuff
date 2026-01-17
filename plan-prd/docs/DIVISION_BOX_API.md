@@ -417,11 +417,11 @@ console.log('Scroll position:', scrollPos)
 
 ## IPC 通信接口
 
-DivisionBox 通过 IPC 通道在主进程和渲染进程之间通信。
+DivisionBox 通过 **TuffTransport** 在主进程和渲染/插件进程之间通信。
 
-### 主进程 → 渲染进程 (Handle)
+### 请求/响应（Handler）
 
-#### `division-box:open`
+#### `DivisionBoxEvents.open`
 
 创建新的 DivisionBox。
 
@@ -448,7 +448,7 @@ DivisionBox 通过 IPC 通道在主进程和渲染进程之间通信。
 
 ---
 
-#### `division-box:close`
+#### `DivisionBoxEvents.close`
 
 关闭 DivisionBox。
 
@@ -469,7 +469,7 @@ DivisionBox 通过 IPC 通道在主进程和渲染进程之间通信。
 
 ---
 
-#### `division-box:get-state`
+#### `DivisionBoxEvents.getState`
 
 获取会话状态。
 
@@ -487,7 +487,7 @@ DivisionBoxState | null
 
 ---
 
-#### `division-box:update-state`
+#### `DivisionBoxEvents.updateState`
 
 更新 sessionState。
 
@@ -509,7 +509,7 @@ DivisionBoxState | null
 
 ---
 
-#### `division-box:get-active-sessions`
+#### `DivisionBoxEvents.getActiveSessions`
 
 获取所有活跃会话。
 
@@ -526,9 +526,9 @@ Array<{
 
 ---
 
-### 主进程 → 渲染进程 (Event)
+### 推送事件（Broadcast）
 
-#### `division-box:state-changed`
+#### `DivisionBoxEvents.stateChanged`
 
 状态变更通知。
 
@@ -543,7 +543,7 @@ Array<{
 
 ---
 
-#### `division-box:session-destroyed`
+#### `DivisionBoxEvents.sessionDestroyed`
 
 会话销毁通知。
 
