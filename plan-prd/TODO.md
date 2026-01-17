@@ -287,9 +287,17 @@
 - `target-registry.ts` - 目标注册表
 - `session-manager.ts` - 会话管理器
 
+**补充（IPC 迁移）**:
+- ✅ Flow/DivisionBox IPC 全量迁移到 TuffTransport（renderer/main/plugin SDK），移除 legacy `flow:*`/`division-box:*`/`FlowIPCChannel`
+- ✅ 验证：全仓 grep legacy 事件名为 0；`apps/core-app` `npm run typecheck` 通过
+
 ---
 
 ### 3. ✅ DivisionBox 深化 (v2.4.7) - Manager + Session + LRU 缓存 + SDK
+
+**补充（IPC 迁移）**:
+- ✅ DivisionBox IPC 全量迁移到 TuffTransport（renderer/main），移除 legacy `division-box:*`
+- ✅ 验证：全仓 grep legacy 事件名为 0；`apps/core-app` `npm run typecheck` 通过
 
 ---
 

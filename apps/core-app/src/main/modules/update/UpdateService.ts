@@ -8,8 +8,10 @@ import type {
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import fs from 'node:fs'
 import path from 'node:path'
-import { AppPreviewChannel, ChannelType, DataCode, UpdateProviderType } from '@talex-touch/utils'
+import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import { app } from 'electron'
 import axios from 'axios'
 import { TalexEvents, UpdateAvailableEvent, touchEventBus } from '../../core/eventbus/touch-event'
@@ -56,6 +58,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private initContext?: ModuleInitContext<TalexEvents>
   private updateSystem?: UpdateSystem
   private updateRepository: UpdateRepository | null = null
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private transportDisposers: Array<() => void> = []
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
@@ -105,8 +109,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateLog.warn('Failed to initialize UpdateRepository', { error })
     }
 
-    // Register IPC channels
-    this.registerIpcChannels()
+    const channel = ((ctx.app as any)?.channel ?? ($app as any)?.channel) as any
+    this.transport = getTuffTransportMain(
+      channel,
+      (channel as any)?.keyManager ?? channel,
+    )
+    this.registerTransportHandlers()
 
     // Load settings
     this.loadSettings()
@@ -146,11 +154,22 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     // Unregister polling task
     this.pollingService.unregister(UPDATE_POLL_TASK_ID)
 
+    // Clear scheduled save
     if (this.settingsSaveTimer) {
       clearTimeout(this.settingsSaveTimer)
       this.settingsSaveTimer = null
       await this.flushSettingsToDisk()
     }
+
+    for (const dispose of this.transportDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
+    this.transport = null
 
     // Clear cache if needed
     if (!this.settings.cacheEnabled) {
@@ -159,270 +178,252 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   /**
-   * Register IPC channels for communication with renderer process
+   * Register transport handlers for communication with renderer process
    */
-  private registerIpcChannels(): void {
-    if (!this.initContext) {
-      throw new Error('[UpdateService] Context not initialized')
+  private registerTransportHandlers(): void {
+    if (!this.transport) {
+      return
     }
-    const touchApp = this.initContext.app as any
-    const appChannel = touchApp.channel
 
-    // Check for updates
-    appChannel.regChannel(ChannelType.MAIN, 'update:check', async ({ data, reply }) => {
-      const force = data?.force ?? false
-      try {
-        const channel = this.getEffectiveChannel()
+    const tx = this.transport
 
-        if (!force) {
-          const quickResult = await this.getQuickUpdateCheckResult(channel)
-          reply(DataCode.SUCCESS, { success: true, data: quickResult })
+    this.transportDisposers.push(
+      tx.on(UpdateEvents.check, async (payload) => {
+        const force = payload?.force ?? false
+        try {
+          const channel = this.getEffectiveChannel()
 
-          if (app.isPackaged) {
-            this.queueBackgroundUpdateCheck()
+          if (!force) {
+            const quickResult = await this.getQuickUpdateCheckResult(channel)
+
+            if (app.isPackaged) {
+              this.queueBackgroundUpdateCheck()
+            }
+
+            return { success: true, data: quickResult }
           }
-          return
+
+          const result = await this.checkForUpdates(true)
+          return { success: true, data: result }
+        } catch (error) {
+          updateLog.error('Update check failed', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
+      }),
 
-        const result = await this.checkForUpdates(true)
-        reply(DataCode.SUCCESS, { success: true, data: result })
-      } catch (error) {
-        updateLog.error('Update check failed', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
+      tx.on(UpdateEvents.getSettings, async () => {
+        return { success: true, data: this.settings }
+      }),
 
-    // Get update settings
-    appChannel.regChannel(ChannelType.MAIN, 'update:get-settings', async ({ reply }) => {
-      reply(DataCode.SUCCESS, { success: true, data: this.settings })
-    })
+      tx.on(UpdateEvents.updateSettings, async (payload) => {
+        const newSettings = (payload as any)?.settings as Partial<UpdateSettings>
+        try {
+          const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
 
-    // Update settings
-    appChannel.regChannel(ChannelType.MAIN, 'update:update-settings', async ({ data, reply }) => {
-      const newSettings = data as Partial<UpdateSettings>
-      try {
-        const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
+          if ('updateChannel' in sanitizedSettings) {
+            sanitizedSettings.updateChannel = this.enforceChannelPreference(
+              sanitizedSettings.updateChannel
+            )
+          }
 
-        if ('updateChannel' in sanitizedSettings) {
-          sanitizedSettings.updateChannel = this.enforceChannelPreference(
-            sanitizedSettings.updateChannel
-          )
+          if ('frequency' in sanitizedSettings && sanitizedSettings.frequency) {
+            sanitizedSettings.frequency = this.normalizeFrequency(sanitizedSettings.frequency)
+          }
+
+          if ('lastCheckedAt' in sanitizedSettings) {
+            delete (sanitizedSettings as Record<string, unknown>).lastCheckedAt
+          }
+
+          this.settings = { ...this.settings, ...sanitizedSettings }
+          this.saveSettings()
+
+          if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
+            this.pollingService.unregister(UPDATE_POLL_TASK_ID)
+          }
+          if (this.settings.enabled) {
+            this.startPolling()
+          }
+
+          return { success: true }
+        } catch (error) {
+          updateLog.error('Failed to update settings', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
+      }),
 
-        if ('frequency' in sanitizedSettings && sanitizedSettings.frequency) {
-          sanitizedSettings.frequency = this.normalizeFrequency(sanitizedSettings.frequency)
+      tx.on(UpdateEvents.getStatus, async () => {
+        return {
+          success: true,
+          data: {
+            enabled: this.settings.enabled,
+            frequency: this.settings.frequency,
+            source: this.settings.source,
+            channel: this.getEffectiveChannel(),
+            polling: this.pollingService.isRegistered(UPDATE_POLL_TASK_ID),
+            lastCheck: this.settings.lastCheckedAt ?? null
+          }
         }
+      }),
 
-        if ('lastCheckedAt' in sanitizedSettings) {
-          delete (sanitizedSettings as Record<string, unknown>).lastCheckedAt
+      tx.on(UpdateEvents.clearCache, async () => {
+        try {
+          this.cache.clear()
+          return { success: true }
+        } catch (error) {
+          updateLog.error('Failed to clear cache', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
+      }),
 
-        this.settings = { ...this.settings, ...sanitizedSettings }
-        this.saveSettings()
-
-        // Restart polling if settings changed
-        if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
-          this.pollingService.unregister(UPDATE_POLL_TASK_ID)
+      tx.on(UpdateEvents.getCachedRelease, async (payload) => {
+        try {
+          const requestedChannel = payload?.channel as AppPreviewChannel | undefined
+          const targetChannel = requestedChannel ?? this.getEffectiveChannel()
+          const record = this.updateRepository ? await this.updateRepository.getLatestRecord(targetChannel) : null
+          if (record) {
+            const release = this.deserializeRelease(record.payload)
+            return {
+              success: true,
+              data: release
+                ? {
+                    release,
+                    status: record.status,
+                    snoozeUntil: record.snoozeUntil ?? null,
+                    fetchedAt: record.fetchedAt,
+                    channel: record.channel as AppPreviewChannel,
+                    tag: record.tag,
+                    source: record.source
+                  }
+                : null
+            }
+          }
+          return { success: true, data: null }
+        } catch (error) {
+          updateLog.error('Failed to get cached release', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
+      }),
 
-        if (this.settings.enabled) {
-          this.startPolling()
+      tx.on(UpdateEvents.recordAction, async (payload) => {
+        try {
+          if (!payload?.tag || !payload?.action) {
+            throw new Error('Invalid action payload')
+          }
+          await this.handleUserAction(payload.tag, payload.action)
+          return { success: true }
+        } catch (error) {
+          updateLog.error('Failed to record update action', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
+      }),
 
-        reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
-        updateLog.error('Failed to update settings', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
-
-    // Get update status
-    appChannel.regChannel(ChannelType.MAIN, 'update:get-status', async ({ reply }) => {
-      reply(DataCode.SUCCESS, {
-        success: true,
-        data: {
-          enabled: this.settings.enabled,
-          frequency: this.settings.frequency,
-          source: this.settings.source,
-          channel: this.getEffectiveChannel(),
-          polling: this.pollingService.isRegistered(UPDATE_POLL_TASK_ID),
-          lastCheck: this.settings.lastCheckedAt ?? null
+      tx.on(UpdateEvents.download, async (release) => {
+        try {
+          if (!this.updateSystem) {
+            throw new Error('UpdateSystem not initialized')
+          }
+          const taskId = await this.updateSystem.downloadUpdate(release)
+          return { success: true, data: { taskId } }
+        } catch (error) {
+          updateLog.error('Failed to download update', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
-      })
-    })
+      }),
 
-    // Clear update cache
-    appChannel.regChannel(ChannelType.MAIN, 'update:clear-cache', async ({ reply }) => {
-      try {
-        this.cache.clear()
-        reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
-        updateLog.error('Failed to clear cache', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
-
-    appChannel.regChannel(ChannelType.MAIN, 'update:get-cached-release', async ({ data, reply }) => {
-      try {
-        const requestedChannel = data?.channel as AppPreviewChannel | undefined
-        const targetChannel = requestedChannel ?? this.getEffectiveChannel()
-        const record = this.updateRepository ? await this.updateRepository.getLatestRecord(targetChannel) : null
-        if (record) {
-          const release = this.deserializeRelease(record.payload)
-          reply(DataCode.SUCCESS, {
-            success: true,
-            data: release
-              ? {
-                  release,
-                  status: record.status,
-                  snoozeUntil: record.snoozeUntil ?? null,
-                  fetchedAt: record.fetchedAt,
-                  channel: record.channel,
-                  tag: record.tag,
-                  source: record.source
-                }
-              : null
-          })
-        } else {
-          reply(DataCode.SUCCESS, { success: true, data: null })
+      tx.on(UpdateEvents.install, async (payload) => {
+        try {
+          if (!this.updateSystem) {
+            throw new Error('UpdateSystem not initialized')
+          }
+          await this.updateSystem.installUpdate(payload.taskId)
+          return { success: true }
+        } catch (error) {
+          updateLog.error('Failed to install update', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
-      } catch (error) {
-        updateLog.error('Failed to get cached release', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
+      }),
 
-    appChannel.regChannel(ChannelType.MAIN, 'update:record-action', async ({ data, reply }) => {
-      try {
-        const actionPayload = data as { tag: string; action: UpdateUserAction }
-        if (!actionPayload?.tag || !actionPayload?.action) {
-          throw new Error('Invalid action payload')
+      tx.on(UpdateEvents.ignoreVersion, async (payload) => {
+        try {
+          if (!this.updateSystem) {
+            throw new Error('UpdateSystem not initialized')
+          }
+          this.updateSystem.ignoreVersion(payload.version)
+          this.settings.ignoredVersions.push(payload.version)
+          this.saveSettings()
+          return { success: true }
+        } catch (error) {
+          updateLog.error('Failed to ignore version', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
-        await this.handleUserAction(actionPayload.tag, actionPayload.action)
-        reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
-        updateLog.error('Failed to record update action', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
+      }),
 
-    // Download update
-    appChannel.regChannel(ChannelType.MAIN, 'update:download', async ({ data, reply }) => {
-      try {
-        if (!this.updateSystem) {
-          throw new Error('UpdateSystem not initialized')
+      tx.on(UpdateEvents.setAutoDownload, async (payload) => {
+        try {
+          if (!this.updateSystem) {
+            throw new Error('UpdateSystem not initialized')
+          }
+          this.updateSystem.setAutoDownload(payload.enabled)
+          return { success: true }
+        } catch (error) {
+          updateLog.error('Failed to set auto download', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
-        const release = data as GitHubRelease
-        const taskId = await this.updateSystem.downloadUpdate(release)
-        reply(DataCode.SUCCESS, { success: true, taskId })
-      } catch (error) {
-        updateLog.error('Failed to download update', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
+      }),
 
-    // Install update
-    appChannel.regChannel(ChannelType.MAIN, 'update:install', async ({ data, reply }) => {
-      try {
-        if (!this.updateSystem) {
-          throw new Error('UpdateSystem not initialized')
-        }
-        const taskId = data as string
-        await this.updateSystem.installUpdate(taskId)
-        reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
-        updateLog.error('Failed to install update', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
+      tx.on(UpdateEvents.setAutoCheck, async (payload) => {
+        try {
+          if (!this.updateSystem) {
+            throw new Error('UpdateSystem not initialized')
+          }
+          this.updateSystem.setAutoCheck(payload.enabled)
+          this.settings.enabled = payload.enabled
+          this.saveSettings()
 
-    // Ignore version
-    appChannel.regChannel(ChannelType.MAIN, 'update:ignore-version', async ({ data, reply }) => {
-      try {
-        if (!this.updateSystem) {
-          throw new Error('UpdateSystem not initialized')
-        }
-        const version = data as string
-        this.updateSystem.ignoreVersion(version)
-        this.settings.ignoredVersions.push(version)
-        this.saveSettings()
-        reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
-        updateLog.error('Failed to ignore version', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
+          if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
+            this.pollingService.unregister(UPDATE_POLL_TASK_ID)
+          }
+          if (payload.enabled) {
+            this.startPolling()
+          }
 
-    // Set auto download
-    appChannel.regChannel(ChannelType.MAIN, 'update:set-auto-download', async ({ data, reply }) => {
-      try {
-        if (!this.updateSystem) {
-          throw new Error('UpdateSystem not initialized')
+          return { success: true }
+        } catch (error) {
+          updateLog.error('Failed to set auto check', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
         }
-        const enabled = data as boolean
-        this.updateSystem.setAutoDownload(enabled)
-        reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
-        updateLog.error('Failed to set auto download', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
-
-    // Set auto check
-    appChannel.regChannel(ChannelType.MAIN, 'update:set-auto-check', async ({ data, reply }) => {
-      try {
-        if (!this.updateSystem) {
-          throw new Error('UpdateSystem not initialized')
-        }
-        const enabled = data as boolean
-        this.updateSystem.setAutoCheck(enabled)
-        this.settings.enabled = enabled
-        this.saveSettings()
-
-        // Restart or stop polling based on setting
-        if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
-          this.pollingService.unregister(UPDATE_POLL_TASK_ID)
-        }
-        if (enabled) {
-          this.startPolling()
-        }
-
-        reply(DataCode.SUCCESS, { success: true })
-      } catch (error) {
-        updateLog.error('Failed to set auto check', { error })
-        reply(DataCode.ERROR, {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
-      }
-    })
+      }),
+    )
   }
 
   /**
@@ -585,10 +586,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateLog.warn('Context not initialized, cannot notify renderer')
       return
     }
-    // Send update notification to all renderer windows
-    const touchApp = this.initContext.app as any
 
-    touchApp.channel.sendMain('update:available', {
+    if (!result.release) {
+      return
+    }
+
+    this.transport?.broadcast(UpdateEvents.available, {
       hasUpdate: true,
       release: result.release,
       source: result.source,

@@ -27,6 +27,12 @@ export * from './meta-overlay'
 // File index domain types
 export * from './file-index'
 
+// Download domain types
+export * from './download'
+
+// Update domain types
+export * from './update'
+
 // Flow domain types
 export * from './flow'
 

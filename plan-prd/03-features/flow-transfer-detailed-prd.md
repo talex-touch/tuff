@@ -302,7 +302,7 @@ sequenceDiagram
     participant B as Plugin B (Target)
     
     A->>SDK: flow.dispatch(payload, options)
-    SDK->>Bus: IPC: flow:dispatch
+    SDK->>Bus: TuffTransport: FlowEvents.dispatch
     Bus->>Bus: 验证发送者权限
     
     alt 指定了 preferredTarget

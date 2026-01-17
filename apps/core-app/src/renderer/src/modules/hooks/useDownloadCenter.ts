@@ -1,6 +1,7 @@
 import type { DownloadRequest, DownloadTask } from '@talex-touch/utils'
 import { DownloadPriority, DownloadStatus } from '@talex-touch/utils'
-import { getTouchSDK } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 /**
@@ -11,7 +12,8 @@ export function useDownloadCenter() {
   const downloadTasks = ref<DownloadTask[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
-  const touchSDK = getTouchSDK()
+  const transport = useTuffTransport()
+  const transportDisposers: Array<() => void> = []
 
   /**
    * Add a new download task
@@ -23,10 +25,10 @@ export function useDownloadCenter() {
       loading.value = true
       error.value = null
 
-      const response = await touchSDK.rawChannel.send('download:add-task', request)
+      const response = await transport.send(DownloadEvents.task.add, request)
 
       if (response.success) {
-        return response.taskId
+        return response.taskId || ''
       }
       else {
         throw new Error(response.error || 'Failed to add download task')
@@ -48,7 +50,7 @@ export function useDownloadCenter() {
    */
   const pauseTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:pause-task', taskId)
+      const response = await transport.send(DownloadEvents.task.pause, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to pause task')
@@ -67,7 +69,7 @@ export function useDownloadCenter() {
    */
   const resumeTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:resume-task', taskId)
+      const response = await transport.send(DownloadEvents.task.resume, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to resume task')
@@ -86,7 +88,7 @@ export function useDownloadCenter() {
    */
   const cancelTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:cancel-task', taskId)
+      const response = await transport.send(DownloadEvents.task.cancel, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to cancel task')
@@ -104,11 +106,12 @@ export function useDownloadCenter() {
    */
   const getAllTasks = async (): Promise<DownloadTask[]> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:get-tasks')
+      const response = await transport.send(DownloadEvents.list.getAll)
 
       if (response.success) {
-        downloadTasks.value = response.tasks
-        return response.tasks
+        const tasks = response.tasks || []
+        downloadTasks.value = tasks
+        return tasks
       }
       else {
         throw new Error(response.error || 'Failed to get tasks')
@@ -132,10 +135,10 @@ export function useDownloadCenter() {
    */
   const getTaskStatus = async (taskId: string): Promise<DownloadTask | null> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:get-task-status', taskId)
+      const response = await transport.send(DownloadEvents.task.getStatus, { taskId })
 
       if (response.success) {
-        return response.task
+        return response.task ?? null
       }
       else {
         throw new Error(response.error || 'Failed to get task status')
@@ -154,7 +157,7 @@ export function useDownloadCenter() {
    */
   const updateConfig = async (config: any): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:update-config', config)
+      const response = await transport.send(DownloadEvents.config.update, { config } as any)
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to update config')
@@ -173,7 +176,7 @@ export function useDownloadCenter() {
    */
   const retryTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:retry-task', taskId)
+      const response = await transport.send(DownloadEvents.task.retry, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to retry task')
@@ -191,7 +194,7 @@ export function useDownloadCenter() {
    */
   const pauseAllTasks = async (): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:pause-all-tasks')
+      const response = await transport.send(DownloadEvents.task.pauseAll)
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to pause all tasks')
@@ -209,7 +212,7 @@ export function useDownloadCenter() {
    */
   const resumeAllTasks = async (): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:resume-all-tasks')
+      const response = await transport.send(DownloadEvents.task.resumeAll)
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to resume all tasks')
@@ -227,7 +230,7 @@ export function useDownloadCenter() {
    */
   const cancelAllTasks = async (): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:cancel-all-tasks')
+      const response = await transport.send(DownloadEvents.task.cancelAll)
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to cancel all tasks')
@@ -246,7 +249,7 @@ export function useDownloadCenter() {
    */
   const openFile = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:open-file', taskId)
+      const response = await transport.send(DownloadEvents.file.open, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to open file')
@@ -265,7 +268,7 @@ export function useDownloadCenter() {
    */
   const showInFolder = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:show-in-folder', taskId)
+      const response = await transport.send(DownloadEvents.file.showInFolder, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to show in folder')
@@ -284,7 +287,7 @@ export function useDownloadCenter() {
    */
   const deleteFile = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:delete-file', taskId)
+      const response = await transport.send(DownloadEvents.file.delete, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to delete file')
@@ -309,7 +312,7 @@ export function useDownloadCenter() {
    */
   const removeTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:remove-task', taskId)
+      const response = await transport.send(DownloadEvents.task.remove, { taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to remove task')
@@ -335,7 +338,7 @@ export function useDownloadCenter() {
    */
   const updateTaskPriority = async (taskId: string, priority: number): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:update-priority', {
+      const response = await transport.send(DownloadEvents.task.updatePriority, {
         taskId,
         priority,
       })
@@ -363,10 +366,10 @@ export function useDownloadCenter() {
    */
   const getHistory = async (limit?: number): Promise<any[]> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:get-history', limit)
+      const response = await transport.send(DownloadEvents.history.get, { limit })
 
       if (response.success) {
-        return response.history
+        return response.history || []
       }
       else {
         throw new Error(response.error || 'Failed to get history')
@@ -384,7 +387,7 @@ export function useDownloadCenter() {
    */
   const clearHistory = async (): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:clear-history')
+      const response = await transport.send(DownloadEvents.history.clear)
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear history')
@@ -403,7 +406,7 @@ export function useDownloadCenter() {
    */
   const clearHistoryItem = async (historyId: string): Promise<void> => {
     try {
-      const response = await touchSDK.rawChannel.send('download:clear-history-item', historyId)
+      const response = await transport.send(DownloadEvents.history.clearItem, { historyId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear history item')
@@ -433,30 +436,13 @@ export function useDownloadCenter() {
    * Setup IPC event listeners for download events
    */
   const setupEventListeners = (): void => {
-    // 任务添加事件
-    touchSDK.onChannelEvent('download:task-added', (task: DownloadTask) => {
-      updateTaskInList(task)
-    })
-
-    // 任务进度更新事件
-    touchSDK.onChannelEvent('download:task-progress', (task: DownloadTask) => {
-      updateTaskInList(task)
-    })
-
-    // 任务完成事件
-    touchSDK.onChannelEvent('download:task-completed', (task: DownloadTask) => {
-      updateTaskInList(task)
-    })
-
-    // 任务失败事件
-    touchSDK.onChannelEvent('download:task-failed', (task: DownloadTask) => {
-      updateTaskInList(task)
-    })
-
-    // 任务更新事件
-    touchSDK.onChannelEvent('download:task-updated', (task: DownloadTask) => {
-      updateTaskInList(task)
-    })
+    transportDisposers.push(
+      transport.on(DownloadEvents.push.taskAdded, (task) => updateTaskInList(task)),
+      transport.on(DownloadEvents.push.taskProgress, (task) => updateTaskInList(task)),
+      transport.on(DownloadEvents.push.taskCompleted, (task) => updateTaskInList(task)),
+      transport.on(DownloadEvents.push.taskFailed, (task) => updateTaskInList(task)),
+      transport.on(DownloadEvents.push.taskUpdated, (task) => updateTaskInList(task)),
+    )
   }
 
   /**
@@ -617,7 +603,15 @@ export function useDownloadCenter() {
    * Cleanup download center
    */
   onUnmounted(() => {
-    // Cleanup event listeners
+    for (const dispose of transportDisposers) {
+      try {
+        dispose()
+      }
+      catch {
+        // ignore cleanup errors
+      }
+    }
+    transportDisposers.length = 0
   })
 
   return {

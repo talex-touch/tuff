@@ -79,6 +79,14 @@ We attach great importance to the security and privacy of our users. We guarante
 
 If you are looking for a cross-platform and beautifully designed desktop software that is easy to use, Tuff is your best choice. It not only provides rich functionality but also has a good user experience with an open community ecology. Welcome to use Tuff and experience a new desktop experience!
 
+## 📚 Documentation
+
+- **Docs Index**: `./docs/INDEX.md`
+- **Project PRD / Plans**: `./plan-prd/README.md`
+- **Repository Docs**: `./docs/`
+- **Contribution Guide**: `./.github/docs/contribution/CONTRIBUTING.md`
+- **Architecture / Agent Notes**: `./AGENTS.md`
+
 ## 🤝 License
 
 This project is open-sourced under the **MIT License**.

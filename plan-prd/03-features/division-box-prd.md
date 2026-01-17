@@ -48,7 +48,7 @@
 
 - 新增 `DivisionBoxManager` 类，维护 `Map<sessionId, DivisionBoxSession>`。
 - 每个 `DivisionBoxSession` 管理 `webContentsView`, `state`, `meta`, `keepAliveTimer`。
-- 通过 IPC 渠道暴露 `division-box:*` 操作指令给前端与插件。
+- 通过 **TuffTransport** 事件暴露操作指令给前端与插件（`DivisionBoxEvents.*`）。
 
 ### 5.2 渲染层与 UI
 
@@ -78,7 +78,7 @@
 ```ts
 // SDK 侧: 打开 DivisionBox
 async function openDivisionBox(config: OpenDivisionBoxConfig) {
-  const session = await channel.send<DivisionBoxSession>('division-box:open', config)
+  const session = await transport.send(DivisionBoxEvents.open, config)
   cache.set(session.sessionId, session)
   return session
 }

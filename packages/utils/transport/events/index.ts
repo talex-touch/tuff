@@ -39,6 +39,7 @@ import type {
   FeatureStats,
   GaugePayload,
   HistogramPayload,
+  NavigateRequest,
   OpenAppRequest,
   OpenExternalRequest,
   OSInfo,
@@ -47,12 +48,62 @@ import type {
   PerformanceSummary,
   PluginStats,
   ReadFileRequest,
+  RendererPerfReport,
   ReportMetricsRequest,
   ReportMetricsResponse,
+  SetLocaleRequest,
   ShowInFolderRequest,
   TrackDurationPayload,
   TrackEventPayload,
 } from './types/app'
+
+import type {
+  DownloadAddTaskRequest,
+  DownloadAddTaskResponse,
+  DownloadClearHistoryItemRequest,
+  DownloadGetConfigResponse,
+  DownloadGetErrorStatsResponse,
+  DownloadGetHistoryRequest,
+  DownloadGetHistoryResponse,
+  DownloadGetLogsResponse,
+  DownloadGetNotificationConfigResponse,
+  DownloadGetTaskStatusResponse,
+  DownloadGetTasksByStatusRequest,
+  DownloadGetTasksResponse,
+  DownloadGetTempStatsResponse,
+  DownloadGetStatsResponse,
+  DownloadMigrationNeededResponse,
+  DownloadMigrationRetryResponse,
+  DownloadMigrationStartResponse,
+  DownloadMigrationStatusResponse,
+  DownloadNotificationClickedPayload,
+  DownloadOpResponse,
+  DownloadTaskIdRequest,
+  DownloadTaskPayload,
+  DownloadTaskRetryingPayload,
+  DownloadUpdateConfigRequest,
+  DownloadUpdateNotificationConfigRequest,
+  DownloadUpdatePriorityRequest,
+} from './types/download'
+
+import type {
+  UpdateAutoCheckRequest,
+  UpdateAutoDownloadRequest,
+  UpdateAvailablePayload,
+  UpdateCachedReleaseRequest,
+  UpdateCheckRequest,
+  UpdateCheckResponse,
+  UpdateDownloadRequest,
+  UpdateDownloadResponse,
+  UpdateGetCachedReleaseResponse,
+  UpdateGetSettingsResponse,
+  UpdateGetStatusResponse,
+  UpdateIgnoreVersionRequest,
+  UpdateInstallRequest,
+  UpdateOpResponse,
+  UpdateRecordActionRequest,
+  UpdateUpdateSettingsRequest,
+} from './types/update'
 
 // ============================================================================
 // App Events
@@ -262,6 +313,35 @@ export const AppEvents = {
       .module('window')
       .event('focus')
       .define<void, void>(),
+
+    /**
+     * Request renderer to navigate.
+     */
+    navigate: defineEvent('app')
+      .module('window')
+      .event('navigate')
+      .define<NavigateRequest, void>(),
+
+    /**
+     * Request renderer to open download center.
+     */
+    openDownloadCenter: defineEvent('app')
+      .module('window')
+      .event('open-download-center')
+      .define<void, void>(),
+  },
+
+  /**
+   * I18n / locale events.
+   */
+  i18n: {
+    /**
+     * Set main-process locale.
+     */
+    setLocale: defineEvent('app')
+      .module('i18n')
+      .event('set-locale')
+      .define<SetLocaleRequest, void>(),
   },
 
   /**
@@ -535,7 +615,314 @@ export const AppEvents = {
       .module('analytics')
       .event('report')
       .define<ReportMetricsRequest, ReportMetricsResponse>(),
+
+    /**
+     * Report renderer performance incidents.
+     */
+    perfReport: defineEvent('app')
+      .module('analytics')
+      .event('perf-report')
+      .define<RendererPerfReport, void>(),
   },
+} as const
+
+// ============================================================================
+// Download Events
+// ============================================================================
+
+export const DownloadEvents = {
+  task: {
+    add: defineEvent('download')
+      .module('task')
+      .event('add')
+      .define<DownloadAddTaskRequest, DownloadAddTaskResponse>(),
+
+    pause: defineEvent('download')
+      .module('task')
+      .event('pause')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    resume: defineEvent('download')
+      .module('task')
+      .event('resume')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    cancel: defineEvent('download')
+      .module('task')
+      .event('cancel')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    retry: defineEvent('download')
+      .module('task')
+      .event('retry')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    remove: defineEvent('download')
+      .module('task')
+      .event('remove')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    getStatus: defineEvent('download')
+      .module('task')
+      .event('get-status')
+      .define<DownloadTaskIdRequest, DownloadGetTaskStatusResponse>(),
+
+    updatePriority: defineEvent('download')
+      .module('task')
+      .event('update-priority')
+      .define<DownloadUpdatePriorityRequest, DownloadOpResponse>(),
+
+    pauseAll: defineEvent('download')
+      .module('task')
+      .event('pause-all')
+      .define<void, DownloadOpResponse>(),
+
+    resumeAll: defineEvent('download')
+      .module('task')
+      .event('resume-all')
+      .define<void, DownloadOpResponse>(),
+
+    cancelAll: defineEvent('download')
+      .module('task')
+      .event('cancel-all')
+      .define<void, DownloadOpResponse>(),
+  },
+
+  list: {
+    getAll: defineEvent('download')
+      .module('list')
+      .event('get')
+      .define<void, DownloadGetTasksResponse>(),
+
+    getByStatus: defineEvent('download')
+      .module('list')
+      .event('get-by-status')
+      .define<DownloadGetTasksByStatusRequest, DownloadGetTasksResponse>(),
+  },
+
+  config: {
+    get: defineEvent('download')
+      .module('config')
+      .event('get')
+      .define<void, DownloadGetConfigResponse>(),
+
+    update: defineEvent('download')
+      .module('config')
+      .event('update')
+      .define<DownloadUpdateConfigRequest, DownloadOpResponse>(),
+
+    getNotification: defineEvent('download')
+      .module('config')
+      .event('get-notification')
+      .define<void, DownloadGetNotificationConfigResponse>(),
+
+    updateNotification: defineEvent('download')
+      .module('config')
+      .event('update-notification')
+      .define<DownloadUpdateNotificationConfigRequest, DownloadOpResponse>(),
+  },
+
+  history: {
+    get: defineEvent('download')
+      .module('history')
+      .event('get')
+      .define<DownloadGetHistoryRequest, DownloadGetHistoryResponse>(),
+
+    clear: defineEvent('download')
+      .module('history')
+      .event('clear')
+      .define<void, DownloadOpResponse>(),
+
+    clearItem: defineEvent('download')
+      .module('history')
+      .event('clear-item')
+      .define<DownloadClearHistoryItemRequest, DownloadOpResponse>(),
+  },
+
+  file: {
+    open: defineEvent('download')
+      .module('file')
+      .event('open')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    showInFolder: defineEvent('download')
+      .module('file')
+      .event('show-in-folder')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    delete: defineEvent('download')
+      .module('file')
+      .event('delete')
+      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+  },
+
+  maintenance: {
+    cleanupTemp: defineEvent('download')
+      .module('maintenance')
+      .event('cleanup-temp')
+      .define<void, DownloadOpResponse>(),
+  },
+
+  logs: {
+    get: defineEvent('download')
+      .module('logs')
+      .event('get')
+      .define<{ limit?: number }, DownloadGetLogsResponse>(),
+
+    getErrorStats: defineEvent('download')
+      .module('logs')
+      .event('get-error-stats')
+      .define<void, DownloadGetErrorStatsResponse>(),
+
+    clear: defineEvent('download')
+      .module('logs')
+      .event('clear')
+      .define<void, DownloadOpResponse>(),
+  },
+
+  temp: {
+    getStats: defineEvent('download')
+      .module('temp')
+      .event('get-stats')
+      .define<void, DownloadGetTempStatsResponse>(),
+  },
+
+  stats: {
+    get: defineEvent('download')
+      .module('stats')
+      .event('get')
+      .define<void, DownloadGetStatsResponse>(),
+  },
+
+  migration: {
+    checkNeeded: defineEvent('download')
+      .module('migration')
+      .event('check-needed')
+      .define<void, DownloadMigrationNeededResponse>(),
+
+    start: defineEvent('download')
+      .module('migration')
+      .event('start')
+      .define<void, DownloadMigrationStartResponse>(),
+
+    retry: defineEvent('download')
+      .module('migration')
+      .event('retry')
+      .define<void, DownloadMigrationRetryResponse>(),
+
+    status: defineEvent('download')
+      .module('migration')
+      .event('status')
+      .define<void, DownloadMigrationStatusResponse>(),
+  },
+
+  push: {
+    taskAdded: defineEvent('download')
+      .module('push')
+      .event('task-added')
+      .define<DownloadTaskPayload, void>(),
+
+    taskProgress: defineEvent('download')
+      .module('push')
+      .event('task-progress')
+      .define<DownloadTaskPayload, void>(),
+
+    taskCompleted: defineEvent('download')
+      .module('push')
+      .event('task-completed')
+      .define<DownloadTaskPayload, void>(),
+
+    taskFailed: defineEvent('download')
+      .module('push')
+      .event('task-failed')
+      .define<DownloadTaskPayload, void>(),
+
+    taskUpdated: defineEvent('download')
+      .module('push')
+      .event('task-updated')
+      .define<DownloadTaskPayload, void>(),
+
+    taskRetrying: defineEvent('download')
+      .module('push')
+      .event('task-retrying')
+      .define<DownloadTaskRetryingPayload, void>(),
+
+    notificationClicked: defineEvent('download')
+      .module('push')
+      .event('notification-clicked')
+      .define<DownloadNotificationClickedPayload, void>(),
+  },
+} as const
+
+// ============================================================================
+// Update Events
+// ============================================================================
+
+export const UpdateEvents = {
+  check: defineEvent('update')
+    .module('service')
+    .event('check')
+    .define<UpdateCheckRequest, UpdateCheckResponse>(),
+
+  getSettings: defineEvent('update')
+    .module('service')
+    .event('get-settings')
+    .define<void, UpdateGetSettingsResponse>(),
+
+  updateSettings: defineEvent('update')
+    .module('service')
+    .event('update-settings')
+    .define<UpdateUpdateSettingsRequest, UpdateOpResponse>(),
+
+  getStatus: defineEvent('update')
+    .module('service')
+    .event('get-status')
+    .define<void, UpdateGetStatusResponse>(),
+
+  clearCache: defineEvent('update')
+    .module('service')
+    .event('clear-cache')
+    .define<void, UpdateOpResponse>(),
+
+  getCachedRelease: defineEvent('update')
+    .module('service')
+    .event('get-cached-release')
+    .define<UpdateCachedReleaseRequest, UpdateGetCachedReleaseResponse>(),
+
+  recordAction: defineEvent('update')
+    .module('service')
+    .event('record-action')
+    .define<UpdateRecordActionRequest, UpdateOpResponse>(),
+
+  download: defineEvent('update')
+    .module('service')
+    .event('download')
+    .define<UpdateDownloadRequest, UpdateDownloadResponse>(),
+
+  install: defineEvent('update')
+    .module('service')
+    .event('install')
+    .define<UpdateInstallRequest, UpdateOpResponse>(),
+
+  ignoreVersion: defineEvent('update')
+    .module('service')
+    .event('ignore-version')
+    .define<UpdateIgnoreVersionRequest, UpdateOpResponse>(),
+
+  setAutoDownload: defineEvent('update')
+    .module('service')
+    .event('set-auto-download')
+    .define<UpdateAutoDownloadRequest, UpdateOpResponse>(),
+
+  setAutoCheck: defineEvent('update')
+    .module('service')
+    .event('set-auto-check')
+    .define<UpdateAutoCheckRequest, UpdateOpResponse>(),
+
+  available: defineEvent('update')
+    .module('push')
+    .event('available')
+    .define<UpdateAvailablePayload, void>(),
 } as const
 
 // ============================================================================

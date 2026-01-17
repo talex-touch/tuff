@@ -5,8 +5,9 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { shell } from 'electron'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { desc, eq } from 'drizzle-orm'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import { BaseModule } from '../abstract-base-module'
@@ -71,6 +72,9 @@ export class DownloadCenterModule extends BaseModule {
   private readonly networkMonitorTaskId = 'download-center.network-monitor'
   private readonly progressUpdateTaskId = 'download-center.progress-update'
 
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private transportDisposers: Array<() => void> = []
+
   // Performance optimizations
   private taskCache: Map<string, DownloadTask> = new Map() // In-memory task cache
   private lastProgressBroadcast: Map<string, number> = new Map() // Progress throttling
@@ -119,8 +123,14 @@ export class DownloadCenterModule extends BaseModule {
     this.downloadWorkers = []
     this.initializeWorkers()
 
-    // 注册IPC通道
-    this.registerChannels()
+    const channel = ($app as any).channel as any
+    this.transport = getTuffTransportMain(
+      channel,
+      (channel as any)?.keyManager ?? channel,
+    )
+
+    // 注册Transport通道
+    this.registerTransportHandlers()
 
     // 启动网络监控
     this.startNetworkMonitoring()
@@ -139,6 +149,16 @@ export class DownloadCenterModule extends BaseModule {
 
     this.pollingService.unregister(this.networkMonitorTaskId)
     this.pollingService.unregister(this.progressUpdateTaskId)
+
+    for (const dispose of this.transportDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
+    this.transport = null
 
     // Stop all download workers
     // Workers will naturally stop when isRunning is false and task scheduler exits
@@ -782,374 +802,282 @@ export class DownloadCenterModule extends BaseModule {
     }
   }
 
-  // 注册IPC通道
-  private registerChannels(): void {
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:add-task',
-      async ({ data: request }: any) => {
+  private registerTransportHandlers(): void {
+    if (!this.transport) {
+      return
+    }
+
+    const tx = this.transport
+
+    this.transportDisposers.push(
+      tx.on(DownloadEvents.task.add, async (request) => {
         try {
           const taskId = await this.addTask(request)
           return { success: true, taskId }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:pause-task',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.task.pause, async (payload) => {
         try {
-          await this.pauseTask(taskId)
+          await this.pauseTask(payload.taskId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:resume-task',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.task.resume, async (payload) => {
         try {
-          await this.resumeTask(taskId)
+          await this.resumeTask(payload.taskId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:cancel-task',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.task.cancel, async (payload) => {
         try {
-          await this.cancelTask(taskId)
+          await this.cancelTask(payload.taskId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(ChannelType.MAIN, 'download:get-tasks', async () => {
-      try {
-        const tasks = this.getAllTasks()
-        return { success: true, tasks }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:get-task-status',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.list.getAll, async () => {
         try {
-          const task = this.getTaskStatus(taskId)
-          return { success: true, task }
-        }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
-
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:update-config',
-      async ({ data: config }: any) => {
-        try {
-          this.updateConfig(config)
-          return { success: true }
-        }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
-
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:retry-task',
-      async ({ data: taskId }: any) => {
-        try {
-          await this.retryTask(taskId)
-          return { success: true }
-        }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:pause-all-tasks', async () => {
-      try {
-        await this.pauseAllTasks()
-        return { success: true }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:resume-all-tasks', async () => {
-      try {
-        await this.resumeAllTasks()
-        return { success: true }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:cancel-all-tasks', async () => {
-      try {
-        await this.cancelAllTasks()
-        return { success: true }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:get-tasks-by-status',
-      async ({ data: status }: any) => {
-        try {
-          const tasks = this.getTasksByStatus(status)
+          const tasks = this.getAllTasks()
           return { success: true, tasks }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:update-priority',
-      async ({ data }: any) => {
+      tx.on(DownloadEvents.task.getStatus, async (payload) => {
         try {
-          await this.updateTaskPriority(data.taskId, data.priority)
+          const task = this.getTaskStatus(payload.taskId)
+          return { success: true, task }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.config.update, async (payload) => {
+        try {
+          this.updateConfig(payload.config)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:remove-task',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.task.retry, async (payload) => {
         try {
-          await this.removeTask(taskId)
+          await this.retryTask(payload.taskId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:get-history',
-      async ({ data: limit }: any) => {
+      tx.on(DownloadEvents.task.pauseAll, async () => {
         try {
-          const history = await this.getTaskHistory(limit)
+          await this.pauseAllTasks()
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.task.resumeAll, async () => {
+        try {
+          await this.resumeAllTasks()
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.task.cancelAll, async () => {
+        try {
+          await this.cancelAllTasks()
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.list.getByStatus, async (payload) => {
+        try {
+          const tasks = this.getTasksByStatus(payload.status)
+          return { success: true, tasks }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.task.updatePriority, async (payload) => {
+        try {
+          await this.updateTaskPriority(payload.taskId, payload.priority)
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.task.remove, async (payload) => {
+        try {
+          await this.removeTask(payload.taskId)
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.history.get, async (payload) => {
+        try {
+          const history = await this.getTaskHistory(payload?.limit)
           return { success: true, history }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(ChannelType.MAIN, 'download:clear-history', async () => {
-      try {
-        await this.clearHistory()
-        return { success: true }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:clear-history-item',
-      async ({ data: historyId }: any) => {
+      tx.on(DownloadEvents.history.clear, async () => {
         try {
-          await this.clearHistoryItem(historyId)
+          await this.clearHistory()
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:open-file',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.history.clearItem, async (payload) => {
         try {
-          await this.openFile(taskId)
+          await this.clearHistoryItem(payload.historyId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:show-in-folder',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.file.open, async (payload) => {
         try {
-          await this.showInFolder(taskId)
+          await this.openFile(payload.taskId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:delete-file',
-      async ({ data: taskId }: any) => {
+      tx.on(DownloadEvents.file.showInFolder, async (payload) => {
         try {
-          await this.deleteFile(taskId)
+          await this.showInFolder(payload.taskId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(ChannelType.MAIN, 'download:cleanup-temp', async () => {
-      try {
-        await this.cleanupTempFiles()
-        return { success: true }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:get-config', async () => {
-      try {
-        const config = this.getConfig()
-        return { success: true, config }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:update-notification-config',
-      async ({ data: config }: any) => {
+      tx.on(DownloadEvents.file.delete, async (payload) => {
         try {
-          this.updateNotificationConfig(config)
+          await this.deleteFile(payload.taskId)
           return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
-        }
-      },
-    )
+      }),
 
-    $app.channel.regChannel(ChannelType.MAIN, 'download:get-notification-config', async () => {
-      try {
-        const config = this.getNotificationConfig()
-        return { success: true, config }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    // 错误日志相关通道
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'download:get-logs',
-      async ({ data: limit }: any) => {
+      tx.on(DownloadEvents.maintenance.cleanupTemp, async () => {
         try {
-          const logs = await this.errorLogger.readLogs(limit)
+          await this.cleanupTempFiles()
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.config.get, async () => {
+        try {
+          const config = this.getConfig()
+          return { success: true, config }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.config.updateNotification, async (payload) => {
+        try {
+          this.updateNotificationConfig(payload.config as Partial<NotificationConfig>)
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.config.getNotification, async () => {
+        try {
+          const config = this.getNotificationConfig()
+          return { success: true, config }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.logs.get, async (payload) => {
+        try {
+          const logs = await this.errorLogger.readLogs(payload?.limit)
           return { success: true, logs }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-        catch (error: any) {
-          return { success: false, error: error.message }
+      }),
+
+      tx.on(DownloadEvents.logs.getErrorStats, async () => {
+        try {
+          const stats = await this.errorLogger.getErrorStats()
+          return { success: true, stats }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
         }
-      },
+      }),
+
+      tx.on(DownloadEvents.logs.clear, async () => {
+        try {
+          await this.errorLogger.clearLogs()
+          return { success: true }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.temp.getStats, async () => {
+        try {
+          const stats = await this.getTempFileStats()
+          return { success: true, stats }
+        } catch (error: any) {
+          return { success: false, error: error?.message ?? String(error) }
+        }
+      }),
+
+      tx.on(DownloadEvents.migration.checkNeeded, async () => {
+        return { success: true, needed: false }
+      }),
+
+      tx.on(DownloadEvents.migration.start, async () => {
+        return { success: true, result: { migrated: true } }
+      }),
+
+      tx.on(DownloadEvents.migration.retry, async () => {
+        return { success: true, result: { migrated: true } }
+      }),
+
+      tx.on(DownloadEvents.migration.status, async () => {
+        return { success: true, currentVersion: 1, appliedMigrations: [] }
+      }),
     )
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:get-error-stats', async () => {
-      try {
-        const stats = await this.errorLogger.getErrorStats()
-        return { success: true, stats }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:clear-logs', async () => {
-      try {
-        await this.errorLogger.clearLogs()
-        return { success: true }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    // 临时文件管理相关通道
-    $app.channel.regChannel(ChannelType.MAIN, 'download:get-temp-stats', async () => {
-      try {
-        const stats = await this.getTempFileStats()
-        return { success: true, stats }
-      }
-      catch (error: any) {
-        return { success: false, error: error.message }
-      }
-    })
-
-    // 迁移相关通道 - 主数据库已统一管理迁移，这些通道返回已完成状态
-    $app.channel.regChannel(ChannelType.MAIN, 'download:check-migration-needed', async () => {
-      return { success: true, needed: false }
-    })
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:start-migration', async () => {
-      return { success: true, result: { migrated: true } }
-    })
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:retry-migration', async () => {
-      return { success: true, result: { migrated: true } }
-    })
-
-    $app.channel.regChannel(ChannelType.MAIN, 'download:get-migration-status', async () => {
-      return { success: true, currentVersion: 1, appliedMigrations: [] }
-    })
   }
 
   // 启动网络监控
@@ -1258,7 +1186,7 @@ export class DownloadCenterModule extends BaseModule {
           )
 
           // 广播重试事件
-          $app.channel.send(ChannelType.MAIN, 'download:task-retrying', {
+          this.transport?.broadcast(DownloadEvents.push.taskRetrying, {
             taskId: task.id,
             attempt,
             error: error.userMessage,
@@ -1350,29 +1278,29 @@ export class DownloadCenterModule extends BaseModule {
   }
 
   private broadcastTaskAdded(task: DownloadTask): void {
-    $app.channel.send(ChannelType.MAIN, 'download:task-added', task)
+    this.transport?.broadcast(DownloadEvents.push.taskAdded, task)
   }
 
   private broadcastTaskProgress(task: DownloadTask): void {
-    $app.channel.send(ChannelType.MAIN, 'download:task-progress', task)
+    this.transport?.broadcast(DownloadEvents.push.taskProgress, task)
   }
 
   private broadcastTaskCompleted(task: DownloadTask): void {
-    $app.channel.send(ChannelType.MAIN, 'download:task-completed', task)
+    this.transport?.broadcast(DownloadEvents.push.taskCompleted, task)
 
     // Show notification for completed download
     this.notificationService.showDownloadCompleteNotification(task)
   }
 
   private broadcastTaskFailed(task: DownloadTask): void {
-    $app.channel.send(ChannelType.MAIN, 'download:task-failed', task)
+    this.transport?.broadcast(DownloadEvents.push.taskFailed, task)
 
     // Show notification for failed download
     this.notificationService.showDownloadFailedNotification(task)
   }
 
   private broadcastTaskUpdated(task: DownloadTask): void {
-    $app.channel.send(ChannelType.MAIN, 'download:task-updated', task)
+    this.transport?.broadcast(DownloadEvents.push.taskUpdated, task)
   }
 
   /**
@@ -1382,7 +1310,7 @@ export class DownloadCenterModule extends BaseModule {
     console.log(`[DownloadCenter] Notification clicked: ${taskId}, action: ${action}`)
 
     // Broadcast notification click event to renderer
-    $app.channel.send(ChannelType.MAIN, 'download:notification-clicked', {
+    this.transport?.broadcast(DownloadEvents.push.notificationClicked, {
       taskId,
       action,
     })

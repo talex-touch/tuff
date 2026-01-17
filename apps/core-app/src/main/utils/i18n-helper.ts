@@ -3,7 +3,7 @@
  * Provides translation support for error messages and notifications in the main process
  */
 
-import { app, ipcMain } from 'electron'
+import { app } from 'electron'
 import enUS from '../../renderer/src/modules/lang/en-US.json'
 import zhCN from '../../renderer/src/modules/lang/zh-CN.json'
 
@@ -35,12 +35,6 @@ export function initI18n(): void {
   const systemLocale = app.getLocale()
   currentLocale = resolveLocale(systemLocale)
   console.log(`[I18n] Initialized with locale: ${currentLocale} (system: ${systemLocale})`)
-
-  // Register IPC handler for locale changes from renderer
-  ipcMain.on('app:set-locale', (_event, locale: Locale) => {
-    console.log(`[I18n] Received locale change request: ${locale}`)
-    setLocale(locale)
-  })
 }
 
 /**

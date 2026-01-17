@@ -69,6 +69,8 @@
      - SDK：`packages/utils/plugin/sdk/flow.ts`
      - 类型：`packages/utils/types/flow.ts`
      - 选择面板：`apps/core-app/src/renderer/src/components/flow/FlowSelector.vue`
+   - **已完成**
+     - IPC 全量迁移：Flow/DivisionBox 全部走 TuffTransport（renderer/main/plugin SDK），移除 legacy `flow:*`/`FlowIPCChannel` 通道
    - **缺口**
      - 权限中心接入（Flow 发送/接收、目标授权记忆等）
      - Selector ↔ 主进程 target selection 的端到端闭环验收
@@ -79,6 +81,8 @@
      - 主进程：`apps/core-app/src/main/modules/division-box/`
      - SDK：`packages/utils/plugin/sdk/division-box.ts`
      - Nexus 文档：`apps/nexus/content/docs/dev/api/division-box.zh.md`
+   - **已完成**
+     - IPC 全量迁移：DivisionBox 全部走 TuffTransport（renderer/main），移除 legacy `division-box:*` 通道
    - **缺口**
      - 生命周期事件（prepare/attach/active/inactive/detach/destroy）对插件侧开放并统一进 SDK
      - 与 FlowTransfer 的权限/触发入口对齐

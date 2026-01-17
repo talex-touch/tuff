@@ -1,4 +1,16 @@
-# Everything Integration - Nexus Documentation
+# Nexus Everything Integration
+
+## Scope
+
+- Nexus-side documentation for Everything integration and related SDK/API surface.
+
+## Summary
+
+- Align Nexus documentation with the CoreBox Everything provider behavior.
+
+## References
+
+- Docs Index: `docs/INDEX.md`
 
 ## Overview
 

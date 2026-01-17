@@ -24,6 +24,8 @@ import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { buildVerificationModule } from '../modules/build-verification'
 import { activeAppService } from '../modules/system/active-app'
 import { enterPerfContext } from '../utils/perf-context'
+import { setLocale } from '../utils/i18n-helper'
+import { perfMonitor } from '../utils/perf-monitor'
 
 const execFileAsync = promisify(execFile)
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
@@ -446,6 +448,15 @@ export class CommonChannelModule extends BaseModule {
     }
 
     this.transportDisposers.push(
+      this.transport.on(AppEvents.i18n.setLocale, (payload) => {
+        const locale = (payload as any)?.locale
+        if (typeof locale === 'string') {
+          setLocale(locale as any)
+        }
+      }),
+      this.transport.on(AppEvents.analytics.perfReport, (payload) => {
+        perfMonitor.recordRendererReport(payload as any)
+      }),
       this.transport.on<ReadFileRequest, string>(AppEvents.system.readFile, async (payload) => {
         const source = payload?.source?.trim()
         const resolvedPath = source ? resolveLocalFilePath(source) : null

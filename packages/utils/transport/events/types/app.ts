@@ -199,6 +199,51 @@ export interface ReadFileRequest {
   source: string
 }
 
+// =========================================================================
+// UI / Navigation Types
+// =========================================================================
+
+export interface NavigateRequest {
+  path: string
+}
+
+// =========================================================================
+// Locale / I18n Types
+// =========================================================================
+
+export type Locale = 'zh-CN' | 'en-US'
+
+export interface SetLocaleRequest {
+  locale: Locale
+}
+
+// =========================================================================
+// Renderer Perf Report Types
+// =========================================================================
+
+export type RendererPerfReportKind =
+  | 'channel.sendSync.slow'
+  | 'channel.send.slow'
+  | 'channel.send.timeout'
+  | 'channel.send.errorReply'
+  | 'ui.route.navigate'
+  | 'ui.route.render'
+  | 'ui.route.transition'
+  | 'ui.details.fetch'
+  | 'ui.details.render'
+  | 'ui.details.total'
+  | 'ui.component.load'
+
+export type RendererPerfReport = {
+  kind: RendererPerfReportKind
+  eventName: string
+  durationMs: number
+  at: number
+  payloadPreview?: string
+  stack?: string
+  meta?: Record<string, unknown>
+}
+
 // ============================================================================
 // Build Verification Types
 // ============================================================================

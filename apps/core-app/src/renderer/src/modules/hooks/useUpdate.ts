@@ -13,7 +13,8 @@ import {
 
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
-import { getTouchSDK } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
@@ -58,7 +59,7 @@ export interface AppVersion {
 export class AppUpdate {
   private static instance: AppUpdate
   private settings: UpdateSettings
-  private touchSDK: ReturnType<typeof getTouchSDK>
+  private transport = useTuffTransport()
   private static readonly CHANNEL_TIMEOUT = 4000
 
   version: AppVersion
@@ -66,13 +67,6 @@ export class AppUpdate {
   private constructor() {
     const pkg = window.$nodeApi.getPackageJSON()
     this.version = this._versionResolver(pkg.version)
-    try {
-      this.touchSDK = getTouchSDK()
-    }
-    catch (error) {
-      console.warn('TouchSDK not initialized, using fallback:', error)
-      this.touchSDK = null as any
-    }
     this.settings = this.getDefaultSettings()
   }
 
@@ -379,21 +373,50 @@ export class AppUpdate {
   }
 
   private async sendRequest(channel: string, payload?: unknown): Promise<any> {
-    if (!this.touchSDK || !this.touchSDK.rawChannel) {
-      throw new Error('TouchSDK not initialized')
-    }
-
     try {
-      return await withTimeout(
-        this.touchSDK.rawChannel.send(channel, payload),
-        AppUpdate.CHANNEL_TIMEOUT,
-      )
+      switch (channel) {
+        case 'update:check':
+          return await withTimeout(
+            this.transport.send(UpdateEvents.check, (payload || {}) as any),
+            AppUpdate.CHANNEL_TIMEOUT,
+          )
+        case 'update:get-settings':
+          return await withTimeout(
+            this.transport.send(UpdateEvents.getSettings),
+            AppUpdate.CHANNEL_TIMEOUT,
+          )
+        case 'update:update-settings':
+          return await withTimeout(
+            this.transport.send(UpdateEvents.updateSettings, { settings: payload as any }),
+            AppUpdate.CHANNEL_TIMEOUT,
+          )
+        case 'update:clear-cache':
+          return await withTimeout(
+            this.transport.send(UpdateEvents.clearCache),
+            AppUpdate.CHANNEL_TIMEOUT,
+          )
+        case 'update:get-status':
+          return await withTimeout(
+            this.transport.send(UpdateEvents.getStatus),
+            AppUpdate.CHANNEL_TIMEOUT,
+          )
+        case 'update:get-cached-release':
+          return await withTimeout(
+            this.transport.send(UpdateEvents.getCachedRelease, (payload || {}) as any),
+            AppUpdate.CHANNEL_TIMEOUT,
+          )
+        case 'update:record-action':
+          return await withTimeout(
+            this.transport.send(UpdateEvents.recordAction, (payload || {}) as any),
+            AppUpdate.CHANNEL_TIMEOUT,
+          )
+        default:
+          throw new Error(`Unsupported update channel: ${channel}`)
+      }
     }
     catch (error) {
       if (error instanceof TimeoutError) {
-        console.warn(
-          `[AppUpdate] ${channel} timed out after ${AppUpdate.CHANNEL_TIMEOUT}ms`,
-        )
+        throw new Error(`Update request timed out for channel: ${channel}`)
       }
       throw error
     }
@@ -612,9 +635,9 @@ export function useApplicationUpgrade() {
    */
   function setupUpdateListener(): void {
     try {
-      const touchSDK = getTouchSDK()
+      const transport = useTuffTransport()
 
-      touchSDK.onChannelEvent('update:available', (data: unknown) => {
+      transport.on(UpdateEvents.available, (data) => {
         console.log('[useApplicationUpgrade] Received update notification:', data)
 
         if ((data as any).hasUpdate && (data as any).release) {

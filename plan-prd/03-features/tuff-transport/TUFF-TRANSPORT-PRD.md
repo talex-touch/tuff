@@ -9,11 +9,11 @@
 - Error types and factory functions
 - Plugin security context types (compatible with existing key mechanism)
 - Legacy API marked with `@deprecated` TSDoc
+- `useTuffTransport()` / `getTuffTransportMain()` (SDK functions)
 
 ⏳ **Pending Implementation:**
 - BatchManager (SDK implementation)
 - StreamServer/StreamClient (MessagePort)
-- `useTuffTransport()` / `getTuffTransportMain()` (SDK functions)
 - Compatibility layer
 
 ## 1. Overview

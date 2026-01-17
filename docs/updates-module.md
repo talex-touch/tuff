@@ -2,6 +2,18 @@
 
 > 本文档梳理应用内更新系统现状，并规划官网 Updates 模块、Intelligence 中心、本地发布流程。
 
+## Scope
+
+- UpdateServiceModule / UpdateSystem architecture and IPC surface.
+
+## Summary
+
+- Current implementation uses legacy IPC channels (`update:*`).
+
+## References
+
+- Docs Index: `docs/INDEX.md`
+
 ---
 
 ## 1. 现有更新系统架构

@@ -8,6 +8,8 @@
 - `apps/core-app/src/main/modules/storage/index.ts`（StorageEvents get/getVersioned/save/delete/updated）
 - `apps/core-app/src/main/modules/box-tool/core-box/index.ts`（布局更新）
 - `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`（CoreBoxEvents 处理器）
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`（FlowEvents handlers + sessionUpdate/deliver push）
+- `apps/core-app/src/main/modules/division-box/ipc.ts`（DivisionBoxEvents handlers + broadcast）
 
 ### 渲染进程
 - `apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts`
@@ -22,6 +24,8 @@
 - `apps/core-app/src/renderer/src/views/base/settings/SettingMessages.vue`（仅 dev）
 - `packages/utils/renderer/storage/base-storage.ts`（TouchStorage 走 StorageEvents）
 - `packages/utils/renderer/storage/storage-subscription.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`（FlowEvents.triggerDetach/triggerTransfer）
+- `apps/core-app/src/renderer/src/modules/division-box/store/division-box.ts`（DivisionBoxEvents send/on）
 
 ## 部分迁移（TuffTransport + Legacy 并存）
 - `apps/core-app/src/main/modules/storage/index.ts`：仍保留 `storage:get/storage:save/storage:update` 的 TouchChannel 方式（同步 / legacy 兼容）。

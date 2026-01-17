@@ -14,6 +14,8 @@ import type { TouchApp } from '../../../core/touch-app'
 import { app } from 'electron'
 import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { createLogger } from '../../../utils/logger'
 import { genTouchApp } from '../../../core'
 import { getCoreBoxWindow } from './window'
@@ -195,12 +197,18 @@ export class MetaOverlayManager {
           return
         }
 
-        // Send show message to renderer via IPC
-        this.metaView.webContents.send('meta-overlay:show', {
-          type: 'meta-overlay:show',
+        const channel = genTouchApp().channel as any
+        const tx = getTuffTransportMain(
+          channel,
+          channel?.keyManager ?? channel,
+        )
+
+        tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.show, {
           item: request.item,
-          actions: allActions
-        })
+          builtinActions: request.builtinActions,
+          itemActions: request.itemActions,
+          pluginActions: request.pluginActions,
+        }).catch(() => {})
 
         metaOverlayLog.debug('Sent show message to MetaOverlay renderer')
 
@@ -236,9 +244,14 @@ export class MetaOverlayManager {
     this.metaView.setVisible(false)
     this.isVisible = false
 
-    // Send hide message to renderer via IPC
     if (!this.metaView.webContents.isDestroyed()) {
-      this.metaView.webContents.send('meta-overlay:hide')
+      const channel = genTouchApp().channel as any
+      const tx = getTuffTransportMain(
+        channel,
+        channel?.keyManager ?? channel,
+      )
+
+      tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined as any).catch(() => {})
     }
 
     // Return focus to parent window

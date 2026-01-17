@@ -1,5 +1,18 @@
 # Everything Search Integration for Windows
 
+## Scope
+
+- Windows-only integration of Everything (es.exe) as a file search provider.
+
+## Summary
+
+- Goal: sub-50ms file search using Everything index.
+- Requirement: Everything installed + CLI available.
+
+## References
+
+- Docs Index: `docs/INDEX.md`
+
 ## Overview
 
 Tuff now integrates with [Everything](https://www.voidtools.com/) search engine on Windows for ultra-fast file searching. Everything provides instant file search results by maintaining a real-time index of all files on NTFS volumes.
