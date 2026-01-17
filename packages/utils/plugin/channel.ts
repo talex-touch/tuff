@@ -10,6 +10,7 @@ import {
   DataCode,
 } from '../channel'
 import { hasWindow } from '../env'
+import { formatPayloadPreview } from '../common/utils/payload-preview'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 
@@ -201,16 +202,7 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   private formatPayloadPreview(payload: unknown): string {
-    if (payload === null || payload === undefined)
-      return String(payload)
-    if (typeof payload === 'string')
-      return payload.length > 200 ? `${payload.slice(0, 200)}…` : payload
-    try {
-      return JSON.stringify(payload)
-    }
-    catch {
-      return '[unserializable]'
-    }
+    return formatPayloadPreview(payload)
   }
 
   send(eventName: string, arg: any): Promise<any> {
