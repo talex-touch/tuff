@@ -28,11 +28,13 @@
     "@sentry/nuxt": "catalog:",
     "@talex-touch/tuffex": "workspace:*",
     "@talex-touch/utils": "workspace:*",
+    "fighting-design": "catalog:",
     "gsap": "catalog:",
     "jszip": "catalog:",
     "motion-v": "catalog:",
     "ogl": "catalog:",
-    "simplex-noise": "catalog:"
+    "simplex-noise": "catalog:",
+    "typeit": "catalog:"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",

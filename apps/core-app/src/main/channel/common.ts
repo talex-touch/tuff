@@ -27,6 +27,7 @@ import type { Locale } from '../utils/i18n-helper'
 import { setLocale } from '../utils/i18n-helper'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
+import { tempFileService } from '../service/temp-file.service'
 
 const execFileAsync = promisify(execFile)
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
@@ -35,6 +36,19 @@ const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
+const PLUGIN_TEMP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+
+function safeNamespaceSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 64) || 'unknown'
+}
+
+function resolveTfilePath(urlOrPath: string): string {
+  if (!urlOrPath) return ''
+  if (urlOrPath.startsWith(`${FILE_SCHEMA}://`)) {
+    return decodeURIComponent(urlOrPath.slice(`${FILE_SCHEMA}://`.length))
+  }
+  return urlOrPath
+}
 
 interface ReadFileCacheEntry {
   content: string
@@ -328,6 +342,101 @@ export class CommonChannelModule extends BaseModule {
       activeAppService.getActiveApp(Boolean(data?.forceRefresh))
     channel.regChannel(ChannelType.MAIN, 'system:get-active-app', systemGetActiveApp)
     channel.regChannel(ChannelType.PLUGIN, 'system:get-active-app', systemGetActiveApp)
+
+    const registeredTempNamespaces = new Map<string, number | null>()
+    const ensureTempNamespace = (namespace: string, retentionMs: number | null) => {
+      const normalized = namespace.replace(/^\/+/, '').replace(/\\/g, '/')
+      if (registeredTempNamespaces.has(normalized)) return
+      registeredTempNamespaces.set(normalized, retentionMs)
+      tempFileService.registerNamespace({ namespace: normalized, retentionMs })
+      tempFileService.startCleanup()
+    }
+
+    channel.regChannel(ChannelType.MAIN, 'temp-file:create', async ({ data }) => {
+      const namespace = typeof data?.namespace === 'string' ? data.namespace : 'misc'
+      const retentionMs =
+        typeof data?.retentionMs === 'number' &&
+        Number.isFinite(data.retentionMs) &&
+        data.retentionMs > 0
+          ? Number(data.retentionMs)
+          : 24 * 60 * 60 * 1000
+
+      ensureTempNamespace(namespace, retentionMs)
+
+      const res = await tempFileService.createFile({
+        namespace,
+        ext: typeof data?.ext === 'string' ? data.ext : undefined,
+        text: typeof data?.text === 'string' ? data.text : undefined,
+        base64: typeof data?.base64 === 'string' ? data.base64 : undefined,
+        prefix: typeof data?.prefix === 'string' ? data.prefix : 'temp'
+      })
+
+      return {
+        url: `${FILE_SCHEMA}://${res.path}`,
+        sizeBytes: res.sizeBytes,
+        createdAt: res.createdAt
+      }
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'temp-file:delete', async ({ data }) => {
+      const target =
+        typeof data?.url === 'string' ? data.url : typeof data?.path === 'string' ? data.path : ''
+      const filePath = resolveTfilePath(target)
+      const success = filePath ? await tempFileService.deleteFile(filePath) : false
+      return { success }
+    })
+
+    channel.regChannel(ChannelType.PLUGIN, 'temp-file:create', async (ctx: any) => {
+      const pluginName = typeof ctx?.plugin === 'string' ? ctx.plugin : 'unknown'
+      const segment = safeNamespaceSegment(pluginName)
+      const namespace = `plugins/${segment}`
+      const retentionMs =
+        typeof ctx?.data?.retentionMs === 'number' &&
+        Number.isFinite(ctx.data.retentionMs) &&
+        ctx.data.retentionMs > 0
+          ? Number(ctx.data.retentionMs)
+          : PLUGIN_TEMP_RETENTION_MS
+
+      ensureTempNamespace(namespace, retentionMs)
+
+      const res = await tempFileService.createFile({
+        namespace,
+        ext: typeof ctx?.data?.ext === 'string' ? ctx.data.ext : undefined,
+        text: typeof ctx?.data?.text === 'string' ? ctx.data.text : undefined,
+        base64: typeof ctx?.data?.base64 === 'string' ? ctx.data.base64 : undefined,
+        prefix: typeof ctx?.data?.prefix === 'string' ? ctx.data.prefix : segment
+      })
+
+      return {
+        url: `${FILE_SCHEMA}://${res.path}`,
+        sizeBytes: res.sizeBytes,
+        createdAt: res.createdAt
+      }
+    })
+
+    channel.regChannel(ChannelType.PLUGIN, 'temp-file:delete', async (ctx: any) => {
+      const pluginName = typeof ctx?.plugin === 'string' ? ctx.plugin : 'unknown'
+      const segment = safeNamespaceSegment(pluginName)
+      const pluginDir = tempFileService.resolveNamespaceDir(`plugins/${segment}`)
+
+      const target =
+        typeof ctx?.data?.url === 'string'
+          ? ctx.data.url
+          : typeof ctx?.data?.path === 'string'
+            ? ctx.data.path
+            : ''
+      const filePath = resolveTfilePath(target)
+      if (!filePath) return { success: false }
+
+      const resolvedPluginDir = path.resolve(pluginDir)
+      const resolvedFilePath = path.resolve(filePath)
+      if (!resolvedFilePath.startsWith(`${resolvedPluginDir}${path.sep}`)) {
+        return { success: false }
+      }
+
+      const success = await tempFileService.deleteFile(resolvedFilePath)
+      return { success }
+    })
 
     channel.regChannel(ChannelType.MAIN, 'common:cwd', process.cwd)
 

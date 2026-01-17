@@ -52,6 +52,9 @@ catalogs:
     '@sentry/nuxt':
       specifier: ^10.20.0
       version: 10.27.0
+    fighting-design:
+      specifier: 0.25.1
+      version: 0.25.1
     gsap:
       specifier: ^3.12.5
       version: 3.13.0
@@ -64,12 +67,21 @@ catalogs:
     ogl:
       specifier: ^1.0.11
       version: 1.0.11
+    react:
+      specifier: ^19.2.1
+      version: 19.2.1
+    react-dom:
+      specifier: ^19.2.1
+      version: 19.2.1
     sass:
       specifier: ^1.89.2
       version: 1.94.0
     simplex-noise:
       specifier: ^4.0.3
       version: 4.0.3
+    typeit:
+      specifier: ^8.8.7
+      version: 8.8.7
   dev:
     '@antfu/eslint-config':
       specifier: ^4.17.0
@@ -546,6 +558,9 @@ importers:
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      fighting-design:
+        specifier: 'catalog:'
+        version: 0.25.1
       gsap:
         specifier: 'catalog:'
         version: 3.13.0
@@ -561,6 +576,9 @@ importers:
       simplex-noise:
         specifier: 'catalog:'
         version: 4.0.3
+      typeit:
+        specifier: 'catalog:'
+        version: 8.8.7
     devDependencies:
       '@antfu/eslint-config':
         specifier: catalog:dev
@@ -626,10 +644,10 @@ importers:
         specifier: catalog:frontend
         version: 3.0.4(typescript@5.9.3)(vue@3.5.24(typescript@5.9.3))
       react:
-        specifier: ^19.2.1
+        specifier: 'catalog:'
         version: 19.2.1
       react-dom:
-        specifier: ^19.2.1
+        specifier: 'catalog:'
         version: 19.2.1(react@19.2.1)
       sass:
         specifier: 'catalog:'
@@ -5600,6 +5618,9 @@ packages:
   '@types/vinyl@2.0.12':
     resolution: {integrity: sha512-Sr2fYMBUVGYq8kj3UthXFAu5UN6ZW+rYr4NACjZQJvHvj+c8lYv0CahmZ2P/r7iUkN44gGUBwqxZkrKXYPb7cw==}
 
+  '@types/web-animations-js@2.2.16':
+    resolution: {integrity: sha512-ATELeWMFwj8eQiH0KmvsCl1V2lu/qx/CjOBmv4ADSZS5u8r4reMyjCXtxG7khqyiwH3IOMNdrON/Ugn94OUcRA==}
+
   '@types/web-bluetooth@0.0.16':
     resolution: {integrity: sha512-oh8q2Zc32S6gd/j50GowEjKLoOVOwHP/bWVjKJInBwQqdOYMdPrf1oVlelTlyfFK3CKxL1uahMDAr+vy8T7yMQ==}
 
@@ -9072,6 +9093,9 @@ packages:
   fetch-blob@3.2.0:
     resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
     engines: {node: ^12.20 || >= 14.13}
+
+  fighting-design@0.25.1:
+    resolution: {integrity: sha512-S6K1xGV3ROXYTi/ao6Ztjj5UJbP/4zKT3LIENEQhGIQ+oGbDGT5mpfdPJ+qAzs94lOUPIywRxZhyP2YOc3Ymfw==}
 
   file-entry-cache@6.0.1:
     resolution: {integrity: sha512-7Gps/XWymbLk2QLYK4NzpMOrYjMhdIxXuIvy2QBsLE6ljuodKvdkWs/cpyJJ3CVIVpH0Oi1Hvg1ovbMzLdFBBg==}
@@ -13290,6 +13314,9 @@ packages:
   typed-function@4.2.2:
     resolution: {integrity: sha512-VwaXim9Gp1bngi/q3do8hgttYn2uC3MoT/gfuMWylnj1IeZBUAyPddHZlo1K05BDoj8DYPpMdiHqH1dDYdJf2A==}
     engines: {node: '>= 18'}
+
+  typeit@8.8.7:
+    resolution: {integrity: sha512-sSVpy+cjeFP6Z+fZqiHzUSShg5yYFeJEt/Qut/bX945+Axyq+Yq+GPOuuk+sofoccSv8nNX/ibOOHkbki2mEpg==}
 
   typescript-eslint@8.46.4:
     resolution: {integrity: sha512-KALyxkpYV5Ix7UhvjTwJXZv76VWsHG+NjNlt/z+a17SOQSiOcBdUXdbJdyXi7RPxrBFECtFOiPwUJQusJuCqrg==}
@@ -20057,6 +20084,8 @@ snapshots:
       '@types/expect': 1.20.4
       '@types/node': 24.1.0
 
+  '@types/web-animations-js@2.2.16': {}
+
   '@types/web-bluetooth@0.0.16': {}
 
   '@types/web-bluetooth@0.0.21': {}
@@ -25012,6 +25041,8 @@ snapshots:
     dependencies:
       node-domexception: 1.0.0
       web-streams-polyfill: 3.3.3
+
+  fighting-design@0.25.1: {}
 
   file-entry-cache@6.0.1:
     dependencies:
@@ -30213,6 +30244,10 @@ snapshots:
       reflect.getprototypeof: 1.0.10
 
   typed-function@4.2.2: {}
+
+  typeit@8.8.7:
+    dependencies:
+      '@types/web-animations-js': 2.2.16
 
   typescript-eslint@8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3):
     dependencies:
