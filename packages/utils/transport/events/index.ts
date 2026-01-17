@@ -149,7 +149,12 @@ import type {
   CancelSearchRequest,
   CancelSearchResponse,
   ClearInputResponse,
+  CoreBoxClearItemsPayload,
+  CoreBoxExecuteRequest,
   CoreBoxLayoutUpdateRequest,
+  CoreBoxNoResultsPayload,
+  CoreBoxSearchEndPayload,
+  CoreBoxSearchUpdatePayload,
   DeactivateProviderRequest,
   EnterUIModeRequest,
   ExpandOptions,
@@ -171,12 +176,62 @@ import type {
 import type {
   FeatureTriggerRequest,
   FeatureTriggerResponse,
+  PluginApiFeatureInputChangedRequest,
+  PluginApiGetManifestRequest,
+  PluginApiGetManifestResponse,
+  PluginApiGetOfficialListRequest,
+  PluginApiGetOfficialListResponse,
+  PluginApiGetPathsRequest,
+  PluginApiGetPathsResponse,
+  PluginApiGetPerformanceRequest,
+  PluginApiGetPerformanceResponse,
+  PluginApiGetRequest,
+  PluginApiGetResponse,
+  PluginApiGetRuntimeStatsRequest,
+  PluginApiGetRuntimeStatsResponse,
+  PluginApiGetStatusRequest,
+  PluginApiGetStatusResponse,
+  PluginApiInstallRequest,
+  PluginApiInstallResponse,
+  PluginApiListRequest,
+  PluginApiListResponse,
+  PluginApiOpenFolderRequest,
+  PluginApiOpenPathRequest,
+  PluginApiOpenPathResponse,
+  PluginApiOperationRequest,
+  PluginApiOperationResponse,
+  PluginApiSaveManifestRequest,
+  PluginApiSaveManifestResponse,
+  PluginApiTriggerFeatureRequest,
+  PluginApiTriggerFeatureResponse,
   PluginDisableRequest,
   PluginEnableRequest,
   PluginInfo,
+  PluginInstallConfirmPayload,
+  PluginInstallConfirmResponsePayload,
+  PluginInstallProgressPayload,
+  PluginInstallSourceRequest,
+  PluginInstallSourceResponse,
   PluginLoadRequest,
   PluginLogEntry,
+  PluginPushCrashedPayload,
+  PluginPushReloadReadmePayload,
+  PluginPushStateChangedPayload,
+  PluginPushStatusUpdatedPayload,
   PluginReloadRequest,
+  PluginReconnectDevServerRequest,
+  PluginReconnectDevServerResponse,
+  PluginPerformanceGetMetricsResponse,
+  PluginPerformanceGetPathsResponse,
+  PluginStorageClearRequest,
+  PluginStorageFileDetailsRequest,
+  PluginStorageFileRequest,
+  PluginStorageListFilesRequest,
+  PluginStorageOpenFolderRequest,
+  PluginStorageSetFileRequest,
+  PluginStorageStatsRequest,
+  PluginStorageTreeRequest,
+  PluginStorageUpdatePayload,
   PluginUnloadRequest,
 } from './types/plugin'
 
@@ -196,6 +251,94 @@ import type {
   StorageSetRequest,
   StorageUpdateNotification,
 } from './types/storage'
+
+// ============================================================================
+// Market Events
+// ============================================================================
+
+import type {
+  MarketCheckUpdatesResponse,
+  MarketGetPluginRequest,
+  MarketGetPluginResponse,
+  MarketHttpRequest,
+  MarketHttpRequestResponse,
+  MarketSearchRequest,
+  MarketSearchResponse,
+  MarketUpdatesAvailablePayload,
+} from './types/market'
+
+// ============================================================================
+// Permission Events
+// ============================================================================
+
+import type {
+  PermissionCheckRequest,
+  PermissionCheckResponse,
+  PermissionGetAllResponse,
+  PermissionGetAuditLogsRequest,
+  PermissionGetAuditLogsResponse,
+  PermissionGetPerformanceResponse,
+  PermissionGetPluginRequest,
+  PermissionGetPluginResponse,
+  PermissionGetRegistryResponse,
+  PermissionGetStatusRequest,
+  PermissionGetStatusResponse,
+  PermissionGrantMultipleRequest,
+  PermissionGrantRequest,
+  PermissionOperationResult,
+  PermissionRevokeAllRequest,
+  PermissionRevokeRequest,
+  PermissionUpdatedPayload,
+} from './types/permission'
+
+// ============================================================================
+// Agents Events
+// ============================================================================
+
+import type {
+  AgentsCancelRequest,
+  AgentsCancelResponse,
+  AgentsExecuteImmediateRequest,
+  AgentsExecuteImmediateResponse,
+  AgentsExecuteRequest,
+  AgentsExecuteResponse,
+  AgentsGetRequest,
+  AgentsGetResponse,
+  AgentsListResponse,
+  AgentsStatsResponse,
+  AgentsTaskStatusRequest,
+  AgentsTaskStatusResponse,
+  AgentsToolsGetRequest,
+  AgentsToolsGetResponse,
+  AgentsToolsListResponse,
+} from './types/agents'
+
+// ============================================================================
+// Tray Events
+// ============================================================================
+
+import type {
+  TrayAutostartGetResponse,
+  TrayAutostartUpdateRequest,
+  TrayAutostartUpdateResponse,
+  TrayHideDockSetResponse,
+  TrayShowGetResponse,
+  TrayShowSetRequest,
+  TrayShowSetResponse,
+} from './types/tray'
+
+// ============================================================================
+// Sentry Events
+// ============================================================================
+
+import type {
+  SentryGetConfigResponse,
+  SentryGetSearchCountResponse,
+  SentryGetTelemetryStatsResponse,
+  SentryRecordPerformanceRequest,
+  SentryRecordPerformanceResponse,
+  SentryUpdateUserRequest,
+} from './types/sentry'
 
 import type {
   FlowAcknowledgeRequest,
@@ -250,7 +393,7 @@ import type {
 // Clipboard Events
 // ============================================================================
 
-import { defineEvent } from '../event/builder'
+import { defineEvent, defineRawEvent } from '../event/builder'
 
 // ============================================================================
 // MetaOverlay Events
@@ -1088,34 +1231,22 @@ export const CoreBoxEvents = {
     /**
      * Show the CoreBox window.
      */
-    show: defineEvent('core-box')
-      .module('ui')
-      .event('show')
-      .define<void, void>(),
+    show: defineRawEvent<void, void>('core-box:show'),
 
     /**
      * Hide the CoreBox window.
      */
-    hide: defineEvent('core-box')
-      .module('ui')
-      .event('hide')
-      .define<void, void>(),
+    hide: defineRawEvent<void, void>('core-box:hide'),
 
     /**
      * Expand or collapse the CoreBox.
      */
-    expand: defineEvent('core-box')
-      .module('ui')
-      .event('expand')
-      .define<ExpandOptions | number, void>(),
+    expand: defineRawEvent<ExpandOptions | number, void>('core-box:expand'),
 
     /**
      * Focus the CoreBox window.
      */
-    focusWindow: defineEvent('core-box')
-      .module('ui')
-      .event('focus-window')
-      .define<void, FocusWindowResponse>(),
+    focusWindow: defineRawEvent<void, FocusWindowResponse>('core-box:focus-window'),
   },
 
   /**
@@ -1147,20 +1278,29 @@ export const CoreBoxEvents = {
      * @remarks
      * This event supports streaming results via MessagePort.
      */
-    query: defineEvent('core-box')
-      .module('search')
-      .event('query')
-      .define<{ query: TuffQuery }, TuffSearchResult>({
-        stream: { enabled: true, bufferSize: 100 },
-      }),
+    query: defineRawEvent<{ query: TuffQuery }, TuffSearchResult>('core-box:query', {
+      stream: { enabled: true, bufferSize: 100 },
+    }),
 
     /**
      * Cancel an in-progress search.
      */
-    cancel: defineEvent('core-box')
-      .module('search')
-      .event('cancel')
-      .define<CancelSearchRequest, CancelSearchResponse>(),
+    cancel: defineRawEvent<CancelSearchRequest, CancelSearchResponse>('core-box:cancel-search'),
+
+    /**
+     * Push incremental search results to renderer.
+     */
+    update: defineRawEvent<CoreBoxSearchUpdatePayload, void>('core-box:search-update'),
+
+    /**
+     * Mark search finished/cancelled.
+     */
+    end: defineRawEvent<CoreBoxSearchEndPayload, void>('core-box:search-end'),
+
+    /**
+     * Notify renderer about empty results (UI sizing hint).
+     */
+    noResults: defineRawEvent<CoreBoxNoResultsPayload, void>('core-box:no-results'),
   },
 
   /**
@@ -1170,50 +1310,41 @@ export const CoreBoxEvents = {
     /**
      * Get current input value.
      */
-    get: defineEvent('core-box')
-      .module('input')
-      .event('get')
-      .define<void, GetInputResponse>(),
+    get: defineRawEvent<void, GetInputResponse>('core-box:get-input'),
 
     /**
      * Set input value.
      */
-    set: defineEvent('core-box')
-      .module('input')
-      .event('set')
-      .define<SetInputRequest, SetInputResponse>(),
+    set: defineRawEvent<SetInputRequest, SetInputResponse>('core-box:set-input'),
 
     /**
      * Clear input value.
      */
-    clear: defineEvent('core-box')
-      .module('input')
-      .event('clear')
-      .define<void, ClearInputResponse>(),
+    clear: defineRawEvent<void, ClearInputResponse>('core-box:clear-input'),
 
     /**
      * Set input visibility.
      */
-    setVisibility: defineEvent('core-box')
-      .module('input')
-      .event('set-visibility')
-      .define<SetInputVisibilityRequest, void>(),
+    setVisibility: defineRawEvent<SetInputVisibilityRequest, void>('core-box:set-input-visibility'),
 
     /**
      * Request input value from renderer.
      */
-    requestValue: defineEvent('core-box')
-      .module('input')
-      .event('request-value')
-      .define<void, GetInputResponse>(),
+    requestValue: defineRawEvent<void, GetInputResponse>('core-box:request-input-value'),
 
     /**
      * Set query from main process.
      */
-    setQuery: defineEvent('core-box')
-      .module('input')
-      .event('set-query')
-      .define<SetInputRequest, void>(),
+    setQuery: defineRawEvent<SetInputRequest, void>('core-box:set-query'),
+  },
+
+  /**
+   * Item execution and mutations.
+   */
+  item: {
+    execute: defineRawEvent<CoreBoxExecuteRequest, void>('core-box:execute'),
+
+    clear: defineRawEvent<CoreBoxClearItemsPayload | void, void>('core-box:clear-items'),
   },
 
   /**
@@ -1223,18 +1354,12 @@ export const CoreBoxEvents = {
     /**
      * Deactivate a specific provider.
      */
-    deactivate: defineEvent('core-box')
-      .module('provider')
-      .event('deactivate')
-      .define<DeactivateProviderRequest, ActivationState>(),
+    deactivate: defineRawEvent<DeactivateProviderRequest, ActivationState>('core-box:deactivate-provider'),
 
     /**
      * Deactivate all providers.
      */
-    deactivateAll: defineEvent('core-box')
-      .module('provider')
-      .event('deactivate-all')
-      .define<void, ActivationState>(),
+    deactivateAll: defineRawEvent<void, ActivationState>('core-box:deactivate-providers'),
 
     /**
      * Get details for multiple providers.
@@ -1242,12 +1367,9 @@ export const CoreBoxEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    getDetails: defineEvent('core-box')
-      .module('provider')
-      .event('get-details')
-      .define<GetProviderDetailsRequest, ProviderDetail[]>({
-        batch: { enabled: true, windowMs: 50, mergeStrategy: 'dedupe' },
-      }),
+    getDetails: defineRawEvent<GetProviderDetailsRequest, ProviderDetail[]>('core-box:get-provider-details', {
+      batch: { enabled: true, windowMs: 50, mergeStrategy: 'dedupe' },
+    }),
   },
 
   /**
@@ -1257,18 +1379,12 @@ export const CoreBoxEvents = {
     /**
      * Enter plugin UI mode.
      */
-    enter: defineEvent('core-box')
-      .module('ui-mode')
-      .event('enter')
-      .define<EnterUIModeRequest, void>(),
+    enter: defineRawEvent<EnterUIModeRequest, void>('core-box:enter-ui-mode'),
 
     /**
      * Exit plugin UI mode.
      */
-    exit: defineEvent('core-box')
-      .module('ui-mode')
-      .event('exit')
-      .define<void, void>(),
+    exit: defineRawEvent<void, void>('core-box:exit-ui-mode'),
   },
 
   /**
@@ -1278,10 +1394,7 @@ export const CoreBoxEvents = {
     /**
      * Allow clipboard monitoring for specific types.
      */
-    allow: defineEvent('core-box')
-      .module('clipboard')
-      .event('allow')
-      .define<AllowClipboardRequest, AllowClipboardResponse>(),
+    allow: defineRawEvent<AllowClipboardRequest, AllowClipboardResponse>('core-box:allow-clipboard'),
   },
 
   /**
@@ -1459,6 +1572,222 @@ export const PluginEvents = {
   },
 
   /**
+   * Lifecycle notifications pushed to plugin renderer processes.
+   */
+  lifecycleSignal: {
+    active: defineEvent('plugin')
+      .module('lifecycle')
+      .event('active')
+      .define<void, void>(),
+
+    inactive: defineEvent('plugin')
+      .module('lifecycle')
+      .event('inactive')
+      .define<void, void>(),
+
+    enabled: defineEvent('plugin')
+      .module('lifecycle')
+      .event('enabled')
+      .define<unknown, void>(),
+
+    disabled: defineEvent('plugin')
+      .module('lifecycle')
+      .event('disabled')
+      .define<unknown, void>(),
+
+    crashed: defineEvent('plugin')
+      .module('lifecycle')
+      .event('crashed')
+      .define<unknown, void>(),
+  },
+
+  /**
+   * Renderer-facing push/broadcast events.
+   */
+  push: {
+    stateChanged: defineRawEvent<PluginPushStateChangedPayload, void>('plugin:state-changed'),
+    statusUpdated: defineRawEvent<PluginPushStatusUpdatedPayload, void>('plugin-status-updated'),
+    reloadReadme: defineRawEvent<PluginPushReloadReadmePayload, void>('plugin:reload-readme'),
+    reload: defineRawEvent<PluginPushReloadPayload, void>('plugin:reload'),
+    crashed: defineRawEvent<PluginPushCrashedPayload, void>('plugin-crashed'),
+  },
+
+  /**
+   * Plugin management APIs (renderer/main).
+   */
+  api: {
+    list: defineEvent('plugin')
+      .module('api')
+      .event('list')
+      .define<PluginApiListRequest, PluginApiListResponse>(),
+
+    get: defineEvent('plugin')
+      .module('api')
+      .event('get')
+      .define<PluginApiGetRequest, PluginApiGetResponse>(),
+
+    getStatus: defineEvent('plugin')
+      .module('api')
+      .event('get-status')
+      .define<PluginApiGetStatusRequest, PluginApiGetStatusResponse>(),
+
+    enable: defineEvent('plugin')
+      .module('api')
+      .event('enable')
+      .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
+
+    disable: defineEvent('plugin')
+      .module('api')
+      .event('disable')
+      .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
+
+    reload: defineEvent('plugin')
+      .module('api')
+      .event('reload')
+      .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
+
+    install: defineEvent('plugin')
+      .module('api')
+      .event('install')
+      .define<PluginApiInstallRequest, PluginApiInstallResponse>(),
+
+    uninstall: defineEvent('plugin')
+      .module('api')
+      .event('uninstall')
+      .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
+
+    triggerFeature: defineEvent('plugin')
+      .module('api')
+      .event('trigger-feature')
+      .define<PluginApiTriggerFeatureRequest, PluginApiTriggerFeatureResponse>(),
+
+    featureInputChanged: defineEvent('plugin')
+      .module('api')
+      .event('feature-input-changed')
+      .define<PluginApiFeatureInputChangedRequest, void>(),
+
+    openFolder: defineEvent('plugin')
+      .module('api')
+      .event('open-folder')
+      .define<PluginApiOpenFolderRequest, void>(),
+
+    getOfficialList: defineEvent('plugin')
+      .module('api')
+      .event('get-official-list')
+      .define<PluginApiGetOfficialListRequest, PluginApiGetOfficialListResponse>(),
+
+    getManifest: defineEvent('plugin')
+      .module('api')
+      .event('get-manifest')
+      .define<PluginApiGetManifestRequest, PluginApiGetManifestResponse>(),
+
+    saveManifest: defineEvent('plugin')
+      .module('api')
+      .event('save-manifest')
+      .define<PluginApiSaveManifestRequest, PluginApiSaveManifestResponse>(),
+
+    getPaths: defineEvent('plugin')
+      .module('api')
+      .event('get-paths')
+      .define<PluginApiGetPathsRequest, PluginApiGetPathsResponse>(),
+
+    openPath: defineEvent('plugin')
+      .module('api')
+      .event('open-path')
+      .define<PluginApiOpenPathRequest, PluginApiOpenPathResponse>(),
+
+    getPerformance: defineEvent('plugin')
+      .module('api')
+      .event('get-performance')
+      .define<PluginApiGetPerformanceRequest, PluginApiGetPerformanceResponse>(),
+
+    getRuntimeStats: defineEvent('plugin')
+      .module('api')
+      .event('get-runtime-stats')
+      .define<PluginApiGetRuntimeStatsRequest, PluginApiGetRuntimeStatsResponse>(),
+  },
+
+  install: {
+    progress: defineRawEvent<PluginInstallProgressPayload, void>('plugin:install-progress'),
+    confirm: defineRawEvent<PluginInstallConfirmPayload, void>('plugin:install-confirm'),
+    confirmResponse: defineRawEvent<PluginInstallConfirmResponsePayload, void>('plugin:install-confirm-response'),
+    source: defineRawEvent<PluginInstallSourceRequest, PluginInstallSourceResponse>('plugin:install-source'),
+  },
+
+  devServer: {
+    reconnect: defineRawEvent<PluginReconnectDevServerRequest, PluginReconnectDevServerResponse>('plugin:reconnect-dev-server'),
+    status: defineRawEvent<PluginDevServerStatusRequest, PluginDevServerStatusResponse>('plugin:dev-server-status'),
+  },
+
+  storage: {
+    getFile: defineEvent('plugin')
+      .module('storage')
+      .event('get-file')
+      .define<PluginStorageFileRequest, unknown>(),
+
+    setFile: defineEvent('plugin')
+      .module('storage')
+      .event('set-file')
+      .define<PluginStorageSetFileRequest, { success: boolean; error?: string }>(),
+
+    deleteFile: defineEvent('plugin')
+      .module('storage')
+      .event('delete-file')
+      .define<PluginStorageFileRequest, { success: boolean; error?: string }>(),
+
+    listFiles: defineEvent('plugin')
+      .module('storage')
+      .event('list-files')
+      .define<PluginStorageListFilesRequest, string[]>(),
+
+    getStats: defineEvent('plugin')
+      .module('storage')
+      .event('get-stats')
+      .define<PluginStorageStatsRequest, unknown>(),
+
+    getTree: defineEvent('plugin')
+      .module('storage')
+      .event('get-tree')
+      .define<PluginStorageTreeRequest, unknown>(),
+
+    getFileDetails: defineEvent('plugin')
+      .module('storage')
+      .event('get-file-details')
+      .define<PluginStorageFileDetailsRequest, unknown>(),
+
+    clear: defineEvent('plugin')
+      .module('storage')
+      .event('clear')
+      .define<PluginStorageClearRequest, { success: boolean; error?: string }>(),
+
+    openFolder: defineEvent('plugin')
+      .module('storage')
+      .event('open-folder')
+      .define<PluginStorageOpenFolderRequest, void>(),
+
+    openInEditor: defineRawEvent<PluginStorageOpenInEditorRequest, { success: boolean; error?: string }>(
+      'plugin:storage:open-in-editor',
+    ),
+
+    update: defineEvent('plugin')
+      .module('storage')
+      .event('update')
+      .define<PluginStorageUpdatePayload, void>(),
+  },
+
+  performance: {
+    getMetrics: defineEvent('plugin')
+      .module('performance')
+      .event('get-metrics')
+      .define<void, PluginPerformanceGetMetricsResponse>(),
+
+    getPaths: defineEvent('plugin')
+      .module('performance')
+      .event('get-paths')
+      .define<void, PluginPerformanceGetPathsResponse>(),
+  },
+
+  /**
    * Feature trigger events.
    */
   feature: {
@@ -1487,6 +1816,156 @@ export const PluginEvents = {
       .define<PluginLogEntry, void>({
         batch: { enabled: true, windowMs: 100, maxSize: 50 },
       }),
+  },
+} as const
+
+export const MarketEvents = {
+  api: {
+    checkUpdates: defineRawEvent<void, MarketCheckUpdatesResponse>('market:check-updates'),
+    search: defineRawEvent<MarketSearchRequest, MarketSearchResponse>('market:search'),
+    getPlugin: defineRawEvent<MarketGetPluginRequest, MarketGetPluginResponse>('market:get-plugin'),
+    httpRequest: defineRawEvent<MarketHttpRequest, MarketHttpRequestResponse>('market:http-request'),
+
+    featured: defineRawEvent<unknown, unknown>('market:featured'),
+    npmList: defineRawEvent<void, unknown>('market:npm-list'),
+  },
+
+  push: {
+    updatesAvailable: defineRawEvent<MarketUpdatesAvailablePayload, void>('market:updates-available'),
+  },
+} as const
+
+export const PermissionEvents = {
+  api: {
+    getPlugin: defineRawEvent<PermissionGetPluginRequest, PermissionGetPluginResponse>('permission:get-plugin'),
+    getStatus: defineRawEvent<PermissionGetStatusRequest, PermissionGetStatusResponse>('permission:get-status'),
+    grant: defineRawEvent<PermissionGrantRequest, PermissionOperationResult>('permission:grant'),
+    revoke: defineRawEvent<PermissionRevokeRequest, PermissionOperationResult>('permission:revoke'),
+    grantMultiple: defineRawEvent<PermissionGrantMultipleRequest, PermissionOperationResult>('permission:grant-multiple'),
+    grantSession: defineRawEvent<PermissionGrantMultipleRequest, PermissionOperationResult>('permission:grant-session'),
+    revokeAll: defineRawEvent<PermissionRevokeAllRequest, PermissionOperationResult>('permission:revoke-all'),
+    check: defineRawEvent<PermissionCheckRequest, PermissionCheckResponse>('permission:check'),
+    getAll: defineRawEvent<void, PermissionGetAllResponse>('permission:get-all'),
+    getRegistry: defineRawEvent<void, PermissionGetRegistryResponse>('permission:get-registry'),
+    getAuditLogs: defineRawEvent<PermissionGetAuditLogsRequest | void, PermissionGetAuditLogsResponse>('permission:get-audit-logs'),
+    clearAuditLogs: defineRawEvent<void, PermissionOperationResult>('permission:clear-audit-logs'),
+    getPerformance: defineRawEvent<void, PermissionGetPerformanceResponse>('permission:get-performance'),
+    resetPerformance: defineRawEvent<void, PermissionOperationResult>('permission:reset-performance'),
+  },
+
+  push: {
+    updated: defineRawEvent<PermissionUpdatedPayload, void>('permission:updated'),
+    startupRequest: defineRawEvent<PermissionStartupRequestPayload, void>('permission:startup-request'),
+  },
+} as const
+
+export const AgentsEvents = {
+  api: {
+    list: defineRawEvent<void, AgentsListResponse>('agents:list'),
+    listAll: defineRawEvent<void, AgentsListResponse>('agents:list-all'),
+    get: defineRawEvent<AgentsGetRequest, AgentsGetResponse>('agents:get'),
+    execute: defineRawEvent<AgentsExecuteRequest, AgentsExecuteResponse>('agents:execute'),
+    executeImmediate: defineRawEvent<AgentsExecuteImmediateRequest, AgentsExecuteImmediateResponse>('agents:execute-immediate'),
+    cancel: defineRawEvent<AgentsCancelRequest, AgentsCancelResponse>('agents:cancel'),
+    taskStatus: defineRawEvent<AgentsTaskStatusRequest, AgentsTaskStatusResponse>('agents:task-status'),
+    stats: defineRawEvent<void, AgentsStatsResponse>('agents:stats'),
+
+    tools: {
+      list: defineEvent('agents')
+        .module('tools')
+        .event('list')
+        .define<void, AgentsToolsListResponse>(),
+
+      get: defineEvent('agents')
+        .module('tools')
+        .event('get')
+        .define<AgentsToolsGetRequest, AgentsToolsGetResponse>(),
+    },
+  },
+
+  market: {
+    search: defineEvent('agents')
+      .module('market')
+      .event('search')
+      .define<unknown, unknown>(),
+
+    get: defineEvent('agents')
+      .module('market')
+      .event('get')
+      .define<unknown, unknown>(),
+
+    featured: defineEvent('agents')
+      .module('market')
+      .event('featured')
+      .define<void, unknown>(),
+
+    installed: defineEvent('agents')
+      .module('market')
+      .event('installed')
+      .define<void, unknown>(),
+
+    categories: defineEvent('agents')
+      .module('market')
+      .event('categories')
+      .define<void, unknown>(),
+
+    install: defineEvent('agents')
+      .module('market')
+      .event('install')
+      .define<unknown, unknown>(),
+
+    uninstall: defineEvent('agents')
+      .module('market')
+      .event('uninstall')
+      .define<unknown, unknown>(),
+
+    checkUpdates: defineEvent('agents')
+      .module('market')
+      .event('check-updates')
+      .define<void, unknown>(),
+  },
+} as const
+
+export const TrayEvents = {
+  autostart: {
+    update: defineEvent('tray')
+      .module('autostart')
+      .event('update')
+      .define<TrayAutostartUpdateRequest, TrayAutostartUpdateResponse>(),
+
+    get: defineEvent('tray')
+      .module('autostart')
+      .event('get')
+      .define<void, TrayAutostartGetResponse>(),
+  },
+
+  show: {
+    get: defineEvent('tray')
+      .module('show')
+      .event('get')
+      .define<void, TrayShowGetResponse>(),
+
+    set: defineEvent('tray')
+      .module('show')
+      .event('set')
+      .define<TrayShowSetRequest, TrayShowSetResponse>(),
+  },
+
+  hideDock: {
+    set: defineEvent('tray')
+      .module('hidedock')
+      .event('set')
+      .define<void, TrayHideDockSetResponse>(),
+  },
+} as const
+
+export const SentryEvents = {
+  api: {
+    updateUser: defineRawEvent<SentryUpdateUserRequest, void>('sentry:update-user'),
+    getConfig: defineRawEvent<void, SentryGetConfigResponse>('sentry:get-config'),
+    getSearchCount: defineRawEvent<void, SentryGetSearchCountResponse>('sentry:get-search-count'),
+    getTelemetryStats: defineRawEvent<void, SentryGetTelemetryStatsResponse>('sentry:get-telemetry-stats'),
+    recordPerformance: defineRawEvent<SentryRecordPerformanceRequest, SentryRecordPerformanceResponse>('sentry:record-performance'),
   },
 } as const
 
@@ -1692,6 +2171,11 @@ export const TuffEvents = {
   coreBox: CoreBoxEvents,
   storage: StorageEvents,
   plugin: PluginEvents,
+  market: MarketEvents,
+  permission: PermissionEvents,
+  agents: AgentsEvents,
+  tray: TrayEvents,
+  sentry: SentryEvents,
   boxItem: BoxItemEvents,
   clipboard: ClipboardEvents,
   metaOverlay: MetaOverlayEvents,

@@ -1,6 +1,4 @@
 <script lang="ts" name="Market" setup>
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
-import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useToggle } from '@vueuse/core'
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -27,7 +25,9 @@ const { installedPluginNames, installedPluginVersions } = usePluginVersionStatus
 
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const viewType = ref<'grid' | 'list'>('grid')
-const tabs = ref<'market' | 'installed'>(route.path === '/market/installed' ? 'installed' : 'market')
+const tabs = ref<'market' | 'installed'>(
+  route.path === '/market/installed' ? 'installed' : 'market'
+)
 const searchKey = ref('')
 const sourcesState = marketSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
@@ -43,24 +43,6 @@ const providerStatsComputed = computed(() => {
     totalPlugins: stats.reduce((sum, s) => sum + s.itemCount, 0)
   }
 })
-
-let rendererChannel: ITouchClientChannel | undefined
-let channelLoadFailed = false
-
-async function getRendererChannel(): Promise<ITouchClientChannel | undefined> {
-  if (rendererChannel) return rendererChannel
-  if (channelLoadFailed || !isElectronRenderer()) return undefined
-
-  try {
-    const module = await import('~/modules/channel/channel-core')
-    rendererChannel = module.touchChannel as ITouchClientChannel
-    return rendererChannel
-  } catch (error) {
-    channelLoadFailed = true
-    console.warn('[Market] Failed to load channel-core module:', error)
-    return undefined
-  }
-}
 
 const displayedPlugins = computed(() => {
   const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
@@ -88,14 +70,9 @@ function handleSearch(query: string): void {
 }
 
 async function onInstall(plugin: MarketPluginListItem): Promise<void> {
-  const channel = await getRendererChannel()
   const installedVersion = installedPluginVersions.value.get(plugin.name)
   const isUpgrade = Boolean(installedVersion && plugin.version)
-  await handleInstall(
-    plugin,
-    channel,
-    isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined
-  )
+  await handleInstall(plugin, isUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined)
 }
 
 function openPluginDetail(plugin: MarketPluginListItem): void {

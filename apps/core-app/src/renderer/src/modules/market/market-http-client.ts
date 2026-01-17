@@ -1,14 +1,13 @@
 import type { MarketHttpRequestOptions, MarketHttpResponse } from '@talex-touch/utils/market'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createMarketSdk } from '@talex-touch/utils/transport/sdk/domains/market'
+
+const marketSdk = createMarketSdk(useTuffTransport())
 
 export async function marketHttpRequest<T = unknown>(
-  options: MarketHttpRequestOptions,
+  options: MarketHttpRequestOptions
 ): Promise<MarketHttpResponse<T>> {
-  if (!touchChannel) {
-    throw new Error('MARKET_CHANNEL_UNAVAILABLE')
-  }
-
-  const response: any = await touchChannel.send('market:http-request', options)
+  const response = await marketSdk.httpRequest<T>(options)
 
   if (response?.error) {
     throw new Error(response.error)

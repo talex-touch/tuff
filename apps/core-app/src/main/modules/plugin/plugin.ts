@@ -1,4 +1,4 @@
-import type { ITuffIcon } from '@talex-touch/utils'
+import type { ITuffIcon, TuffQuery } from '@talex-touch/utils'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
@@ -17,6 +17,7 @@ import path from 'node:path'
 import { ChannelType } from '@talex-touch/utils/channel'
 import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import {
   createBoxSDK,
   createClipboardManager,
@@ -30,6 +31,7 @@ import axios from 'axios'
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import { genTouchChannel } from '../../core/channel-core'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 import {
   PluginLogAppendEvent,
   PluginStorageUpdatedEvent,
@@ -49,6 +51,20 @@ import {
 } from './plugin-feature'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
+
+interface FeatureEventUtil {
+  onFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
+  offFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
+}
+
+interface StorageTreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  size: number
+  modified: number
+  children?: StorageTreeNode[]
+}
 
 const disallowedArrays = [
   '官方',
@@ -79,6 +95,16 @@ const disallowedArrays = [
  * Plugin implementation
  */
 export class TouchPlugin implements ITouchPlugin {
+  private static _transport: ITuffTransportMain | null = null
+
+  static setTransport(transport: ITuffTransportMain | null): void {
+    TouchPlugin._transport = transport
+  }
+
+  private get transport(): ITuffTransportMain | null {
+    return TouchPlugin._transport
+  }
+
   dev: IPluginDev
   name: string
   readme: string
@@ -134,13 +160,13 @@ export class TouchPlugin implements ITouchPlugin {
   _performanceMetrics = {
     loadStartTime: 0,
     loadEndTime: 0,
-    lastActiveTime: 0,
+    lastActiveTime: 0
   }
 
   _runtimeStats = {
     startedAt: 0,
     requestCount: 0,
-    lastActiveAt: 0,
+    lastActiveAt: 0
   }
 
   /**
@@ -164,11 +190,13 @@ export class TouchPlugin implements ITouchPlugin {
       status: this.status,
       platforms: this.platforms,
       sdkapi: this.sdkapi,
-      declaredPermissions: this.declaredPermissions ? {
-        required: [...this.declaredPermissions.required],
-        optional: [...this.declaredPermissions.optional],
-        reasons: { ...this.declaredPermissions.reasons },
-      } : undefined,
+      declaredPermissions: this.declaredPermissions
+        ? {
+            required: [...this.declaredPermissions.required],
+            optional: [...this.declaredPermissions.optional],
+            reasons: { ...this.declaredPermissions.reasons }
+          }
+        : undefined,
       features: this.features.map((feature) => {
         // 防御性检查：确保 feature 有 toJSONObject 方法
         if (typeof feature.toJSONObject === 'function') {
@@ -201,7 +229,15 @@ export class TouchPlugin implements ITouchPlugin {
   set status(v: PluginStatus) {
     this._status = v
 
-    const channel = genTouchChannel()!
+    if (this.transport) {
+      this.transport.broadcast(PluginEvents.push.statusUpdated, {
+        plugin: this.name,
+        status: this._status
+      })
+      return
+    }
+
+    const channel = genTouchChannel()
     channel?.broadcast(ChannelType.MAIN, 'plugin-status-updated', {
       plugin: this.name,
       status: this._status
@@ -256,7 +292,10 @@ export class TouchPlugin implements ITouchPlugin {
     return this.features
   }
 
-  async triggerFeature(feature: IPluginFeature, query: any): Promise<boolean | void> {
+  async triggerFeature(
+    feature: IPluginFeature,
+    query: string | TuffQuery | undefined
+  ): Promise<boolean | void> {
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
     this.markActive()
@@ -312,7 +351,7 @@ export class TouchPlugin implements ITouchPlugin {
     return result
   }
 
-  triggerInputChanged(feature: IPluginFeature, query: any): void {
+  triggerInputChanged(feature: IPluginFeature, query: string | TuffQuery | undefined): void {
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
     this.markActive()
@@ -473,13 +512,13 @@ export class TouchPlugin implements ITouchPlugin {
 
     // Memory usage estimation based on features and storage
     const storageStats = this.getStorageStats()
-    const estimatedMemory = storageStats.totalSize + (this.features.length * 1024) // rough estimate
+    const estimatedMemory = storageStats.totalSize + this.features.length * 1024 // rough estimate
 
     return {
       loadTime: loadTime > 0 ? loadTime : 0,
       memoryUsage: estimatedMemory,
       cpuUsage: 0, // CPU usage tracking would require more complex implementation
-      lastActiveTime: this._performanceMetrics.lastActiveTime,
+      lastActiveTime: this._performanceMetrics.lastActiveTime
     }
   }
 
@@ -544,13 +583,15 @@ export class TouchPlugin implements ITouchPlugin {
           )
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unknown error'
+      const stack = e instanceof Error ? e.stack : undefined
       this.issues.push({
         type: 'error',
-        message: `Failed to execute index.js: ${e.message}`,
+        message: `Failed to execute index.js: ${message}`,
         source: 'index.js',
         code: 'LIFECYCLE_SCRIPT_FAILED',
-        meta: { error: e.stack },
+        meta: { error: stack },
         timestamp: Date.now()
       })
       this.status = PluginStatus.CRASHED
@@ -558,7 +599,8 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this.status = PluginStatus.ENABLED
-    this._uniqueChannelKey = genTouchChannel().requestKey(this.name)
+    this._uniqueChannelKey =
+      this.transport?.keyManager.requestKey(this.name) ?? genTouchChannel().requestKey(this.name)
 
     const now = Date.now()
     this._runtimeStats.startedAt = now
@@ -566,7 +608,13 @@ export class TouchPlugin implements ITouchPlugin {
     this._runtimeStats.lastActiveAt = now
 
     this.pluginLifecycle?.onInit?.()
-    genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:enabled', this.toJSONObject())
+    if (this.transport) {
+      this.transport
+        .sendToPlugin(this.name, PluginEvents.lifecycleSignal.enabled, this.toJSONObject())
+        .catch(() => {})
+    } else {
+      genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:enabled', this.toJSONObject())
+    }
 
     console.log(`[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`)
     console.log(`[Plugin] Plugin ${this.name} is enabled.`)
@@ -592,7 +640,13 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING
     this.logger.debug('Disabling plugin')
 
-    genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:disabled', this.toJSONObject())
+    if (this.transport) {
+      this.transport
+        .sendToPlugin(this.name, PluginEvents.lifecycleSignal.disabled, this.toJSONObject())
+        .catch(() => {})
+    } else {
+      genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:disabled', this.toJSONObject())
+    }
 
     this._windows.forEach((win, id) => {
       try {
@@ -610,7 +664,7 @@ export class TouchPlugin implements ITouchPlugin {
           }
         }
         this._windows.delete(id)
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.warn(`[Plugin] Error closing window ${id} for plugin ${this.name}:`, error)
         this._windows.delete(id)
       }
@@ -623,13 +677,19 @@ export class TouchPlugin implements ITouchPlugin {
 
     try {
       viewCacheManager.releasePlugin(this.name)
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.warn('Failed to evict cached UI views during disable()', {
-        error: error?.message ?? String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
     }
 
-    genTouchChannel().revokeKey(this._uniqueChannelKey)
+    if (this._uniqueChannelKey) {
+      if (this.transport) {
+        this.transport.keyManager.revokeKey(this._uniqueChannelKey)
+      } else {
+        genTouchChannel().revokeKey(this._uniqueChannelKey)
+      }
+    }
 
     this._runtimeStats.startedAt = 0
 
@@ -639,7 +699,7 @@ export class TouchPlugin implements ITouchPlugin {
     return Promise.resolve(true)
   }
 
-  getFeatureEventUtil(): any {
+  getFeatureEventUtil(): FeatureEventUtil {
     return {
       onFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => {
         const listeners = this._featureEvent.get(id) || []
@@ -654,7 +714,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
   }
 
-  getFeatureUtil(): any {
+  getFeatureUtil() {
     const pluginName = this.name
     const appChannel = genTouchChannel()
 
@@ -672,7 +732,7 @@ export class TouchPlugin implements ITouchPlugin {
       listFiles: () => {
         return this.listPluginFiles()
       },
-      onDidChange: (fileName: string, callback: (newConfig: any) => void) => {
+      onDidChange: (fileName: string, callback: (newConfig: unknown) => void) => {
         const handler = (event: ITouchEvent<TalexEvents>) => {
           const storageEvent = event as PluginStorageUpdatedEvent
           if (
@@ -708,10 +768,8 @@ export class TouchPlugin implements ITouchPlugin {
       raw: appChannel
     }
 
-    const boxChannelHandlers = new Map<
-      string,
-      Map<(data: StandardChannelData) => any, () => void>
-    >()
+    type BoxChannelHandler = (data: StandardChannelData) => unknown
+    const boxChannelHandlers = new Map<string, Map<BoxChannelHandler, () => void>>()
 
     const boxChannel: ITouchClientChannel = {
       regChannel: (eventName, callback) => {
@@ -887,7 +945,12 @@ export class TouchPlugin implements ITouchPlugin {
               processedItem.render.basic.icon.type === 'file'
             ) {
               const basicIcon = processedItem.render.basic.icon
-              const icon = new TuffIconImpl(this.pluginPath, basicIcon.type, basicIcon.value, this.dev)
+              const icon = new TuffIconImpl(
+                this.pluginPath,
+                basicIcon.type,
+                basicIcon.value,
+                this.dev
+              )
               await icon.init()
               processedItem.render.basic.icon = {
                 type: icon.type,
@@ -1135,7 +1198,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @param filters Optional filters for plugin list
        * @returns Promise resolving to array of plugin objects
        */
-      list: async (filters?: any) => {
+      list: async (filters?: unknown) => {
         try {
           const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:list', { filters })
           return response || []
@@ -1186,7 +1249,7 @@ export class TouchPlugin implements ITouchPlugin {
       search: searchManager,
       box: createBoxSDK(boxChannel),
       divisionBox: createDivisionBoxSDK(channelBridge),
-      meta: createMetaSDK(channelBridge, this.name),
+      meta: createMetaSDK(channelBridge, this.name)
     }
 
     return {
@@ -1251,7 +1314,7 @@ export class TouchPlugin implements ITouchPlugin {
     return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
   }
 
-  __getInjections__(): any {
+  __getInjections__() {
     const indexPath = this.__index__()
     const preload = this.__preload__()
 
@@ -1434,7 +1497,7 @@ export class TouchPlugin implements ITouchPlugin {
     type: 'file' | 'directory'
     size: number
     modified: number
-    children?: any[]
+    children?: StorageTreeNode[]
   }> {
     const configPath = this.getConfigPath()
 
@@ -1442,19 +1505,9 @@ export class TouchPlugin implements ITouchPlugin {
       return []
     }
 
-    const buildTree = (
-      dirPath: string,
-      relativePath: string = ''
-    ): Array<{
-      name: string
-      path: string
-      type: 'file' | 'directory'
-      size: number
-      modified: number
-      children?: any[]
-    }> => {
+    const buildTree = (dirPath: string, relativePath: string = ''): StorageTreeNode[] => {
       const items = fse.readdirSync(dirPath)
-      const result: any[] = []
+      const result: StorageTreeNode[] = []
 
       for (const item of items) {
         const itemPath = path.join(dirPath, item)
@@ -1502,7 +1555,7 @@ export class TouchPlugin implements ITouchPlugin {
     created: number
     modified: number
     type: string
-    content?: any
+    content?: unknown
     truncated?: boolean
   } | null {
     const configPath = this.getConfigPath()
@@ -1528,7 +1581,7 @@ export class TouchPlugin implements ITouchPlugin {
       created: number
       modified: number
       type: string
-      content?: any
+      content?: unknown
       truncated?: boolean
     } = {
       name: path.basename(fileName),

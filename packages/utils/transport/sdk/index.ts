@@ -7,6 +7,7 @@ import type { ITuffTransport, ITuffTransportMain } from '../types'
 import { TuffRendererTransport } from './renderer-transport'
 import { TuffMainTransport } from './main-transport'
 import { createPluginTuffTransport } from './plugin-transport'
+export * from './domains'
 
 // Singleton instance for renderer transport
 let rendererTransportInstance: ITuffTransport | null = null
