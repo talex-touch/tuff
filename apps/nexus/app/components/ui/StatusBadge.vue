@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    text: string
+    text?: string
     status?: 'success' | 'warning' | 'danger' | 'info' | 'muted'
     statusKey?: 'granted' | 'denied' | 'notDetermined' | 'unsupported'
     size?: 'sm' | 'md'
@@ -14,7 +14,7 @@ const props = withDefaults(
   {
     text: '',
     status: 'muted',
-    statusKey: '',
+    statusKey: undefined,
     size: 'md',
     icon: '',
     os: undefined,

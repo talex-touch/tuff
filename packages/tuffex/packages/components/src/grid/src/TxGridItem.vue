@@ -19,12 +19,17 @@ const props = withDefaults(
 )
 
 const style = computed<Record<string, string>>(() => {
-  return {
+  const out: Record<string, string> = {
     gridColumn: `span ${Math.max(1, props.colSpan ?? 1)} / span ${Math.max(1, props.colSpan ?? 1)}`,
     gridRow: `span ${Math.max(1, props.rowSpan ?? 1)} / span ${Math.max(1, props.rowSpan ?? 1)}`,
-    justifySelf: props.justifySelf || undefined,
-    alignSelf: props.alignSelf || undefined,
   }
+
+  if (props.justifySelf)
+    out.justifySelf = props.justifySelf
+  if (props.alignSelf)
+    out.alignSelf = props.alignSelf
+
+  return out
 })
 </script>
 

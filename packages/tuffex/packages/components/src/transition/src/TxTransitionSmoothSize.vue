@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxTransitionSmoothSizeProps } from './types'
-import { computed, useAttrs } from 'vue'
+import { computed, type StyleValue, useAttrs } from 'vue'
 import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 
 defineOptions({
@@ -36,11 +36,11 @@ const styleVars = computed(() => {
 })
 
 const wrapperClass = computed(() => {
-  return ['tx-transition', 'tx-transition-smooth-size', attrs.class]
+  return ['tx-transition', 'tx-transition-smooth-size', attrs.class] as any
 })
 
-const wrapperStyle = computed(() => {
-  return [styleVars.value, attrs.style]
+const wrapperStyle = computed<StyleValue>(() => {
+  return [styleVars.value, attrs.style] as any
 })
 
 const passThroughAttrs = computed(() => {

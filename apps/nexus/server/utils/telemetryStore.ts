@@ -395,7 +395,7 @@ export async function recordTelemetryEvent(
   await ensureTelemetrySchema(db)
 
   const now = new Date().toISOString()
-  const today = now.split('T')[0]
+  const today = now.slice(0, 10)
   const ip = resolveRequestIp(event)
   const normalized = normalizeTelemetryInput(telemetry)
   if (!normalized.telemetry) {

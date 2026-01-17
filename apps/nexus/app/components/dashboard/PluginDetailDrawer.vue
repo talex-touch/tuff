@@ -1,46 +1,16 @@
 <script setup lang="ts">
+import type {
+  DashboardPlugin as Plugin,
+  DashboardPluginVersion as PluginVersion,
+  PluginChannel,
+  PluginStatus,
+  VersionStatus,
+} from '~/types/dashboard-plugin'
 import Button from '~/components/ui/Button.vue'
 import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
 import Tag from '~/components/ui/Tag.vue'
-
-type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
-type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
-type VersionStatus = 'pending' | 'approved' | 'rejected'
-
-interface PluginVersion {
-  id: string
-  pluginId: string
-  channel: PluginChannel
-  version: string
-  signature: string
-  packageUrl: string
-  packageSize: number
-  changelog?: string | null
-  status: VersionStatus
-  reviewedAt?: string | null
-  createdAt: string
-}
-
-interface Plugin {
-  id: string
-  userId: string
-  slug: string
-  name: string
-  summary: string
-  category: string
-  installs: number
-  homepage?: string | null
-  isOfficial: boolean
-  badges: string[]
-  status: PluginStatus
-  iconUrl?: string | null
-  createdAt: string
-  updatedAt: string
-  versions?: PluginVersion[]
-  latestVersion?: PluginVersion | null
-}
 
 interface Props {
   isOpen: boolean

@@ -44,16 +44,18 @@ export default defineNuxtConfig({
   },
 
   content: {
-    highlight: {
-      theme: 'github-dark',
-    },
     experimental: {
       nativeSqlite: true,
     },
-    markdown: {
-      toc: {
-        depth: 3,
-        searchDepth: 3,
+    build: {
+      markdown: {
+        highlight: {
+          theme: 'github-dark',
+        },
+        toc: {
+          depth: 3,
+          searchDepth: 3,
+        },
       },
     },
   },
@@ -177,11 +179,11 @@ export default defineNuxtConfig({
   },
 
   clerk: {
-    publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+    ...(process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+      ? { publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY }
+      : {}),
     signInUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
     signUpUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
-    domain: process.env.NUXT_PUBLIC_CLERK_DOMAIN,
-    proxyUrl: process.env.NUXT_PUBLIC_CLERK_PROXY_URL,
   },
 
   runtimeConfig: {

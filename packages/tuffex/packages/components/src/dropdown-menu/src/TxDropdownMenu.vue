@@ -29,7 +29,10 @@ const open = computed({
   get: () => !!props.modelValue,
   set: (v) => {
     emit('update:modelValue', v)
-    emit(v ? 'open' : 'close')
+    if (v)
+      emit('open')
+    else
+      emit('close')
   },
 })
 

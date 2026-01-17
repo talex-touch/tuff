@@ -1,8 +1,8 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
-import { useStorage } from '#imports'
 import { createError } from 'h3'
+import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
 
 const UPDATES_KEY = 'dashboard:updates'
@@ -342,19 +342,20 @@ export async function updateUpdate(event: H3Event, id: string, rawInput: Partial
   if (index === -1)
     throw createError({ statusCode: 404, statusMessage: 'Update not found.' })
 
-  const mergedInput: UpdateInput = {
-    ...updates[index],
-    ...normalizeUpdateInput(
-      {
-        ...updates[index],
-        ...rawInput,
-      },
-      true,
-    ),
-  }
+  const existing = updates[index]
+  if (!existing)
+    throw createError({ statusCode: 404, statusMessage: 'Update not found.' })
+
+  const mergedInput = normalizeUpdateInput(
+    {
+      ...existing,
+      ...rawInput,
+    },
+    true,
+  )
 
   const updated: DashboardUpdate = {
-    ...updates[index],
+    ...existing,
     ...mergedInput,
     updatedAt: new Date().toISOString(),
   }

@@ -84,7 +84,7 @@ const docTitleState = useState<string>('docs-title', () => '')
 const docLocaleState = useState<string>('docs-locale', () => locale.value)
 
 function resolveDocLocale(target: any) {
-  const path = typeof target?._path === 'string' ? target._path : null
+  const path = typeof target?.path === 'string' ? target.path : null
   if (!path)
     return 'en'
   if (path.endsWith('.zh'))
@@ -94,7 +94,7 @@ function resolveDocLocale(target: any) {
   return 'en'
 }
 
-const normalizedDocPath = computed(() => normalizeContentPath(doc.value?._path ?? docPath.value))
+const normalizedDocPath = computed(() => normalizeContentPath(doc.value?.path ?? docPath.value))
 
 function itemTitle(title?: string, path?: string) {
   if (title)
@@ -165,27 +165,13 @@ const docPager = computed(() => {
 })
 
 const githubEditUrl = computed(() => {
-  const file = doc.value?._file
-  if (!file)
+  const entry = doc.value
+  if (!entry)
     return null
-  const segments = [
-    GITHUB_EDIT_BASE_URL,
-    'content',
-  ]
-  if (file.path) {
-    const normalized = file.path.startsWith('/') ? file.path.slice(1) : file.path
-    segments.push(normalized)
-  }
-  else if (doc.value?._path) {
-    const normalized = doc.value._path.replace(/^\//, '')
-    segments.push(`${normalized}${file.extension ? '' : '.md'}`)
-  }
-
-  let url = segments.join('/')
-  if (file.extension && !url.endsWith(`.${file.extension}`))
-    url = `${url}.${file.extension}`
-
-  return url
+  const stem = entry.stem
+  const extension = entry.extension || 'md'
+  const normalizedStem = stem.replace(/^\//, '')
+  return [GITHUB_EDIT_BASE_URL, 'content', `${normalizedStem}.${extension}`].join('/')
 })
 
 const lastUpdatedDate = computed(() => {
@@ -193,18 +179,20 @@ const lastUpdatedDate = computed(() => {
   if (!source)
     return null
 
+  const meta = source.meta as Record<string, unknown> | undefined
   const candidates = [
-    source.updatedAt,
-    source.modifiedAt,
-    source._file?.mtime,
-    source._file?.createdAt,
-    source._file?.updatedAt,
+    meta?.updatedAt,
+    meta?.modifiedAt,
+    meta?.mtime,
+    meta?.createdAt,
   ]
 
   for (const candidate of candidates) {
     if (!candidate)
       continue
-    const value = new Date(candidate)
+    const value = candidate instanceof Date
+      ? candidate
+      : new Date(candidate as any)
     if (!Number.isNaN(value.getTime()))
       return value
   }
@@ -244,7 +232,7 @@ const pagerNextTitle = computed(() => {
 watchEffect(() => {
   if (doc.value) {
     outlineState.value = doc.value.body?.toc?.links ?? []
-    docTitleState.value = doc.value.title ?? doc.value.head?.title ?? ''
+    docTitleState.value = doc.value.seo?.title ?? doc.value.title ?? ''
     docLocaleState.value = resolveDocLocale(doc.value)
   }
   else {
@@ -370,7 +358,7 @@ watch(
         <div class="grid gap-4 lg:grid-cols-2">
           <NuxtLink
             v-if="pagerPrevPath"
-            :to="localePath(pagerPrevPath)"
+            :to="localePath({ path: pagerPrevPath })"
             class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
           >
             <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">
@@ -383,7 +371,7 @@ watch(
           </NuxtLink>
           <NuxtLink
             v-if="pagerNextPath"
-            :to="localePath(pagerNextPath)"
+            :to="localePath({ path: pagerNextPath })"
             class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
           >
             <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">

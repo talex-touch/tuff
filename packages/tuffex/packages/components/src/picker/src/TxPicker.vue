@@ -46,13 +46,17 @@ function normalizeValue(v: PickerValue): PickerValue {
   const out: PickerValue = []
   for (let i = 0; i < cols.length; i++) {
     const col = cols[i]
+    if (!col)
+      continue
     const opts = col.options ?? []
     const desired = v[i]
 
-    const idx = desired == null ? -1 : opts.findIndex(o => o.value === desired)
-    if (idx >= 0) {
-      out[i] = desired
-      continue
+    if (desired !== undefined) {
+      const idx = opts.findIndex(o => o.value === desired)
+      if (idx >= 0) {
+        out[i] = desired
+        continue
+      }
     }
 
     const first = opts.find(o => !o.disabled)
@@ -162,6 +166,8 @@ function setValueAt(colIndex: number, v: any) {
 function onScroll(colIndex: number) {
   ensureStates()
   const state = scrollStates.value[colIndex]
+  if (!state)
+    return
 
   if (state.rafId != null)
     cancelAnimationFrame(state.rafId)

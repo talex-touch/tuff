@@ -23,7 +23,7 @@ const sessions = computed<DeviceSession[]>(() => {
   if (!isLoaded.value || !user.value)
     return []
 
-  const userSessions = user.value.sessions || []
+  const userSessions = (user.value as any)?.sessions ?? []
   const currentSessionId = session.value?.id
 
   return userSessions.map((s: any) => ({
@@ -73,10 +73,10 @@ function formatLastActive(date: Date): string {
   if (minutes < 1)
     return t('dashboard.devices.justNow', '刚刚')
   if (minutes < 60)
-    return t('dashboard.devices.minutesAgo', '{n} 分钟前', { n: minutes })
+    return t('dashboard.devices.minutesAgo', { n: minutes })
   if (hours < 24)
-    return t('dashboard.devices.hoursAgo', '{n} 小时前', { n: hours })
-  return t('dashboard.devices.daysAgo', '{n} 天前', { n: days })
+    return t('dashboard.devices.hoursAgo', { n: hours })
+  return t('dashboard.devices.daysAgo', { n: days })
 }
 
 async function revokeSession(sessionId: string) {
@@ -85,7 +85,7 @@ async function revokeSession(sessionId: string) {
 
   loading.value = true
   try {
-    const targetSession = user.value.sessions?.find((s: any) => s.id === sessionId)
+    const targetSession = (user.value as any)?.sessions?.find((s: any) => s.id === sessionId)
     if (targetSession) {
       await targetSession.revoke()
     }

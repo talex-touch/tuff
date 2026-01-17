@@ -39,12 +39,13 @@ export default defineEventHandler(async (event) => {
   const optionalUserId = await getOptionalAuth(event)
 
   if (optionalUserId) {
-    viewerId = optionalUserId
+    const authedUserId = optionalUserId
+    viewerId = authedUserId
     const client = clerkClient(event)
-    const user = await client.users.getUser(viewerId)
+    const user = await client.users.getUser(authedUserId)
     viewerIsAdmin = user.publicMetadata?.role === 'admin'
 
-    const orgMemberships = await client.users.getOrganizationMembershipList({ userId: viewerId })
+    const orgMemberships = await client.users.getOrganizationMembershipList({ userId: authedUserId })
     viewerOrgIds = orgMemberships.data?.map(membership => membership.organization.id) ?? []
   }
 

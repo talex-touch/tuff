@@ -51,17 +51,29 @@ export interface NpmPackageVersions {
 function parseNpmSource(source: string): { packageName: string, version?: string } | null {
   const npmMatch = source.match(/^npm:(@?[a-z0-9][\w\-.]*(?:\/[a-z0-9][\w\-.]*)?)(?:@(.+))?$/i)
   if (npmMatch) {
-    return { packageName: npmMatch[1], version: npmMatch[2] }
+    const packageName = npmMatch[1]
+    if (!packageName)
+      return null
+    const version = npmMatch[2]
+    return version ? { packageName, version } : { packageName }
   }
 
   const scopedMatch = source.match(/^(@tuff\/[a-z0-9][\w\-.]*)(?:@(.+))?$/i)
   if (scopedMatch) {
-    return { packageName: scopedMatch[1], version: scopedMatch[2] }
+    const packageName = scopedMatch[1]
+    if (!packageName)
+      return null
+    const version = scopedMatch[2]
+    return version ? { packageName, version } : { packageName }
   }
 
   const prefixMatch = source.match(/^(tuff-plugin-[a-z0-9][\w\-.]*)(?:@(.+))?$/i)
   if (prefixMatch) {
-    return { packageName: prefixMatch[1], version: prefixMatch[2] }
+    const packageName = prefixMatch[1]
+    if (!packageName)
+      return null
+    const version = prefixMatch[2]
+    return version ? { packageName, version } : { packageName }
   }
 
   return null

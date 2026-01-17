@@ -176,11 +176,11 @@ function updateDarkMode(): (() => void) | undefined {
 
 const outlineStyle = computed<Record<string, string>>(() => {
   if (!indicatorVisible.value) {
-    return { opacity: '0' }
+    return { opacity: '0' } as Record<string, string>
   }
 
   if (motionActive.value) {
-    return { opacity: '0' }
+    return { opacity: '0' } as Record<string, string>
   }
 
   const { width, height, x, y } = currentRect.value
@@ -189,12 +189,12 @@ const outlineStyle = computed<Record<string, string>>(() => {
     width: `${width}px`,
     height: `${height}px`,
     transform: `translate3d(${x}px, ${y}px, 0)`,
-  }
+  } as Record<string, string>
 })
 
 const glassWrapStyle = computed<Record<string, string>>(() => {
   if (!indicatorVisible.value) {
-    return { opacity: '0' }
+    return { opacity: '0' } as Record<string, string>
   }
 
   const { width, height, x, y } = currentRect.value
@@ -238,12 +238,12 @@ const glassWrapStyle = computed<Record<string, string>>(() => {
     height: `${height}px`,
     filter: glassFilter.value,
     transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
-  }
+  } as Record<string, string>
 })
 
 const glassInnerStyle = computed<Record<string, string>>(() => {
   if (!indicatorVisible.value) {
-    return { opacity: '0' }
+    return { opacity: '0' } as Record<string, string>
   }
 
   const v = velocity.value
@@ -278,7 +278,7 @@ const glassInnerStyle = computed<Record<string, string>>(() => {
     width: '100%',
     height: '100%',
     transform: `scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
-  }
+  } as Record<string, string>
 })
 
 const glassRadius = computed(() => 18)
@@ -357,7 +357,7 @@ const glassFilter = computed(() => {
 
 const blurWrapStyle = computed<Record<string, string>>(() => {
   if (!indicatorVisible.value) {
-    return { opacity: '0' }
+    return { opacity: '0' } as Record<string, string>
   }
 
   const { width, height, x, y } = currentRect.value
@@ -406,12 +406,12 @@ const blurWrapStyle = computed<Record<string, string>>(() => {
     backdropFilter: blurEnabled ? `blur(${blurPx}px)` : 'none',
     WebkitBackdropFilter: blurEnabled ? `blur(${blurPx}px)` : 'none',
     transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
-  }
+  } as Record<string, string>
 })
 
 const plainIndicatorStyle = computed<Record<string, string>>(() => {
   if (!indicatorVisible.value) {
-    return { opacity: '0' }
+    return { opacity: '0' } as Record<string, string>
   }
 
   const { width, height, x, y } = currentRect.value
@@ -454,12 +454,12 @@ const plainIndicatorStyle = computed<Record<string, string>>(() => {
     width: `${width}px`,
     height: `${height}px`,
     transform: `translate3d(${x}px, ${y}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`,
-  }
+  } as Record<string, string>
 })
 
 const hitStyle = computed<Record<string, string>>(() => {
   if (!indicatorVisible.value) {
-    return { opacity: '0' }
+    return { opacity: '0' } as Record<string, string>
   }
 
   const { width, height, x, y } = currentRect.value
@@ -468,7 +468,7 @@ const hitStyle = computed<Record<string, string>>(() => {
     width: `${width}px`,
     height: `${height}px`,
     transform: `translate3d(${x}px, ${y}px, 0) scale(1.08)`,
-  }
+  } as Record<string, string>
 })
 
 /**

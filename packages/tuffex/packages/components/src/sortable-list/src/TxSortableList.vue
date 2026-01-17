@@ -24,7 +24,9 @@ function findIndex(id: string): number {
 
 function move<T extends SortableListItem>(arr: T[], from: number, to: number): T[] {
   const next = arr.slice()
-  const [picked] = next.splice(from, 1)
+  const picked = next.splice(from, 1)[0]
+  if (!picked)
+    return next
   next.splice(to, 0, picked)
   return next
 }

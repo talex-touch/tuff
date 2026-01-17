@@ -35,8 +35,9 @@ watch(() => props.modelValue, (newValue) => {
 function setActiveNames(names: string[]) {
   activeNames.value = names
 
-  const emitValue = props.accordion
-    ? (names.length > 0 ? names[0] : [])
+  const first = names[0]
+  const emitValue: string | string[] = props.accordion
+    ? (first !== undefined ? first : [])
     : names
 
   emit('update:modelValue', emitValue)

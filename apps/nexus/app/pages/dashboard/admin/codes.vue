@@ -67,8 +67,8 @@ async function fetchCodes() {
   loading.value = true
   error.value = null
   try {
-    const res = await $fetch('/api/admin/codes')
-    codes.value = res.codes as ActivationCode[]
+    const res = await $fetch<{ codes: ActivationCode[] }>('/api/admin/codes')
+    codes.value = res.codes
   }
   catch (e: any) {
     error.value = e.data?.message || e.message || 'Failed to load codes'

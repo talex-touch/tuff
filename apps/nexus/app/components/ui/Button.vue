@@ -5,7 +5,7 @@ const props = withDefaults(
   defineProps<{
     variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'ghost'
     type?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'
-    size?: 'sm' | 'md' | 'lg' | 'small' | 'default' | 'large' | 'mini'
+    size?: 'sm' | 'md' | 'lg' | 'small' | 'large' | 'mini'
     block?: boolean
     plain?: boolean
     round?: boolean

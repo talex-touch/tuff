@@ -33,16 +33,20 @@ const customStyle = computed(() => {
 })
 
 const fallbackText = computed(() => {
-  if (props.name) {
-    const words = props.name.split(' ').filter(word => word.length > 0)
-    if (words.length >= 2) {
-      return words[0][0].toUpperCase() + words[words.length - 1][0].toUpperCase()
-    }
-    else if (words.length === 1) {
-      return words[0][0].toUpperCase()
-    }
-  }
-  return ''
+  const name = props.name?.trim()
+  if (!name)
+    return ''
+
+  const words = name.split(' ').filter(word => word.length > 0)
+  if (!words.length)
+    return ''
+
+  const first = words[0]?.charAt(0).toUpperCase() ?? ''
+  if (words.length === 1)
+    return first
+
+  const last = words[words.length - 1]?.charAt(0).toUpperCase() ?? ''
+  return `${first}${last}`
 })
 
 function handleImageError() {

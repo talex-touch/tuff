@@ -1,26 +1,6 @@
 <script setup lang="ts">
+import type { DashboardPlugin as Plugin, DashboardPluginVersion as PluginVersion } from '~/types/dashboard-plugin'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
-
-interface PluginVersion {
-  id: string
-  channel: 'SNAPSHOT' | 'BETA' | 'RELEASE'
-  version: string
-  status: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-}
-
-interface Plugin {
-  id: string
-  slug: string
-  name: string
-  summary: string
-  category: string
-  status: 'draft' | 'pending' | 'approved' | 'rejected'
-  iconUrl?: string | null
-  isOfficial: boolean
-  installs: number
-  latestVersion?: PluginVersion | null
-}
 
 interface Props {
   plugin: Plugin

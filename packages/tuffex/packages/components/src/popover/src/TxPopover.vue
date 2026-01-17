@@ -38,7 +38,10 @@ const open = computed({
   get: () => !!props.modelValue,
   set: (v) => {
     emit('update:modelValue', v)
-    emit(v ? 'open' : 'close')
+    if (v)
+      emit('open')
+    else
+      emit('close')
   },
 })
 
@@ -55,8 +58,12 @@ const splitY = ref(0)
 
 const motion = computed(() => (props.motion === 'fade' ? 'fade' : 'split'))
 
+function getPlacementSide(v: string): string {
+  return v.split('-')[0] ?? 'bottom'
+}
+
 const popoverVars = computed<Record<string, string>>(() => {
-  const side = String(stablePlacement.value || placement.value || props.placement || 'bottom').split('-')[0]
+  const side = getPlacementSide(String(stablePlacement.value || placement.value || props.placement || 'bottom'))
   const arrowData = (middlewareData.value as any)?.arrow
   const arrowSize = props.arrowSize || 12
 
@@ -132,7 +139,7 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
   ],
 })
 
-const arrowSide = computed(() => String(stablePlacement.value || placement.value || props.placement || 'bottom').split('-')[0])
+const arrowSide = computed(() => getPlacementSide(String(stablePlacement.value || placement.value || props.placement || 'bottom')))
 
 const arrowStyle = computed<Record<string, string>>(() => {
   if (!props.showArrow || !arrowRef.value)
@@ -160,12 +167,15 @@ const arrowStyle = computed<Record<string, string>>(() => {
   if (y != null)
     base.top = `${y}px`
 
-  const staticSide = {
+  const staticSideMap = {
     top: 'bottom',
     right: 'left',
     bottom: 'top',
     left: 'right',
-  }[side] as string
+  } as const
+  const staticSide = side in staticSideMap
+    ? staticSideMap[side as keyof typeof staticSideMap]
+    : 'top'
 
   const half = Math.round((props.arrowSize || 12) / 2)
   base[staticSide] = `calc(-${half}px + 1px)`

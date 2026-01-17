@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 import TuffBanner from '../TuffBanner.vue'
 
-type GsapContext = import('gsap').Context
-type GsapTween = import('gsap').gsap.core.Tween
+type GsapContext = gsap.Context
+type GsapTween = gsap.core.Tween
 
 interface HeroCta {
   label?: string

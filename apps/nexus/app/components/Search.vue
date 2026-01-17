@@ -1,6 +1,12 @@
 <script setup lang="ts">
+interface SearchResultItem {
+  id: string
+  _path: string
+  title: string
+}
+
 const searchTerm = ref('')
-const searchResults = ref([])
+const searchResults = ref<SearchResultItem[]>([])
 
 watch(searchTerm, async (newTerm) => {
   if (!newTerm) {
@@ -8,7 +14,7 @@ watch(searchTerm, async (newTerm) => {
     return
   }
   // @ts-expect-error: `searchContent` is auto-imported
-  const results = await searchContent(newTerm)
+  const results = await searchContent(newTerm) as SearchResultItem[]
   searchResults.value = results
 })
 </script>

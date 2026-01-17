@@ -64,7 +64,11 @@ export default defineEventHandler(async (event) => {
 })
 
 function compareVersions(v1: string, v2: string): number {
-  const normalize = (v: string) => v.split('-')[0].split('+')[0].split('.').map(Number)
+  const normalize = (v: string) => {
+    const base = v.split('-').shift() ?? v
+    const core = base.split('+').shift() ?? base
+    return core.split('.').map(part => Number(part))
+  }
   const parts1 = normalize(v1)
   const parts2 = normalize(v2)
 

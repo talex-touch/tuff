@@ -1,3 +1,4 @@
+import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'

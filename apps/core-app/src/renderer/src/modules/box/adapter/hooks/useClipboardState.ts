@@ -124,11 +124,17 @@ export function useClipboardState(options: UseClipboardStateOptions): ClipboardS
 
     // Priority 1: Image clipboard
     if (clipboardOptions.last?.type === 'image') {
+      const baseMeta = safeSerializeMetadata(clipboardOptions.last.meta)
       inputs.push({
         type: TuffInputType.Image,
         content: clipboardOptions.last.content,
         thumbnail: clipboardOptions.last.thumbnail ?? undefined,
-        metadata: safeSerializeMetadata(clipboardOptions.last.meta)
+        metadata: {
+          ...baseMeta,
+          clipboardId: clipboardOptions.last.id,
+          contentKind: 'preview',
+          canResolveOriginal: true
+        }
       })
       return inputs
     }

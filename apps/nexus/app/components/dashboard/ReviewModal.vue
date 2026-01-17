@@ -1,37 +1,12 @@
 <script setup lang="ts">
+import type {
+  DashboardPlugin as Plugin,
+  DashboardPluginVersion as PluginVersion,
+  PluginChannel,
+} from '~/types/dashboard-plugin'
 import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Modal from '~/components/ui/Modal.vue'
-
-type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
-type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
-type VersionStatus = 'pending' | 'approved' | 'rejected'
-
-interface PluginVersion {
-  id: string
-  pluginId: string
-  channel: PluginChannel
-  version: string
-  signature: string
-  packageUrl: string
-  packageSize: number
-  changelog?: string | null
-  status: VersionStatus
-  createdAt: string
-}
-
-interface Plugin {
-  id: string
-  slug: string
-  name: string
-  summary: string
-  category: string
-  status: PluginStatus
-  iconUrl?: string | null
-  homepage?: string | null
-  isOfficial: boolean
-  versions?: PluginVersion[]
-}
 
 export interface ReviewItem {
   type: 'plugin' | 'version'

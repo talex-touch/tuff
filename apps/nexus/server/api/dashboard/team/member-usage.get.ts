@@ -12,7 +12,10 @@ export default defineEventHandler(async (event) => {
     return { hasTeam: false, members: [] }
   }
 
-  const organizationId = memberships.data[0].organization.id
+  const membership = memberships.data[0]
+  if (!membership)
+    return { hasTeam: false, members: [] }
+  const organizationId = membership.organization.id
 
   // Fetch members from Clerk
   const orgMembers = await client.organizations.getOrganizationMembershipList({ organizationId })
