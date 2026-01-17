@@ -90,6 +90,15 @@ export interface IPluginRendererChannel {
 export interface PluginClipboardItem {
   id?: number
   type: 'text' | 'image' | 'files'
+  /**
+   * Clipboard content:
+   * - text: plain string
+   * - files: JSON string array
+   * - image: defaults to a small preview data URL to keep IPC payload light
+   *
+   * For images, the original asset URL (tfile://...) may be available at:
+   * - `meta.image_original_url`
+   */
   content: string
   thumbnail?: string | null
   rawContent?: string | null
