@@ -325,12 +325,21 @@ const arrowStyle = computed<Record<string, string>>(() => {
   if (y != null)
     base.top = `${y}px`
 
-  const staticSide = {
-    top: 'bottom',
-    right: 'left',
-    bottom: 'top',
-    left: 'right',
-  }[side] as string
+  let staticSide: 'top' | 'right' | 'bottom' | 'left' = 'bottom'
+  switch (side) {
+    case 'top':
+      staticSide = 'bottom'
+      break
+    case 'right':
+      staticSide = 'left'
+      break
+    case 'bottom':
+      staticSide = 'top'
+      break
+    case 'left':
+      staticSide = 'right'
+      break
+  }
 
   const half = Math.round((props.arrowSize || 12) / 2)
   base[staticSide] = `calc(-${half}px + 1px)`

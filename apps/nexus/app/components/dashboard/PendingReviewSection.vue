@@ -1,26 +1,5 @@
 <script setup lang="ts">
-type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
-type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
-type VersionStatus = 'pending' | 'approved' | 'rejected'
-
-interface PluginVersion {
-  id: string
-  pluginId: string
-  channel: PluginChannel
-  version: string
-  status: VersionStatus
-  createdAt: string
-}
-
-interface Plugin {
-  id: string
-  slug: string
-  name: string
-  summary: string
-  status: PluginStatus
-  iconUrl?: string | null
-  versions?: PluginVersion[]
-}
+import type { DashboardPlugin as Plugin, DashboardPluginVersion as PluginVersion } from '~/types/dashboard-plugin'
 
 export interface PendingReviewItem {
   type: 'plugin' | 'version'

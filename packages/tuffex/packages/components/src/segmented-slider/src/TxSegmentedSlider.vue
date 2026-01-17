@@ -54,7 +54,9 @@ function handleKeydown(e: KeyboardEvent, segment: SegmentedSliderSegment) {
 onMounted(() => {
   // Auto select first segment if no value provided and segments exist
   if (props.modelValue == null && props.segments.length > 0) {
-    emit('update:modelValue', props.segments[0].value)
+    const first = props.segments[0]
+    if (first)
+      emit('update:modelValue', first.value)
   }
 })
 </script>

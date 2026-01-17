@@ -13,6 +13,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const membership = orgMemberships.data[0]
+  if (!membership)
+    return { invites: [] }
   const organizationId = membership.organization.id
 
   // Only admins and owners can view invites

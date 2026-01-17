@@ -63,6 +63,11 @@ export interface ClipboardImageResult {
   dataUrl: string
   width: number
   height: number
+  /**
+   * Original image as a local streamable URL (Electron only).
+   * Returned when calling `readImage({ preview: false })`.
+   */
+  tfileUrl?: string
 }
 
 export interface ClipboardCopyAndPasteOptions {
@@ -264,8 +269,23 @@ export function useClipboard() {
     /**
      * Reads image from clipboard as data URL
      */
-    async readImage(): Promise<ClipboardImageResult | null> {
-      return await channel.send('clipboard:read-image')
+    async readImage(options?: { preview?: boolean }): Promise<ClipboardImageResult | null> {
+      return await channel.send('clipboard:read-image', { preview: options?.preview ?? true })
+    },
+
+    /**
+     * Resolves the original image URL for a clipboard history item (streamable via tfile://).
+     *
+     * @remarks
+     * - This avoids transferring large base64 payloads over IPC.
+     * - Returns null if the item is not an image or original asset is not available.
+     */
+    async getHistoryImageUrl(id: number): Promise<string | null> {
+      const res = await channel.send('clipboard:get-image-url', { id })
+      if (res && typeof res === 'object' && 'url' in res && typeof (res as any).url === 'string') {
+        return (res as any).url as string
+      }
+      return null
     },
 
     /**

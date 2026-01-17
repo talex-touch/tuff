@@ -69,7 +69,7 @@ export default defineComponent({
             '--tx-avatar-group-overlap': overlapPx.value,
           },
         },
-        children,
+        children as any,
       )
     }
   },

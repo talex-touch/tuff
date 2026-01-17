@@ -84,16 +84,18 @@ const style = computed<Record<string, string>>(() => {
   const offset = Math.min(24, Math.max(0, Number(props.offset ?? 0)))
 
   const basis = `${(span / 24) * 100}%`
-  const marginLeft = offset ? `${(offset / 24) * 100}%` : undefined
-
-  return {
+  const out: Record<string, string> = {
     paddingLeft: `calc(${gutter} / 2)`,
     paddingRight: `calc(${gutter} / 2)`,
     flex: `0 0 ${basis}`,
     maxWidth: basis,
-    marginLeft,
     boxSizing: 'border-box',
   }
+
+  if (offset)
+    out.marginLeft = `${(offset / 24) * 100}%`
+
+  return out
 })
 </script>
 

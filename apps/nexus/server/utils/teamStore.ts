@@ -138,7 +138,7 @@ function getWeekStartDate(): string {
   const diff = now.getUTCDate() - day + (day === 0 ? -6 : 1)
   const monday = new Date(now.setUTCDate(diff))
   monday.setUTCHours(0, 0, 0, 0)
-  return monday.toISOString().split('T')[0]
+  return monday.toISOString().slice(0, 10)
 }
 
 function mapInviteRow(row: D1InviteRow): TeamInvite {

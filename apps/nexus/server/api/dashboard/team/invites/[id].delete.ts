@@ -18,6 +18,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const membership = orgMemberships.data[0]
+  if (!membership)
+    throw createError({ statusCode: 403, statusMessage: 'Not in an organization' })
   const organizationId = membership.organization.id
 
   // Only admins and owners can revoke invites

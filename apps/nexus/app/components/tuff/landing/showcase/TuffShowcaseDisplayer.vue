@@ -17,7 +17,7 @@ interface ShowcaseSlideScenario {
     title: string
     description: string
     badge?: string
-    confidence?: string
+    confidence: string
     category?: string
   }>
 }

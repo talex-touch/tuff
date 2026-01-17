@@ -6,7 +6,6 @@ import TuffLandingAiOverview from './landing/TuffLandingAiOverview.vue'
 import TuffLandingBuiltForYou from './landing/TuffLandingBuiltForYou.vue'
 import TuffLandingCommunity from './landing/TuffLandingCommunity.vue'
 import TuffLandingEcosystem from './landing/TuffLandingEcosystem.vue'
-import TuffLandingExperience from './landing/TuffLandingExperience.vue'
 import TuffLandingFaq from './landing/TuffLandingFaq.vue'
 import TuffLandingFeatures from './landing/TuffLandingFeatures.vue'
 import TuffLandingHero from './landing/TuffLandingHero.vue'
@@ -17,7 +16,7 @@ import TuffLandingStarSnippets from './landing/TuffLandingStarSnippets.vue'
 import TuffLandingStats from './landing/TuffLandingStats.vue'
 import TuffLandingWaitlist from './landing/TuffLandingWaitlist.vue'
 
-type GsapTween = import('gsap').gsap.core.Tween
+type GsapTween = gsap.core.Tween
 
 const showStarSnippets = false
 const showAggregation = false
@@ -245,7 +244,10 @@ onMounted(async () => {
       if (direction > 0) {
         heroJustExited = false
         currentSectionIndex = clampIndex(0)
-        scrollToSection(sectionElements[currentSectionIndex])
+        const target = sectionElements[currentSectionIndex]
+        if (!target)
+          return false
+        scrollToSection(target)
         return true
       }
 
@@ -270,7 +272,10 @@ onMounted(async () => {
       return false
 
     currentSectionIndex = targetIndex
-    scrollToSection(sectionElements[targetIndex])
+    const target = sectionElements[targetIndex]
+    if (!target)
+      return false
+    scrollToSection(target)
     heroJustExited = false
     return true
   }

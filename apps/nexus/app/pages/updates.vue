@@ -61,10 +61,12 @@ watch(
 
 watch(selectedChannel, async (channel) => {
   historyExpanded.value = false
-  const nextQuery = channel === 'release' ? { ...route.query } : { ...route.query, channel }
-
-  if (channel === 'release' && route.query.channel)
-    delete nextQuery.channel
+  const nextQuery = channel === 'release'
+    ? (() => {
+        const { channel: _channel, ...rest } = route.query
+        return rest
+      })()
+    : { ...route.query, channel }
 
   if (!isSameQuery(nextQuery, route.query))
     router.replace({ query: nextQuery })
@@ -127,10 +129,10 @@ const allDownloads = computed(() => {
 watch(historyExpanded, (expanded) => {
   const nextQuery = expanded
     ? { ...route.query, history: '1' }
-    : { ...route.query }
-
-  if (!expanded && nextQuery.history)
-    delete nextQuery.history
+    : (() => {
+        const { history: _history, ...rest } = route.query
+        return rest
+      })()
 
   if (!isSameQuery(nextQuery, route.query))
     router.replace({ query: nextQuery })

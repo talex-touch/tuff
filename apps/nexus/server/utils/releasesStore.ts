@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
-import { useStorage } from '#imports'
+import { useStorage } from 'nitropack/runtime/internal/storage'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 
@@ -434,6 +434,8 @@ export async function getLatestRelease(
     return null
 
   const release = published[0]
+  if (!release)
+    return null
   let assets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
   assets = assets.filter(a => a.releaseId === release.id)
 
@@ -756,8 +758,11 @@ export async function incrementDownloadCount(
   const assets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
   const index = assets.findIndex(a => a.id === assetId)
   if (index !== -1) {
-    assets[index].downloadCount++
-    assets[index].updatedAt = new Date().toISOString()
+    const existing = assets[index]
+    if (!existing)
+      return
+    existing.downloadCount++
+    existing.updatedAt = new Date().toISOString()
     await writeCollection(RELEASE_ASSETS_KEY, assets)
   }
 }

@@ -292,7 +292,10 @@ const searchHits = computed(() => {
 watch(
   open,
   async (v) => {
-    emit(v ? 'open' : 'close')
+    if (v)
+      emit('open')
+    else
+      emit('close')
     if (!v) {
       query.value = ''
       return

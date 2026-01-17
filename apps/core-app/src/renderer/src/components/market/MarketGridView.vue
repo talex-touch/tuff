@@ -14,6 +14,7 @@ import { useI18n } from 'vue-i18n'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { hasUpgradeAvailable } from '~/composables/market/useVersionCompare'
 import MarketItemCard from './MarketItemCard.vue'
+import { TxSpinner } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   /** List of plugins to display */
@@ -133,9 +134,9 @@ watch(
 
 <template>
   <div class="market-grid-view p-4">
-    <div v-if="loading" class="market-loading">
-      <i class="i-ri-loader-4-line animate-spin" />
-      <span>{{ t('market.loading') }}</span>
+    <div v-if="loading" class="flex flex-col w-full h-full items-center justify-center gap-4">
+      <TxSpinner :size="32" />
+      <span class="text-sm text-black/70 dark:text-light/70">{{ t('market.loading') }}</span>
     </div>
 
     <TransitionGroup
@@ -165,7 +166,7 @@ watch(
       />
     </TransitionGroup>
 
-    <div v-else class="market-empty">
+    <div v-else class="market-empty w-full h-full flex flex-col items-center justify-center">
       <div class="empty-icon">
         <i class="i-ri-search-line" />
       </div>
@@ -179,21 +180,6 @@ watch(
 .market-grid-view {
   flex: 1;
   overflow: auto;
-}
-
-.market-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 4rem 0;
-  color: var(--el-text-color-secondary);
-
-  i {
-    font-size: 2rem;
-    color: var(--el-color-primary);
-  }
 }
 
 .market-grid {

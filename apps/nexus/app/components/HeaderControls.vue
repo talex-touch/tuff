@@ -16,9 +16,9 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { locale } = useI18n()
 
-// eslint-disable-next-line unused-imports/no-unused-vars
+ 
 const searchButtonLabel = computed(() => locale.value === 'zh' ? '搜索文档' : 'Search docs')
-// eslint-disable-next-line unused-imports/no-unused-vars
+ 
 const searchButtonAriaLabel = computed(() => locale.value === 'zh' ? '打开文档搜索' : 'Open docs search')
 
 const isSearchOpen = ref(false)
@@ -26,14 +26,14 @@ const searchButtonRef = ref<HTMLElement | null>(null)
 const searchPanelRef = ref<HTMLElement | null>(null)
 let stopClickOutside: (() => void) | null = null
 
-// eslint-disable-next-line unused-imports/no-unused-vars
+ 
 function toggleSearch() {
   if (!props.showSearchButton)
     return
   isSearchOpen.value = !isSearchOpen.value
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
+ 
 function onSearchPanelClick(event: MouseEvent) {
   const target = event.target as HTMLElement | null
   if (target?.closest('a'))
@@ -68,13 +68,12 @@ function registerClickOutside() {
   if (!props.showSearchButton)
     return
 
-  const targets = [searchButtonRef.value, searchPanelRef.value].filter((el): el is HTMLElement => !!el)
-  if (!targets.length)
+  if (!searchPanelRef.value)
     return
 
-  stopClickOutside = onClickOutside(targets, () => {
+  stopClickOutside = onClickOutside(searchPanelRef, () => {
     isSearchOpen.value = false
-  })
+  }, { ignore: [searchButtonRef] })
 }
 
 onMounted(() => {

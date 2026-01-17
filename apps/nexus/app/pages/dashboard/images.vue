@@ -58,7 +58,7 @@ async function handleImageUpload(event: Event) {
   if (!target?.files?.length)
     return
 
-  imageFile.value = target.files[0]
+  imageFile.value = target.files[0] ?? null
   await uploadImage()
 }
 

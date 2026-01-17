@@ -14,9 +14,10 @@ import type { NativeImage } from 'electron'
 import type * as schema from '../db/schema'
 import { execFile } from 'node:child_process'
 import crypto from 'node:crypto'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { DataCode } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
@@ -37,6 +38,7 @@ import { windowManager } from './box-tool/core-box/window'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { activeAppService } from './system/active-app'
+import { tempFileService } from '../service/temp-file.service'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -109,6 +111,29 @@ const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
 
 const execFileAsync = promisify(execFile)
 const IMAGE_HASH_SIZE = 24
+const CLIPBOARD_IMAGE_NAMESPACE = 'clipboard/images'
+const CLIPBOARD_LIVE_IMAGE_NAMESPACE = 'clipboard/live-images'
+const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID = 'clipboard.temp-images.cleanup'
+const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
+const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
+
+function toTfileUrl(filePath: string): string {
+  return `tfile://${filePath}`
+}
+
+function isDataUrl(value: string): boolean {
+  return typeof value === 'string' && value.startsWith('data:')
+}
+
+function isLikelyLocalPath(value: string): boolean {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !value.startsWith('data:') &&
+    !value.startsWith('http:') &&
+    !value.startsWith('https:')
+  )
+}
 
 class ClipboardHelper {
   private lastText: string = ''
@@ -495,14 +520,52 @@ export class ClipboardModule extends BaseModule {
           ? TuffInputType.Files
           : TuffInputType.Text
 
+    const value =
+      item.type === 'image'
+        ? item.thumbnail && item.thumbnail.length > 0
+          ? item.thumbnail
+          : (item.content ?? '')
+        : (item.content ?? '')
+
     return {
       id: item.id,
       type,
-      value: item.content ?? '',
+      value,
       html: item.type === 'text' ? (item.rawContent ?? undefined) : undefined,
       source: item.sourceApp ?? undefined,
       createdAt,
       isFavorite: item.isFavorite ?? undefined
+    }
+  }
+
+  private toClientItem(item: IClipboardItem | null): IClipboardItem | null {
+    if (!item) return null
+
+    if (item.type !== 'image') {
+      return { ...item }
+    }
+
+    const meta = { ...(item.meta ?? {}) } as Record<string, unknown>
+    const rawContent = typeof item.content === 'string' ? item.content : ''
+
+    const originalPath =
+      isLikelyLocalPath(rawContent) && tempFileService.isWithinBaseDir(rawContent)
+        ? rawContent
+        : undefined
+    const originalUrl = originalPath ? toTfileUrl(originalPath) : undefined
+
+    meta.image_original_url = originalUrl ?? meta.image_original_url
+    meta.image_content_kind = 'preview'
+
+    const content =
+      typeof item.thumbnail === 'string' && item.thumbnail.length > 0
+        ? item.thumbnail
+        : (originalUrl ?? (isDataUrl(rawContent) ? rawContent : ''))
+
+    return {
+      ...item,
+      content,
+      meta
     }
   }
 
@@ -591,6 +654,31 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
+  private createNativeImageFromSource(source: string): NativeImage {
+    if (!source) {
+      return nativeImage.createEmpty()
+    }
+
+    if (isDataUrl(source)) {
+      return nativeImage.createFromDataURL(source)
+    }
+
+    if (source.startsWith('tfile://')) {
+      const rawPath = decodeURIComponent(source.slice('tfile://'.length))
+      return nativeImage.createFromPath(rawPath)
+    }
+
+    if (source.startsWith('file://')) {
+      try {
+        return nativeImage.createFromPath(fileURLToPath(source))
+      } catch {
+        return nativeImage.createEmpty()
+      }
+    }
+
+    return nativeImage.createFromPath(source)
+  }
+
   private writeItemToClipboard(item: IClipboardItem, payload: ClipboardApplyPayload): void {
     if (item.type === 'text') {
       const html = item.rawContent ?? payload.html ?? undefined
@@ -603,7 +691,8 @@ export class ClipboardModule extends BaseModule {
     }
 
     if (item.type === 'image') {
-      const image = nativeImage.createFromDataURL(item.content)
+      const source = item.content ?? ''
+      const image = this.createNativeImageFromSource(source)
       if (image.isEmpty()) {
         throw new Error('Image clipboard item could not be reconstructed.')
       }
@@ -641,6 +730,103 @@ export class ClipboardModule extends BaseModule {
     // Ensure at least the path text is available as a fallback.
     clipboard.write({ text: resolvedPaths[0] ?? '' })
     this.clipboardHelper?.primeFiles(resolvedPaths)
+  }
+
+  private startTempCleanupTasks(): void {
+    tempFileService.registerNamespace({ namespace: CLIPBOARD_IMAGE_NAMESPACE, retentionMs: null })
+    tempFileService.registerNamespace({
+      namespace: CLIPBOARD_LIVE_IMAGE_NAMESPACE,
+      retentionMs: 24 * 60 * 60 * 1000
+    })
+    tempFileService.startCleanup()
+
+    if (!pollingService.isRegistered(CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID)) {
+      pollingService.register(
+        CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID,
+        () => {
+          void this.cleanupOrphanClipboardImages().catch((error) => {
+            clipboardLog.warn('Clipboard temp image cleanup failed', { error })
+          })
+        },
+        { interval: CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS, unit: 'milliseconds' }
+      )
+      pollingService.start()
+    }
+  }
+
+  private async cleanupOrphanClipboardImages(): Promise<void> {
+    if (!this.db) return
+
+    const dirPath = tempFileService.resolveNamespaceDir(CLIPBOARD_IMAGE_NAMESPACE)
+    const now = Date.now()
+    const cutoff = now - CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS
+
+    const referenced = new Set<string>()
+    try {
+      const rows = await this.db
+        .select({ content: clipboardHistory.content })
+        .from(clipboardHistory)
+        .where(eq(clipboardHistory.type, 'image'))
+
+      for (const row of rows) {
+        const content = row.content ?? ''
+        if (!isLikelyLocalPath(content)) continue
+        if (!tempFileService.isWithinBaseDir(content)) continue
+        referenced.add(path.resolve(content))
+      }
+    } catch (error) {
+      clipboardLog.warn('Failed to load referenced clipboard image paths', { error })
+      return
+    }
+
+    const collectFiles = async (root: string): Promise<string[]> => {
+      const files: string[] = []
+      let entries: Array<import('node:fs').Dirent>
+      try {
+        entries = await fs.readdir(root, { withFileTypes: true })
+      } catch {
+        return files
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(root, entry.name)
+        if (entry.isDirectory()) {
+          files.push(...(await collectFiles(fullPath)))
+          continue
+        }
+        if (entry.isFile()) {
+          files.push(fullPath)
+        }
+      }
+      return files
+    }
+
+    const candidates = await collectFiles(dirPath)
+    let cleanedCount = 0
+    let cleanedBytes = 0
+
+    for (const filePath of candidates) {
+      const resolved = path.resolve(filePath)
+      if (referenced.has(resolved)) continue
+
+      try {
+        const stat = await fs.stat(resolved)
+        if (!Number.isFinite(stat.mtimeMs) || stat.mtimeMs > cutoff) continue
+        const ok = await tempFileService.deleteFile(resolved)
+        if (ok) {
+          cleanedCount += 1
+          cleanedBytes += stat.size
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (cleanedCount > 0) {
+      clipboardLog.info('Cleaned orphaned clipboard images', {
+        meta: { cleanedCount, cleanedBytes }
+      })
+    }
   }
 
   private async wait(ms: number): Promise<void> {
@@ -949,9 +1135,18 @@ export class ClipboardModule extends BaseModule {
           helper.markText('')
           const size = image.getSize()
           metaEntries.push({ key: 'image_size', value: size })
+          const png = image.toPNG()
+          const stored = await tempFileService.createFile({
+            namespace: CLIPBOARD_IMAGE_NAMESPACE,
+            ext: 'png',
+            buffer: png,
+            prefix: 'clipboard-image'
+          })
+          metaEntries.push({ key: 'image_file_path', value: stored.path })
+          metaEntries.push({ key: 'image_file_size', value: stored.sizeBytes })
           item = {
             type: 'image',
-            content: image.toDataURL(),
+            content: stored.path,
             thumbnail: image.resize({ width: 128 }).toDataURL()
           }
         }
@@ -1086,7 +1281,7 @@ export class ClipboardModule extends BaseModule {
     const registerHandlers = (type: ChannelType) => {
       touchChannel.regChannel(type, 'clipboard:get-latest', async ({ reply }) => {
         const latest = this.memoryCache.length > 0 ? this.memoryCache[0] : null
-        reply(DataCode.SUCCESS, latest)
+        reply(DataCode.SUCCESS, this.toClientItem(latest))
       })
 
       touchChannel.regChannel(type, 'clipboard:get-history', async ({ data: payload, reply }) => {
@@ -1161,6 +1356,7 @@ export class ClipboardModule extends BaseModule {
           .offset(offset)
 
         const history = await this.hydrateWithMeta(historyRows)
+        const normalized = history.map((item) => this.toClientItem(item) ?? item)
 
         // Get total count
         const totalResult = await this.db
@@ -1170,7 +1366,7 @@ export class ClipboardModule extends BaseModule {
 
         const total = totalResult[0]?.count ?? 0
 
-        reply(DataCode.SUCCESS, { history, total, page, pageSize })
+        reply(DataCode.SUCCESS, { history: normalized, total, page, pageSize })
       })
 
       touchChannel.regChannel(type, 'clipboard:set-favorite', async ({ data, reply }) => {
@@ -1188,6 +1384,23 @@ export class ClipboardModule extends BaseModule {
 
       touchChannel.regChannel(type, 'clipboard:delete-item', async ({ data, reply }) => {
         const { id } = data ?? {}
+        try {
+          const [row] = await this.db!.select()
+            .from(clipboardHistory)
+            .where(eq(clipboardHistory.id, id))
+            .limit(1)
+          const item = row as unknown as IClipboardItem | undefined
+          if (
+            item?.type === 'image' &&
+            typeof item.content === 'string' &&
+            isLikelyLocalPath(item.content)
+          ) {
+            void tempFileService.deleteFile(item.content)
+          }
+        } catch (error) {
+          clipboardLog.warn('Failed to delete clipboard image file for removed item', { error })
+        }
+
         await this.db!.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
         this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
         this.notifyTransportChange()
@@ -1196,6 +1409,24 @@ export class ClipboardModule extends BaseModule {
 
       touchChannel.regChannel(type, 'clipboard:clear-history', async ({ reply }) => {
         const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
+        try {
+          const rows = await this.db!.select()
+            .from(clipboardHistory)
+            .where(gt(clipboardHistory.timestamp, oneHourAgo))
+          for (const row of rows) {
+            const item = row as unknown as IClipboardItem
+            if (
+              item?.type === 'image' &&
+              typeof item.content === 'string' &&
+              isLikelyLocalPath(item.content)
+            ) {
+              void tempFileService.deleteFile(item.content)
+            }
+          }
+        } catch (error) {
+          clipboardLog.warn('Failed to cleanup clipboard image files for clear-history', { error })
+        }
+
         await this.db!.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
         this.memoryCache = []
         this.notifyTransportChange()
@@ -1231,7 +1462,7 @@ export class ClipboardModule extends BaseModule {
           }
 
           if (image) {
-            const img = nativeImage.createFromDataURL(image)
+            const img = this.createNativeImageFromSource(image)
             if (!img.isEmpty()) {
               clipboard.writeImage(img)
               this.clipboardHelper?.primeImage(img)
@@ -1279,7 +1510,7 @@ export class ClipboardModule extends BaseModule {
         }
       })
 
-      touchChannel.regChannel(type, 'clipboard:read-image', async ({ reply }) => {
+      touchChannel.regChannel(type, 'clipboard:read-image', async ({ data, reply }) => {
         try {
           const image = clipboard.readImage()
           if (image.isEmpty()) {
@@ -1287,10 +1518,28 @@ export class ClipboardModule extends BaseModule {
             return
           }
           const size = image.getSize()
+          const preview = Boolean((data as any)?.preview)
+          const previewDataUrl = image.resize({ width: 256 }).toDataURL()
+          if (preview) {
+            reply(DataCode.SUCCESS, {
+              dataUrl: previewDataUrl,
+              width: size.width,
+              height: size.height
+            })
+            return
+          }
+
+          const stored = await tempFileService.createFile({
+            namespace: CLIPBOARD_LIVE_IMAGE_NAMESPACE,
+            ext: 'png',
+            buffer: image.toPNG(),
+            prefix: 'clipboard-read'
+          })
           reply(DataCode.SUCCESS, {
-            dataUrl: image.toDataURL(),
+            dataUrl: previewDataUrl,
             width: size.width,
-            height: size.height
+            height: size.height,
+            tfileUrl: toTfileUrl(stored.path)
           })
         } catch (error) {
           reply(DataCode.ERROR, (error as Error).message)
@@ -1446,10 +1695,11 @@ export class ClipboardModule extends BaseModule {
           .orderBy(desc(clipboardHistory.timestamp))
 
         const history = await this.hydrateWithMeta(rows)
+        const normalized = history.map((item) => this.toClientItem(item) ?? item)
         clipboardLog.debug('[clipboard:query] Returning results', {
           meta: { count: history.length }
         })
-        reply(DataCode.SUCCESS, history)
+        reply(DataCode.SUCCESS, normalized)
       })
     }
 
@@ -1535,6 +1785,23 @@ export class ClipboardModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(ClipboardEvents.delete, async (request: ClipboardDeleteRequest) => {
         if (!this.db) return
+        try {
+          const [row] = await this.db
+            .select()
+            .from(clipboardHistory)
+            .where(eq(clipboardHistory.id, request.id))
+            .limit(1)
+          const item = row as unknown as IClipboardItem | undefined
+          if (
+            item?.type === 'image' &&
+            typeof item.content === 'string' &&
+            isLikelyLocalPath(item.content)
+          ) {
+            void tempFileService.deleteFile(item.content)
+          }
+        } catch (error) {
+          clipboardLog.warn('Failed to delete clipboard image file for transport delete', { error })
+        }
         await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, request.id))
         this.memoryCache = this.memoryCache.filter((item) => item.id !== request.id)
         this.notifyTransportChange()
@@ -1602,6 +1869,7 @@ export class ClipboardModule extends BaseModule {
     this.db = databaseModule.getDb()
     this.clipboardHelper = new ClipboardHelper()
     this.registerTransportHandlers()
+    this.startTempCleanupTasks()
     setImmediate(() => {
       this.startClipboardMonitoring()
       void this.loadInitialCache()

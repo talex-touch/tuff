@@ -176,7 +176,10 @@ function setupIntersectionObserver() {
     return
 
   intersectionObserver = new IntersectionObserver(
-    ([entry]) => {
+    (entries) => {
+      const entry = entries[0]
+      if (!entry)
+        return
       isVisible.value = entry.isIntersecting
     },
     { threshold: 0.1 },

@@ -1,5 +1,5 @@
 import type { TpexMetadata } from '@talex-touch/utils/plugin/providers'
-import type { Buffer } from 'node:buffer'
+import { Buffer } from 'node:buffer'
 
 export type { TpexMetadata }
 

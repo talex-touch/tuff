@@ -19,6 +19,12 @@ export default defineEventHandler(async (event) => {
     }
 
     const membership = memberships.data[0]
+    if (!membership) {
+      return {
+        hasTeam: false,
+        quota: null,
+      }
+    }
     const organizationId = membership.organization.id
 
     // Get organization details to find owner

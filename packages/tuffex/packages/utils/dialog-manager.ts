@@ -38,6 +38,8 @@ export class DialogManager {
       return
 
     const [dialog] = this.stack.splice(index, 1)
+    if (!dialog)
+      return
     const wasVisible = index === this.stack.length
 
     dialog.onDestroy?.()
@@ -51,7 +53,7 @@ export class DialogManager {
   }
 
   getVisibleDialog(): DialogConfig | null {
-    return this.stack.length > 0 ? this.stack[this.stack.length - 1] : null
+    return this.stack.at(-1) ?? null
   }
 
   getAllDialogs(): DialogConfig[] {

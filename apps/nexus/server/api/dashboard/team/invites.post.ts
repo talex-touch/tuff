@@ -14,6 +14,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const membership = orgMemberships.data[0]
+  if (!membership)
+    throw createError({ statusCode: 400, statusMessage: 'You must be in an organization to create invites' })
   const organizationId = membership.organization.id
 
   // Only admins and owners can create invites

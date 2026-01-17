@@ -20,7 +20,6 @@ export function useTheme() {
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const isAppearanceTransition = !prefersReducedMotion
-      // @ts-expect-error: Transition API
       && ('startViewTransition' in document)
 
     if (!isAppearanceTransition || !event) {

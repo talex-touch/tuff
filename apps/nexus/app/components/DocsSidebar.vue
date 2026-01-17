@@ -196,7 +196,7 @@ function sectionContainsActive(item: any): boolean {
   if (target && isLinkActive(target))
     return true
   if (Array.isArray(item.children))
-    return item.children.some(child => sectionContainsActive(child))
+    return item.children.some((child: any) => sectionContainsActive(child))
   return false
 }
 
@@ -246,7 +246,7 @@ watch(
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
-          :to="localePath(`/docs/${sec.key}`)"
+          :to="localePath({ path: `/docs/${sec.key}` })"
           class="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium no-underline transition-all duration-200"
           :class="activeTopSection === sec.key
             ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
@@ -273,7 +273,7 @@ watch(
         <div v-if="currentSectionData" class="flex flex-col gap-1">
           <NuxtLink
             v-if="linkTarget(currentSectionData)"
-            :to="localePath(linkTarget(currentSectionData)!)"
+            :to="localePath({ path: linkTarget(currentSectionData)! })"
             class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium no-underline transition-colors"
             :class="isLinkActive(linkTarget(currentSectionData) || '')
               ? 'bg-primary/10 text-primary'
@@ -303,7 +303,7 @@ watch(
           >
             <NuxtLink
               v-if="linkTarget(child)"
-              :to="localePath(linkTarget(child)!)"
+              :to="localePath({ path: linkTarget(child)! })"
               class="group/link relative flex items-center py-1.5 pl-4 pr-2 text-[13px] no-underline transition-all duration-150"
               :class="isLinkActive(linkTarget(child) || child.path || '')
                 ? 'text-black font-medium dark:text-white'

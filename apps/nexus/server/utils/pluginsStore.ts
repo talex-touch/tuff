@@ -2,7 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
-import { useStorage } from '#imports'
+import { useStorage } from 'nitropack/runtime/internal/storage'
 import { createError } from 'h3'
 import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
@@ -413,7 +413,8 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
     hasLoggedShaFallback = true
   }
 
-  const digest = await subtle.digest('SHA-256', data)
+  const safeData = new Uint8Array(data)
+  const digest = await subtle.digest('SHA-256', safeData)
   return Array.from(new Uint8Array(digest))
     .map(byte => byte.toString(16).padStart(2, '0'))
     .join('')
@@ -543,14 +544,18 @@ function validateSemanticVersion(version: string): boolean {
  */
 function compareVersions(v1: string, v2: string): number {
   // Extract major.minor.patch from version strings (ignore pre-release and build metadata)
-  const normalize = (v: string) => v.split('-')[0].split('+')[0].split('.').map(Number)
+  const normalize = (v: string) => {
+    const base = v.split('-').shift() ?? v
+    const core = base.split('+').shift() ?? base
+    return core.split('.').map(part => Number(part))
+  }
   const parts1 = normalize(v1)
   const parts2 = normalize(v2)
 
   for (let i = 0; i < 3; i++) {
-    if (parts1[i] > parts2[i])
+    if ((parts1[i] ?? 0) > (parts2[i] ?? 0))
       return 1
-    if (parts1[i] < parts2[i])
+    if ((parts1[i] ?? 0) < (parts2[i] ?? 0))
       return -1
   }
   return 0
@@ -1190,8 +1195,11 @@ async function updatePluginIcon(event: H3Event, pluginId: string, iconKey: strin
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
     const index = plugins.findIndex(item => item.id === pluginId)
     if (index !== -1) {
+      const existing = plugins[index]
+      if (!existing)
+        return
       plugins[index] = {
-        ...plugins[index],
+        ...existing,
         iconKey,
         iconUrl,
         updatedAt: now,
@@ -1287,8 +1295,11 @@ export async function setPluginStatus(event: H3Event, id: string, status: Plugin
     const index = plugins.findIndex(item => item.id === id)
     if (index === -1)
       throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
+    const existing = plugins[index]
+    if (!existing)
+      throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
     plugins[index] = {
-      ...plugins[index],
+      ...existing,
       status,
       updatedAt: now,
     }
@@ -1333,8 +1344,11 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
     const index = versions.findIndex(item => item.id === versionId)
     if (index === -1)
       throw createError({ statusCode: 404, statusMessage: 'Version not found.' })
+    const existing = versions[index]
+    if (!existing)
+      throw createError({ statusCode: 404, statusMessage: 'Version not found.' })
     versions[index] = {
-      ...versions[index],
+      ...existing,
       status,
       reviewedAt,
       updatedAt: now,
@@ -1364,6 +1378,14 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
     const index = plugins.findIndex(item => item.id === pluginId)
     if (index !== -1) {
+      const existing = plugins[index]
+      if (!existing)
+        return {
+          ...version,
+          status,
+          reviewedAt,
+          updatedAt: now,
+        }
       const refreshed = await getPluginById(event, pluginId, {
         includeVersions: true,
         viewerIsAdmin: true,
@@ -1372,8 +1394,8 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
         viewerIsAdmin: true,
       })
       plugins[index] = {
-        ...plugins[index],
-        latestVersionId: latest?.id ?? plugins[index].latestVersionId ?? null,
+        ...existing,
+        latestVersionId: latest?.id ?? existing.latestVersionId ?? null,
         updatedAt: now,
       }
       await writeCollection(PLUGINS_KEY, plugins)
@@ -1598,6 +1620,11 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
     const index = plugins.findIndex(item => item.id === plugin.id)
     if (index !== -1) {
+      const existing = plugins[index]
+      if (!existing) {
+        await writeCollection(PLUGINS_KEY, plugins)
+        return version
+      }
       const latest = selectLatestVisibleVersion(
         [...currentVersions, version],
         { ...plugin, versions: currentVersions },
@@ -1605,7 +1632,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       )
 
       plugins[index] = {
-        ...plugins[index],
+        ...existing,
         latestVersionId: latest?.id ?? version.id,
         updatedAt: version.createdAt,
       }
@@ -1681,6 +1708,9 @@ export async function deletePluginVersion(event: H3Event, pluginId: string, vers
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
     const index = plugins.findIndex(item => item.id === plugin.id)
     if (index !== -1) {
+      const existing = plugins[index]
+      if (!existing)
+        return version
       const remainingVersions = (plugin.versions ?? []).filter(item => item.id !== version.id)
       const latest = selectLatestVisibleVersion(
         remainingVersions,
@@ -1689,7 +1719,7 @@ export async function deletePluginVersion(event: H3Event, pluginId: string, vers
       )
 
       plugins[index] = {
-        ...plugins[index],
+        ...existing,
         latestVersionId: latest?.id ?? null,
         updatedAt: new Date().toISOString(),
       }
@@ -1735,9 +1765,14 @@ export async function incrementPluginInstalls(event: H3Event, pluginId: string):
   if (index === -1)
     return 0
 
+  const existing = plugins[index]
+  if (!existing)
+    return 0
+
+  const installs = (existing.installs ?? 0) + 1
   plugins[index] = {
-    ...plugins[index],
-    installs: (plugins[index].installs ?? 0) + 1,
+    ...existing,
+    installs,
   }
   await writeCollection(PLUGINS_KEY, plugins)
 
@@ -1746,10 +1781,10 @@ export async function incrementPluginInstalls(event: H3Event, pluginId: string):
     'H2',
     'nexus/server/utils/pluginsStore.ts:incrementPluginInstalls',
     'increment installs (fallback)',
-    { pluginId, hasDb: false, installs: plugins[index].installs },
+    { pluginId, hasDb: false, installs },
   )
   // endregion
-  return plugins[index].installs
+  return installs
 }
 
 export async function decrementPluginInstalls(event: H3Event, pluginId: string): Promise<number> {
@@ -1777,13 +1812,18 @@ export async function decrementPluginInstalls(event: H3Event, pluginId: string):
   if (index === -1)
     return 0
 
+  const existing = plugins[index]
+  if (!existing)
+    return 0
+
+  const installs = Math.max(0, (existing.installs ?? 0) - 1)
   plugins[index] = {
-    ...plugins[index],
-    installs: Math.max(0, (plugins[index].installs ?? 0) - 1),
+    ...existing,
+    installs,
   }
   await writeCollection(PLUGINS_KEY, plugins)
 
-  return plugins[index].installs
+  return installs
 }
 
 export async function findVersionByPackageKey(event: H3Event, packageKey: string) {

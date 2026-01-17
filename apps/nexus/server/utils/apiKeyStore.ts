@@ -215,6 +215,8 @@ export async function validateApiKey(event: H3Event, key: string): Promise<{ use
   }
 
   const row = results[0]
+  if (!row)
+    return null
 
   // Check expiration
   if (row.expires_at && new Date(row.expires_at) < new Date()) {

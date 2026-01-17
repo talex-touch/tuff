@@ -22,7 +22,6 @@ defineProps<Props>()
         duration: 0.5,
         delay: 0.2 * index,
         ease: 'easeOut',
-        once: true,
       },
     }"
     class="rounded-3xl last:pr-[5%] md:last:pr-[33%]"

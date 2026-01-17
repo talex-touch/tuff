@@ -75,12 +75,20 @@ export interface TpexDetailResponse {
 function parseTpexSource(source: string): { slug: string, version?: string } | null {
   const tpexMatch = source.match(/^tpex:([a-z0-9][\w\-.]{1,62}[a-z0-9])(?:@(.+))?$/i)
   if (tpexMatch) {
-    return { slug: tpexMatch[1], version: tpexMatch[2] }
+    const slug = tpexMatch[1]
+    if (!slug)
+      return null
+    const version = tpexMatch[2]
+    return version ? { slug, version } : { slug }
   }
 
   const slugMatch = source.match(/^([a-z0-9][\w\-.]{1,62}[a-z0-9])(?:@(.+))?$/i)
   if (slugMatch) {
-    return { slug: slugMatch[1], version: slugMatch[2] }
+    const slug = slugMatch[1]
+    if (!slug)
+      return null
+    const version = slugMatch[2]
+    return version ? { slug, version } : { slug }
   }
 
   return null

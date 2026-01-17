@@ -3,8 +3,8 @@ import SearchInput from '~/components/ui/SearchInput.vue'
 import Tag from '~/components/ui/Tag.vue'
 import { PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
 
-const value = defineModel()
-const filter = defineModel('filter')
+const value = defineModel<string>()
+const filter = defineModel<string | undefined>('filter')
 
 const { t } = useI18n()
 

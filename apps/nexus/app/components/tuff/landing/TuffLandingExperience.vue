@@ -36,7 +36,7 @@ watch(
     }
 
     if (!scenarios.some(item => item.id === activeScenarioId.value)) {
-      activeScenarioId.value = scenarios[0].id
+      activeScenarioId.value = scenarios[0]!.id
     }
   },
   { immediate: true },
@@ -44,7 +44,8 @@ watch(
 
 const activeScenario = computed(() =>
   proactive.value.scenarios.find(item => item.id === activeScenarioId.value)
-  ?? proactive.value.scenarios[0],
+  ?? proactive.value.scenarios[0]
+  ?? null,
 )
 
 function selectScenario(id: string) {

@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { useStorage } from '#imports'
+import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
 
 const PLUGIN_RATINGS_TABLE = 'market_plugin_ratings'
@@ -134,8 +134,20 @@ export async function upsertPluginRating(
     })
   }
   else {
+    const existing = items[index]
+    if (!existing) {
+      items.push({
+        pluginId: input.pluginId,
+        userId: input.userId,
+        rating,
+        createdAt: now,
+        updatedAt: now,
+      })
+      await writeStoredRatings(items)
+      return
+    }
     items[index] = {
-      ...items[index],
+      ...existing,
       rating,
       updatedAt: now,
     }

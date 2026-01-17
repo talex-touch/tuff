@@ -28,6 +28,28 @@ export default defineEventHandler(async (event) => {
   // 如果用户属于组织，获取第一个组织的信息
   if (orgMemberships.data && orgMemberships.data.length > 0) {
     const membership = orgMemberships.data[0]
+    if (!membership) {
+      return {
+        team: {
+          name: 'Personal Account',
+          plan: 'free',
+          slots: { total: 1, used: 1 },
+          members: [
+            {
+              id: userId,
+              name: user.firstName
+                ? `${user.firstName} ${user.lastName || ''}`.trim()
+                : user.emailAddresses?.[0]?.emailAddress || 'Unknown',
+              role: 'owner',
+              status: 'active',
+              email: user.emailAddresses?.[0]?.emailAddress,
+            },
+          ],
+          invitations: [],
+          organization: null,
+        },
+      }
+    }
     const org = membership.organization
 
     try {

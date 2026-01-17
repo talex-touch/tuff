@@ -12,7 +12,7 @@ const { t, locale, setLocale } = useI18n()
 const route = useRoute()
 
 const slugSegments = computed(() => {
-  const raw = route.params.slug
+  const raw = (route.params as Record<string, unknown>).slug
   if (!raw)
     return []
   return Array.isArray(raw) ? raw : [raw]

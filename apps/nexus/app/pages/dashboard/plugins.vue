@@ -5,6 +5,7 @@ import type { ReviewItem } from '~/components/dashboard/ReviewModal.vue'
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
 import { useUser } from '@clerk/vue'
 import { computed, ref } from 'vue'
+import type { DashboardPlugin, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
 import CreatePluginDrawer from '~/components/CreatePluginDrawer.vue'
 import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
@@ -17,47 +18,6 @@ import Switch from '~/components/ui/Switch.vue'
 import VersionDrawer from '~/components/VersionDrawer.vue'
 import { useDashboardPluginsData } from '~/composables/useDashboardData'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
-
-type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
-
-interface DashboardPluginVersion {
-  id: string
-  pluginId: string
-  channel: PluginChannel
-  version: string
-  signature: string
-  packageUrl: string
-  packageKey: string
-  packageSize: number
-  readmeMarkdown?: string | null
-  changelog?: string | null
-  manifest?: Record<string, unknown> | null
-  status: 'pending' | 'approved' | 'rejected'
-  reviewedAt?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface DashboardPlugin {
-  id: string
-  userId: string
-  ownerOrgId?: string | null
-  slug: string
-  name: string
-  summary: string
-  category: string
-  installs: number
-  homepage?: string | null
-  isOfficial: boolean
-  badges: string[]
-  status: 'draft' | 'pending' | 'approved' | 'rejected'
-  readmeMarkdown?: string | null
-  iconUrl?: string | null
-  createdAt: string
-  updatedAt: string
-  versions?: DashboardPluginVersion[]
-  latestVersion?: DashboardPluginVersion | null
-}
 
 interface VersionFormState {
   pluginId: string
@@ -235,10 +195,7 @@ function applyManifestToVersionForm(manifest: ExtractedManifest | null) {
 
   const manifestChannel = typeof manifest.channel === 'string' ? manifest.channel.toUpperCase() : undefined
   if (manifestChannel && PACKAGE_CHANNELS.includes(manifestChannel as PluginChannel))
-    versionForm.channel = manifestChannel
-
-  if (typeof manifest.homepage === 'string' && !versionForm.homepage.trim())
-    versionForm.homepage = manifest.homepage
+    versionForm.channel = manifestChannel as PluginChannel
 
   if (typeof manifest.changelog === 'string' && !versionForm.changelog.trim())
     versionForm.changelog = manifest.changelog

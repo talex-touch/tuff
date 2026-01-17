@@ -13,13 +13,16 @@ export default defineEventHandler(async (event) => {
   const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
   const viewerOrgIds = orgMemberships.data?.map(membership => membership.organization.id) ?? []
 
+  const pluginStatusIds = ['draft', 'pending', 'approved', 'rejected'] as const
+  type PluginStatus = typeof pluginStatusIds[number]
+
   const query = getQuery(event)
   const statusQuery = typeof query.status === 'string' ? query.status : undefined
   const statusFilter = statusQuery
     ? statusQuery
         .split(',')
         .map(item => item.trim())
-        .filter(item => ['draft', 'pending', 'approved', 'rejected'].includes(item))
+        .filter((item): item is PluginStatus => pluginStatusIds.includes(item as PluginStatus))
     : undefined
 
   // Admin 可以看到所有 plugins，普通用户只能看到自己的
