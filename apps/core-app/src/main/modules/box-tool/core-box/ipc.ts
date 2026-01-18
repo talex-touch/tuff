@@ -25,6 +25,7 @@ import { createLogger } from '../../../utils/logger'
 import { pluginModule } from '../../plugin/plugin-module'
 import { BOX_ITEM_CHANNELS, getBoxItemManager } from '../item-sdk'
 import searchEngineCore from '../search-engine/search-core'
+import { searchLogger } from '../search-engine/search-logger'
 import { coreBoxInputTransport } from './input-transport'
 import { coreBoxKeyTransport } from './key-transport'
 import { coreBoxManager } from './manager'
@@ -186,16 +187,6 @@ export class IpcManager {
     this.touchApp.channel.regChannel(ChannelType.MAIN, 'core-box:expand', ({ data }: any) => {
       this.handleExpandRequest(data as ExpandOptions | number)
     })
-    this.touchApp.channel.regChannel(
-      ChannelType.MAIN,
-      'core-box:query',
-      async ({ data, reply }) => {
-        const { query } = data as { query: TuffQuery }
-        // The search engine now manages its own activation state.
-        const result = await coreBoxManager.search(query)
-        reply(DataCode.SUCCESS, result)
-      }
-    )
 
     this.touchApp.channel.regChannel(
       ChannelType.MAIN,
@@ -659,6 +650,12 @@ export class IpcManager {
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.search.query, async ({ query }) => {
+        if (searchLogger.isEnabled()) {
+          searchLogger.logSearchPhase(
+            'IPC Query',
+            `Text: "${query?.text ?? ''}", Inputs: ${query?.inputs?.length ?? 0}`
+          )
+        }
         return await coreBoxManager.search(query)
       })
     )

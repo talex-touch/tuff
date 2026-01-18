@@ -2,8 +2,9 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IClipboardOptions } from './types'
 import { useDocumentVisibility } from '@vueuse/core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { nextTick, ref, watch } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 import { getLatestClipboardSync } from './useClipboardChannel'
@@ -31,10 +32,11 @@ export function useVisibility(options: UseVisibilityOptions) {
     deactivateAllProviders
   } = options
 
+  const transport = useTuffTransport()
   const visibility = useDocumentVisibility()
   const wasTriggeredByShortcut = ref(false)
 
-  const unregisterShortcutTrigger = touchChannel.regChannel('core-box:shortcut-triggered', () => {
+  const unregisterShortcutTrigger = transport.on(CoreBoxEvents.ui.shortcutTriggered, () => {
     wasTriggeredByShortcut.value = true
   })
 

@@ -6,7 +6,7 @@ import type {
 } from './worker-status'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { fileProviderLog } from '../../../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 
 export interface ReconcileDiskFile {
   path: string
@@ -44,6 +44,8 @@ type WorkerMessage =
   | { type: 'done'; taskId: string; result: ReconcileResult }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
+
+const fileProviderLog = getLogger('file-provider')
 
 export class FileReconcileWorkerClient {
   private worker: Worker | null = null

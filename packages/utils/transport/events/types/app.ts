@@ -1,4 +1,5 @@
 import type { AnalyticsWindowType } from '../../../analytics'
+import type { StartupInfo } from '../../../types'
 /**
  * @fileoverview Type definitions for App domain events
  * @module @talex-touch/utils/transport/events/types/app
@@ -198,6 +199,28 @@ export interface ReadFileRequest {
    */
   source: string
 }
+
+/**
+ * Request to resolve an app path.
+ */
+export interface GetPathRequest {
+  /**
+   * Electron app.getPath key.
+   */
+  name: string
+}
+
+/**
+ * Startup handshake payload.
+ */
+export interface StartupRequest {
+  rendererStartTime: number
+}
+
+/**
+ * Startup handshake response.
+ */
+export type StartupResponse = StartupInfo
 
 // =========================================================================
 // UI / Navigation Types

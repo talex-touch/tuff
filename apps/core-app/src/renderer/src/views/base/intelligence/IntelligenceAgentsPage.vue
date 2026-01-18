@@ -2,12 +2,14 @@
 import type { AgentDescriptor } from '@talex-touch/utils'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AgentsEvents } from '@talex-touch/utils/transport/events'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import AgentDetail from '~/components/intelligence/agents/AgentDetail.vue'
 import AgentsList from '~/components/intelligence/agents/AgentsList.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 
 const { t } = useI18n()
+const transport = useTuffTransport()
 
 const agents = ref<AgentDescriptor[]>([])
 const selectedAgentId = ref<string | null>(null)
@@ -29,7 +31,7 @@ const filteredAgents = computed(() => {
 async function loadAgents() {
   loading.value = true
   try {
-    const result = await touchChannel.send('agents:list-all')
+    const result = await transport.send(AgentsEvents.api.listAll)
     agents.value = result || []
     if (agents.value.length > 0 && !selectedAgentId.value) {
       selectedAgentId.value = agents.value[0].id

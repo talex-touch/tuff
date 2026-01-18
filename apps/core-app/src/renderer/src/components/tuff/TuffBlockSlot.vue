@@ -20,8 +20,8 @@ const props = withDefaults(
     description: '',
     iconSize: 20,
     disabled: false,
-    active: false,
-  },
+    active: false
+  }
 )
 
 const emits = defineEmits<{
@@ -29,12 +29,11 @@ const emits = defineEmits<{
 }>()
 
 function toIcon(icon?: IconValue): ITuffIcon | null {
-  if (!icon)
-    return null
+  if (!icon) return null
   if (typeof icon === 'string') {
     return {
       type: 'class',
-      value: icon,
+      value: icon
     }
   }
   return icon
@@ -51,8 +50,7 @@ const currentIcon = computed(() => {
 })
 
 function handleClick(event: MouseEvent) {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   emits('click', event)
 }
 </script>
@@ -182,11 +180,11 @@ function handleClick(event: MouseEvent) {
   height: 56px;
 
   user-select: none;
-  border-radius: 4px;
+  border-radius: 12px;
   box-sizing: border-box;
   --fake-color: var(--el-fill-color-dark);
-  --fake-radius: 4px;
-  --fake-opacity: 0.45;
+  --fake-radius: 12px;
+  --fake-opacity: 0.5;
 
   &:hover {
     --fake-color: var(--el-fill-color);
@@ -197,7 +195,7 @@ function handleClick(event: MouseEvent) {
   --fake-color: var(--el-fill-color);
 
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--el-fill-color-dark);
   }
 }
 </style>

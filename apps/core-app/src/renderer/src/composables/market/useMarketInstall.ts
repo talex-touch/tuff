@@ -3,14 +3,12 @@ import type {
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { MarketPluginListItem } from './useMarketData'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { useI18n } from 'vue-i18n'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
-
-const NEXUS_URL = getTuffBaseUrl()
 
 export interface InstallOptions {
   /** Whether this is an upgrade (force update existing plugin) */
@@ -125,7 +123,7 @@ export function useMarketInstall() {
 
     // If the URL is a relative path starting with /api/, prepend NEXUS_URL
     if (url.startsWith('/api/')) {
-      return `${NEXUS_URL}${url}`
+      return `${getAuthBaseUrl()}${url}`
     }
 
     return url

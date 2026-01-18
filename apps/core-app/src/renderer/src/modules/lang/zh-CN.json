@@ -249,11 +249,17 @@
     "refresh": "刷新",
     "install": "安装",
     "installed": "已安装",
+    "docs": "文档",
     "installing": "安装中...",
     "upgrade": "升级",
     "upgradeAvailable": "有新版本",
     "officialBadge": "官方",
     "lastUpdated": "上次更新 {time}",
+    "docsGroupTitle": "平台能力文档",
+    "docsGroupDesc": "查看平台能力清单与相关开发说明",
+    "docsLinkTitle": "Platform Capabilities SDK",
+    "docsLinkDesc": "打开 Nexus 文档，了解能力目录与调用方式",
+    "docsOpen": "打开 Nexus 文档",
 	    "categories": {
 	      "title": "分类",
 	      "all": "全部",
@@ -961,6 +967,31 @@
         "tempCleanFailed": "清理临时文件失败"
       }
     },
+    "settingPlatformCapabilities": {
+      "groupTitle": "平台能力",
+      "groupDesc": "查看平台内置能力清单与状态",
+      "loading": "加载中...",
+      "refresh": "刷新",
+      "empty": "暂无可用能力",
+      "total": "共 {count} 项",
+      "lastUpdated": "更新时间：{time}",
+      "scope": {
+        "system": "系统能力",
+        "plugin": "插件能力",
+        "ai": "AI 能力"
+      },
+      "status": {
+        "stable": "稳定",
+        "beta": "Beta",
+        "alpha": "Alpha"
+      },
+      "tags": {
+        "sensitive": "敏感"
+      },
+      "messages": {
+        "loadFailed": "加载平台能力失败"
+      }
+    },
     "settingAISDK": {
       "groupTitle": "AI SDK 设置",
       "groupDesc": "配置 AI 提供商、模型和策略",
@@ -1367,6 +1398,22 @@
       "actions": {
         "manualCheck": "立即检查",
         "clearCache": "清空缓存"
+      },
+      "assetsTitle": "GitHub 下载包",
+      "assetsDesc": "查看当前缓存版本的安装包并手动下载。",
+      "assetsEmpty": "暂无缓存版本，请先检查更新。",
+      "assetsOpen": "查看下载包",
+      "assetsCount": "共 {count} 个",
+      "assets": {
+        "download": "下载",
+        "copyLink": "复制链接",
+        "messages": {
+          "downloadStarted": "下载任务已创建",
+          "downloadFailed": "创建下载任务失败",
+          "downloadFailedWithReason": "创建下载任务失败：{reason}",
+          "copySuccess": "下载链接已复制",
+          "copyFailed": "复制下载链接失败"
+        }
       },
       "messages": {
         "loadFailed": "加载更新设置失败",

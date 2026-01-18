@@ -37,6 +37,7 @@ const MODULE_DEFAULTS: Record<string, { enabled: boolean, level: LogLevel, color
   'clipboard': { enabled: false, level: LogLevel.INFO, color: 'cyan' },
   'flow-bus': { enabled: true, level: LogLevel.INFO, color: 'green' },
   'division-box': { enabled: true, level: LogLevel.INFO, color: 'blue' },
+  'channel-core': { enabled: true, level: LogLevel.INFO, color: 'cyan' },
   'core-box': { enabled: true, level: LogLevel.INFO, color: 'cyan' },
   'tray': { enabled: false, level: LogLevel.INFO, color: 'gray' },
   'download': { enabled: true, level: LogLevel.INFO, color: 'green' },

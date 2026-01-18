@@ -1,6 +1,7 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { ElOption, ElOptionGroup, ElSelect, ElTransfer } from 'element-plus'
 import { computed, ref, watch } from 'vue'
@@ -9,7 +10,6 @@ import { toast } from 'vue-sonner'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
 
 const props = defineProps<{
@@ -19,11 +19,12 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: IntelligenceProviderConfig]
-  'change': []
+  change: []
 }>()
 
 const { t } = useI18n()
-const aiClient = createIntelligenceClient(touchChannel as any)
+const transport = useTuffTransport()
+const aiClient = createIntelligenceClient(transport)
 
 // 使用 reactive 计算属性直接操作存储
 const localModels = computed({
@@ -31,49 +32,48 @@ const localModels = computed({
   set: (value: string[]) => {
     intelligenceSettings.updateProvider(props.modelValue.id, { models: value })
     emits('change')
-  },
+  }
 })
 
 const localDefaultModel = computed({
   get: () => props.modelValue.defaultModel || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      defaultModel: value || undefined,
+      defaultModel: value || undefined
     })
     emits('change')
-  },
+  }
 })
 
 const localInstructions = computed({
   get: () => props.modelValue.instructions || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      instructions: value || undefined,
+      instructions: value || undefined
     })
     emits('change')
-  },
+  }
 })
 
 const allModels = ref<string[]>([])
 const DEFAULT_MODEL_GROUP_FALLBACK = '__default_model_group__'
 const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
-  'openai': 'OpenAI',
-  'anthropic': 'Anthropic',
-  'deepseek': 'DeepSeek',
-  'siliconflow': 'SiliconFlow',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
+  deepseek: 'DeepSeek',
+  siliconflow: 'SiliconFlow',
   'ascend-tribe': 'Ascend Tribe',
-  'local': 'Local Model',
-  'custom': 'Custom Provider',
+  local: 'Local Model',
+  custom: 'Custom Provider'
 }
 
 function formatGroupLabel(value: string): string {
   const cleaned = (value || '').trim()
-  if (!cleaned)
-    return cleaned
+  if (!cleaned) return cleaned
   return cleaned
     .split(/[\s_-]+/)
     .filter(Boolean)
-    .map(segment => segment[0].toUpperCase() + segment.slice(1))
+    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
     .join(' ')
 }
 
@@ -87,8 +87,7 @@ function normalizeModelList(list: string[] = []): string[] {
     .map(normalizeModel)
     .filter(Boolean)
     .filter((model) => {
-      if (seen.has(model))
-        return false
+      if (seen.has(model)) return false
       seen.add(model)
       return true
     })
@@ -98,8 +97,7 @@ function addToAllModels(values: string | string[]): void {
   const items = Array.isArray(values) ? values : [values]
   const normalized = normalizeModelList(items)
 
-  if (!normalized.length)
-    return
+  if (!normalized.length) return
 
   const merged = new Set(allModels.value)
   normalized.forEach((model) => {
@@ -139,20 +137,18 @@ const transferData = computed(() => {
   const pool = new Set<string>()
   allModels.value.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (normalized)
-      pool.add(normalized)
+    if (normalized) pool.add(normalized)
   })
   localModels.value.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (normalized)
-      pool.add(normalized)
+    if (normalized) pool.add(normalized)
   })
 
   return Array.from(pool)
     .sort((a, b) => a.localeCompare(b))
-    .map(model => ({
+    .map((model) => ({
       key: model,
-      label: model,
+      label: model
     }))
 })
 
@@ -160,7 +156,7 @@ const transferSelectedModels = computed<string[]>({
   get: () => localModels.value,
   set: (value) => {
     applyModelUpdates(value ?? [])
-  },
+  }
 })
 
 const newModelInput = ref('')
@@ -195,7 +191,7 @@ const defaultModelGroups = computed(() => {
   const fallbackKey = fallbackName ? fallbackName.toLowerCase() : DEFAULT_MODEL_GROUP_FALLBACK
   const fallbackLabel = fallbackName || t('intelligence.config.model.group.other')
 
-  const grouped = new Map<string, { label: string, models: Set<string> }>()
+  const grouped = new Map<string, { label: string; models: Set<string> }>()
 
   function ensureGroup(key: string, label: string) {
     if (!grouped.has(key)) {
@@ -206,17 +202,14 @@ const defaultModelGroups = computed(() => {
 
   localModels.value.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (!normalized)
-      return
+    if (!normalized) return
 
     const slashIndex = normalized.indexOf('/')
     const hasProviderPrefix = slashIndex > 0
-    const groupKey = hasProviderPrefix
-      ? normalized.slice(0, slashIndex).toLowerCase()
-      : fallbackKey
+    const groupKey = hasProviderPrefix ? normalized.slice(0, slashIndex).toLowerCase() : fallbackKey
     const rawLabel = hasProviderPrefix ? normalized.slice(0, slashIndex) : fallbackLabel
     const label = hasProviderPrefix
-      ? PROVIDER_NAME_OVERRIDES[groupKey] ?? formatGroupLabel(rawLabel)
+      ? (PROVIDER_NAME_OVERRIDES[groupKey] ?? formatGroupLabel(rawLabel))
       : fallbackLabel
 
     const group = ensureGroup(groupKey, label)
@@ -224,29 +217,25 @@ const defaultModelGroups = computed(() => {
   })
 
   const sortedGroups = Array.from(grouped.entries()).sort(([keyA], [keyB]) => {
-    if (keyA === fallbackKey)
-      return 1
-    if (keyB === fallbackKey)
-      return -1
+    if (keyA === fallbackKey) return 1
+    if (keyB === fallbackKey) return -1
     return keyA.localeCompare(keyB)
   })
 
   return sortedGroups.map(([key, { label, models }]) => ({
     key,
     label,
-    models: Array.from(models).sort((a, b) => a.localeCompare(b)),
+    models: Array.from(models).sort((a, b) => a.localeCompare(b))
   }))
 })
 
 function openDefaultModelDrawer() {
-  if (props.disabled || localModels.value.length === 0)
-    return
+  if (props.disabled || localModels.value.length === 0) return
   showDefaultModelDrawer.value = true
 }
 
 function openInstructionsDrawer() {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   showInstructionsDrawer.value = true
 }
 
@@ -287,8 +276,7 @@ function validateDefaultModel(): boolean {
 function handleAddModel() {
   const modelName = normalizeModel(newModelInput.value)
 
-  if (!modelName)
-    return
+  if (!modelName) return
 
   if (localModels.value.includes(modelName)) {
     modelsError.value = t('intelligence.config.model.modelExists')
@@ -306,8 +294,7 @@ function handleDefaultModelChange() {
 function handleDefaultModelCreate(value: string) {
   const modelName = normalizeModel(value)
 
-  if (!modelName)
-    return
+  if (!modelName) return
 
   if (!localModels.value.includes(modelName)) {
     applyModelUpdates([...localModels.value, modelName])
@@ -322,8 +309,7 @@ function handleInstructionsChange() {
 }
 
 async function handleFetchModels() {
-  if (!canFetchModels.value || isFetching.value)
-    return
+  if (!canFetchModels.value || isFetching.value) return
 
   isFetching.value = true
   modelsError.value = ''
@@ -340,7 +326,7 @@ async function handleFetchModels() {
       apiKey: props.modelValue.apiKey,
       baseUrl: props.modelValue.baseUrl,
       models: [],
-      timeout: props.modelValue.timeout || 30000,
+      timeout: props.modelValue.timeout || 30000
     }
 
     const result = await aiClient.fetchModels(fetchConfig)
@@ -350,19 +336,16 @@ async function handleFetchModels() {
       applyModelUpdates([...localModels.value, ...result.models])
 
       toast.success(`已获取 ${result.models.length} 个模型`)
-    }
-    else {
+    } else {
       modelsError.value = result.message || '获取模型失败'
       toast.error(`获取模型失败: ${result.message}`)
     }
-  }
-  catch (error) {
+  } catch (error) {
     const message = error instanceof Error ? error.message : '获取模型失败'
     modelsError.value = message
     toast.error(`获取模型失败: ${message}`)
     console.error('[Model Config] Failed to fetch models:', error)
-  }
-  finally {
+  } finally {
     isFetching.value = false
   }
 }
@@ -373,14 +356,14 @@ watch(
     allModels.value = []
     addToAllModels(localModels.value)
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 watch(
   () => localModels.value,
   (models) => {
     addToAllModels(models)
-  },
+  }
 )
 </script>
 
@@ -404,7 +387,8 @@ watch(
           </span>
           <span v-else class="text-[var(--el-text-color-primary)]">
             {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
-          </span></span>
+          </span></span
+        >
         <FlatButton>{{ t('intelligence.config.model.editModels') }}</FlatButton>
       </div>
     </TuffBlockSlot>
@@ -462,7 +446,7 @@ watch(
             :filter-placeholder="t('intelligence.config.model.transferFilterPlaceholder')"
             :titles="[
               t('intelligence.config.model.transferAll'),
-              t('intelligence.config.model.transferEnabled'),
+              t('intelligence.config.model.transferEnabled')
             ]"
             target-order="original"
           />
@@ -493,7 +477,7 @@ watch(
             :placeholder="t('intelligence.config.model.addModelPlaceholder')"
             class="add-model-input"
             @keyup.enter="handleAddModel"
-          >
+          />
           <FlatButton
             class="add-model-button"
             :disabled="!newModelInput.trim()"
@@ -529,17 +513,8 @@ watch(
           @change="handleDefaultModelChange"
           @created="handleDefaultModelCreate"
         >
-          <ElOptionGroup
-            v-for="group in defaultModelGroups"
-            :key="group.key"
-            :label="group.label"
-          >
-            <ElOption
-              v-for="model in group.models"
-              :key="model"
-              :label="model"
-              :value="model"
-            />
+          <ElOptionGroup v-for="group in defaultModelGroups" :key="group.key" :label="group.label">
+            <ElOption v-for="model in group.models" :key="model" :label="model" :value="model" />
           </ElOptionGroup>
           <ElOption
             v-if="!defaultModelGroups.length"

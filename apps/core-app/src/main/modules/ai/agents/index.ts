@@ -20,7 +20,8 @@ export {
   registerBuiltinAgents,
   registerDataAgent,
   registerFileAgent,
-  registerSearchAgent
+  registerSearchAgent,
+  registerWorkflowAgent
 } from './builtin'
 export * from './tool-registry'
 
@@ -28,3 +29,6 @@ export { toolRegistry } from './tool-registry'
 
 // Tools
 export { registerBuiltinTools } from './tools'
+
+// Memory & Context
+export * from './memory'

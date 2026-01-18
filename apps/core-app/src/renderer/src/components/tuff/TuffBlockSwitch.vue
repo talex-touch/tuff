@@ -19,8 +19,8 @@ const props = withDefaults(
   {
     disabled: false,
     guidance: false,
-    loading: false,
-  },
+    loading: false
+  }
 )
 
 const emits = defineEmits<{

@@ -8,18 +8,20 @@
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { ElEmpty, ElTag } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { PermissionEvents } from '@talex-touch/utils/transport/events'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 
 interface Props {
   plugin: ITouchPlugin
 }
 
 const props = defineProps<Props>()
+const transport = useTuffTransport()
 
 interface PluginPermissionStatus {
   pluginId: string
@@ -195,7 +197,7 @@ async function loadStatus() {
     const required = [...(props.plugin.declaredPermissions?.required || [])]
     const optional = [...(props.plugin.declaredPermissions?.optional || [])]
 
-    const result = await touchChannel.send('permission:get-status', {
+    const result = await transport.send(PermissionEvents.api.getStatus, {
       pluginId: props.plugin.name,
       sdkapi: props.plugin.sdkapi,
       required,
@@ -213,13 +215,13 @@ async function loadStatus() {
 async function handleToggle(permissionId: string, granted: boolean) {
   try {
     if (granted) {
-      await touchChannel.send('permission:grant', {
+      await transport.send(PermissionEvents.api.grant, {
         pluginId: props.plugin.name,
         permissionId,
         grantedBy: 'user'
       })
     } else {
-      await touchChannel.send('permission:revoke', {
+      await transport.send(PermissionEvents.api.revoke, {
         pluginId: props.plugin.name,
         permissionId
       })
@@ -234,7 +236,7 @@ async function handleToggle(permissionId: string, granted: boolean) {
 async function handleGrantAll() {
   if (!status.value?.missingRequired.length) return
   try {
-    await touchChannel.send('permission:grant-multiple', {
+    await transport.send(PermissionEvents.api.grantMultiple, {
       pluginId: props.plugin.name,
       permissionIds: status.value.missingRequired,
       grantedBy: 'user'
@@ -248,7 +250,7 @@ async function handleGrantAll() {
 // Revoke all
 async function handleRevokeAll() {
   try {
-    await touchChannel.send('permission:revoke-all', {
+    await transport.send(PermissionEvents.api.revokeAll, {
       pluginId: props.plugin.name
     })
     await loadStatus()

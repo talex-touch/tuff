@@ -1,13 +1,13 @@
 <script lang="ts" name="IntelligenceApiConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, getCurrentInstance, ref } from 'vue'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
 
 const props = defineProps<{
@@ -16,33 +16,34 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: IntelligenceProviderConfig]
-  'change': []
-  'testSuccess': [models: string[]]
+  change: []
+  testSuccess: [models: string[]]
 }>()
 
 const instance = getCurrentInstance()
 const t = (key: string) => instance?.proxy?.$t(key) || key
 
-const aiClient = createIntelligenceClient(touchChannel as any)
+const transport = useTuffTransport()
+const aiClient = createIntelligenceClient(transport)
 
 const localApiKey = computed({
   get: () => props.modelValue.apiKey || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      apiKey: value.trim() || undefined,
+      apiKey: value.trim() || undefined
     })
     emits('change')
-  },
+  }
 })
 
 const localBaseUrl = computed({
   get: () => props.modelValue.baseUrl || '',
   set: (value: string) => {
     intelligenceSettings.updateProvider(props.modelValue.id, {
-      baseUrl: value.trim() || undefined,
+      baseUrl: value.trim() || undefined
     })
     emits('change')
-  },
+  }
 })
 
 const apiKeyError = ref('')
@@ -74,8 +75,7 @@ function validateBaseUrl(value: string): boolean {
   if (value.trim()) {
     try {
       new URL(value)
-    }
-    catch {
+    } catch {
       baseUrlError.value = t('intelligence.config.api.baseUrlInvalid')
       return false
     }
@@ -93,8 +93,7 @@ function handleBaseUrlBlur() {
 }
 
 async function handleTest() {
-  if (!canTest.value || isTesting.value)
-    return
+  if (!canTest.value || isTesting.value) return
 
   isTesting.value = true
   testError.value = ''
@@ -116,10 +115,10 @@ async function handleTest() {
       rateLimit: props.modelValue.rateLimit
         ? {
             requestsPerMinute: props.modelValue.rateLimit.requestsPerMinute || undefined,
-            tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined,
+            tokensPerMinute: props.modelValue.rateLimit.tokensPerMinute || undefined
           }
         : undefined,
-      priority: Number(props.modelValue.priority) || 1,
+      priority: Number(props.modelValue.priority) || 1
     }
 
     // 使用默认模型或 gpt-3.5-turbo 进行测试
@@ -129,7 +128,7 @@ async function handleTest() {
       type: testProvider.type,
       model: modelToTest,
       hasApiKey: !!testProvider.apiKey,
-      baseUrl: testProvider.baseUrl,
+      baseUrl: testProvider.baseUrl
     })
 
     const result = (await aiClient.testProvider(testProvider)) as any
@@ -142,13 +141,12 @@ async function handleTest() {
         '连接测试成功',
         `已成功连接到 ${props.modelValue.name}`,
         { type: 'remix', value: 'ri-checkbox-circle-line' },
-        [{ content: '确定', type: 'success', onClick: () => true }],
+        [{ content: '确定', type: 'success', onClick: () => true }]
       )
 
       // 尝试获取可用模型列表
       await fetchAvailableModels(testProvider)
-    }
-    else {
+    } else {
       testError.value = result?.message || '连接失败'
 
       // 使用 MentionDialog 显示失败消息
@@ -156,11 +154,10 @@ async function handleTest() {
         '连接测试失败',
         result?.message || '无法连接到提供商，请检查您的配置',
         { type: 'remix', value: 'ri-error-warning-line' },
-        [{ content: '确定', type: 'danger', onClick: () => true }],
+        [{ content: '确定', type: 'danger', onClick: () => true }]
       )
     }
-  }
-  catch (error) {
+  } catch (error) {
     const message = error instanceof Error ? error.message : '连接失败'
     testError.value = message
 
@@ -169,12 +166,11 @@ async function handleTest() {
       '连接测试失败',
       `连接过程中发生错误: ${message}`,
       { type: 'remix', value: 'ri-error-warning-line' },
-      [{ content: '确定', type: 'danger', onClick: () => true }],
+      [{ content: '确定', type: 'danger', onClick: () => true }]
     )
 
     console.error('[API Config] Test connection failed:', error)
-  }
-  finally {
+  } finally {
     isTesting.value = false
   }
 }
@@ -189,7 +185,7 @@ async function fetchAvailableModels(provider: any) {
     if (result?.success && result?.models) {
       // 直接更新 provider 的模型列表
       intelligenceSettings.updateProvider(provider.id, {
-        models: result.models,
+        models: result.models
       })
       emits('testSuccess', result.models)
 
@@ -198,17 +194,15 @@ async function fetchAvailableModels(provider: any) {
         '模型获取成功',
         `已获取 ${result.models.length} 个可用模型`,
         { type: 'remix', value: 'ri-checkbox-circle-line' },
-        [{ content: '确定', type: 'success', onClick: () => true }],
+        [{ content: '确定', type: 'success', onClick: () => true }]
       )
-    }
-    else {
+    } else {
       console.log('[API Config] Failed to fetch models:', result?.message)
       // 即使获取模型失败，连接测试也算成功
       // 发送空数组，表示测试成功但没有获取到模型
       emits('testSuccess', [])
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[API Config] Failed to fetch models:', error)
     // 即使获取模型失败，连接测试也算成功
     emits('testSuccess', [])

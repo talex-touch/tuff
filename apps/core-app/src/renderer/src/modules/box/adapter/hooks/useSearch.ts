@@ -12,10 +12,10 @@ import type { IClipboardOptions } from './types'
 import { TuffInputType } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
@@ -71,20 +71,34 @@ export function useSearch(
   const activeActivations = ref<IProviderActivate[] | null>(null)
   const currentSearchId = ref<string | null>(null)
   const transport = useTuffTransport()
+  const triggerFeatureExitEvent = defineRawEvent<{ plugin: string }, void>(
+    'trigger-plugin-feature-exit'
+  )
 
   const pendingSearchEndById = new Map<string, SearchEndData>()
+  const pendingSearchUpdatesById = new Map<string, TuffItem[]>()
 
   const BASE_DEBOUNCE = 35
-  const inputTransport = createCoreBoxInputTransport(touchChannel, BASE_DEBOUNCE)
+  const inputTransport = createCoreBoxInputTransport(transport, BASE_DEBOUNCE)
 
   let searchSequence = 0
   let recommendationTimeoutId: ReturnType<typeof setTimeout> | null = null
+  let inFlightQueryKey: string | null = null
+  let lastQueryKey = ''
+  let lastQueryAt = 0
 
+  const DUPLICATE_QUERY_WINDOW_MS = 200
   const MAX_TEXT_INPUT_LENGTH = 2000
   const MAX_HTML_INPUT_LENGTH = 5000
   const MIN_TEXT_ATTACHMENT_LENGTH = 80
 
-  function toActivations(state: ActivationState | null | undefined): IProviderActivate[] | null {
+  function toActivations(
+    state: ActivationState | IProviderActivate[] | null | undefined
+  ): IProviderActivate[] | null {
+    if (!state) return null
+    if (Array.isArray(state)) {
+      return state.length > 0 ? state : null
+    }
     const ids = state?.activeProviders
     if (!ids || ids.length === 0) {
       return null
@@ -126,6 +140,44 @@ export function useSearch(
   function truncateContent(content: string, maxLength: number): string {
     if (content.length <= maxLength) return content
     return content.slice(0, maxLength)
+  }
+
+  function buildStringSignature(value?: string | null): string {
+    if (!value) return '0'
+    const length = value.length
+    const head = value.charCodeAt(0)
+    const tail = value.charCodeAt(length - 1)
+    return `${length}:${head}:${tail}`
+  }
+
+  function getActivationKey(activation: IProviderActivate): string {
+    if (activation.id === 'plugin-features' && activation.meta?.pluginName) {
+      return `${activation.id}:${activation.meta.pluginName}`
+    }
+    return activation.id
+  }
+
+  function buildInputsKey(inputs: TuffQueryInput[]): string {
+    if (inputs.length === 0) return ''
+    return inputs
+      .map((input) => {
+        const contentSig = buildStringSignature(input.content)
+        const rawSig = buildStringSignature(input.rawContent)
+        return `${input.type}:${contentSig}:${rawSig}`
+      })
+      .join('|')
+  }
+
+  function buildQueryKey(
+    text: string,
+    inputs: TuffQueryInput[],
+    activations: IProviderActivate[] | null
+  ): string {
+    const activationKey = activations?.length
+      ? activations.map(getActivationKey).sort().join('|')
+      : ''
+    const inputsKey = buildInputsKey(inputs)
+    return `${text}::${activationKey}::${inputsKey}`
   }
 
   function buildQueryInputs(): TuffQueryInput[] {
@@ -181,6 +233,8 @@ export function useSearch(
     boxOptions.layout = undefined
     loading.value = false
     recommendationPending.value = false
+    pendingSearchEndById.clear()
+    pendingSearchUpdatesById.clear()
   }
 
   const broadcastDivisionBoxInput = (query: TuffQuery): void => {
@@ -221,6 +275,17 @@ export function useSearch(
   async function executeSearch(): Promise<void> {
     const currentSequence = ++searchSequence
     const inputs = buildQueryInputs()
+    const queryKey = buildQueryKey(searchVal.value, inputs, activeActivations.value)
+
+    pendingSearchEndById.clear()
+    pendingSearchUpdatesById.clear()
+
+    logDebug('[useSearch] executeSearch start:', {
+      sequence: currentSequence,
+      text: searchVal.value,
+      inputs: inputs.length,
+      activations: activeActivations.value?.length || 0
+    })
 
     // Clear any pending recommendation timeout when starting a new search
     if (recommendationTimeoutId) {
@@ -250,6 +315,24 @@ export function useSearch(
         return
       }
 
+      const now = Date.now()
+      if (inFlightQueryKey === queryKey) {
+        logDebug('[useSearch] Skipping duplicate in-flight query:', {
+          text: searchVal.value,
+          inputs: inputs.length
+        })
+        return
+      }
+      if (queryKey === lastQueryKey && now - lastQueryAt < DUPLICATE_QUERY_WINDOW_MS) {
+        logDebug('[useSearch] Skipping duplicate query (window):', {
+          text: searchVal.value,
+          inputs: inputs.length
+        })
+        return
+      }
+      lastQueryKey = queryKey
+      lastQueryAt = now
+
       loading.value = true
       recommendationPending.value = true
       // Don't collapse immediately - wait for recommendation to load
@@ -264,8 +347,14 @@ export function useSearch(
       }, RECOMMENDATION_TIMEOUT_MS)
 
       try {
+        inFlightQueryKey = queryKey
         const query: TuffQuery = { text: '', inputs }
         inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
+
+        logDebug('[useSearch] Sending recommendation query:', {
+          text: query.text,
+          inputs: inputs.length
+        })
 
         const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
           query
@@ -274,12 +363,24 @@ export function useSearch(
           clearTimeout(recommendationTimeoutId)
           recommendationTimeoutId = null
         }
+        if (inFlightQueryKey === queryKey) {
+          inFlightQueryKey = null
+        }
 
         if (currentSequence !== searchSequence) {
           recommendationPending.value = false
+          logDebug('[useSearch] Discarding stale recommendation result', {
+            sessionId: initialResult?.sessionId,
+            sequence: currentSequence,
+            latest: searchSequence
+          })
           return
         }
 
+        logDebug('[useSearch] Recommendation result accepted:', {
+          sessionId: initialResult?.sessionId,
+          itemCount: initialResult?.items?.length || 0
+        })
         applyRecommendationResult(initialResult)
         loading.value = false
         recommendationPending.value = false
@@ -287,6 +388,9 @@ export function useSearch(
         if (recommendationTimeoutId) {
           clearTimeout(recommendationTimeoutId)
           recommendationTimeoutId = null
+        }
+        if (inFlightQueryKey === queryKey) {
+          inFlightQueryKey = null
         }
         console.error('Recommendation search failed:', error)
         resetSearchState()
@@ -309,16 +413,40 @@ export function useSearch(
       return
     }
 
+    const now = Date.now()
+    if (inFlightQueryKey === queryKey) {
+      logDebug('[useSearch] Skipping duplicate in-flight query:', {
+        text: searchVal.value,
+        inputs: inputs.length
+      })
+      return
+    }
+    if (queryKey === lastQueryKey && now - lastQueryAt < DUPLICATE_QUERY_WINDOW_MS) {
+      logDebug('[useSearch] Skipping duplicate query (window):', {
+        text: searchVal.value,
+        inputs: inputs.length
+      })
+      return
+    }
+    lastQueryKey = queryKey
+    lastQueryAt = now
+
     boxOptions.focus = 0
     loading.value = true
     // Don't clear results immediately - this causes UI flicker
     // Results will be replaced when new search completes
 
     try {
+      inFlightQueryKey = queryKey
       const query: TuffQuery = {
         text: searchVal.value,
         inputs
       }
+
+      logDebug('[useSearch] Sending search query:', {
+        text: query.text,
+        inputs: inputs.length
+      })
 
       inputTransport.broadcast({
         input: query.text,
@@ -329,6 +457,9 @@ export function useSearch(
       const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
         query
       })
+      if (inFlightQueryKey === queryKey) {
+        inFlightQueryKey = null
+      }
 
       logDebug('[useSearch] Search result received:', {
         sessionId: initialResult.sessionId,
@@ -339,7 +470,11 @@ export function useSearch(
       })
 
       if (currentSequence !== searchSequence) {
-        logDebug('[useSearch] Discarding stale search result (sequence mismatch)')
+        logDebug('[useSearch] Discarding stale search result (sequence mismatch)', {
+          sessionId: initialResult.sessionId,
+          sequence: currentSequence,
+          latest: searchSequence
+        })
         return
       }
 
@@ -357,11 +492,25 @@ export function useSearch(
       }
 
       searchResults.value = initialResult.items
+      if (currentSearchId.value) {
+        const pendingUpdates = pendingSearchUpdatesById.get(currentSearchId.value)
+        if (pendingUpdates && pendingUpdates.length > 0) {
+          pendingSearchUpdatesById.delete(currentSearchId.value)
+          logDebug('[useSearch] Applying queued search updates:', {
+            sessionId: currentSearchId.value,
+            itemCount: pendingUpdates.length
+          })
+          searchResults.value = [...searchResults.value, ...pendingUpdates]
+        }
+      }
       logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
 
       boxOptions.layout = undefined
     } catch (error) {
       console.error('Search initiation failed:', error)
+      if (inFlightQueryKey === queryKey) {
+        inFlightQueryKey = null
+      }
       searchResults.value = []
       searchResult.value = null
       currentSearchId.value = null
@@ -377,6 +526,8 @@ export function useSearch(
   }
 
   async function handleSearchImmediate(): Promise<void> {
+    const cancelable = debouncedSearch as unknown as { cancel?: () => void }
+    cancelable.cancel?.()
     await executeSearch()
   }
 
@@ -446,8 +597,8 @@ export function useSearch(
     loading.value = true
 
     try {
-      const newActivationState: IProviderActivate[] | null = await touchChannel.send(
-        'core-box:execute',
+      const activationState = await transport.send(
+        CoreBoxEvents.item.execute,
         serializedSearchResult
           ? {
               item: serializedItem,
@@ -457,7 +608,9 @@ export function useSearch(
               item: serializedItem
             }
       )
-
+      const newActivationState = toActivations(
+        activationState as ActivationState | IProviderActivate[] | null
+      )
       activeActivations.value = newActivationState
 
       if (newActivationState && newActivationState.length > 0) {
@@ -537,9 +690,11 @@ export function useSearch(
         }
 
         if (boxOptions.data?.plugin) {
-          touchChannel.send('trigger-plugin-feature-exit', {
-            plugin: boxOptions.data.plugin
-          })
+          transport
+            .send(triggerFeatureExitEvent, {
+              plugin: boxOptions.data.plugin
+            })
+            .catch(() => {})
         }
         boxOptions.data.feature = undefined
       }
@@ -583,17 +738,44 @@ export function useSearch(
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 
-  touchChannel.regChannel('core-box:search-update', ({ data }) => {
+  transport.on(CoreBoxEvents.search.update, (data) => {
+    const itemCount = data.items?.length ?? 0
+    if (!data.searchId) return
+    if (!currentSearchId.value) {
+      if (itemCount > 0) {
+        const queued = pendingSearchUpdatesById.get(data.searchId) ?? []
+        pendingSearchUpdatesById.set(data.searchId, [...queued, ...data.items])
+        logDebug('[useSearch] Queued search update (no active session):', {
+          sessionId: data.searchId,
+          itemCount,
+          queuedTotal: queued.length + itemCount
+        })
+      } else {
+        logDebug('[useSearch] Ignoring empty search update (no active session):', {
+          sessionId: data.searchId
+        })
+      }
+      return
+    }
+    if (data.searchId !== currentSearchId.value) {
+      logDebug('[useSearch] Ignoring search update (session mismatch):', {
+        sessionId: data.searchId,
+        currentSessionId: currentSearchId.value,
+        itemCount
+      })
+      return
+    }
     // Skip empty updates to avoid unnecessary re-renders
-    if (data.searchId !== currentSearchId.value) return
-    if (!data.items || data.items.length === 0) return
+    if (!data.items || data.items.length === 0) {
+      logDebug('[useSearch] Ignoring empty search update:', { sessionId: data.searchId })
+      return
+    }
+    logDebug('[useSearch] Applying search update:', {
+      sessionId: data.searchId,
+      itemCount,
+      currentTotal: searchResults.value.length
+    })
     searchResults.value = [...searchResults.value, ...data.items]
-  })
-
-  touchChannel.regChannel('core-box:set-query', ({ data }) => {
-    const value = typeof data?.value === 'string' ? data.value : ''
-    searchVal.value = value
-    window.dispatchEvent(new CustomEvent('corebox:focus-input'))
   })
 
   transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
@@ -603,8 +785,8 @@ export function useSearch(
   })
 
   onMounted(() => {
-    touchChannel.send('core-box:get-activated-providers').then((providers) => {
-      activeActivations.value = providers ?? null
+    transport.send(CoreBoxEvents.provider.getActivated).then((providers) => {
+      activeActivations.value = toActivations(providers as ActivationState | IProviderActivate[])
     })
 
     handleSearch()
@@ -618,19 +800,34 @@ export function useSearch(
     window.addEventListener('corebox:shown', handleCoreBoxShown)
   })
 
-  touchChannel.regChannel('core-box:search-end', ({ data }) => {
-    if (!data || typeof data !== 'object') return
-    const payload = data as Partial<SearchEndData>
+  transport.on(CoreBoxEvents.search.end, (payload) => {
+    if (!payload || typeof payload !== 'object') return
     if (!payload.searchId) return
 
     if (!currentSearchId.value) {
       pendingSearchEndById.set(payload.searchId, payload as SearchEndData)
+      logDebug('[useSearch] Queued search end (no active session):', {
+        sessionId: payload.searchId,
+        cancelled: Boolean(payload.cancelled)
+      })
       return
     }
 
     if (payload.searchId === currentSearchId.value) {
+      logDebug('[useSearch] Applying search end:', {
+        sessionId: payload.searchId,
+        cancelled: Boolean(payload.cancelled),
+        activateCount: payload.activate?.length || 0,
+        sourceCount: payload.sources?.length || 0
+      })
       applySearchEnd(payload as SearchEndData)
+      return
     }
+
+    logDebug('[useSearch] Ignoring search end (session mismatch):', {
+      sessionId: payload.searchId,
+      currentSessionId: currentSearchId.value
+    })
   })
 
   const applySearchEnd = (data: SearchEndData): void => {
@@ -649,11 +846,11 @@ export function useSearch(
     recommendationPending.value = false
   }
 
-  touchChannel.regChannel('core-box:clear-items', () => {
+  transport.on(CoreBoxEvents.item.clear, () => {
     resetSearchState()
   })
 
-  touchChannel.regChannel('core-box:no-results', () => {
+  transport.on(CoreBoxEvents.search.noResults, () => {
     // Window resize is handled via layout updates (useResize)
   })
 

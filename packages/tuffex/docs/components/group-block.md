@@ -7,8 +7,8 @@ import { ref } from 'vue'
 
 const notifications = ref(true)
 const language = ref<'en' | 'zh'>('en')
-
-const enabled = ref(false)
+const autoUpdate = ref(true)
+const loading = ref(true)
 const dummy = ref(false)
 </script>
 
@@ -19,16 +19,22 @@ const dummy = ref(false)
 <div style="width: 560px;">
   <TxGroupBlock
     name="通用设置"
-    icon="i-carbon-settings"
+    default-icon="i-ri-settings-3-line"
+    active-icon="i-ri-settings-3-fill"
     description="配置基本选项"
   >
     <TxBlockSwitch
       v-model="notifications"
       title="通知"
       description="启用推送通知"
-      icon="i-carbon-notification"
+      default-icon="i-ri-notification-line"
+      active-icon="i-ri-notification-fill"
     />
-    <TxBlockSlot title="语言" description="选择显示语言" icon="i-carbon-translate">
+    <TxBlockSlot
+      title="语言"
+      description="选择显示语言"
+      default-icon="i-carbon-translate"
+    >
       <select v-model="language" style="padding: 6px 10px; border-radius: 10px; border: 1px solid var(--tx-border-color); background: var(--tx-fill-color-blank);">
         <option value="en">English</option>
         <option value="zh">中文</option>
@@ -41,9 +47,20 @@ const dummy = ref(false)
 <template #code>
 ```vue
 <template>
-  <TxGroupBlock name="通用设置" icon="i-carbon-settings" description="配置基本选项">
-    <TxBlockSwitch v-model="notifications" title="通知" description="启用推送通知" icon="i-carbon-notification" />
-    <TxBlockSlot title="语言" description="选择显示语言" icon="i-carbon-translate">
+  <TxGroupBlock
+    name="通用设置"
+    default-icon="i-ri-settings-3-line"
+    active-icon="i-ri-settings-3-fill"
+    description="配置基本选项"
+  >
+    <TxBlockSwitch
+      v-model="notifications"
+      title="通知"
+      description="启用推送通知"
+      default-icon="i-ri-notification-line"
+      active-icon="i-ri-notification-fill"
+    />
+    <TxBlockSlot title="语言" description="选择显示语言" default-icon="i-carbon-translate">
       <select v-model="language">
         <option value="en">English</option>
         <option value="zh">中文</option>
@@ -57,13 +74,18 @@ const dummy = ref(false)
 
 ## 初始折叠
 
-使用 `shrink` 属性使分组初始为折叠状态。
+使用 `default-expand` 或 `collapsed` 控制初始展开状态。
 
-
-<DemoBlock title="GroupBlock (shrink)">
+<DemoBlock title="GroupBlock (collapsed)">
 <template #preview>
 <div style="width: 560px;">
-  <TxGroupBlock name="高级设置" icon="i-carbon-tool-kit" shrink>
+  <TxGroupBlock
+    name="高级设置"
+    description="折叠展示内容"
+    default-icon="i-ri-folder-line"
+    active-icon="i-ri-folder-open-line"
+    :default-expand="false"
+  >
     <div style="padding: 12px;">高级内容</div>
   </TxGroupBlock>
 </div>
@@ -72,7 +94,13 @@ const dummy = ref(false)
 <template #code>
 ```vue
 <template>
-  <TxGroupBlock name="高级设置" icon="i-carbon-tool-kit" shrink>
+  <TxGroupBlock
+    name="高级设置"
+    description="折叠展示内容"
+    default-icon="i-ri-folder-line"
+    active-icon="i-ri-folder-open-line"
+    :default-expand="false"
+  >
     <p>高级内容</p>
   </TxGroupBlock>
 </template>
@@ -80,16 +108,27 @@ const dummy = ref(false)
 </template>
 </DemoBlock>
 
-## 展开填充
+## 记忆展开状态
 
-使用 `expandFill` 在展开时更改图标样式。
+为 `memory-name` 指定唯一键，组件会持久化展开状态。
 
-
-<DemoBlock title="GroupBlock (expandFill)">
+<DemoBlock title="GroupBlock (memory)">
 <template #preview>
 <div style="width: 560px;">
-  <TxGroupBlock name="功能" icon="i-carbon-star" expand-fill>
-    <div style="padding: 12px;">内容</div>
+  <TxGroupBlock
+    name="更新策略"
+    description="记忆展开状态"
+    default-icon="i-ri-refresh-line"
+    active-icon="i-ri-refresh-line"
+    memory-name="tx-group-block-demo"
+  >
+    <TxBlockSwitch
+      v-model="autoUpdate"
+      title="自动更新"
+      description="后台自动检查更新"
+      default-icon="i-ri-refresh-line"
+      active-icon="i-ri-refresh-line"
+    />
   </TxGroupBlock>
 </div>
 </template>
@@ -97,8 +136,62 @@ const dummy = ref(false)
 <template #code>
 ```vue
 <template>
-  <TxGroupBlock name="功能" icon="i-carbon-star" expand-fill>
-    <p>内容</p>
+  <TxGroupBlock
+    name="更新策略"
+    description="记忆展开状态"
+    default-icon="i-ri-refresh-line"
+    active-icon="i-ri-refresh-line"
+    memory-name="tx-group-block-demo"
+  >
+    <TxBlockSwitch
+      v-model="autoUpdate"
+      title="自动更新"
+      description="后台自动检查更新"
+      default-icon="i-ri-refresh-line"
+      active-icon="i-ri-refresh-line"
+    />
+  </TxGroupBlock>
+</template>
+```
+</template>
+</DemoBlock>
+
+## 头部扩展
+
+使用 `header-extra` 插槽放置操作区。
+
+<DemoBlock title="GroupBlock (header-extra)">
+<template #preview>
+<div style="width: 560px;">
+  <TxGroupBlock
+    name="同步"
+    description="手动触发同步"
+    default-icon="i-ri-loop-left-line"
+    :collapsible="false"
+  >
+    <template #header-extra>
+      <button style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--tx-border-color); background: var(--tx-fill-color-blank); font-size: 12px;">
+        立即同步
+      </button>
+    </template>
+    <TxBlockLine title="上次同步" description="刚刚" />
+  </TxGroupBlock>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxGroupBlock
+    name="同步"
+    description="手动触发同步"
+    default-icon="i-ri-loop-left-line"
+    :collapsible="false"
+  >
+    <template #header-extra>
+      <button>立即同步</button>
+    </template>
+    <TxBlockLine title="上次同步" description="刚刚" />
   </TxGroupBlock>
 </template>
 ```
@@ -140,10 +233,10 @@ const dummy = ref(false)
 
 ```vue
 <template>
-  <TxBlockSlot 
-    title="主题" 
-    description="选择您偏好的主题" 
-    icon="i-carbon-color-palette"
+  <TxBlockSlot
+    title="主题"
+    description="选择您偏好的主题"
+    default-icon="i-ri-palette-line"
   >
     <select v-model="theme">
       <option value="light">浅色</option>
@@ -154,11 +247,29 @@ const dummy = ref(false)
 </template>
 ```
 
+## 激活态与标签
+
+```vue
+<template>
+  <TxBlockSlot
+    title="常用设置"
+    description="已启用"
+    default-icon="i-ri-star-line"
+    active-icon="i-ri-star-fill"
+    :active="true"
+  >
+    <template #tags>
+      <span style="font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--tx-fill-color);">推荐</span>
+    </template>
+  </TxBlockSlot>
+</template>
+```
+
 ## 自定义标签
 
 ```vue
 <template>
-  <TxBlockSlot icon="i-carbon-user">
+  <TxBlockSlot>
     <template #label>
       <h3>自定义标题 <span style="color: red">*</span></h3>
       <p>必填字段</p>
@@ -180,10 +291,11 @@ const dummy = ref(false)
 <template #preview>
 <div style="width: 560px;">
   <TxBlockSwitch
-    v-model="enabled"
-    title="深色模式"
-    description="启用深色主题"
-    icon="i-carbon-moon"
+    v-model="autoUpdate"
+    title="自动更新"
+    description="启用后台更新"
+    default-icon="i-ri-refresh-line"
+    active-icon="i-ri-refresh-line"
   />
 </div>
 </template>
@@ -191,7 +303,45 @@ const dummy = ref(false)
 <template #code>
 ```vue
 <template>
-  <TxBlockSwitch v-model="enabled" title="深色模式" description="启用深色主题" icon="i-carbon-moon" />
+  <TxBlockSwitch
+    v-model="autoUpdate"
+    title="自动更新"
+    description="启用后台更新"
+    default-icon="i-ri-refresh-line"
+    active-icon="i-ri-refresh-line"
+  />
+</template>
+```
+</template>
+</DemoBlock>
+
+## 加载状态
+
+<DemoBlock title="BlockSwitch (loading)">
+<template #preview>
+<div style="width: 560px;">
+  <TxBlockSwitch
+    v-model="loading"
+    title="正在同步"
+    description="同步过程中暂不可用"
+    default-icon="i-ri-loader-4-line"
+    active-icon="i-ri-loader-4-line"
+    :loading="true"
+  />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxBlockSwitch
+    v-model="loading"
+    title="正在同步"
+    description="同步过程中暂不可用"
+    default-icon="i-ri-loader-4-line"
+    active-icon="i-ri-loader-4-line"
+    :loading="true"
+  />
 </template>
 ```
 </template>
@@ -201,12 +351,13 @@ const dummy = ref(false)
 
 ```vue
 <template>
-  <TxBlockSwitch 
-    v-model="value" 
-    title="高级功能" 
-    description="需要订阅" 
-    icon="i-carbon-locked" 
-    disabled 
+  <TxBlockSwitch
+    v-model="value"
+    title="高级功能"
+    description="需要订阅"
+    default-icon="i-ri-lock-line"
+    active-icon="i-ri-lock-fill"
+    disabled
   />
 </template>
 ```
@@ -215,7 +366,6 @@ const dummy = ref(false)
 
 显示为导航项而非开关。
 
-
 <DemoBlock title="BlockSwitch (guidance)">
 <template #preview>
 <div style="width: 560px;">
@@ -223,7 +373,7 @@ const dummy = ref(false)
     v-model="dummy"
     title="隐私设置"
     description="管理您的隐私选项"
-    icon="i-carbon-security"
+    default-icon="i-ri-shield-keyhole-line"
     guidance
     @click="() => {}"
   />
@@ -233,7 +383,14 @@ const dummy = ref(false)
 <template #code>
 ```vue
 <template>
-  <TxBlockSwitch v-model="dummy" title="隐私设置" description="管理您的隐私选项" icon="i-carbon-security" guidance />
+  <TxBlockSwitch
+    v-model="dummy"
+    title="隐私设置"
+    description="管理您的隐私选项"
+    default-icon="i-ri-shield-keyhole-line"
+    guidance
+    @click="handleClick"
+  />
 </template>
 ```
 </template>
@@ -248,17 +405,21 @@ const dummy = ref(false)
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `name` | `string` | *必填* | 分组标题 |
-| `icon` | `string` | `''` | 图标类名 |
 | `description` | `string` | `''` | 描述文本 |
-| `expandFill` | `boolean` | `false` | 展开时使用填充图标 |
-| `shrink` | `boolean` | `false` | 初始为折叠状态 |
+| `defaultIcon` | `TxIconSource \| string` | - | 默认图标 |
+| `activeIcon` | `TxIconSource \| string` | - | 展开时图标 |
+| `iconSize` | `number` | `22` | 图标尺寸 |
+| `collapsible` | `boolean` | `true` | 是否可折叠 |
+| `collapsed` | `boolean` | `false` | 外部折叠状态 |
+| `defaultExpand` | `boolean` | `true` | 初始展开 |
+| `memoryName` | `string` | - | 展开状态持久化键 |
 
 ### TxGroupBlock 事件
 
 | 事件名 | 参数 | 说明 |
 |------|------------|-------------|
 | `update:expanded` | `expanded: boolean` | 展开状态变化时触发 |
-| `toggle` | - | 点击头部时触发 |
+| `toggle` | `expanded: boolean` | 点击头部时触发 |
 
 ### TxBlockLine 属性
 
@@ -272,9 +433,12 @@ const dummy = ref(false)
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
-| `title` | `string` | *必填* | 标题文本 |
-| `description` | `string` | *必填* | 描述文本 |
-| `icon` | `string` | *必填* | 图标类名 |
+| `title` | `string` | `''` | 标题文本 |
+| `description` | `string` | `''` | 描述文本 |
+| `defaultIcon` | `TxIconSource \| string` | - | 默认图标 |
+| `activeIcon` | `TxIconSource \| string` | - | 激活图标 |
+| `iconSize` | `number` | `20` | 图标尺寸 |
+| `active` | `boolean` | `false` | 激活状态 |
 | `disabled` | `boolean` | `false` | 禁用交互 |
 
 ### TxBlockSwitch 属性
@@ -284,9 +448,11 @@ const dummy = ref(false)
 | `modelValue` | `boolean` | *必填* | 开关值 (v-model) |
 | `title` | `string` | *必填* | 标题文本 |
 | `description` | `string` | *必填* | 描述文本 |
-| `icon` | `string` | *必填* | 图标类名 |
+| `defaultIcon` | `TxIconSource \| string` | - | 默认图标 |
+| `activeIcon` | `TxIconSource \| string` | - | 激活图标 |
 | `disabled` | `boolean` | `false` | 禁用开关 |
 | `guidance` | `boolean` | `false` | 显示为导航项 |
+| `loading` | `boolean` | `false` | 加载状态 |
 
 ### TxBlockSwitch 事件
 
@@ -294,3 +460,4 @@ const dummy = ref(false)
 |------|------------|-------------|
 | `update:modelValue` | `value: boolean` | 值变化时触发 |
 | `change` | `value: boolean` | 值变化时触发 |
+| `click` | `event: MouseEvent` | 引导模式点击时触发 |

@@ -4,12 +4,14 @@ DivisionBox 是一个轻量级的子窗口系统，基于 `WebContentsView` 实�
 
 ## Scope
 
-本文档描述 **当前已落地** 的 DivisionBox 基础能力（open/close/state）。
+本文档描述 **当前已落地** 的 DivisionBox 基础能力（open/close/state + 生命周期事件）。
 
 - 不包含：多视图并行、复杂 Dock 布局等高级能力。
-- “生命周期事件对插件开放”将统一收敛到 `DivisionBoxSDK`（后续补齐）。
+- 生命周期事件已通过 `DivisionBoxSDK` 暴露（`onLifecycleChange` / `onStateChange`）。
 
-> 权限说明：DivisionBox 相关能力目前**尚未接入权限中心**（Permission Center），后续会补齐权限门控与用户授权流程。
+> 权限说明：DivisionBox 已接入权限中心（Permission Center），插件需具备 `window.create` 权限。
+
+> 规范：优先使用 SDK；仅在 SDK 不覆盖时使用 transport 通道。
 
 ## 核心概念
 
@@ -79,13 +81,40 @@ interface DivisionBoxConfig {
 
 ## 使用方式
 
+### 插件 SDK（推荐）
+
+```typescript
+import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
+
+const divisionBox = useDivisionBox()
+
+// 打开 DivisionBox
+const { sessionId } = await divisionBox.open({
+  url: 'https://example.com/tool',
+  title: '我的工具',
+  size: 'medium',
+  keepAlive: true
+})
+
+// 监听生命周期变化
+const unsubscribe = divisionBox.onLifecycleChange((event) => {
+  console.log(event.sessionId, event.oldState, event.newState)
+})
+
+// 关闭 DivisionBox
+await divisionBox.close(sessionId)
+unsubscribe()
+```
+
 ### 从渲染进程打开 DivisionBox
 
 ```typescript
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 
 async function openDivisionBox() {
-  const response = await touchChannel.send('division-box:open', {
+  const transport = useTuffTransport()
+  const response = await transport.send(DivisionBoxEvents.open, {
     url: 'plugin://my-plugin/panel.html',
     title: '我的面板',
     icon: 'ri:dashboard-line',
@@ -104,7 +133,8 @@ async function openDivisionBox() {
 
 ```typescript
 async function closeDivisionBox(sessionId: string) {
-  await touchChannel.send('division-box:close', {
+  const transport = useTuffTransport()
+  await transport.send(DivisionBoxEvents.close, {
     sessionId,
     options: {
       delay: 0,
@@ -119,7 +149,8 @@ async function closeDivisionBox(sessionId: string) {
 
 ```typescript
 async function getSessionState(sessionId: string) {
-  const response = await touchChannel.send('division-box:get-state', {
+  const transport = useTuffTransport()
+  const response = await transport.send(DivisionBoxEvents.getState, {
     sessionId
   })
   
@@ -133,7 +164,8 @@ async function getSessionState(sessionId: string) {
 
 ```typescript
 async function updateSessionState(sessionId: string, key: string, value: any) {
-  await touchChannel.send('division-box:update-state', {
+  const transport = useTuffTransport()
+  await transport.send(DivisionBoxEvents.updateState, {
     sessionId,
     key,
     value
@@ -145,7 +177,8 @@ async function updateSessionState(sessionId: string, key: string, value: any) {
 
 ```typescript
 async function getActiveSessions() {
-  const response = await touchChannel.send('division-box:get-active-sessions', {})
+  const transport = useTuffTransport()
+  const response = await transport.send(DivisionBoxEvents.getActiveSessions, {})
   
   if (response?.success) {
     console.log('Active sessions:', response.data)
@@ -154,25 +187,6 @@ async function getActiveSessions() {
 ```
 
 ## 插件 SDK
-
-### 快速开始
-
-```typescript
-import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
-
-const divisionBox = useDivisionBox()
-
-// 打开 DivisionBox
-const { sessionId } = await divisionBox.open({
-  url: 'https://example.com/tool',
-  title: '我的工具',
-  size: 'medium',
-  keepAlive: true
-})
-
-// 关闭 DivisionBox
-await divisionBox.close(sessionId)
-```
 
 ### 完整 API
 
@@ -220,12 +234,24 @@ await divisionBox.close(sessionId, { force: true })
 
 监听状态变化。
 
-> 当前 SDK 提供的是“状态变化”回调。后续将把 DivisionBox 的完整生命周期事件
-> （prepare/attach/active/inactive/detach/destroy）以更稳定的事件模型对插件开放。
+> `onStateChange` 提供简化的状态变更回调；需要完整生命周期信息时使用 `onLifecycleChange`。
 
 ```typescript
 const unsubscribe = divisionBox.onStateChange((data) => {
   console.log(`Session ${data.sessionId} changed to ${data.state}`)
+})
+
+// 停止监听
+unsubscribe()
+```
+
+#### `onLifecycleChange(handler)`
+
+监听完整生命周期变化事件。
+
+```typescript
+const unsubscribe = divisionBox.onLifecycleChange((event) => {
+  console.log(event.sessionId, event.oldState, event.newState)
 })
 
 // 停止监听

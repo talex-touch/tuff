@@ -6,7 +6,7 @@ import type {
 } from './worker-status'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { fileProviderLog } from '../../../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 
 interface PendingIcon {
   resolve: (value: Buffer | null) => void
@@ -23,6 +23,8 @@ type WorkerMessage =
   | { type: 'done'; taskId: string; buffer: Buffer | null }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
+
+const fileProviderLog = getLogger('file-provider')
 
 export class IconWorkerClient {
   private worker: Worker | null = null

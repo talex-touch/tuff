@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 const { t } = useI18n()
+const transport = useTuffTransport()
 const showBanner = ref(false)
 const verificationFailed = ref(false)
 const dismissed = ref(false)
@@ -24,18 +26,22 @@ function handleVerificationStatus(status: VerificationStatus) {
 }
 
 onMounted(async () => {
-  touchChannel.regChannel('build:verification-status', ({ data }) => {
-    const status = data as VerificationStatus
+  const verificationStatusEvent = defineRawEvent<VerificationStatus, void>(
+    'build:verification-status'
+  )
+  transport.on(verificationStatusEvent, (status) => {
     handleVerificationStatus(status)
   })
 
   try {
-    const status = await touchChannel.send('build:get-verification-status')
+    const getVerificationStatus = defineRawEvent<void, VerificationStatus>(
+      'build:get-verification-status'
+    )
+    const status = await transport.send(getVerificationStatus)
     if (status) {
       handleVerificationStatus(status as VerificationStatus)
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[BuildSecurityBanner] Failed to get verification status:', error)
   }
 })

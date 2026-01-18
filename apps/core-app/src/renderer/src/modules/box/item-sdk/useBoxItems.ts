@@ -1,21 +1,22 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { UseBoxItemsReturn } from './types'
 import { computed, onMounted, onUnmounted, readonly, ref } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 /**
  * BoxItem SDK Channel 常量（与主进程保持一致）
  */
-const BOX_ITEM_CHANNELS = {
-  CREATE: 'box-item:create',
-  UPDATE: 'box-item:update',
-  UPSERT: 'box-item:upsert',
-  DELETE: 'box-item:delete',
-  BATCH_UPSERT: 'box-item:batch-upsert',
-  BATCH_DELETE: 'box-item:batch-delete',
-  CLEAR: 'box-item:clear',
-  SYNC: 'box-item:sync',
-  SYNC_RESPONSE: 'box-item:sync-response',
+const BOX_ITEM_EVENTS = {
+  CREATE: defineRawEvent<{ item: TuffItem }, void>('box-item:create'),
+  UPDATE: defineRawEvent<{ id: string; updates: Partial<TuffItem> }, void>('box-item:update'),
+  UPSERT: defineRawEvent<{ item: TuffItem }, void>('box-item:upsert'),
+  DELETE: defineRawEvent<{ id: string }, void>('box-item:delete'),
+  BATCH_UPSERT: defineRawEvent<{ items: TuffItem[] }, void>('box-item:batch-upsert'),
+  BATCH_DELETE: defineRawEvent<{ ids: string[] }, void>('box-item:batch-delete'),
+  CLEAR: defineRawEvent<{ source?: string }, void>('box-item:clear'),
+  SYNC: defineRawEvent<void, void>('box-item:sync'),
+  SYNC_RESPONSE: defineRawEvent<{ items: TuffItem[] }, void>('box-item:sync-response')
 } as const
 
 /**
@@ -37,6 +38,7 @@ const BOX_ITEM_CHANNELS = {
  * ```
  */
 export function useBoxItems(): UseBoxItemsReturn {
+  const transport = useTuffTransport()
   // ==================== 状态管理 ====================
 
   const items = ref<TuffItem[]>([])
@@ -69,56 +71,56 @@ export function useBoxItems(): UseBoxItemsReturn {
    * 创建新 item
    */
   const create = (item: TuffItem): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.CREATE, { item })
+    void transport.send(BOX_ITEM_EVENTS.CREATE, { item })
   }
 
   /**
    * 更新 item 部分字段
    */
   const update = (id: string, updates: Partial<TuffItem>): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.UPDATE, { id, updates })
+    void transport.send(BOX_ITEM_EVENTS.UPDATE, { id, updates })
   }
 
   /**
    * 创建或更新 item（推荐）
    */
   const upsert = (item: TuffItem): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.UPSERT, { item })
+    void transport.send(BOX_ITEM_EVENTS.UPSERT, { item })
   }
 
   /**
    * 删除 item
    */
   const remove = (id: string): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.DELETE, { id })
+    void transport.send(BOX_ITEM_EVENTS.DELETE, { id })
   }
 
   /**
    * 批量 upsert
    */
   const batchUpsert = (itemsToUpsert: TuffItem[]): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.BATCH_UPSERT, { items: itemsToUpsert })
+    void transport.send(BOX_ITEM_EVENTS.BATCH_UPSERT, { items: itemsToUpsert })
   }
 
   /**
    * 批量删除
    */
   const batchDelete = (ids: string[]): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.BATCH_DELETE, { ids })
+    void transport.send(BOX_ITEM_EVENTS.BATCH_DELETE, { ids })
   }
 
   /**
    * 清空所有或指定来源
    */
   const clear = (source?: string): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.CLEAR, { source })
+    void transport.send(BOX_ITEM_EVENTS.CLEAR, { source })
   }
 
   /**
    * 请求同步
    */
   const sync = (): void => {
-    touchChannel.send(BOX_ITEM_CHANNELS.SYNC, {})
+    void transport.send(BOX_ITEM_EVENTS.SYNC)
   }
 
   // ==================== 事件处理器 ====================
@@ -126,8 +128,7 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 upsert 事件
    */
-  const handleUpsert = ({ data }: { data: { item: TuffItem } }): void => {
-    const { item } = data
+  const handleUpsert = ({ item }: { item: TuffItem }): void => {
     const index = itemsMap.get(item.id)
 
     if (index !== undefined) {
@@ -135,8 +136,7 @@ export function useBoxItems(): UseBoxItemsReturn {
       items.value.splice(index, 1)
       items.value.unshift(item)
       rebuildIndex()
-    }
-    else {
+    } else {
       // 新增：插入到最前（最新结果置顶），触发列表 FLIP
       items.value.unshift(item)
       rebuildIndex()
@@ -151,8 +151,7 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 update 事件
    */
-  const handleUpdate = ({ data }: { data: { id: string, updates: Partial<TuffItem> } }): void => {
-    const { id, updates } = data
+  const handleUpdate = ({ id, updates }: { id: string; updates: Partial<TuffItem> }): void => {
     const index = itemsMap.get(id)
 
     if (index !== undefined) {
@@ -166,8 +165,7 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 delete 事件
    */
-  const handleDelete = ({ data }: { data: { id: string } }): void => {
-    const { id } = data
+  const handleDelete = ({ id }: { id: string }): void => {
     const index = itemsMap.get(id)
 
     if (index !== undefined) {
@@ -180,11 +178,11 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 batch-upsert 事件
    */
-  const handleBatchUpsert = ({ data }: { data: { items: TuffItem[] } }): void => {
+  const handleBatchUpsert = ({ items: batchItems }: { items: TuffItem[] }): void => {
     // Reverse iterate to preserve incoming order while unshifting
     // so the first item in data.items ends up before subsequent ones.
-    for (let i = data.items.length - 1; i >= 0; i--) {
-      const item = data.items[i]
+    for (let i = batchItems.length - 1; i >= 0; i--) {
+      const item = batchItems[i]
       const index = itemsMap.get(item.id)
       if (index !== undefined) {
         items.value.splice(index, 1)
@@ -197,24 +195,21 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 batch-delete 事件
    */
-  const handleBatchDelete = ({ data }: { data: { ids: string[] } }): void => {
+  const handleBatchDelete = ({ ids }: { ids: string[] }): void => {
     // 批量删除需要重建索引
-    const idsToDelete = new Set(data.ids)
-    items.value = items.value.filter(item => !idsToDelete.has(item.id))
+    const idsToDelete = new Set(ids)
+    items.value = items.value.filter((item) => !idsToDelete.has(item.id))
     rebuildIndex()
   }
 
   /**
    * 处理 clear 事件
    */
-  const handleClear = ({ data }: { data: { source?: string } }): void => {
-    const { source } = data
-
+  const handleClear = ({ source }: { source?: string }): void => {
     if (source) {
       // 清空指定来源
-      items.value = items.value.filter(item => item.source?.id !== source)
-    }
-    else {
+      items.value = items.value.filter((item) => item.source?.id !== source)
+    } else {
       // 清空所有
       items.value = []
     }
@@ -225,8 +220,8 @@ export function useBoxItems(): UseBoxItemsReturn {
   /**
    * 处理 sync-response 事件
    */
-  const handleSyncResponse = ({ data }: { data: { items: TuffItem[] } }): void => {
-    items.value = data.items
+  const handleSyncResponse = ({ items: syncedItems }: { items: TuffItem[] }): void => {
+    items.value = syncedItems
     rebuildIndex()
   }
 
@@ -234,22 +229,21 @@ export function useBoxItems(): UseBoxItemsReturn {
 
   onMounted(() => {
     // 注册所有事件监听器
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.CREATE, handleCreate as any)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.UPDATE, handleUpdate as any)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.UPSERT, handleUpsert as any)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.DELETE, handleDelete as any)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.BATCH_UPSERT, handleBatchUpsert as any)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.BATCH_DELETE, handleBatchDelete as any)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.CLEAR, handleClear as any)
-    touchChannel.regChannel(BOX_ITEM_CHANNELS.SYNC_RESPONSE, handleSyncResponse as any)
+    transport.on(BOX_ITEM_EVENTS.CREATE, handleCreate)
+    transport.on(BOX_ITEM_EVENTS.UPDATE, handleUpdate)
+    transport.on(BOX_ITEM_EVENTS.UPSERT, handleUpsert)
+    transport.on(BOX_ITEM_EVENTS.DELETE, handleDelete)
+    transport.on(BOX_ITEM_EVENTS.BATCH_UPSERT, handleBatchUpsert)
+    transport.on(BOX_ITEM_EVENTS.BATCH_DELETE, handleBatchDelete)
+    transport.on(BOX_ITEM_EVENTS.CLEAR, handleClear)
+    transport.on(BOX_ITEM_EVENTS.SYNC_RESPONSE, handleSyncResponse)
 
     // 请求初始同步
     sync()
   })
 
   onUnmounted(() => {
-    // Vue 的 regChannel 实现可能需要手动清理
-    // 这里假设 touchChannel 会自动清理，如需手动清理请添加
+    // transport.on 监听在窗口销毁后会自动释放，如需手动清理请补充
     // 清空本地状态
     items.value = []
     itemsMap.clear()
@@ -272,6 +266,6 @@ export function useBoxItems(): UseBoxItemsReturn {
     clear,
     sync,
     count,
-    getById,
+    getById
   }
 }

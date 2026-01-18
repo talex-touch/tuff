@@ -14,7 +14,7 @@ import type {
 } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { FlowPayload } from './flow-trigger'
-import { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
+import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxIPCChannel } from '@talex-touch/utils'
 import { DivisionBoxEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
 import { getPermissionModule } from '../permission'
 import { flowTriggerManager } from './flow-trigger'
@@ -183,8 +183,11 @@ export class DivisionBoxIPC {
           return createErrorResponse(validation.error!)
         }
 
-        const session = await this.manager.createSession(config, (event) => {
-          this.broadcastStateChanged(event)
+        const session = await this.manager.createSession(config)
+        const pluginName = session.getAttachedPlugin()?.name ?? session.meta?.pluginId
+
+        session.onStateChange((event) => {
+          this.broadcastStateChanged(event, pluginName)
         })
 
         const sessionInfo: SessionInfo = {
@@ -206,8 +209,11 @@ export class DivisionBoxIPC {
           return createErrorResponse(validation.error!)
         }
 
+        const session = this.manager.getSession(sessionId)
+        const pluginName = session?.getAttachedPlugin()?.name ?? session?.meta?.pluginId
+
         await this.manager.destroySession(sessionId, options)
-        this.broadcastSessionDestroyed(sessionId)
+        this.broadcastSessionDestroyed(sessionId, pluginName)
         return createSuccessResponse({ success: true })
       })
     )
@@ -441,10 +447,18 @@ export class DivisionBoxIPC {
    *
    * @param event - State change event data
    */
-  private broadcastStateChanged(event: StateChangeEvent): void {
+  private broadcastStateChanged(event: StateChangeEvent, pluginName?: string): void {
     if (this.transport) {
       try {
         this.transport.broadcast(DivisionBoxEvents.stateChanged, event)
+      } catch {
+        // ignore
+      }
+    }
+
+    if (pluginName) {
+      try {
+        this.channel.sendPlugin(pluginName, DivisionBoxIPCChannel.STATE_CHANGED, event)
       } catch {
         // ignore
       }
@@ -456,10 +470,18 @@ export class DivisionBoxIPC {
    *
    * @param sessionId - ID of the destroyed session
    */
-  private broadcastSessionDestroyed(sessionId: string): void {
+  private broadcastSessionDestroyed(sessionId: string, pluginName?: string): void {
     if (this.transport) {
       try {
         this.transport.broadcast(DivisionBoxEvents.sessionDestroyed, { sessionId })
+      } catch {
+        // ignore
+      }
+    }
+
+    if (pluginName) {
+      try {
+        this.channel.sendPlugin(pluginName, DivisionBoxIPCChannel.SESSION_DESTROYED, { sessionId })
       } catch {
         // ignore
       }

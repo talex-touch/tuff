@@ -1,10 +1,14 @@
 import { ElLoading } from 'element-plus'
 import { h } from 'vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
-import { touchChannel } from '../channel/channel-core'
 import { blowMention, popperMention } from '../mention/dialog-mention'
 
 const bufferCache = new Map<string, Buffer>()
+const transport = useTuffTransport()
+const dropPluginEvent = defineRawEvent<any, any>('drop:plugin')
+const dropEvent = defineRawEvent<any, void>('drop')
 
 export function getBufferedFile(name: string): Buffer | undefined {
   return bufferCache.get(name)
@@ -34,7 +38,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       // Cache the buffer before sending it to the main process
       bufferCache.set(file.name, buffer)
 
-      const data = touchChannel.sendSync('drop:plugin', {
+      const data = await transport.send(dropPluginEvent, {
         name: file.name,
         buffer,
         size: file.size
@@ -115,7 +119,7 @@ export function useDropperResolver(): void {
       }
     }
 
-    touchChannel.send('drop', option)
+    transport.send(dropEvent, option).catch(() => {})
   })
 
   document.addEventListener('dragover', (e) => {

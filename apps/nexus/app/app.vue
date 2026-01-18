@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ClerkLoaded, ClerkLoading } from '@clerk/nuxt/components'
+import { useI18n } from '#imports'
 import { computed, onMounted, watch, watchEffect } from 'vue'
 import { appName } from '~/constants'
 

@@ -4,13 +4,15 @@ import { ElMessageBox } from 'element-plus'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DownloadEvents } from '@talex-touch/utils/transport/events'
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<Emits>()
 
 const { t } = useI18n()
+const transport = useTuffTransport()
 
 interface Props {
   modelValue: boolean
@@ -34,7 +36,7 @@ watch(
       refreshLogs()
       loadErrorStats()
     }
-  },
+  }
 )
 
 watch(visible, (val) => {
@@ -44,31 +46,36 @@ watch(visible, (val) => {
 async function refreshLogs() {
   loading.value = true
   try {
-    const result = await touchChannel.send('download:get-logs', logLimit.value)
+    const result = await transport.send(DownloadEvents.logs.get, { limit: logLimit.value })
     if (result.success) {
-      logs.value = result.logs || t('download.no_logs')
-    }
-    else {
+      const rawLogs = result.logs
+      const logContent =
+        typeof rawLogs === 'string'
+          ? rawLogs
+          : Array.isArray(rawLogs)
+            ? rawLogs.join('\n')
+            : rawLogs
+              ? JSON.stringify(rawLogs, null, 2)
+              : ''
+      logs.value = logContent || t('download.no_logs')
+    } else {
       toast.error(t('download.load_logs_failed'))
     }
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     toast.error(`${t('download.load_logs_failed')}: ${message}`)
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
 
 async function loadErrorStats() {
   try {
-    const result = await touchChannel.send('download:get-error-stats')
+    const result = await transport.send(DownloadEvents.logs.getErrorStats)
     if (result.success) {
       errorStats.value = result.stats
     }
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     console.error('Failed to load error stats:', error)
   }
 }
@@ -81,23 +88,20 @@ async function clearLogs() {
       {
         confirmButtonText: t('common.confirm'),
         cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      },
+        type: 'warning'
+      }
     )
 
-    const result = await touchChannel.send('download:clear-logs')
+    const result = await transport.send(DownloadEvents.logs.clear)
     if (result.success) {
       logs.value = ''
       errorStats.value = null
       toast.success(t('download.logs_cleared'))
-    }
-    else {
+    } else {
       toast.error(t('download.clear_logs_failed'))
     }
-  }
-  catch (error: unknown) {
-    if (error === 'cancel')
-      return
+  } catch (error: unknown) {
+    if (error === 'cancel') return
     const message = error instanceof Error ? error.message : String(error)
     toast.error(`${t('download.clear_logs_failed')}: ${message}`)
   }

@@ -39,7 +39,7 @@ function openErrorDetails(): void {
 }
 
 const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
-const tabs = defineModel<'market' | 'installed'>('tabs', { default: 'market' })
+const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'market' })
 </script>
 
 <template>
@@ -55,6 +55,7 @@ const tabs = defineModel<'market' | 'installed'>('tabs', { default: 'market' })
       <TxRadioGroup v-model="tabs" glass>
         <TxRadio value="market" :label="t('flatNavBar.market')" />
         <TxRadio value="installed" :label="t('market.installed')" />
+        <TxRadio value="docs" :label="t('market.docs')" />
       </TxRadioGroup>
 
       <div v-if="tabs === 'market'" flex items-center gap-2>

@@ -29,6 +29,7 @@ import {
   PermissionEvents,
   PluginEvents
 } from '@talex-touch/utils/transport/events'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
@@ -46,7 +47,6 @@ import {
 import { performMarketHttpRequest } from '../../service/market-http.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import { debounce } from '../../utils/common-util'
-import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
@@ -60,7 +60,7 @@ import { createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 
-const pluginLog = createLogger('PluginModule')
+const pluginLog = getLogger('plugin-system')
 const devWatcherLog = pluginLog.child('DevWatcher')
 
 type IPluginManagerWithInternals = IPluginManager & {

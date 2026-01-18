@@ -1,4 +1,5 @@
-import type { ITouchClientChannel } from '@talex-touch/utils'
+import type { ITuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { createCoreBoxTransport } from './core-box-transport'
 
 /**
@@ -39,23 +40,23 @@ export interface UIViewStateResponse {
  * @param channel - The IPC channel to use for communication
  * @returns An object with methods to forward key events and query UI view state
  */
-export function createCoreBoxKeyTransport(channel: ITouchClientChannel): {
+export function createCoreBoxKeyTransport(transport: ITuffTransport): {
   forwardKeyEvent: (event: ForwardedKeyEvent) => void
   getUIViewState: () => Promise<UIViewStateResponse>
 } {
-  const transport = createCoreBoxTransport<ForwardedKeyEvent>(channel, {
-    event: 'core-box:forward-key-event',
+  const keyTransport = createCoreBoxTransport<ForwardedKeyEvent>(transport, {
+    event: CoreBoxEvents.ui.forwardKeyEvent,
     debounceMs: 0
   })
 
   return {
     forwardKeyEvent(event: ForwardedKeyEvent) {
-      transport.dispatch(event)
+      keyTransport.dispatch(event)
     },
 
     async getUIViewState(): Promise<UIViewStateResponse> {
       try {
-        const result = await channel.send('core-box:get-ui-view-state')
+        const result = await transport.send(CoreBoxEvents.ui.getUIViewState)
         return result as UIViewStateResponse
       } catch {
         return { isActive: false, isFocused: false, isUIMode: false }

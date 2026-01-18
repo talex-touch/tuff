@@ -39,6 +39,9 @@ export * from './meta-overlay'
 // Permission domain types
 export * from './permission'
 
+// Platform domain types
+export * from './platform'
+
 // Plugin domain types
 export * from './plugin'
 

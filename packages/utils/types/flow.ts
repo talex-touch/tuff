@@ -228,6 +228,9 @@ export interface FlowDispatchOptions {
 
   /** Whether acknowledgment is required */
   requireAck?: boolean
+
+  /** Consent token for one-time authorization */
+  consentToken?: string
 }
 
 /**

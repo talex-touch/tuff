@@ -1,8 +1,11 @@
 import type { TuffItem } from '@talex-touch/utils'
+import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { touchChannel } from '~/modules/channel/channel-core'
 
 interface UseActionPanelOptions {
   openFlowSelector?: (item: TuffItem) => void
@@ -12,6 +15,11 @@ interface UseActionPanelOptions {
 export function useActionPanel(options: UseActionPanelOptions = {}) {
   const { openFlowSelector, refreshSearch } = options
   const { t } = useI18n()
+  const transport = useTuffTransport()
+  const appSdk = useAppSdk()
+  const openActionPanelEvent = defineRawEvent<{ item?: TuffItem }, void>(
+    'corebox:open-action-panel'
+  )
 
   const visible = ref(false)
   const item = ref<TuffItem | null>(null)
@@ -30,7 +38,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
 
   async function togglePin(targetItem: TuffItem): Promise<void> {
     try {
-      const response = await touchChannel.send('core-box:toggle-pin', {
+      const response = await transport.send(CoreBoxEvents.item.togglePin, {
         sourceId: targetItem.source.id,
         itemId: targetItem.id,
         sourceType: targetItem.source.type
@@ -63,13 +71,16 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         break
       case 'copy-title':
         if (targetItem.render?.basic?.title) {
-          await touchChannel.send('clipboard:write-text', { text: targetItem.render.basic.title })
+          await transport.send(ClipboardEvents.write, {
+            type: 'text',
+            value: targetItem.render.basic.title
+          })
           toast.success(t('corebox.copied', '已复制'))
         }
         break
       case 'reveal-in-finder': {
         const path = targetItem.meta?.app?.path || targetItem.meta?.file?.path
-        if (path) await touchChannel.send('shell:show-item-in-folder', { path })
+        if (path) await appSdk.showInFolder(path)
         break
       }
       case 'flow-transfer':
@@ -79,7 +90,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
   }
 
   // Channel listener for action panel
-  const unregOpen = touchChannel.regChannel('corebox:open-action-panel', ({ data }) => {
+  const unregOpen = transport.on(openActionPanelEvent, (data) => {
     if (data?.item) open(data.item)
   })
 

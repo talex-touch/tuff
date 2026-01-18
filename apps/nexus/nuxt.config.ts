@@ -193,6 +193,7 @@ export default defineNuxtConfig({
       jwtKey: process.env.CLERK_JWT_KEY,
       machineSecretKey: process.env.CLERK_MACHINE_KEY,
     },
+    appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     public: {
       clerk: {
         publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,

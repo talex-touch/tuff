@@ -6,10 +6,13 @@ import { toast } from 'vue-sonner'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 const { t } = useI18n()
 const router = useRouter()
+const transport = useTuffTransport()
+const openPromptsFolderEvent = defineRawEvent<void, void>('app:open-prompts-folder')
 
 // TODO: 从存储中获取实际数据
 const promptFiles = ref<string[]>([])
@@ -22,10 +25,9 @@ function handlePromptsClick() {
 
 async function handleOpenFolder() {
   try {
-    await touchChannel.send('app:open-prompts-folder')
+    await transport.send(openPromptsFolderEvent)
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to open prompts folder:', error)
     toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
@@ -89,5 +91,4 @@ function handleCreatePrompt() {
   </TuffGroupBlock>
 </template>
 
-<style lang="scss" scoped>
-</style>
+<style lang="scss" scoped></style>

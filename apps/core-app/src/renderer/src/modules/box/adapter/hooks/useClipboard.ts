@@ -2,6 +2,7 @@ import type { IBoxOptions } from '..'
 import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
+import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
 import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChannel'
@@ -236,15 +237,15 @@ export function useClipboard(
   // Initialize after component is mounted
   if (hasWindow()) {
     // Check if TouchChannel is available
-    if (window.$channel || window.touchChannel) {
+    if (tryUseChannel()) {
       initClipboardChannel()
     } else {
-      // Wait for TouchChannel to be injected
+      // Wait for channel to be injected
       const checkTaskId = `clipboard.channel-check.${Date.now()}`
       pollingService.register(
         checkTaskId,
         () => {
-          if (window.$channel || window.touchChannel) {
+          if (tryUseChannel()) {
             pollingService.unregister(checkTaskId)
             initClipboardChannel()
           }

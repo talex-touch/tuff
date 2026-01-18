@@ -8,12 +8,12 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { ChannelType } from '@talex-touch/utils/channel'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import { appTaskGate } from '../../service/app-task-gate'
-import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
 import { StorageCache } from './storage-cache'
@@ -21,7 +21,7 @@ import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
 import { StoragePollingService } from './storage-polling-service'
 
-const storageLog = createLogger('Storage')
+const storageLog = getLogger('storage')
 
 let pluginConfigPath: string
 
@@ -150,7 +150,7 @@ export class StorageModule extends BaseModule {
     this.transportDisposers = []
     this.transport = null
     storageUpdateEmitter = null
-    storageLog.success('Shutdown complete')
+    storageLog.info('Shutdown complete')
   }
 
   public emitStorageUpdate(name: string, version?: number): void {
@@ -171,6 +171,13 @@ export class StorageModule extends BaseModule {
         continue
       }
       stream.emit(payload)
+    }
+  }
+
+  public getCacheStats(): { cachedConfigs: number; pluginConfigs: number } {
+    return {
+      cachedConfigs: this.cache.size(),
+      pluginConfigs: this.pluginConfigs.size
     }
   }
 

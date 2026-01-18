@@ -1,6 +1,7 @@
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { isCoreBox } from '@talex-touch/utils/renderer'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { SentryEvents } from '@talex-touch/utils/transport/events'
 
 interface RendererPerformanceBuffer {
   longTaskCount: number
@@ -20,6 +21,7 @@ const buffer: RendererPerformanceBuffer = {
   rafJankMaxMs: 0
 }
 
+const transport = useTuffTransport()
 let started = false
 const pollingService = PollingService.getInstance()
 const flushTaskId = 'renderer.performance.flush'
@@ -31,7 +33,7 @@ export async function startRendererPerformanceTelemetry(options?: {
   started = true
 
   try {
-    const config = (await touchChannel.send('sentry:get-config')) as
+    const config = (await transport.send(SentryEvents.api.getConfig)) as
       | { enabled?: boolean }
       | undefined
     if (!config?.enabled) return
@@ -126,7 +128,7 @@ async function flush(): Promise<void> {
   buffer.rafJankMaxMs = 0
 
   try {
-    await touchChannel.send('sentry:record-performance', payload)
+    await transport.send(SentryEvents.api.recordPerformance, payload)
   } catch {
     // ignore telemetry errors
   }

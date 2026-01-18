@@ -25,6 +25,7 @@ import { agentExecutor } from './agent-executor'
 import { agentRegistry } from './agent-registry'
 import { agentScheduler } from './agent-scheduler'
 import { toolRegistry } from './tool-registry'
+import { agentContextManager } from './memory'
 
 const TAG = chalk.hex('#9c27b0').bold('[AgentManager]')
 const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
@@ -82,6 +83,7 @@ export class AgentManager extends EventEmitter {
 
     // Set executor dependencies
     this.executor.setToolRegistry(this.tools)
+    this.executor.setContextManager(agentContextManager)
 
     // Forward scheduler events
     this.setupEventForwarding()

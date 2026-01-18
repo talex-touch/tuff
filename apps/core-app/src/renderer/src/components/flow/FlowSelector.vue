@@ -23,7 +23,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'close'): void
-  (e: 'select', targetId: string): void
+  (e: 'select', payload: { targetId: string; consentToken?: string }): void
 }>()
 
 const { t } = useI18n()
@@ -35,6 +35,9 @@ const loading = ref(false)
 const searchQuery = ref('')
 const selectedIndex = ref(0)
 const inputRef = ref<HTMLInputElement>()
+const consentVisible = ref(false)
+const consentLoading = ref(false)
+const consentTarget = ref<FlowTargetInfo | null>(null)
 
 const filteredTargets = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -49,6 +52,8 @@ const filteredTargets = computed(() => {
       target.pluginName?.toLowerCase().includes(query)
   )
 })
+
+const senderId = computed(() => props.payload?.context?.sourcePluginId || 'corebox')
 
 async function loadTargets(): Promise<void> {
   loading.value = true
@@ -71,12 +76,45 @@ async function loadTargets(): Promise<void> {
   }
 }
 
-function handleSelect(target: FlowTargetInfo): void {
-  emit('select', target.fullId)
+async function handleSelect(target: FlowTargetInfo): Promise<void> {
+  const response = await transport.send(FlowEvents.checkConsent, {
+    senderId: senderId.value,
+    targetId: target.fullId
+  })
+  if (response?.success && response.data?.allowed) {
+    emit('select', { targetId: target.fullId })
+    return
+  }
+  consentTarget.value = target
+  consentVisible.value = true
 }
 
 function handleClose(): void {
   emit('close')
+}
+
+async function handleConsent(mode: 'once' | 'always'): Promise<void> {
+  if (!consentTarget.value) return
+  consentLoading.value = true
+  try {
+    const response = await transport.send(FlowEvents.grantConsent, {
+      senderId: senderId.value,
+      targetId: consentTarget.value.fullId,
+      mode
+    })
+    if (response?.success) {
+      emit('select', { targetId: consentTarget.value.fullId, consentToken: response.data?.token })
+      consentVisible.value = false
+      consentTarget.value = null
+    }
+  } finally {
+    consentLoading.value = false
+  }
+}
+
+function handleConsentDeny(): void {
+  consentVisible.value = false
+  consentTarget.value = null
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -118,6 +156,8 @@ watch(
       loadTargets()
       selectedIndex.value = 0
       searchQuery.value = ''
+      consentVisible.value = false
+      consentTarget.value = null
       requestAnimationFrame(() => {
         inputRef.value?.focus()
       })
@@ -299,6 +339,52 @@ function getPayloadPreview(): string {
               @click="handleClose"
             >
               {{ t('common.cancel', '取消') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <Teleport to="body">
+    <Transition name="flow-selector">
+      <div v-if="consentVisible" class="fixed inset-0 z-[10000] flex items-center justify-center">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="handleConsentDeny" />
+        <div
+          class="relative w-[420px] bg-[var(--el-bg-color)] rounded-xl shadow-2xl overflow-hidden p-5"
+        >
+          <h3 class="text-base font-semibold text-[var(--el-text-color-primary)]">
+            {{ t('flow.consentTitle', '流转授权') }}
+          </h3>
+          <p class="mt-2 text-sm text-[var(--el-text-color-secondary)] leading-relaxed">
+            {{
+              t(
+                'flow.consentDesc',
+                `允许 ${senderId} 向 ${consentTarget?.pluginName || consentTarget?.name || '目标插件'} 发送数据？`
+              )
+            }}
+          </p>
+          <div class="mt-4 flex items-center justify-end gap-2">
+            <button
+              class="px-3 py-1.5 text-sm rounded-md border border-[var(--el-border-color)] text-[var(--el-text-color-regular)] hover:bg-[var(--el-fill-color-light)]"
+              :disabled="consentLoading"
+              @click="handleConsentDeny"
+            >
+              {{ t('flow.consentDeny', '拒绝') }}
+            </button>
+            <button
+              class="px-3 py-1.5 text-sm rounded-md border border-[var(--el-border-color)] text-[var(--el-text-color-regular)] hover:bg-[var(--el-fill-color-light)]"
+              :disabled="consentLoading"
+              @click="handleConsent('once')"
+            >
+              {{ t('flow.consentOnce', '仅本次') }}
+            </button>
+            <button
+              class="px-3 py-1.5 text-sm rounded-md bg-[var(--el-color-primary)] text-white hover:opacity-90"
+              :disabled="consentLoading"
+              @click="handleConsent('always')"
+            >
+              {{ t('flow.consentAlways', '始终允许') }}
             </button>
           </div>
         </div>

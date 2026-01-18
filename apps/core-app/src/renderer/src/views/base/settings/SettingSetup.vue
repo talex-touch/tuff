@@ -7,6 +7,9 @@
 <script setup lang="ts" name="SettingSetup">
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
 
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
@@ -20,15 +23,30 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
 // Import storage and channel
-import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage/index'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 
 const { t } = useI18n()
+const transport = useTuffTransport()
+const { startupInfo } = useStartupInfo()
 
-const platform = computed(() => window.$startupInfo?.platform || process.platform)
+const platform = computed(() => startupInfo.value?.platform || process.platform)
 const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
 const isLinux = computed(() => platform.value === 'linux')
+
+type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
+
+interface SystemPermissionCheckResult {
+  status: SystemPermissionStatus
+  canRequest: boolean
+  message?: string
+}
+
+const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
+  'system:permission:check'
+)
+const systemPermissionRequest = defineRawEvent<string, boolean>('system:permission:request')
 
 // Permission states
 const permissions = ref({
@@ -103,7 +121,7 @@ if (appSetting.setup.customDesktop === undefined) {
 
 onMounted(async () => {
   await checkAllPermissions()
-  loadSettings()
+  await loadSettings()
 })
 
 async function checkAllPermissions(): Promise<void> {
@@ -111,7 +129,7 @@ async function checkAllPermissions(): Promise<void> {
   try {
     // Check accessibility permission (macOS)
     if (isMacOS.value) {
-      const accResult = await touchChannel.send('system:permission:check', 'accessibility' as any)
+      const accResult = await transport.send(systemPermissionCheck, 'accessibility')
       permissions.value.accessibility = {
         status: accResult.status,
         checked: true
@@ -120,7 +138,7 @@ async function checkAllPermissions(): Promise<void> {
     }
 
     // Check notification permission
-    const notifResult = await touchChannel.send('system:permission:check', 'notifications' as any)
+    const notifResult = await transport.send(systemPermissionCheck, 'notifications')
     permissions.value.notifications = {
       status: notifResult.status,
       checked: true
@@ -129,10 +147,7 @@ async function checkAllPermissions(): Promise<void> {
 
     // Check admin privileges (Windows)
     if (isWindows.value) {
-      const adminResult = await touchChannel.send(
-        'system:permission:check',
-        'adminPrivileges' as any
-      )
+      const adminResult = await transport.send(systemPermissionCheck, 'adminPrivileges')
       permissions.value.adminPrivileges = {
         status: adminResult.status,
         checked: true
@@ -147,7 +162,7 @@ async function checkAllPermissions(): Promise<void> {
   }
 }
 
-function loadSettings(): void {
+async function loadSettings(): Promise<void> {
   if (appSetting.setup) {
     settings.value.autoStart = appSetting.setup.autoStart ?? false
     settings.value.showTray = appSetting.setup.showTray ?? true
@@ -160,9 +175,9 @@ function loadSettings(): void {
 
   // Load autoStart from existing setting
   try {
-    const autoStartResult = touchChannel.sendSync('tray:autostart:get')
+    const autoStartResult = await transport.send(TrayEvents.autostart.get)
     if (autoStartResult !== null) {
-      settings.value.autoStart = autoStartResult as boolean
+      settings.value.autoStart = Boolean(autoStartResult)
     }
   } catch (error) {
     console.error('[SettingSetup] Failed to load autoStart:', error)
@@ -170,9 +185,11 @@ function loadSettings(): void {
 
   // Load startSilent from existing setting
   try {
-    const startSilentResult = touchChannel.sendSync('storage:get', 'app.window.startSilent')
+    const startSilentResult = await transport.send(StorageEvents.app.get, {
+      key: 'app.window.startSilent'
+    })
     if (startSilentResult !== null && startSilentResult !== undefined) {
-      settings.value.startSilent = startSilentResult as boolean
+      settings.value.startSilent = Boolean(startSilentResult)
     } else {
       const windowSettings = appSetting.window
       if (windowSettings && windowSettings.startSilent !== undefined) {
@@ -186,7 +203,7 @@ function loadSettings(): void {
 
 async function requestPermission(type: string): Promise<void> {
   try {
-    const opened = await touchChannel.send('system:permission:request', type as any)
+    const opened = await transport.send(systemPermissionRequest, type)
     if (opened) {
       toast.info(t('setupPermissions.openSettings'))
     }
@@ -204,12 +221,12 @@ async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
   appSetting.setup.autoStart = value
   try {
-    await touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.autoStart',
       content: JSON.stringify(value),
       clear: false
     })
-    await touchChannel.send('tray:autostart:update', value)
+    await transport.send(TrayEvents.autostart.update, value)
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update autoStart:', error)
@@ -217,16 +234,16 @@ async function updateAutoStart(value: boolean): Promise<void> {
   }
 }
 
-function updateShowTray(value: boolean): void {
+async function updateShowTray(value: boolean): Promise<void> {
   settings.value.showTray = value
   appSetting.setup.showTray = value
   try {
-    touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.setup.showTray',
       content: JSON.stringify(value),
       clear: false
     })
-    touchChannel.send('tray:show:set', value)
+    await transport.send(TrayEvents.show.set, value)
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update showTray:', error)
@@ -234,16 +251,16 @@ function updateShowTray(value: boolean): void {
   }
 }
 
-function updateHideDock(value: boolean): void {
+async function updateHideDock(value: boolean): Promise<void> {
   settings.value.hideDock = value
   appSetting.setup.hideDock = value
   try {
-    touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.setup.hideDock',
       content: JSON.stringify(value),
       clear: false
     })
-    touchChannel.send('tray:hidedock:set', value)
+    await transport.send(TrayEvents.hideDock.set)
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update hideDock:', error)
@@ -251,18 +268,18 @@ function updateHideDock(value: boolean): void {
   }
 }
 
-function updateStartSilent(value: boolean): void {
+async function updateStartSilent(value: boolean): Promise<void> {
   settings.value.startSilent = value
   ensureWindowSettings()
   appSetting.window.startSilent = value
   try {
-    touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.window.startSilent',
       content: JSON.stringify(value),
       clear: false
     })
     // Update auto-start setting to apply the change
-    touchChannel.send('tray:autostart:update', settings.value.autoStart)
+    await transport.send(TrayEvents.autostart.update, settings.value.autoStart)
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update startSilent:', error)
@@ -274,7 +291,7 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
   settings.value.runAsAdmin = value
   appSetting.setup.runAsAdmin = value
   try {
-    await touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.setup.runAsAdmin',
       content: JSON.stringify(value),
       clear: false
@@ -290,7 +307,7 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
   settings.value.customDesktop = value
   appSetting.setup.customDesktop = value
   try {
-    await touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.setup.customDesktop',
       content: JSON.stringify(value),
       clear: false

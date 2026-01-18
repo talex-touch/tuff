@@ -1,14 +1,18 @@
 <script setup lang="ts" name="FlatDownload">
 import { Download } from '@element-plus/icons-vue'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
+import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import FlatButton from '../base/button/FlatButton.vue'
 import DownloadCenter from './DownloadCenter.vue'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+
 // const { ipcRenderer } = require('electron')
 
 const { isLoggedIn } = useAuth()
+const { taskStats } = useDownloadCenter()
 const downloadDialogVisible = ref(false)
+const downloadingCount = computed(() => taskStats.value.downloading + taskStats.value.pending)
+const failedCount = computed(() => taskStats.value.failed)
 
 function handleClick(): void {
   downloadDialogVisible.value = true
@@ -37,6 +41,14 @@ onBeforeUnmount(() => {
       <Download />
     </el-icon>
     <span class="download-text">下载管理</span>
+    <div v-if="downloadingCount > 0 || failedCount > 0" class="download-badges">
+      <span v-if="downloadingCount > 0" class="download-badge">
+        {{ downloadingCount }}
+      </span>
+      <span v-if="failedCount > 0" class="download-badge error">
+        {{ failedCount }}
+      </span>
+    </div>
   </FlatButton>
 
   <el-dialog
@@ -56,6 +68,7 @@ onBeforeUnmount(() => {
   &.active {
     --h: 0;
   }
+  position: relative;
   width: calc(100% - 1rem);
   margin: 0.5rem 0.5rem 0.5rem 0.5rem;
   display: flex;
@@ -79,6 +92,31 @@ onBeforeUnmount(() => {
   .el-icon {
     color: var(--el-color-primary);
   }
+}
+
+.download-badges {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.download-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--el-color-primary);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.download-badge.error {
+  background: var(--el-color-danger);
 }
 
 @keyframes download-btn-enter {

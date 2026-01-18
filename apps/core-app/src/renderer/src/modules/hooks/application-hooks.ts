@@ -1,9 +1,14 @@
 import { isLocalhostUrl } from '@talex-touch/utils'
-import { DataCode } from '@talex-touch/utils/channel'
-import { touchChannel } from '../channel/channel-core'
+import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { blowMention, forTouchTip } from '../mention/dialog-mention'
 
 export async function urlHooker(): Promise<void> {
+  const transport = useTuffTransport()
+  const appSdk = useAppSdk()
+  const urlOpenEvent = defineRawEvent<string, boolean>('url:open')
+
   function directListener(event: Event): void {
     const target = event.target as HTMLElement
 
@@ -19,9 +24,9 @@ export async function urlHooker(): Promise<void> {
 
       event.preventDefault()
       if (!regex.test(url) || url.startsWith(window.location.origin) || url.startsWith('/')) {
-        touchChannel.send('url:open', url)
+        void transport.send(urlOpenEvent, url)
       } else {
-        touchChannel.send('open-external', { url })
+        void appSdk.openExternal(url)
       }
 
       // if(/^\//.test(target)) {
@@ -44,30 +49,37 @@ export async function urlHooker(): Promise<void> {
 
   document.body.addEventListener('click', directListener)
 
-  touchChannel.regChannel('url:open', async ({ data, reply }) => {
-    const url = data! as unknown as string
-    if (isLocalhostUrl(url)) {
-      return
-    }
+  transport.on(urlOpenEvent, async (url) => {
+    if (typeof url !== 'string') return false
+    if (isLocalhostUrl(url)) return false
 
-    await forTouchTip('Allow to open external link?', url, [
-      {
-        content: 'Cancel',
-        type: 'info',
-        onClick: async () => {
-          reply(DataCode.SUCCESS, false)
-          return true
-        }
-      },
-      {
-        content: 'Sure',
-        type: 'danger',
-        onClick: async () => {
-          reply(DataCode.SUCCESS, true)
-          return true
-        }
+    return await new Promise<boolean>((resolve) => {
+      let resolved = false
+      const finish = (allowed: boolean) => {
+        if (resolved) return
+        resolved = true
+        resolve(allowed)
       }
-    ])
+
+      void forTouchTip('Allow to open external link?', url, [
+        {
+          content: 'Cancel',
+          type: 'info',
+          onClick: async () => {
+            finish(false)
+            return true
+          }
+        },
+        {
+          content: 'Sure',
+          type: 'danger',
+          onClick: async () => {
+            finish(true)
+            return true
+          }
+        }
+      ])
+    })
   })
 }
 
@@ -116,18 +128,17 @@ export function screenCapture(): void {
 }
 
 export function clipBoardResolver(): void {
-  touchChannel.regChannel(
-    'clipboard:trigger',
-    ({ data }: { data?: { type: string; data: string } }) => {
-      if (!data) return
+  const transport = useTuffTransport()
+  const clipboardTrigger = defineRawEvent<{ type: string; data: string }, void>('clipboard:trigger')
+  transport.on(clipboardTrigger, (payload) => {
+    if (!payload) return
 
-      if (data.type === 'text') {
-        blowMention('Clipboard', `You may copied "${data.data}"`)
-      } else if (data.type === 'image') {
-        blowMention('Clipboard', data.data)
-      } else if (data.type === 'html') {
-        blowMention('Clipboard', data.data)
-      }
+    if (payload.type === 'text') {
+      blowMention('Clipboard', `You may copied "${payload.data}"`)
+    } else if (payload.type === 'image') {
+      blowMention('Clipboard', payload.data)
+    } else if (payload.type === 'html') {
+      blowMention('Clipboard', payload.data)
     }
-  )
+  })
 }

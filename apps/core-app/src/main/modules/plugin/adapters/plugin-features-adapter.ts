@@ -14,6 +14,7 @@ import type { MatchRange } from '@talex-touch/utils/search'
 import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
 import { TuffFactory, TuffInputType } from '@talex-touch/utils'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { matchFeature } from '@talex-touch/utils/search'
 import { genTouchApp } from '../../../core'
@@ -22,6 +23,8 @@ import searchEngineCore from '../../box-tool/search-engine/search-core'
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
 import { buildFeatureSearchTokens } from './feature-search-tokens'
+
+const pluginFeaturesLog = getLogger('plugin-system')
 
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   if (!command.type) {
@@ -121,7 +124,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       return true
     } catch (error) {
-      console.error('[PluginFeaturesAdapter] handleActiveFeatureInput error:', error)
+      pluginFeaturesLog.error('[PluginFeaturesAdapter] handleActiveFeatureInput error:', error)
       return false
     }
   }
@@ -132,7 +135,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     if (item.meta?.defaultAction) {
       const pluginName = item.meta?.pluginName
       if (!pluginName) {
-        console.error(
+        pluginFeaturesLog.error(
           '[PluginFeaturesAdapter] onExecute (Action): Missing pluginName in item.meta.'
         )
         return null
@@ -156,12 +159,15 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
             return result.activation || null
           }
         } catch (error) {
-          console.error(`[PluginFeaturesAdapter] Error in onItemAction for ${pluginName}:`, error)
+          pluginFeaturesLog.error(
+            `[PluginFeaturesAdapter] Error in onItemAction for ${pluginName}:`,
+            error
+          )
         }
 
         return null
       } else {
-        console.warn(
+        pluginFeaturesLog.warn(
           `[PluginFeaturesAdapter] Plugin ${pluginName} has defaultAction but no onItemAction handler.`
         )
         return null
@@ -175,13 +181,15 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     const featureId = meta.featureId || extension.featureId || item.actions?.[0]?.payload?.featureId
 
     if (!pluginName || !featureId) {
-      console.error('[PluginFeaturesAdapter] onExecute (Feature): Missing pluginName or featureId.')
+      pluginFeaturesLog.error(
+        '[PluginFeaturesAdapter] onExecute (Feature): Missing pluginName or featureId.'
+      )
       return null
     }
 
     const plugin = pluginModule.pluginManager!.plugins.get(pluginName)
     if (!plugin || !this.isPluginActive(plugin)) {
-      console.error(
+      pluginFeaturesLog.error(
         `[PluginFeaturesAdapter] Plugin not found or not active: ${pluginName} (status: ${plugin?.status})`
       )
       return null
@@ -189,7 +197,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     const feature = plugin.getFeature(featureId)
     if (!feature) {
-      console.error(
+      pluginFeaturesLog.error(
         `[PluginFeaturesAdapter] Feature not found: ${featureId} in plugin ${pluginName}`
       )
       return null

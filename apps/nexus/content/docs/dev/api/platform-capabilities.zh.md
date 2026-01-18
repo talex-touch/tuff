@@ -1,0 +1,42 @@
+# Platform Capabilities SDK
+
+<div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #06b6d4, #3b82f6);"></div>
+
+## 介绍
+
+Platform Capabilities SDK 提供平台能力目录查询，用于查看当前可用的系统级能力与状态。
+
+## 技术原理
+
+- 主进程维护能力注册表（Registry）。
+- 通过 TuffTransport 事件 `platform.capabilities.list` 查询能力清单。
+- 支持按 scope/status 进行过滤。
+
+## 如何实现的
+
+- SDK 仅封装事件调用。
+- 能力清单由主进程静态注册并按需扩展。
+
+## 如何使用
+
+```typescript
+import { usePlatformSdk } from '@talex-touch/utils/renderer'
+
+const platform = usePlatformSdk()
+
+// 获取全部能力
+const all = await platform.listCapabilities()
+
+// 仅查看系统级能力
+const systemCaps = await platform.listCapabilities({ scope: 'system' })
+```
+
+## 常见例子
+
+1. 按状态筛选 beta 能力：`{ status: 'beta' }`
+2. 在设置页展示平台能力列表
+
+## 常见问题
+
+**Q: 能力清单来自哪里？**  
+A: 由主进程注册表维护，随着新模块接入持续扩展。

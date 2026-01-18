@@ -5,6 +5,7 @@ import * as schema from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('QueryCompletionService')
+const MIN_COMPLETION_QUERY_LENGTH = 2
 
 export interface CompletionSuggestion {
   sourceId: string
@@ -95,7 +96,7 @@ export class QueryCompletionService {
 
   /** Get completion suggestions for a query prefix, sorted by frequency and recency */
   async getSuggestions(query: string, limit = 10): Promise<CompletionSuggestion[]> {
-    if (!query) return []
+    if (!query || query.trim().length < MIN_COMPLETION_QUERY_LENGTH) return []
 
     const timer = log.time('getSuggestions')
     const db = this.dbUtils.getDb()
@@ -149,7 +150,7 @@ export class QueryCompletionService {
 
   /** Inject completion weights into search results based on historical completion data */
   async injectCompletionWeights(query: string, items: TuffItem[]): Promise<void> {
-    if (!query || items.length === 0) return
+    if (!query || query.trim().length < MIN_COMPLETION_QUERY_LENGTH || items.length === 0) return
 
     const start = performance.now()
 

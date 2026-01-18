@@ -3,13 +3,15 @@ import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
 import { ElMessage } from 'element-plus'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AgentsEvents } from '@talex-touch/utils/transport/events'
 
 const props = defineProps<{
   agent: AgentDescriptor
 }>()
 
 const { t } = useI18n()
+const transport = useTuffTransport()
 
 const taskInput = ref('')
 const executing = ref(false)
@@ -28,7 +30,7 @@ async function executeTask() {
       input: { query: taskInput.value }
     }
 
-    const result = await touchChannel.send('agents:execute-immediate', task)
+    const result = await transport.send(AgentsEvents.api.executeImmediate, task)
     taskResult.value = result
 
     if (result?.success) {
@@ -274,3 +276,4 @@ function getCapabilityIcon(type: string): string {
   margin: 0;
 }
 </style>
+const transport = useTuffTransport()

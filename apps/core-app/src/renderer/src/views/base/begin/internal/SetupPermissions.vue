@@ -2,11 +2,14 @@
 import { computed, inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
 import TGroupBlock from '~/components/base/group/TGroupBlock.vue'
 import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage/index'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import Done from './Done.vue'
 
 type StepFunction = (
@@ -16,10 +19,25 @@ type StepFunction = (
 
 const { t } = useI18n()
 const step: StepFunction = inject('step')!
+const transport = useTuffTransport()
+const { startupInfo } = useStartupInfo()
 
-const platform = computed(() => window.$startupInfo?.platform || process.platform)
+const platform = computed(() => startupInfo.value?.platform || process.platform)
 const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
+
+type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
+
+interface SystemPermissionCheckResult {
+  status: SystemPermissionStatus
+  canRequest: boolean
+  message?: string
+}
+
+const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
+  'system:permission:check'
+)
+const systemPermissionRequest = defineRawEvent<string, boolean>('system:permission:request')
 
 // Permission states
 const permissions = ref({
@@ -71,7 +89,7 @@ if (!appSetting.setup) {
 // Check permissions on mount
 onMounted(async () => {
   await checkAllPermissions()
-  loadSettings()
+  await loadSettings()
 })
 
 async function checkAllPermissions(): Promise<void> {
@@ -84,7 +102,7 @@ async function checkAllPermissions(): Promise<void> {
   try {
     // Check file access permission (required)
     const fileAccessResult = (await Promise.race([
-      touchChannel.send('system:permission:check', 'fileAccess' as any),
+      transport.send(systemPermissionCheck, 'fileAccess'),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
     ])) as any
 
@@ -100,7 +118,7 @@ async function checkAllPermissions(): Promise<void> {
     if (isMacOS.value) {
       try {
         const accResult = (await Promise.race([
-          touchChannel.send('system:permission:check', 'accessibility' as any),
+          transport.send(systemPermissionCheck, 'accessibility'),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ])) as any
 
@@ -120,7 +138,7 @@ async function checkAllPermissions(): Promise<void> {
     // Check notification permission (optional)
     try {
       const notifResult = (await Promise.race([
-        touchChannel.send('system:permission:check', 'notifications' as any),
+        transport.send(systemPermissionCheck, 'notifications'),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
       ])) as any
 
@@ -140,7 +158,7 @@ async function checkAllPermissions(): Promise<void> {
     if (isWindows.value) {
       try {
         const adminResult = (await Promise.race([
-          touchChannel.send('system:permission:check', 'adminPrivileges' as any),
+          transport.send(systemPermissionCheck, 'adminPrivileges'),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
         ])) as any
 
@@ -164,22 +182,22 @@ async function checkAllPermissions(): Promise<void> {
   }
 }
 
-function loadSettings(): void {
+async function loadSettings(): Promise<void> {
   if (appSetting.setup) {
     settings.value.autoStart = appSetting.setup.autoStart ?? false
     settings.value.showTray = appSetting.setup.showTray ?? true
   }
 
   // Load autoStart from existing setting
-  const autoStartResult = touchChannel.sendSync('tray:autostart:get')
+  const autoStartResult = await transport.send(TrayEvents.autostart.get)
   if (autoStartResult !== null) {
-    settings.value.autoStart = autoStartResult as boolean
+    settings.value.autoStart = Boolean(autoStartResult)
   }
 }
 
 async function requestPermission(type: string): Promise<void> {
   try {
-    const opened = await touchChannel.send('system:permission:request', type as any)
+    const opened = await transport.send(systemPermissionRequest, type)
     if (opened) {
       toast.info(t('setupPermissions.openSettings'))
     }
@@ -197,28 +215,28 @@ async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
   appSetting.setup.autoStart = value
   try {
-    await touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.autoStart',
       content: JSON.stringify(value),
       clear: false
     })
-    await touchChannel.send('tray:autostart:update', value)
+    await transport.send(TrayEvents.autostart.update, value)
   } catch (error) {
     console.error('[SetupPermissions] Failed to update autoStart:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
 
-function updateShowTray(value: boolean): void {
+async function updateShowTray(value: boolean): Promise<void> {
   settings.value.showTray = value
   appSetting.setup.showTray = value
   try {
-    touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'app.setup.showTray',
       content: JSON.stringify(value),
       clear: false
     })
-    touchChannel.send('tray:show:set', value)
+    await transport.send(TrayEvents.show.set, value)
   } catch (error) {
     console.error('[SetupPermissions] Failed to update showTray:', error)
     toast.error(t('setupPermissions.updateFailed'))

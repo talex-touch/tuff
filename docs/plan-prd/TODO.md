@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2025-12-13
+> 更新时间: 2026-01-18
 
 ---
 
@@ -9,9 +9,9 @@
 
 | 状态 | 数量 | 说明 |
 |------|------|------|
-| ✅ 已完成 | 8 | 可归档或精简 |
-| 🟡 进行中 | 5 | 部分实现 |
-| 📝 待实现 | 12 | 规划中 |
+| ✅ 已完成 | 11 | 可归档或精简 |
+| 🟡 进行中 | 7 | 部分实现 |
+| 📝 待实现 | 2 | 规划中 |
 | 📁 参考文档 | 6 | 指南/参考 |
 
 ### ✅ 已完成 PRD (可归档)
@@ -21,24 +21,24 @@
 - `03-features/plugin/widget-dynamic-loading-plan.md` - Widget 动态加载 (核心完成)
 - `03-features/plugin/permission-center-prd.md` - 权限中心 (Phase 1-4 完成)
 - `03-features/tuff-transport/*` - TuffTransport 系列 (已实现)
+- `03-features/search/SEARCH-DSL-PRD.md` - 搜索 DSL (已实现)
+- `03-features/nexus/NEXUS-TEAM-INVITE-PRD.md` - 团队邀请 (已落地)
+- `03-features/plugin/plugin-market-provider-frontend-plan.md` - 插件市场多源 (已落地)
+- `03-features/search/intelligent-recommendation-system-prd.md` - 智能推荐 (已落地)
+- `04-implementation/performance/direct-preview-calculation-prd.md` - 直接预览计算 (已落地)
 
 ### 🟡 进行中 PRD
-- `03-features/plugin/plugin-market-provider-frontend-plan.md` - 插件市场多源 ✅ (2025-12-13 核心完成)
-- `02-architecture/module-logging-system-prd.md` - 模块日志系统 (Phase 1 完成, SearchLogger 已集成)
-- `03-features/nexus/NEXUS-TEAM-INVITE-PRD.md` - 团队邀请 (PRD 完成，待 Nexus 后端实现)
-- `03-features/search/SEARCH-DSL-PRD.md` - 搜索 DSL ✅ (@xxx 过滤已实现 2025-12-13)
+- `02-architecture/module-logging-system-prd.md` - 模块日志系统 (Phase 1-4 完成, SearchLogger 已集成)
+- `03-features/flow-transfer-prd.md` - Flow Transfer (权限闭环已落地)
+- `03-features/division-box-prd.md` - DivisionBox 深化 (生命周期事件对插件开放)
+- `03-features/view/attach-view-cache-prd.md` - 缓存优化 (MVP 已落地)
+- `03-features/view/view-mode-prd.md` - View Mode 增强 (部分实现)
+- `02-architecture/intelligence-agents-system-prd.md` - Intelligence Agents (Phase 1-2 已落地，Phase 3 基础完成)
+- `02-architecture/platform-capabilities-prd.md` - 平台能力体系 (能力目录 + 管理 UI 基础已落地)
 
 ### 📝 待实现 PRD
-- `03-features/view/view-mode-prd.md` - View Mode 增强
 - `03-features/view/multi-attach-view-prd.md` - 多视图并行
-- `03-features/view/attach-view-cache-prd.md` - 缓存优化
-- `03-features/division-box-prd.md` - DivisionBox 深化
-- `03-features/flow-transfer-prd.md` - Flow Transfer
 - `03-features/build/build-signature-system-prd.md` - 构建签名
-- `03-features/search/intelligent-recommendation-system-prd.md` - 智能推荐
-- `04-implementation/performance/direct-preview-calculation-prd.md` - 直接预览计算
-- `02-architecture/intelligence-agents-system-prd.md` - Intelligence Agents
-- `02-architecture/platform-capabilities-prd.md` - 平台能力体系
 
 ---
 
@@ -53,7 +53,7 @@
 - [ ] 清理产物：确认 `packages/tuffex/**/node_modules` 与旧 `playground` 目录已删除（仓库内不提交）
 - [ ] 提交变更：README/CONTRIBUTING/Nexus docs 链接更新 + createTestVue 删除 + 构建脚本修复
 
-### ✅ 模块日志系统 (v2.4.8) - Phase 1 核心完成
+### ✅ 模块日志系统 (v2.4.8) - Phase 1-4 核心完成
 **来源**: `plan-prd/02-architecture/module-logging-system-prd.md`
 **工期**: 8-11 天 → **Phase 1 已完成**
 
@@ -64,21 +64,21 @@
   - [x] TuffTransportLogger 专用日志 (`packages/utils/common/logger/transport-logger.ts`)
   - [x] 导出到 @talex-touch/utils/common/logger
 
-- [ ] **Phase 2**: 迁移 SearchEngine (1-2天)
-  - [ ] 迁移 search-core.ts
-  - [ ] 迁移 search-gatherer.ts
-  - [ ] 保留 searchLogger 特殊功能
+- [x] **Phase 2**: 迁移 SearchEngine (1-2天)
+  - [x] 迁移 search-core.ts
+  - [x] 迁移 search-gatherer.ts
+  - [x] 保留 searchLogger 特殊功能
 
-- [ ] **Phase 3**: 迁移 Provider (1天)
-  - [ ] FileProvider
-  - [ ] AppProvider
-  - [ ] PluginFeaturesAdapter
+- [x] **Phase 3**: 迁移 Provider (1天)
+  - [x] FileProvider
+  - [x] AppProvider
+  - [x] PluginFeaturesAdapter
 
-- [ ] **Phase 4**: 迁移核心模块 (2-3天)
-  - [ ] DatabaseModule
-  - [ ] StorageModule
-  - [ ] PluginModule
-  - [ ] ChannelCore
+- [x] **Phase 4**: 迁移核心模块 (2-3天)
+  - [x] DatabaseModule
+  - [x] StorageModule
+  - [x] PluginModule
+  - [x] ChannelCore
 
 - [ ] **Phase 5**: UI 配置界面 (2天) - 可选
   - [ ] 设计配置页面
@@ -188,7 +188,7 @@
 - ✅ 未声明 sdkapi 的插件报 issue 警告
 - ✅ 低版本 sdkapi 的插件跳过权限校验但提示用户
 - ✅ 运行时拦截框架 (withPermission wrapper)
-- [ ] 权限检查耗时 < 5ms (需测试验证)
+- [x] 权限检查耗时 < 5ms（performance test: `apps/core-app/src/main/modules/permission/permission-guard.test.ts`）
 
 ---
 
@@ -273,12 +273,13 @@
 
 ---
 
-### 2. ✅ Flow Transfer (v2.4.8) - FlowBus 核心调度 + 原生 Share + 系统分享通知
+### 2. ✅ Flow Transfer (v2.4.8) - 核心调度完成，权限/闭环完成
 
 **新增功能** (2025-12-11):
 - [x] ShareNotificationService - 系统分享操作反馈通知
 - [x] 原生分享目标英文化 (System Share, AirDrop, Mail, Messages)
 - [x] 分享结果自动通知 (clipboard, file revealed, airdrop ready 等)
+- [x] 失败回退（fallback copy + detach rollback）
 
 **已实现文件**:
 - `flow-bus.ts` - 核心调度器
@@ -291,13 +292,21 @@
 - ✅ Flow/DivisionBox IPC 全量迁移到 TuffTransport（renderer/main/plugin SDK），移除 legacy `flow:*`/`division-box:*`/`FlowIPCChannel`
 - ✅ 验证：全仓 grep legacy 事件名为 0；`apps/core-app` `npm run typecheck` 通过
 
+**待补**:
+- [ ] 审计日志（会话历史/失败原因记录）
+- [ ] 测试插件与开发文档补齐
+
 ---
 
-### 3. ✅ DivisionBox 深化 (v2.4.7) - Manager + Session + LRU 缓存 + SDK
+### 3. 🟡 DivisionBox 深化 (v2.4.7) - 核心完成，生命周期开放待补
 
 **补充（IPC 迁移）**:
 - ✅ DivisionBox IPC 全量迁移到 TuffTransport（renderer/main），移除 legacy `division-box:*`
 - ✅ 验证：全仓 grep legacy 事件名为 0；`apps/core-app` `npm run typecheck` 通过
+
+**待补**:
+- [x] 生命周期事件（prepare/attach/active/inactive/detach/destroy）对插件侧开放并统一进 SDK
+- [ ] 与 FlowTransfer 的权限/触发入口对齐
 
 ---
 
@@ -450,8 +459,8 @@
   - [x] useAgentMarket composable
 
 #### Phase 3: 高级功能 (v2.7.0) - 10天
-- [ ] **Day 1-3**: WorkflowAgent + 编辑器
-- [ ] **Day 4-6**: 记忆系统 + 上下文管理
+- [ ] **Day 1-3**: WorkflowAgent + 编辑器（WorkflowAgent 已落地，编辑器未完成）
+- [ ] **Day 4-6**: 记忆系统 + 上下文管理（MemoryStore/ContextManager 已落地）
 - [ ] **Day 7-8**: 用户自定义代理
 - [ ] **Day 9-10**: 代理协作 + 测试
 
@@ -515,7 +524,7 @@
 
 | 优先级 | 任务数 | 已完成 | 剩余 | 状态 |
 |--------|--------|--------|------|------|
-| P0 紧急 | 1 | 1 | 0 | 模块日志系统 Phase 1 完成 |
+| P0 紧急 | 1 | 1 | 0 | 模块日志系统 Phase 1-4 完成 |
 | P1 重要 | 5 | 3 | 2 | 托盘+计算+NPM完成, 新增权限中心 |
 | P2 增强 | 6 | 5 | 1 | Widget+Flow+Division+推荐+多文件类型完成 |
 | P3 长期 | 5 | 4 | 1 | Intelligence + 下载中心 + Agents + Everything PRD |
@@ -566,5 +575,5 @@
 ---
 
 **文档版本**: v1.11
-**更新时间**: 2025-12-12
+**更新时间**: 2026-01-18
 **维护者**: Development Team

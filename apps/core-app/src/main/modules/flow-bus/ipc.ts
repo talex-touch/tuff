@@ -8,7 +8,9 @@ import type { ITouchChannel } from '@talex-touch/utils/channel'
 import { FlowEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
 import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
+import { flowConsentStore, requiresFlowConsent } from './flow-consent'
 import { flowSessionManager } from './session-manager'
+import { flowTargetRegistry } from './target-registry'
 
 /**
  * FlowBusIPC
@@ -120,6 +122,46 @@ export class FlowBusIPC {
           success: true,
           data: { resolved: true }
         }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.checkConsent, async (payload: any) => {
+        const { senderId, targetId } = payload || {}
+        if (!senderId || !targetId) {
+          return { success: false, error: { message: 'senderId and targetId are required' } }
+        }
+        const target = flowTargetRegistry.getTarget(targetId)
+        if (!requiresFlowConsent(senderId, target)) {
+          return { success: true, data: { allowed: true } }
+        }
+        const allowed = flowConsentStore.hasConsent(senderId, targetId)
+        return { success: true, data: { allowed } }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(FlowEvents.grantConsent, async (payload: any, context: any) => {
+        if (context?.plugin?.name) {
+          return {
+            success: false,
+            error: { message: 'Flow consent can only be granted by app UI' }
+          }
+        }
+        const { senderId, targetId, mode } = payload || {}
+        if (!senderId || !targetId || (mode !== 'once' && mode !== 'always')) {
+          return { success: false, error: { message: 'Invalid consent payload' } }
+        }
+        const target = flowTargetRegistry.getTarget(targetId)
+        if (!requiresFlowConsent(senderId, target)) {
+          return { success: true, data: {} }
+        }
+        if (mode === 'always') {
+          flowConsentStore.grantConsent(senderId, targetId)
+          return { success: true, data: {} }
+        }
+        const token = flowConsentStore.grantOnce(senderId, targetId)
+        return { success: true, data: { token } }
       })
     )
   }

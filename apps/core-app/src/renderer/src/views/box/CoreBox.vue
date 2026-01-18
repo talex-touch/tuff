@@ -1,7 +1,9 @@
 <script setup lang="ts" name="CoreBox">
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { IProviderActivate, ITuffIcon, TuffItem } from '@talex-touch/utils'
-import type { StandardChannelData } from '@talex-touch/utils/channel'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { ComponentPublicInstance } from 'vue'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
@@ -16,7 +18,6 @@ import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
@@ -35,10 +36,6 @@ import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
 import TagSection from './tag/TagSection.vue'
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object'
-}
-
 declare global {
   interface Window {
     __coreboxHistoryVisible?: boolean
@@ -47,6 +44,8 @@ declare global {
 
 const scrollbar = ref()
 const boxInputRef = ref()
+const transport = useTuffTransport()
+const focusInputEvent = defineRawEvent<void, void>('corebox:focus-input')
 const boxOptions = reactive<IBoxOptions>({
   lastHidden: -1,
   mode: BoxMode.INPUT,
@@ -351,25 +350,21 @@ const previewHistory = usePreviewHistory({
 })
 
 // Handle UI mode exit event from main process (ESC pressed in plugin UI view)
-const unregUIModeExited = touchChannel.regChannel(
-  'core-box:ui-mode-exited',
-  (payload: StandardChannelData) => {
-    logDebug('[CoreBox] UI mode exited from main process, deactivating providers')
-    deactivateAllProviders().catch((error) => {
-      console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
-    })
+const unregUIModeExited = transport.on(CoreBoxEvents.ui.uiModeExited, (payload) => {
+  logDebug('[CoreBox] UI mode exited from main process, deactivating providers')
+  deactivateAllProviders().catch((error) => {
+    console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
+  })
 
-    // Reset input state if requested
-    const resetInput = isRecord(payload.data) && payload.data.resetInput === true
-    if (resetInput) {
-      boxOptions.mode = BoxMode.INPUT
-    }
-
-    setTimeout(() => {
-      boxInputRef.value?.focus()
-    }, 150)
+  // Reset input state if requested
+  if (payload?.resetInput) {
+    boxOptions.mode = BoxMode.INPUT
   }
-)
+
+  setTimeout(() => {
+    boxInputRef.value?.focus()
+  }, 150)
+})
 
 async function deactivateProviderVoid(id?: string): Promise<void> {
   await deactivateProvider(id)
@@ -392,7 +387,7 @@ const actionPanel = useActionPanel({
 })
 
 // Channel: focus input
-const unregFocusInput = touchChannel.regChannel('corebox:focus-input', () => focusInput())
+const unregFocusInput = transport.on(focusInputEvent, () => focusInput())
 
 onMounted(() => {
   resetAutoPasteState()

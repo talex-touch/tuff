@@ -1,7 +1,8 @@
 import type { Ref } from 'vue'
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 export interface CalculationHistoryEntry {
   id?: string | number
@@ -23,6 +24,16 @@ interface UsePreviewHistoryOptions {
 
 export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   const { searchVal, focusInput, panelRef } = options
+  const transport = useTuffTransport()
+  const coreboxShowHistoryEvent = defineRawEvent<void, void>('corebox:show-history')
+  const coreboxHideHistoryEvent = defineRawEvent<void, void>('corebox:hide-history')
+  const coreboxCopyPreviewEvent = defineRawEvent<{ value?: string }, void>('corebox:copy-preview')
+  const clipboardQueryEvent = defineRawEvent<
+    { category?: string; limit?: number },
+    { data?: CalculationHistoryEntry[] } | CalculationHistoryEntry[]
+  >('clipboard:query')
+  const clipboardNewItemEvent = defineRawEvent<CalculationHistoryEntry, void>('clipboard:new-item')
+  const clipboardWriteTextEvent = defineRawEvent<{ text: string }, void>('clipboard:write-text')
 
   const activeIndex = ref(-1)
   const visible = ref(false)
@@ -61,7 +72,7 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   async function load(): Promise<void> {
     loading.value = true
     try {
-      const response = await touchChannel.send('clipboard:query', {
+      const response = await transport.send(clipboardQueryEvent, {
         category: 'preview',
         limit: 20
       })
@@ -163,19 +174,19 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   }
 
   // Channel listeners
-  const unregShow = touchChannel.regChannel('corebox:show-history', () => open())
-  const unregHide = touchChannel.regChannel('corebox:hide-history', () => close())
-  const unregCopy = touchChannel.regChannel('corebox:copy-preview', async ({ data }) => {
-    if (!data?.value) return
+  const unregShow = transport.on(coreboxShowHistoryEvent, () => open())
+  const unregHide = transport.on(coreboxHideHistoryEvent, () => close())
+  const unregCopy = transport.on(coreboxCopyPreviewEvent, async (payload) => {
+    if (!payload?.value) return
     try {
-      await touchChannel.send('clipboard:write-text', { text: data.value })
+      await transport.send(clipboardWriteTextEvent, { text: payload.value })
       toast.success('结果已复制')
     } catch {
       toast.error('复制失败')
     }
   })
 
-  const unregNewItem = touchChannel.regChannel('clipboard:new-item', ({ data }) => {
+  const unregNewItem = transport.on(clipboardNewItemEvent, (data) => {
     if (!data?.meta?.category) return
     if (data.meta.category === 'preview') {
       console.log('[usePreviewHistory] New preview item detected, refreshing if visible')

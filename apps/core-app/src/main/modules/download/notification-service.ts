@@ -1,7 +1,7 @@
 import type { DownloadTask } from '@talex-touch/utils'
 import path from 'node:path'
 import { DownloadModule } from '@talex-touch/utils'
-import { Notification, shell } from 'electron'
+import { Notification, app, shell } from 'electron'
 import { formatDuration, formatFileSize, t } from '../../utils/i18n-helper'
 
 /**
@@ -19,7 +19,7 @@ export interface NotificationConfig {
 export const defaultNotificationConfig: NotificationConfig = {
   downloadComplete: true,
   updateAvailable: true,
-  updateDownloadComplete: true,
+  updateDownloadComplete: true
 }
 
 /**
@@ -48,6 +48,10 @@ export class NotificationService {
    * Requirement 11.2: Display filename and "Open File" button in notification
    */
   showDownloadCompleteNotification(task: DownloadTask): void {
+    if (this.shouldSuppressNotifications(task)) {
+      return
+    }
+
     // Check if notifications are enabled
     if (!this.config.downloadComplete) {
       return
@@ -65,12 +69,12 @@ export class NotificationService {
       body: t('notifications.downloadCompleteBody', {
         filename: task.filename,
         size: sizeText,
-        duration: durationText,
+        duration: durationText
       }),
       icon: this.getIconForModule(task.module),
       silent: false,
       urgency: 'normal',
-      timeoutType: 'default',
+      timeoutType: 'default'
     })
 
     // Handle notification click
@@ -85,8 +89,7 @@ export class NotificationService {
       if (index === 0) {
         // Open file
         this.openFile(task)
-      }
-      else if (index === 1) {
+      } else if (index === 1) {
         // Show in folder
         this.showInFolder(task)
       }
@@ -111,7 +114,7 @@ export class NotificationService {
       icon: this.getIconForModule(DownloadModule.APP_UPDATE),
       silent: false,
       urgency: 'normal',
-      timeoutType: 'default',
+      timeoutType: 'default'
     })
 
     // Handle notification click
@@ -140,15 +143,13 @@ export class NotificationService {
       icon: this.getIconForModule(DownloadModule.APP_UPDATE),
       silent: false,
       urgency: 'critical',
-      timeoutType: 'never',
+      timeoutType: 'never'
     })
 
     // Handle notification click
     // Requirement 11.3: Navigate to install update when clicked
     notification.on('click', () => {
-      console.log(
-        `[NotificationService] Update download complete notification clicked: ${taskId}`,
-      )
+      console.log(`[NotificationService] Update download complete notification clicked: ${taskId}`)
       this.onNotificationClickCallback?.(taskId, 'install-update')
     })
 
@@ -159,16 +160,20 @@ export class NotificationService {
    * Show download failed notification
    */
   showDownloadFailedNotification(task: DownloadTask): void {
+    if (this.shouldSuppressNotifications(task)) {
+      return
+    }
+
     const notification = new Notification({
       title: `❌ ${t('notifications.downloadFailed')}`,
       body: t('notifications.downloadFailedBody', {
         filename: task.filename,
-        error: task.error || t('downloadErrors.unknown_error'),
+        error: task.error || t('downloadErrors.unknown_error')
       }),
       icon: this.getIconForModule(task.module),
       silent: false,
       urgency: 'normal',
-      timeoutType: 'default',
+      timeoutType: 'default'
     })
 
     // Handle notification click
@@ -213,6 +218,10 @@ export class NotificationService {
     return undefined
   }
 
+  private shouldSuppressNotifications(task: DownloadTask): boolean {
+    return app.isPackaged && Boolean(task.metadata?.hidden)
+  }
+
   /**
    * Open file with default application
    */
@@ -220,8 +229,7 @@ export class NotificationService {
     try {
       const filePath = path.join(task.destination, task.filename)
       await shell.openPath(filePath)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[NotificationService] Failed to open file:', error)
     }
   }
@@ -233,8 +241,7 @@ export class NotificationService {
     try {
       const filePath = path.join(task.destination, task.filename)
       shell.showItemInFolder(filePath)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[NotificationService] Failed to show in folder:', error)
     }
   }

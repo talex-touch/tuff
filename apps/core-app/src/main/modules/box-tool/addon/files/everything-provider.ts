@@ -5,7 +5,7 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type { Primitive } from '../../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import type { ProviderContext } from '../../search-engine/types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -15,12 +15,13 @@ import { promisify } from 'node:util'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { shell } from 'electron'
-import { fileProviderLog, formatDuration } from '../../../../utils/logger'
+import { formatDuration } from '../../../../utils/logger'
 import { storageModule } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import { mapFileToTuffItem } from './utils'
 
 const execFileAsync = promisify(execFile)
+const fileProviderLog = getLogger('file-provider')
 
 interface EverythingSearchResult {
   path: string
@@ -60,42 +61,52 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private lastChecked: number | null = null
 
-  private logInfo(message: string, meta?: Record<string, Primitive>): void {
+  private logInfo(message: string, meta?: Record<string, unknown>): void {
     if (meta) {
-      fileProviderLog.info(`[Everything] ${message}`, { meta })
+      fileProviderLog.info(`[Everything] ${message}`, meta)
     } else {
       fileProviderLog.info(`[Everything] ${message}`)
     }
   }
 
-  private logWarn(message: string, error?: unknown, meta?: Record<string, Primitive>): void {
-    if (error || meta) {
-      fileProviderLog.warn(`[Everything] ${message}`, {
-        ...(meta ? { meta } : {}),
-        ...(error ? { error } : {})
-      })
-    } else {
-      fileProviderLog.warn(`[Everything] ${message}`)
+  private logWarn(message: string, error?: unknown, meta?: Record<string, unknown>): void {
+    if (error && meta) {
+      fileProviderLog.warn(`[Everything] ${message}`, { ...meta, error })
+      return
     }
+    if (meta) {
+      fileProviderLog.warn(`[Everything] ${message}`, meta)
+      return
+    }
+    if (error) {
+      fileProviderLog.warn(`[Everything] ${message}`, error)
+      return
+    }
+    fileProviderLog.warn(`[Everything] ${message}`)
   }
 
-  private logDebug(message: string, meta?: Record<string, Primitive>): void {
+  private logDebug(message: string, meta?: Record<string, unknown>): void {
     if (meta) {
-      fileProviderLog.debug(`[Everything] ${message}`, { meta })
+      fileProviderLog.debug(`[Everything] ${message}`, meta)
     } else {
       fileProviderLog.debug(`[Everything] ${message}`)
     }
   }
 
-  private logError(message: string, error?: unknown, meta?: Record<string, Primitive>): void {
-    if (error || meta) {
-      fileProviderLog.error(`[Everything] ${message}`, {
-        ...(meta ? { meta } : {}),
-        ...(error ? { error } : {})
-      })
-    } else {
-      fileProviderLog.error(`[Everything] ${message}`)
+  private logError(message: string, error?: unknown, meta?: Record<string, unknown>): void {
+    if (error && meta) {
+      fileProviderLog.error(`[Everything] ${message}`, { ...meta, error })
+      return
     }
+    if (meta) {
+      fileProviderLog.error(`[Everything] ${message}`, meta)
+      return
+    }
+    if (error) {
+      fileProviderLog.error(`[Everything] ${message}`, error)
+      return
+    }
+    fileProviderLog.error(`[Everything] ${message}`)
   }
 
   async onLoad(context: ProviderContext): Promise<void> {

@@ -18,6 +18,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { is } from '@electron-toolkit/utils'
 import { completeTiming, createRetrier, sleep, startTiming, timingLogger } from '@talex-touch/utils'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
@@ -42,6 +43,7 @@ import { formatLog, LogStyle } from './app-utils'
 import { processSearchResults } from './search-processing-service'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
+const appProviderLog = getLogger('app-provider')
 
 type AppTimingMeta = TimingMeta & {
   label?: string
@@ -90,6 +92,27 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
     const styleFn = LogStyle[styleKey] ?? LogStyle.info
     return formatLog('AppProvider', `${message} in ${durationText}${suffix}`, styleFn)
   }
+}
+
+function logApp(
+  message: string,
+  style: (message: string) => string = LogStyle.info,
+  meta?: Record<string, unknown>
+): void {
+  const logArgs = meta ? [meta] : []
+  if (style === LogStyle.error) {
+    appProviderLog.error(message, ...logArgs)
+    return
+  }
+  if (style === LogStyle.warning) {
+    appProviderLog.warn(message, ...logArgs)
+    return
+  }
+  if (style === LogStyle.process) {
+    appProviderLog.debug(message, ...logArgs)
+    return
+  }
+  appProviderLog.info(message, ...logArgs)
 }
 
 function resolveAppTimingOptions(overrides?: TimingOptions): TimingOptions {
@@ -151,12 +174,9 @@ const sqliteBusyRetrier = createRetrier({
   timeoutMs: 2000,
   shouldRetry: (error) => isSqliteBusyError(error),
   onRetry: (attempt) =>
-    console.warn(
-      formatLog(
-        'AppProvider',
-        `SQLITE_BUSY encountered while updating app display name, retrying attempt ${attempt + 1}`,
-        LogStyle.warning
-      )
+    logApp(
+      `SQLITE_BUSY encountered while updating app display name, retrying attempt ${attempt + 1}`,
+      LogStyle.warning
     )
 })
 
@@ -195,12 +215,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private searchIndex: SearchIndexService | null = null
 
   constructor() {
-    console.log(formatLog('AppProvider', 'Initializing AppProvider service', LogStyle.info))
+    logApp('Initializing AppProvider service', LogStyle.info)
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
     const loadStart = startTiming()
-    console.log(formatLog('AppProvider', 'Loading AppProvider service...', LogStyle.process))
+    logApp('Loading AppProvider service...', LogStyle.process)
     this.context = context
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
@@ -223,9 +243,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this._registerWatchPaths()
     this._scheduleMdlsUpdateScan()
 
-    console.log(
-      formatLog('AppProvider', 'AppProvider service loaded successfully', LogStyle.success)
-    )
+    logApp('AppProvider service loaded successfully', LogStyle.success)
     logAppDuration('onLoad', loadStart, {
       label: 'onLoad finished',
       style: 'success',
@@ -235,30 +253,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onDestroy(): Promise<void> {
-    console.log(formatLog('AppProvider', 'Unloading AppProvider service', LogStyle.process))
+    logApp('Unloading AppProvider service', LogStyle.process)
     this._unsubscribeFromFSEvents()
-    console.log(formatLog('AppProvider', 'AppProvider service unloaded', LogStyle.success))
+    logApp('AppProvider service unloaded', LogStyle.success)
   }
 
   public async setAliases(aliases: Record<string, string[]>): Promise<void> {
-    console.log(formatLog('AppProvider', 'Updating app aliases', LogStyle.process))
+    logApp('Updating app aliases', LogStyle.process)
     this.aliases = aliases
 
-    console.log(
-      formatLog('AppProvider', 'App aliases updated, resyncing all app keywords', LogStyle.info)
-    )
+    logApp('App aliases updated, resyncing all app keywords', LogStyle.info)
 
     if (!this.dbUtils) return
 
     const allApps = await this.dbUtils.getFilesByType('app')
     const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
 
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Resyncing keywords for ${chalk.cyan(appsWithExtensions.length)} apps...`,
-        LogStyle.process
-      )
+    logApp(
+      `Resyncing keywords for ${chalk.cyan(appsWithExtensions.length)} apps...`,
+      LogStyle.process
     )
 
     await runAdaptiveTaskQueue(
@@ -268,12 +281,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         await this._syncKeywordsForApp(appInfo)
 
         if ((index + 1) % 100 === 0 || index === appsWithExtensions.length - 1) {
-          console.log(
-            formatLog(
-              'AppProvider',
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
-              LogStyle.info
-            )
+          logApp(
+            `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
+            LogStyle.info
           )
         }
       },
@@ -285,7 +295,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
     )
 
-    console.log(formatLog('AppProvider', 'All app keywords synced successfully', LogStyle.success))
+    logApp('All app keywords synced successfully', LogStyle.success)
   }
 
   private _mapDbAppToScannedInfo(app: any): any {
@@ -396,9 +406,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           )
           generatedKeywords.add(pinyinFirst)
         } catch {
-          console.warn(
-            formatLog('AppProvider', `Failed to get pinyin for: ${name}`, LogStyle.warning)
-          )
+          logApp(`Failed to get pinyin for: ${name}`, LogStyle.warning)
         }
       }
     }
@@ -433,7 +441,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async _initialize(): Promise<void> {
     const initStart = startTiming()
-    console.log(formatLog('AppProvider', 'Initializing app data...', LogStyle.process))
+    logApp('Initializing app data...', LogStyle.process)
 
     const scanStart = startTiming()
     const scannedApps = await appScanner.getApps()
@@ -454,13 +462,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const uniqueId = app.uniqueId || app.path
       if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
 
-      console.warn(
-        formatLog(
-          'AppProvider',
-          `Icon not found for app: ${chalk.yellow(app.name)}`,
-          LogStyle.warning
-        )
-      )
+      logApp(`Icon not found for app: ${chalk.yellow(app.name)}`, LogStyle.warning)
       knownMissingIconApps.add(uniqueId)
       missingIconConfigUpdated = true
     }
@@ -486,12 +488,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const toUpdate: { fileId: any; app: any }[] = []
     const missingApps: Array<{ id: number; path: string; uniqueId: string }> = []
 
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Comparing ${chalk.cyan(scannedApps.length)} scanned apps with ${chalk.cyan(dbApps.length)} apps in DB`,
-        LogStyle.info
-      )
+    logApp(
+      `Comparing ${chalk.cyan(scannedApps.length)} scanned apps with ${chalk.cyan(dbApps.length)} apps in DB`,
+      LogStyle.info
     )
 
     for (const [uniqueId, scannedApp] of scannedAppsMap.entries()) {
@@ -518,20 +517,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     // Process missing apps with grace period protection
     const toDeleteIds = await this._processAppsForDeletion(missingApps)
 
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Found ${chalk.green(toAdd.length)} to add, ${chalk.yellow(toUpdate.length)} to update, ${chalk.yellow(missingApps.length)} missing (${chalk.red(toDeleteIds.length)} confirmed for deletion)`,
-        LogStyle.info
-      )
+    logApp(
+      `Found ${chalk.green(toAdd.length)} to add, ${chalk.yellow(toUpdate.length)} to update, ${chalk.yellow(missingApps.length)} missing (${chalk.red(toDeleteIds.length)} confirmed for deletion)`,
+      LogStyle.info
     )
 
     const db = this.dbUtils!.getDb()
 
     if (toAdd.length > 0) {
-      console.log(
-        formatLog('AppProvider', `Adding ${chalk.cyan(toAdd.length)} new apps...`, LogStyle.process)
-      )
+      logApp(`Adding ${chalk.cyan(toAdd.length)} new apps...`, LogStyle.process)
       const addStartTime = startTiming()
 
       await runAdaptiveTaskQueue(
@@ -569,12 +563,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           }
 
           if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
-            console.log(
-              formatLog(
-                'AppProvider',
-                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
-                LogStyle.info
-              )
+            logApp(
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
+              LogStyle.info
             )
           }
         },
@@ -593,13 +584,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (toUpdate.length > 0) {
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Updating ${chalk.cyan(toUpdate.length)} apps...`,
-          LogStyle.process
-        )
-      )
+      logApp(`Updating ${chalk.cyan(toUpdate.length)} apps...`, LogStyle.process)
       const updateStartTime = startTiming()
 
       await runAdaptiveTaskQueue(
@@ -627,12 +612,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           // 改为每100个输出一次，但保持10个一组的处理
           if ((index + 1) % 100 === 0 || index === toUpdate.length - 1) {
-            console.log(
-              formatLog(
-                'AppProvider',
-                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdate.length)} app updates`,
-                LogStyle.info
-              )
+            logApp(
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdate.length)} app updates`,
+              LogStyle.info
             )
           }
         },
@@ -653,13 +635,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (toDeleteIds.length > 0) {
-      console.log(
-        formatLog(
-          'AppProvider',
-          `Deleting ${chalk.cyan(toDeleteIds.length)} apps...`,
-          LogStyle.process
-        )
-      )
+      logApp(`Deleting ${chalk.cyan(toDeleteIds.length)} apps...`, LogStyle.process)
 
       const deletedItemIds = (
         await db
@@ -707,48 +683,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (!appPath.endsWith('.app')) return
     }
 
-    console.log(
-      formatLog('AppProvider', `App change detected: ${chalk.cyan(appPath)}`, LogStyle.info)
-    )
+    logApp(`App change detected: ${chalk.cyan(appPath)}`, LogStyle.info)
     this.processingPaths.add(appPath)
 
     try {
       if (!(await this._waitForItemStable(appPath))) {
-        console.log(
-          formatLog(
-            'AppProvider',
-            `Item is unstable, skipping: ${chalk.yellow(appPath)}`,
-            LogStyle.warning
-          )
-        )
+        logApp(`Item is unstable, skipping: ${chalk.yellow(appPath)}`, LogStyle.warning)
         return
       }
 
-      console.log(
-        formatLog('AppProvider', `Fetching app info: ${chalk.cyan(appPath)}`, LogStyle.process)
-      )
+      logApp(`Fetching app info: ${chalk.cyan(appPath)}`, LogStyle.process)
       const appInfo = await appScanner.getAppInfoByPath(appPath)
       if (!appInfo) {
-        console.warn(
-          formatLog(
-            'AppProvider',
-            `Could not get app info for: ${chalk.yellow(appPath)}`,
-            LogStyle.warning
-          )
-        )
+        logApp(`Could not get app info for: ${chalk.yellow(appPath)}`, LogStyle.warning)
         return
       }
       const existingFile = await this.dbUtils!.getFileByPath(appInfo.path)
       const db = this.dbUtils!.getDb()
 
       if (existingFile) {
-        console.log(
-          formatLog(
-            'AppProvider',
-            `Updating existing app: ${chalk.cyan(appInfo.name)}`,
-            LogStyle.process
-          )
-        )
+        logApp(`Updating existing app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
 
         const updateData: any = {
           name: appInfo.name,
@@ -767,17 +721,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         ])
 
         await this._syncKeywordsForApp(appInfo)
-        console.log(
-          formatLog(
-            'AppProvider',
-            `App ${chalk.cyan(appInfo.name)} updated successfully`,
-            LogStyle.success
-          )
-        )
+        logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
       } else {
-        console.log(
-          formatLog('AppProvider', `Adding new app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
-        )
+        logApp(`Adding new app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
 
         const [insertedFile] = await db
           .insert(filesSchema)
@@ -798,23 +744,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           ])
 
           await this._syncKeywordsForApp(appInfo)
-          console.log(
-            formatLog(
-              'AppProvider',
-              `New app ${chalk.cyan(appInfo.name)} added successfully`,
-              LogStyle.success
-            )
-          )
+          logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
         }
       }
     } catch (error) {
-      console.error(
-        formatLog(
-          'AppProvider',
-          `Error processing app change: ${chalk.red((error as Error).message)}`,
-          LogStyle.error
-        )
-      )
+      logApp(`Error processing app change: ${chalk.red((error as Error).message)}`, LogStyle.error)
     } finally {
       this.processingPaths.delete(appPath)
     }
@@ -829,9 +763,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (!appPath.endsWith('.app')) return
     }
 
-    console.log(
-      formatLog('AppProvider', `App deletion detected: ${chalk.cyan(appPath)}`, LogStyle.process)
-    )
+    logApp(`App deletion detected: ${chalk.cyan(appPath)}`, LogStyle.process)
     this.processingPaths.add(appPath)
 
     try {
@@ -847,30 +779,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
         await this.searchIndex?.removeItems([itemId])
 
-        console.log(
-          formatLog(
-            'AppProvider',
-            `App deleted from database: ${chalk.cyan(appPath)}`,
-            LogStyle.success
-          )
-        )
+        logApp(`App deleted from database: ${chalk.cyan(appPath)}`, LogStyle.success)
       } else {
-        console.log(
-          formatLog(
-            'AppProvider',
-            `App to delete not found in database: ${chalk.yellow(appPath)}`,
-            LogStyle.warning
-          )
-        )
+        logApp(`App to delete not found in database: ${chalk.yellow(appPath)}`, LogStyle.warning)
       }
     } catch (error) {
-      console.error(
-        formatLog(
-          'AppProvider',
-          `Error deleting app: ${chalk.red((error as Error).message)}`,
-          LogStyle.error
-        )
-      )
+      logApp(`Error deleting app: ${chalk.red((error as Error).message)}`, LogStyle.error)
     } finally {
       this.processingPaths.delete(appPath)
     }
@@ -912,46 +826,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const sessionId = searchResult?.sessionId
     if (sessionId) {
-      console.debug(
-        formatLog('AppProvider', `Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
-      )
+      logApp(`Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
       searchEngineCore.recordExecute(sessionId, item).catch((err) => {
-        console.error(
-          formatLog(
-            'AppProvider',
-            `Failed to record execution: ${chalk.red(err.message)}`,
-            LogStyle.error
-          )
-        )
+        logApp(`Failed to record execution: ${chalk.red(err.message)}`, LogStyle.error)
       })
     }
 
     const appPath = item.meta?.app?.path
     if (!appPath) {
-      console.error(
-        formatLog('AppProvider', `Execution failed: App path not found`, LogStyle.error)
-      )
+      logApp('Execution failed: App path not found', LogStyle.error)
       return null
     }
 
-    console.debug(formatLog('AppProvider', `Opening app: ${chalk.cyan(appPath)}`, LogStyle.process))
+    logApp(`Opening app: ${chalk.cyan(appPath)}`, LogStyle.process)
     try {
       await shell.openPath(appPath)
-      console.debug(
-        formatLog(
-          'AppProvider',
-          `App opened successfully: ${chalk.green(appPath)}`,
-          LogStyle.success
-        )
-      )
+      logApp(`App opened successfully: ${chalk.green(appPath)}`, LogStyle.success)
     } catch (err) {
-      console.error(
-        formatLog(
-          'AppProvider',
-          `Failed to open app: ${chalk.red((err as Error).message)}`,
-          LogStyle.error
-        )
-      )
+      logApp(`Failed to open app: ${chalk.red((err as Error).message)}`, LogStyle.error)
     }
 
     return null
@@ -959,18 +851,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onSearch(query: TuffQuery): Promise<TuffSearchResult> {
     const searchStart = startTiming()
-    console.debug(
-      formatLog('AppProvider', `Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
-    )
+    logApp(`Performing search: ${chalk.cyan(query.text)}`, LogStyle.process)
 
     if (!this.dbUtils || !this.searchIndex) {
-      console.warn(
-        formatLog(
-          'AppProvider',
-          'Search dependencies not ready, returning empty result',
-          LogStyle.warning
-        )
-      )
+      logApp('Search dependencies not ready, returning empty result', LogStyle.warning)
       return new TuffSearchResultBuilder(query).build()
     }
 
@@ -987,13 +871,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     let preciseMatchedItemIds: Set<string> | null = null
     if (terms.length > 0) {
       const preciseStart = startTiming()
-      console.debug(
-        formatLog(
-          'AppProvider',
-          `Executing precise query: ${chalk.cyan(terms.join(', '))}`,
-          LogStyle.info
-        )
-      )
+      logApp(`Executing precise query: ${chalk.cyan(terms.join(', '))}`, LogStyle.info)
 
       const preciseResults = await Promise.all(
         terms.map((term) =>
@@ -1022,7 +900,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           precision: 0,
           suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} result(s)`
         },
-        { logger: (message) => console.debug(message) }
+        { logger: (message) => appProviderLog.debug(message) }
       )
     }
 
@@ -1053,7 +931,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           precision: 0,
           suffix: `with ${chalk.cyan(preciseMatchedItemIds?.size ?? 0)} accumulated result(s)`
         },
-        { logger: (message) => console.debug(message) }
+        { logger: (message) => appProviderLog.debug(message) }
       )
     }
 
@@ -1071,7 +949,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           precision: 0,
           suffix: `(${chalk.cyan(ftsQuery)}) returned ${chalk.cyan(ftsMatches.length)} matches`
         },
-        { logger: (message) => console.debug(message) }
+        { logger: (message) => appProviderLog.debug(message) }
       )
     }
 
@@ -1085,13 +963,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (candidateIds.size === 0) {
-      console.debug(
-        formatLog(
-          'AppProvider',
-          'No candidates found for query, returning empty result',
-          LogStyle.info
-        )
-      )
+      logApp('No candidates found for query, returning empty result', LogStyle.info)
       return new TuffSearchResultBuilder(query).build()
     }
 
@@ -1121,17 +993,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         unit: 'ms',
         precision: 0
       },
-      { logger: (message) => console.debug(message) }
+      { logger: (message) => appProviderLog.debug(message) }
     )
 
     if (files.length === 0) {
-      console.warn(
-        formatLog(
-          'AppProvider',
-          'Candidate mapping returned no rows, search result empty',
-          LogStyle.warning
-        )
-      )
+      logApp('Candidate mapping returned no rows, search result empty', LogStyle.warning)
       return new TuffSearchResultBuilder(query).build()
     }
 
@@ -1167,7 +1033,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         },
         {
           logThresholds: { none: SLOW_SEARCH_THRESHOLD_MS, info: 1000, warn: 2500 },
-          logger: (message) => console.warn(message)
+          logger: (message) => appProviderLog.warn(message)
         }
       )
     }
@@ -1194,13 +1060,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private _subscribeToFSEvents(): void {
     // Windows: 跳过文件系统事件订阅，避免权限问题
     if (process.platform === 'win32') {
-      console.log(
-        formatLog('AppProvider', 'Skipping FS event subscription on Windows', LogStyle.info)
-      )
+      logApp('Skipping FS event subscription on Windows', LogStyle.info)
       return
     }
 
-    console.log(formatLog('AppProvider', 'Subscribing to file system events', LogStyle.info))
+    logApp('Subscribing to file system events', LogStyle.info)
 
     if (this.isMac) {
       touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
@@ -1214,7 +1078,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _unsubscribeFromFSEvents(): void {
-    console.log(formatLog('AppProvider', 'Unsubscribing from file system events', LogStyle.info))
+    logApp('Unsubscribing from file system events', LogStyle.info)
 
     touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
     touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
@@ -1226,20 +1090,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private _registerWatchPaths(): void {
     // Windows: 跳过目录监视，避免 EPERM 权限错误
     if (process.platform === 'win32') {
-      console.log(
-        formatLog('AppProvider', 'Skipping watch path registration on Windows', LogStyle.info)
-      )
+      logApp('Skipping watch path registration on Windows', LogStyle.info)
       return
     }
 
     const watchPaths = appScanner.getWatchPaths()
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Registering watch paths: ${chalk.cyan(watchPaths.join(', '))}`,
-        LogStyle.info
-      )
-    )
+    logApp(`Registering watch paths: ${chalk.cyan(watchPaths.join(', '))}`, LogStyle.info)
 
     for (const p of watchPaths) {
       const depth = this.isMac && (p === '/Applications' || p.endsWith('/Applications')) ? 1 : 4
@@ -1248,13 +1104,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _waitForItemStable(itemPath: string, delay = 500, retries = 5): Promise<boolean> {
-    console.log(
-      formatLog(
-        'AppProvider',
-        `Waiting for item to stabilize: ${chalk.cyan(itemPath)}`,
-        LogStyle.info
-      )
-    )
+    logApp(`Waiting for item to stabilize: ${chalk.cyan(itemPath)}`, LogStyle.info)
 
     for (let i = 0; i < retries; i++) {
       try {
@@ -1263,64 +1113,42 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const size2 = (await fs.stat(itemPath)).size
 
         if (size1 === size2) {
-          console.log(
-            formatLog('AppProvider', `Item stabilized: ${chalk.green(itemPath)}`, LogStyle.success)
-          )
+          logApp(`Item stabilized: ${chalk.green(itemPath)}`, LogStyle.success)
           await sleep(1000)
           return true
         } else {
-          console.log(
-            formatLog(
-              'AppProvider',
-              `Item still changing: ${chalk.yellow(itemPath)}, retry ${i + 1}/${retries}`,
-              LogStyle.info
-            )
+          logApp(
+            `Item still changing: ${chalk.yellow(itemPath)}, retry ${i + 1}/${retries}`,
+            LogStyle.info
           )
         }
       } catch (error) {
-        console.error(
-          formatLog(
-            'AppProvider',
-            `Failed to check item stability: ${chalk.red((error as Error).message)}`,
-            LogStyle.error
-          )
+        logApp(
+          `Failed to check item stability: ${chalk.red((error as Error).message)}`,
+          LogStyle.error
         )
         return false
       }
     }
 
-    console.warn(
-      formatLog(
-        'AppProvider',
-        `Item did not stabilize: ${chalk.yellow(itemPath)}`,
-        LogStyle.warning
-      )
-    )
+    logApp(`Item did not stabilize: ${chalk.yellow(itemPath)}`, LogStyle.warning)
     return false
   }
 
   private _scheduleMdlsUpdateScan(): void {
     if (process.platform !== 'darwin') {
-      console.log(
-        formatLog('AppProvider', 'Not on macOS, skipping mdls scan scheduling', LogStyle.info)
-      )
+      logApp('Not on macOS, skipping mdls scan scheduling', LogStyle.info)
       return
     }
 
     if (is.dev) {
-      console.log(formatLog('AppProvider', 'Running initial mdls scan in dev mode', LogStyle.info))
+      logApp('Running initial mdls scan in dev mode', LogStyle.info)
       this._runMdlsUpdateScan().then(() => {
-        console.log(formatLog('AppProvider', 'Dev mode mdls scan complete', LogStyle.success))
+        logApp('Dev mode mdls scan complete', LogStyle.success)
       })
     }
 
-    console.log(
-      formatLog(
-        'AppProvider',
-        'Registering mdls update polling service (10 min interval)',
-        LogStyle.info
-      )
-    )
+    logApp('Registering mdls update polling service (10 min interval)', LogStyle.info)
     pollingService.register(
       'app_provider_mdls_update_scan',
       async () => {
@@ -1328,24 +1156,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const now = Date.now()
 
         if (!is.dev && now - lastScanTimestamp > 60 * 60 * 1000) {
-          console.log(
-            formatLog(
-              'AppProvider',
-              'Over 1 hour since last scan, starting mdls scan',
-              LogStyle.info
-            )
-          )
+          logApp('Over 1 hour since last scan, starting mdls scan', LogStyle.info)
           await this._runMdlsUpdateScan()
         } else if (is.dev && !lastScanTimestamp) {
-          console.log(formatLog('AppProvider', 'First scan in dev mode', LogStyle.info))
+          logApp('First scan in dev mode', LogStyle.info)
           await this._runMdlsUpdateScan()
         } else {
-          console.debug(
-            formatLog(
-              'AppProvider',
-              `${chalk.cyan(((now - lastScanTimestamp) / (60 * 1000)).toFixed(1))} minutes since last scan, skipping`,
-              LogStyle.info
-            )
+          appProviderLog.debug(
+            `${chalk.cyan(((now - lastScanTimestamp) / (60 * 1000)).toFixed(1))} minutes since last scan, skipping`
           )
         }
       },
@@ -1354,12 +1172,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   async _forceRebuild(): Promise<void> {
-    console.log(formatLog('AppProvider', 'Forcing app database rebuild...', LogStyle.process))
+    logApp('Forcing app database rebuild...', LogStyle.process)
 
     if (!this.context || !this.dbUtils) {
-      console.error(
-        formatLog('AppProvider', 'Context or DB not initialized, cannot rebuild', LogStyle.error)
-      )
+      logApp('Context or DB not initialized, cannot rebuild', LogStyle.error)
       return
     }
 
@@ -1369,12 +1185,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await db.delete(fileExtensions)
     await this.searchIndex?.removeByProvider(this.id)
 
-    console.log(formatLog('AppProvider', 'Database cleared, re-initializing...', LogStyle.info))
+    logApp('Database cleared, re-initializing...', LogStyle.info)
 
     this.isInitializing = null
     await this.onLoad(this.context)
 
-    console.log(formatLog('AppProvider', 'App database rebuild complete', LogStyle.success))
+    logApp('App database rebuild complete', LogStyle.success)
   }
 
   private async _getLastScanTime(): Promise<number | null> {
@@ -1431,12 +1247,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return new Set(ids)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      console.warn(
-        formatLog(
-          'AppProvider',
-          `Failed to load missing icon config, continuing without cache: ${message}`,
-          LogStyle.warning
-        )
+      logApp(
+        `Failed to load missing icon config, continuing without cache: ${message}`,
+        LogStyle.warning
       )
       return new Set()
     }
@@ -1458,37 +1271,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      console.warn(
-        formatLog(
-          'AppProvider',
-          `Failed to persist missing icon config: ${message}`,
-          LogStyle.warning
-        )
-      )
+      logApp(`Failed to persist missing icon config: ${message}`, LogStyle.warning)
     }
   }
 
   private async _runMdlsUpdateScan(): Promise<void> {
     if (process.platform !== 'darwin') {
-      console.log(formatLog('AppProvider', 'Not on macOS, skipping mdls scan', LogStyle.info))
+      logApp('Not on macOS, skipping mdls scan', LogStyle.info)
       return
     }
 
     if (!this.dbUtils) {
-      console.error(
-        formatLog('AppProvider', 'Database not initialized, cannot run mdls scan', LogStyle.error)
-      )
+      logApp('Database not initialized, cannot run mdls scan', LogStyle.error)
       return
     }
 
     const dbUtils = this.dbUtils
 
     await appTaskGate.runAppTask(async () => {
-      console.log(formatLog('AppProvider', 'Starting mdls update scan...', LogStyle.process))
+      logApp('Starting mdls update scan...', LogStyle.process)
 
       const allDbApps = await dbUtils.getFilesByType('app')
       if (allDbApps.length === 0) {
-        console.log(formatLog('AppProvider', 'No apps in DB, skipping mdls scan', LogStyle.info))
+        logApp('No apps in DB, skipping mdls scan', LogStyle.info)
         return
       }
 
@@ -1524,12 +1329,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       // 处理删除的 app（文件不存在，从数据库中删除）
       if (deletedApps.length > 0) {
         const db = dbUtils.getDb()
-        console.log(
-          formatLog(
-            'AppProvider',
-            `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
-            LogStyle.process
-          )
+        logApp(
+          `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
+          LogStyle.process
         )
 
         for (const app of deletedApps) {
@@ -1544,22 +1346,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
             await this.searchIndex?.removeItems([itemId])
 
-            console.log(
-              formatLog(
-                'AppProvider',
-                `App deleted from database: ${chalk.cyan(app.path)}`,
-                LogStyle.success
-              )
-            )
+            logApp(`App deleted from database: ${chalk.cyan(app.path)}`, LogStyle.success)
           } catch (error) {
-            console.error(
-              formatLog(
-                'AppProvider',
-                `Error deleting app ${chalk.red(app.path)}: ${
-                  error instanceof Error ? error.message : String(error)
-                }`,
-                LogStyle.error
-              )
+            logApp(
+              `Error deleting app ${chalk.red(app.path)}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              LogStyle.error
             )
           }
         }
@@ -1589,12 +1382,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       return new Map(parsed.map((entry) => [entry.uniqueId, entry]))
     } catch (error) {
-      console.warn(
-        formatLog(
-          'AppProvider',
-          `Failed to load pending deletions: ${error instanceof Error ? error.message : String(error)}`,
-          LogStyle.warning
-        )
+      logApp(
+        `Failed to load pending deletions: ${error instanceof Error ? error.message : String(error)}`,
+        LogStyle.warning
       )
       return new Map()
     }
@@ -1615,12 +1405,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           set: { value: serialized }
         })
     } catch (error) {
-      console.warn(
-        formatLog(
-          'AppProvider',
-          `Failed to save pending deletions: ${error instanceof Error ? error.message : String(error)}`,
-          LogStyle.warning
-        )
+      logApp(
+        `Failed to save pending deletions: ${error instanceof Error ? error.message : String(error)}`,
+        LogStyle.warning
       )
     }
   }
@@ -1638,12 +1425,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (existsSync(app.path)) {
         // File exists, remove from pending if present
         if (pendingDeletions.has(app.uniqueId)) {
-          console.log(
-            formatLog(
-              'AppProvider',
-              `App reappeared, removing from pending deletion: ${chalk.green(app.path)}`,
-              LogStyle.info
-            )
+          logApp(
+            `App reappeared, removing from pending deletion: ${chalk.green(app.path)}`,
+            LogStyle.info
           )
           pendingDeletions.delete(app.uniqueId)
           pendingUpdated = true
@@ -1656,12 +1440,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       if (!existing) {
         // First time missing, add to pending
-        console.log(
-          formatLog(
-            'AppProvider',
-            `App missing (1st time), adding to pending deletion: ${chalk.yellow(app.path)}`,
-            LogStyle.info
-          )
+        logApp(
+          `App missing (1st time), adding to pending deletion: ${chalk.yellow(app.path)}`,
+          LogStyle.info
         )
         pendingDeletions.set(app.uniqueId, {
           id: app.id,
@@ -1682,22 +1463,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
         if (graceExpired && minMissCountReached) {
           // Grace period expired and min miss count reached, confirm deletion
-          console.log(
-            formatLog(
-              'AppProvider',
-              `App confirmed for deletion (missed ${existing.missCount} times, ${(elapsed / 1000).toFixed(0)}s elapsed): ${chalk.red(app.path)}`,
-              LogStyle.warning
-            )
+          logApp(
+            `App confirmed for deletion (missed ${existing.missCount} times, ${(elapsed / 1000).toFixed(0)}s elapsed): ${chalk.red(app.path)}`,
+            LogStyle.warning
           )
           confirmedDeleteIds.push(app.id)
           pendingDeletions.delete(app.uniqueId)
         } else {
-          console.log(
-            formatLog(
-              'AppProvider',
-              `App still in grace period (missed ${existing.missCount} times, ${(elapsed / 1000).toFixed(0)}s/${(DELETION_GRACE_PERIOD_MS / 1000).toFixed(0)}s): ${chalk.yellow(app.path)}`,
-              LogStyle.info
-            )
+          logApp(
+            `App still in grace period (missed ${existing.missCount} times, ${(elapsed / 1000).toFixed(0)}s/${(DELETION_GRACE_PERIOD_MS / 1000).toFixed(0)}s): ${chalk.yellow(app.path)}`,
+            LogStyle.info
           )
         }
       }

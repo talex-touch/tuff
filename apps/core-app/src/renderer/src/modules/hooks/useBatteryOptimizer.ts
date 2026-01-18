@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { appSetting } from '~/modules/channel/storage'
 
 interface BatteryStatusPayload {
@@ -14,11 +15,12 @@ const batteryStatus = reactive<{ onBattery: boolean; percent: number | null }>({
 
 let listenerReferenceCount = 0
 let unregisterChannel: (() => void) | undefined
+const transport = useTuffTransport()
+const batteryStatusEvent = defineRawEvent<BatteryStatusPayload, void>('power:battery-status')
 
 function setupListener() {
   if (listenerReferenceCount === 0) {
-    unregisterChannel = touchChannel.regChannel('power:battery-status', ({ data }) => {
-      const payload = data as BatteryStatusPayload | undefined
+    unregisterChannel = transport.on(batteryStatusEvent, (payload) => {
       if (!payload) return
 
       if (typeof payload.onBattery === 'boolean') {

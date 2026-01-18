@@ -21,6 +21,30 @@ export interface ExternalUrlOptions {
   url: string
 }
 
+export interface TempFileCreateOptions {
+  namespace: string
+  ext?: string
+  text?: string
+  base64?: string
+  prefix?: string
+  retentionMs?: number
+}
+
+export interface TempFileCreateResult {
+  url: string
+  sizeBytes: number
+  createdAt: number
+}
+
+export interface TempFileDeleteOptions {
+  url?: string
+  path?: string
+}
+
+export interface TempFileDeleteResult {
+  success: boolean
+}
+
 export class TouchSDK {
   private channel: ITouchClientChannel
 
@@ -76,6 +100,17 @@ export class TouchSDK {
 
   async openExternalUrl(options: ExternalUrlOptions): Promise<void> {
     return this.channel.send('open-external', options)
+  }
+
+  /**
+   * Temp file operations
+   */
+  async createTempFile(options: TempFileCreateOptions): Promise<TempFileCreateResult> {
+    return this.channel.send('temp-file:create', options)
+  }
+
+  async deleteTempFile(options: TempFileDeleteOptions): Promise<TempFileDeleteResult> {
+    return this.channel.send('temp-file:delete', options)
   }
 
   /**

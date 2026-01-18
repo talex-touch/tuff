@@ -1,18 +1,12 @@
 import { clerkClient } from '@clerk/nuxt/server'
+import { createAppToken, requireAuth } from '../../utils/auth'
 
 /**
  * Create a sign-in token for the current user
  * This allows the desktop app to authenticate using the browser session
  */
 export default defineEventHandler(async (event) => {
-  const { userId } = event.context.auth()
-
-  if (!userId) {
-    throw createError({
-      statusCode: 401,
-      message: 'Unauthorized',
-    })
-  }
+  const { userId } = await requireAuth(event)
 
   try {
     // Create a sign-in token that can be used by the desktop app
@@ -21,8 +15,17 @@ export default defineEventHandler(async (event) => {
       expiresInSeconds: 60, // Short expiry for security
     })
 
+    let appToken: string | null = null
+    try {
+      appToken = createAppToken(userId)
+    }
+    catch (error) {
+      console.warn('[SignInToken] App token disabled:', error)
+    }
+
     return {
       token: signInToken.token,
+      appToken,
     }
   }
   catch (error) {

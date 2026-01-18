@@ -1,7 +1,7 @@
 <script name="AppConfigure" setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import FlatButton from '~/components/base/button/FlatButton.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 
 const props = defineProps<{
   data: any
@@ -17,6 +17,7 @@ const emits = defineEmits<{
 // import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 const { t } = useI18n()
+const appSdk = useAppSdk()
 
 const info = ref()
 
@@ -89,7 +90,7 @@ function handleHelp(): void {
   // open google and search
   const url = `https://www.google.com/search?q=${props.data.name}`
 
-  touchChannel.sendSync('open-external', { url })
+  appSdk.openExternal(url).catch(() => {})
 }
 </script>
 
@@ -97,7 +98,7 @@ function handleHelp(): void {
   <div class="AppConfigure">
     <div class="AppConfigure-Head">
       <div class="AppConfigure-Head-Left">
-        <img :src="data.icon" alt="Application Logo">
+        <img :src="data.icon" alt="Application Logo" />
       </div>
       <div class="AppConfigure-Head-Right">
         <div class="AppConfigure-Head-Right-Top">
@@ -130,9 +131,7 @@ function handleHelp(): void {
                 </h3>
               </template>
               <FlatButton hover:bg-red @click="handleDelete">
-                {{
-                  t('appConfigure.uninstallBtn')
-                }}
+                {{ t('appConfigure.uninstallBtn') }}
               </FlatButton>
             </t-block-slot>
             <t-block-switch
@@ -161,14 +160,9 @@ function handleHelp(): void {
 
           <t-group-block v-if="info" :name="t('appConfigure.spec')" icon="apps">
             <t-block-line :title="t('appConfigure.version')">
-              <template #description>
-                1
-              </template>
+              <template #description> 1 </template>
             </t-block-line>
-            <t-block-line
-              :title="t('appConfigure.size')"
-              :description="formatSize(info.size)"
-            />
+            <t-block-line :title="t('appConfigure.size')" :description="formatSize(info.size)" />
             <t-block-line :title="t('appConfigure.dev')" :description="info.dev" />
             <t-block-line :title="t('appConfigure.ino')" :description="info.ino" />
             <t-block-line :title="t('appConfigure.mode')" :description="info.mode" />
@@ -176,10 +170,7 @@ function handleHelp(): void {
             <t-block-line :title="t('appConfigure.uid')" :description="info.uid" />
             <t-block-line :title="t('appConfigure.gid')" :description="info.gid" />
             <t-block-line :title="t('appConfigure.rdev')" :description="info.rdev" />
-            <t-block-line
-              :title="t('appConfigure.blksize')"
-              :description="info.blksize"
-            />
+            <t-block-line :title="t('appConfigure.blksize')" :description="info.blksize" />
             <t-block-line
               :title="t('appConfigure.atimeMs')"
               :description="formatTime(info.atimeMs)"

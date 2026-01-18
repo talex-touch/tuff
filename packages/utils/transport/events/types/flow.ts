@@ -113,6 +113,31 @@ export interface FlowSelectTargetResponse {
   error?: { message: string }
 }
 
+export interface FlowConsentCheckRequest {
+  senderId: string
+  targetId: string
+  _sdkapi?: number
+}
+
+export interface FlowConsentCheckResponse {
+  success: boolean
+  data?: { allowed: boolean }
+  error?: { message: string }
+}
+
+export interface FlowConsentGrantRequest {
+  senderId: string
+  targetId: string
+  mode: 'once' | 'always'
+  _sdkapi?: number
+}
+
+export interface FlowConsentGrantResponse {
+  success: boolean
+  data?: { token?: string }
+  error?: { message: string }
+}
+
 export interface FlowDeliverPayload {
   sessionId: string
   payload: FlowPayload

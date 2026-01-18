@@ -6,8 +6,7 @@
 -->
 <script setup lang="ts" name="SettingDownload">
 import type { DownloadConfig } from '@talex-touch/utils'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { DownloadEvents } from '@talex-touch/utils/transport/events'
+import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -24,7 +23,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 
 const { t } = useI18n()
-const transport = useTuffTransport()
+const downloadSdk = useDownloadSdk()
 
 // Download center hook
 const { updateConfig } = useDownloadCenter()
@@ -35,24 +34,24 @@ const downloadConfig = ref<DownloadConfig>({
     maxConcurrent: 3,
     autoAdjust: true,
     networkAware: true,
-    priorityBased: true,
+    priorityBased: true
   },
   chunk: {
     size: 1024 * 1024, // 1MB
     resume: true,
     autoRetry: true,
-    maxRetries: 3,
+    maxRetries: 3
   },
   storage: {
     tempDir: '',
     historyRetention: 30,
-    autoCleanup: true,
+    autoCleanup: true
   },
   network: {
     timeout: 30000,
     retryDelay: 5000,
-    maxRetries: 3,
-  },
+    maxRetries: 3
+  }
 })
 
 const loading = ref(false)
@@ -67,12 +66,11 @@ onMounted(async () => {
 async function loadConfig() {
   loading.value = true
   try {
-    const response = await transport.send(DownloadEvents.config.get)
+    const response = await downloadSdk.getConfig()
     if (response.success && response.config) {
       downloadConfig.value = response.config
     }
-  }
-  catch (error: any) {
+  } catch (error: any) {
     // Ignore timeout errors during startup - module may not be ready yet
     if (error?.message?.includes('timed out')) {
       console.debug('[SettingDownload] Config load timed out, module may be initializing')
@@ -80,8 +78,7 @@ async function loadConfig() {
     }
     console.error('[SettingDownload] Failed to load config:', error)
     toast.warning(t('settings.settingDownload.messages.loadFailed'))
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
@@ -91,8 +88,7 @@ async function updateDownloadConfig() {
   try {
     await updateConfig(downloadConfig.value)
     toast.success(t('settings.settingDownload.messages.saved'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingDownload] Failed to update config:', error)
     toast.error(t('settings.settingDownload.messages.saveFailed'))
   }
@@ -110,24 +106,24 @@ async function restoreDefaults() {
       maxConcurrent: 3,
       autoAdjust: true,
       networkAware: true,
-      priorityBased: true,
+      priorityBased: true
     },
     chunk: {
       size: 1024 * 1024,
       resume: true,
       autoRetry: true,
-      maxRetries: 3,
+      maxRetries: 3
     },
     storage: {
       tempDir: downloadConfig.value.storage.tempDir, // Keep current temp dir
       historyRetention: 30,
-      autoCleanup: true,
+      autoCleanup: true
     },
     network: {
       timeout: 30000,
       retryDelay: 5000,
-      maxRetries: 3,
-    },
+      maxRetries: 3
+    }
   }
   await updateDownloadConfig()
   toast.success(t('settings.settingDownload.messages.defaultsRestored'))
@@ -137,27 +133,23 @@ async function restoreDefaults() {
 async function cleanupTempFiles() {
   cleaningTemp.value = true
   try {
-    const response = await transport.send(DownloadEvents.maintenance.cleanupTemp)
+    const response = await downloadSdk.cleanupTemp()
     if (response.success) {
       toast.success(t('settings.settingDownload.messages.tempCleaned'))
-    }
-    else {
+    } else {
       throw new Error(response.error || 'Failed to cleanup temp files')
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('[SettingDownload] Failed to cleanup temp files:', error)
     toast.error(t('settings.settingDownload.messages.tempCleanFailed'))
-  }
-  finally {
+  } finally {
     cleaningTemp.value = false
   }
 }
 
 // Format file size for display
 function formatFileSize(bytes: number): string {
-  if (bytes === 0)
-    return '0 B'
+  if (bytes === 0) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -168,8 +160,7 @@ function formatFileSize(bytes: number): string {
 function formatTimeout(ms: number): string {
   if (ms >= 60000) {
     return `${(ms / 60000).toFixed(0)}${t('settings.settingDownload.timeUnits.minutes')}`
-  }
-  else {
+  } else {
     return `${(ms / 1000).toFixed(0)}${t('settings.settingDownload.timeUnits.seconds')}`
   }
 }
@@ -199,27 +190,13 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="1">
-        1
-      </TSelectItem>
-      <TSelectItem :model-value="2">
-        2
-      </TSelectItem>
-      <TSelectItem :model-value="3">
-        3
-      </TSelectItem>
-      <TSelectItem :model-value="4">
-        4
-      </TSelectItem>
-      <TSelectItem :model-value="5">
-        5
-      </TSelectItem>
-      <TSelectItem :model-value="8">
-        8
-      </TSelectItem>
-      <TSelectItem :model-value="10">
-        10
-      </TSelectItem>
+      <TSelectItem :model-value="1"> 1 </TSelectItem>
+      <TSelectItem :model-value="2"> 2 </TSelectItem>
+      <TSelectItem :model-value="3"> 3 </TSelectItem>
+      <TSelectItem :model-value="4"> 4 </TSelectItem>
+      <TSelectItem :model-value="5"> 5 </TSelectItem>
+      <TSelectItem :model-value="8"> 8 </TSelectItem>
+      <TSelectItem :model-value="10"> 10 </TSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSwitch
@@ -272,19 +249,13 @@ function formatTimeout(ms: number): string {
         {{ formatFileSize(1024 * 1024) }}
       </TSelectItem>
       <TSelectItem :model-value="2 * 1024 * 1024">
-        {{
-          formatFileSize(2 * 1024 * 1024)
-        }}
+        {{ formatFileSize(2 * 1024 * 1024) }}
       </TSelectItem>
       <TSelectItem :model-value="4 * 1024 * 1024">
-        {{
-          formatFileSize(4 * 1024 * 1024)
-        }}
+        {{ formatFileSize(4 * 1024 * 1024) }}
       </TSelectItem>
       <TSelectItem :model-value="8 * 1024 * 1024">
-        {{
-          formatFileSize(8 * 1024 * 1024)
-        }}
+        {{ formatFileSize(8 * 1024 * 1024) }}
       </TSelectItem>
     </TuffBlockSelect>
 
@@ -320,21 +291,11 @@ function formatTimeout(ms: number): string {
       <TSelectItem :model-value="0">
         {{ t('settings.settingDownload.noRetry') }}
       </TSelectItem>
-      <TSelectItem :model-value="1">
-        1
-      </TSelectItem>
-      <TSelectItem :model-value="2">
-        2
-      </TSelectItem>
-      <TSelectItem :model-value="3">
-        3
-      </TSelectItem>
-      <TSelectItem :model-value="5">
-        5
-      </TSelectItem>
-      <TSelectItem :model-value="10">
-        10
-      </TSelectItem>
+      <TSelectItem :model-value="1"> 1 </TSelectItem>
+      <TSelectItem :model-value="2"> 2 </TSelectItem>
+      <TSelectItem :model-value="3"> 3 </TSelectItem>
+      <TSelectItem :model-value="5"> 5 </TSelectItem>
+      <TSelectItem :model-value="10"> 10 </TSelectItem>
     </TuffBlockSelect>
 
     <!-- Storage Settings -->
@@ -347,24 +308,12 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="7">
-        7 {{ t('settings.settingDownload.days') }}
-      </TSelectItem>
-      <TSelectItem :model-value="14">
-        14 {{ t('settings.settingDownload.days') }}
-      </TSelectItem>
-      <TSelectItem :model-value="30">
-        30 {{ t('settings.settingDownload.days') }}
-      </TSelectItem>
-      <TSelectItem :model-value="60">
-        60 {{ t('settings.settingDownload.days') }}
-      </TSelectItem>
-      <TSelectItem :model-value="90">
-        90 {{ t('settings.settingDownload.days') }}
-      </TSelectItem>
-      <TSelectItem :model-value="365">
-        365 {{ t('settings.settingDownload.days') }}
-      </TSelectItem>
+      <TSelectItem :model-value="7"> 7 {{ t('settings.settingDownload.days') }} </TSelectItem>
+      <TSelectItem :model-value="14"> 14 {{ t('settings.settingDownload.days') }} </TSelectItem>
+      <TSelectItem :model-value="30"> 30 {{ t('settings.settingDownload.days') }} </TSelectItem>
+      <TSelectItem :model-value="60"> 60 {{ t('settings.settingDownload.days') }} </TSelectItem>
+      <TSelectItem :model-value="90"> 90 {{ t('settings.settingDownload.days') }} </TSelectItem>
+      <TSelectItem :model-value="365"> 365 {{ t('settings.settingDownload.days') }} </TSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSwitch
@@ -413,21 +362,11 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="1000">
-        1s
-      </TSelectItem>
-      <TSelectItem :model-value="2000">
-        2s
-      </TSelectItem>
-      <TSelectItem :model-value="3000">
-        3s
-      </TSelectItem>
-      <TSelectItem :model-value="5000">
-        5s
-      </TSelectItem>
-      <TSelectItem :model-value="10000">
-        10s
-      </TSelectItem>
+      <TSelectItem :model-value="1000"> 1s </TSelectItem>
+      <TSelectItem :model-value="2000"> 2s </TSelectItem>
+      <TSelectItem :model-value="3000"> 3s </TSelectItem>
+      <TSelectItem :model-value="5000"> 5s </TSelectItem>
+      <TSelectItem :model-value="10000"> 10s </TSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSelect
@@ -442,21 +381,11 @@ function formatTimeout(ms: number): string {
       <TSelectItem :model-value="0">
         {{ t('settings.settingDownload.noRetry') }}
       </TSelectItem>
-      <TSelectItem :model-value="1">
-        1
-      </TSelectItem>
-      <TSelectItem :model-value="2">
-        2
-      </TSelectItem>
-      <TSelectItem :model-value="3">
-        3
-      </TSelectItem>
-      <TSelectItem :model-value="5">
-        5
-      </TSelectItem>
-      <TSelectItem :model-value="10">
-        10
-      </TSelectItem>
+      <TSelectItem :model-value="1"> 1 </TSelectItem>
+      <TSelectItem :model-value="2"> 2 </TSelectItem>
+      <TSelectItem :model-value="3"> 3 </TSelectItem>
+      <TSelectItem :model-value="5"> 5 </TSelectItem>
+      <TSelectItem :model-value="10"> 10 </TSelectItem>
     </TuffBlockSelect>
 
     <!-- Storage path display -->

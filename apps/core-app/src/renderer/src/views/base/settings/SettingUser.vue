@@ -1,21 +1,20 @@
 <script setup lang="ts" name="SettingUser">
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { appSetting } from '~/modules/channel/storage'
 
 const { t } = useI18n()
 const { isLoggedIn, currentUser, loginWithBrowser, logout, authLoadingState } = useAuth()
+const appSdk = useAppSdk()
 
 const isDev = import.meta.env.DEV
-const NEXUS_URL = getTuffBaseUrl()
-
 const useLocalServer = computed({
   get: () => appSetting?.dev?.authServer === 'local',
   set: (val: boolean) => {
@@ -49,13 +48,13 @@ async function handleLogout() {
 }
 
 function openUserProfile() {
-  const profileUrl = `${NEXUS_URL}/dashboard/account`
-  touchChannel.send('open-external', { url: profileUrl })
+  const profileUrl = `${getAuthBaseUrl()}/dashboard/account`
+  void appSdk.openExternal(profileUrl)
 }
 
 function openDeviceManagement() {
-  const devicesUrl = `${NEXUS_URL}/dashboard/devices`
-  touchChannel.send('open-external', { url: devicesUrl })
+  const devicesUrl = `${getAuthBaseUrl()}/dashboard/devices`
+  void appSdk.openExternal(devicesUrl)
 }
 </script>
 

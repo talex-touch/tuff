@@ -8,25 +8,14 @@ import type {
   PluginPermissionStatus,
 } from '../../permission/types'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-
-/**
- * Send channel message to main process
- */
-async function sendChannel<T>(event: string, data?: unknown): Promise<T> {
-  return window.$channel?.send(event, data)
-}
-
-/**
- * Register channel listener
- */
-function onChannel(event: string, callback: (data: unknown) => void): () => void {
-  return window.$channel?.regChannel(event, callback) || (() => {})
-}
+import { PermissionEvents } from '../../transport/events'
+import { useTuffTransport } from '../../transport'
 
 /**
  * Hook for managing plugin permissions
  */
 export function usePermission(pluginId: string) {
+  const transport = useTuffTransport()
   const permissions = ref<PermissionGrant[]>([])
   const loading = ref(true)
   const error = ref<string | null>(null)
@@ -38,7 +27,7 @@ export function usePermission(pluginId: string) {
     loading.value = true
     error.value = null
     try {
-      const result = await sendChannel<PermissionGrant[]>('permission:get-plugin', { pluginId })
+      const result = await transport.send(PermissionEvents.api.getPlugin, { pluginId })
       permissions.value = result || []
     }
     catch (e) {
@@ -54,7 +43,7 @@ export function usePermission(pluginId: string) {
    */
   async function grant(permissionId: string): Promise<boolean> {
     try {
-      const result = await sendChannel<{ success: boolean }>('permission:grant', {
+      const result = await transport.send(PermissionEvents.api.grant, {
         pluginId,
         permissionId,
         grantedBy: 'user',
@@ -74,7 +63,7 @@ export function usePermission(pluginId: string) {
    */
   async function revoke(permissionId: string): Promise<boolean> {
     try {
-      const result = await sendChannel<{ success: boolean }>('permission:revoke', {
+      const result = await transport.send(PermissionEvents.api.revoke, {
         pluginId,
         permissionId,
       })
@@ -93,7 +82,7 @@ export function usePermission(pluginId: string) {
    */
   async function grantMultiple(permissionIds: string[]): Promise<boolean> {
     try {
-      const result = await sendChannel<{ success: boolean }>('permission:grant-multiple', {
+      const result = await transport.send(PermissionEvents.api.grantMultiple, {
         pluginId,
         permissionIds,
         grantedBy: 'user',
@@ -113,7 +102,7 @@ export function usePermission(pluginId: string) {
    */
   async function revokeAll(): Promise<boolean> {
     try {
-      const result = await sendChannel<{ success: boolean }>('permission:revoke-all', {
+      const result = await transport.send(PermissionEvents.api.revokeAll, {
         pluginId,
       })
       if (result?.success) {
@@ -143,9 +132,8 @@ export function usePermission(pluginId: string) {
 
   onMounted(() => {
     refresh()
-    unsubscribe = onChannel('permission:updated', (data: unknown) => {
-      const { pluginId: updatedPluginId } = data as { pluginId: string }
-      if (updatedPluginId === pluginId) {
+    unsubscribe = transport.on(PermissionEvents.push.updated, (payload) => {
+      if (payload?.pluginId === pluginId) {
         refresh()
       }
     })
@@ -177,13 +165,14 @@ export function usePermissionStatus(
   sdkapi: number | undefined,
   declared: { required: string[], optional: string[] },
 ) {
+  const transport = useTuffTransport()
   const status = ref<PluginPermissionStatus | null>(null)
   const loading = ref(true)
 
   async function refresh(): Promise<void> {
     loading.value = true
     try {
-      const result = await sendChannel<PluginPermissionStatus>('permission:get-status', {
+      const result = await transport.send(PermissionEvents.api.getStatus, {
         pluginId,
         sdkapi,
         required: declared.required,
@@ -224,13 +213,14 @@ export function usePermissionStatus(
  * Hook for getting permission registry (all available permissions)
  */
 export function usePermissionRegistry() {
+  const transport = useTuffTransport()
   const registry = ref<PermissionDefinition[]>([])
   const loading = ref(true)
 
   async function refresh(): Promise<void> {
     loading.value = true
     try {
-      const result = await sendChannel<PermissionDefinition[]>('permission:get-registry')
+      const result = await transport.send(PermissionEvents.api.getRegistry)
       registry.value = result || []
     }
     catch {
@@ -280,13 +270,14 @@ export function usePermissionRegistry() {
  * Hook for getting all plugin permissions
  */
 export function useAllPluginPermissions() {
+  const transport = useTuffTransport()
   const permissions = ref<Record<string, PermissionGrant[]>>({})
   const loading = ref(true)
 
   async function refresh(): Promise<void> {
     loading.value = true
     try {
-      const result = await sendChannel<Record<string, PermissionGrant[]>>('permission:get-all')
+      const result = await transport.send(PermissionEvents.api.getAll)
       permissions.value = result || {}
     }
     catch {
@@ -302,7 +293,7 @@ export function useAllPluginPermissions() {
 
   onMounted(() => {
     refresh()
-    unsubscribe = onChannel('permission:updated', () => {
+    unsubscribe = transport.on(PermissionEvents.push.updated, () => {
       refresh()
     })
   })

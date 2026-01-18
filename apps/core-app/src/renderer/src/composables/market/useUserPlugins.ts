@@ -1,9 +1,7 @@
 import type { MarketPlugin } from '@talex-touch/utils/market'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { computed, ref } from 'vue'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { getAuthToken, isAuthenticated } from '~/modules/market/auth-token-service'
-
-const NEXUS_URL = getTuffBaseUrl()
 
 export interface UserPluginStats {
   total: number
@@ -47,7 +45,8 @@ export function useUserPlugins() {
         return
       }
 
-      const response = await fetch(`${NEXUS_URL}/api/dashboard/plugins`, {
+      const baseUrl = getAuthBaseUrl()
+      const response = await fetch(`${baseUrl}/api/dashboard/plugins`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -65,7 +64,7 @@ export function useUserPlugins() {
       }
 
       const data = await response.json()
-      plugins.value = normalizePlugins(data.plugins || [])
+      plugins.value = normalizePlugins(data.plugins || [], baseUrl)
       lastUpdated.value = Date.now()
     } catch (err) {
       console.error('[useUserPlugins] Failed to load:', err)
@@ -75,7 +74,7 @@ export function useUserPlugins() {
     }
   }
 
-  function normalizePlugins(rawPlugins: any[]): MarketPlugin[] {
+  function normalizePlugins(rawPlugins: any[], baseUrl: string): MarketPlugin[] {
     return rawPlugins.map((plugin) => ({
       id: plugin.slug || plugin.id,
       name: plugin.name,
@@ -93,7 +92,7 @@ export function useUserPlugins() {
         homepage: plugin.homepage
       },
       readmeUrl: plugin.readmeMarkdown
-        ? `${NEXUS_URL}/api/market/plugins/${plugin.slug}/readme`
+        ? `${baseUrl}/api/market/plugins/${plugin.slug}/readme`
         : undefined,
       homepage: plugin.homepage ?? undefined,
       downloadUrl: plugin.latestVersion?.packageUrl ?? '',

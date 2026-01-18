@@ -25,14 +25,19 @@ const { installedPluginNames, installedPluginVersions } = usePluginVersionStatus
 
 const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
 const viewType = ref<'grid' | 'list'>('grid')
-const tabs = ref<'market' | 'installed'>(
-  route.path === '/market/installed' ? 'installed' : 'market'
-)
+const initialTab =
+  route.path === '/market/installed'
+    ? 'installed'
+    : route.path === '/market/docs'
+      ? 'docs'
+      : 'market'
+const tabs = ref<'market' | 'installed' | 'docs'>(initialTab)
 const searchKey = ref('')
 const sourcesState = marketSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
 
 const PluginInstalled = defineAsyncComponent(() => import('~/views/base/Plugin.vue'))
+const MarketDocs = defineAsyncComponent(() => import('~/views/base/market/MarketDocs.vue'))
 
 const providerStatsComputed = computed(() => {
   const stats = providerStats.value
@@ -118,6 +123,7 @@ onMounted(() => {
         @install="onInstall"
         @open-detail="openPluginDetail"
       />
+      <MarketDocs v-else-if="tabs === 'docs'" key="docs" class="flex-1 min-h-0" />
       <PluginInstalled v-else key="installed" class="flex-1 min-h-0" />
     </Transition>
   </div>

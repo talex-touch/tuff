@@ -2,16 +2,23 @@ import {
   preloadDebugStep,
   preloadLog,
   preloadRemoveOverlay,
-  preloadState,
+  preloadState
 } from '@talex-touch/utils/preload'
-import { initStorageChannel, isCoreBox, useTouchSDK } from '@talex-touch/utils/renderer'
-import { touchChannel } from '~/modules/channel/channel-core'
+import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
+import {
+  initStorageChannel,
+  initStorageTransport,
+  isCoreBox,
+  tryUseChannel
+} from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { appSetting } from '~/modules/channel/storage/index'
 import {
   shouldShowPlatformWarning,
-  showPlatformCompatibilityWarning,
+  showPlatformCompatibilityWarning
 } from '~/modules/mention/platform-warning'
 import { useCoreBox } from './core-box'
+import { useStartupInfo } from './useStartupInfo'
 import { useApplicationUpgrade } from './useUpdate'
 import { useUrlProcessor } from './useUrlProcessor'
 
@@ -51,8 +58,7 @@ export function useAppLifecycle() {
   async function start(): Promise<void> {
     if (isCoreBox()) {
       await executeCoreboxTask()
-    }
-    else {
+    } else {
       await executeMainTask()
     }
   }
@@ -63,39 +69,42 @@ export function useAppLifecycle() {
    */
   async function entry(onReady: () => Promise<void>): Promise<void> {
     try {
-      if (!window.$startupInfo) {
+      const { startupInfo, ensureStartupInfo } = useStartupInfo()
+      if (!startupInfo.value) {
         preloadDebugStep('Requesting startup handshake...', 0.05)
-        const res: IStartupInfo = touchChannel.sendSync('app-ready', {
-          rendererStartTime: performance.timeOrigin,
-        })
+        await ensureStartupInfo()
         preloadDebugStep('Startup handshake acknowledged', 0.05)
-        window.$startupInfo = res
-      }
-      else {
+      } else {
         preloadDebugStep('Using cached startup metadata', 0.02)
       }
 
       preloadDebugStep('Initializing Touch SDK and storage channels', 0.05)
-      useTouchSDK({ channel: touchChannel })
-      initStorageChannel(touchChannel)
+      const transport = useTuffTransport()
+      initStorageTransport(transport)
+      const channel = tryUseChannel()
+      const hasStorageChannel = (value: typeof channel): boolean =>
+        !!value && typeof value.sendSync === 'function' && typeof value.unRegChannel === 'function'
+      if (hasStorageChannel(channel)) {
+        initStorageChannel(channel as IStorageChannel)
+      }
 
       preloadDebugStep('Initializing Sentry...', 0.01)
       void (async () => {
         try {
           const { initSentryRenderer } = await import('~/modules/sentry/sentry-renderer')
           await initSentryRenderer()
-        }
-        catch (error) {
+        } catch (error) {
           console.warn('[useAppLifecycle] Failed to initialize Sentry', error)
         }
       })()
 
       void (async () => {
         try {
-          const { startRendererPerformanceTelemetry } = await import('~/modules/telemetry/performance')
+          const { startRendererPerformanceTelemetry } = await import(
+            '~/modules/telemetry/performance'
+          )
           await startRendererPerformanceTelemetry()
-        }
-        catch (error) {
+        } catch (error) {
           console.warn('[useAppLifecycle] Failed to start performance telemetry', error)
         }
       })()
@@ -111,8 +120,7 @@ export function useAppLifecycle() {
       await maybeShowPlatformWarning()
 
       await start()
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[useAppLifecycle] Initialization failed', error)
       preloadLog('Renderer initialization failed. Check console output.')
     }
@@ -122,7 +130,7 @@ export function useAppLifecycle() {
     entry,
     start,
     executeMainTask,
-    executeCoreboxTask,
+    executeCoreboxTask
   }
 }
 
@@ -138,15 +146,15 @@ async function maybeShowPlatformWarning(): Promise<void> {
     return
   }
 
-  const warningMessage = window.$startupInfo?.platformWarning
+  const { startupInfo } = useStartupInfo()
+  const warningMessage = startupInfo.value?.platformWarning
   if (!warningMessage) {
     return
   }
 
   try {
     await showPlatformCompatibilityWarning(warningMessage)
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('[useAppLifecycle] 显示平台警告失败', error)
   }
 }

@@ -11,6 +11,7 @@ export interface AppSdk {
   getCwd: () => Promise<string>
   getOS: () => Promise<unknown>
   getPackage: () => Promise<unknown>
+  getPath: (name: string) => Promise<string | null>
 
   openExternal: (url: string) => Promise<void>
   showInFolder: (path: string) => Promise<void>
@@ -30,6 +31,7 @@ export function createAppSdk(transport: ITuffTransport): AppSdk {
     getCwd: () => transport.send(AppEvents.system.getCwd),
     getOS: () => transport.send(AppEvents.system.getOS),
     getPackage: () => transport.send(AppEvents.system.getPackage),
+    getPath: name => transport.send(AppEvents.system.getPath, { name }),
 
     openExternal: url => transport.send(AppEvents.system.openExternal, { url }),
     showInFolder: path => transport.send(AppEvents.system.showInFolder, { path }),

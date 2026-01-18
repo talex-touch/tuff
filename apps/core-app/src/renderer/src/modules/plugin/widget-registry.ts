@@ -2,17 +2,27 @@ import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget
 import type { Component } from 'vue'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsChannel from '@talex-touch/utils/channel'
-import { DataCode } from '@talex-touch/utils/channel'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
 import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
 import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import * as Vue from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
-import { touchChannel } from '~/modules/channel/channel-core'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
+const transport = useTuffTransport()
+const widgetRegisterEvent = defineRawEvent<WidgetRegistrationPayload, { widgetId: string }>(
+  'plugin:widget:register'
+)
+const widgetUpdateEvent = defineRawEvent<WidgetRegistrationPayload, { widgetId: string }>(
+  'plugin:widget:update'
+)
+const widgetUnregisterEvent = defineRawEvent<{ widgetId: string }, { widgetId: string }>(
+  'plugin:widget:unregister'
+)
 
 // List of allowed packages that can be used in widgets
 const ALLOWED_PACKAGES = [
@@ -120,37 +130,31 @@ function injectStyles(widgetId: string, styles: string): void {
   injectedStyles.set(widgetId, style)
 }
 
-touchChannel.regChannel('plugin:widget:register', ({ data, reply }) => {
-  const payload = data as WidgetRegistrationPayload
-
+transport.on(widgetRegisterEvent, (payload) => {
   try {
     const component = evaluateWidgetComponent(payload.code, payload.dependencies || [])
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
-    reply(DataCode.SUCCESS, { widgetId: payload.widgetId })
+    return { widgetId: payload.widgetId }
   } catch (error) {
     console.error('[WidgetRegistry] Widget registration failed', error)
-    reply(DataCode.ERROR, { message: (error as Error).message })
+    throw error
   }
 })
 
-touchChannel.regChannel('plugin:widget:update', ({ data, reply }) => {
-  const payload = data as WidgetRegistrationPayload
-
+transport.on(widgetUpdateEvent, (payload) => {
   try {
     const component = evaluateWidgetComponent(payload.code, payload.dependencies || [])
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
-    reply(DataCode.SUCCESS, { widgetId: payload.widgetId })
+    return { widgetId: payload.widgetId }
   } catch (error) {
     console.error('[WidgetRegistry] Widget update failed', error)
-    reply(DataCode.ERROR, { message: (error as Error).message })
+    throw error
   }
 })
 
-touchChannel.regChannel('plugin:widget:unregister', ({ data, reply }) => {
-  const { widgetId } = data as { widgetId: string }
-
+transport.on(widgetUnregisterEvent, ({ widgetId }) => {
   try {
     unregisterCustomRenderer(widgetId)
     const style = injectedStyles.get(widgetId)
@@ -158,9 +162,9 @@ touchChannel.regChannel('plugin:widget:unregister', ({ data, reply }) => {
       style.remove()
       injectedStyles.delete(widgetId)
     }
-    reply(DataCode.SUCCESS, { widgetId })
+    return { widgetId }
   } catch (error) {
     console.error('[WidgetRegistry] Widget unregister failed', error)
-    reply(DataCode.ERROR, { message: (error as Error).message })
+    throw error
   }
 })

@@ -3,6 +3,8 @@ import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligenc
 import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -14,7 +16,6 @@ import TuffAsideList from '~/components/tuff/template/TuffAsideList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { getPromptManager } from '~/modules/hooks/usePromptManager'
 
@@ -22,7 +23,9 @@ type FilterMode = 'all' | 'builtin' | 'custom'
 
 const { t } = useI18n()
 const promptManager = getPromptManager()
-const aiClient = createIntelligenceClient(touchChannel as any)
+const transport = useTuffTransport()
+const openPromptsFolderEvent = defineRawEvent<void, void>('app:open-prompts-folder')
+const aiClient = createIntelligenceClient(transport)
 
 const { providers, capabilities } = useIntelligenceManager()
 
@@ -277,7 +280,7 @@ function handleOpenDocs(): void {
 
 async function handleOpenFolder(): Promise<void> {
   try {
-    await touchChannel.send('app:open-prompts-folder')
+    await transport.send(openPromptsFolderEvent)
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
   } catch (error) {
     console.error('[PromptManager] Failed to open folder', error)

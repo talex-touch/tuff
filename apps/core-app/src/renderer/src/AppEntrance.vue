@@ -4,6 +4,7 @@ import { Toaster } from 'vue-sonner'
 import { logAppEntranceMode } from './modules/devtools/app-entrance-log'
 import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
 import { useAppState } from './modules/hooks/useAppStates'
+import { useStartupInfo } from './modules/hooks/useStartupInfo'
 import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
 
@@ -19,6 +20,7 @@ const props = defineProps<{
 const init = ref(false)
 const { appStates } = useAppState()
 const { entry } = useAppLifecycle()
+const { startupInfo } = useStartupInfo()
 
 const isMetaOverlayMode = computed(() => {
   return window.$isMetaOverlay === true || isMetaOverlay()
@@ -30,8 +32,8 @@ setTimeout(async () => {
   logAppEntranceMode(
     mode,
     {
-      startupInfoId: window.$startupInfo?.id,
-      platform: window.$startupInfo?.platform
+      startupInfoId: startupInfo.value?.id,
+      platform: startupInfo.value?.platform
     },
     { onceKey: `appentrance:${mode}` }
   )

@@ -1,6 +1,7 @@
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { WebContentsView } from 'electron'
 import type { TouchPlugin } from '../../plugin/plugin'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('ViewCache')
@@ -30,6 +31,8 @@ export class ViewCacheManager {
   private static instance: ViewCacheManager
   private cache = new Map<string, CachedView>()
   private config: ViewCacheConfig = { ...DEFAULT_CONFIG }
+  private readonly pollingService = PollingService.getInstance()
+  private readonly cleanupTaskId = 'core-box.view-cache.cleanup'
 
   private constructor() {}
 
@@ -50,6 +53,22 @@ export class ViewCacheManager {
     log.debug(
       `Config updated: maxCachedViews=${this.config.maxCachedViews}, hotCacheDurationMs=${this.config.hotCacheDurationMs}`
     )
+    this.ensureCleanupTask()
+  }
+
+  private ensureCleanupTask(): void {
+    const enabled = this.config.maxCachedViews > 0
+    if (!enabled) {
+      this.pollingService.unregister(this.cleanupTaskId)
+      return
+    }
+
+    const intervalMs = Math.max(Math.floor(this.config.hotCacheDurationMs / 2), 30_000)
+    this.pollingService.register(this.cleanupTaskId, () => this.cleanupStale(), {
+      interval: intervalMs,
+      unit: 'milliseconds'
+    })
+    this.pollingService.start()
   }
 
   private getCacheKey(plugin: TouchPlugin, feature?: IPluginFeature): string {
@@ -165,6 +184,7 @@ export class ViewCacheManager {
     })
 
     log.debug(`Cached view: ${key} (total: ${this.cache.size})`)
+    this.ensureCleanupTask()
   }
 
   public release(plugin: TouchPlugin, feature?: IPluginFeature): void {
