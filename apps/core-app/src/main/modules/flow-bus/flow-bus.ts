@@ -16,6 +16,7 @@ import type {
 } from '@talex-touch/utils'
 import { FlowErrorCode } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { flowConsentStore, requiresFlowConsent } from './flow-consent'
 import { flowSessionManager } from './session-manager'
 import { flowTargetRegistry } from './target-registry'
 
@@ -208,6 +209,29 @@ export class FlowBus {
           sessionId: session.sessionId,
           state: 'FAILED',
           error: updatedSession.error
+        }
+      }
+    }
+
+    const consentToken = options.consentToken
+    if (requiresFlowConsent(senderId, targetInfo)) {
+      const hasConsent = flowConsentStore.hasConsent(senderId, targetInfo.fullId)
+      const allowOnce = consentToken
+        ? flowConsentStore.consumeOnce(senderId, targetInfo.fullId, consentToken)
+        : false
+      if (!hasConsent && !allowOnce) {
+        flowSessionManager.setError(session.sessionId, {
+          code: FlowErrorCode.PERMISSION_DENIED,
+          message: 'Flow consent required',
+          details: {
+            senderId,
+            targetId: targetInfo.fullId
+          }
+        })
+        return {
+          sessionId: session.sessionId,
+          state: 'FAILED',
+          error: flowSessionManager.getSession(session.sessionId)?.error
         }
       }
     }

@@ -1,15 +1,16 @@
 import { storages } from '@talex-touch/utils/renderer'
 import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
 import { openersStorage } from '@talex-touch/utils/renderer/storage/openers'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { reactive, toRaw, unref } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { AccountStorage } from '~/modules/channel/storage/accounter'
 import '~/modules/channel/storage/base'
 
 /**
  * StorageManager handles the reactive data storages of the app,
  * such as theme settings, application preferences, and user accounts.
- * It also ensures data persistence through touchChannel sync and save operations.
+ * It also ensures data persistence through transport-based sync and save operations.
  *
  * @example
  * ```ts
@@ -20,7 +21,7 @@ import '~/modules/channel/storage/base'
 /**
  * StorageManager handles the reactive data storages of the app,
  * such as theme settings and user accounts.
- * It also ensures data persistence through touchChannel sync and save operations.
+ * It also ensures data persistence through transport-based sync and save operations.
  *
  * @example
  * ```ts
@@ -34,6 +35,7 @@ export class StorageManager {
 
   /** Reactive user account information */
   account: AccountStorage
+  private transport = useTuffTransport()
 
   constructor() {
     this.account = reactive(new AccountStorage())
@@ -43,7 +45,7 @@ export class StorageManager {
   private async loadAccountFromStorage(): Promise<void> {
     const startAt = performance.now()
     try {
-      const data = await touchChannel.send('storage:get', 'account.ini')
+      const data = await this.transport.send(StorageEvents.app.get, { key: 'account.ini' })
       this.account.analyzeFromObj(data)
     } catch (error) {
       console.warn('[StorageManager] Failed to load account storage:', error)
@@ -69,7 +71,7 @@ export class StorageManager {
    * ```
    */
   async _save(name: string, data: object, clear: boolean = false): Promise<void> {
-    await touchChannel.send('storage:save', {
+    await this.transport.send(StorageEvents.app.save, {
       key: name,
       value: toRaw(unref(data) as object),
       clear

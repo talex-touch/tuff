@@ -1,25 +1,27 @@
 import { packageJson } from 'talex-touch:information'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useAppSdk } from '@talex-touch/utils/renderer'
+
+const appSdk = useAppSdk()
 
 export class BaseNodeApi {
   close() {
-    return touchChannel.send('close')
+    return appSdk.close()
   }
 
   hide() {
-    return touchChannel.send('hide')
+    return appSdk.hide()
   }
 
   minimize() {
-    return touchChannel.send('minimize')
+    return appSdk.minimize()
   }
 
   openDevTools() {
-    return touchChannel.send('dev-tools')
+    return appSdk.openDevTools()
   }
 
   openExternal(url: string) {
-    return touchChannel.send('open-external', { url })
+    return appSdk.openExternal(url)
   }
 
   getPackageJSON() {
@@ -27,11 +29,15 @@ export class BaseNodeApi {
   }
 
   getOS() {
-    return touchChannel.sendSync('get-os')
+    return appSdk.getOS()
   }
 
   getCWD() {
-    return touchChannel.sendSync('common:cwd')
+    return appSdk.getCwd()
+  }
+
+  getPath(name: string) {
+    return appSdk.getPath(name)
   }
 }
 

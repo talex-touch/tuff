@@ -4,32 +4,32 @@ import type {
   LoginOptions,
   LoginResult
 } from '@talex-touch/utils/renderer'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
-import { useAuthState, useClerkProvider, useCurrentUser } from '@talex-touch/utils/renderer'
+import {
+  useAppSdk,
+  useAuthState,
+  useClerkProvider,
+  useCurrentUser
+} from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { SentryEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
-import { touchChannel } from '../channel/channel-core'
+import {
+  DEV_AUTH_STORAGE_KEY,
+  clearAppAuthToken,
+  getAuthBaseUrl,
+  isLocalAuthMode,
+  setAppAuthToken
+} from './auth-env'
 import { appSetting } from '../channel/storage/index'
 
 let eventListenerCleanup: (() => void) | null = null
 let authCallbackCleanup: (() => void) | null = null
 let isInitialized = false
 let activeConsumers = 0
-
-const NEXUS_URL_LOCAL = 'http://localhost:3200'
-const DEV_AUTH_STORAGE_KEY = 'tuff-dev-auth-user'
-
-function isLocalAuthMode(): boolean {
-  return import.meta.env.DEV && appSetting?.dev?.authServer === 'local'
-}
-
-function getNexusUrl(): string {
-  // In dev mode, check appSetting for auth server preference
-  if (isLocalAuthMode()) {
-    return NEXUS_URL_LOCAL
-  }
-  return getTuffBaseUrl()
-}
+const transport = useTuffTransport()
+const appSdk = useAppSdk()
 
 function buildLocalUser(token?: string): ClerkUser {
   const now = new Date().toISOString()
@@ -187,7 +187,6 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
   // Notify Sentry about user context change (async, don't block)
   void (async () => {
     try {
-      const { touchChannel } = await import('~/modules/channel/channel-core')
       // Notify main process Sentry - only send serializable data
       const safeUser = authState.user
         ? {
@@ -198,7 +197,7 @@ function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
             }))
           }
         : null
-      await touchChannel.send('sentry:update-user', { user: safeUser })
+      await transport.send(SentryEvents.api.updateUser, { user: safeUser })
       // Notify renderer process Sentry
       try {
         const { updateSentryUserContext } = await import('~/modules/sentry/sentry-renderer')
@@ -339,6 +338,7 @@ async function signOut() {
     authState.user = null
     authState.sessionId = null
     clearLocalAuthUser()
+    clearAppAuthToken()
     return
   }
 
@@ -359,6 +359,7 @@ async function signOut() {
     authState.isSignedIn = false
     authState.user = null
     authState.sessionId = null
+    clearAppAuthToken()
   } catch (error) {
     console.error('Sign out failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
@@ -536,6 +537,8 @@ async function logout(): Promise<void> {
     console.error('Logout failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
     toast.error(errorMessage)
+  } finally {
+    clearAppAuthToken()
   }
 }
 
@@ -564,9 +567,9 @@ async function loginWithBrowser(): Promise<LoginResult> {
     pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId }
 
     // Open browser to Nexus sign-in with app callback redirect
-    const nexusUrl = getNexusUrl()
+    const nexusUrl = getAuthBaseUrl()
     const signInUrl = `${nexusUrl}/sign-in?redirect_url=/auth/app-callback`
-    touchChannel.send('open-external', { url: signInUrl }).catch((err) => {
+    appSdk.openExternal(signInUrl).catch((err) => {
       console.error('[useAuth] Failed to open browser:', err)
       clearTimeout(timeoutId)
       pendingBrowserLogin.value = null
@@ -582,17 +585,27 @@ async function loginWithBrowser(): Promise<LoginResult> {
 /**
  * Handle external auth callback from tuff:// protocol
  */
-async function handleExternalAuthCallback(token: string): Promise<void> {
-  console.log('[useAuth] Handling external auth callback, token length:', token.length)
+async function handleExternalAuthCallback(token: string, appToken?: string): Promise<void> {
+  if (token) {
+    console.log('[useAuth] Handling external auth callback, token length:', token.length)
+  }
+  if (appToken) {
+    console.log('[useAuth] Handling external auth callback, app token length:', appToken.length)
+  }
 
   if (!pendingBrowserLogin.value) {
     console.warn('[useAuth] Received auth callback but no pending login')
     // Still try to use the token
   }
 
+  const resolvedAppToken = appToken && appToken.length > 0 ? appToken : null
+  if (resolvedAppToken) {
+    setAppAuthToken(resolvedAppToken)
+  }
+
   try {
     if (isLocalAuthMode()) {
-      applyLocalAuth(token)
+      applyLocalAuth(resolvedAppToken || token)
       authLoadingState.loginProgress = 100
       toast.success('登录成功')
 
@@ -605,6 +618,10 @@ async function handleExternalAuthCallback(token: string): Promise<void> {
         pendingBrowserLogin.value = null
       }
       return
+    }
+
+    if (!token) {
+      throw new Error('Missing sign-in token')
     }
 
     // Use the token to authenticate with Clerk
@@ -668,9 +685,14 @@ async function handleExternalAuthCallback(token: string): Promise<void> {
 function setupAuthCallbackListener(): void {
   if (authCallbackCleanup) return
 
-  authCallbackCleanup = touchChannel.regChannel('auth:external-callback', ({ data }) => {
-    if (data?.token) {
-      handleExternalAuthCallback(data.token)
+  const authCallbackEvent = defineRawEvent<{ token?: string; appToken?: string }, void>(
+    'auth:external-callback'
+  )
+  authCallbackCleanup = transport.on(authCallbackEvent, (payload) => {
+    const token = payload?.token || ''
+    const appToken = payload?.appToken || ''
+    if (token || appToken) {
+      handleExternalAuthCallback(token, appToken)
     }
   })
 

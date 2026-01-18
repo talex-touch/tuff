@@ -42,11 +42,17 @@ const schemaHandlers: SchemaHandler[] = [
   {
     pattern: /^\/auth\/callback/,
     handler: (url) => {
-      const token = url.searchParams.get('token')
-      if (token) {
-        console.log('[Addon] Auth callback received, token length:', token.length)
+      const token = url.searchParams.get('token') || ''
+      const appToken = url.searchParams.get('app_token') || ''
+      if (token || appToken) {
+        if (token) {
+          console.log('[Addon] Auth callback received, token length:', token.length)
+        }
+        if (appToken) {
+          console.log('[Addon] Auth callback received, app token length:', appToken.length)
+        }
         const touchChannel = genTouchChannel()
-        touchChannel.send(ChannelType.MAIN, 'auth:external-callback', { token })
+        touchChannel.send(ChannelType.MAIN, 'auth:external-callback', { token, appToken })
       } else {
         console.warn('[Addon] Auth callback received without token')
       }

@@ -1,6 +1,7 @@
 <script lang="ts" name="AppUpgradationView" setup>
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import FlatButton from '~/components/base/button//FlatButton.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
@@ -14,13 +15,14 @@ const props = defineProps({
 const emit = defineEmits(['updateNow', 'skipVersion', 'remindLater'])
 const close = inject<() => void>('destroy')
 const { t } = useI18n()
+const appSdk = useAppSdk()
 /**
  * 打开更新页面的外部链接
  *
  * 使用系统默认浏览器打开 GitHub Release 页面
  */
 function upgrade(): void {
-  window.$nodeApi.openExternal(props.release.html_url)
+  void appSdk.openExternal(props.release.html_url)
 }
 
 function handleUpdateNow(): void {

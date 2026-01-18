@@ -1,3 +1,7 @@
+import type { TxIconSource } from '../../icon'
+
+type IconValue = TxIconSource | string | null | undefined
+
 /**
  * Props interface for the TxGroupBlock component.
  *
@@ -10,28 +14,26 @@ export interface GroupBlockProps {
   name: string
 
   /**
-   * Icon class name to display in the header.
-   * @default ''
-   */
-  icon?: string
-
-  /**
    * Description text displayed below the name.
    * @default ''
    */
   description?: string
 
   /**
-   * Whether to use filled icon style when expanded.
-   * @default false
+   * Default icon to display in the header.
    */
-  expandFill?: boolean
+  defaultIcon?: IconValue
 
   /**
-   * Whether the group block starts in collapsed state.
-   * @default false
+   * Active icon to display when expanded.
    */
-  shrink?: boolean
+  activeIcon?: IconValue
+
+  /**
+   * Header icon size in pixels.
+   * @default 22
+   */
+  iconSize?: number
 
   /**
    * Whether the block can be toggled.
@@ -56,6 +58,24 @@ export interface GroupBlockProps {
    * Persist expanded state in localStorage.
    */
   memoryName?: string
+
+  /**
+   * Legacy icon class name (alias for defaultIcon).
+   * @deprecated Use defaultIcon instead.
+   */
+  icon?: string
+
+  /**
+   * Legacy filled icon toggle (kept for compatibility).
+   * @deprecated Use activeIcon instead.
+   */
+  expandFill?: boolean
+
+  /**
+   * Legacy collapsed state (alias for collapsed).
+   * @deprecated Use collapsed/defaultExpand instead.
+   */
+  shrink?: boolean
 }
 
 /**
@@ -73,7 +93,7 @@ export interface GroupBlockEmits {
   /**
    * Emitted when the header is clicked.
    */
-  (e: 'toggle', expanded?: boolean): void
+  (e: 'toggle', expanded: boolean): void
 }
 
 /**
@@ -123,23 +143,46 @@ export interface BlockSlotProps {
   /**
    * The title text of the block slot.
    */
-  title: string
+  title?: string
 
   /**
    * The description text displayed below the title.
    */
-  description: string
+  description?: string
 
   /**
-   * Icon class name to display.
+   * Default icon to display.
    */
-  icon: string
+  defaultIcon?: IconValue
+
+  /**
+   * Active icon to display when active.
+   */
+  activeIcon?: IconValue
+
+  /**
+   * Header icon size in pixels.
+   * @default 20
+   */
+  iconSize?: number
+
+  /**
+   * Whether the block slot is active.
+   * @default false
+   */
+  active?: boolean
 
   /**
    * Whether the block slot is disabled.
    * @default false
    */
   disabled?: boolean
+
+  /**
+   * Legacy icon class name (alias for defaultIcon).
+   * @deprecated Use defaultIcon instead.
+   */
+  icon?: string
 }
 
 /**
@@ -177,9 +220,14 @@ export interface BlockSwitchProps {
   modelValue: boolean
 
   /**
-   * Icon class name to display.
+   * Default icon to display.
    */
-  icon: string
+  defaultIcon?: IconValue
+
+  /**
+   * Active icon to display when active.
+   */
+  activeIcon?: IconValue
 
   /**
    * Whether the block switch is disabled.
@@ -192,6 +240,18 @@ export interface BlockSwitchProps {
    * @default false
    */
   guidance?: boolean
+
+  /**
+   * Whether to show loading state.
+   * @default false
+   */
+  loading?: boolean
+
+  /**
+   * Legacy icon class name (alias for defaultIcon).
+   * @deprecated Use defaultIcon instead.
+   */
+  icon?: string
 }
 
 /**
@@ -211,4 +271,10 @@ export interface BlockSwitchEmits {
    * @param value - The new switch value
    */
   (e: 'change', value: boolean): void
+
+  /**
+   * Emitted when the block is clicked in guidance mode.
+   * @param event - The mouse event
+   */
+  (e: 'click', event: MouseEvent): void
 }

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 
 interface PackageJson {
   name: string
@@ -43,9 +44,28 @@ declare global {
 }
 
 export function useEnv() {
-  const packageJson = ref<PackageJson>(window.$nodeApi.getPackageJSON())
-  const os = ref<OSInfo>(window.$nodeApi.getOS())
+  const appSdk = useAppSdk()
+  const packageJson = ref<PackageJson | null>(null)
+  const os = ref<OSInfo | null>(null)
   const processInfo = ref<NodeProcess>({ ...window.process })
+
+  void appSdk
+    .getPackage()
+    .then((pkg) => {
+      packageJson.value = pkg as PackageJson
+    })
+    .catch((error) => {
+      console.warn('[useEnv] Failed to load package info:', error)
+    })
+
+  void appSdk
+    .getOS()
+    .then((info) => {
+      os.value = info as OSInfo
+    })
+    .catch((error) => {
+      console.warn('[useEnv] Failed to load OS info:', error)
+    })
 
   return { packageJson, os, processInfo }
 }
@@ -58,8 +78,7 @@ export function useCPUUsage() {
   function running() {
     value.value = window.process.getCPUUsage()
 
-    if (!cancel)
-      setTimeout(running, 1000)
+    if (!cancel) setTimeout(running, 1000)
   }
 
   running()
@@ -75,8 +94,7 @@ export function useMemoryUsage() {
   function running() {
     value.value = window.process.memoryUsage()
 
-    if (!cancel)
-      setTimeout(running, 1000)
+    if (!cancel) setTimeout(running, 1000)
   }
 
   running()

@@ -1,4 +1,7 @@
-import { touchChannel } from '../channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
+
+const transport = useTuffTransport()
 
 interface Token {
   access_token: string
@@ -58,14 +61,10 @@ export class AccountStorage {
   }
 
   analyzeFromObj(data: any): void {
-    if (!data)
-      return
-    if (data.user)
-      this.user = data.user
-    if (data.token)
-      this.token = data.token
-    if (data.eller)
-      this.eller = data.eller
+    if (!data) return
+    if (data.user) this.user = data.user
+    if (data.token) this.token = data.token
+    if (data.eller) this.eller = data.eller
 
     setTimeout(() => this.__save())
   }
@@ -73,10 +72,10 @@ export class AccountStorage {
   __save(): void {
     const { user, eller, token } = this
 
-    touchChannel.send('storage:save', {
+    void transport.send(StorageEvents.app.save, {
       key: 'account.ini',
       content: JSON.stringify({ user, eller, token }),
-      clear: false,
+      clear: false
     })
   }
 
@@ -88,14 +87,14 @@ export class AccountStorage {
       JSON.stringify({
         user,
         eller,
-        token,
-      }),
+        token
+      })
     )
 
     return JSON.stringify({
       user,
       eller,
-      token,
+      token
     })
   }
 }

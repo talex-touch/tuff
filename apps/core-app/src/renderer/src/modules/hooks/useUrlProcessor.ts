@@ -1,9 +1,14 @@
 import { isLocalhostUrl } from '@talex-touch/utils'
-import { DataCode } from '@talex-touch/utils/channel'
-import { touchChannel } from '../channel/channel-core'
+import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { forTouchTip } from '../mention/dialog-mention'
 
 export async function useUrlProcessor(): Promise<void> {
+  const transport = useTuffTransport()
+  const appSdk = useAppSdk()
+  const urlOpenEvent = defineRawEvent<string, boolean>('url:open')
+
   function directListener(event: Event): void {
     const target = event.target as HTMLElement
 
@@ -20,9 +25,9 @@ export async function useUrlProcessor(): Promise<void> {
         !isLocalhostUrl(url) && !url.startsWith(window.location.origin) && !url.startsWith('/')
 
       if (isExternal) {
-        touchChannel.send('open-external', { url })
+        void appSdk.openExternal(url)
       } else {
-        touchChannel.send('url:open', url)
+        void transport.send(urlOpenEvent, url)
       }
 
       // if(/^\//.test(target)) {
@@ -45,31 +50,41 @@ export async function useUrlProcessor(): Promise<void> {
 
   document.body.addEventListener('click', directListener)
 
-  touchChannel.regChannel('url:open', async ({ data, reply }) => {
-    const url = data as string
-
-    if (isLocalhostUrl(url)) {
-      reply(DataCode.SUCCESS, false)
-      return
+  transport.on(urlOpenEvent, async (url) => {
+    if (typeof url !== 'string') {
+      return false
     }
 
-    await forTouchTip('Allow to open external link?', url, [
-      {
-        content: 'Cancel',
-        type: 'info',
-        onClick: async () => {
-          reply(DataCode.SUCCESS, false)
-          return true
-        }
-      },
-      {
-        content: 'Sure',
-        type: 'danger',
-        onClick: async () => {
-          reply(DataCode.SUCCESS, true)
-          return true
-        }
+    if (isLocalhostUrl(url)) {
+      return false
+    }
+
+    return await new Promise<boolean>((resolve) => {
+      let resolved = false
+      const finish = (allowed: boolean) => {
+        if (resolved) return
+        resolved = true
+        resolve(allowed)
       }
-    ])
+
+      void forTouchTip('Allow to open external link?', url, [
+        {
+          content: 'Cancel',
+          type: 'info',
+          onClick: async () => {
+            finish(false)
+            return true
+          }
+        },
+        {
+          content: 'Sure',
+          type: 'danger',
+          onClick: async () => {
+            finish(true)
+            return true
+          }
+        }
+      ])
+    })
   })
 }

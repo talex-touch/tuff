@@ -2,7 +2,6 @@ import type { Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { nextTick } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 
 interface UseFocusOptions {
   boxInputRef: Ref<any>
@@ -22,7 +21,7 @@ export function useFocus(options: UseFocusOptions) {
     try {
       await transport.send(CoreBoxEvents.ui.focusWindow)
     } catch {
-      await touchChannel.send('core-box:focus-window')
+      // ignore focus errors
     }
     await nextTick()
     boxInputRef.value?.focus?.()

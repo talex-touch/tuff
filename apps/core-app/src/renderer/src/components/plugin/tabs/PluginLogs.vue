@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
-import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ElTooltip } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -30,8 +31,26 @@ const props = defineProps<{
   plugin: ITouchPlugin
 }>()
 
-const touchSdk = useTouchSDK()
+const transport = useTuffTransport()
 const { t } = useI18n()
+
+const pluginLogEvents = {
+  subscribe: defineRawEvent<{ pluginName: string }, void>('plugin-log:subscribe'),
+  unsubscribe: defineRawEvent<{ pluginName: string }, void>('plugin-log:unsubscribe'),
+  getSessionLog: defineRawEvent<{ pluginName: string; session: string }, LogItem[]>(
+    'plugin-log:get-session-log'
+  ),
+  getBuffer: defineRawEvent<{ pluginName: string }, LogItem[]>('plugin-log:get-buffer'),
+  getSessions: defineRawEvent<
+    { pluginName: string; page: number; pageSize: number },
+    SessionResponse
+  >('plugin-log:get-sessions'),
+  openSessionFile: defineRawEvent<{ pluginName: string; session: string }, void>(
+    'plugin-log:open-session-file'
+  ),
+  openLogDirectory: defineRawEvent<{ pluginName: string }, void>('plugin-log:open-log-directory'),
+  stream: defineRawEvent<LogItem, void>('plugin-log-stream')
+}
 
 const isHistoryDrawerOpen = ref(false)
 const sessions = ref<LogSessionMeta[]>([])
@@ -274,7 +293,7 @@ function cleanup(): void {
   const pluginName = currentPluginName.value
   if (!pluginName) return
   detachStream()
-  void touchSdk.rawChannel.send('plugin-log:unsubscribe', { pluginName })
+  void transport.send(pluginLogEvents.unsubscribe, { pluginName })
   currentPluginName.value = null
   sessions.value = []
   sessionCache.value = {}
@@ -296,13 +315,10 @@ async function readSessionLogs(
 
     if (meta?.hasLogFile) {
       try {
-        const sessionLogs: LogItem[] = await touchSdk.rawChannel.send(
-          'plugin-log:get-session-log',
-          {
-            pluginName,
-            session: sessionId
-          }
-        )
+        const sessionLogs: LogItem[] = await transport.send(pluginLogEvents.getSessionLog, {
+          pluginName,
+          session: sessionId
+        })
         chunks.push(...sessionLogs)
       } catch (error) {
         console.warn('[PluginLogs] Failed to load session log:', error)
@@ -311,7 +327,7 @@ async function readSessionLogs(
 
     if (options?.includeBuffer) {
       try {
-        const buffer: LogItem[] = await touchSdk.rawChannel.send('plugin-log:get-buffer', {
+        const buffer: LogItem[] = await transport.send(pluginLogEvents.getBuffer, {
           pluginName
         })
         chunks.push(...buffer)
@@ -333,7 +349,7 @@ async function fetchSessions(
 ): Promise<void> {
   const targetPage = options?.page ?? currentPage.value
   try {
-    const response: SessionResponse = await touchSdk.rawChannel.send('plugin-log:get-sessions', {
+    const response: SessionResponse = await transport.send(pluginLogEvents.getSessions, {
       pluginName,
       page: targetPage,
       pageSize: pageSize.value
@@ -392,8 +408,8 @@ async function refreshSessions(options?: {
 
 function attachStream(pluginName: string): void {
   detachStream()
-  void touchSdk.rawChannel.send('plugin-log:subscribe', { pluginName })
-  unsubscribeLogStream = touchSdk.onChannelEvent('plugin-log-stream', (log: LogItem) => {
+  void transport.send(pluginLogEvents.subscribe, { pluginName })
+  unsubscribeLogStream = transport.on(pluginLogEvents.stream, (log) => {
     handleLogStream(log)
   })
 }
@@ -447,7 +463,7 @@ async function selectSession(
 
 function openSelectedSessionFile(): void {
   if (!currentPluginName.value || !selectedSessionId.value || !canOpenLogFile.value) return
-  void touchSdk.rawChannel.send('plugin-log:open-session-file', {
+  void transport.send(pluginLogEvents.openSessionFile, {
     pluginName: currentPluginName.value,
     session: selectedSessionId.value
   })
@@ -455,7 +471,7 @@ function openSelectedSessionFile(): void {
 
 function openLogDirectory(): void {
   if (!currentPluginName.value || !canOpenLogDirectory.value) return
-  void touchSdk.rawChannel.send('plugin-log:open-log-directory', {
+  void transport.send(pluginLogEvents.openLogDirectory, {
     pluginName: currentPluginName.value
   })
 }

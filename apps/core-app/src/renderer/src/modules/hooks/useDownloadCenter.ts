@@ -1,7 +1,6 @@
 import type { DownloadRequest, DownloadTask } from '@talex-touch/utils'
 import { DownloadPriority, DownloadStatus } from '@talex-touch/utils'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { DownloadEvents } from '@talex-touch/utils/transport/events'
+import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 /**
@@ -12,8 +11,17 @@ export function useDownloadCenter() {
   const downloadTasks = ref<DownloadTask[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
-  const transport = useTuffTransport()
+  const downloadSdk = useDownloadSdk()
   const transportDisposers: Array<() => void> = []
+  const isDev = import.meta.env.DEV
+
+  const shouldHideTask = (task: DownloadTask): boolean => {
+    return !isDev && Boolean(task.metadata?.hidden)
+  }
+
+  const filterVisibleTasks = (tasks: DownloadTask[]): DownloadTask[] => {
+    return tasks.filter((task) => !shouldHideTask(task))
+  }
 
   /**
    * Add a new download task
@@ -25,7 +33,7 @@ export function useDownloadCenter() {
       loading.value = true
       error.value = null
 
-      const response = await transport.send(DownloadEvents.task.add, request)
+      const response = await downloadSdk.addTask(request)
 
       if (response.success) {
         return response.taskId || ''
@@ -47,7 +55,7 @@ export function useDownloadCenter() {
    */
   const pauseTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.pause, { taskId })
+      const response = await downloadSdk.pauseTask({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to pause task')
@@ -65,7 +73,7 @@ export function useDownloadCenter() {
    */
   const resumeTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.resume, { taskId })
+      const response = await downloadSdk.resumeTask({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to resume task')
@@ -83,7 +91,7 @@ export function useDownloadCenter() {
    */
   const cancelTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.cancel, { taskId })
+      const response = await downloadSdk.cancelTask({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to cancel task')
@@ -100,10 +108,10 @@ export function useDownloadCenter() {
    */
   const getAllTasks = async (): Promise<DownloadTask[]> => {
     try {
-      const response = await transport.send(DownloadEvents.list.getAll)
+      const response = await downloadSdk.getAllTasks()
 
       if (response.success) {
-        const tasks = response.tasks || []
+        const tasks = filterVisibleTasks(response.tasks || [])
         downloadTasks.value = tasks
         return tasks
       } else {
@@ -127,7 +135,7 @@ export function useDownloadCenter() {
    */
   const getTaskStatus = async (taskId: string): Promise<DownloadTask | null> => {
     try {
-      const response = await transport.send(DownloadEvents.task.getStatus, { taskId })
+      const response = await downloadSdk.getTaskStatus({ taskId })
 
       if (response.success) {
         return response.task ?? null
@@ -147,7 +155,7 @@ export function useDownloadCenter() {
    */
   const updateConfig = async (config: any): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.config.update, { config } as any)
+      const response = await downloadSdk.updateConfig({ config } as any)
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to update config')
@@ -165,7 +173,7 @@ export function useDownloadCenter() {
    */
   const retryTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.retry, { taskId })
+      const response = await downloadSdk.retryTask({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to retry task')
@@ -182,7 +190,7 @@ export function useDownloadCenter() {
    */
   const pauseAllTasks = async (): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.pauseAll)
+      const response = await downloadSdk.pauseAll()
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to pause all tasks')
@@ -199,7 +207,7 @@ export function useDownloadCenter() {
    */
   const resumeAllTasks = async (): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.resumeAll)
+      const response = await downloadSdk.resumeAll()
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to resume all tasks')
@@ -216,7 +224,7 @@ export function useDownloadCenter() {
    */
   const cancelAllTasks = async (): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.cancelAll)
+      const response = await downloadSdk.cancelAll()
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to cancel all tasks')
@@ -234,7 +242,7 @@ export function useDownloadCenter() {
    */
   const openFile = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.file.open, { taskId })
+      const response = await downloadSdk.openFile({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to open file')
@@ -252,7 +260,7 @@ export function useDownloadCenter() {
    */
   const showInFolder = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.file.showInFolder, { taskId })
+      const response = await downloadSdk.showInFolder({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to show in folder')
@@ -270,7 +278,7 @@ export function useDownloadCenter() {
    */
   const deleteFile = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.file.delete, { taskId })
+      const response = await downloadSdk.deleteFile({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to delete file')
@@ -294,7 +302,7 @@ export function useDownloadCenter() {
    */
   const removeTask = async (taskId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.remove, { taskId })
+      const response = await downloadSdk.removeTask({ taskId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to remove task')
@@ -319,7 +327,7 @@ export function useDownloadCenter() {
    */
   const updateTaskPriority = async (taskId: string, priority: number): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.task.updatePriority, {
+      const response = await downloadSdk.updatePriority({
         taskId,
         priority
       })
@@ -346,7 +354,7 @@ export function useDownloadCenter() {
    */
   const getHistory = async (limit?: number): Promise<any[]> => {
     try {
-      const response = await transport.send(DownloadEvents.history.get, { limit })
+      const response = await downloadSdk.getHistory(limit ? { limit } : undefined)
 
       if (response.success) {
         return response.history || []
@@ -365,7 +373,7 @@ export function useDownloadCenter() {
    */
   const clearHistory = async (): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.history.clear)
+      const response = await downloadSdk.clearHistory()
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear history')
@@ -383,7 +391,7 @@ export function useDownloadCenter() {
    */
   const clearHistoryItem = async (historyId: string): Promise<void> => {
     try {
-      const response = await transport.send(DownloadEvents.history.clearItem, { historyId })
+      const response = await downloadSdk.clearHistoryItem({ historyId })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear history item')
@@ -399,6 +407,9 @@ export function useDownloadCenter() {
    * @param task - The task to update
    */
   const updateTaskInList = (task: DownloadTask): void => {
+    if (shouldHideTask(task)) {
+      return
+    }
     const index = downloadTasks.value.findIndex((t) => t.id === task.id)
     if (index !== -1) {
       downloadTasks.value[index] = task
@@ -412,11 +423,11 @@ export function useDownloadCenter() {
    */
   const setupEventListeners = (): void => {
     transportDisposers.push(
-      transport.on(DownloadEvents.push.taskAdded, (task) => updateTaskInList(task)),
-      transport.on(DownloadEvents.push.taskProgress, (task) => updateTaskInList(task)),
-      transport.on(DownloadEvents.push.taskCompleted, (task) => updateTaskInList(task)),
-      transport.on(DownloadEvents.push.taskFailed, (task) => updateTaskInList(task)),
-      transport.on(DownloadEvents.push.taskUpdated, (task) => updateTaskInList(task))
+      downloadSdk.onTaskAdded((task) => updateTaskInList(task)),
+      downloadSdk.onTaskProgress((task) => updateTaskInList(task)),
+      downloadSdk.onTaskCompleted((task) => updateTaskInList(task)),
+      downloadSdk.onTaskFailed((task) => updateTaskInList(task)),
+      downloadSdk.onTaskUpdated((task) => updateTaskInList(task))
     )
   }
 

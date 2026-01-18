@@ -121,13 +121,14 @@ export function useDetach(options: UseDetachOptions) {
     flowSessionId.value = ''
   }
 
-  async function dispatchFlow(targetId: string): Promise<void> {
+  async function dispatchFlow(payload: { targetId: string; consentToken?: string }): Promise<void> {
     if (!flowPayload.value) return
     try {
+      const { targetId, consentToken } = payload
       const response = await transport.send(FlowEvents.dispatch, {
         senderId: 'corebox',
         payload: flowPayload.value,
-        options: { preferredTarget: targetId, skipSelector: true }
+        options: { preferredTarget: targetId, skipSelector: true, consentToken }
       })
       if (response?.success) {
         toast.success(t('corebox.flowSent', '已发送到目标插件'))

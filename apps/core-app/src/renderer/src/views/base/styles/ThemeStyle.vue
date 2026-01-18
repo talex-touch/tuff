@@ -8,7 +8,8 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { appSetting } from '~/modules/channel/storage'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
 import LayoutSection from './LayoutSection.vue'
@@ -18,6 +19,8 @@ import ThemePreviewIcon from './sub/ThemePreviewIcon.vue'
 import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
+const transport = useTuffTransport()
+const openFileEvent = defineRawEvent<any, { filePaths?: string[] }>('dialog:open-file')
 
 const styleValue = ref(0)
 type RouteTransitionStyle = 'slide' | 'fade' | 'zoom'
@@ -107,7 +110,7 @@ function handleThemeChange(value: string | number, event?: Event): void {
  */
 async function selectBackgroundImage() {
   try {
-    const result = await touchChannel.send('dialog:open-file', {
+    const result = await transport.send(openFileEvent, {
       title: t('themeStyle.selectBackgroundImage', 'Select Background Image'),
       filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }],
       properties: ['openFile']

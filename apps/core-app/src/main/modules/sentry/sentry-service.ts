@@ -983,7 +983,6 @@ export class SentryServiceModule extends BaseModule {
         const errorText = await response.text().catch(() => 'Unknown error')
         if (response.status === 403) {
           this.telemetryCooldownUntil = Date.now() + 60 * 60_000
-          sentryLog.warn('Telemetry blocked by server', { meta: { status: response.status, url } })
           this.recordTelemetryFailure('Telemetry blocked by server', {
             status: response.status,
             statusText: response.statusText,
@@ -997,9 +996,6 @@ export class SentryServiceModule extends BaseModule {
         }
         this.failedNexusUploads++
         this.schedulePersistTelemetryStats()
-        sentryLog.error('Telemetry upload failed', {
-          meta: { status: response.status, statusText: response.statusText, error: errorText }
-        })
         this.recordTelemetryFailure('Telemetry upload failed', {
           status: response.status,
           statusText: response.statusText,
@@ -1029,11 +1025,7 @@ export class SentryServiceModule extends BaseModule {
         count: events.length,
         cooldownMs: 5 * 60_000
       })
-      if (recorded) {
-        sentryLog.warn('Telemetry upload exception', {
-          meta: { error: errorMessage, cooldownMs: 5 * 60_000 }
-        })
-      }
+      void recorded
       this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
     }
   }

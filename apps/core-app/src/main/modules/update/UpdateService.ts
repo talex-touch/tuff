@@ -37,12 +37,39 @@ const UPDATE_POLL_TASK_ID = 'update-service.check'
  * Update settings interface
  */
 type UpdateSettings = SharedUpdateSettings & {
+  autoDownload: boolean
   cacheEnabled: boolean
   cacheTTL: number // Cache TTL in minutes
   rateLimitEnabled: boolean
   maxRetries: number
   retryDelay: number // Base retry delay in milliseconds
   lastCheckedAt: number | null
+}
+
+type ReleaseCacheRateLimit = {
+  remaining?: number
+  resetAt?: number
+}
+
+type ReleaseCacheEntry = {
+  releases: GitHubRelease[]
+  fetchedAt: number
+  ttlMinutes: number
+  etag?: string
+  lastModified?: string
+  rateLimit?: ReleaseCacheRateLimit
+  cooldownUntil?: number
+  failureCount?: number
+}
+
+type ReleaseCacheStore = {
+  version: 1
+  entries: Partial<Record<AppPreviewChannel, ReleaseCacheEntry>>
+}
+
+type UpdateFetchResult = {
+  result: UpdateCheckResult
+  usedNetwork: boolean
 }
 
 /**
@@ -56,9 +83,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private cache: Map<string, any> = new Map()
   private checkInFlight: Promise<UpdateCheckResult> | null = null
   private settingsSaveTimer: NodeJS.Timeout | null = null
+  private releaseCacheSaveTimer: NodeJS.Timeout | null = null
   private initContext?: ModuleInitContext<TalexEvents>
   private updateSystem?: UpdateSystem
   private updateRepository: UpdateRepository | null = null
+  private releaseCacheStore: ReleaseCacheStore = { version: 1, entries: {} }
+  private autoDownloadTasks: Map<string, string> = new Map()
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
@@ -86,7 +116,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     this.updateSystem = new UpdateSystem(downloadCenterModule, {
-      autoDownload: false,
+      autoDownload: this.settings.autoDownload,
       autoCheck: this.settings.enabled,
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
       ignoredVersions: this.settings.ignoredVersions,
@@ -116,6 +146,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     // Load settings
     this.loadSettings()
+    await this.loadReleaseCache()
 
     if (!this.tryInitUpdateSystem(ctx)) {
       touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, () => {
@@ -157,6 +188,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       clearTimeout(this.settingsSaveTimer)
       this.settingsSaveTimer = null
       await this.flushSettingsToDisk()
+    }
+
+    if (this.releaseCacheSaveTimer) {
+      clearTimeout(this.releaseCacheSaveTimer)
+      this.releaseCacheSaveTimer = null
+      await this.flushReleaseCacheToDisk()
     }
 
     for (const dispose of this.transportDisposers) {
@@ -238,6 +275,23 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           this.settings = { ...this.settings, ...sanitizedSettings }
           this.saveSettings()
 
+          if (this.updateSystem) {
+            if (typeof sanitizedSettings.autoDownload === 'boolean') {
+              this.updateSystem.setAutoDownload(sanitizedSettings.autoDownload)
+            }
+            if (typeof sanitizedSettings.enabled === 'boolean') {
+              this.updateSystem.setAutoCheck(sanitizedSettings.enabled)
+            }
+            if (sanitizedSettings.frequency) {
+              this.updateSystem.setCheckFrequency(
+                this.mapFrequencyToCheckFrequency(sanitizedSettings.frequency)
+              )
+            }
+            if (sanitizedSettings.updateChannel) {
+              this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
+            }
+          }
+
           if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
             this.pollingService.unregister(UPDATE_POLL_TASK_ID)
           }
@@ -272,6 +326,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       tx.on(UpdateEvents.clearCache, async () => {
         try {
           this.cache.clear()
+          this.clearReleaseCache()
           return { success: true }
         } catch (error) {
           updateLog.error('Failed to clear cache', { error })
@@ -388,6 +443,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             throw new Error('UpdateSystem not initialized')
           }
           this.updateSystem.setAutoDownload(payload.enabled)
+          this.settings.autoDownload = payload.enabled
+          this.saveSettings()
           return { success: true }
         } catch (error) {
           updateLog.error('Failed to set auto download', { error })
@@ -504,12 +561,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return { hasUpdate: false, source: this.settings.source?.name ?? 'Unknown' }
     }
 
-    let performedNetworkCheck = false
-
     try {
-      performedNetworkCheck = true
-      const result = await this.fetchLatestRelease(targetChannel)
-      this.recordCheckTimestamp()
+      const { result, usedNetwork } = await this.fetchLatestRelease(targetChannel, { force })
+      if (usedNetwork) {
+        this.recordCheckTimestamp()
+      }
 
       if (result.hasUpdate && result.release) {
         await this.persistRelease(targetChannel, result.release, result.source)
@@ -547,6 +603,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           }
 
           this.notifyRendererAboutUpdate(result, targetChannel)
+          void this.maybeAutoDownload(result.release)
 
           return result
         }
@@ -564,9 +621,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       return noUpdateResult
     } catch (error) {
-      if (performedNetworkCheck) {
-        this.recordCheckTimestamp()
-      }
+      this.recordCheckTimestamp()
       updateLog.error('Update check failed', { error })
 
       const errorResult = {
@@ -576,6 +631,31 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }
 
       return errorResult
+    }
+  }
+
+  private async maybeAutoDownload(release: GitHubRelease): Promise<void> {
+    if (!this.settings.autoDownload) {
+      return
+    }
+    if (!this.updateSystem) {
+      return
+    }
+    if (!app.isPackaged) {
+      return
+    }
+
+    const tag = release.tag_name
+    if (this.autoDownloadTasks.has(tag)) {
+      return
+    }
+
+    try {
+      const taskId = await this.updateSystem.downloadUpdate(release)
+      this.autoDownloadTasks.set(tag, taskId)
+      updateLog.info(`Auto download started for ${tag}`, { meta: { taskId } })
+    } catch (error) {
+      updateLog.warn('Auto download failed', { error, meta: { tag } })
     }
   }
 
@@ -709,56 +789,196 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   /**
    * Fetch latest release from GitHub API
    */
-  private async fetchLatestRelease(channel: AppPreviewChannel): Promise<UpdateCheckResult> {
-    try {
-      const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
-        timeout: 8000,
-        headers: {
+  private async fetchLatestRelease(
+    channel: AppPreviewChannel,
+    options?: { force?: boolean }
+  ): Promise<UpdateFetchResult> {
+    const source = this.settings.source?.name ?? 'GitHub'
+    const force = options?.force ?? false
+    const cacheEntry = this.getReleaseCacheEntry(channel)
+    const now = Date.now()
+
+    if (!force && this.settings.cacheEnabled && cacheEntry?.releases?.length) {
+      const ttlMs = this.settings.cacheTTL * 60 * 1000
+      if (now - cacheEntry.fetchedAt <= ttlMs) {
+        return {
+          usedNetwork: false,
+          result: {
+            hasUpdate: true,
+            release: cacheEntry.releases[0],
+            source
+          }
+        }
+      }
+    }
+
+    if (
+      this.settings.rateLimitEnabled &&
+      cacheEntry?.cooldownUntil &&
+      now < cacheEntry.cooldownUntil
+    ) {
+      if (cacheEntry.releases?.length) {
+        return {
+          usedNetwork: false,
+          result: {
+            hasUpdate: true,
+            release: cacheEntry.releases[0],
+            source
+          }
+        }
+      }
+      return {
+        usedNetwork: false,
+        result: {
+          hasUpdate: false,
+          error: 'Rate limit cooldown in effect',
+          source
+        }
+      }
+    }
+
+    const maxRetries = Math.max(1, this.settings.maxRetries || 1)
+    const baseDelay = this.settings.retryDelay || 2000
+    const ttlMinutes = this.settings.cacheTTL
+
+    let lastError: unknown
+    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      try {
+        const headers: Record<string, string> = {
           Accept: 'application/vnd.github.v3+json',
           'User-Agent': 'TalexTouch-Updater/1.0'
         }
-      })
 
-      const releases: GitHubRelease[] = response.data
-
-      if (!releases || !Array.isArray(releases)) {
-        return {
-          hasUpdate: false,
-          error: 'Invalid response format from GitHub API',
-          source: 'GitHub'
+        if (this.settings.cacheEnabled && cacheEntry?.etag) {
+          headers['If-None-Match'] = cacheEntry.etag
         }
-      }
-
-      // Filter releases by channel
-      const channelReleases = releases.filter((release) => {
-        const version = this.parseVersion(release.tag_name)
-        return version.channel === channel
-      })
-
-      if (channelReleases.length === 0) {
-        return {
-          hasUpdate: false,
-          error: `No releases found for channel: ${channel}`,
-          source: 'GitHub'
+        if (this.settings.cacheEnabled && cacheEntry?.lastModified) {
+          headers['If-Modified-Since'] = cacheEntry.lastModified
         }
-      }
 
-      // Get latest release (first one)
-      const latestRelease = channelReleases[0]
+        const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
+          timeout: 8000,
+          headers,
+          validateStatus: (status) => status === 200 || status === 304
+        })
 
-      return {
-        hasUpdate: true,
-        release: latestRelease,
-        source: 'GitHub'
-      }
-    } catch (error) {
-      updateLog.error('Failed to fetch latest release', { error })
-      return {
-        hasUpdate: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        source: 'GitHub'
+        const rateLimit = this.extractRateLimitInfo(response.headers)
+        const etag = this.getHeaderValue(response.headers, 'etag')
+        const lastModified = this.getHeaderValue(response.headers, 'last-modified')
+
+        if (response.status === 304) {
+          if (cacheEntry?.releases?.length) {
+            this.setReleaseCacheEntry(channel, {
+              ...cacheEntry,
+              fetchedAt: now,
+              ttlMinutes,
+              rateLimit: rateLimit ?? cacheEntry.rateLimit,
+              etag: etag ?? cacheEntry.etag,
+              lastModified: lastModified ?? cacheEntry.lastModified,
+              cooldownUntil: this.resolveCooldownUntil(rateLimit),
+              failureCount: 0
+            })
+            return {
+              usedNetwork: true,
+              result: {
+                hasUpdate: true,
+                release: cacheEntry.releases[0],
+                source
+              }
+            }
+          }
+          return {
+            usedNetwork: true,
+            result: {
+              hasUpdate: false,
+              error: 'No cached release available',
+              source
+            }
+          }
+        }
+
+        const releases: GitHubRelease[] = response.data
+
+        if (!releases || !Array.isArray(releases)) {
+          return {
+            usedNetwork: true,
+            result: {
+              hasUpdate: false,
+              error: 'Invalid response format from GitHub API',
+              source
+            }
+          }
+        }
+
+        const channelReleases = releases.filter((release) => {
+          const version = this.parseVersion(release.tag_name)
+          return version.channel === channel
+        })
+
+        if (channelReleases.length === 0) {
+          return {
+            usedNetwork: true,
+            result: {
+              hasUpdate: false,
+              error: `No releases found for channel: ${channel}`,
+              source
+            }
+          }
+        }
+
+        const updatedEntry: ReleaseCacheEntry = {
+          releases: channelReleases,
+          fetchedAt: now,
+          ttlMinutes,
+          etag: etag ?? cacheEntry?.etag,
+          lastModified: lastModified ?? cacheEntry?.lastModified,
+          rateLimit,
+          cooldownUntil: this.resolveCooldownUntil(rateLimit),
+          failureCount: 0
+        }
+
+        this.setReleaseCacheEntry(channel, updatedEntry)
+
+        return {
+          usedNetwork: true,
+          result: {
+            hasUpdate: true,
+            release: channelReleases[0],
+            source
+          }
+        }
+      } catch (error) {
+        lastError = error
+
+        if (!this.isRetryableError(error) || attempt >= maxRetries - 1) {
+          break
+        }
+
+        const delay = this.calculateRetryDelay(attempt, baseDelay)
+        await this.sleep(delay)
       }
     }
+
+    if (lastError) {
+      this.recordFetchFailure(channel, lastError)
+    }
+
+    if (cacheEntry?.releases?.length) {
+      return {
+        usedNetwork: false,
+        result: {
+          hasUpdate: true,
+          release: cacheEntry.releases[0],
+          source
+        }
+      }
+    }
+
+    if (lastError instanceof Error) {
+      throw lastError
+    }
+
+    throw new Error('Failed to fetch latest release')
   }
 
   private async persistRelease(
@@ -998,6 +1218,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateChannel: this.enforceChannelPreference(this.currentChannel),
       ignoredVersions: [],
       customSources: [],
+      autoDownload: false,
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL
       rateLimitEnabled: true,
@@ -1037,6 +1258,185 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     } catch (error) {
       updateLog.error('Failed to save settings', { error })
     }
+  }
+
+  private getReleaseCacheFilePath(): string | null {
+    if (!this.initContext) {
+      return null
+    }
+    return path.join(this.initContext.app.rootPath, 'config', 'update-cache.json')
+  }
+
+  private async loadReleaseCache(): Promise<void> {
+    const cacheFile = this.getReleaseCacheFilePath()
+    if (!cacheFile) {
+      return
+    }
+    try {
+      if (!fs.existsSync(cacheFile)) {
+        return
+      }
+      const raw = await fs.promises.readFile(cacheFile, 'utf8')
+      const parsed = JSON.parse(raw)
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        parsed.entries &&
+        typeof parsed.entries === 'object'
+      ) {
+        this.releaseCacheStore = {
+          version: 1,
+          entries: parsed.entries as ReleaseCacheStore['entries']
+        }
+      }
+    } catch (error) {
+      updateLog.warn('Failed to load update cache', { error })
+    }
+  }
+
+  private scheduleReleaseCacheSave(): void {
+    if (this.releaseCacheSaveTimer) {
+      clearTimeout(this.releaseCacheSaveTimer)
+    }
+    this.releaseCacheSaveTimer = setTimeout(() => {
+      this.releaseCacheSaveTimer = null
+      void this.flushReleaseCacheToDisk()
+    }, 300)
+  }
+
+  private async flushReleaseCacheToDisk(): Promise<void> {
+    const cacheFile = this.getReleaseCacheFilePath()
+    if (!cacheFile) {
+      return
+    }
+    try {
+      await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true })
+      await fs.promises.writeFile(cacheFile, JSON.stringify(this.releaseCacheStore, null, 2))
+    } catch (error) {
+      updateLog.warn('Failed to save update cache', { error })
+    }
+  }
+
+  private clearReleaseCache(): void {
+    this.releaseCacheStore = { version: 1, entries: {} }
+    this.scheduleReleaseCacheSave()
+  }
+
+  private getReleaseCacheEntry(channel: AppPreviewChannel): ReleaseCacheEntry | null {
+    return this.releaseCacheStore.entries[channel] ?? null
+  }
+
+  private setReleaseCacheEntry(channel: AppPreviewChannel, entry: ReleaseCacheEntry): void {
+    this.releaseCacheStore.entries[channel] = entry
+    this.scheduleReleaseCacheSave()
+  }
+
+  private resolveCooldownUntil(rateLimit?: ReleaseCacheRateLimit): number | undefined {
+    if (!this.settings.rateLimitEnabled) {
+      return undefined
+    }
+    if (rateLimit?.remaining !== undefined && rateLimit.remaining <= 0 && rateLimit.resetAt) {
+      return rateLimit.resetAt
+    }
+    return undefined
+  }
+
+  private extractRateLimitInfo(
+    headers: Record<string, unknown>
+  ): ReleaseCacheRateLimit | undefined {
+    const remaining = this.getHeaderNumber(headers, 'x-ratelimit-remaining')
+    const resetRaw = this.getHeaderNumber(headers, 'x-ratelimit-reset')
+    if (remaining === undefined && resetRaw === undefined) {
+      return undefined
+    }
+    return {
+      remaining,
+      resetAt: resetRaw ? resetRaw * 1000 : undefined
+    }
+  }
+
+  private getHeaderValue(headers: Record<string, unknown>, key: string): string | undefined {
+    const value = headers[key.toLowerCase()]
+    if (Array.isArray(value)) {
+      return typeof value[0] === 'string' ? value[0] : undefined
+    }
+    return typeof value === 'string' ? value : undefined
+  }
+
+  private getHeaderNumber(headers: Record<string, unknown>, key: string): number | undefined {
+    const value = this.getHeaderValue(headers, key)
+    if (!value) {
+      return undefined
+    }
+    const parsed = Number.parseInt(value, 10)
+    return Number.isNaN(parsed) ? undefined : parsed
+  }
+
+  private isRetryableError(error: unknown): boolean {
+    if (!axios.isAxiosError(error)) {
+      return false
+    }
+    const status = error.response?.status
+    if (status && status >= 500) {
+      return true
+    }
+    if (status === 403 || status === 429) {
+      return true
+    }
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+      return true
+    }
+    if (error.request && !error.response) {
+      return true
+    }
+    return false
+  }
+
+  private calculateRetryDelay(attempt: number, baseDelay: number): number {
+    const delay = Math.min(baseDelay * 2 ** attempt, 60000)
+    const jitter = Math.random() * 0.1 * delay
+    return delay + jitter
+  }
+
+  private async sleep(delay: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+
+  private recordFetchFailure(channel: AppPreviewChannel, error: unknown): void {
+    if (this.settings.rateLimitEnabled && axios.isAxiosError(error)) {
+      const status = error.response?.status
+      const headers = error.response?.headers as Record<string, unknown> | undefined
+      if (status === 403 || status === 429) {
+        const rateLimit = headers ? this.extractRateLimitInfo(headers) : undefined
+        const cooldownUntil = rateLimit?.resetAt ?? Date.now() + 60 * 60 * 1000
+        const fallbackEntry = this.getReleaseCacheEntry(channel) ?? {
+          releases: [],
+          fetchedAt: 0,
+          ttlMinutes: this.settings.cacheTTL
+        }
+        this.setReleaseCacheEntry(channel, {
+          ...fallbackEntry,
+          rateLimit: rateLimit ?? fallbackEntry.rateLimit,
+          cooldownUntil,
+          failureCount: (fallbackEntry.failureCount ?? 0) + 1
+        })
+        return
+      }
+    }
+
+    const fallbackEntry = this.getReleaseCacheEntry(channel) ?? {
+      releases: [],
+      fetchedAt: 0,
+      ttlMinutes: this.settings.cacheTTL
+    }
+    const nextCount = Math.min((fallbackEntry.failureCount ?? 0) + 1, 4)
+    const delays = [60_000, 300_000, 900_000, 3_600_000]
+    const cooldownUntil = Date.now() + delays[nextCount - 1]
+    this.setReleaseCacheEntry(channel, {
+      ...fallbackEntry,
+      failureCount: nextCount,
+      cooldownUntil
+    })
   }
 
   private async getQuickUpdateCheckResult(channel: AppPreviewChannel): Promise<UpdateCheckResult> {
@@ -1119,6 +1519,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.settings.frequency = this.normalizeFrequency(this.settings.frequency)
         if (typeof this.settings.lastCheckedAt !== 'number') {
           this.settings.lastCheckedAt = defaults.lastCheckedAt
+        }
+        if (typeof this.settings.autoDownload !== 'boolean') {
+          this.settings.autoDownload = defaults.autoDownload
         }
         updateLog.info(`Settings loaded from: ${settingsFile}`)
       } else {

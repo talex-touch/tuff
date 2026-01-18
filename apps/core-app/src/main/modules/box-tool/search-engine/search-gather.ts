@@ -5,21 +5,19 @@ import type {
   SearchPriorityLayer,
   TuffAggregatorCallback,
   TuffQuery,
-  TuffSearchResult,
+  TuffSearchResult
 } from '@talex-touch/utils'
 import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
-import {
-  withTimeout,
-} from '@talex-touch/utils'
+import { withTimeout } from '@talex-touch/utils'
 import chalk from 'chalk'
 
 import { debounce } from 'lodash'
-import { createLogger } from '../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { analyticsModule } from '../../analytics'
 import { searchLogger } from './search-logger'
 
-const gatherLog = createLogger('SearchGatherer')
+const gatherLog = getLogger('search-engine')
 
 /**
  * @interface ExtendedSourceStat
@@ -49,13 +47,13 @@ const defaultTuffGatherOptions: Required<ITuffGatherOptions> = {
   fastLayerTimeoutMs: 80,
   deferredLayerDelayMs: 50,
   fastLayerConcurrency: 3,
-  deferredLayerConcurrency: 2,
+  deferredLayerConcurrency: 2
 }
 
 /**
  * Utility function to create a delay promise
  */
-const delay = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
  * Count total items from search results
@@ -72,8 +70,8 @@ function countItems(results: TuffSearchResult[]): number {
 function createGatherController(
   callback: (
     signal: AbortSignal,
-    resolve: (value: number | PromiseLike<number>) => void,
-  ) => Promise<number>,
+    resolve: (value: number | PromiseLike<number>) => void
+  ) => Promise<number>
 ): IGatherController {
   const controller = new AbortController()
   const { signal } = controller
@@ -90,7 +88,7 @@ function createGatherController(
         controller.abort()
       }
     },
-    signal,
+    signal
   }
 }
 
@@ -120,7 +118,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
   return function executeSearch(
     providers: ISearchProvider<ProviderContext>[],
     params: TuffQuery,
-    onUpdate: TuffAggregatorCallback,
+    onUpdate: TuffAggregatorCallback
   ): IGatherController {
     searchLogger.logSearchPhase('Gatherer Setup', `Initializing ${providers.length} providers`)
     searchLogger.gathererStart(providers.length, params.text)
@@ -128,8 +126,7 @@ export function createGatherAggregator(options: ITuffGatherOptions = {}) {
     // Use layered search if enabled, otherwise fall back to legacy mode
     if (config.enableLayeredSearch) {
       return createLayeredSearchController(providers, params, onUpdate, config)
-    }
-    else {
+    } else {
       return createLegacySearchController(providers, params, onUpdate, config)
     }
   }
@@ -142,14 +139,14 @@ function createLayeredSearchController(
   providers: ISearchProvider<ProviderContext>[],
   params: TuffQuery,
   onUpdate: TuffAggregatorCallback,
-  config: Required<ITuffGatherOptions>,
+  config: Required<ITuffGatherOptions>
 ): IGatherController {
   const {
     fastLayerTimeoutMs,
     deferredLayerDelayMs,
     fastLayerConcurrency,
     deferredLayerConcurrency,
-    taskTimeoutMs,
+    taskTimeoutMs
   } = config
 
   return createGatherController(async (signal, resolve) => {
@@ -157,13 +154,25 @@ function createLayeredSearchController(
     const allResults: TuffSearchResult[] = []
     const sourceStats: ExtendedSourceStat[] = []
 
+    if (providers.length === 0) {
+      searchLogger.logSearchPhase('Layered Search', 'No providers available')
+      onUpdate({
+        newResults: [],
+        totalCount: 0,
+        isDone: true,
+        sourceStats: []
+      })
+      resolve(0)
+      return 0
+    }
+
     // Split providers by priority
-    const fastProviders = providers.filter(p => p.priority === 'fast')
-    const deferredProviders = providers.filter(p => p.priority !== 'fast')
+    const fastProviders = providers.filter((p) => p.priority === 'fast')
+    const deferredProviders = providers.filter((p) => p.priority !== 'fast')
 
     searchLogger.logSearchPhase(
       'Layered Search',
-      `Fast: ${fastProviders.length}, Deferred: ${deferredProviders.length}`,
+      `Fast: ${fastProviders.length}, Deferred: ${deferredProviders.length}`
     )
 
     // Set up abort handler
@@ -176,7 +185,7 @@ function createLayeredSearchController(
         totalCount: countItems(allResults),
         isDone: true,
         cancelled: true,
-        sourceStats: sourceStats as TuffSearchResult['sources'],
+        sourceStats: sourceStats as TuffSearchResult['sources']
       })
       resolve(0)
     })
@@ -192,7 +201,7 @@ function createLayeredSearchController(
         fastLayerTimeoutMs,
         fastLayerConcurrency,
         taskTimeoutMs,
-        sourceStats,
+        sourceStats
       )
 
       allResults.push(...fastResults)
@@ -202,7 +211,7 @@ function createLayeredSearchController(
         const fastDuration = performance.now() - startTime
         searchLogger.logSearchPhase(
           'Fast Layer Complete',
-          `${countItems(fastResults)} items in ${fastDuration.toFixed(1)}ms`,
+          `${countItems(fastResults)} items in ${fastDuration.toFixed(1)}ms`
         )
 
         onUpdate({
@@ -210,7 +219,7 @@ function createLayeredSearchController(
           totalCount: countItems(allResults),
           isDone: deferredProviders.length === 0,
           sourceStats: sourceStats as TuffSearchResult['sources'],
-          layer: 'fast',
+          layer: 'fast'
         })
       }
     }
@@ -229,7 +238,10 @@ function createLayeredSearchController(
         return countItems(allResults)
       }
 
-      searchLogger.logSearchPhase('Deferred Layer', `Starting with ${deferredProviders.length} providers`)
+      searchLogger.logSearchPhase(
+        'Deferred Layer',
+        `Starting with ${deferredProviders.length} providers`
+      )
 
       await runDeferredLayer(
         deferredProviders,
@@ -238,8 +250,7 @@ function createLayeredSearchController(
         deferredLayerConcurrency,
         taskTimeoutMs,
         (result, stat) => {
-          if (isAborted)
-            return
+          if (isAborted) return
 
           allResults.push(result)
           sourceStats.push(stat)
@@ -249,9 +260,9 @@ function createLayeredSearchController(
             totalCount: countItems(allResults),
             isDone: false,
             sourceStats: sourceStats as TuffSearchResult['sources'],
-            layer: 'deferred',
+            layer: 'deferred'
           })
-        },
+        }
       )
 
       // Final update after deferred layer completes
@@ -259,7 +270,7 @@ function createLayeredSearchController(
         const totalDuration = performance.now() - startTime
         searchLogger.logSearchPhase(
           'Search Complete',
-          `${countItems(allResults)} items in ${totalDuration.toFixed(1)}ms`,
+          `${countItems(allResults)} items in ${totalDuration.toFixed(1)}ms`
         )
 
         const providerTimings = sourceStats.reduce<Record<string, number>>((acc, stat) => {
@@ -273,11 +284,10 @@ function createLayeredSearchController(
           totalCount: countItems(allResults),
           isDone: true,
           sourceStats: sourceStats as TuffSearchResult['sources'],
-          layer: 'deferred',
+          layer: 'deferred'
         })
       }
-    }
-    else if (!isAborted && deferredProviders.length === 0) {
+    } else if (!isAborted && deferredProviders.length === 0) {
       // No deferred providers, search is already complete
       searchLogger.logSearchPhase('Search Complete', 'No deferred providers')
     }
@@ -298,7 +308,7 @@ async function runFastLayer(
   timeoutMs: number,
   concurrency: number,
   taskTimeoutMs: number,
-  sourceStats: ExtendedSourceStat[],
+  sourceStats: ExtendedSourceStat[]
 ): Promise<TuffSearchResult[]> {
   const results: TuffSearchResult[] = []
   const queue = [...providers]
@@ -310,8 +320,7 @@ async function runFastLayer(
     const worker = async () => {
       while (queue.length > 0 && !signal.aborted) {
         const provider = queue.shift()
-        if (!provider)
-          continue
+        if (!provider) continue
 
         const startTime = performance.now()
         let status: ExtendedSourceStat['status'] = 'success'
@@ -325,24 +334,20 @@ async function runFastLayer(
           resultCount = result.items.length
           results.push(result)
           searchLogger.providerResult(provider.id, resultCount)
-        }
-        catch (error) {
+        } catch (error) {
           if (signal.aborted) {
             status = 'aborted'
-          }
-          else if (error instanceof Error && error.name === 'TimeoutError') {
+          } else if (error instanceof Error && error.name === 'TimeoutError') {
             status = 'timeout'
             searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-          }
-          else {
+          } else {
             status = 'error'
             searchLogger.providerError(
               provider.id,
-              error instanceof Error ? error.message : 'Unknown error',
+              error instanceof Error ? error.message : 'Unknown error'
             )
           }
-        }
-        finally {
+        } finally {
           const duration = performance.now() - startTime
           if (!signal.aborted) {
             sourceStats.push({
@@ -351,7 +356,7 @@ async function runFastLayer(
               duration,
               resultCount,
               status,
-              layer: 'fast',
+              layer: 'fast'
             })
             logProviderCompletion(provider, duration, resultCount, status, 'fast')
           }
@@ -360,10 +365,7 @@ async function runFastLayer(
       }
     }
 
-    const workers = Array.from(
-      { length: Math.min(concurrency, queue.length) },
-      () => worker(),
-    )
+    const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker())
 
     void Promise.all(workers).then(() => resolveAll())
   })
@@ -392,15 +394,14 @@ async function runDeferredLayer(
   signal: AbortSignal,
   concurrency: number,
   taskTimeoutMs: number,
-  onResult: (result: TuffSearchResult, stat: ExtendedSourceStat) => void,
+  onResult: (result: TuffSearchResult, stat: ExtendedSourceStat) => void
 ): Promise<void> {
   const queue = [...providers]
 
   const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
     while (queue.length > 0 && !signal.aborted) {
       const provider = queue.shift()
-      if (!provider)
-        continue
+      if (!provider) continue
 
       const startTime = performance.now()
       let status: ExtendedSourceStat['status'] = 'success'
@@ -420,29 +421,25 @@ async function runDeferredLayer(
           duration: performance.now() - startTime,
           resultCount,
           status: 'success',
-          layer: 'deferred',
+          layer: 'deferred'
         }
 
         onResult(result, stat)
-      }
-      catch (error) {
+      } catch (error) {
         if (signal.aborted) {
           status = 'aborted'
-        }
-        else if (error instanceof Error && error.name === 'TimeoutError') {
+        } else if (error instanceof Error && error.name === 'TimeoutError') {
           status = 'timeout'
           searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-        }
-        else {
+        } else {
           status = 'error'
           searchLogger.providerError(
             provider.id,
-            error instanceof Error ? error.message : 'Unknown error',
+            error instanceof Error ? error.message : 'Unknown error'
           )
           gatherLog.warn(`Deferred provider [${provider.id}] failed`, { error })
         }
-      }
-      finally {
+      } finally {
         const duration = performance.now() - startTime
         if (!signal.aborted) {
           logProviderCompletion(provider, duration, resultCount, status, 'deferred')
@@ -462,16 +459,14 @@ function logProviderCompletion(
   duration: number,
   resultCount: number,
   status: ExtendedSourceStat['status'],
-  layer: SearchPriorityLayer,
+  layer: SearchPriorityLayer
 ): void {
   let durationStr: string
   if (duration < 50) {
     durationStr = chalk.gray(`${duration.toFixed(1)}ms`)
-  }
-  else if (duration < 200) {
+  } else if (duration < 200) {
     durationStr = chalk.bgYellow.black(`${duration.toFixed(1)}ms`)
-  }
-  else {
+  } else {
     durationStr = chalk.bgRed.white(`${duration.toFixed(1)}ms`)
   }
 
@@ -479,8 +474,7 @@ function logProviderCompletion(
   const message = `${layerTag} Provider [${provider.id}] finished in ${durationStr} with ${resultCount} results (${status})`
   if (status === 'success') {
     gatherLog.debug(message)
-  }
-  else {
+  } else {
     gatherLog.warn(message)
   }
 }
@@ -493,7 +487,7 @@ function createLegacySearchController(
   providers: ISearchProvider<ProviderContext>[],
   params: TuffQuery,
   onUpdate: TuffAggregatorCallback,
-  config: Required<ITuffGatherOptions>,
+  config: Required<ITuffGatherOptions>
 ): IGatherController {
   const { concurrency, coalesceGapMs, firstBatchGraceMs, debouncePushMs, taskTimeoutMs } = config
 
@@ -519,7 +513,7 @@ function createLegacySearchController(
           newResults: pushBuffer,
           totalCount: countItems(allResults),
           isDone: false,
-          sourceStats: sourceStats as TuffSearchResult['sources'],
+          sourceStats: sourceStats as TuffSearchResult['sources']
         })
         pushBuffer = []
       }
@@ -529,7 +523,7 @@ function createLegacySearchController(
           newResults: [],
           totalCount: countItems(allResults),
           isDone: true,
-          sourceStats: sourceStats as TuffSearchResult['sources'],
+          sourceStats: sourceStats as TuffSearchResult['sources']
         })
         resolve(countItems(allResults))
       }
@@ -555,10 +549,8 @@ function createLegacySearchController(
         hasFlushedFirstBatch = true
         searchLogger.firstBatch(firstBatchGraceMs)
         coalesceTimeoutId = setTimeout(() => debouncedFlush(), firstBatchGraceMs)
-      }
-      else {
-        if (coalesceTimeoutId)
-          clearTimeout(coalesceTimeoutId)
+      } else {
+        if (coalesceTimeoutId) clearTimeout(coalesceTimeoutId)
         coalesceTimeoutId = setTimeout(() => debouncedFlush(), coalesceGapMs)
       }
 
@@ -584,7 +576,7 @@ function createLegacySearchController(
         totalCount: countItems(allResults),
         isDone: true,
         cancelled: true,
-        sourceStats: sourceStats as TuffSearchResult['sources'],
+        sourceStats: sourceStats as TuffSearchResult['sources']
       })
       finalizeMetrics()
       resolve(0)
@@ -593,13 +585,12 @@ function createLegacySearchController(
     searchLogger.logSearchPhase('Legacy Worker Pool', `Starting ${concurrency} workers`)
 
     const workers = Array.from({ length: concurrency }, async (_, i) => {
-      await new Promise(r => setTimeout(r, i * 10))
+      await new Promise((r) => setTimeout(r, i * 10))
       searchLogger.workerStart(i)
 
       while (taskQueue.length > 0) {
         const provider = taskQueue.shift()
-        if (!provider)
-          continue
+        if (!provider) continue
 
         searchLogger.workerProcessing(i, provider.id)
         const startTime = performance.now()
@@ -607,8 +598,7 @@ function createLegacySearchController(
         let resultCount = 0
 
         try {
-          if (signal.aborted)
-            return
+          if (signal.aborted) return
 
           searchLogger.providerCall(provider.id)
           const searchPromise = provider.onSearch(params, signal)
@@ -617,22 +607,19 @@ function createLegacySearchController(
           resultCount = searchResult.items.length
           searchLogger.providerResult(provider.id, resultCount)
           onNewResult(searchResult)
-        }
-        catch (error) {
+        } catch (error) {
           if (error instanceof Error && error.name === 'TimeoutError') {
             status = 'timeout'
             searchLogger.providerTimeout(provider.id, taskTimeoutMs)
-          }
-          else {
+          } else {
             status = 'error'
             searchLogger.providerError(
               provider.id,
-              error instanceof Error ? error.message : 'Unknown error',
+              error instanceof Error ? error.message : 'Unknown error'
             )
           }
           gatherLog.error(`Provider [${provider.id}] failed`, { error })
-        }
-        finally {
+        } finally {
           const duration = performance.now() - startTime
           if (!signal.aborted) {
             sourceStats.push({
@@ -640,7 +627,7 @@ function createLegacySearchController(
               providerName: provider.name || provider.id,
               duration,
               resultCount,
-              status,
+              status
             })
           }
         }

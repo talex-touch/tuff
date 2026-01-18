@@ -15,7 +15,10 @@ pnpm add @talex-touch/utils
 | [Plugin Context](./plugin-context.zh.md) | `globalThis` | index.js 全局上下文 API |
 | [Box SDK](./box.zh.md) | `useBox()` | 控制 CoreBox 窗口 |
 | [Clipboard SDK](./clipboard.zh.md) | `useClipboard()` | 剪贴板读写和历史 |
+| [TempFile SDK](./temp-file.zh.md) | `useTempPluginFiles()` | 临时文件创建与清理 |
 | [Storage SDK](./storage.zh.md) | `usePluginStorage()` | 插件数据持久化 |
+| [Download SDK](./download.zh.md) | `useDownloadSdk()` | 下载任务管理 |
+| [Platform Capabilities SDK](./platform-capabilities.zh.md) | `usePlatformSdk()` | 平台能力目录 |
 | [**Account SDK**](./account.zh.md) | `accountSDK` | **用户信息、订阅、配额** |
 | [**TuffTransport**](./transport.zh.md) | `useTuffTransport()` | **新一代 IPC（推荐）** |
 | [Channel SDK](./channel.zh.md) | `useChannel()` | IPC 通信（传统） |

@@ -1,5 +1,6 @@
 <script name="ApplicationIndex" setup lang="ts">
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import AppConfigure from './AppConfigure.vue'
 import ApplicationEmpty from './ApplicationEmpty.vue'
 import AppList from './AppList.vue'
@@ -12,6 +13,7 @@ const index = ref(-1)
 const curSelect = ref()
 const appList: any = ref([])
 let currentSearchId: string | null = null
+const transport = useTuffTransport()
 
 let unregisterUpdate: (() => void) | null = null
 let unregisterEnd: (() => void) | null = null
@@ -19,18 +21,16 @@ let unregisterEnd: (() => void) | null = null
 onMounted(() => {
   handleSearch('')
 
-  unregisterUpdate = touchChannel.regChannel('core-box:search-update', (channelData) => {
-    const { searchId, items } = channelData.data as any
-    if (searchId !== currentSearchId)
-      return
+  unregisterUpdate = transport.on(CoreBoxEvents.search.update, (channelData) => {
+    const { searchId, items } = channelData as any
+    if (searchId !== currentSearchId) return
     // append to list
     appList.value = [...appList.value, ...items]
   })
 
-  unregisterEnd = touchChannel.regChannel('core-box:search-end', (channelData) => {
-    const { searchId } = channelData.data as any
-    if (searchId !== currentSearchId)
-      return
+  unregisterEnd = transport.on(CoreBoxEvents.search.end, (channelData) => {
+    const { searchId } = channelData as any
+    if (searchId !== currentSearchId) return
     console.log('[ApplicationIndex] Search ended', channelData)
   })
 })
@@ -45,8 +45,8 @@ async function handleSearch(value: string): Promise<void> {
   curSelect.value = null
   index.value = -1
 
-  const res = await touchChannel.send('core-box:query', { query: { text: value } })
-  currentSearchId = res.sessionId
+  const res = await transport.send(CoreBoxEvents.search.query, { query: { text: value } })
+  currentSearchId = res.sessionId ?? null
   appList.value = res.items
 }
 
@@ -56,7 +56,7 @@ function handleSelect(item: any, _index: number): void {
 }
 
 function handleExecute(item: any): void {
-  touchChannel.send('core-box:execute', { item })
+  transport.send(CoreBoxEvents.item.execute, { item }).catch(() => {})
 }
 </script>
 

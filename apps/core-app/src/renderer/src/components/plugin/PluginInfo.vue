@@ -3,7 +3,8 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { VNode } from 'vue'
 import { TxSplitButton } from '@talex-touch/tuffex'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
-import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ElMessageBox } from 'element-plus'
 import { computed, ref, useSlots, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -12,6 +13,7 @@ import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import StatusIcon from '~/components/base/StatusIcon.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import PluginDetails from './tabs/PluginDetails.vue'
 import PluginFeatures from './tabs/PluginFeatures.vue'
@@ -27,7 +29,8 @@ const props = defineProps<{
 }>()
 
 // SDK and state
-const touchSdk = useTouchSDK()
+const transport = useTuffTransport()
+const { startupInfo } = useStartupInfo()
 const { t } = useI18n()
 
 // Tabs state
@@ -45,7 +48,7 @@ const loadingStates = ref({
 const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.length > 0)
 const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
 
-const isAppDev = computed(() => window.$startupInfo?.isDev === true)
+const isAppDev = computed(() => startupInfo.value?.isDev === true)
 
 // Watch for errors and auto-select the 'Issues' tab
 const slots = useSlots()
@@ -94,7 +97,7 @@ async function handleReloadPlugin(): Promise<void> {
 
   loadingStates.value.reload = true
   try {
-    await touchSdk.reloadPlugin(props.plugin.name)
+    await pluginSDK.reload(props.plugin.name)
   } finally {
     loadingStates.value.reload = false
   }
@@ -105,7 +108,7 @@ async function handleOpenPluginFolder(): Promise<void> {
 
   loadingStates.value.openFolder = true
   try {
-    await touchSdk.openPluginFolder(props.plugin.name)
+    await pluginSDK.openFolder(props.plugin.name)
   } catch (error) {
     console.error('Failed to open plugin folder:', error)
   } finally {
@@ -118,7 +121,8 @@ async function handleOpenDevTools(): Promise<void> {
 
   loadingStates.value.openDevTools = true
   try {
-    await touchSdk.openPluginDevTools(props.plugin.name)
+    const openDevTools = defineRawEvent<string, void>('plugin:open-devtools')
+    await transport.send(openDevTools, props.plugin.name)
   } catch (error) {
     console.error('Failed to open plugin DevTools:', error)
     toast.error(t('plugin.actions.openDevToolsFailed'))

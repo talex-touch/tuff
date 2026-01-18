@@ -59,14 +59,9 @@ const url = computed(() => {
   return safeIcon.value.value
 })
 
-const {
-  content: svgContent,
-  // loading: svgLoading,
-  // error: svgError,
-  fetchSvgContent,
-  setUrl
-} = useSvgContent()
+const { content: svgContent, resolvedUrl: svgResolvedUrl, setUrl } = useSvgContent()
 
+const effectiveUrl = computed(() => svgResolvedUrl.value || url.value)
 const isSvg = computed(() => url.value?.endsWith('.svg'))
 
 const dataurl = computed(() => {
@@ -74,12 +69,13 @@ const dataurl = computed(() => {
 })
 
 watch(
-  () => isSvg.value,
-  (newIsSvg) => {
-    if (newIsSvg) {
-      setUrl(url.value)
-      fetchSvgContent()
+  () => url.value,
+  (nextUrl) => {
+    if (nextUrl && nextUrl.endsWith('.svg')) {
+      setUrl(nextUrl)
+      return
     }
+    setUrl('')
   },
   { immediate: true }
 )
@@ -119,12 +115,12 @@ watch(
       <i :class="safeIcon.value" />
     </span>
 
-    <template v-else-if="addressable && url">
+    <template v-else-if="addressable && effectiveUrl">
       <template v-if="isSvg && colorful">
         <i class="TuffIcon-Svg colorful" :alt="alt" :style="{ '--un-icon': `url('${dataurl}')` }" />
       </template>
       <template v-else>
-        <img :alt="alt" :src="url" />
+        <img :alt="alt" :src="effectiveUrl" />
       </template>
     </template>
   </span>

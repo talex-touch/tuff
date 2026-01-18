@@ -220,7 +220,8 @@ class TouchChannel implements ITouchClientChannel {
 
         const duration = performance.now() - startedAt
         if (duration >= CHANNEL_SEND_ERROR_MS) {
-          console.error(`[Channel][send][slow] "${eventName}" took ${duration.toFixed(1)}ms`, {
+          const logSlow = eventName === 'market:http-request' ? console.warn : console.error
+          logSlow(`[Channel][send][slow] "${eventName}" took ${duration.toFixed(1)}ms`, {
             payloadPreview: this.formatPayloadPreview(arg),
             stack
           })

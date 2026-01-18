@@ -15,7 +15,10 @@ pnpm add @talex-touch/utils
 | [Plugin Context](./plugin-context.en.md) | `globalThis` | index.js global context API |
 | [Box SDK](./box.en.md) | `useBox()` | Control CoreBox window |
 | [Clipboard SDK](./clipboard.en.md) | `useClipboard()` | Clipboard read/write and history |
+| [TempFile SDK](./temp-file.en.md) | `useTempPluginFiles()` | Create and clean temp files |
 | [Storage SDK](./storage.en.md) | `usePluginStorage()` | Plugin data persistence |
+| [Download SDK](./download.en.md) | `useDownloadSdk()` | Download task management |
+| [Platform Capabilities SDK](./platform-capabilities.en.md) | `usePlatformSdk()` | Platform capability catalog |
 | [**Account SDK**](./account.en.md) | `accountSDK` | **User info, subscription, quota** |
 | [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
 | [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication (legacy) |

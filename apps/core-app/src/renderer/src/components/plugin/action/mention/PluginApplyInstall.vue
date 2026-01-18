@@ -1,9 +1,10 @@
 <script name="PluginApplyInstall" lang="ts" setup>
 import { sleep } from '@talex-touch/utils'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import Loading from '~/assets/lotties/compress-loading.json'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { clearBufferedFile, getBufferedFile } from '~/modules/hooks/dropper-resolver'
 import { blowMention, forTouchTip } from '~/modules/mention/dialog-mention'
 
@@ -19,6 +20,8 @@ const props = defineProps<{
   fileName: string
 }>()
 
+const transport = useTuffTransport()
+const installEvent = defineRawEvent<any, any>('@install-plugin')
 const installing = ref(false)
 const close = inject('destroy') as () => void
 
@@ -36,7 +39,7 @@ async function install(forceUpdate = false): Promise<void> {
   try {
     await sleep(400)
 
-    const data = await touchChannel.send('@install-plugin', {
+    const data = await transport.send(installEvent, {
       name: props.fileName,
       buffer,
       forceUpdate

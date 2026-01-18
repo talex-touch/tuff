@@ -7,21 +7,34 @@
  *
  * @example
  * ```vue
- * <TxBlockSlot title="Theme" description="Choose your preferred theme" icon="i-carbon-color-palette">
+ * <TxBlockSlot
+ *   title="Theme"
+ *   description="Choose your preferred theme"
+ *   default-icon="i-carbon-color-palette"
+ * >
  *   <select>...</select>
  * </TxBlockSlot>
  * ```
  *
  * @component
  */
+import type { TxIconSource } from '../../icon'
 import type { BlockSlotEmits, BlockSlotProps } from './types'
+import { computed } from 'vue'
+import { TuffIcon } from '../../icon'
 
 defineOptions({
   name: 'TxBlockSlot',
 })
 
+type IconValue = TxIconSource | string | null | undefined
+
 const props = withDefaults(defineProps<BlockSlotProps>(), {
+  title: '',
+  description: '',
+  iconSize: 20,
   disabled: false,
+  active: false,
 })
 
 const emit = defineEmits<BlockSlotEmits>()
@@ -31,22 +44,56 @@ const emit = defineEmits<BlockSlotEmits>()
  * @param event - The mouse event
  */
 function handleClick(event: MouseEvent): void {
-  if (!props.disabled) {
-    emit('click', event)
-  }
+  if (props.disabled)
+    return
+  emit('click', event)
 }
+
+function toIcon(icon?: IconValue): TxIconSource | null {
+  if (!icon)
+    return null
+  if (typeof icon === 'string')
+    return { type: 'class', value: icon }
+  return icon
+}
+
+const defaultIcon = computed(() => {
+  if (props.defaultIcon !== undefined)
+    return toIcon(props.defaultIcon)
+  return toIcon(props.icon)
+})
+
+const activeIcon = computed(() => {
+  if (props.activeIcon !== undefined)
+    return toIcon(props.activeIcon)
+  return null
+})
+
+const currentIcon = computed(() => {
+  if (props.active)
+    return activeIcon.value ?? defaultIcon.value
+  return defaultIcon.value ?? activeIcon.value
+})
 </script>
 
 <template>
   <div
-    class="tx-block-slot fake-background index-fix"
-    :class="{ 'tx-block-slot--disabled': disabled }"
+    class="tx-block-slot TBlockSlot-Container TBlockSelection fake-background index-fix"
+    :class="{ 'tx-block-slot--disabled': disabled, disabled }"
     @click="handleClick"
   >
-    <div class="tx-block-slot__content">
-      <i v-if="icon" :class="icon" class="tx-block-slot__icon" aria-hidden="true" />
-      <div class="tx-block-slot__label">
-        <slot name="label">
+    <div class="tx-block-slot__content TBlockSlot-Content TBlockSelection-Content">
+      <slot name="icon" :active="active">
+        <TuffIcon v-if="currentIcon" :icon="currentIcon" :size="iconSize" />
+      </slot>
+      <div class="tx-block-slot__label TBlockSlot-Label TBlockSelection-Label">
+        <template v-if="$slots.label">
+          <slot name="label" />
+          <div v-if="$slots.tags" class="tx-block-slot__tags tx-block-slot__tags--after">
+            <slot name="tags" />
+          </div>
+        </template>
+        <template v-else>
           <div class="tx-block-slot__title-row">
             <h5 class="tx-block-slot__title">
               {{ title }}
@@ -58,17 +105,17 @@ function handleClick(event: MouseEvent): void {
           <p class="tx-block-slot__description">
             {{ description }}
           </p>
-        </slot>
+        </template>
       </div>
     </div>
-    <div class="tx-block-slot__slot">
-      <slot />
+    <div class="tx-block-slot__slot TBlockSlot-Slot TBlockSelection-Func">
+      <slot :active="active" />
     </div>
   </div>
 </template>
 
 <style lang="scss">
-.tx-block-slot {
+:is(.tx-block-slot, .TBlockSlot-Container) {
   position: relative;
   display: flex;
   justify-content: space-between;
@@ -78,16 +125,14 @@ function handleClick(event: MouseEvent): void {
   width: 100%;
   height: 56px;
   user-select: none;
-  border-radius: 4px;
+  border-radius: 12px;
   box-sizing: border-box;
-  --fake-color: var(--tx-fill-color, #ebeef5);
-  --fake-radius: 4px;
-  --fake-opacity: 0.45;
-  background: transparent;
-  transition: background-color 0.25s ease;
+  --fake-color: var(--tx-fill-color-darker, #ebeef5);
+  --fake-radius: 12px;
+  --fake-opacity: 0.5;
 
   &:hover {
-    --fake-color: var(--tx-fill-color, #ebeef5);
+    --fake-color: var(--tx-fill-color, #f0f2f5);
   }
 
   &--disabled {
@@ -95,41 +140,45 @@ function handleClick(event: MouseEvent): void {
     pointer-events: none;
   }
 
-  &__content {
+  &.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .tx-block-slot__content {
     display: flex;
     align-items: center;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
     cursor: pointer;
-    gap: 16px;
+
+    > * {
+      margin-right: 16px;
+      font-size: 24px;
+    }
+
+    > .tx-block-slot__label {
+      flex: 1;
+    }
+
+    .tx-block-slot__title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--tx-text-color-primary, #303133);
+    }
+
+    .tx-block-slot__description {
+      margin: 2px 0 0;
+      font-size: 12px;
+      font-weight: 400;
+      opacity: 0.5;
+      color: var(--tx-text-color-secondary, #909399);
+    }
   }
 
-  &__icon {
-    font-size: 24px;
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &__label {
-    flex: 1;
-  }
-
-  &__title {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--tx-text-color-primary, #303133);
-  }
-
-  &__description {
-    margin: 0;
-    font-size: 12px;
-    font-weight: 400;
-    opacity: 0.5;
-    color: var(--tx-text-color-secondary, #909399);
-  }
-
-  &__title-row {
+  .tx-block-slot__title-row {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -137,7 +186,7 @@ function handleClick(event: MouseEvent): void {
     width: 100%;
   }
 
-  &__tags {
+  .tx-block-slot__tags {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -148,13 +197,25 @@ function handleClick(event: MouseEvent): void {
     height: auto;
   }
 
-  &__slot {
+  .tx-block-slot__tags--after {
+    margin-top: 4px;
+  }
+
+  .tx-block-slot__slot {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     margin-left: auto;
     flex-shrink: 0;
     gap: 8px;
+  }
+}
+
+.touch-blur :is(.tx-block-slot, .TBlockSlot-Container) {
+  --fake-color: var(--tx-fill-color, #f0f2f5);
+
+  &:hover {
+    --fake-color: var(--tx-fill-color-darker, #ebeef5);
   }
 }
 </style>

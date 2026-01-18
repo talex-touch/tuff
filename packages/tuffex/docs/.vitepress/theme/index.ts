@@ -36,6 +36,14 @@ import {
   TxDrawer,
   TxDropdownItem,
   TxDropdownMenu,
+  TxEmptyState,
+  TxBlankSlate,
+  TxLoadingState,
+  TxNoSelection,
+  TxNoData,
+  TxSearchEmpty,
+  TxOfflineState,
+  TxPermissionState,
   TxEmpty,
   TxFlex,
   TxFusion,
@@ -196,6 +204,14 @@ export default {
     app.component('TxContextMenu', TxContextMenu)
     app.component('TxContextMenuItem', TxContextMenuItem)
     app.component('TxEmpty', TxEmpty)
+    app.component('TxEmptyState', TxEmptyState)
+    app.component('TxBlankSlate', TxBlankSlate)
+    app.component('TxLoadingState', TxLoadingState)
+    app.component('TxNoSelection', TxNoSelection)
+    app.component('TxNoData', TxNoData)
+    app.component('TxSearchEmpty', TxSearchEmpty)
+    app.component('TxOfflineState', TxOfflineState)
+    app.component('TxPermissionState', TxPermissionState)
     app.component('TxRadio', TxRadio)
     app.component('TxRadioGroup', TxRadioGroup)
     app.component('TxAgentsList', TxAgentsList)

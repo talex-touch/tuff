@@ -98,6 +98,10 @@ export interface UpdateSettings {
   ignoredVersions: string[]
   customSources: CustomUpdateConfig[]
   /**
+   * Automatically download update packages when available.
+   */
+  autoDownload?: boolean
+  /**
    * Timestamp (ms) of the last successful update check.
    */
   lastCheckedAt?: number | null
@@ -139,6 +143,7 @@ export const defaultUpdateSettings: UpdateSettings = {
   updateChannel: AppPreviewChannel.RELEASE,
   ignoredVersions: [],
   customSources: [],
+  autoDownload: false,
   lastCheckedAt: null,
   cacheEnabled: true,
   cacheTTL: 30,

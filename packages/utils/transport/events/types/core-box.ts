@@ -3,6 +3,8 @@
  * @module @talex-touch/utils/transport/events/types/core-box
  */
 
+import type { IProviderActivate, TuffItem, TuffQuery, TuffQueryInput } from '../../../core-box/tuff/tuff-dsl'
+
 // ============================================================================
 // UI Types
 // ============================================================================
@@ -84,6 +86,36 @@ export interface SetInputVisibilityRequest {
   visible: boolean
 }
 
+/**
+ * UI view state for CoreBox.
+ */
+export interface CoreBoxUIViewStateResponse {
+  /**
+   * Whether a UI view is currently attached.
+   */
+  isActive: boolean
+
+  /**
+   * Whether the UI view has focus.
+   */
+  isFocused: boolean
+
+  /**
+   * Whether CoreBox is in UI mode.
+   */
+  isUIMode: boolean
+}
+
+/**
+ * Payload for CoreBox UI mode exit.
+ */
+export interface CoreBoxUIModeExitedPayload {
+  /**
+   * Whether renderer should reset input state.
+   */
+  resetInput?: boolean
+}
+
 // ============================================================================
 // Search Types
 // ============================================================================
@@ -94,13 +126,14 @@ export interface SetInputVisibilityRequest {
 export { TuffInputType } from '../../../core-box/tuff/tuff-dsl'
 
 export type {
-  TuffQueryInput as TuffInput,
   TuffQuery,
-} from '../../../core-box/tuff/tuff-dsl'
+  TuffQueryInput as TuffInput,
+  IProviderActivate,
+}
 
 export interface CoreBoxSearchUpdatePayload {
   searchId: string
-  items: unknown[]
+  items: TuffItem[]
 }
 
 export interface CoreBoxSearchEndPayload {
@@ -121,6 +154,18 @@ export interface CoreBoxClearItemsPayload {
 export interface CoreBoxExecuteRequest {
   item: unknown
   searchResult?: unknown
+}
+
+export interface CoreBoxTogglePinRequest {
+  sourceId: string
+  itemId: string
+  sourceType: string
+}
+
+export interface CoreBoxTogglePinResponse {
+  success: boolean
+  isPinned?: boolean
+  error?: string
 }
 
 /**
@@ -348,6 +393,28 @@ export interface ClearInputResponse {
    * Whether input was cleared.
    */
   cleared: boolean
+}
+
+/**
+ * Input change payload from renderer.
+ */
+export interface CoreBoxInputChangeRequest {
+  input?: string
+  query?: TuffQuery
+  source?: 'renderer' | 'initial' | 'ui-monitor'
+}
+
+/**
+ * Serialized keyboard event data for IPC transport.
+ */
+export interface CoreBoxForwardKeyEvent {
+  key: string
+  code: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  repeat: boolean
 }
 
 // ============================================================================

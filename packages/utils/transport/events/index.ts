@@ -56,6 +56,7 @@ import type {
   ExecuteCommandResponse,
   FeatureStats,
   GaugePayload,
+  GetPathRequest,
   HistogramPayload,
   NavigateRequest,
   OpenAppRequest,
@@ -71,6 +72,8 @@ import type {
   ReportMetricsResponse,
   SetLocaleRequest,
   ShowInFolderRequest,
+  StartupRequest,
+  StartupResponse,
   TrackDurationPayload,
   TrackEventPayload,
 } from './types/app'
@@ -117,16 +120,23 @@ import type {
   ClearInputResponse,
   CoreBoxClearItemsPayload,
   CoreBoxExecuteRequest,
+  CoreBoxForwardKeyEvent,
+  CoreBoxInputChangeRequest,
   CoreBoxLayoutUpdateRequest,
   CoreBoxNoResultsPayload,
   CoreBoxSearchEndPayload,
   CoreBoxSearchUpdatePayload,
+  CoreBoxTogglePinRequest,
+  CoreBoxTogglePinResponse,
+  CoreBoxUIModeExitedPayload,
+  CoreBoxUIViewStateResponse,
   DeactivateProviderRequest,
   EnterUIModeRequest,
   ExpandOptions,
   FocusWindowResponse,
   GetInputResponse,
   GetProviderDetailsRequest,
+  IProviderActivate,
   ProviderDetail,
   SetInputRequest,
   SetInputResponse,
@@ -220,6 +230,10 @@ import type {
   FlowAcknowledgeRequest,
   FlowAcknowledgeResponse,
   FlowCancelResponse,
+  FlowConsentCheckRequest,
+  FlowConsentCheckResponse,
+  FlowConsentGrantRequest,
+  FlowConsentGrantResponse,
   FlowDeliverPayload,
   FlowDispatchRequest,
   FlowDispatchResponse,
@@ -277,6 +291,15 @@ import type {
   PermissionStartupRequestPayload,
   PermissionUpdatedPayload,
 } from './types/permission'
+
+// ============================================================================
+// Platform Events
+// ============================================================================
+
+import type {
+  PlatformCapabilityListRequest,
+  PlatformCapabilityListResponse,
+} from './types/platform'
 
 // ============================================================================
 // Tray Events
@@ -553,12 +576,28 @@ export const AppEvents = {
       .define<void, string>(),
 
     /**
+     * Resolve an Electron app path.
+     */
+    getPath: defineEvent('app')
+      .module('system')
+      .event('get-path')
+      .define<GetPathRequest, string | null>(),
+
+    /**
      * Read a local file as text.
      */
     readFile: defineEvent('app')
       .module('system')
       .event('read-file')
       .define<ReadFileRequest, string>(),
+
+    /**
+     * Get startup handshake info.
+     */
+    startup: defineEvent('app')
+      .module('system')
+      .event('startup')
+      .define<StartupRequest, StartupResponse>(),
   },
 
   /**
@@ -1108,6 +1147,16 @@ export const FlowEvents = {
     .event('select-target')
     .define<FlowSelectTargetRequest, FlowSelectTargetResponse>(),
 
+  checkConsent: defineEvent('flow')
+    .module('consent')
+    .event('check')
+    .define<FlowConsentCheckRequest, FlowConsentCheckResponse>(),
+
+  grantConsent: defineEvent('flow')
+    .module('consent')
+    .event('grant')
+    .define<FlowConsentGrantRequest, FlowConsentGrantResponse>(),
+
   sessionUpdate: defineEvent('flow')
     .module('session')
     .event('update')
@@ -1252,6 +1301,26 @@ export const CoreBoxEvents = {
      * Focus the CoreBox window.
      */
     focusWindow: defineRawEvent<void, FocusWindowResponse>('core-box:focus-window'),
+
+    /**
+     * Forward a key event to the attached UI view.
+     */
+    forwardKeyEvent: defineRawEvent<CoreBoxForwardKeyEvent, void>('core-box:forward-key-event'),
+
+    /**
+     * Query current UI view state.
+     */
+    getUIViewState: defineRawEvent<void, CoreBoxUIViewStateResponse>('core-box:get-ui-view-state'),
+
+    /**
+     * Notify renderer that CoreBox was triggered by shortcut.
+     */
+    shortcutTriggered: defineRawEvent<void, void>('core-box:shortcut-triggered'),
+
+    /**
+     * Notify renderer that UI mode exited.
+     */
+    uiModeExited: defineRawEvent<CoreBoxUIModeExitedPayload, void>('core-box:ui-mode-exited'),
   },
 
   /**
@@ -1333,6 +1402,11 @@ export const CoreBoxEvents = {
     setVisibility: defineRawEvent<SetInputVisibilityRequest, void>('core-box:set-input-visibility'),
 
     /**
+     * Broadcast input changes from renderer.
+     */
+    change: defineRawEvent<CoreBoxInputChangeRequest, void>('core-box:input-change'),
+
+    /**
      * Request input value from renderer.
      */
     requestValue: defineRawEvent<void, GetInputResponse>('core-box:request-input-value'),
@@ -1347,9 +1421,11 @@ export const CoreBoxEvents = {
    * Item execution and mutations.
    */
   item: {
-    execute: defineRawEvent<CoreBoxExecuteRequest, void>('core-box:execute'),
+    execute: defineRawEvent<CoreBoxExecuteRequest, IProviderActivate[] | null>('core-box:execute'),
 
     clear: defineRawEvent<CoreBoxClearItemsPayload | void, void>('core-box:clear-items'),
+
+    togglePin: defineRawEvent<CoreBoxTogglePinRequest, CoreBoxTogglePinResponse>('core-box:toggle-pin'),
   },
 
   /**
@@ -1365,6 +1441,11 @@ export const CoreBoxEvents = {
      * Deactivate all providers.
      */
     deactivateAll: defineRawEvent<void, ActivationState>('core-box:deactivate-providers'),
+
+    /**
+     * Get current activated providers.
+     */
+    getActivated: defineRawEvent<void, ActivationState>('core-box:get-activated-providers'),
 
     /**
      * Get details for multiple providers.
@@ -1864,6 +1945,15 @@ export const PermissionEvents = {
   },
 } as const
 
+export const PlatformEvents = {
+  capabilities: {
+    list: defineEvent('platform')
+      .module('capabilities')
+      .event('list')
+      .define<PlatformCapabilityListRequest | void, PlatformCapabilityListResponse>(),
+  },
+} as const
+
 export const AgentsEvents = {
   api: {
     list: defineRawEvent<void, AgentsListResponse>('agents:list'),
@@ -2178,6 +2268,7 @@ export const TuffEvents = {
   plugin: PluginEvents,
   market: MarketEvents,
   permission: PermissionEvents,
+  platform: PlatformEvents,
   agents: AgentsEvents,
   tray: TrayEvents,
   sentry: SentryEvents,

@@ -1,6 +1,6 @@
 <script lang="ts" name="Plugin" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { useTouchSDK } from '@talex-touch/utils/renderer'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatButton from '~/components/base/button/FlatButton.vue'
@@ -10,10 +10,13 @@ import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 import PluginInfo from '~/components/plugin/PluginInfo.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { appSetting } from '~/modules/channel/storage'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 import PluginNew from './plugin/PluginNew.vue'
 
 const { t } = useI18n()
+const appSdk = useAppSdk()
+const { ensureStartupInfo } = useStartupInfo()
 
 const { plugins, curSelect, selectPlugin } = usePluginSelection()
 const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
@@ -23,7 +26,6 @@ const visiblePlugins = computed(() => {
 })
 
 const drawerVisible = ref(false)
-const touchSdk = useTouchSDK()
 const searchQuery = ref('')
 const selectedPlugin = ref<ITouchPlugin | null>(null)
 
@@ -65,7 +67,12 @@ async function handleOpenPluginFolder(): Promise<void> {
 
   loadingStates.value.openFolder = true
   try {
-    await touchSdk.openModuleFolder('plugins')
+    const info = await ensureStartupInfo()
+    const pluginPath = info?.path?.pluginPath || info?.path?.modulePath
+    if (!pluginPath) {
+      throw new Error('Plugin path unavailable')
+    }
+    await appSdk.showInFolder(pluginPath)
   } catch (error) {
     console.error('Failed to open plugin folder:', error)
   } finally {

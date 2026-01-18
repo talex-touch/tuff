@@ -37,11 +37,16 @@ async function handleCallback() {
     }
 
     const token = data.value.token
-    sessionToken.value = token
+    const appToken = data.value.appToken
+    sessionToken.value = appToken || token
     status.value = 'success'
 
     // Redirect to app with token
-    const callbackUrl = `${APP_SCHEMA}://auth/callback?token=${encodeURIComponent(token)}`
+    const params = new URLSearchParams({ token })
+    if (appToken) {
+      params.set('app_token', appToken)
+    }
+    const callbackUrl = `${APP_SCHEMA}://auth/callback?${params.toString()}`
     window.location.href = callbackUrl
 
     // In dev mode, show fallback after a delay (protocol might not work)

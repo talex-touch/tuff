@@ -1,6 +1,7 @@
 <script lang="ts" name="IntelligenceChannelsPage" setup>
 import type { IntelligenceProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -10,11 +11,11 @@ import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 
 const { t } = useI18n()
-const aiClient = createIntelligenceClient(touchChannel as any)
+const transport = useTuffTransport()
+const aiClient = createIntelligenceClient(transport)
 
 const {
   providers,
@@ -22,7 +23,7 @@ const {
   selectedProvider,
   addProvider,
   updateProvider,
-  removeProvider,
+  removeProvider
 } = useIntelligenceManager()
 
 const testResult = ref<TestResult | null>(null)
@@ -40,7 +41,7 @@ function handleAddProvider(): void {
     priority: 3,
     models: [],
     timeout: 30000,
-    rateLimit: {},
+    rateLimit: {}
   })
   selectedProviderId.value = id
 }
@@ -55,33 +56,29 @@ function handleUpdateProvider(updatedProvider: IntelligenceProviderConfig): void
 }
 
 async function handleTestProvider(): Promise<void> {
-  if (!selectedProvider.value || isTesting.value)
-    return
+  if (!selectedProvider.value || isTesting.value) return
   isTesting.value = true
   testResult.value = null
   try {
     const response = (await aiClient.testProvider(selectedProvider.value)) as TestResult
     testResult.value = response
-  }
-  catch (error) {
+  } catch (error) {
     testResult.value = {
       success: false,
       message: error instanceof Error ? error.message : '连接测试失败',
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
-  }
-  finally {
+  } finally {
     isTesting.value = false
   }
 }
 
 function handleDeleteProvider(): void {
-  if (!selectedProvider.value)
-    return
+  if (!selectedProvider.value) return
   const deletedId = selectedProvider.value.id
 
   // Find current index before deletion
-  const currentIndex = providers.value.findIndex(p => p.id === deletedId)
+  const currentIndex = providers.value.findIndex((p) => p.id === deletedId)
 
   // Remove the provider
   removeProvider(deletedId)
@@ -92,8 +89,7 @@ function handleDeleteProvider(): void {
     // Try to select the provider at the same index, or the last one if index is out of bounds
     const newIndex = Math.min(currentIndex, remainingProviders.length - 1)
     selectedProviderId.value = remainingProviders[newIndex].id
-  }
-  else {
+  } else {
     selectedProviderId.value = null
   }
 
@@ -102,7 +98,7 @@ function handleDeleteProvider(): void {
 }
 
 function navigateToNextProvider(): void {
-  const currentIndex = providers.value.findIndex(p => p.id === selectedProviderId.value)
+  const currentIndex = providers.value.findIndex((p) => p.id === selectedProviderId.value)
   if (currentIndex < providers.value.length - 1) {
     selectedProviderId.value = providers.value[currentIndex + 1].id
     testResult.value = null
@@ -110,7 +106,7 @@ function navigateToNextProvider(): void {
 }
 
 function navigateToPreviousProvider(): void {
-  const currentIndex = providers.value.findIndex(p => p.id === selectedProviderId.value)
+  const currentIndex = providers.value.findIndex((p) => p.id === selectedProviderId.value)
   if (currentIndex > 0) {
     selectedProviderId.value = providers.value[currentIndex - 1].id
     testResult.value = null
@@ -119,7 +115,7 @@ function navigateToPreviousProvider(): void {
 
 useKeyboardNavigation({
   onNavigateDown: navigateToNextProvider,
-  onNavigateUp: navigateToPreviousProvider,
+  onNavigateUp: navigateToPreviousProvider
 })
 
 // Debug: Log providers data on mount

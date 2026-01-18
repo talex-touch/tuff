@@ -19,7 +19,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
-import type { Primitive } from '../../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import type {
   SearchIndexItem,
   SearchIndexKeyword,
@@ -70,7 +70,7 @@ import {
 import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
 import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
-import { fileProviderLog, formatDuration } from '../../../../utils/logger'
+import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getConfig, saveConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
@@ -90,6 +90,7 @@ import { IconWorkerClient } from './workers/icon-worker-client'
 
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
+const fileProviderLog = getLogger('file-provider')
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
 
@@ -335,42 +336,52 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     void this.extractContentForFiles
   }
 
-  private logInfo(message: string, meta?: Record<string, Primitive>): void {
+  private logInfo(message: string, meta?: Record<string, unknown>): void {
     if (meta) {
-      fileProviderLog.info(message, { meta })
+      fileProviderLog.info(message, meta)
     } else {
       fileProviderLog.info(message)
     }
   }
 
-  private logWarn(message: string, error?: unknown, meta?: Record<string, Primitive>): void {
-    if (error || meta) {
-      fileProviderLog.warn(message, {
-        ...(meta ? { meta } : {}),
-        ...(error ? { error } : {})
-      })
-    } else {
-      fileProviderLog.warn(message)
+  private logWarn(message: string, error?: unknown, meta?: Record<string, unknown>): void {
+    if (error && meta) {
+      fileProviderLog.warn(message, { ...meta, error })
+      return
     }
+    if (meta) {
+      fileProviderLog.warn(message, meta)
+      return
+    }
+    if (error) {
+      fileProviderLog.warn(message, error)
+      return
+    }
+    fileProviderLog.warn(message)
   }
 
-  private logDebug(message: string, meta?: Record<string, Primitive>): void {
+  private logDebug(message: string, meta?: Record<string, unknown>): void {
     if (meta) {
-      fileProviderLog.debug(message, { meta })
+      fileProviderLog.debug(message, meta)
     } else {
       fileProviderLog.debug(message)
     }
   }
 
-  private logError(message: string, error?: unknown, meta?: Record<string, Primitive>): void {
-    if (error || meta) {
-      fileProviderLog.error(message, {
-        ...(meta ? { meta } : {}),
-        ...(error ? { error } : {})
-      })
-    } else {
-      fileProviderLog.error(message)
+  private logError(message: string, error?: unknown, meta?: Record<string, unknown>): void {
+    if (error && meta) {
+      fileProviderLog.error(message, { ...meta, error })
+      return
     }
+    if (meta) {
+      fileProviderLog.error(message, meta)
+      return
+    }
+    if (error) {
+      fileProviderLog.error(message, error)
+      return
+    }
+    fileProviderLog.error(message)
   }
 
   private recordContentFailure(

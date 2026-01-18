@@ -4,21 +4,21 @@
   Sentry privacy controls and analytics settings
 -->
 <script setup lang="ts" name="SettingSentry">
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import FlatButton from '~/components/base/button/FlatButton.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 
 const { t } = useI18n()
-
-const NEXUS_URL = getTuffBaseUrl()
 
 interface TelemetryStats {
   searchCount: number
@@ -41,10 +41,15 @@ const searchCount = ref(0)
 const telemetryStats = ref<TelemetryStats | null>(null)
 const isDev = import.meta.env.DEV
 const autoRefreshTimer = ref<number | null>(null)
+const transport = useTuffTransport()
+const appSdk = useAppSdk()
+const authBaseUrl = getAuthBaseUrl()
 
 async function loadConfig() {
   try {
-    const config = (await touchChannel.send('storage:get', 'sentry-config.json')) as {
+    const config = (await transport.send(StorageEvents.app.get, {
+      key: 'sentry-config.json'
+    })) as {
       enabled?: boolean
       anonymous?: boolean
     }
@@ -60,12 +65,12 @@ async function refreshStats(options?: { silent?: boolean }) {
 
   statsLoading.value = true
   try {
-    const count = await touchChannel.send('sentry:get-search-count')
+    const count = await transport.send(SentryEvents.api.getSearchCount)
     searchCount.value = typeof count === 'number' ? count : 0
 
     if (isDev) {
-      telemetryStats.value = (await touchChannel.send(
-        'sentry:get-telemetry-stats'
+      telemetryStats.value = (await transport.send(
+        SentryEvents.api.getTelemetryStats
       )) as TelemetryStats
     }
   } catch (error) {
@@ -94,7 +99,7 @@ function stopAutoRefresh() {
 async function saveConfig() {
   loading.value = true
   try {
-    await touchChannel.send('storage:save', {
+    await transport.send(StorageEvents.app.save, {
       key: 'sentry-config.json',
       content: JSON.stringify({
         enabled: enabled.value,
@@ -122,13 +127,13 @@ async function updateAnonymous(value: boolean) {
 }
 
 function openPrivacySettings() {
-  const privacyUrl = `${NEXUS_URL}/dashboard/privacy`
-  touchChannel.send('open-external', { url: privacyUrl })
+  const privacyUrl = `${getAuthBaseUrl()}/dashboard/privacy`
+  appSdk.openExternal(privacyUrl).catch(() => {})
 }
 
 function openNexusDashboard() {
-  const dashboardUrl = `${NEXUS_URL}/dashboard/analytics`
-  touchChannel.send('open-external', { url: dashboardUrl })
+  const dashboardUrl = `${getAuthBaseUrl()}/dashboard/analytics`
+  appSdk.openExternal(dashboardUrl).catch(() => {})
 }
 
 function formatTimestamp(ts: number | null) {
@@ -282,7 +287,7 @@ onBeforeUnmount(() => {
       <TuffBlockLine :title="t('settingSentry.apiBase', 'API 地址')">
         <template #description>
           <span class="font-mono text-[var(--el-text-color-primary)] break-all">
-            {{ telemetryStats.apiBase || NEXUS_URL }}
+            {{ telemetryStats.apiBase || authBaseUrl }}
           </span>
         </template>
       </TuffBlockLine>

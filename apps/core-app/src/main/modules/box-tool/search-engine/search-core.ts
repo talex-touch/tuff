@@ -23,7 +23,7 @@ import {
   touchEventBus
 } from '../../../core/eventbus/touch-event'
 import { createDbUtils } from '../../../db/utils'
-import { createLogger } from '../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
@@ -48,7 +48,7 @@ import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
 
-const searchEngineLog = createLogger('SearchEngineCore')
+const searchEngineLog = getLogger('search-engine')
 // import intelligenceSearchProvider from './providers/intelligence-provider' // Removed - 使用 internal-ai-plugin
 
 /**
@@ -174,6 +174,8 @@ export class SearchEngineCore
   private timeStatsAggregator: TimeStatsAggregator | null = null
   private latestSessionId: string | null = null // 跟踪最新的搜索 session，防止竞态条件
   private searchSessionStartTimes = new Map<string, number>()
+  private pinnedCache: { fetchedAt: number; pinnedSet: Set<string> } | null = null
+  private readonly pinnedCacheTtlMs = 10_000
 
   private touchApp: TouchApp | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
@@ -221,7 +223,7 @@ export class SearchEngineCore
       return
     }
     this.providers.set(provider.id, provider)
-    searchEngineLog.success(`Search provider '${provider.id}' registered`)
+    searchEngineLog.info(`Search provider '${provider.id}' registered`)
 
     if (provider.onLoad) {
       this.providersToLoad.push(provider)
@@ -246,7 +248,7 @@ export class SearchEngineCore
         searchIndex: this.searchIndexService
       })
       const duration = Date.now() - startTime
-      searchEngineLog.success(`Provider '${provider.id}' loaded in ${duration}ms`)
+      searchEngineLog.info(`Provider '${provider.id}' loaded in ${duration}ms`)
     } catch (error) {
       const duration = Date.now() - startTime
       searchEngineLog.error(`Failed to load provider '${provider.id}' after ${duration}ms`, {
@@ -964,10 +966,8 @@ export class SearchEngineCore
     const start = performance.now()
 
     try {
-      const pinnedRecords = await this.dbUtils.getAllPinnedItems()
-      if (pinnedRecords.length === 0) return
-
-      const pinnedSet = new Set(pinnedRecords.map((p) => `${p.sourceId}:${p.itemId}`))
+      const pinnedSet = await this.getPinnedSet()
+      if (pinnedSet.size === 0) return
 
       let injectedCount = 0
       for (const item of items) {
@@ -998,6 +998,29 @@ export class SearchEngineCore
     } catch (error) {
       searchEngineLog.error('Failed to inject pinned state', { error })
     }
+  }
+
+  private invalidatePinnedCache(): void {
+    this.pinnedCache = null
+  }
+
+  private async getPinnedSet(): Promise<Set<string>> {
+    if (!this.dbUtils) return new Set()
+
+    const now = Date.now()
+    if (this.pinnedCache && now - this.pinnedCache.fetchedAt < this.pinnedCacheTtlMs) {
+      return this.pinnedCache.pinnedSet
+    }
+
+    const pinnedRecords = await this.dbUtils.getAllPinnedItems()
+    const pinnedSet = new Set(pinnedRecords.map((p) => `${p.sourceId}:${p.itemId}`))
+
+    this.pinnedCache = {
+      fetchedAt: now,
+      pinnedSet
+    }
+
+    return pinnedSet
   }
 
   /** Record search result display stats for top 10 items */
@@ -1324,7 +1347,7 @@ export class SearchEngineCore
         await instance.loadProvider(provider)
       }
       instance.providersToLoad = []
-      searchEngineLog.success('All providers loaded successfully')
+      searchEngineLog.info('All providers loaded successfully')
 
       // 启动汇总服务
       instance.usageSummaryService?.start()
@@ -1446,6 +1469,7 @@ export class SearchEngineCore
       try {
         const { sourceId, itemId, sourceType } = data
         const isPinned = await instance.dbUtils.togglePin(sourceId, itemId, sourceType)
+        instance.invalidatePinnedCache()
         return { success: true, isPinned }
       } catch (error) {
         searchEngineLog.error('Failed to toggle pin', { error })

@@ -1,8 +1,12 @@
 import type { IntelligenceInvokeOptions, IntelligenceInvokeResult, IntelligenceProviderConfig } from '../types/intelligence'
+import type { ITuffTransport } from '../transport/types'
+import { defineRawEvent } from '../transport/event/builder'
 
 export interface IntelligenceClientChannel {
   send: (eventName: string, payload: unknown) => Promise<any>
 }
+
+type IntelligenceChannelLike = IntelligenceClientChannel | ITuffTransport
 
 export type IntelligenceChannelResolver = () => IntelligenceClientChannel | null | undefined
 
@@ -56,8 +60,28 @@ export interface IntelligenceClient {
   fetchModels: (config: IntelligenceProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
 }
 
-export function createIntelligenceClient(channel?: IntelligenceClientChannel, resolvers?: IntelligenceChannelResolver[]): IntelligenceClient {
-  const resolvedChannel = channel ?? resolveIntelligenceChannel(resolvers)
+function isTuffTransport(channel: IntelligenceChannelLike | null | undefined): channel is ITuffTransport {
+  return Boolean(channel && typeof (channel as ITuffTransport).stream === 'function')
+}
+
+function createTransportAdapter(transport: ITuffTransport): IntelligenceClientChannel {
+  return {
+    send: (eventName: string, payload: unknown) => {
+      const event = defineRawEvent<unknown, unknown>(eventName)
+      return transport.send(event, payload as unknown)
+    },
+  }
+}
+
+export function createIntelligenceClient(
+  channel?: IntelligenceChannelLike,
+  resolvers?: IntelligenceChannelResolver[]
+): IntelligenceClient {
+  let resolvedChannel: IntelligenceClientChannel | ITuffTransport | null | undefined =
+    channel ?? resolveIntelligenceChannel(resolvers)
+  if (resolvedChannel && isTuffTransport(resolvedChannel)) {
+    resolvedChannel = createTransportAdapter(resolvedChannel)
+  }
   if (!resolvedChannel) {
     throw new Error('[Intelligence Client] Unable to resolve channel. Pass a channel instance or register a resolver.')
   }

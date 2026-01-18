@@ -1,6 +1,47 @@
 # AGENTS.md
 
-This file provides guidance to Qoder (qoder.com) when working with code in this repository.
+本文件用于指导 AI 编码代理（如 Codex CLI / Qoder 等）在本仓库内工作。目标是：少歧义、可执行、可维护。
+
+## 0. 最高优先级（必须遵守）
+
+### 0.1 语言与输出
+- 默认使用中文（可混用英文技术术语）；代码标识符使用英文。
+- 代码注释语言跟随所在目录/文件的既有风格（不要引入新的语言混用）。
+- 执行类任务建议采用“进度式”汇报；分析类任务采用“结论 + 关键分析”。
+
+### 0.2 安全与高风险操作确认
+在执行以下**高风险操作**前，必须先向用户说明影响范围并获得明确确认：
+- 文件系统：删除文件/目录、批量修改/重命名/移动
+- Git：`git commit`、`git push`、`git reset --hard` 等不可逆操作
+- 系统配置：环境变量、权限、系统设置变更
+- 数据操作：数据库删除/结构变更/批量更新
+- 网络请求：向外部服务发送敏感数据或调用生产环境 API
+- 包管理：全局安装/卸载、升级核心依赖（尤其大版本）
+
+确认提示格式（需要用户明确回复“是/确认/继续”）：
+```text
+⚠️ 危险操作检测！
+操作类型：[具体操作]
+影响范围：[详细说明]
+风险评估：[潜在后果]
+
+请确认是否继续？[需要明确的"是"、"确认"、"继续"]
+```
+
+### 0.3 工程原则（默认约束）
+- KISS / YAGNI：优先最小改动解决根因，避免无关重构与“为未来预留”。
+- DRY：避免重复实现；若抽象能显著减少重复再做抽取。
+- SOLID：保持单一职责，控制分支/嵌套深度，优先小函数与清晰接口。
+- 向后兼容：未经明确要求不破坏现有 API/CLI 行为/数据格式。
+
+### 0.4 工作流与工具偏好
+- 先读后写：先收敛上下文再修改；优先用精确搜索定位改动点。
+- 多步任务（≥2 步）使用计划追踪（如 `update_plan`）并随进度更新。
+- 命令规范：路径始终使用双引号包裹；优先使用正斜杠 `/`；内容搜索优先 `rg`。
+- SDK 优先：优先使用封装好的 SDK，只有在缺少 SDK 或能力不足时才直接使用 transport 通道。
+- 未经用户主动要求，不要执行 git 提交/推送/创建分支等操作。
+- 修改完成后按需运行最贴近改动的校验（lint/typecheck/test/build），不修复无关失败项。
+- 文档/网络检索：离线与本仓库信息优先；外部请求需最小化并避免敏感信息外传。
 
 ## Monorepo 维护标准（精简版）
 
@@ -23,14 +64,14 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 - `pnpm core:build:snapshot:mac` - macOS 快照构建
 - `pnpm core:build:snapshot:linux` - Linux 快照构建
 
-### 类型检查（在 apps/core-app/ 目录下执行）
-- `npm run typecheck` - 完整类型检查（主进程 + 渲染进程）
-- `npm run typecheck:node` - 仅主进程类型检查
-- `npm run typecheck:web` - 仅渲染进程类型检查
+### 类型检查（推荐 workspace 方式）
+- `pnpm -C "apps/core-app" run typecheck` - 完整类型检查（主进程 + 渲染进程）
+- `pnpm -C "apps/core-app" run typecheck:node` - 仅主进程类型检查
+- `pnpm -C "apps/core-app" run typecheck:web` - 仅渲染进程类型检查
 
-### 数据库操作（在 apps/core-app/ 目录下执行）
-- `npm run db:generate` - 生成 Drizzle ORM 迁移文件
-- `npm run db:migrate` - 执行数据库迁移
+### 数据库操作（在 core-app 内执行）
+- `pnpm -C "apps/core-app" run db:generate` - 生成 Drizzle ORM 迁移文件
+- `pnpm -C "apps/core-app" run db:migrate` - 执行数据库迁移
 
 ### 代码质量
 - `pnpm lint` - 运行 ESLint 检查

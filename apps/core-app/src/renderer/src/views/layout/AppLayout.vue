@@ -27,6 +27,22 @@ const { canNavigateBack, navigateBack } = useSecondaryNavigation({
 
 const routeTransitionStartedAt = new Map<string, number>()
 
+function isKeepAliveRoute(route: { meta?: Record<string, unknown> } | null | undefined): boolean {
+  return Boolean(route?.meta && (route.meta as { keepAlive?: boolean }).keepAlive)
+}
+
+function resolveRouteCacheKey(route: { name?: unknown; fullPath?: string; meta?: any }): string {
+  const metaKey =
+    route?.meta && typeof route.meta.keepAliveKey === 'string' ? route.meta.keepAliveKey : ''
+  if (metaKey) {
+    return metaKey
+  }
+
+  return typeof route?.name === 'string' && route.name.length > 0
+    ? route.name
+    : route?.fullPath || 'unknown-route'
+}
+
 function onRouteEnterStart(fullPath: string): void {
   routeTransitionStartedAt.set(fullPath, performance.now())
 }
@@ -79,7 +95,10 @@ onMounted(() => {
             @before-enter="() => onRouteEnterStart(route.fullPath)"
             @after-enter="() => onRouteEnterEnd(route.fullPath)"
           >
-            <component :is="Component" v-if="Component" :key="route.fullPath" />
+            <KeepAlive v-if="Component && isKeepAliveRoute(route)">
+              <component :is="Component" :key="resolveRouteCacheKey(route)" />
+            </KeepAlive>
+            <component :is="Component" v-else-if="Component" :key="route.fullPath" />
           </transition>
         </router-view>
       </template>

@@ -10,7 +10,7 @@ Flow Transfer 是一个插件间数据流转系统，允许插件将结构化数
 - Target：`onFlowTransfer()` + `acknowledge()` / `reportError()`
 - Native Share：`nativeShare()`
 
-> 权限说明：Flow Transfer 相关能力目前**尚未接入权限中心**（Permission Center）。`PERMISSION_DENIED` 等错误码是预留语义，后续会接入权限门控与用户授权流程。
+> 权限说明：Flow Transfer 已接入权限中心（Permission Center）与授权流程。未授权时会返回 `PERMISSION_DENIED`，并在选择面板触发授权弹窗。
 
 > **v2.4.7 新特性**：
 > - 插件需要主动注册 `onFlowTransfer` 处理器才能接收 Flow 数据

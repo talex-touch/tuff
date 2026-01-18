@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ElMessageBox, ElProgress, ElTabPane, ElTabs } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { appSetting } from '~/modules/channel/storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 
@@ -170,10 +173,12 @@ const loading = ref<boolean>(false)
 const error = ref<string | null>(null)
 const snapshot = ref<TuffDashboardSnapshot | null>(null)
 const activeTab = ref('system')
+const transport = useTuffTransport()
+const dashboardEvent = defineRawEvent<{ limit: number }, any>('tuff:dashboard')
 
 // File indexing progress
 const indexingProgress = ref<{
-  stage: 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
+  stage: FileIndexStage
   current: number
   total: number
   progress: number
@@ -270,28 +275,34 @@ function getStageText(stage: string): string {
 }
 
 function setupIndexingProgressListener(): void {
-  progressUnsubscribe = touchChannel.regChannel('file-index:progress', (data) => {
-    const progressData = data.data as {
-      stage: 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
-      current: number
-      total: number
-      progress: number
-    }
-    if (progressData) {
-      indexingProgress.value = {
-        stage: progressData.stage,
-        current: progressData.current,
-        total: progressData.total,
-        progress: progressData.progress
+  progressUnsubscribe?.()
+  progressUnsubscribe = null
+
+  void transport
+    .stream(AppEvents.fileIndex.progress, undefined, {
+      onData: (progressData) => {
+        if (progressData) {
+          indexingProgress.value = {
+            stage: progressData.stage,
+            current: progressData.current,
+            total: progressData.total,
+            progress: progressData.progress
+          }
+          // Reset to null when completed
+          if (progressData.stage === 'completed') {
+            setTimeout(() => {
+              indexingProgress.value = null
+            }, 2000)
+          }
+        }
       }
-      // Reset to null when completed
-      if (progressData.stage === 'completed') {
-        setTimeout(() => {
-          indexingProgress.value = null
-        }, 2000)
-      }
-    }
-  })
+    })
+    .then((controller) => {
+      progressUnsubscribe = () => controller.cancel()
+    })
+    .catch(() => {
+      progressUnsubscribe = null
+    })
 }
 
 const ocrJobs = computed(() => snapshot.value?.ocr.jobs.slice(0, limit.value) ?? [])
@@ -308,7 +319,7 @@ async function load(): Promise<void> {
   error.value = null
   try {
     const fetchStartedAt = performance.now()
-    const response = await touchChannel.send('tuff:dashboard', { limit: limit.value })
+    const response = await transport.send(dashboardEvent, { limit: limit.value })
     const fetchDurationMs = performance.now() - fetchStartedAt
     reportPerfToMain({
       kind: 'ui.details.fetch',

@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
  
  > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
- > 更新时间: 2025-12-07
+ > 更新时间: 2026-01-18
 
  ## PRD Index（以代码实现为准）
  
@@ -25,9 +25,9 @@
      - `apps/core-app/src/main/modules/permission/`
      - `packages/utils/permission/`
    - **状态**
-     - 核心已完成；Phase 5（测试/性能验证）待补
+     - 核心已完成；Phase 5（测试/性能验证）已落地（performance test）
 
- - **模块日志系统**（Phase 1 已落地，后续迁移未完成）
+- **模块日志系统**（Phase 1-4 已落地）
    - **PRD**：`./02-architecture/module-logging-system-prd.md`
    - **代码**（已落地的 utils 实现）
      - `packages/utils/common/logger/`
@@ -71,9 +71,12 @@
      - 选择面板：`apps/core-app/src/renderer/src/components/flow/FlowSelector.vue`
    - **已完成**
      - IPC 全量迁移：Flow/DivisionBox 全部走 TuffTransport（renderer/main/plugin SDK），移除 legacy `flow:*`/`FlowIPCChannel` 通道
+     - 权限中心接入：Flow 发送/接收授权 + 一次性 token 闭环
+     - Selector ↔ 主进程授权闭环（FlowSelector → FlowBus）
+     - 会话管理与失败回退（FlowSessionManager + fallback copy/rollback）
    - **缺口**
-     - 权限中心接入（Flow 发送/接收、目标授权记忆等）
-     - Selector ↔ 主进程 target selection 的端到端闭环验收
+     - 审计日志（会话历史/失败原因记录）
+     - 测试插件与开发文档补齐
 
  - **DivisionBox（生命周期对插件开放 / SDK 统一）**
    - **PRD**：`./03-features/division-box-prd.md`
@@ -83,16 +86,46 @@
      - Nexus 文档：`apps/nexus/content/docs/dev/api/division-box.zh.md`
    - **已完成**
      - IPC 全量迁移：DivisionBox 全部走 TuffTransport（renderer/main），移除 legacy `division-box:*` 通道
+     - 生命周期事件已对插件 SDK 广播（stateChanged/sessionDestroyed + onLifecycleChange）
    - **缺口**
-     - 生命周期事件（prepare/attach/active/inactive/detach/destroy）对插件侧开放并统一进 SDK
-     - 与 FlowTransfer 的权限/触发入口对齐
+     - 生命周期语义与文档补齐（prepare/attach/detach 等时序说明）
+     - 与 FlowTransfer 的触发链路联调验收
 
  - **AttachUIView 缓存优化**（已做 Hot/LRU 的 MVP，PRD 大部分未落地）
    - **PRD**：`./03-features/view/attach-view-cache-prd.md`
    - **代码**
      - `apps/core-app/src/main/modules/box-tool/core-box/view-cache.ts`
+   - **已完成**
+     - stale cache 轮询清理（PollingService）
    - **缺口**
      - Warm/Cold 分层、Score 模型、Idle preload、SDK 接口、可视化/调试工具
+
+ - **View Mode 与开发模式增强**（部分能力已落地）
+   - **PRD**：`./03-features/view/view-mode-prd.md`
+   - **代码**
+     - `apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
+   - **缺口**
+     - plugin-core 拆分、URL 安全构造、生产环境协议限制、Hash 路由校验
+
+ - **Intelligence Agents（Phase 3 部分落地）**
+   - **PRD**：`./02-architecture/intelligence-agents-system-prd.md`
+   - **代码**
+     - `apps/core-app/src/main/modules/ai/agents/`
+   - **已完成**
+     - WorkflowAgent 基础执行（workflow.run/plan）
+     - 记忆系统基础实现（MemoryStore + ContextManager）
+   - **缺口**
+     - Workflow 编辑器、用户自定义代理、协作与测试
+
+ - **平台能力体系（能力目录 + 管理 UI 基础已落地）**
+   - **PRD**：`./02-architecture/platform-capabilities-prd.md`
+   - **代码**
+     - `apps/core-app/src/main/modules/platform/capability-registry.ts`
+     - `packages/utils/transport/events/index.ts`
+     - `packages/utils/renderer/hooks/use-platform-sdk.ts`
+     - `apps/core-app/src/renderer/src/views/base/settings/SettingPlatformCapabilities.vue`
+   - **缺口**
+     - 能力调用监控、授权审批流程、能力治理策略
 
  ## Dock / Pin / Recommendation 重叠问题（建议）
 

@@ -1,0 +1,63 @@
+# TempFile SDK
+
+<div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #0ea5e9, #22c55e);"></div>
+
+## 介绍
+
+TempFile SDK 用于创建短生命周期的临时文件，适合缓存下载结果、临时导出内容或在插件间传递文件句柄。
+
+## 技术原理
+
+- 主进程 `TempFileService` 统一管理临时目录与清理策略。
+- 通过 `temp-file:create` / `temp-file:delete` IPC 完成创建与删除。
+- 支持可选 `retentionMs`，由主进程定期清理。
+
+## 如何实现的
+
+- 临时文件位于 `userData/temp/<namespace>`。
+- SDK 只负责参数封装与结果校验，真正的文件写入与生命周期由主进程处理。
+
+## 如何使用
+
+### 插件侧
+
+```typescript
+import { useTempPluginFiles } from '@talex-touch/utils/plugin/sdk'
+
+const temp = useTempPluginFiles()
+const result = await temp.create({
+  ext: 'svg',
+  text: '<svg></svg>',
+  retentionMs: 24 * 60 * 60 * 1000
+})
+
+// tfile://...
+console.log(result.url)
+```
+
+### 应用渲染进程
+
+```typescript
+import { useTouchSDK } from '@talex-touch/utils/renderer'
+
+const sdk = useTouchSDK()
+const result = await sdk.createTempFile({
+  namespace: 'icons/svg',
+  ext: 'svg',
+  text: '<svg></svg>',
+  retentionMs: 7 * 24 * 60 * 60 * 1000
+})
+```
+
+## 常见例子
+
+1. 远程 SVG 下载后落地到临时目录，再通过 `tfile://` 访问。
+2. 导出调试日志到临时文件后打开查看。
+
+## 常见问题
+
+**Q: 临时文件会自动清理吗？**  
+A: 会。若设置了 `retentionMs`，主进程会周期性清理过期文件。
+
+**Q: 为什么访问不了 `tfile://`？**  
+A: 该协议仅在 Electron 环境可用，浏览器环境会被拒绝。

@@ -18,12 +18,15 @@ import {
   ElTag
 } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
+import type { PermissionAuditLog } from '@talex-touch/utils'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { PermissionEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 
 import { PermissionList } from '~/components/permission'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
-import { touchChannel } from '~/modules/channel/channel-core'
+const transport = useTuffTransport()
 
 interface PermissionGrant {
   pluginId: string
@@ -44,16 +47,6 @@ interface PluginPermissionInfo {
   warning?: string
 }
 
-interface AuditLogEntry {
-  id: string
-  timestamp: number
-  pluginId: string
-  action: 'grant' | 'revoke' | 'check' | 'deny'
-  permissionId: string
-  triggeredBy: 'user' | 'auto' | 'system' | 'plugin'
-  details?: string
-}
-
 // State
 const loading = ref(true)
 const searchQuery = ref('')
@@ -64,10 +57,10 @@ const expandedPlugins = ref<string[]>([])
 
 // Audit log state
 const showAuditLogs = ref(false)
-const auditLogs = ref<AuditLogEntry[]>([])
+const auditLogs = ref<PermissionAuditLog[]>([])
 const auditLogsTotal = ref(0)
 const auditLogsLoading = ref(false)
-const auditLogFilter = ref<'all' | 'grant' | 'revoke' | 'deny'>('all')
+const auditLogFilter = ref<'all' | PermissionAuditLog['action']>('all')
 
 // Permission info translations
 const permissionTranslations: Record<string, { name: string; desc: string }> = {
@@ -126,16 +119,16 @@ async function loadData() {
   loading.value = true
   try {
     // Get all plugins
-    const pluginList = await touchChannel.send('plugin:api:list', {})
+    const pluginList = await transport.send(PluginEvents.api.list, {})
 
     // Get all permissions
-    const perms = await touchChannel.send('permission:get-all', {})
+    const perms = await transport.send(PermissionEvents.api.getAll)
     allPermissions.value = perms || {}
 
     // Build plugin permission info
     plugins.value = await Promise.all(
       pluginList.map(async (plugin: any) => {
-        const status = await touchChannel.send('permission:get-status', {
+        const status = await transport.send(PermissionEvents.api.getStatus, {
           pluginId: plugin.name,
           sdkapi: plugin.sdkapi,
           required: plugin.declaredPermissions?.required || [],
@@ -204,13 +197,13 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
 async function handleToggle(pluginId: string, permissionId: string, granted: boolean) {
   try {
     if (granted) {
-      await touchChannel.send('permission:grant', {
+      await transport.send(PermissionEvents.api.grant, {
         pluginId,
         permissionId,
         grantedBy: 'user'
       })
     } else {
-      await touchChannel.send('permission:revoke', { pluginId, permissionId })
+      await transport.send(PermissionEvents.api.revoke, { pluginId, permissionId })
     }
     // Refresh data
     await loadData()
@@ -222,7 +215,7 @@ async function handleToggle(pluginId: string, permissionId: string, granted: boo
 // Grant all required permissions
 async function handleGrantAll(plugin: PluginPermissionInfo) {
   try {
-    await touchChannel.send('permission:grant-multiple', {
+    await transport.send(PermissionEvents.api.grantMultiple, {
       pluginId: plugin.id,
       permissionIds: plugin.missingRequired,
       grantedBy: 'user'
@@ -236,7 +229,7 @@ async function handleGrantAll(plugin: PluginPermissionInfo) {
 // Revoke all permissions
 async function handleRevokeAll(pluginId: string) {
   try {
-    await touchChannel.send('permission:revoke-all', { pluginId })
+    await transport.send(PermissionEvents.api.revokeAll, { pluginId })
     await loadData()
   } catch (e) {
     console.error('Failed to revoke all permissions:', e)
@@ -247,12 +240,12 @@ async function handleRevokeAll(pluginId: string) {
 async function loadAuditLogs() {
   auditLogsLoading.value = true
   try {
-    const result = await touchChannel.send('permission:get-audit-logs', {
+    const result = await transport.send(PermissionEvents.api.getAuditLogs, {
       action: auditLogFilter.value === 'all' ? undefined : auditLogFilter.value,
       limit: 100
     })
-    auditLogs.value = result?.logs || []
-    auditLogsTotal.value = result?.total || 0
+    auditLogs.value = Array.isArray(result) ? result : []
+    auditLogsTotal.value = auditLogs.value.length
   } catch (e) {
     console.error('Failed to load audit logs:', e)
   } finally {
@@ -263,7 +256,7 @@ async function loadAuditLogs() {
 // Clear audit logs
 async function clearAuditLogs() {
   try {
-    await touchChannel.send('permission:clear-audit-logs', {})
+    await transport.send(PermissionEvents.api.clearAuditLogs)
     await loadAuditLogs()
   } catch (e) {
     console.error('Failed to clear audit logs:', e)
@@ -285,14 +278,16 @@ function formatTime(timestamp: number) {
 // Get action label
 function getActionLabel(action: string) {
   switch (action) {
-    case 'grant':
+    case 'granted':
       return '授予'
-    case 'revoke':
+    case 'revoked':
       return '撤销'
-    case 'check':
-      return '检查'
-    case 'deny':
+    case 'denied':
       return '拒绝'
+    case 'used':
+      return '使用'
+    case 'blocked':
+      return '拦截'
     default:
       return action
   }
@@ -301,15 +296,24 @@ function getActionLabel(action: string) {
 // Get action type for tag
 function getActionType(action: string) {
   switch (action) {
-    case 'grant':
+    case 'granted':
       return 'success'
-    case 'revoke':
+    case 'revoked':
       return 'warning'
-    case 'deny':
+    case 'denied':
       return 'danger'
+    case 'blocked':
+      return 'danger'
+    case 'used':
+      return 'info'
     default:
       return 'info'
   }
+}
+
+function getAuditDetails(log: PermissionAuditLog): string | null {
+  const reason = log.context?.reason
+  return typeof reason === 'string' && reason.trim() ? reason : null
 }
 
 // Toggle audit logs view
@@ -451,9 +455,11 @@ onMounted(() => {
         <template v-if="showAuditLogs">
           <ElSelect v-model="auditLogFilter" class="audit-filter">
             <ElOption value="all" label="全部操作" />
-            <ElOption value="grant" label="授予" />
-            <ElOption value="revoke" label="撤销" />
-            <ElOption value="deny" label="拒绝" />
+            <ElOption value="granted" label="授予" />
+            <ElOption value="revoked" label="撤销" />
+            <ElOption value="denied" label="拒绝" />
+            <ElOption value="used" label="使用" />
+            <ElOption value="blocked" label="拦截" />
           </ElSelect>
 
           <ElButton :icon="Refresh" :loading="auditLogsLoading" @click="loadAuditLogs">
@@ -484,7 +490,9 @@ onMounted(() => {
             <span class="audit-permission">{{
               permissionTranslations[log.permissionId]?.name || log.permissionId
             }}</span>
-            <span v-if="log.details" class="audit-details">({{ log.details }})</span>
+            <span v-if="getAuditDetails(log)" class="audit-details">
+              ({{ getAuditDetails(log) }})
+            </span>
           </div>
         </div>
       </div>

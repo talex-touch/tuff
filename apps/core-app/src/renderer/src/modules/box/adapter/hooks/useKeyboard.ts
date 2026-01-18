@@ -3,8 +3,8 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { ForwardedKeyEvent } from '../transport/key-transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { BoxMode } from '..'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
 
@@ -353,7 +353,8 @@ export function useKeyboard(
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
   itemRefs: Ref<any[]>
 ) {
-  const keyTransport = createCoreBoxKeyTransport(touchChannel)
+  const transport = useTuffTransport()
+  const keyTransport = createCoreBoxKeyTransport(transport)
 
   function getFooterInset(): number {
     const footer = document.querySelector('.CoreBoxFooter-Sticky') as HTMLElement | null
@@ -415,8 +416,8 @@ export function useKeyboard(
       }
 
       const builtinActions = generateBuiltinActions(currentItem)
-      touchChannel
-        .send(MetaOverlayEvents.ui.show.toEventName(), {
+      transport
+        .send(MetaOverlayEvents.ui.show, {
           item: currentItem,
           builtinActions,
           itemActions: currentItem.actions?.map(convertTuffActionToMetaAction) || []
@@ -618,9 +619,9 @@ export function useKeyboard(
       // Use async/await pattern for better control flow
       void (async () => {
         try {
-          const response = await touchChannel.send(MetaOverlayEvents.ui.isVisible.toEventName())
+          const response = await transport.send(MetaOverlayEvents.ui.isVisible)
           if (response?.visible) {
-            await touchChannel.send(MetaOverlayEvents.ui.hide.toEventName())
+            await transport.send(MetaOverlayEvents.ui.hide)
             event.preventDefault()
             event.stopPropagation()
           }

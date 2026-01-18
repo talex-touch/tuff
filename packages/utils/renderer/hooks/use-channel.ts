@@ -12,6 +12,16 @@ export interface TouchChannel {
     eventName: string,
     handler: (data: TRequest) => Promise<any> | any,
   ) => () => void
+
+  unRegChannel?: <TRequest = any>(
+    eventName: string,
+    handler: (data: TRequest) => Promise<any> | any,
+  ) => boolean
+
+  sendSync?: <TRequest = any, TResponse = any>(
+    eventName: string,
+    data?: TRequest,
+  ) => TResponse
 }
 
 // Injection key for the TouchChannel

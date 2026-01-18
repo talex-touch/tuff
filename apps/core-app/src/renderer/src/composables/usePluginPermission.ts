@@ -4,7 +4,8 @@
  * Composable for managing plugin permissions in the UI.
  */
 
-import { useChannel } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { PermissionEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref } from 'vue'
 
 interface PermissionGrant {
@@ -58,7 +59,7 @@ const permissionTranslations: Record<string, { name: string; desc: string }> = {
 }
 
 export function usePluginPermission(pluginId: string) {
-  const { send, regChannel } = useChannel()
+  const transport = useTuffTransport()
 
   const permissions = ref<PermissionGrant[]>([])
   const registry = ref<PermissionDefinition[]>([])
@@ -70,8 +71,8 @@ export function usePluginPermission(pluginId: string) {
     loading.value = true
     try {
       const [perms, reg] = await Promise.all([
-        send('permission:get-plugin', { pluginId }),
-        send('permission:get-registry')
+        transport.send(PermissionEvents.api.getPlugin, { pluginId }),
+        transport.send(PermissionEvents.api.getRegistry)
       ])
       permissions.value = perms || []
       registry.value = reg || []
@@ -85,7 +86,7 @@ export function usePluginPermission(pluginId: string) {
   // Fetch status with plugin info
   async function refreshStatus(sdkapi?: number, required: string[] = [], optional: string[] = []) {
     try {
-      const result = await send('permission:get-status', {
+      const result = await transport.send(PermissionEvents.api.getStatus, {
         pluginId,
         sdkapi,
         required,
@@ -100,7 +101,7 @@ export function usePluginPermission(pluginId: string) {
   // Grant permission
   async function grant(permissionId: string): Promise<boolean> {
     try {
-      const result = await send('permission:grant', {
+      const result = await transport.send(PermissionEvents.api.grant, {
         pluginId,
         permissionId,
         grantedBy: 'user'
@@ -118,7 +119,7 @@ export function usePluginPermission(pluginId: string) {
   // Revoke permission
   async function revoke(permissionId: string): Promise<boolean> {
     try {
-      const result = await send('permission:revoke', { pluginId, permissionId })
+      const result = await transport.send(PermissionEvents.api.revoke, { pluginId, permissionId })
       if (result?.success) {
         await refresh()
         return true
@@ -132,7 +133,7 @@ export function usePluginPermission(pluginId: string) {
   // Grant multiple permissions
   async function grantMultiple(permissionIds: string[]): Promise<boolean> {
     try {
-      const result = await send('permission:grant-multiple', {
+      const result = await transport.send(PermissionEvents.api.grantMultiple, {
         pluginId,
         permissionIds,
         grantedBy: 'user'
@@ -191,8 +192,7 @@ export function usePluginPermission(pluginId: string) {
   let unsubscribe: (() => void) | null = null
 
   function startListening() {
-    if (!regChannel) return
-    unsubscribe = regChannel('permission:updated', (data: any) => {
+    unsubscribe = transport.on(PermissionEvents.push.updated, (data) => {
       if (data?.pluginId === pluginId) {
         refresh()
       }

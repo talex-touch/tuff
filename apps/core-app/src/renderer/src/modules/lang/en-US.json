@@ -249,12 +249,18 @@
     "refresh": "Refresh",
     "install": "Install",
     "installed": "Installed",
+    "docs": "Docs",
     "installing": "Installing...",
     "upgrade": "Upgrade",
     "upgradeAvailable": "Update available",
     "officialBadge": "Official",
     "lastUpdated": "Last updated {time}",
-	    "categories": {
+    "docsGroupTitle": "Platform Capability Docs",
+    "docsGroupDesc": "Browse platform capabilities and developer references",
+    "docsLinkTitle": "Platform Capabilities SDK",
+    "docsLinkDesc": "Open Nexus docs for capability catalog and usage",
+    "docsOpen": "Open Nexus Docs",
+    "categories": {
 	      "title": "Categories",
 	      "all": "All",
 	      "productivity": "Productivity",
@@ -961,6 +967,31 @@
         "tempCleanFailed": "Failed to cleanup temporary files"
       }
     },
+    "settingPlatformCapabilities": {
+      "groupTitle": "Platform Capabilities",
+      "groupDesc": "Browse built-in platform capabilities and status",
+      "loading": "Loading...",
+      "refresh": "Refresh",
+      "empty": "No capabilities available",
+      "total": "{count} total",
+      "lastUpdated": "Updated: {time}",
+      "scope": {
+        "system": "System",
+        "plugin": "Plugin",
+        "ai": "AI"
+      },
+      "status": {
+        "stable": "Stable",
+        "beta": "Beta",
+        "alpha": "Alpha"
+      },
+      "tags": {
+        "sensitive": "Sensitive"
+      },
+      "messages": {
+        "loadFailed": "Failed to load platform capabilities"
+      }
+    },
     "settingAISDK": {
       "groupTitle": "AI SDK Settings",
       "groupDesc": "Configure AI providers, models and strategies",
@@ -1375,6 +1406,22 @@
       "actions": {
         "manualCheck": "Check Now",
         "clearCache": "Clear Cache"
+      },
+      "assetsTitle": "GitHub Packages",
+      "assetsDesc": "Review cached release packages and download manually.",
+      "assetsEmpty": "No cached release yet. Run a manual check first.",
+      "assetsOpen": "View packages",
+      "assetsCount": "{count} assets",
+      "assets": {
+        "download": "Download",
+        "copyLink": "Copy Link",
+        "messages": {
+          "downloadStarted": "Download task created",
+          "downloadFailed": "Failed to create download task",
+          "downloadFailedWithReason": "Failed to create download task: {reason}",
+          "copySuccess": "Download link copied",
+          "copyFailed": "Failed to copy download link"
+        }
       },
       "messages": {
         "loadFailed": "Failed to load update settings",

@@ -48,7 +48,7 @@ import type {
   IntelligenceSummarizePayload,
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
-  IntelligenceVisionOcrResult,
+  IntelligenceVisionOcrResult
 } from '@talex-touch/utils'
 import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { stdout } from 'node:process'
@@ -76,30 +76,29 @@ function normalizeEmbeddingText(input: string | string[]): string {
   return input
 }
 
-function chunkText(text: string): { chunks: string[], truncated: boolean } {
+function chunkText(text: string): { chunks: string[]; truncated: boolean } {
   const normalized = text.trim()
-  const limited = normalized.length > MAX_EMBEDDING_TOTAL_CHARS
-    ? normalized.slice(0, MAX_EMBEDDING_TOTAL_CHARS)
-    : normalized
+  const limited =
+    normalized.length > MAX_EMBEDDING_TOTAL_CHARS
+      ? normalized.slice(0, MAX_EMBEDDING_TOTAL_CHARS)
+      : normalized
 
   const chunks: string[] = []
   for (let i = 0; i < limited.length; i += EMBEDDING_CHUNK_CHARS) {
     chunks.push(limited.slice(i, i + EMBEDDING_CHUNK_CHARS))
-    if (chunks.length >= MAX_EMBEDDING_CHUNKS)
-      break
+    if (chunks.length >= MAX_EMBEDDING_CHUNKS) break
   }
 
-  const truncated = limited.length !== normalized.length || chunks.join('').length !== limited.length
+  const truncated =
+    limited.length !== normalized.length || chunks.join('').length !== limited.length
   return { chunks: chunks.length > 0 ? chunks : [''], truncated }
 }
 
 function averageEmbeddings(vectors: number[][], weights: number[]): number[] {
-  if (vectors.length === 0)
-    return []
+  if (vectors.length === 0) return []
 
   const dim = vectors[0]?.length ?? 0
-  if (dim === 0)
-    return []
+  if (dim === 0) return []
 
   const sum = Array.from({ length: dim }, () => 0)
   let weightSum = 0
@@ -114,8 +113,7 @@ function averageEmbeddings(vectors: number[][], weights: number[]): number[] {
     weightSum += w
   }
 
-  if (weightSum <= 0)
-    return sum
+  if (weightSum <= 0) return sum
 
   for (let j = 0; j < dim; j++) {
     sum[j] /= weightSum
@@ -128,15 +126,16 @@ function extractMustacheVariables(template: string): string[] {
   const regex = /\{\{\s*([\w.]+)\s*\}\}/g
   while (true) {
     const match = regex.exec(template)
-    if (!match)
-      break
-    if (match[1])
-      vars.add(match[1])
+    if (!match) break
+    if (match[1]) vars.add(match[1])
   }
   return Array.from(vars)
 }
 
-async function renderPromptTemplate(template: string, variables?: Record<string, any>): Promise<string> {
+async function renderPromptTemplate(
+  template: string,
+  variables?: Record<string, any>
+): Promise<string> {
   const inputVariables = extractMustacheVariables(template)
   if (inputVariables.length === 0) {
     return template
@@ -145,7 +144,7 @@ async function renderPromptTemplate(template: string, variables?: Record<string,
   const prompt = new PromptTemplate({
     template,
     inputVariables,
-    templateFormat: 'mustache' as any,
+    templateFormat: 'mustache' as any
   })
 
   return await prompt.format(variables ?? {})
@@ -172,10 +171,10 @@ export class AiSDK {
     enableAudit: true,
     enableCache: false,
     enableQuota: true,
-    capabilities: {},
+    capabilities: {}
   }
 
-  private cache = new Map<string, { result: any, timestamp: number }>()
+  private cache = new Map<string, { result: any; timestamp: number }>()
 
   constructor(config?: Partial<IntelligenceSDKConfig>) {
     if (config) {
@@ -189,17 +188,18 @@ export class AiSDK {
     if (config.capabilities) {
       nextConfig.capabilities = {
         ...this.config.capabilities,
-        ...config.capabilities,
+        ...config.capabilities
       }
     }
 
     if (config.defaultStrategy) {
-      nextConfig.defaultStrategy = normalizeStrategyId(config.defaultStrategy) || this.config.defaultStrategy
+      nextConfig.defaultStrategy =
+        normalizeStrategyId(config.defaultStrategy) || this.config.defaultStrategy
     }
 
     this.config = {
       ...nextConfig,
-      defaultStrategy: normalizeStrategyId(nextConfig.defaultStrategy) || 'adaptive-default',
+      defaultStrategy: normalizeStrategyId(nextConfig.defaultStrategy) || 'adaptive-default'
     }
 
     if (config.providers) {
@@ -208,8 +208,7 @@ export class AiSDK {
       config.providers.forEach((providerConfig) => {
         try {
           manager.registerFromConfig(providerConfig)
-        }
-        catch (error) {
+        } catch (error) {
           logError(`Failed to register provider ${providerConfig.id}:`, error)
         }
       })
@@ -225,7 +224,7 @@ export class AiSDK {
   async invoke<T = any>(
     capabilityId: string,
     payload: any,
-    options: IntelligenceInvokeOptions = {},
+    options: IntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<T>> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
@@ -245,23 +244,33 @@ export class AiSDK {
     const runtimeOptions: IntelligenceInvokeOptions = { ...options }
     runtimeOptions.metadata = {
       ...(runtimeOptions.metadata ?? {}),
-      capabilityId,
+      capabilityId
     }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
-    const configuredProviders
-      = capabilityRouting?.providers
-        ?.filter(binding => binding.enabled !== false)
+    const configuredProviders =
+      capabilityRouting?.providers
+        ?.filter((binding) => binding.enabled !== false)
         .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
-        .map(binding => binding.providerId) ?? []
+        .map((binding) => binding.providerId) ?? []
 
-    if ((!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) && configuredProviders.length > 0) {
+    if (
+      (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) &&
+      configuredProviders.length > 0
+    ) {
       runtimeOptions.allowedProviderIds = configuredProviders
     }
 
-    if ((!runtimeOptions.modelPreference || runtimeOptions.modelPreference.length === 0) && capabilityRouting?.providers) {
+    if (
+      (!runtimeOptions.modelPreference || runtimeOptions.modelPreference.length === 0) &&
+      capabilityRouting?.providers
+    ) {
       const preferredModels = capabilityRouting.providers
-        .filter(binding => !runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.includes(binding.providerId))
-        .flatMap(binding => binding.models ?? [])
+        .filter(
+          (binding) =>
+            !runtimeOptions.allowedProviderIds ||
+            runtimeOptions.allowedProviderIds.includes(binding.providerId)
+        )
+        .flatMap((binding) => binding.models ?? [])
         .filter((model): model is string => Boolean(model))
       if (preferredModels.length > 0) {
         runtimeOptions.modelPreference = preferredModels
@@ -279,9 +288,9 @@ export class AiSDK {
 
     const manager = ensureProviderManager()
 
-    const enabledProviders = manager.getEnabled().map(p => p.getConfig())
-    const typeFilteredProviders = enabledProviders.filter(config =>
-      capability.supportedProviders.includes(config.type),
+    const enabledProviders = manager.getEnabled().map((p) => p.getConfig())
+    const typeFilteredProviders = enabledProviders.filter((config) =>
+      capability.supportedProviders.includes(config.type)
     )
 
     const accessFilteredProviders = typeFilteredProviders.filter((config) => {
@@ -292,15 +301,17 @@ export class AiSDK {
     })
 
     const missingKeyProviders = accessFilteredProviders
-      .filter(config => config.type !== 'local' && !config.apiKey)
-      .map(config => config.id)
+      .filter((config) => config.type !== 'local' && !config.apiKey)
+      .map((config) => config.id)
 
-    const availableProviders = accessFilteredProviders.filter(config => !(config.type !== 'local' && !config.apiKey))
+    const availableProviders = accessFilteredProviders.filter(
+      (config) => !(config.type !== 'local' && !config.apiKey)
+    )
 
     if (availableProviders.length === 0) {
       if (missingKeyProviders.length > 0) {
         throw new Error(
-          `[Intelligence] No enabled providers for ${capabilityId}: missing API key for ${missingKeyProviders.join(', ')}`,
+          `[Intelligence] No enabled providers for ${capabilityId}: missing API key for ${missingKeyProviders.join(', ')}`
         )
       }
       throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
@@ -309,7 +320,7 @@ export class AiSDK {
     const strategyResult = await strategyManager.select({
       capabilityId,
       options: runtimeOptions,
-      availableProviders,
+      availableProviders
     })
 
     const provider = manager.get(strategyResult.selectedProvider.id)
@@ -317,13 +328,37 @@ export class AiSDK {
       throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
     }
     logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
+    if (runtimeOptions.modelPreference && runtimeOptions.modelPreference.length > 0) {
+      const providerModels = new Set<string>()
+      const { defaultModel, models } = strategyResult.selectedProvider
+      if (defaultModel) providerModels.add(defaultModel)
+      if (Array.isArray(models)) {
+        for (const model of models) {
+          if (model) providerModels.add(model)
+        }
+      }
+      if (providerModels.size > 0) {
+        const filtered = runtimeOptions.modelPreference.filter((model) => providerModels.has(model))
+        if (filtered.length === 0) {
+          logWarn(
+            `Model preference not supported by ${strategyResult.selectedProvider.id} for ${capabilityId}, fallback to provider default.`
+          )
+          runtimeOptions.modelPreference = undefined
+        } else {
+          runtimeOptions.modelPreference = filtered
+        }
+      }
+    }
 
     let result: IntelligenceInvokeResult<T>
     const startTime = Date.now()
 
-    const invokeEmbeddingWithGovernance = async (
-      embeddingProvider: { embedding: (p: IntelligenceEmbeddingPayload, o: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<number[]>> },
-    ): Promise<IntelligenceInvokeResult<number[]>> => {
+    const invokeEmbeddingWithGovernance = async (embeddingProvider: {
+      embedding: (
+        p: IntelligenceEmbeddingPayload,
+        o: IntelligenceInvokeOptions
+      ) => Promise<IntelligenceInvokeResult<number[]>>
+    }): Promise<IntelligenceInvokeResult<number[]>> => {
       const embeddingPayload = payload as IntelligenceEmbeddingPayload
       const rawText = normalizeEmbeddingText(embeddingPayload.text)
       if (!rawText || !rawText.trim()) {
@@ -343,24 +378,21 @@ export class AiSDK {
         const res = await embeddingProvider.embedding(
           {
             ...embeddingPayload,
-            text: chunk,
+            text: chunk
           },
-          runtimeOptions,
+          runtimeOptions
         )
         vectors.push(res.result)
         weights.push(Math.max(1, chunk.length))
         usage = {
           promptTokens: usage.promptTokens + (res.usage?.promptTokens ?? 0),
           completionTokens: usage.completionTokens + (res.usage?.completionTokens ?? 0),
-          totalTokens: usage.totalTokens + (res.usage?.totalTokens ?? 0),
+          totalTokens: usage.totalTokens + (res.usage?.totalTokens ?? 0)
         }
         latency += res.latency ?? 0
-        if (!model)
-          model = res.model
-        if (!traceId)
-          traceId = res.traceId
-        if (!providerName)
-          providerName = res.provider
+        if (!model) model = res.model
+        if (!traceId) traceId = res.traceId
+        if (!providerName) providerName = res.provider
       }
 
       const aggregated = averageEmbeddings(vectors, weights)
@@ -369,16 +401,18 @@ export class AiSDK {
         usage,
         model,
         latency,
-        traceId: traceId ? `${traceId}-chunked-${chunks.length}${truncated ? '-truncated' : ''}` : intelligenceAuditLogger.generateTraceId(),
-        provider: providerName,
+        traceId: traceId
+          ? `${traceId}-chunked-${chunks.length}${truncated ? '-truncated' : ''}`
+          : intelligenceAuditLogger.generateTraceId(),
+        provider: providerName
       }
     }
 
-    const promptTemplate = (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
+    const promptTemplate =
+      (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
     const promptVariables = options.metadata?.promptVariables as Record<string, any> | undefined
     const applyPromptTemplate = (messages: IntelligenceMessage[], template?: string) => {
-      if (!template)
-        return messages
+      if (!template) return messages
       const systemMsg: IntelligenceMessage = { role: 'system', content: template }
       const rest = messages ?? []
       return [systemMsg, ...rest]
@@ -394,98 +428,171 @@ export class AiSDK {
             if (promptTemplate) {
               try {
                 renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
-              }
-              catch (error) {
+              } catch (error) {
                 logWarn('Failed to render prompt template, falling back to raw template', error)
               }
             }
-            const promptAppliedMessages = applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
+            const promptAppliedMessages = applyPromptTemplate(
+              chatPayload.messages ?? [],
+              renderedTemplate
+            )
             const nextPayload: IntelligenceChatPayload = {
               ...chatPayload,
-              messages: promptAppliedMessages,
+              messages: promptAppliedMessages
             }
-            result = await provider.chat(nextPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+            result = (await provider.chat(
+              nextPayload,
+              runtimeOptions
+            )) as IntelligenceInvokeResult<T>
           }
           break
         case 'embedding':
-          result = await invokeEmbeddingWithGovernance(provider as any) as IntelligenceInvokeResult<T>
+          result = (await invokeEmbeddingWithGovernance(
+            provider as any
+          )) as IntelligenceInvokeResult<T>
           break
         case 'translate':
-          result = await provider.translate(payload as IntelligenceTranslatePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.translate(
+            payload as IntelligenceTranslatePayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'summarize':
-          result = await provider.summarize!(payload as IntelligenceSummarizePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.summarize!(
+            payload as IntelligenceSummarizePayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'rewrite':
-          result = await provider.rewrite!(payload as IntelligenceRewritePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.rewrite!(
+            payload as IntelligenceRewritePayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'grammar-check':
-          result = await provider.grammarCheck!(payload as IntelligenceGrammarCheckPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.grammarCheck!(
+            payload as IntelligenceGrammarCheckPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
 
         // Code capabilities
         case 'code-generate':
-          result = await provider.codeGenerate!(payload as IntelligenceCodeGeneratePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.codeGenerate!(
+            payload as IntelligenceCodeGeneratePayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'code-explain':
-          result = await provider.codeExplain!(payload as IntelligenceCodeExplainPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.codeExplain!(
+            payload as IntelligenceCodeExplainPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'code-review':
-          result = await provider.codeReview!(payload as IntelligenceCodeReviewPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.codeReview!(
+            payload as IntelligenceCodeReviewPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'code-refactor':
-          result = await provider.codeRefactor!(payload as IntelligenceCodeRefactorPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.codeRefactor!(
+            payload as IntelligenceCodeRefactorPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'code-debug':
-          result = await provider.codeDebug!(payload as IntelligenceCodeDebugPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.codeDebug!(
+            payload as IntelligenceCodeDebugPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
 
         // Analysis capabilities
         case 'intent-detect':
-          result = await provider.intentDetect!(payload as IntelligenceIntentDetectPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.intentDetect!(
+            payload as IntelligenceIntentDetectPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'sentiment-analyze':
-          result = await provider.sentimentAnalyze!(payload as IntelligenceSentimentAnalyzePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.sentimentAnalyze!(
+            payload as IntelligenceSentimentAnalyzePayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'content-extract':
-          result = await provider.contentExtract!(payload as IntelligenceContentExtractPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.contentExtract!(
+            payload as IntelligenceContentExtractPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'keywords-extract':
-          result = await provider.keywordsExtract!(payload as IntelligenceKeywordsExtractPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.keywordsExtract!(
+            payload as IntelligenceKeywordsExtractPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'classification':
-          result = await provider.classification!(payload as IntelligenceClassificationPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.classification!(
+            payload as IntelligenceClassificationPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
 
         // Vision capabilities
         case 'vision':
         case 'vision-ocr':
-          result = await provider.visionOcr(payload as IntelligenceVisionOcrPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.visionOcr(
+            payload as IntelligenceVisionOcrPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'image-caption':
-          result = await provider.imageCaption!(payload as IntelligenceImageCaptionPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.imageCaption!(
+            payload as IntelligenceImageCaptionPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'image-analyze':
-          result = await provider.imageAnalyze!(payload as IntelligenceImageAnalyzePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.imageAnalyze!(
+            payload as IntelligenceImageAnalyzePayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'image-generate':
-          result = await provider.imageGenerate!(payload as IntelligenceImageGeneratePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.imageGenerate!(
+            payload as IntelligenceImageGeneratePayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
 
         // RAG & Search capabilities
         case 'rag-query':
-          result = await provider.ragQuery!(payload as IntelligenceRAGQueryPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.ragQuery!(
+            payload as IntelligenceRAGQueryPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'semantic-search':
-          result = await provider.semanticSearch!(payload as IntelligenceSemanticSearchPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.semanticSearch!(
+            payload as IntelligenceSemanticSearchPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
         case 'rerank':
-          result = await provider.rerank!(payload as IntelligenceRerankPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.rerank!(
+            payload as IntelligenceRerankPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
 
         // Agent capabilities
         case 'agent':
-          result = await provider.agent!(payload as IntelligenceAgentPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+          result = (await provider.agent!(
+            payload as IntelligenceAgentPayload,
+            runtimeOptions
+          )) as IntelligenceInvokeResult<T>
           break
 
         default:
@@ -508,15 +615,18 @@ export class AiSDK {
           success: true,
           caller: runtimeOptions.metadata?.caller,
           userId: runtimeOptions.metadata?.userId,
-          promptHash: promptTemplate ? intelligenceAuditLogger.generatePromptHash(promptTemplate) : undefined,
-          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined,
+          promptHash: promptTemplate
+            ? intelligenceAuditLogger.generatePromptHash(promptTemplate)
+            : undefined,
+          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined
         })
       }
 
-      logInfo(`${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`)
+      logInfo(
+        `${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`
+      )
       return result
-    }
-    catch (error) {
+    } catch (error) {
       logError(`Invoke error for ${capabilityId}`, error)
 
       if (this.config.enableAudit) {
@@ -532,8 +642,10 @@ export class AiSDK {
           error: error instanceof Error ? error.message : String(error),
           caller: runtimeOptions.metadata?.caller,
           userId: runtimeOptions.metadata?.userId,
-          promptHash: promptTemplate ? intelligenceAuditLogger.generatePromptHash(promptTemplate) : undefined,
-          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined,
+          promptHash: promptTemplate
+            ? intelligenceAuditLogger.generatePromptHash(promptTemplate)
+            : undefined,
+          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined
         })
       }
 
@@ -541,22 +653,32 @@ export class AiSDK {
         logWarn(`Attempting fallback providers for ${capabilityId}`)
         for (const fallbackConfig of strategyResult.fallbackProviders) {
           const fallbackProvider = manager.get(fallbackConfig.id)
-          if (!fallbackProvider)
-            continue
+          if (!fallbackProvider) continue
 
           try {
             switch (capability.type) {
               case 'chat':
-                result = await fallbackProvider.chat(payload as IntelligenceChatPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+                result = (await fallbackProvider.chat(
+                  payload as IntelligenceChatPayload,
+                  runtimeOptions
+                )) as IntelligenceInvokeResult<T>
                 break
               case 'embedding':
-                result = await invokeEmbeddingWithGovernance(fallbackProvider as any) as IntelligenceInvokeResult<T>
+                result = (await invokeEmbeddingWithGovernance(
+                  fallbackProvider as any
+                )) as IntelligenceInvokeResult<T>
                 break
               case 'translate':
-                result = await fallbackProvider.translate(payload as IntelligenceTranslatePayload, runtimeOptions) as IntelligenceInvokeResult<T>
+                result = (await fallbackProvider.translate(
+                  payload as IntelligenceTranslatePayload,
+                  runtimeOptions
+                )) as IntelligenceInvokeResult<T>
                 break
               case 'vision':
-                result = await fallbackProvider.visionOcr(payload as IntelligenceVisionOcrPayload, runtimeOptions) as IntelligenceInvokeResult<T>
+                result = (await fallbackProvider.visionOcr(
+                  payload as IntelligenceVisionOcrPayload,
+                  runtimeOptions
+                )) as IntelligenceInvokeResult<T>
                 break
               default:
                 continue
@@ -564,8 +686,7 @@ export class AiSDK {
 
             logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
             return result
-          }
-          catch (fallbackError) {
+          } catch (fallbackError) {
             logError(`Fallback provider ${fallbackConfig.id} failed`, fallbackError)
           }
         }
@@ -575,10 +696,10 @@ export class AiSDK {
     }
   }
 
-  async* invokeStream(
+  async *invokeStream(
     capabilityId: string,
     payload: any,
-    options: IntelligenceInvokeOptions = {},
+    options: IntelligenceInvokeOptions = {}
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const capability = aiCapabilityRegistry.get(capabilityId)
     if (!capability) {
@@ -587,20 +708,30 @@ export class AiSDK {
 
     const runtimeOptions: IntelligenceInvokeOptions = { ...options, stream: true }
     const capabilityRouting = this.config.capabilities?.[capabilityId]
-    const configuredProviders
-      = capabilityRouting?.providers
-        ?.filter(binding => binding.enabled !== false)
+    const configuredProviders =
+      capabilityRouting?.providers
+        ?.filter((binding) => binding.enabled !== false)
         .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
-        .map(binding => binding.providerId) ?? []
+        .map((binding) => binding.providerId) ?? []
 
-    if ((!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) && configuredProviders.length > 0) {
+    if (
+      (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) &&
+      configuredProviders.length > 0
+    ) {
       runtimeOptions.allowedProviderIds = configuredProviders
     }
 
-    if ((!runtimeOptions.modelPreference || runtimeOptions.modelPreference.length === 0) && capabilityRouting?.providers) {
+    if (
+      (!runtimeOptions.modelPreference || runtimeOptions.modelPreference.length === 0) &&
+      capabilityRouting?.providers
+    ) {
       const preferredModels = capabilityRouting.providers
-        .filter(binding => !runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.includes(binding.providerId))
-        .flatMap(binding => binding.models ?? [])
+        .filter(
+          (binding) =>
+            !runtimeOptions.allowedProviderIds ||
+            runtimeOptions.allowedProviderIds.includes(binding.providerId)
+        )
+        .flatMap((binding) => binding.models ?? [])
         .filter((model): model is string => Boolean(model))
       if (preferredModels.length > 0) {
         runtimeOptions.modelPreference = preferredModels
@@ -609,9 +740,9 @@ export class AiSDK {
 
     const manager = ensureProviderManager()
 
-    const enabledProviders = manager.getEnabled().map(p => p.getConfig())
-    const typeFilteredProviders = enabledProviders.filter(config =>
-      capability.supportedProviders.includes(config.type),
+    const enabledProviders = manager.getEnabled().map((p) => p.getConfig())
+    const typeFilteredProviders = enabledProviders.filter((config) =>
+      capability.supportedProviders.includes(config.type)
     )
 
     const availableProviders = typeFilteredProviders.filter((config) => {
@@ -628,7 +759,7 @@ export class AiSDK {
     const strategyResult = await strategyManager.select({
       capabilityId,
       options: runtimeOptions,
-      availableProviders,
+      availableProviders
     })
 
     const provider = manager.get(strategyResult.selectedProvider.id)
@@ -643,14 +774,17 @@ export class AiSDK {
     yield* provider.chatStream(payload as IntelligenceChatPayload, runtimeOptions)
   }
 
-  private getCacheKey(capabilityId: string, payload: any, options: IntelligenceInvokeOptions): string {
+  private getCacheKey(
+    capabilityId: string,
+    payload: any,
+    options: IntelligenceInvokeOptions
+  ): string {
     return `${capabilityId}:${JSON.stringify(payload)}:${JSON.stringify(options)}`
   }
 
   private getFromCache(key: string): any | null {
     const cached = this.cache.get(key)
-    if (!cached)
-      return null
+    if (!cached) return null
 
     const expiration = this.config.cacheExpiration || 1800
     if (Date.now() - cached.timestamp > expiration * 1000) {
@@ -664,15 +798,14 @@ export class AiSDK {
   private setToCache(key: string, result: any): void {
     this.cache.set(key, {
       result,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     })
   }
 
   private async logAudit(log: IntelligenceAuditLogEntry): Promise<void> {
     try {
       await intelligenceAuditLogger.log(log)
-    }
-    catch (error) {
+    } catch (error) {
       logError('Failed to log audit entry:', error)
     }
   }
@@ -682,8 +815,8 @@ export class AiSDK {
    */
   async checkQuota(
     caller?: string,
-    estimatedTokens: number = 0,
-  ): Promise<{ allowed: boolean, reason?: string }> {
+    estimatedTokens: number = 0
+  ): Promise<{ allowed: boolean; reason?: string }> {
     if (!this.config.enableQuota || !caller) {
       return { allowed: true }
     }
@@ -691,8 +824,7 @@ export class AiSDK {
     try {
       const result = await intelligenceQuotaManager.checkQuota(caller, 'plugin', estimatedTokens)
       return { allowed: result.allowed, reason: result.reason }
-    }
-    catch (error) {
+    } catch (error) {
       logError('Failed to check quota:', error)
       return { allowed: true } // Fail open on quota check errors
     }
@@ -708,13 +840,15 @@ export class AiSDK {
   /**
    * Query audit logs from database
    */
-  async queryAuditLogs(options: {
-    caller?: string
-    capabilityId?: string
-    startTime?: number
-    endTime?: number
-    limit?: number
-  } = {}): Promise<IntelligenceAuditLogEntry[]> {
+  async queryAuditLogs(
+    options: {
+      caller?: string
+      capabilityId?: string
+      startTime?: number
+      endTime?: number
+      limit?: number
+    } = {}
+  ): Promise<IntelligenceAuditLogEntry[]> {
     return intelligenceAuditLogger.queryLogs(options)
   }
 
@@ -739,7 +873,7 @@ export class AiSDK {
     callerId: string,
     periodType: 'day' | 'month',
     startPeriod?: string,
-    endPeriod?: string,
+    endPeriod?: string
   ) {
     return intelligenceAuditLogger.getUsageStats(callerId, periodType, startPeriod, endPeriod)
   }
@@ -766,10 +900,10 @@ export class AiSDK {
       'Estimated Cost',
       'Latency (ms)',
       'Success',
-      'Error',
+      'Error'
     ]
 
-    const rows = logs.map(log => [
+    const rows = logs.map((log) => [
       log.traceId,
       new Date(log.timestamp).toISOString(),
       log.capabilityId,
@@ -782,12 +916,12 @@ export class AiSDK {
       log.estimatedCost?.toFixed(6) || '',
       log.latency,
       log.success ? 'Yes' : 'No',
-      log.error || '',
+      log.error || ''
     ])
 
     return [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     ].join('\n')
   }
 
@@ -822,12 +956,12 @@ export class AiSDK {
       this.invoke<string>('text.rewrite', payload, options),
 
     grammarCheck: (payload: IntelligenceGrammarCheckPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceGrammarCheckResult>('text.grammar', payload, options),
+      this.invoke<IntelligenceGrammarCheckResult>('text.grammar', payload, options)
   }
 
   embedding = {
     generate: (payload: IntelligenceEmbeddingPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<number[]>('embedding.generate', payload, options),
+      this.invoke<number[]>('embedding.generate', payload, options)
   }
 
   code = {
@@ -844,24 +978,30 @@ export class AiSDK {
       this.invoke<IntelligenceCodeRefactorResult>('code.refactor', payload, options),
 
     debug: (payload: IntelligenceCodeDebugPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceCodeDebugResult>('code.debug', payload, options),
+      this.invoke<IntelligenceCodeDebugResult>('code.debug', payload, options)
   }
 
   analysis = {
     detectIntent: (payload: IntelligenceIntentDetectPayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<IntelligenceIntentDetectResult>('intent.detect', payload, options),
 
-    analyzeSentiment: (payload: IntelligenceSentimentAnalyzePayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options),
+    analyzeSentiment: (
+      payload: IntelligenceSentimentAnalyzePayload,
+      options?: IntelligenceInvokeOptions
+    ) => this.invoke<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options),
 
-    extractContent: (payload: IntelligenceContentExtractPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceContentExtractResult>('content.extract', payload, options),
+    extractContent: (
+      payload: IntelligenceContentExtractPayload,
+      options?: IntelligenceInvokeOptions
+    ) => this.invoke<IntelligenceContentExtractResult>('content.extract', payload, options),
 
-    extractKeywords: (payload: IntelligenceKeywordsExtractPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options),
+    extractKeywords: (
+      payload: IntelligenceKeywordsExtractPayload,
+      options?: IntelligenceInvokeOptions
+    ) => this.invoke<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options),
 
     classify: (payload: IntelligenceClassificationPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceClassificationResult>('text.classify', payload, options),
+      this.invoke<IntelligenceClassificationResult>('text.classify', payload, options)
   }
 
   vision = {
@@ -875,23 +1015,25 @@ export class AiSDK {
       this.invoke<IntelligenceImageAnalyzeResult>('image.analyze', payload, options),
 
     generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options),
+      this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options)
   }
 
   rag = {
     query: (payload: IntelligenceRAGQueryPayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<IntelligenceRAGQueryResult>('rag.query', payload, options),
 
-    semanticSearch: (payload: IntelligenceSemanticSearchPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
+    semanticSearch: (
+      payload: IntelligenceSemanticSearchPayload,
+      options?: IntelligenceInvokeOptions
+    ) => this.invoke<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
 
     rerank: (payload: IntelligenceRerankPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceRerankResult>('search.rerank', payload, options),
+      this.invoke<IntelligenceRerankResult>('search.rerank', payload, options)
   }
 
   agent = {
     run: (payload: IntelligenceAgentPayload, options?: IntelligenceInvokeOptions) =>
-      this.invoke<IntelligenceAgentResult>('agent.run', payload, options),
+      this.invoke<IntelligenceAgentResult>('agent.run', payload, options)
   }
 
   /**
@@ -914,7 +1056,7 @@ export class AiSDK {
         return {
           success: false,
           message: 'Provider is disabled',
-          timestamp,
+          timestamp
         }
       }
 
@@ -922,7 +1064,7 @@ export class AiSDK {
         return {
           success: false,
           message: 'API key is required',
-          timestamp,
+          timestamp
         }
       }
 
@@ -935,10 +1077,10 @@ export class AiSDK {
         messages: [
           {
             role: 'user',
-            content: 'Hello',
-          },
+            content: 'Hello'
+          }
         ],
-        maxTokens: 10,
+        maxTokens: 10
       }
 
       const timeout = providerConfig.timeout || 30000
@@ -947,8 +1089,8 @@ export class AiSDK {
       const result = await Promise.race([
         provider.chat(testPayload, { timeout }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Request timeout')), timeout),
-        ),
+          setTimeout(() => reject(new Error('Request timeout')), timeout)
+        )
       ])
 
       const latency = Date.now() - startTime
@@ -957,10 +1099,9 @@ export class AiSDK {
         success: true,
         message: `Connection successful. Model: ${result.model}`,
         latency,
-        timestamp,
+        timestamp
       }
-    }
-    catch (error) {
+    } catch (error) {
       const latency = Date.now() - startTime
       let message = 'Connection failed'
 
@@ -968,26 +1109,23 @@ export class AiSDK {
         // Parse common error messages
         if (error.message.includes('timeout')) {
           message = 'Request timeout - check your network connection'
-        }
-        else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
           message = 'Invalid API key'
-        }
-        else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+        } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
           message = 'Access forbidden - check your API key permissions'
-        }
-        else if (error.message.includes('404')) {
+        } else if (error.message.includes('404')) {
           message = 'API endpoint not found - check your base URL'
-        }
-        else if (error.message.includes('429')) {
+        } else if (error.message.includes('429')) {
           message = 'Rate limit exceeded'
-        }
-        else if (error.message.includes('500') || error.message.includes('502') || error.message.includes('503')) {
+        } else if (
+          error.message.includes('500') ||
+          error.message.includes('502') ||
+          error.message.includes('503')
+        ) {
           message = 'Provider service error - try again later'
-        }
-        else if (error.message.includes('network') || error.message.includes('fetch')) {
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
           message = 'Network error - check your internet connection'
-        }
-        else {
+        } else {
           message = error.message
         }
       }
@@ -996,7 +1134,7 @@ export class AiSDK {
         success: false,
         message,
         latency,
-        timestamp,
+        timestamp
       }
     }
   }
@@ -1005,11 +1143,8 @@ export class AiSDK {
 export const ai = new AiSDK()
 
 function normalizeStrategyId(id?: string): string | undefined {
-  if (!id)
-    return id
-  if (id === 'priority')
-    return 'rule-based-default'
-  if (id === 'adaptive')
-    return 'adaptive-default'
+  if (!id) return id
+  if (id === 'priority') return 'rule-based-default'
+  if (id === 'adaptive') return 'adaptive-default'
   return id
 }

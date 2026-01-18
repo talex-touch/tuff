@@ -61,7 +61,8 @@ const routes: any = [
     name: 'Plugin Market',
     component: withRouteComponentPerf('/market', () => import('../views/base/Market.vue')),
     meta: {
-      index: 2
+      index: 2,
+      keepAlive: true
     }
   },
   {
@@ -72,7 +73,17 @@ const routes: any = [
       () => import('../views/base/Market.vue')
     ),
     meta: {
-      index: 2
+      index: 2,
+      keepAlive: true
+    }
+  },
+  {
+    path: '/market/docs',
+    name: 'Market Docs',
+    component: withRouteComponentPerf('/market/docs', () => import('../views/base/Market.vue')),
+    meta: {
+      index: 2,
+      keepAlive: true
     }
   },
   {
@@ -106,7 +117,8 @@ const routes: any = [
       () => import('../components/download/DownloadCenterView.vue')
     ),
     meta: {
-      index: 7
+      index: 7,
+      keepAlive: true
     }
   },
   {
@@ -126,7 +138,8 @@ const routes: any = [
       () => import('../views/base/styles/ThemeStyle.vue')
     ),
     meta: {
-      index: 5
+      index: 5,
+      keepAlive: true
     }
   },
   {
@@ -137,7 +150,8 @@ const routes: any = [
       () => import('../views/base/styles/sub/ThemePreference.vue')
     ),
     meta: {
-      index: 5
+      index: 5,
+      keepAlive: true
     }
   },
   {
@@ -148,7 +162,8 @@ const routes: any = [
       () => import('../views/base/application/ApplicationIndex.vue')
     ),
     meta: {
-      index: 6
+      index: 6,
+      keepAlive: true
     }
   },
   {
@@ -158,21 +173,21 @@ const routes: any = [
       '/setting',
       () => import('../views/base/settings/AppSettings.vue')
     ),
-    children: [
-      {
-        path: '/setting/storage',
-        name: 'Storagable',
-        component: withRouteComponentPerf(
-          '/setting/storage',
-          () => import('../views/storage/Storagable.vue')
-        ),
-        meta: {
-          index: 1
-        }
-      }
-    ],
     meta: {
-      index: 1
+      index: 1,
+      keepAlive: true
+    }
+  },
+  {
+    path: '/setting/storage',
+    name: 'Storagable',
+    component: withRouteComponentPerf(
+      '/setting/storage',
+      () => import('../views/storage/Storagable.vue')
+    ),
+    meta: {
+      index: 1,
+      keepAlive: true
     }
   },
   {
@@ -183,7 +198,8 @@ const routes: any = [
       () => import('../views/base/intelligence/IntelligencePage.vue')
     ),
     meta: {
-      index: 8
+      index: 8,
+      keepAlive: true
     }
   },
   {
@@ -194,7 +210,8 @@ const routes: any = [
       () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')
     ),
     meta: {
-      index: 8
+      index: 8,
+      keepAlive: true
     }
   },
   {
@@ -205,7 +222,8 @@ const routes: any = [
       () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
     ),
     meta: {
-      index: 8
+      index: 8,
+      keepAlive: true
     }
   },
   {
@@ -216,7 +234,8 @@ const routes: any = [
       () => import('../views/base/intelligence/IntelligencePromptsPage.vue')
     ),
     meta: {
-      index: 8
+      index: 8,
+      keepAlive: true
     }
   },
   {
@@ -227,7 +246,8 @@ const routes: any = [
       () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
     ),
     meta: {
-      index: 8
+      index: 8,
+      keepAlive: true
     }
   },
   {
@@ -238,7 +258,8 @@ const routes: any = [
       () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')
     ),
     meta: {
-      index: 8
+      index: 8,
+      keepAlive: true
     }
   },
   {

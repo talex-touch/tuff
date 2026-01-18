@@ -10,9 +10,7 @@ import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-
 import VWave from 'v-wave'
 import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
-import { baseNodeApi } from '~/modules/channel/main/node'
-import { shortconApi } from '~/modules/channel/main/shortcon'
-import { storageManager } from '~/modules/channel/storage'
+import '~/modules/channel/channel-core'
 
 import { setupI18n } from '~/modules/lang'
 
@@ -31,10 +29,6 @@ import 'vue-sonner/style.css'
 import 'uno.css'
 
 import 'virtual:unocss-devtools'
-
-window.$nodeApi = baseNodeApi
-window.$shortconApi = shortconApi
-window.$storage = storageManager
 
 setRuntimeEnv(import.meta.env as any)
 

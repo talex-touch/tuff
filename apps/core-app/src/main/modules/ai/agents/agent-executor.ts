@@ -17,6 +17,7 @@ import type { AgentExecutionContext, AgentImpl } from './agent-registry'
 import type { ToolRegistry } from './tool-registry'
 import chalk from 'chalk'
 import { agentRegistry } from './agent-registry'
+import type { AgentContextManager } from './memory'
 
 const TAG = chalk.hex('#9c27b0').bold('[AgentExecutor]')
 const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
@@ -53,6 +54,7 @@ export class AgentExecutor {
   private toolRegistry: ToolRegistry | null = null
   private intelligenceSDK: IntelligenceSDKInterface | null = null
   private abortControllers: Map<string, AbortController> = new Map()
+  private contextManager: AgentContextManager | null = null
 
   constructor(options: ExecutorOptions = {}) {
     this.options = {
@@ -77,6 +79,13 @@ export class AgentExecutor {
   }
 
   /**
+   * Set the context manager
+   */
+  setContextManager(manager: AgentContextManager): void {
+    this.contextManager = manager
+  }
+
+  /**
    * Execute an agent task
    */
   async executeTask(task: AgentTask): Promise<AgentResult> {
@@ -97,6 +106,30 @@ export class AgentExecutor {
       return this.createErrorResult(taskId, task.agentId, `Agent ${task.agentId} is disabled`)
     }
 
+    const sessionId = task.context?.sessionId
+    let mergedMessages = task.context?.messages
+
+    if (sessionId && this.contextManager) {
+      if (task.context?.messages?.length) {
+        this.contextManager.appendMessages(sessionId, task.context.messages)
+      }
+
+      const storedMessages = this.contextManager.getMessages(sessionId)
+      if (storedMessages.length > 0) {
+        mergedMessages = [...storedMessages, ...(mergedMessages ?? [])]
+      }
+    }
+
+    const resolvedTask: AgentTask = mergedMessages
+      ? {
+          ...task,
+          context: {
+            ...task.context,
+            messages: mergedMessages
+          }
+        }
+      : task
+
     // Create abort controller
     const abortController = new AbortController()
     this.abortControllers.set(taskId, abortController)
@@ -111,10 +144,10 @@ export class AgentExecutor {
       // Build execution context
       const context: AgentExecutionContext = {
         taskId,
-        sessionId: task.context?.sessionId,
-        workingDirectory: task.context?.workingDirectory,
+        sessionId: resolvedTask.context?.sessionId,
+        workingDirectory: resolvedTask.context?.workingDirectory,
         signal: abortController.signal,
-        metadata: task.context?.metadata
+        metadata: resolvedTask.context?.metadata
       }
 
       // Add thought trace
@@ -131,13 +164,13 @@ export class AgentExecutor {
       // Execute based on task type
       switch (task.type) {
         case 'execute':
-          output = await this.executeAction(agent.impl, task, context, trace)
+          output = await this.executeAction(agent.impl, resolvedTask, context, trace)
           break
         case 'plan':
-          output = await this.executePlan(agent.impl, task, context, trace)
+          output = await this.executePlan(agent.impl, resolvedTask, context, trace)
           break
         case 'chat':
-          output = await this.executeChat(agent.impl, task, context, trace)
+          output = await this.executeChat(agent.impl, resolvedTask, context, trace)
           break
         default:
           throw new Error(`Unknown task type: ${task.type}`)
@@ -156,10 +189,14 @@ export class AgentExecutor {
 
       logInfo(`Task ${taskId} completed in ${duration}ms`)
 
+      if (sessionId && this.contextManager) {
+        this.contextManager.recordTurn(sessionId, resolvedTask.input, output)
+      }
+
       return {
         success: true,
         taskId,
-        agentId: task.agentId,
+        agentId: resolvedTask.agentId,
         output,
         status: 'completed' as AgentStatus,
         usage: this.calculateUsage(startTime, trace),

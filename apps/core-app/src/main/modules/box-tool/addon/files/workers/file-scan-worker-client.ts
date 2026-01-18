@@ -7,7 +7,7 @@ import type {
 } from './worker-status'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { fileProviderLog } from '../../../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 
 interface PendingScan {
   results: ScannedFileInfo[]
@@ -26,6 +26,8 @@ type WorkerMessage =
   | { type: 'done'; taskId: string; scannedCount: number }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
+
+const fileProviderLog = getLogger('file-provider')
 
 export class FileScanWorkerClient {
   private worker: Worker | null = null

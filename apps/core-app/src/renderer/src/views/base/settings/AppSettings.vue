@@ -1,13 +1,14 @@
 <script lang="ts" name="AppSettings" setup>
 import { computed } from 'vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
-// import SettingStorage from './SettingStorage.vue'
+import SettingStorage from './SettingStorage.vue'
 import SettingAbout from './SettingAbout.vue'
 import SettingDownload from './SettingDownload.vue'
 import SettingEverything from './SettingEverything.vue'
 import SettingFileIndex from './SettingFileIndex.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
+import SettingPlatformCapabilities from './SettingPlatformCapabilities.vue'
 import SettingSentry from './SettingSentry.vue'
 import SettingSetup from './SettingSetup.vue'
 import SettingTools from './SettingTools.vue'
@@ -38,9 +39,11 @@ const isWindows = computed(() => window.electron?.process?.platform === 'win32')
 
       <SettingUpdate />
 
+      <SettingPlatformCapabilities />
+
       <SettingSentry />
 
-      <!-- <SettingStorage /> -->
+      <SettingStorage />
 
       <SettingAbout />
     </div>

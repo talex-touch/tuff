@@ -1,4 +1,6 @@
 export * from './app'
+export * from './download'
 export * from './disposable'
 export * from './market'
+export * from './platform'
 export * from './plugin'

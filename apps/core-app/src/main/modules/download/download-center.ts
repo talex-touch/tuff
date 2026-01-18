@@ -15,7 +15,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { desc, eq } from 'drizzle-orm'
-import { shell } from 'electron'
+import { app, shell } from 'electron'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
@@ -785,6 +785,10 @@ export class DownloadCenterModule extends BaseModule {
       })
   }
 
+  private shouldSuppressHistory(task: DownloadTask): boolean {
+    return app.isPackaged && Boolean(task.metadata?.hidden)
+  }
+
   // 初始化下载工作器
   private initializeWorkers(): void {
     const workerCount = this.config.concurrency.maxConcurrent
@@ -1192,7 +1196,9 @@ export class DownloadCenterModule extends BaseModule {
         // 下载完成
         task.status = DownloadStatus.COMPLETED
         await this.updateTaskStatusInDb(task.id, DownloadStatus.COMPLETED)
-        await this.saveToHistoryDb(task)
+        if (!this.shouldSuppressHistory(task)) {
+          await this.saveToHistoryDb(task)
+        }
 
         this.broadcastTaskCompleted(task)
       } else {

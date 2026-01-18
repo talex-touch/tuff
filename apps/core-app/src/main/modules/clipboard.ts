@@ -25,7 +25,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
-import { and, desc, eq, gt, inArray, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage } from 'electron'
 import { genTouchChannel } from '../core/channel-core'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
@@ -502,6 +502,61 @@ export class ClipboardModule extends BaseModule {
 
   public getLatestItem(): IClipboardItem | undefined {
     return this.memoryCache[0]
+  }
+
+  public getCacheStats(): { memoryItems: number; activeAppCached: boolean } {
+    return {
+      memoryItems: this.memoryCache.length,
+      activeAppCached: Boolean(this.activeAppCache?.value)
+    }
+  }
+
+  public async cleanupHistory(options?: {
+    beforeDays?: number
+    type?: 'all' | 'text' | 'image' | 'files'
+  }): Promise<{ removedCount: number }> {
+    if (!this.db) return { removedCount: 0 }
+
+    const conditions: Array<ReturnType<typeof and>> = []
+    const itemType = options?.type ?? 'all'
+    if (itemType !== 'all') {
+      conditions.push(eq(clipboardHistory.type, itemType))
+    }
+
+    if (options?.beforeDays && Number.isFinite(options.beforeDays) && options.beforeDays > 0) {
+      const cutoff = new Date(Date.now() - options.beforeDays * 24 * 60 * 60 * 1000)
+      conditions.push(lt(clipboardHistory.timestamp, cutoff))
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+    const rows = await this.db.select().from(clipboardHistory).where(whereClause)
+    for (const row of rows) {
+      const item = row as unknown as IClipboardItem
+      if (
+        item.type === 'image' &&
+        typeof item.content === 'string' &&
+        isLikelyLocalPath(item.content)
+      ) {
+        void tempFileService.deleteFile(item.content)
+      }
+    }
+
+    await this.db.delete(clipboardHistory).where(whereClause)
+    this.memoryCache = this.memoryCache.filter((item) => {
+      if (itemType !== 'all' && item.type !== itemType) return true
+      if (options?.beforeDays && item.timestamp) {
+        const ts =
+          item.timestamp instanceof Date
+            ? item.timestamp.getTime()
+            : new Date(item.timestamp).getTime()
+        const cutoff = Date.now() - options.beforeDays * 24 * 60 * 60 * 1000
+        return ts >= cutoff
+      }
+      return false
+    })
+    this.notifyTransportChange()
+
+    return { removedCount: rows.length }
   }
 
   private toTransportItem(item: IClipboardItem): ClipboardItem | null {

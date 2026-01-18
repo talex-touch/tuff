@@ -9,14 +9,15 @@ import type {
   CapabilityTestResult
 } from '~/components/intelligence/capabilities/types'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 // import IntelligenceCapabilityInfo from '~/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 
 const { t } = useI18n()
-const aiClient = createIntelligenceClient(touchChannel as any)
+const transport = useTuffTransport()
+const aiClient = createIntelligenceClient(transport)
 
 const {
   providers,

@@ -2,50 +2,44 @@
 const props = defineProps({
   os: {
     type: String,
-    required: true,
-  },
+    default: ''
+  }
 })
 
 const _class = ref()
 
 watchEffect(() => {
   const { os } = props
+  if (!os) {
+    _class.value = undefined
+    return
+  }
   if (
-    os === 'Windows 10 Pro'
-    || os === 'Windows 11 Pro'
-    || os === 'win'
-    || os.includes('Home China')
+    os === 'Windows 10 Pro' ||
+    os === 'Windows 11 Pro' ||
+    os === 'win' ||
+    os.includes('Home China')
   ) {
     _class.value = 'Windows_11'
-  }
-  else if (os.includes('Windows')) {
+  } else if (os.includes('Windows')) {
     _class.value = 'i-ri-windows-line'
-  }
-  else if (os.includes('Darwin') || os === 'darwin') {
+  } else if (os.includes('Darwin') || os === 'darwin') {
     _class.value = 'i-ri-apple-fill'
-  }
-  else if (os.includes('OS X')) {
+  } else if (os.includes('OS X')) {
     _class.value = 'i-ri-apple-line'
-  }
-  else if (os.includes('Kali')) {
+  } else if (os.includes('Kali')) {
     _class.value = 'i-simple-icons-kalilinux'
-  }
-  else if (os.includes('Linux') || os === 'linux') {
+  } else if (os.includes('Linux') || os === 'linux') {
     _class.value = 'i-simple-icons-linux'
-  }
-  else if (os.includes('Ubuntu')) {
+  } else if (os.includes('Ubuntu')) {
     _class.value = 'i-simple-icons-ubuntu'
-  }
-  else if (os.includes('Debian')) {
+  } else if (os.includes('Debian')) {
     _class.value = 'i-simple-icons-debian'
-  }
-  else if (os.includes('Fedora')) {
+  } else if (os.includes('Fedora')) {
     _class.value = 'i-simple-icons-fedora'
-  }
-  else if (os.includes('Arch')) {
+  } else if (os.includes('Arch')) {
     _class.value = 'i-simple-icons-archlinux'
-  }
-  else if (os.includes('Chromium')) {
+  } else if (os.includes('Chromium')) {
     _class.value = 'i-ri-chrome-line'
   }
 })

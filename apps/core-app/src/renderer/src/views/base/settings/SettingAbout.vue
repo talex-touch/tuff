@@ -9,21 +9,25 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import OSIcon from '~/components/icon/OSIcon.vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 // Import UI components
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
-import { touchChannel } from '~/modules/channel/channel-core'
 import { appSetting } from '~/modules/channel/storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
+const transport = useTuffTransport()
 const { packageJson, os, processInfo } = useEnv()
+const { startupInfo } = useStartupInfo()
 
-const appUpdate = ref(window.$startupInfo.appUpdate)
-const sui = ref(window.$startupInfo)
+const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
 const dev = ref(false)
 const performanceSummary = ref<any>(null)
@@ -35,7 +39,7 @@ const developerMode = computed({
     if (appSetting?.dev) {
       appSetting.dev.developerMode = val
     }
-  },
+  }
 })
 
 onMounted(async () => {
@@ -43,26 +47,29 @@ onMounted(async () => {
 
   // Load performance summary
   try {
-    const summary = await touchChannel.send('analytics:get-summary')
+    const analyticsSummary = defineRawEvent<void, any>('analytics:get-summary')
+    const summary = await transport.send(analyticsSummary)
     performanceSummary.value = summary
-  }
-  catch (error) {
+  } catch (error) {
     console.warn('Failed to load performance summary', error)
   }
 })
 
 // Computed property for version string
 const versionStr = computed(
-  () => `TalexTouch ${dev.value ? 'Dev' : 'Master'} ${packageJson.value?.version}`,
+  () => `TalexTouch ${dev.value ? 'Dev' : 'Master'} ${packageJson.value?.version}`
 )
 
 // Computed property for application start time
-const startCosts = computed(() => sui.value && (sui.value.t.e - sui.value.t.s) / 1000)
+const startCosts = computed(() =>
+  startupInfo.value ? (startupInfo.value.t.e - startupInfo.value.t.s) / 1000 : 0
+)
 
 // Export performance data
 async function exportPerformanceData() {
   try {
-    const data = await touchChannel.send('analytics:export')
+    const analyticsExport = defineRawEvent<void, string>('analytics:export')
+    const data = await transport.send(analyticsExport)
 
     // Create a download link
     const blob = new Blob([data], { type: 'application/json' })
@@ -74,8 +81,7 @@ async function exportPerformanceData() {
     URL.revokeObjectURL(url)
 
     toast.success(t('settingAbout.exportSuccess'))
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to export performance data', error)
     toast.error(t('settingAbout.exportFailed'))
   }
@@ -106,20 +112,18 @@ const buildInfo = computed(() => getBuildInfo())
 // Open application folder
 async function openAppFolder() {
   try {
-    const rootPath = window.$startupInfo?.path?.rootPath
+    const rootPath = startupInfo.value?.path?.rootPath
     if (!rootPath) {
       toast.error(t('settingAbout.folderPathNotFound'))
       return
     }
-    const result = await touchChannel.send('execute:cmd', { command: rootPath })
+    const result = await transport.send(AppEvents.system.executeCommand, { command: rootPath })
     if (result?.success) {
       toast.success(t('settingAbout.folderOpened'))
-    }
-    else {
+    } else {
       toast.error(t('settingAbout.folderOpenFailed'))
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to open app folder', error)
     toast.error(t('settingAbout.folderOpenFailed'))
   }
@@ -155,15 +159,8 @@ async function openAppFolder() {
         <span v-else class="tag" style="color: #6d8b51"> {{ t('settingAbout.latest') }} </span>
       </template>
     </TuffBlockLine>
-    <TuffBlockLine
-      :title="t('settingAbout.specification')"
-      :description="`${currentQuarter}`"
-    />
-    <TuffBlockLine
-      v-if="buildInfo.version"
-      title="Version"
-      :description="buildInfo.version"
-    />
+    <TuffBlockLine :title="t('settingAbout.specification')" :description="`${currentQuarter}`" />
+    <TuffBlockLine v-if="buildInfo.version" title="Version" :description="buildInfo.version" />
     <TuffBlockLine
       v-if="buildInfo.buildIdentifier"
       title="Build ID"
@@ -174,11 +171,7 @@ async function openAppFolder() {
       title="Git Hash"
       :description="buildInfo.gitCommitHash.substring(0, 7)"
     />
-    <TuffBlockLine
-      v-if="buildInfo.channel"
-      title="Channel"
-      :description="buildInfo.channel"
-    />
+    <TuffBlockLine v-if="buildInfo.channel" title="Channel" :description="buildInfo.channel" />
     <TuffBlockLine
       v-if="buildInfo.buildType"
       title="Build Type"
@@ -222,14 +215,10 @@ async function openAppFolder() {
     </TuffBlockLine>
     <template v-if="showPerformanceDetails && performanceSummary">
       <TuffBlockLine :title="t('settingAbout.mainProcessTime')">
-        <template #description>
-          {{ performanceSummary.mainProcessTime.toFixed(3) }}s
-        </template>
+        <template #description> {{ performanceSummary.mainProcessTime.toFixed(3) }}s </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('settingAbout.rendererTime')">
-        <template #description>
-          {{ performanceSummary.rendererTime.toFixed(3) }}s
-        </template>
+        <template #description> {{ performanceSummary.rendererTime.toFixed(3) }}s </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('settingAbout.modulesLoaded')">
         <template #description>
@@ -253,11 +242,7 @@ async function openAppFolder() {
           </span>
         </template>
       </TuffBlockLine>
-      <TuffBlockLine
-        :title="t('settingAbout.exportData')"
-        link
-        @click="exportPerformanceData"
-      >
+      <TuffBlockLine :title="t('settingAbout.exportData')" link @click="exportPerformanceData">
         <template #description>
           <span style="cursor: pointer; color: var(--el-color-primary)">
             {{ t('settingAbout.exportJson') }}
@@ -269,10 +254,7 @@ async function openAppFolder() {
       :title="t('settingAbout.electron')"
       :description="processInfo.versions?.electron"
     />
-    <TuffBlockLine
-      :title="t('settingAbout.v8')"
-      :description="processInfo.versions?.v8"
-    />
+    <TuffBlockLine :title="t('settingAbout.v8')" :description="processInfo.versions?.v8" />
     <TuffBlockLine :title="t('settingAbout.os')">
       <template #description>
         <span flex gap-0 items-center>
@@ -283,7 +265,7 @@ async function openAppFolder() {
     </TuffBlockLine>
     <TuffBlockLine
       :title="t('settingAbout.platform')"
-      :description="`${processInfo.platform} (${os.value?.arch})`"
+      :description="`${processInfo.platform} (${os?.arch})`"
     />
     <TuffBlockLine
       :title="t('settingAbout.experience')"

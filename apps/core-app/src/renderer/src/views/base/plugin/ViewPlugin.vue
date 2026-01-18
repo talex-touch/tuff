@@ -1,8 +1,10 @@
 <script name="ViewPlugin" setup>
 import PluginView from '~/components/plugin/PluginView.vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { tryUseChannel } from '@talex-touch/utils/renderer/hooks/use-channel'
+import { appSetting } from '~/modules/channel/storage'
 
-const options = window.$storage.themeStyle
+const channel = tryUseChannel()
+const options = computed(() => appSetting.background ?? {})
 const activePlugin = inject('activePlugin')
 const plugins = inject('plugins')
 // const plugins = computed(() => _plugins());
@@ -10,21 +12,21 @@ const plugins = inject('plugins')
 const pendingLists = reactive({})
 
 onMounted(() => {
-  touchChannel.regChannel('plugin:message-transport', async ({ data: _data, reply }) => {
+  channel?.regChannel?.('plugin:message-transport', async ({ data: _data, reply }) => {
     // console.log("[Plugin] Receive message from plugin", _data)
     const { data, plugin } = _data
-    if (!plugins.value.filter(item => item.name === plugin)?.length) {
+    if (!plugins.value.filter((item) => item.name === plugin)?.length) {
       delete pendingLists[plugin]
       return reply({
         code: 404,
-        message: 'Plugin not found',
+        message: 'Plugin not found'
       })
     }
 
     const pendingList = pendingLists[plugin] || (pendingLists[plugin] = [])
     pendingList.push({
       data,
-      reply,
+      reply
     })
   })
 })
@@ -33,7 +35,7 @@ onMounted(() => {
 <template>
   <div
     class="Blur-Container"
-    :class="{ 'touch-blur': options?.blur || true, 'active': activePlugin }"
+    :class="{ 'touch-blur': options?.blur || true, active: activePlugin }"
   >
     <PluginView
       v-for="plugin in plugins"

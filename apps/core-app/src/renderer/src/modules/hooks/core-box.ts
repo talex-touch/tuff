@@ -1,9 +1,10 @@
 import type { DivisionBoxConfig, SessionMeta } from '@talex-touch/utils'
-import type { StandardChannelData } from '@talex-touch/utils/channel'
 import { isDivisionBox as checkIsDivisionBox } from '@talex-touch/utils/renderer'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { reactive } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
 import { logAppEntranceMode } from '~/modules/devtools/app-entrance-log'
+import { useStartupInfo } from './useStartupInfo'
 
 /**
  * DivisionBox initial data from unified channel
@@ -39,6 +40,8 @@ function detectDivisionBox(): boolean {
 }
 
 const initialType = detectDivisionBox() ? 'division-box' : 'corebox'
+const transport = useTuffTransport()
+const { startupInfo } = useStartupInfo()
 
 export const windowState = reactive<{
   type: 'corebox' | 'division-box'
@@ -53,22 +56,23 @@ if (initialType === 'division-box') {
 }
 
 try {
-  touchChannel.regChannel('core-box:trigger', ({ data }: StandardChannelData) => {
-    if (!data || typeof data !== 'object') return
+  const coreBoxTrigger = defineRawEvent<Record<string, unknown>, void>('core-box:trigger')
+  transport.on(coreBoxTrigger, (payload) => {
+    if (!payload || typeof payload !== 'object') return
 
-    const payload = data as Record<string, unknown>
-    const type = payload.type
-    const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : undefined
-    const config = payload.config as DivisionBoxConfig | undefined
-    const meta = payload.meta as SessionMeta | undefined
-    const show = payload.show
-    const id = payload.id
+    const message = payload as Record<string, unknown>
+    const type = message.type
+    const sessionId = typeof message.sessionId === 'string' ? message.sessionId : undefined
+    const config = message.config as DivisionBoxConfig | undefined
+    const meta = message.meta as SessionMeta | undefined
+    const show = message.show
+    const id = message.id
 
     console.debug('[core-box.ts] Received core-box:trigger', {
       show,
       id,
       type,
-      startupInfoId: window.$startupInfo?.id
+      startupInfoId: startupInfo.value?.id
     })
 
     if (type === 'division-box') {
@@ -99,12 +103,12 @@ try {
 
     if (
       typeof id === 'number' &&
-      window.$startupInfo?.id !== undefined &&
-      id !== window.$startupInfo.id
+      startupInfo.value?.id !== undefined &&
+      id !== startupInfo.value.id
     ) {
       console.debug('[core-box.ts] ID mismatch, skipping', {
         receivedId: id,
-        startupInfoId: window.$startupInfo.id
+        startupInfoId: startupInfo.value.id
       })
       return
     }

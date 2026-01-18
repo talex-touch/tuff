@@ -1,13 +1,16 @@
+import { useStartupInfo } from '../hooks/useStartupInfo'
+
 export type AppEntranceMode = 'CoreBox' | 'MainApp' | 'DivisionBox'
 
 type LogDetails = Record<string, unknown>
 
 const printedOnceKeys = new Set<string>()
+const { startupInfo } = useStartupInfo()
 
 function shouldLogEntrance(): boolean {
   if (import.meta.env.DEV) return true
 
-  return Boolean(window.$startupInfo?.isDev) || window.location.search.includes('debug-entrance')
+  return Boolean(startupInfo.value?.isDev) || window.location.search.includes('debug-entrance')
 }
 
 function getModeStyle(mode: AppEntranceMode): string {

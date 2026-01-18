@@ -1,9 +1,7 @@
 import type { Ref } from 'vue'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { ref, watch } from 'vue'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { getAuthToken } from '~/modules/market/auth-token-service'
-
-const NEXUS_URL = getTuffBaseUrl()
 
 export interface MarketPluginRatingSummary {
   average: number
@@ -35,7 +33,8 @@ export function useMarketRating(slug: Ref<string | undefined>) {
     loading.value = true
     error.value = null
     try {
-      const response = await fetch(`${NEXUS_URL}/api/market/plugins/${currentSlug}/rating`, {
+      const baseUrl = getAuthBaseUrl()
+      const response = await fetch(`${baseUrl}/api/market/plugins/${currentSlug}/rating`, {
         method: 'GET',
         headers: { Accept: 'application/json' }
       })
@@ -77,7 +76,8 @@ export function useMarketRating(slug: Ref<string | undefined>) {
         return
       }
 
-      const response = await fetch(`${NEXUS_URL}/api/market/plugins/${currentSlug}/rating`, {
+      const baseUrl = getAuthBaseUrl()
+      const response = await fetch(`${baseUrl}/api/market/plugins/${currentSlug}/rating`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',

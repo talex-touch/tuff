@@ -1,5 +1,8 @@
 import type { TimingLogLevel, TimingMeta, TimingOptions } from '@talex-touch/utils'
-import { fileProviderLog, formatDuration } from './logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
+import { formatDuration } from './logger'
+
+const fileProviderLog = getLogger('file-provider')
 
 /**
  * Extended timing metadata for file provider operations
@@ -19,7 +22,7 @@ const FILE_TIMING_STYLE: Record<TimingLogLevel, 'debug' | 'info' | 'warn' | 'err
   none: 'debug',
   info: 'debug',
   warn: 'warn',
-  error: 'error',
+  error: 'error'
 }
 
 /**
@@ -30,7 +33,7 @@ export const FILE_TIMING_BASE_OPTIONS: TimingOptions = {
   logThresholds: {
     none: 50,
     info: 250,
-    warn: 1000,
+    warn: 1000
   },
   formatter: (entry) => {
     const meta = (entry.meta ?? {}) as FileTimingMeta
@@ -57,15 +60,12 @@ export const FILE_TIMING_BASE_OPTIONS: TimingOptions = {
     const level = FILE_TIMING_STYLE[entry.logLevel ?? 'info'] ?? 'debug'
     if (level === 'warn') {
       fileProviderLog.warn(message)
-    }
-    else if (level === 'error') {
+    } else if (level === 'error') {
       fileProviderLog.error(message)
-    }
-    else if (level === 'info') {
+    } else if (level === 'info') {
       fileProviderLog.info(message)
-    }
-    else {
+    } else {
       fileProviderLog.debug(message)
     }
-  },
+  }
 }

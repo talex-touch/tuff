@@ -6,16 +6,11 @@
 
 import { ElButton, ElMessageBox } from 'element-plus'
 import { h, onMounted, onUnmounted, ref } from 'vue'
-import { touchChannel } from '~/modules/channel/channel-core'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { PermissionEvents } from '@talex-touch/utils/transport/events'
+import type { PermissionStartupRequestPayload } from '@talex-touch/utils/transport/events/types'
 
-interface PermissionStartupRequest {
-  pluginId: string
-  pluginName: string
-  sdkapi?: number
-  required: string[]
-  optional: string[]
-  reasons: Record<string, string>
-}
+type PermissionStartupRequest = PermissionStartupRequestPayload
 
 // Permission name translations
 const permissionNames: Record<string, string> = {
@@ -43,6 +38,7 @@ const PERMISSION_TIMEOUT_MS = 30_000
 
 export function usePermissionStartup() {
   const pendingRequests = ref<PermissionStartupRequest[]>([])
+  const transport = useTuffTransport()
   let unregister: (() => void) | null = null
 
   const handlePermissionRequest = async (request: PermissionStartupRequest) => {
@@ -125,7 +121,7 @@ export function usePermissionStartup() {
     // Handle user choice
     switch (userChoice) {
       case 'always':
-        await touchChannel.send('permission:grant-multiple', {
+        await transport.send(PermissionEvents.api.grantMultiple, {
           pluginId: request.pluginId,
           permissionIds: request.required,
           grantedBy: 'user'
@@ -133,7 +129,7 @@ export function usePermissionStartup() {
         break
 
       case 'session':
-        await touchChannel.send('permission:grant-session', {
+        await transport.send(PermissionEvents.api.grantSession, {
           pluginId: request.pluginId,
           permissionIds: request.required
         })
@@ -146,11 +142,8 @@ export function usePermissionStartup() {
   }
 
   const setupListener = () => {
-    if (!touchChannel.regChannel) return
-
-    unregister = touchChannel.regChannel('permission:startup-request', (message) => {
-      const request = (message as any).data as PermissionStartupRequest
-      handlePermissionRequest(request)
+    unregister = transport.on(PermissionEvents.push.startupRequest, (request) => {
+      handlePermissionRequest(request as PermissionStartupRequest)
     })
   }
 

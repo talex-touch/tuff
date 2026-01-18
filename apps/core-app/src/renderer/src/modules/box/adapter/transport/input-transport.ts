@@ -1,26 +1,24 @@
-import type { ITouchClientChannel, TuffQuery } from '@talex-touch/utils'
+import type { ITuffTransport } from '@talex-touch/utils/transport'
+import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { createCoreBoxTransport } from './core-box-transport'
 
-interface CoreBoxInputMessage {
-  input?: string
-  query?: TuffQuery
-  source?: 'renderer'
-}
+type CoreBoxInputMessage = CoreBoxInputChangeRequest
 
 export function createCoreBoxInputTransport(
-  channel: ITouchClientChannel,
+  transport: ITuffTransport,
   debounceMs = 35
 ): {
   broadcast: (payload: CoreBoxInputMessage) => void
 } {
-  const transport = createCoreBoxTransport<CoreBoxInputMessage>(channel, {
-    event: 'core-box:input-change',
+  const inputTransport = createCoreBoxTransport<CoreBoxInputMessage>(transport, {
+    event: CoreBoxEvents.input.change,
     debounceMs
   })
 
   return {
     broadcast(payload: CoreBoxInputMessage) {
-      transport.dispatch(payload)
+      inputTransport.dispatch(payload)
     }
   }
 }

@@ -7,7 +7,7 @@ import type {
 } from './worker-status'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { fileProviderLog } from '../../../../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 
 export interface IndexWorkerProgressUpdate {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped'
@@ -60,6 +60,8 @@ type WorkerMessage =
   | { type: 'error'; taskId: string; error: string }
   | IndexWorkerFileResult
   | WorkerMetricsResponse
+
+const fileProviderLog = getLogger('file-provider')
 
 export class FileIndexWorkerClient {
   private readonly onFile?: (payload: IndexWorkerFileResult) => void

@@ -49,9 +49,6 @@ declare global {
 
   export interface Window {
     $argMapper: import('@talex-touch/utils/electron').IArgMapperOptions
-    $nodeApi: import('~/modules/channel/main/node').BaseNodeApi
-    $shortconApi: import('./modules/channel/main/shortcon').ShortconApi
-    $storage: import('./modules/channel/storage').StorageManager
     $channel: import('@talex-touch/utils/channel').ITouchClientChannel
     $i18n: import('vue-i18n').I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
     $startupInfo: IStartupInfo

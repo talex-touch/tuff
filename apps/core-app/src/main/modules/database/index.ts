@@ -12,10 +12,10 @@ import { app, BrowserWindow, dialog } from 'electron'
 import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
-import { createLogger } from '../../utils/logger'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { BaseModule } from '../abstract-base-module'
 
-const dbLog = createLogger('Database')
+const dbLog = getLogger('database')
 
 export class DatabaseModule extends BaseModule {
   private db: LibSQLDatabase<typeof schema> | null = null
@@ -29,6 +29,10 @@ export class DatabaseModule extends BaseModule {
       create: true,
       dirName: 'database'
     })
+  }
+
+  public getClient(): Client | null {
+    return this.client
   }
 
   private async showDatabaseErrorDialog(error: Error, details?: string): Promise<void> {
@@ -136,7 +140,7 @@ export class DatabaseModule extends BaseModule {
       await this.client.execute('PRAGMA synchronous = NORMAL')
       await this.client.execute('PRAGMA locking_mode = NORMAL')
       await this.client.execute('PRAGMA mmap_size = 268435456')
-      dbLog.success('SQLite configured: WAL mode enabled, busy_timeout=30s')
+      dbLog.info('SQLite configured: WAL mode enabled, busy_timeout=30s')
     } catch (error) {
       dbLog.warn('Failed to configure SQLite pragmas', { error })
     }
@@ -237,7 +241,7 @@ export class DatabaseModule extends BaseModule {
 
       const stats = timing.getStats()
       const duration = stats ? stats.lastMs.toFixed(2) : 'N/A'
-      dbLog.success(`Migrations completed successfully in ${duration}ms`)
+      dbLog.info(`Migrations completed successfully in ${duration}ms`)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error ?? '')
       const duplicateColumn = message.includes('duplicate column name: provider_id')

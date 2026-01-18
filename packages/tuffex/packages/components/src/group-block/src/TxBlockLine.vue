@@ -40,27 +40,28 @@ function handleClick(event: MouseEvent): void {
 
 <template>
   <div
-    class="tx-block-line fake-background index-fix"
-    :class="{ 'tx-block-line--link': link }"
+    class="tx-block-line TBlockLine-Container fake-background index-fix"
+    :class="{ 'tx-block-line--link': link, link }"
     role="button"
     :tabindex="link ? 0 : undefined"
     @click="handleClick"
     @keydown.enter="link && handleClick($event as unknown as MouseEvent)"
   >
-    <span class="tx-block-line__title">{{ title }}</span>
-    <div v-if="!link" class="tx-block-line__description">
+    <span class="tx-block-line__title TBlockLine-Title">{{ title }}</span>
+    <div v-if="!link" class="tx-block-line__description TBlockLine-Description">
       <slot name="description">
         {{ description }}
       </slot>
     </div>
-    <div v-else class="tx-block-line__link-slot">
+    <div v-else class="tx-block-line__link-slot TBlockLine-LinkSlot">
       <slot name="description" />
     </div>
   </div>
 </template>
 
 <style lang="scss">
-.tx-block-line {
+.tx-block-line,
+.TBlockLine-Container {
   position: relative;
   display: flex;
   gap: 12px;
@@ -68,18 +69,17 @@ function handleClick(event: MouseEvent): void {
   padding: 2px 18px 2px 50px;
   min-height: 24px;
   border-radius: 12px;
-  --fake-color: var(--tx-fill-color, #ebeef5);
+  --fake-color: var(--tx-fill-color, #f0f2f5);
   --fake-opacity: 0.45;
-  background: transparent;
 
-  &__title {
+  .tx-block-line__title {
     width: 120px;
     font-size: 13px;
     font-weight: 600;
     color: var(--tx-text-color-secondary, #909399);
   }
 
-  &__description {
+  .tx-block-line__description {
     flex: 1;
     font-size: 13px;
     line-height: 1.4;
@@ -87,7 +87,7 @@ function handleClick(event: MouseEvent): void {
     color: var(--tx-text-color-secondary, #909399);
   }
 
-  &__link-slot {
+  .tx-block-line__link-slot {
     font-size: 13px;
     font-weight: 600;
     color: var(--tx-color-primary, #409eff);
@@ -96,29 +96,36 @@ function handleClick(event: MouseEvent): void {
     gap: 6px;
   }
 
-  &--link {
-    cursor: pointer;
-    padding-top: 2px;
-    padding-bottom: 2px;
-    cursor: pointer;
-    --fake-color: var(--tx-fill-color, #ebeef5);
-    --fake-opacity: 0.4;
+}
 
-    .tx-block-line__title {
-      width: auto;
-      min-width: 120px;
-      opacity: 0.7;
-      color: var(--tx-text-color-primary, #303133);
-    }
+.tx-block-line--link,
+.TBlockLine-Container.link {
+  cursor: pointer;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  --fake-color: var(--tx-fill-color, #f0f2f5);
+  --fake-opacity: 0.4;
 
-    &:focus-visible {
-      outline: 2px solid var(--tx-color-primary);
-      outline-offset: -2px;
-    }
+  .tx-block-line__title {
+    width: auto;
+    min-width: 120px;
+    opacity: 0.7;
+    color: var(--tx-text-color-primary, #303133);
+  }
 
-    &:hover {
-      text-decoration: underline;
-    }
+  .tx-block-line__link-slot {
+    color: var(--tx-color-primary, #409eff);
+    text-decoration-color: var(--tx-color-primary, #409eff);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: -2px;
+  }
+
+  &:hover {
+    text-decoration: underline;
+    --fake-inner-opacity: 0.75;
   }
 }
 </style>

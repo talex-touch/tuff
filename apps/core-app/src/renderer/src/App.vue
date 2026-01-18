@@ -10,14 +10,14 @@ import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
 import { capturePlatformWarningContext } from '~/modules/mention/platform-warning'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import AppLayout from '~/views/layout/AppLayout.vue'
 import AppEntrance from './AppEntrance.vue'
 
 const { t } = useI18n()
 const { initializeLanguage } = useLanguage()
-
-const packageJson = window.$nodeApi.getPackageJSON()
+const { startupInfo } = useStartupInfo()
 
 const beginner = ref(false)
 
@@ -52,10 +52,10 @@ async function init(): Promise<void> {
       <template #title>
         <span text-sm>{{ t('app.title') }}</span>
         <span
-          :title="packageJson.version"
+          :title="startupInfo?.version"
           style="--fake-radius: 4px"
           class="app-version px-[3px] py-[1px] rounded-md text-xs version fake-background"
-          >{{ packageJson.version }}</span
+          >{{ startupInfo?.version }}</span
         >
       </template>
       <template #navbar>

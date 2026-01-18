@@ -1,7 +1,11 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
-import type { ReadFileRequest } from '@talex-touch/utils/transport/events/types'
-import type { TalexTouch } from '../types'
+import type {
+  ReadFileRequest,
+  StartupRequest,
+  StartupResponse
+} from '@talex-touch/utils/transport/events/types'
+import { TalexTouch } from '../types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -12,7 +16,7 @@ import { isLocalhostUrl } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow, powerMonitor, shell } from 'electron'
 import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
@@ -28,6 +32,28 @@ import { setLocale } from '../utils/i18n-helper'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
 import { tempFileService } from '../service/temp-file.service'
+import { getStorageUsageReport } from '../utils/storage-usage'
+import { databaseModule } from '../modules/database'
+import { storageModule } from '../modules/storage'
+import { clipboardModule } from '../modules/clipboard'
+import { checkPlatformCompatibility } from '../utils/common-util'
+import {
+  platformCapabilityRegistry,
+  registerDefaultPlatformCapabilities
+} from '../modules/platform/capability-registry'
+import {
+  cleanupAnalytics,
+  cleanupClipboard,
+  cleanupConfig,
+  cleanupDownloads,
+  cleanupFileIndex,
+  cleanupIntelligence,
+  cleanupLogs,
+  cleanupOcr,
+  cleanupTemp,
+  cleanupUpdates,
+  cleanupUsage
+} from '../service/storage-maintenance'
 
 const execFileAsync = promisify(execFile)
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
@@ -245,6 +271,7 @@ export class CommonChannelModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
+  private touchApp: TalexTouch.TouchApp | null = null
 
   constructor() {
     super(CommonChannelModule.key, {
@@ -254,7 +281,9 @@ export class CommonChannelModule extends BaseModule {
   }
 
   async onInit({ app }: ModuleInitContext<TalexEvents>): Promise<void> {
-    const channel = genTouchChannel(app as TalexTouch.TouchApp)
+    const touchApp = app as TalexTouch.TouchApp
+    this.touchApp = touchApp
+    const channel = genTouchChannel(touchApp)
     this.channel = channel
     this.transport = getTuffTransportMain(channel, getKeyManager(channel) ?? channel)
 
@@ -438,11 +467,103 @@ export class CommonChannelModule extends BaseModule {
       return { success }
     })
 
+    channel.regChannel(ChannelType.MAIN, 'system:get-storage-usage', async ({ data }) => {
+      const storageStats = storageModule.getCacheStats()
+      const clipboardStats = clipboardModule.getCacheStats()
+      return await getStorageUsageReport({
+        dbClient: databaseModule.getClient(),
+        cacheStats: {
+          'storage.lru': storageStats.cachedConfigs,
+          'storage.plugins': storageStats.pluginConfigs,
+          'clipboard.memory': clipboardStats.memoryItems
+        },
+        include: data?.include
+      })
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:clipboard', async ({ data }) => {
+      return await cleanupClipboard(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:file-index', async ({ data }) => {
+      return await cleanupFileIndex(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:logs', async ({ data }) => {
+      return await cleanupLogs(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:temp', async ({ data }) => {
+      return await cleanupTemp(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:analytics', async ({ data }) => {
+      return await cleanupAnalytics(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:usage', async ({ data }) => {
+      return await cleanupUsage(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:ocr', async ({ data }) => {
+      return await cleanupOcr(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:downloads', async ({ data }) => {
+      return await cleanupDownloads(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:intelligence', async ({ data }) => {
+      return await cleanupIntelligence(data)
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:config', async () => {
+      return await cleanupConfig()
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:updates', async () => {
+      return await cleanupUpdates()
+    })
+
     channel.regChannel(ChannelType.MAIN, 'common:cwd', process.cwd)
+
+    channel.regChannel(ChannelType.MAIN, 'common:get-path', ({ data }) => {
+      const name = typeof data?.name === 'string' ? data.name : ''
+      if (!name) {
+        return null
+      }
+      try {
+        return touchApp.app.getPath(name as any)
+      } catch (error) {
+        console.warn(`[CommonChannel] Failed to resolve app path: ${name}`, error)
+        return null
+      }
+    })
 
     channel.regChannel(ChannelType.MAIN, 'folder:open', ({ data }) => {
       if (data?.path) {
         shell.showItemInFolder(data.path)
+      }
+    })
+
+    channel.regChannel(ChannelType.MAIN, 'app:open-prompts-folder', async () => {
+      const basePath = storageModule.filePath
+      if (!basePath) {
+        throw new Error('Config path not available')
+      }
+
+      const promptFilePath = path.join(basePath, 'intelligence', 'prompt-library')
+      try {
+        await fs.stat(promptFilePath)
+        shell.showItemInFolder(promptFilePath)
+        return
+      } catch {
+        // Ignore and fallback to opening config root
+      }
+
+      const error = await shell.openPath(basePath)
+      if (error) {
+        throw new Error(error)
       }
     })
 
@@ -585,7 +706,7 @@ export class CommonChannelModule extends BaseModule {
       }
     }
 
-    ;(app as TalexTouch.TouchApp).app.addListener('open-url', (event, url) => {
+    touchApp.app.addListener('open-url', (event, url) => {
       event.preventDefault()
 
       const regex =
@@ -626,8 +747,131 @@ export class CommonChannelModule extends BaseModule {
     if (!this.transport || !this.channel) {
       return
     }
+    const touchApp = this.touchApp
+    if (!touchApp) {
+      return
+    }
+    const electronApp = touchApp.app
+
+    registerDefaultPlatformCapabilities()
 
     this.transportDisposers.push(
+      this.transport.on<StartupRequest, StartupResponse>(
+        AppEvents.system.startup,
+        (payload, context) => {
+          const rendererStartTime =
+            typeof payload?.rendererStartTime === 'number' ? payload.rendererStartTime : Date.now()
+          const currentTime = Date.now()
+
+          const sender = context.sender as Electron.WebContents | undefined
+          const senderId = sender?.id ?? touchApp.window.window.webContents.id
+          const primaryRendererId = touchApp.window.window.webContents.id
+
+          if (senderId === primaryRendererId) {
+            const analytics = getStartupAnalytics()
+            analytics.setRendererProcessMetrics({
+              startTime: rendererStartTime,
+              readyTime: currentTime,
+              domContentLoaded: undefined,
+              firstInteractive: undefined,
+              loadEventEnd: undefined
+            })
+          }
+
+          return {
+            id: senderId,
+            version: touchApp.version,
+            path: {
+              rootPath: touchApp.rootPath,
+              appPath: electronApp.getAppPath(),
+              appDataPath: electronApp.getPath('appData'),
+              userDataPath: electronApp.getPath('userData'),
+              tempPath: electronApp.getPath('temp'),
+              homePath: electronApp.getPath('home'),
+              exePath: electronApp.getPath('exe'),
+              modulePath: path.join(touchApp.rootPath, 'modules'),
+              configPath: path.join(touchApp.rootPath, 'config'),
+              pluginPath: path.join(touchApp.rootPath, 'plugins')
+            },
+            isPackaged: electronApp.isPackaged,
+            isDev: touchApp.version === TalexTouch.AppVersion.DEV,
+            isRelease: touchApp.version === TalexTouch.AppVersion.RELEASE,
+            platform: process.platform,
+            arch: process.arch,
+            platformWarning: checkPlatformCompatibility() ?? undefined,
+            t: {
+              _s: process.getCreationTime() ?? Date.now(),
+              s: rendererStartTime,
+              e: currentTime,
+              p: process.uptime(),
+              h: process.hrtime()
+            }
+          }
+        }
+      ),
+      this.transport.on(PlatformEvents.capabilities.list, (payload) => {
+        return platformCapabilityRegistry.list(payload ?? {})
+      }),
+      this.transport.on(AppEvents.window.close, () => closeApp(touchApp)),
+      this.transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
+      this.transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
+      this.transport.on(AppEvents.window.focus, () => touchApp.window.window.focus()),
+      this.transport.on(AppEvents.debug.openDevTools, (payload) => {
+        const options = payload && typeof payload === 'object' ? payload : undefined
+        touchApp.window.openDevTools(options as any)
+      }),
+      this.transport.on(AppEvents.system.getCwd, () => process.cwd()),
+      this.transport.on(AppEvents.system.getOS, () => getOSInformation()),
+      this.transport.on(AppEvents.system.getPackage, () => packageJson),
+      this.transport.on(AppEvents.system.getPath, (payload) => {
+        const name = typeof payload?.name === 'string' ? payload.name : ''
+        if (!name) {
+          return null
+        }
+        try {
+          return electronApp.getPath(name as any)
+        } catch (error) {
+          console.warn(`[CommonChannel] Failed to resolve app path: ${name}`, error)
+          return null
+        }
+      }),
+      this.transport.on(AppEvents.system.openExternal, (payload) => {
+        const url = typeof payload?.url === 'string' ? payload.url : ''
+        if (url) {
+          return shell.openExternal(url)
+        }
+        return undefined
+      }),
+      this.transport.on(AppEvents.system.showInFolder, (payload) => {
+        const target = typeof payload?.path === 'string' ? payload.path : ''
+        if (target) {
+          shell.showItemInFolder(target)
+        }
+      }),
+      this.transport.on(AppEvents.system.openApp, (payload) => {
+        const target = payload?.appName || payload?.path
+        if (target) {
+          void shell.openPath(target)
+        }
+        return undefined
+      }),
+      this.transport.on(AppEvents.system.executeCommand, async (payload) => {
+        const command = typeof payload?.command === 'string' ? payload.command : ''
+        if (!command) {
+          return { success: false, error: 'No command provided' }
+        }
+        try {
+          const error = await shell.openPath(command)
+          if (error) {
+            console.error(`[CommonChannel] Failed to open path: ${command}, error: ${error}`)
+            return { success: false, error }
+          }
+          return { success: true }
+        } catch (error) {
+          console.error(`[CommonChannel] Error opening path: ${command}`, error)
+          return { success: false, error: error instanceof Error ? error.message : String(error) }
+        }
+      }),
       this.transport.on(AppEvents.i18n.setLocale, (payload) => {
         const locale = getOptionalStringProp(payload, 'locale')
         if (locale && isLocale(locale)) {
