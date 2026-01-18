@@ -3,7 +3,7 @@ import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { desc, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import * as schema from '../../../../db/schema'
 import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
@@ -495,74 +495,72 @@ export class RecommendationEngine {
     const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000)
     const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000)
 
-    // 获取所有有执行记录的项目
-    const allStats = await db
-      .select()
-      .from(schema.itemUsageStats)
-      .where(sql`${schema.itemUsageStats.lastExecuted} IS NOT NULL`)
-      .all()
+    const rows = await db
+      .select({
+        sourceId: schema.usageLogs.source,
+        itemId: schema.usageLogs.itemId,
+        recentCount: sql<number>`SUM(CASE WHEN ${schema.usageLogs.timestamp} >= ${sevenDaysAgo} THEN 1 ELSE 0 END)`,
+        historicalCount: sql<number>`COUNT(*)`
+      })
+      .from(schema.usageLogs)
+      .where(
+        and(eq(schema.usageLogs.action, 'execute'), gte(schema.usageLogs.timestamp, thirtyDaysAgo))
+      )
+      .groupBy(schema.usageLogs.source, schema.usageLogs.itemId)
 
-    const trending: Array<{ item: ItemCandidate; growthScore: number }> = []
+    if (rows.length === 0) return []
 
-    for (const stat of allStats) {
-      // 计算最近 7 天的使用次数
-      const recentLogs = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(schema.usageLogs)
-        .where(
-          sql`${schema.usageLogs.source} = ${stat.sourceId}
-              AND ${schema.usageLogs.itemId} = ${stat.itemId}
-              AND ${schema.usageLogs.action} = 'execute'
-              AND ${schema.usageLogs.timestamp} >= ${sevenDaysAgo.getTime()}`
-        )
-        .get()
+    const candidates: Array<{ sourceId: string; itemId: string; growthScore: number }> = []
 
-      const recentCount = recentLogs?.count || 0
+    for (const row of rows) {
+      const recentCount = Number(row.recentCount ?? 0)
+      const historicalCount = Number(row.historicalCount ?? 0)
+      const avgWeeklyCount = historicalCount / 4
 
-      // 计算过去 30 天的平均每周使用次数
-      const historicalLogs = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(schema.usageLogs)
-        .where(
-          sql`${schema.usageLogs.source} = ${stat.sourceId}
-              AND ${schema.usageLogs.itemId} = ${stat.itemId}
-              AND ${schema.usageLogs.action} = 'execute'
-              AND ${schema.usageLogs.timestamp} >= ${thirtyDaysAgo.getTime()}`
-        )
-        .get()
-
-      const historicalCount = historicalLogs?.count || 0
-      const avgWeeklyCount = historicalCount / 4 // 30天约4周
-
-      // 计算增长率
       let growthScore = 0
       if (avgWeeklyCount === 0 && recentCount > 0) {
-        // 新项目或重新使用的项目
         growthScore = recentCount * 10
       } else if (avgWeeklyCount > 0) {
         const growthRate = (recentCount - avgWeeklyCount) / avgWeeklyCount
         growthScore = growthRate * 100
       }
 
-      // 只保留有正增长的项目
       if (growthScore > 0 && recentCount >= 2) {
-        // 至少最近使用过2次
-        trending.push({
-          item: {
-            sourceId: stat.sourceId,
-            itemId: stat.itemId,
-            sourceType: stat.sourceType,
-            usageStats: stat
-          },
-          growthScore
-        })
+        candidates.push({ sourceId: row.sourceId, itemId: row.itemId, growthScore })
       }
     }
 
-    return trending
+    if (candidates.length === 0) return []
+
+    const sampleLimit = Math.max(limit * 2, limit)
+    const topCandidates = candidates
       .sort((a, b) => b.growthScore - a.growthScore)
-      .slice(0, limit)
-      .map(({ item }) => item)
+      .slice(0, sampleLimit)
+
+    const usageStatsList = await this.dbUtils.getUsageStatsBatch(
+      topCandidates.map((candidate) => ({
+        sourceId: candidate.sourceId,
+        itemId: candidate.itemId
+      }))
+    )
+    const usageStatsMap = new Map(
+      usageStatsList.map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
+    )
+
+    const trending: ItemCandidate[] = []
+    for (const candidate of topCandidates) {
+      const usageStats = usageStatsMap.get(`${candidate.sourceId}:${candidate.itemId}`)
+      if (!usageStats) continue
+      trending.push({
+        sourceId: candidate.sourceId,
+        itemId: candidate.itemId,
+        sourceType: usageStats.sourceType,
+        usageStats
+      })
+      if (trending.length >= limit) break
+    }
+
+    return trending
   }
 
   /**
