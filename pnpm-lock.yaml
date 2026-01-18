@@ -89,6 +89,9 @@ catalogs:
     '@cloudflare/workers-types':
       specifier: ^4.20241218.0
       version: 4.20251128.0
+    baseline-browser-mapping:
+      specifier: ^2.9.15
+      version: 2.9.15
     eslint:
       specifier: ^9.31.0
       version: 9.39.1
@@ -628,6 +631,9 @@ importers:
       '@vueuse/nuxt':
         specifier: catalog:build
         version: 13.9.0(magicast@0.5.1)(nuxt@4.2.1(@libsql/client@0.15.15(bufferutil@4.0.9)(utf-8-validate@6.0.5))(@parcel/watcher@2.5.1)(@types/node@24.1.0)(@vue/compiler-sfc@3.5.25)(bufferutil@4.0.9)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.0.9)(utf-8-validate@6.0.5))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20251128.0)(@libsql/client@0.15.15(bufferutil@4.0.9)(utf-8-validate@6.0.5))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20251128.0)(@libsql/client@0.15.15(bufferutil@4.0.9)(utf-8-validate@6.0.5))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6))(encoding@0.1.13)(eslint@9.39.1(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.8.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.53.2)(sass@1.94.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(utf-8-validate@6.0.5)(vite@7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.94.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1))(vue-tsc@3.1.3(typescript@5.9.3))(yaml@2.8.1))(vue@3.5.24(typescript@5.9.3))
+      baseline-browser-mapping:
+        specifier: catalog:dev
+        version: 2.9.15
       eslint:
         specifier: catalog:dev
         version: 9.39.1(jiti@2.6.1)
@@ -7258,8 +7264,8 @@ packages:
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
-  baseline-browser-mapping@2.8.28:
-    resolution: {integrity: sha512-gYjt7OIqdM0PcttNYP2aVrr2G0bMALkBaoehD4BuRGjAOtipg0b6wHg1yNL+s5zSnLZZrGHOw4IrND8CD+3oIQ==}
+  baseline-browser-mapping@2.9.15:
+    resolution: {integrity: sha512-kX8h7K2srmDyYnXRIppo4AH/wYgzWVCs+eKr3RusRSQ5PvRYoEFmR/I0PbdTjKFAoKqp5+kbxnNTFO9jOfSVJg==}
     hasBin: true
 
   big-integer@1.6.52:
@@ -22493,7 +22499,7 @@ snapshots:
 
   base64-js@1.5.1: {}
 
-  baseline-browser-mapping@2.8.28: {}
+  baseline-browser-mapping@2.9.15: {}
 
   big-integer@1.6.52: {}
 
@@ -22560,7 +22566,7 @@ snapshots:
 
   browserslist@4.28.0:
     dependencies:
-      baseline-browser-mapping: 2.8.28
+      baseline-browser-mapping: 2.9.15
       caniuse-lite: 1.0.30001754
       electron-to-chromium: 1.5.253
       node-releases: 2.0.27

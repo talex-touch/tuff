@@ -1,4 +1,4 @@
-import type { TuffItem, TuffQuery } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
+import type { TuffItem } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type {
   ActivationState,
