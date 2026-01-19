@@ -13,7 +13,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  compact: false,
+  compact: false
 })
 
 const progressStatus = computed(() => {
@@ -32,11 +32,9 @@ const progressStatus = computed(() => {
 function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond >= 1024 * 1024) {
     return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  }
-  else if (bytesPerSecond >= 1024) {
+  } else if (bytesPerSecond >= 1024) {
     return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  }
-  else {
+  } else {
     return `${bytesPerSecond.toFixed(0)} B/s`
   }
 }
@@ -44,14 +42,11 @@ function formatSpeed(bytesPerSecond: number): string {
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  }
-  else if (bytes >= 1024 * 1024) {
+  } else if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  else if (bytes >= 1024) {
+  } else if (bytes >= 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`
-  }
-  else {
+  } else {
     return `${bytes} B`
   }
 }
@@ -59,13 +54,11 @@ function formatSize(bytes: number): string {
 function formatRemainingTime(seconds: number): string {
   if (seconds < 60) {
     return `${Math.round(seconds)}秒`
-  }
-  else if (seconds < 3600) {
+  } else if (seconds < 3600) {
     const minutes = Math.floor(seconds / 60)
     const secs = Math.round(seconds % 60)
     return secs > 0 ? `${minutes}分${secs}秒` : `${minutes}分钟`
-  }
-  else {
+  } else {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     return minutes > 0 ? `${hours}小时${minutes}分钟` : `${hours}小时`
@@ -104,6 +97,9 @@ function formatRemainingTime(seconds: number): string {
 <style scoped>
 .progress-bar-component {
   width: 100%;
+  --progress-strong: var(--el-text-color-primary);
+  --progress-muted: var(--el-text-color-secondary);
+  --progress-soft: var(--el-text-color-regular);
 }
 
 .progress-info {
@@ -133,20 +129,20 @@ function formatRemainingTime(seconds: number): string {
 
 .progress-percentage {
   font-weight: 600;
-  color: var(--el-color-primary);
+  color: var(--progress-strong);
 }
 
 .progress-speed {
-  color: var(--el-text-color-regular);
+  color: var(--progress-soft);
   font-weight: 500;
 }
 
 .progress-size {
-  color: var(--el-text-color-regular);
+  color: var(--progress-soft);
 }
 
 .progress-time {
-  color: var(--el-text-color-secondary);
+  color: var(--progress-muted);
   font-style: italic;
 }
 
@@ -156,7 +152,8 @@ function formatRemainingTime(seconds: number): string {
 }
 
 @keyframes progress-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -172,6 +169,7 @@ function formatRemainingTime(seconds: number): string {
 
 .el-progress :deep(.el-progress-bar__inner) {
   border-radius: 4px;
+  background-color: var(--progress-strong);
   transition: width 0.3s ease;
 }
 

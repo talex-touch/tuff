@@ -13,8 +13,9 @@ import {
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
+import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import {
   DEV_AUTH_STORAGE_KEY,
   clearAppAuthToken,
@@ -26,10 +27,12 @@ import { appSetting } from '../channel/storage/index'
 
 let eventListenerCleanup: (() => void) | null = null
 let authCallbackCleanup: (() => void) | null = null
+let focusPromptCleanup: (() => void) | null = null
 let isInitialized = false
 let activeConsumers = 0
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
+const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 
 function buildLocalUser(token?: string): ClerkUser {
   const now = new Date().toISOString()
@@ -551,25 +554,12 @@ async function loginWithBrowser(): Promise<LoginResult> {
   authLoadingState.loginProgress = 0
 
   return new Promise((resolve) => {
-    const timeoutMs = 5 * 60 * 1000 // 5 minutes timeout
-
-    const timeoutId = setTimeout(() => {
-      if (pendingBrowserLogin.value) {
-        pendingBrowserLogin.value = null
-        authLoadingState.isLoggingIn = false
-        authLoadingState.loginProgress = 0
-        const error = new Error('Browser login timeout')
-        toast.error(getErrorMessage(error, 'LOGIN_TIMEOUT'))
-        resolve({ success: false, error })
-      }
-    }, timeoutMs)
+    const timeoutId = createBrowserLoginTimeout(resolve)
 
     pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId }
 
     // Open browser to Nexus sign-in with app callback redirect
-    const nexusUrl = getAuthBaseUrl()
-    const signInUrl = `${nexusUrl}/sign-in?redirect_url=/auth/app-callback`
-    appSdk.openExternal(signInUrl).catch((err) => {
+    openBrowserLoginPage().catch((err) => {
       console.error('[useAuth] Failed to open browser:', err)
       clearTimeout(timeoutId)
       pendingBrowserLogin.value = null
@@ -722,6 +712,184 @@ function cleanupAuthCallbackListener(): void {
   }
 }
 
+function buildSignInUrl(): string {
+  const nexusUrl = getAuthBaseUrl()
+  return `${nexusUrl}/sign-in?redirect_url=/auth/app-callback`
+}
+
+async function openBrowserLoginPage(): Promise<void> {
+  const signInUrl = buildSignInUrl()
+  await appSdk.openExternal(signInUrl)
+}
+
+function createBrowserLoginTimeout(resolve: (result: LoginResult) => void): NodeJS.Timeout {
+  return setTimeout(() => {
+    if (pendingBrowserLogin.value) {
+      pendingBrowserLogin.value = null
+      authLoadingState.isLoggingIn = false
+      authLoadingState.loginProgress = 0
+      const error = new Error('Browser login timeout')
+      toast.error(getErrorMessage(error, 'LOGIN_TIMEOUT'))
+      resolve({ success: false, error })
+    }
+  }, BROWSER_LOGIN_TIMEOUT_MS)
+}
+
+function isJwtToken(token: string): boolean {
+  const parts = token.split('.')
+  return parts.length === 3 && parts.every(Boolean)
+}
+
+function cancelPendingBrowserLogin(reason = 'Login cancelled'): void {
+  if (!pendingBrowserLogin.value) return
+  clearTimeout(pendingBrowserLogin.value.timeoutId)
+  pendingBrowserLogin.value.resolve({ success: false, error: new Error(reason) })
+  pendingBrowserLogin.value = null
+  authLoadingState.isLoggingIn = false
+  authLoadingState.loginProgress = 0
+  authLoadingState.loginTimeRemaining = 0
+}
+
+async function retryPendingBrowserLogin(): Promise<void> {
+  if (!pendingBrowserLogin.value) return
+  clearTimeout(pendingBrowserLogin.value.timeoutId)
+  pendingBrowserLogin.value.timeoutId = createBrowserLoginTimeout(pendingBrowserLogin.value.resolve)
+  try {
+    await openBrowserLoginPage()
+    toast.info('已重新打开登录页面')
+  } catch (error) {
+    console.error('[useAuth] Failed to retry browser login:', error)
+    toast.error('无法重新打开浏览器')
+  }
+}
+
+async function handleManualTokenLogin(rawToken: string): Promise<void> {
+  const token = rawToken.trim()
+  if (!token) {
+    toast.error('请输入 token')
+    return
+  }
+
+  if (isJwtToken(token)) {
+    await handleExternalAuthCallback('', token)
+    return
+  }
+
+  await handleExternalAuthCallback(token)
+}
+
+async function showLoginResumePrompt(): Promise<{
+  action: 'manual' | 'retry' | 'cancel'
+  token?: string
+} | null> {
+  return new Promise((resolve) => {
+    const tokenInput = ref('')
+    let resolved = false
+
+    const finish = (result: { action: 'manual' | 'retry' | 'cancel'; token?: string }) => {
+      if (resolved) return
+      resolved = true
+      ElMessageBox.close()
+      resolve(result)
+    }
+
+    const handleManual = () => {
+      const token = tokenInput.value.trim()
+      if (!token) {
+        toast.error('请输入 token')
+        return
+      }
+      finish({ action: 'manual', token })
+    }
+
+    const handleRetry = () => finish({ action: 'retry' })
+    const handleCancel = () => finish({ action: 'cancel' })
+
+    ElMessageBox({
+      title: '登录确认',
+      message: h('div', { style: 'display: flex; flex-direction: column; gap: 12px;' }, [
+        h('p', { style: 'margin: 0;' }, '检测到你已返回应用，但未拿到登录信息。是否已完成登录？'),
+        h(ElInput, {
+          modelValue: tokenInput.value,
+          'onUpdate:modelValue': (value: string) => {
+            tokenInput.value = value
+          },
+          type: 'textarea',
+          autosize: { minRows: 2, maxRows: 4 },
+          placeholder: '粘贴登录 token（可选）'
+        }),
+        h(
+          'div',
+          { style: 'display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;' },
+          [
+            h(ElButton, { type: 'primary', onClick: handleManual }, () => '手动填入 token'),
+            h(ElButton, { onClick: handleRetry }, () => '重新获取'),
+            h(ElButton, { type: 'danger', onClick: handleCancel }, () => '取消登录')
+          ]
+        )
+      ]),
+      showConfirmButton: false,
+      showCancelButton: false,
+      closeOnClickModal: false,
+      closeOnPressEscape: false,
+      showClose: false,
+      beforeClose: (_action, _instance, done) => {
+        if (!resolved) {
+          resolved = true
+          resolve({ action: 'cancel' })
+        }
+        done()
+      }
+    } as any).catch(() => {
+      if (!resolved) {
+        resolved = true
+        resolve({ action: 'cancel' })
+      }
+    })
+  })
+}
+
+function setupAuthFocusPrompt(): void {
+  if (focusPromptCleanup) return
+  let promptActive = false
+
+  const handleFocus = () => {
+    if (!appSetting?.beginner?.init) return
+    if (!pendingBrowserLogin.value) return
+    if (authState.isSignedIn) return
+    if (promptActive) return
+
+    promptActive = true
+    void (async () => {
+      try {
+        const result = await showLoginResumePrompt()
+        if (!result) return
+        if (result.action === 'manual' && result.token) {
+          await handleManualTokenLogin(result.token)
+          return
+        }
+        if (result.action === 'retry') {
+          await retryPendingBrowserLogin()
+          return
+        }
+        cancelPendingBrowserLogin()
+      } finally {
+        promptActive = false
+      }
+    })()
+  }
+
+  window.addEventListener('focus', handleFocus)
+  focusPromptCleanup = () => window.removeEventListener('focus', handleFocus)
+}
+
+function cleanupAuthFocusPrompt(): void {
+  if (focusPromptCleanup) {
+    focusPromptCleanup()
+    focusPromptCleanup = null
+  }
+}
+
 /**
  * Authentication hook
  *
@@ -733,6 +901,7 @@ export function useAuth() {
 
     // Setup auth callback listener for browser login
     setupAuthCallbackListener()
+    setupAuthFocusPrompt()
 
     if (!appSetting?.beginner?.init) {
       console.log('[useAuth] Skipping auth status check on first launch')
@@ -756,6 +925,7 @@ export function useAuth() {
   onUnmounted(() => {
     cleanup()
     cleanupAuthCallbackListener()
+    cleanupAuthFocusPrompt()
   })
 
   return {

@@ -9,7 +9,7 @@ import {
   Refresh,
   Remove,
   VideoPause,
-  VideoPlay,
+  VideoPlay
 } from '@element-plus/icons-vue'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
@@ -37,13 +37,13 @@ const taskStatusClass = computed(() => ({
   'task-failed': props.task.status === DownloadStatus.FAILED,
   'task-paused': props.task.status === DownloadStatus.PAUSED,
   'task-cancelled': props.task.status === DownloadStatus.CANCELLED,
-  'task-pending': props.task.status === DownloadStatus.PENDING,
+  'task-pending': props.task.status === DownloadStatus.PENDING
 }))
 
 // 是否显示进度条
 const showProgress = computed(() => {
   return [DownloadStatus.DOWNLOADING, DownloadStatus.COMPLETED, DownloadStatus.FAILED].includes(
-    props.task.status as DownloadStatus,
+    props.task.status as DownloadStatus
   )
 })
 
@@ -53,7 +53,7 @@ function getModuleName(module: DownloadModule): string {
     [DownloadModule.APP_UPDATE]: '应用更新',
     [DownloadModule.PLUGIN_INSTALL]: '插件安装',
     [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
-    [DownloadModule.USER_MANUAL]: '手动下载',
+    [DownloadModule.USER_MANUAL]: '手动下载'
   }
   return moduleNames[module] || '未知'
 }
@@ -62,17 +62,17 @@ function getModuleName(module: DownloadModule): string {
 function getTaskStatusColor(status: DownloadStatus): string {
   switch (status) {
     case DownloadStatus.DOWNLOADING:
-      return '#409EFF'
+      return '#111111'
     case DownloadStatus.COMPLETED:
-      return '#67C23A'
+      return '#1a1a1a'
     case DownloadStatus.FAILED:
-      return '#F56C6C'
+      return '#444444'
     case DownloadStatus.PAUSED:
-      return '#E6A23C'
+      return '#666666'
     case DownloadStatus.CANCELLED:
-      return '#909399'
+      return '#888888'
     default:
-      return '#909399'
+      return '#999999'
   }
 }
 
@@ -95,7 +95,9 @@ function getTaskStatusIcon(status: DownloadStatus) {
 }
 
 // 获取进度条状态
-function getProgressStatus(status: DownloadStatus): '' | 'success' | 'warning' | 'exception' | undefined {
+function getProgressStatus(
+  status: DownloadStatus
+): '' | 'success' | 'warning' | 'exception' | undefined {
   switch (status) {
     case DownloadStatus.COMPLETED:
       return 'success'
@@ -109,19 +111,15 @@ function getProgressStatus(status: DownloadStatus): '' | 'success' | 'warning' |
 // 获取优先级颜色
 function getPriorityColor(priority: DownloadPriority): string {
   if (priority >= DownloadPriority.CRITICAL) {
-    return '#ff4757'
-  }
-  else if (priority >= DownloadPriority.HIGH) {
-    return '#ffa502'
-  }
-  else if (priority >= DownloadPriority.NORMAL) {
-    return '#2ed573'
-  }
-  else if (priority >= DownloadPriority.LOW) {
-    return '#70a1ff'
-  }
-  else {
-    return '#a4b0be'
+    return '#111111'
+  } else if (priority >= DownloadPriority.HIGH) {
+    return '#333333'
+  } else if (priority >= DownloadPriority.NORMAL) {
+    return '#666666'
+  } else if (priority >= DownloadPriority.LOW) {
+    return '#888888'
+  } else {
+    return '#aaaaaa'
   }
 }
 
@@ -129,17 +127,13 @@ function getPriorityColor(priority: DownloadPriority): string {
 function getPriorityName(priority: DownloadPriority): string {
   if (priority >= DownloadPriority.CRITICAL) {
     return '关键'
-  }
-  else if (priority >= DownloadPriority.HIGH) {
+  } else if (priority >= DownloadPriority.HIGH) {
     return '高'
-  }
-  else if (priority >= DownloadPriority.NORMAL) {
+  } else if (priority >= DownloadPriority.NORMAL) {
     return '普通'
-  }
-  else if (priority >= DownloadPriority.LOW) {
+  } else if (priority >= DownloadPriority.LOW) {
     return '低'
-  }
-  else {
+  } else {
     return '后台'
   }
 }
@@ -148,11 +142,9 @@ function getPriorityName(priority: DownloadPriority): string {
 function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond >= 1024 * 1024) {
     return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  }
-  else if (bytesPerSecond >= 1024) {
+  } else if (bytesPerSecond >= 1024) {
     return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  }
-  else {
+  } else {
     return `${bytesPerSecond.toFixed(0)} B/s`
   }
 }
@@ -161,14 +153,11 @@ function formatSpeed(bytesPerSecond: number): string {
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  }
-  else if (bytes >= 1024 * 1024) {
+  } else if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  else if (bytes >= 1024) {
+  } else if (bytes >= 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`
-  }
-  else {
+  } else {
     return `${bytes.toFixed(0)} B`
   }
 }
@@ -177,12 +166,10 @@ function formatSize(bytes: number): string {
 function formatRemainingTime(seconds: number): string {
   if (seconds < 60) {
     return `${Math.round(seconds)}秒`
-  }
-  else if (seconds < 3600) {
+  } else if (seconds < 3600) {
     const minutes = Math.round(seconds / 60)
     return `${minutes}分钟`
-  }
-  else {
+  } else {
     const hours = Math.round(seconds / 3600)
     return `${hours}小时`
   }
@@ -314,37 +301,42 @@ function formatRemainingTime(seconds: number): string {
 .download-task {
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  border-left: 2px solid var(--task-accent);
+  border-radius: 10px;
   padding: 16px;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease;
+  --task-accent: #111111;
+  --task-strong: var(--el-text-color-primary);
+  --task-muted: var(--el-text-color-secondary);
+  --task-soft: var(--el-text-color-regular);
 }
 
 .download-task:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: var(--el-border-color);
 }
 
 .task-downloading {
-  border-left: 4px solid #409eff;
+  --task-accent: #111111;
 }
 
 .task-completed {
-  border-left: 4px solid #67c23a;
+  --task-accent: #1a1a1a;
 }
 
 .task-failed {
-  border-left: 4px solid #f56c6c;
+  --task-accent: #444444;
 }
 
 .task-paused {
-  border-left: 4px solid #e6a23c;
+  --task-accent: #666666;
 }
 
 .task-cancelled {
-  border-left: 4px solid #909399;
+  --task-accent: #888888;
 }
 
 .task-pending {
-  border-left: 4px solid #909399;
+  --task-accent: #999999;
 }
 
 .task-header {
@@ -368,7 +360,7 @@ function formatRemainingTime(seconds: number): string {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--el-bg-color-page);
+  border: 1px solid var(--el-border-color-light);
 }
 
 .task-icon .loading {
@@ -389,9 +381,9 @@ function formatRemainingTime(seconds: number): string {
 }
 
 .task-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--task-strong);
   margin-bottom: 4px;
   word-break: break-all;
 }
@@ -400,7 +392,7 @@ function formatRemainingTime(seconds: number): string {
   display: flex;
   gap: 12px;
   font-size: 14px;
-  color: var(--el-text-color-regular);
+  color: var(--task-soft);
 }
 
 .task-actions {
@@ -422,11 +414,11 @@ function formatRemainingTime(seconds: number): string {
 
 .progress-text {
   font-weight: 600;
-  color: var(--el-color-primary);
+  color: var(--task-strong);
 }
 
 .remaining-time {
-  color: var(--el-text-color-regular);
+  color: var(--task-soft);
 }
 
 .task-error {
@@ -447,14 +439,35 @@ function formatRemainingTime(seconds: number): string {
 
 .detail-label {
   font-size: 12px;
-  color: var(--el-text-color-regular);
+  color: var(--task-muted);
   font-weight: 500;
 }
 
 .detail-value {
   font-size: 14px;
-  color: var(--el-text-color-primary);
+  color: var(--task-strong);
   word-break: break-all;
+}
+
+.task-actions :deep(.el-button) {
+  background: transparent;
+  border-color: var(--el-border-color-light);
+  color: var(--task-strong);
+  height: 28px;
+  padding: 0 10px;
+}
+
+.task-actions :deep(.el-button:hover) {
+  border-color: var(--task-strong);
+}
+
+.task-progress :deep(.el-progress-bar__outer) {
+  background-color: var(--el-fill-color-light);
+}
+
+.task-progress :deep(.el-progress-bar__inner) {
+  background-color: var(--task-strong);
+  transition: width 0.3s ease;
 }
 
 /* 响应式设计 */

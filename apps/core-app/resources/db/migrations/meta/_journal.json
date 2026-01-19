@@ -134,6 +134,13 @@
       "when": 1767544234536,
       "tag": "0018_telemetry_upload_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1768794340549,
+      "tag": "0019_usage_trend_daily",
+      "breakpoints": true
     }
   ]
 }

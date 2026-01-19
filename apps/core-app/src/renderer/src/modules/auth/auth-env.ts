@@ -61,6 +61,13 @@ export function clearAppAuthToken(): void {
   localStorage.removeItem(APP_AUTH_STORAGE_KEY)
 }
 
+export function clearDevAuthUser(): void {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+  localStorage.removeItem(DEV_AUTH_STORAGE_KEY)
+}
+
 export function getDevAuthToken(): string | null {
   if (!isLocalAuthMode()) {
     return null

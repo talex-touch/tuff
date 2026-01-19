@@ -63,6 +63,7 @@ import {
   TxLoadingOverlay,
   TxMarkdownView,
   TxNavBar,
+  TxOutlineBorder,
   TxPicker,
   TxPopover,
   TxPopperDialog,
@@ -99,6 +100,7 @@ import {
   TxTransitionSmoothSize,
   TxTreeSelect,
   TxTypingIndicator,
+  TxCornerOverlay,
 } from '../../../packages/components/src'
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
@@ -140,6 +142,8 @@ export default {
     app.component('TxStatusBadge', TxStatusBadge)
     app.component('TxAvatar', TxAvatar)
     app.component('TxAvatarGroup', TxAvatarGroup)
+    app.component('TxOutlineBorder', TxOutlineBorder)
+    app.component('TxCornerOverlay', TxCornerOverlay)
     app.component('TxDrawer', TxDrawer)
     app.component('TxGroupBlock', TxGroupBlock)
     app.component('TxBlockLine', TxBlockLine)

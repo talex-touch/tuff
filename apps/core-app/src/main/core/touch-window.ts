@@ -49,6 +49,24 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
       this.window = new BrowserWindow(options)
     }
 
+    const shouldIgnoreDevtoolsAutofill = (message: string, sourceId?: string): boolean => {
+      if (!sourceId || !sourceId.startsWith('devtools://')) return false
+      return message.includes('Autofill.') && message.includes("wasn't found")
+    }
+
+    const attachConsoleFilter = (contents: WebContents | null | undefined): void => {
+      if (!contents) return
+      contents.on('console-message', (event, _level, message, _line, sourceId) => {
+        if (!shouldIgnoreDevtoolsAutofill(message, sourceId)) return
+        event.preventDefault()
+      })
+    }
+
+    attachConsoleFilter(this.window.webContents)
+    this.window.webContents.on('devtools-opened', () => {
+      attachConsoleFilter(this.window.webContents.devToolsWebContents)
+    })
+
     /**
      * Auto apply Vibrancy(darwin) or MicaMaterial(windows) on window
      */

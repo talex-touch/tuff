@@ -163,6 +163,29 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
     async addUsageLog(log: typeof schema.usageLogs.$inferInsert) {
       return db.insert(schema.usageLogs).values(log).returning()
     },
+    async incrementUsageTrendDaily(sourceId: string, itemId: string, timestamp = new Date()) {
+      const day = Math.floor(timestamp.getTime() / 86_400_000)
+      return db
+        .insert(schema.usageTrendDaily)
+        .values({
+          sourceId,
+          itemId,
+          day,
+          executeCount: 1,
+          updatedAt: timestamp
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.usageTrendDaily.sourceId,
+            schema.usageTrendDaily.itemId,
+            schema.usageTrendDaily.day
+          ],
+          set: {
+            executeCount: sql`${schema.usageTrendDaily.executeCount} + 1`,
+            updatedAt: timestamp
+          }
+        })
+    },
 
     // Usage Summary
     async incrementUsageSummary(itemId: string) {

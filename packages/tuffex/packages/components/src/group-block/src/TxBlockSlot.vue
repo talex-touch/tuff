@@ -115,7 +115,8 @@ const currentIcon = computed(() => {
 </template>
 
 <style lang="scss">
-:is(.tx-block-slot, .TBlockSlot-Container) {
+.tx-block-slot,
+.TBlockSlot-Container {
   position: relative;
   display: flex;
   justify-content: space-between;
@@ -130,20 +131,6 @@ const currentIcon = computed(() => {
   --fake-color: var(--tx-fill-color-darker, #ebeef5);
   --fake-radius: 12px;
   --fake-opacity: 0.5;
-
-  &:hover {
-    --fake-color: var(--tx-fill-color, #f0f2f5);
-  }
-
-  &--disabled {
-    opacity: 0.5;
-    pointer-events: none;
-  }
-
-  &.disabled {
-    opacity: 0.5;
-    pointer-events: none;
-  }
 
   .tx-block-slot__content {
     display: flex;
@@ -211,11 +198,27 @@ const currentIcon = computed(() => {
   }
 }
 
-.touch-blur :is(.tx-block-slot, .TBlockSlot-Container) {
+.tx-block-slot:hover,
+.TBlockSlot-Container:hover {
+  --fake-color: var(--tx-fill-color, #f0f2f5);
+}
+
+.tx-block-slot--disabled,
+.TBlockSlot-Container--disabled,
+.tx-block-slot.disabled,
+.TBlockSlot-Container.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.touch-blur .tx-block-slot,
+.touch-blur .TBlockSlot-Container {
   --fake-color: var(--tx-fill-color, #f0f2f5);
 
-  &:hover {
-    --fake-color: var(--tx-fill-color-darker, #ebeef5);
-  }
+}
+
+.touch-blur .tx-block-slot:hover,
+.touch-blur .TBlockSlot-Container:hover {
+  --fake-color: var(--tx-fill-color-darker, #ebeef5);
 }
 </style>

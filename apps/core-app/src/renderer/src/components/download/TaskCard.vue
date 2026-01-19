@@ -13,7 +13,7 @@ import {
   Refresh,
   Remove,
   VideoPause,
-  VideoPlay,
+  VideoPlay
 } from '@element-plus/icons-vue'
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
@@ -29,12 +29,12 @@ interface Props {
 const props = defineProps<Props>()
 
 defineEmits<{
-  'pause': [taskId: string]
-  'resume': [taskId: string]
-  'cancel': [taskId: string]
-  'retry': [taskId: string]
-  'remove': [taskId: string]
-  'delete': [taskId: string]
+  pause: [taskId: string]
+  resume: [taskId: string]
+  cancel: [taskId: string]
+  retry: [taskId: string]
+  remove: [taskId: string]
+  delete: [taskId: string]
   'open-file': [taskId: string]
   'show-in-folder': [taskId: string]
   'show-details': [taskId: string]
@@ -47,17 +47,17 @@ const statusClass = computed(() => `status-${props.task.status}`)
 const statusColor = computed(() => {
   switch (props.task.status) {
     case DownloadStatus.DOWNLOADING:
-      return '#409EFF'
+      return '#111111'
     case DownloadStatus.COMPLETED:
-      return '#67C23A'
+      return '#1a1a1a'
     case DownloadStatus.FAILED:
-      return '#F56C6C'
+      return '#444444'
     case DownloadStatus.PAUSED:
-      return '#E6A23C'
+      return '#666666'
     case DownloadStatus.CANCELLED:
-      return '#909399'
+      return '#888888'
     default:
-      return '#909399'
+      return '#999999'
   }
 })
 
@@ -79,11 +79,9 @@ const statusIcon = computed(() => {
 })
 
 const showProgress = computed(() => {
-  return [
-    DownloadStatus.DOWNLOADING,
-    DownloadStatus.PAUSED,
-    DownloadStatus.COMPLETED,
-  ].includes(props.task.status as DownloadStatus)
+  return [DownloadStatus.DOWNLOADING, DownloadStatus.PAUSED, DownloadStatus.COMPLETED].includes(
+    props.task.status as DownloadStatus
+  )
 })
 
 const showMoreActions = computed(() => {
@@ -95,7 +93,7 @@ function getModuleName(module: DownloadModule): string {
     [DownloadModule.APP_UPDATE]: '应用更新',
     [DownloadModule.PLUGIN_INSTALL]: '插件安装',
     [DownloadModule.RESOURCE_DOWNLOAD]: '资源下载',
-    [DownloadModule.USER_MANUAL]: '手动下载',
+    [DownloadModule.USER_MANUAL]: '手动下载'
   }
   return moduleNames[module] || '未知'
 }
@@ -103,14 +101,11 @@ function getModuleName(module: DownloadModule): string {
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  }
-  else if (bytes >= 1024 * 1024) {
+  } else if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  else if (bytes >= 1024) {
+  } else if (bytes >= 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`
-  }
-  else {
+  } else {
     return `${bytes} B`
   }
 }
@@ -244,14 +239,18 @@ function formatSize(bytes: number): string {
 .task-card {
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  border-left: 2px solid var(--task-accent);
+  border-radius: 10px;
   padding: 16px;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease;
   cursor: move;
+  --task-accent: #111111;
+  --task-strong: var(--el-text-color-primary);
+  --task-muted: var(--el-text-color-secondary);
+  --task-soft: var(--el-text-color-regular);
 }
 
 .task-card:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   border-color: var(--el-border-color);
 }
 
@@ -261,27 +260,27 @@ function formatSize(bytes: number): string {
 
 /* 状态样式 */
 .status-downloading {
-  border-left: 4px solid #409eff;
+  --task-accent: #111111;
 }
 
 .status-completed {
-  border-left: 4px solid #67c23a;
+  --task-accent: #1a1a1a;
 }
 
 .status-failed {
-  border-left: 4px solid #f56c6c;
+  --task-accent: #444444;
 }
 
 .status-paused {
-  border-left: 4px solid #e6a23c;
+  --task-accent: #666666;
 }
 
 .status-cancelled {
-  border-left: 4px solid #909399;
+  --task-accent: #888888;
 }
 
 .status-pending {
-  border-left: 4px solid #909399;
+  --task-accent: #999999;
 }
 
 .task-header {
@@ -310,7 +309,7 @@ function formatSize(bytes: number): string {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: var(--el-bg-color-page);
+  border: 1px solid var(--el-border-color-light);
   flex-shrink: 0;
 }
 
@@ -340,7 +339,7 @@ function formatSize(bytes: number): string {
 .task-name {
   font-size: 16px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--task-strong);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -355,7 +354,7 @@ function formatSize(bytes: number): string {
   display: flex;
   gap: 12px;
   font-size: 14px;
-  color: var(--el-text-color-regular);
+  color: var(--task-soft);
 }
 
 .task-meta span {
@@ -367,6 +366,16 @@ function formatSize(bytes: number): string {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.task-actions :deep(.el-button) {
+  background: transparent;
+  border-color: var(--el-border-color-light);
+  color: var(--task-strong);
+}
+
+.task-actions :deep(.el-button:hover) {
+  border-color: var(--task-strong);
 }
 
 .task-progress {

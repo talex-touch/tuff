@@ -1,0 +1,17 @@
+# Avatar Variants 头像变体
+
+基于 `TxAvatar` + `TxOutlineBorder` + `TxCornerOverlay` 的组合配方集合，用于快速拼装在线状态、角标、平台标记、系统徽章、动效等“头像变体”。
+
+<script setup lang="ts">
+import AvatarVariantsGalleryDemo from '../.vitepress/theme/components/demos/AvatarVariantsGalleryDemo.vue'
+import AvatarVariantsGalleryDemoSource from '../.vitepress/theme/components/demos/AvatarVariantsGalleryDemo.vue?raw'
+</script>
+
+## Gallery
+
+<DemoBlock title="Avatar Variants Gallery" :code="AvatarVariantsGalleryDemoSource">
+  <template #preview>
+    <AvatarVariantsGalleryDemo />
+  </template>
+</DemoBlock>
+

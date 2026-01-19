@@ -2,6 +2,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { TxStatusBadge } from '@talex-touch/tuffex'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
@@ -73,8 +74,8 @@ const lowBatteryThreshold = computed({
   set: (val: number) => {
     if (!appSetting.animation) {
       appSetting.animation = {
-        listItemStagger: true,
-        resultTransition: true,
+        listItemStagger: false,
+        resultTransition: false,
         coreBoxResize: false,
         autoDisableOnLowBattery: true,
         lowBatteryThreshold: 20
@@ -319,6 +320,9 @@ function clearBackgroundImage() {
         <template #icon="{ active }">
           <ThemePreviewIcon variant="stagger" :active="active" />
         </template>
+        <template #suffix>
+          <TxStatusBadge text="Beta" status="warning" size="sm" />
+        </template>
       </TuffBlockSwitch>
 
       <!-- Result transition animation switch -->
@@ -329,6 +333,9 @@ function clearBackgroundImage() {
       >
         <template #icon="{ active }">
           <ThemePreviewIcon variant="transition" :active="active" />
+        </template>
+        <template #suffix>
+          <TxStatusBadge text="Beta" status="warning" size="sm" />
         </template>
       </TuffBlockSwitch>
 
@@ -368,11 +375,7 @@ function clearBackgroundImage() {
           <ThemePreviewIcon variant="transition" :active="active" />
         </template>
         <template #suffix>
-          <span
-            class="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400"
-          >
-            Beta
-          </span>
+          <TxStatusBadge text="Beta" status="warning" size="sm" />
         </template>
       </TuffBlockSwitch>
 

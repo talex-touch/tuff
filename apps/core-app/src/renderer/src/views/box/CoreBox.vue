@@ -79,7 +79,7 @@ const {
 const { lowBatteryMode } = useBatteryOptimizer()
 
 const resultTransitionName = computed(() => {
-  const enabled = appSetting.animation?.resultTransition !== false
+  const enabled = appSetting.animation?.resultTransition === true
   return enabled && !lowBatteryMode.value ? 'result-switch' : ''
 })
 
@@ -523,7 +523,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
                   :index="index"
                   :class="{
                     'is-new-item':
-                      appSetting.animation?.listItemStagger !== false &&
+                      appSetting.animation?.listItemStagger === true &&
                       !lowBatteryMode &&
                       newItemIds.has(item.id)
                   }"
@@ -666,7 +666,6 @@ div.CoreBoxRes {
 
 .CoreBoxRes-ScrollContent {
   width: 100%;
-  padding: 8px 12px 16px;
 }
 
 .CoreBoxRes-ScrollContent.has-footer {

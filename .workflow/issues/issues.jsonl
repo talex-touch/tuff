@@ -1,0 +1,1 @@
+{"id":"ISSUE-20260119-001","title":"关于 clipboard 上下文","status":"planned","priority":4,"context":"我希望 clipboard 能贴上标签 比如我在某个应用复制的 可以快速匹配 某些 apikey url 密码账号等 你分析下","source":"dashboard","source_url":null,"tags":[],"created_at":"2026-01-19T11:26:57.887Z","updated_at":"2026-01-19T11:41:27.336Z","bound_solution_id":"SOL-ISSUE-20260119-001-1","planned_at":"2026-01-19T11:41:27.320Z"}

@@ -3,10 +3,27 @@ import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { and, desc, eq, gte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
+import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { getSentryService } from '../../../sentry'
 import * as schema from '../../../../db/schema'
 import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
+
+const DAY_MS = 86_400_000
+const TREND_HISTORY_DAYS = 30
+const TREND_RECENT_DAYS = 7
+const TREND_BACKFILL_INTERVAL_SECONDS = 2
+const RECOMMENDATION_PERF_WINDOW_MS = 60 * 60 * 1000
+const RECOMMENDATION_PERF_SAMPLE_LIMIT = 2000
+const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
+const RECOMMENDATION_QUERY_BUDGET_MS = 50
+const RECOMMENDATION_PERF_PLUGIN = 'core'
+
+function toDayBucket(timestampMs: number): number {
+  return Math.floor(timestampMs / DAY_MS)
+}
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -22,12 +39,17 @@ export class RecommendationEngine {
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
   private readonly pollingService = PollingService.getInstance()
   private readonly refreshTaskId = 'recommendation.refresh'
+  private readonly trendBackfillTaskId = 'recommendation.trend-backfill'
+  private readonly telemetryTaskId = 'recommendation.telemetry-report'
+  private trendBackfillQueue: number[] | null = null
+  private trendBackfillCompleted = false
 
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder(dbUtils)
 
     this.startBackgroundRefresh()
+    this.startTelemetryReport()
   }
 
   /** Start background refresh timer */
@@ -49,20 +71,339 @@ export class RecommendationEngine {
     this.pollingService.start()
   }
 
+  private startTelemetryReport(): void {
+    if (this.pollingService.isRegistered(this.telemetryTaskId)) {
+      this.pollingService.unregister(this.telemetryTaskId)
+    }
+    this.pollingService.register(
+      this.telemetryTaskId,
+      async () => {
+        try {
+          await this.reportRecommendationTelemetry()
+        } catch (error) {
+          console.error('[RecommendationEngine] Telemetry report failed', error)
+        }
+      },
+      { interval: RECOMMENDATION_TELEMETRY_INTERVAL_MS, unit: 'milliseconds' }
+    )
+    this.pollingService.start()
+  }
+
+  private recordRecommendationPerf(eventType: string, metadata: Record<string, unknown>): void {
+    const db = this.dbUtils.getDb()
+    const payload = {
+      pluginName: RECOMMENDATION_PERF_PLUGIN,
+      eventType,
+      metadata: JSON.stringify(metadata),
+      timestamp: Date.now()
+    }
+
+    void dbWriteScheduler
+      .schedule('analytics.plugin', () =>
+        withSqliteRetry(() => db.insert(schema.pluginAnalytics).values(payload), {
+          label: 'recommendation.perf'
+        })
+      )
+      .catch((error) => {
+        console.error('[RecommendationEngine] Failed to record perf metrics', error)
+      })
+  }
+
+  private async reportRecommendationTelemetry(): Promise<void> {
+    const sentryService = getSentryService()
+    if (!sentryService.isTelemetryEnabled()) return
+
+    const db = this.dbUtils.getDb()
+    const windowStart = Date.now() - RECOMMENDATION_PERF_WINDOW_MS
+
+    const totalRows = await db
+      .select({ metadata: schema.pluginAnalytics.metadata })
+      .from(schema.pluginAnalytics)
+      .where(
+        and(
+          eq(schema.pluginAnalytics.pluginName, RECOMMENDATION_PERF_PLUGIN),
+          eq(schema.pluginAnalytics.eventType, 'recommendation.total'),
+          gte(schema.pluginAnalytics.timestamp, windowStart)
+        )
+      )
+      .orderBy(desc(schema.pluginAnalytics.timestamp))
+      .limit(RECOMMENDATION_PERF_SAMPLE_LIMIT)
+
+    const totalSamples = this.collectPerfSamples(totalRows)
+    const totalStats = this.buildPerfStats(totalSamples.durationsByLayer.none ?? [])
+    const totalAllStats = this.buildPerfStats(totalSamples.durations)
+    const totalByCacheLayer = this.buildPerfStatsByLayer(totalSamples.durationsByLayer)
+
+    const trendingRows = await db
+      .select({ metadata: schema.pluginAnalytics.metadata })
+      .from(schema.pluginAnalytics)
+      .where(
+        and(
+          eq(schema.pluginAnalytics.pluginName, RECOMMENDATION_PERF_PLUGIN),
+          eq(schema.pluginAnalytics.eventType, 'recommendation.trending'),
+          gte(schema.pluginAnalytics.timestamp, windowStart)
+        )
+      )
+      .orderBy(desc(schema.pluginAnalytics.timestamp))
+      .limit(RECOMMENDATION_PERF_SAMPLE_LIMIT)
+
+    const trendingSamples = this.collectPerfSamples(trendingRows)
+    const trendingStats = this.buildPerfStats(trendingSamples.durations)
+
+    if (!totalStats && !trendingStats) return
+
+    sentryService.queueNexusTelemetry({
+      eventType: 'performance',
+      metadata: {
+        kind: 'recommendation.aggregate',
+        windowMs: RECOMMENDATION_PERF_WINDOW_MS,
+        sampleLimit: RECOMMENDATION_PERF_SAMPLE_LIMIT,
+        cacheLayerCounts: totalSamples.cacheLayers,
+        total: totalStats ?? undefined,
+        totalAll: totalAllStats ?? undefined,
+        totalByCacheLayer:
+          Object.keys(totalByCacheLayer).length > 0 ? totalByCacheLayer : undefined,
+        trending: trendingStats ?? undefined
+      }
+    })
+  }
+
+  private collectPerfSamples(rows: Array<{ metadata: string | null }>): {
+    durations: number[]
+    cacheLayers: Record<string, number>
+    durationsByLayer: Record<string, number[]>
+  } {
+    const durations: number[] = []
+    const cacheLayers: Record<string, number> = { none: 0, memory: 0, db: 0, unknown: 0 }
+    const durationsByLayer: Record<string, number[]> = {
+      none: [],
+      memory: [],
+      db: [],
+      unknown: []
+    }
+
+    for (const row of rows) {
+      const parsed = this.parsePerfMetadata(row.metadata)
+      if (!parsed) continue
+
+      const cacheLayer = parsed.cacheLayer ?? 'unknown'
+      cacheLayers[cacheLayer] = (cacheLayers[cacheLayer] ?? 0) + 1
+
+      if (typeof parsed.durationMs !== 'number') continue
+      durations.push(parsed.durationMs)
+      if (!durationsByLayer[cacheLayer]) {
+        durationsByLayer[cacheLayer] = []
+      }
+      durationsByLayer[cacheLayer].push(parsed.durationMs)
+    }
+
+    return { durations, cacheLayers, durationsByLayer }
+  }
+
+  private parsePerfMetadata(metadata: string | null): RecommendationPerfMetadata | null {
+    if (!metadata) return null
+    try {
+      const parsed = JSON.parse(metadata) as Record<string, unknown>
+      return {
+        durationMs: this.toNumber(parsed.durationMs),
+        cacheLayer: typeof parsed.cacheLayer === 'string' ? parsed.cacheLayer : undefined
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private toNumber(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value)
+      if (Number.isFinite(parsed)) return parsed
+    }
+    return null
+  }
+
+  private buildPerfStats(durations: number[]): PerfStats | null {
+    if (durations.length === 0) return null
+    const sorted = [...durations].sort((a, b) => a - b)
+    const total = durations.reduce((sum, value) => sum + value, 0)
+    const avg = total / durations.length
+    const p50 = this.pickPercentile(sorted, 0.5)
+    const p95 = this.pickPercentile(sorted, 0.95)
+    const max = sorted[sorted.length - 1] ?? 0
+    const overBudgetCount = durations.filter(
+      (value) => value > RECOMMENDATION_QUERY_BUDGET_MS
+    ).length
+
+    return {
+      samples: durations.length,
+      avgMs: Math.round(avg),
+      p50Ms: Math.round(p50),
+      p95Ms: Math.round(p95),
+      maxMs: Math.round(max),
+      overBudgetMs: RECOMMENDATION_QUERY_BUDGET_MS,
+      overBudgetCount
+    }
+  }
+
+  private buildPerfStatsByLayer(
+    durationsByLayer: Record<string, number[]>
+  ): Record<string, PerfStats> {
+    const result: Record<string, PerfStats> = {}
+    for (const [layer, durations] of Object.entries(durationsByLayer)) {
+      const stats = this.buildPerfStats(durations)
+      if (stats) {
+        result[layer] = stats
+      }
+    }
+    return result
+  }
+
+  private pickPercentile(sorted: number[], percentile: number): number {
+    if (sorted.length === 0) return 0
+    const index = Math.min(
+      sorted.length - 1,
+      Math.max(0, Math.ceil(percentile * sorted.length) - 1)
+    )
+    return sorted[index]
+  }
+
+  private scheduleTrendBackfill(): void {
+    if (this.trendBackfillQueue || this.trendBackfillCompleted) return
+
+    const today = toDayBucket(Date.now())
+    const startDay = today - (TREND_HISTORY_DAYS - 1)
+    const days: number[] = []
+    for (let day = startDay; day <= today; day++) {
+      days.push(day)
+    }
+
+    this.trendBackfillQueue = days
+
+    if (this.pollingService.isRegistered(this.trendBackfillTaskId)) {
+      this.pollingService.unregister(this.trendBackfillTaskId)
+    }
+
+    this.pollingService.register(
+      this.trendBackfillTaskId,
+      async () => {
+        await this.processTrendBackfillTick()
+      },
+      { interval: TREND_BACKFILL_INTERVAL_SECONDS, unit: 'seconds', runImmediately: true }
+    )
+    this.pollingService.start()
+  }
+
+  private async processTrendBackfillTick(): Promise<void> {
+    if (!this.trendBackfillQueue || this.trendBackfillQueue.length === 0) {
+      this.pollingService.unregister(this.trendBackfillTaskId)
+      this.trendBackfillQueue = null
+      this.trendBackfillCompleted = true
+      return
+    }
+
+    const day = this.trendBackfillQueue.shift()
+    if (day == null) return
+
+    try {
+      const hasData = await this.hasTrendDataForDay(day)
+      if (!hasData) {
+        await this.backfillTrendDay(day)
+      }
+    } catch (error) {
+      console.error('[RecommendationEngine] Trend backfill failed', error)
+    }
+  }
+
+  private async hasTrendDataForDay(day: number): Promise<boolean> {
+    const db = this.dbUtils.getDb()
+    const row = await db
+      .select({ day: schema.usageTrendDaily.day })
+      .from(schema.usageTrendDaily)
+      .where(eq(schema.usageTrendDaily.day, day))
+      .limit(1)
+      .get()
+    return Boolean(row)
+  }
+
+  private async backfillTrendDay(day: number): Promise<void> {
+    const db = this.dbUtils.getDb()
+    const dayStart = new Date(day * DAY_MS)
+    const dayEnd = new Date((day + 1) * DAY_MS)
+    const dayBucket = day
+
+    const rows = await db
+      .select({
+        sourceId: schema.usageLogs.source,
+        itemId: schema.usageLogs.itemId,
+        executeCount: sql<number>`COUNT(*)`
+      })
+      .from(schema.usageLogs)
+      .where(
+        and(
+          eq(schema.usageLogs.action, 'execute'),
+          gte(schema.usageLogs.timestamp, dayStart),
+          lt(schema.usageLogs.timestamp, dayEnd)
+        )
+      )
+      .groupBy(schema.usageLogs.source, schema.usageLogs.itemId)
+
+    if (rows.length === 0) return
+
+    const now = new Date()
+    const values = rows.map((row) => ({
+      sourceId: row.sourceId,
+      itemId: row.itemId,
+      day: dayBucket,
+      executeCount: Number(row.executeCount ?? 0),
+      updatedAt: now
+    }))
+
+    const chunkSize = 500
+    for (let i = 0; i < values.length; i += chunkSize) {
+      const chunk = values.slice(i, i + chunkSize)
+      await db
+        .insert(schema.usageTrendDaily)
+        .values(chunk)
+        .onConflictDoUpdate({
+          target: [
+            schema.usageTrendDaily.sourceId,
+            schema.usageTrendDaily.itemId,
+            schema.usageTrendDaily.day
+          ],
+          set: {
+            executeCount: sql`excluded.execute_count`,
+            updatedAt: sql`excluded.updated_at`
+          }
+        })
+    }
+  }
+
   /** Stop background refresh timer */
   public stopBackgroundRefresh(): void {
     this.pollingService.unregister(this.refreshTaskId)
+    this.pollingService.unregister(this.trendBackfillTaskId)
+    this.pollingService.unregister(this.telemetryTaskId)
   }
 
   /** Generate recommendation list */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
     const startTime = performance.now()
+    this.scheduleTrendBackfill()
+
+    const contextStartedAt = performance.now()
     const context = await this.contextProvider.getCurrentContext()
+    const contextDuration = performance.now() - contextStartedAt
 
     if (!options.forceRefresh && this.recommendationCache) {
       const cacheAge = Date.now() - this.recommendationCache.timestamp
       if (cacheAge < this.CACHE_DURATION_MS) {
         console.debug('[RecommendationEngine] Cache hit, age:', (cacheAge / 1000).toFixed(1), 's')
+        this.recordRecommendationPerf('recommendation.total', {
+          cacheLayer: 'memory',
+          durationMs: Math.round(performance.now() - startTime),
+          contextMs: Math.round(contextDuration),
+          itemsCount: this.recommendationCache.items.length
+        })
         return {
           items: this.recommendationCache.items,
           context: this.recommendationCache.context,
@@ -75,6 +416,12 @@ export class RecommendationEngine {
 
     const cached = await this.getCachedRecommendations(context)
     if (cached && !options.forceRefresh) {
+      this.recordRecommendationPerf('recommendation.total', {
+        cacheLayer: 'db',
+        durationMs: Math.round(performance.now() - startTime),
+        contextMs: Math.round(contextDuration),
+        itemsCount: cached.items.length
+      })
       return {
         items: cached.items,
         context,
@@ -83,8 +430,10 @@ export class RecommendationEngine {
       }
     }
 
+    const pinnedStartedAt = performance.now()
     const pinnedItems = await this.getPinnedItems()
-    const pinnedTuffItems = await this.itemRebuilder.rebuildItems(
+    const pinnedDuration = performance.now() - pinnedStartedAt
+    let pinnedTuffItems = await this.itemRebuilder.rebuildItems(
       pinnedItems.map((item) => ({
         ...item,
         source: 'pinned' as const,
@@ -96,18 +445,43 @@ export class RecommendationEngine {
       item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
       item.meta.recommendation = { source: 'pinned' }
     }
+    pinnedTuffItems = this.dedupeItems(pinnedTuffItems)
 
-    const candidates = await this.getCandidates(context, options)
+    const candidatesStartedAt = performance.now()
+    const { items: candidates, perf: candidatePerf } = await this.getCandidates(context, options)
+    const candidatesDuration = performance.now() - candidatesStartedAt
 
     if (candidates.length === 0) {
       const fallbackItems = await this.getFallbackRecommendations(options.limit || 10)
-      const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, options.limit || 10)
+      const pinnedKeys = new Set(pinnedTuffItems.map((item) => this.getItemIdentity(item)))
+      const filteredFallback = this.dedupeItems(fallbackItems).filter(
+        (item) => !pinnedKeys.has(this.getItemIdentity(item))
+      )
+      const finalItems = this.dedupeItems([...filteredFallback, ...pinnedTuffItems]).slice(
+        0,
+        options.limit || 10
+      )
 
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
         context
       }
+
+      this.recordRecommendationPerf('recommendation.total', {
+        cacheLayer: 'none',
+        durationMs: Math.round(performance.now() - startTime),
+        contextMs: Math.round(contextDuration),
+        pinnedMs: Math.round(pinnedDuration),
+        candidatesMs: Math.round(candidatesDuration),
+        candidateCount: candidatePerf.totalCandidates,
+        filteredCount: candidatePerf.filteredCount,
+        itemsCount: finalItems.length,
+        trendingMs: candidatePerf.trendingDurationMs,
+        trendingRows: candidatePerf.trendingRows,
+        trendingCandidates: candidatePerf.trendingCandidates,
+        trendingReady: candidatePerf.trendingReady
+      })
 
       return {
         items: finalItems,
@@ -125,13 +499,32 @@ export class RecommendationEngine {
 
     if (items.length === 0 && diversified.length > 0) {
       const fallbackItems = await this.getFallbackRecommendations(limit)
-      const finalItems = [...fallbackItems, ...pinnedTuffItems].slice(0, limit)
+      const pinnedKeys = new Set(pinnedTuffItems.map((item) => this.getItemIdentity(item)))
+      const filteredFallback = this.dedupeItems(fallbackItems).filter(
+        (item) => !pinnedKeys.has(this.getItemIdentity(item))
+      )
+      const finalItems = this.dedupeItems([...filteredFallback, ...pinnedTuffItems]).slice(0, limit)
 
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
         context
       }
+
+      this.recordRecommendationPerf('recommendation.total', {
+        cacheLayer: 'none',
+        durationMs: Math.round(performance.now() - startTime),
+        contextMs: Math.round(contextDuration),
+        pinnedMs: Math.round(pinnedDuration),
+        candidatesMs: Math.round(candidatesDuration),
+        candidateCount: candidatePerf.totalCandidates,
+        filteredCount: candidatePerf.filteredCount,
+        itemsCount: finalItems.length,
+        trendingMs: candidatePerf.trendingDurationMs,
+        trendingRows: candidatePerf.trendingRows,
+        trendingCandidates: candidatePerf.trendingCandidates,
+        trendingReady: candidatePerf.trendingReady
+      })
 
       return {
         items: finalItems,
@@ -143,13 +536,15 @@ export class RecommendationEngine {
     }
 
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
-    const filteredItems = items.filter((item) => {
+    const pinnedIdentityKeys = new Set(pinnedTuffItems.map((item) => this.getItemIdentity(item)))
+    const filteredItems = this.dedupeItems(items).filter((item) => {
       const meta = item.meta as any
       const originalKey =
         meta?._originalSourceId && meta?._originalItemId
           ? `${meta._originalSourceId}:${meta._originalItemId}`
           : `${item.source.id}:${item.id}`
-      return !pinnedKeys.has(originalKey)
+      const identityKey = this.getItemIdentity(item)
+      return !pinnedKeys.has(originalKey) && !pinnedIdentityKeys.has(identityKey)
     })
 
     for (const item of filteredItems) {
@@ -159,11 +554,26 @@ export class RecommendationEngine {
       }
     }
 
-    const combinedItems = [...filteredItems, ...pinnedTuffItems].slice(0, limit)
+    const combinedItems = this.dedupeItems([...filteredItems, ...pinnedTuffItems]).slice(0, limit)
 
     await this.cacheRecommendations(context, combinedItems)
     const duration = performance.now() - startTime
     console.debug('[RecommendationEngine] Generated in', duration.toFixed(0), 'ms')
+
+    this.recordRecommendationPerf('recommendation.total', {
+      cacheLayer: 'none',
+      durationMs: Math.round(duration),
+      contextMs: Math.round(contextDuration),
+      pinnedMs: Math.round(pinnedDuration),
+      candidatesMs: Math.round(candidatesDuration),
+      candidateCount: candidatePerf.totalCandidates,
+      filteredCount: candidatePerf.filteredCount,
+      itemsCount: combinedItems.length,
+      trendingMs: candidatePerf.trendingDurationMs,
+      trendingRows: candidatePerf.trendingRows,
+      trendingCandidates: candidatePerf.trendingCandidates,
+      trendingReady: candidatePerf.trendingReady
+    })
 
     this.recommendationCache = {
       items: combinedItems,
@@ -314,7 +724,7 @@ export class RecommendationEngine {
   private async getCandidates(
     context: ContextSignal,
     _options: RecommendationOptions
-  ): Promise<CandidateItem[]> {
+  ): Promise<CandidateResult> {
     const candidates: CandidateItem[] = []
 
     // 维度 1: 全局高频项目 (Top 30)
@@ -348,7 +758,8 @@ export class RecommendationEngine {
     )
 
     // 维度 4: 趋势项目 (Top 15)
-    const trendingItems = await this.getTrendingItems(15)
+    const trending = await this.getTrendingItems(15)
+    const trendingItems = trending.items
     console.debug(`[RecommendationEngine] Trending items: ${trendingItems.length}`)
     candidates.push(
       ...trendingItems.map((item) => ({
@@ -358,6 +769,8 @@ export class RecommendationEngine {
     )
 
     console.debug(`[RecommendationEngine] Total candidates before dedup: ${candidates.length}`)
+
+    const totalCandidates = candidates.length
 
     // 去重(同一 sourceId + itemId 只保留第一次出现)
     const deduplicated = this.deduplicateCandidates(candidates)
@@ -378,7 +791,17 @@ export class RecommendationEngine {
       Object.fromEntries(sourceDistribution)
     )
 
-    return filtered
+    return {
+      items: filtered,
+      perf: {
+        totalCandidates,
+        filteredCount: filtered.length,
+        trendingDurationMs: trending.perf.durationMs,
+        trendingRows: trending.perf.rowCount,
+        trendingCandidates: trendingItems.length,
+        trendingReady: trending.perf.ready
+      }
+    }
   }
 
   /**
@@ -487,28 +910,36 @@ export class RecommendationEngine {
    * 获取趋势上升的项目
    * 比较最近 7 天 vs 过去 30 天的使用频率
    */
-  private async getTrendingItems(limit: number): Promise<ItemCandidate[]> {
+  private async getTrendingItems(limit: number): Promise<TrendingResult> {
     const db = this.dbUtils.getDb()
+    this.scheduleTrendBackfill()
 
-    // 计算时间点
-    const now = Date.now()
-    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000)
-    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000)
+    const startedAt = performance.now()
+    const today = toDayBucket(Date.now())
+    const recentThreshold = today - (TREND_RECENT_DAYS - 1)
+    const historyThreshold = today - (TREND_HISTORY_DAYS - 1)
 
     const rows = await db
       .select({
-        sourceId: schema.usageLogs.source,
-        itemId: schema.usageLogs.itemId,
-        recentCount: sql<number>`SUM(CASE WHEN ${schema.usageLogs.timestamp} >= ${sevenDaysAgo} THEN 1 ELSE 0 END)`,
-        historicalCount: sql<number>`COUNT(*)`
+        sourceId: schema.usageTrendDaily.sourceId,
+        itemId: schema.usageTrendDaily.itemId,
+        recentCount: sql<number>`SUM(CASE WHEN ${schema.usageTrendDaily.day} >= ${recentThreshold} THEN ${schema.usageTrendDaily.executeCount} ELSE 0 END)`,
+        historicalCount: sql<number>`SUM(${schema.usageTrendDaily.executeCount})`
       })
-      .from(schema.usageLogs)
-      .where(
-        and(eq(schema.usageLogs.action, 'execute'), gte(schema.usageLogs.timestamp, thirtyDaysAgo))
-      )
-      .groupBy(schema.usageLogs.source, schema.usageLogs.itemId)
+      .from(schema.usageTrendDaily)
+      .where(gte(schema.usageTrendDaily.day, historyThreshold))
+      .groupBy(schema.usageTrendDaily.sourceId, schema.usageTrendDaily.itemId)
 
-    if (rows.length === 0) return []
+    const durationMs = performance.now() - startedAt
+    const rowCount = rows.length
+    if (rowCount === 0) {
+      this.recordRecommendationPerf('recommendation.trending', {
+        durationMs: Math.round(durationMs),
+        rows: rowCount,
+        ready: false
+      })
+      return { items: [], perf: { durationMs, rowCount, ready: false } }
+    }
 
     const candidates: Array<{ sourceId: string; itemId: string; growthScore: number }> = []
 
@@ -530,7 +961,16 @@ export class RecommendationEngine {
       }
     }
 
-    if (candidates.length === 0) return []
+    if (candidates.length === 0) {
+      this.recordRecommendationPerf('recommendation.trending', {
+        durationMs: Math.round(durationMs),
+        rows: rowCount,
+        candidates: 0,
+        resultCount: 0,
+        ready: true
+      })
+      return { items: [], perf: { durationMs, rowCount, ready: true } }
+    }
 
     const sampleLimit = Math.max(limit * 2, limit)
     const topCandidates = candidates
@@ -560,7 +1000,15 @@ export class RecommendationEngine {
       if (trending.length >= limit) break
     }
 
-    return trending
+    this.recordRecommendationPerf('recommendation.trending', {
+      durationMs: Math.round(durationMs),
+      rows: rowCount,
+      candidates: candidates.length,
+      resultCount: trending.length,
+      ready: true
+    })
+
+    return { items: trending, perf: { durationMs, rowCount, ready: true } }
   }
 
   /**
@@ -996,6 +1444,43 @@ export class RecommendationEngine {
     return result
   }
 
+  private getItemIdentity(item: TuffItem): string {
+    const meta = item.meta as Record<string, any> | null | undefined
+    const sourceId = item.source?.id || 'unknown'
+    const appMeta = meta?.app
+    if (appMeta?.bundle_id) {
+      return `${sourceId}:bundle:${appMeta.bundle_id}`
+    }
+    if (appMeta?.path) {
+      return `${sourceId}:path:${appMeta.path}`
+    }
+    const systemActionId = meta?.raw?.systemActionId
+    if (systemActionId) {
+      return `${sourceId}:system:${systemActionId}`
+    }
+    if (meta?._originalSourceId && meta?._originalItemId) {
+      return `${meta._originalSourceId}:${meta._originalItemId}`
+    }
+    if (item.id) {
+      return `${sourceId}:${item.id}`
+    }
+    return sourceId
+  }
+
+  private dedupeItems(items: TuffItem[]): TuffItem[] {
+    const seen = new Set<string>()
+    const result: TuffItem[] = []
+
+    for (const item of items) {
+      const key = this.getItemIdentity(item)
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(item)
+    }
+
+    return result
+  }
+
   /**
    * 获取缓存的推荐
    */
@@ -1012,7 +1497,7 @@ export class RecommendationEngine {
 
     try {
       const items = JSON.parse(cached.recommendedItems)
-      return { items }
+      return { items: this.dedupeItems(items) }
     } catch (error) {
       console.error('[RecommendationEngine] Failed to parse cached recommendations:', error)
       return null
@@ -1048,6 +1533,44 @@ export interface RecommendationResult {
   fromCache: boolean
   /** 容器布局配置 */
   containerLayout?: TuffContainerLayout
+}
+
+interface TrendingPerf {
+  durationMs: number
+  rowCount: number
+  ready: boolean
+}
+
+interface TrendingResult {
+  items: ItemCandidate[]
+  perf: TrendingPerf
+}
+
+interface CandidateResult {
+  items: CandidateItem[]
+  perf: {
+    totalCandidates: number
+    filteredCount: number
+    trendingDurationMs: number
+    trendingRows: number
+    trendingCandidates: number
+    trendingReady: boolean
+  }
+}
+
+interface RecommendationPerfMetadata {
+  durationMs: number | null
+  cacheLayer?: string
+}
+
+interface PerfStats {
+  samples: number
+  avgMs: number
+  p50Ms: number
+  p95Ms: number
+  maxMs: number
+  overBudgetMs: number
+  overBudgetCount: number
 }
 
 /**

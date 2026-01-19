@@ -6,7 +6,7 @@ import { useAppSdk } from '@talex-touch/utils/renderer'
 import TModal from '~/components/base/tuff/TModal.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
-import { getAuthToken } from '~/modules/market/auth-token-service'
+import { fetchNexusWithAuth } from '~/modules/market/nexus-auth-client'
 import { useClerkProvider } from '@talex-touch/utils/renderer'
 
 const { t } = useI18n()
@@ -106,16 +106,10 @@ function resetAccountSnapshot() {
 }
 
 async function fetchNexusJson<T>(path: string): Promise<T> {
-  const token = await getAuthToken()
-  if (!token) {
+  const response = await fetchNexusWithAuth(path, {}, `user-profile:${path}`)
+  if (!response) {
     throw new Error(t('userProfile.authRequired', '登录后才能获取账户信息'))
   }
-  const url = new URL(path, getAuthBaseUrl()).toString()
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`)
   }

@@ -600,7 +600,7 @@ export class WindowManager {
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
-      const animationEnabled = settings.animation?.coreBoxResize !== false
+      const animationEnabled = settings.animation?.coreBoxResize === true
 
       if (currentWindow.window.isVisible() && animationEnabled) {
         this.animateWindowBounds(currentWindow, bounds, { minHeight: height })
@@ -640,7 +640,7 @@ export class WindowManager {
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
-      const animationEnabled = settings.animation?.coreBoxResize !== false
+      const animationEnabled = settings.animation?.coreBoxResize === true
 
       if (currentWindow.window.isVisible() && animationEnabled) {
         this.animateWindowBounds(currentWindow, bounds, { minHeight: 60 })
@@ -683,7 +683,7 @@ export class WindowManager {
     if (!bounds) return
 
     const settings = this.getAppSettingConfig()
-    const animationEnabled = settings.animation?.coreBoxResize !== false
+    const animationEnabled = settings.animation?.coreBoxResize === true
     const isVisible = currentWindow.window.isVisible()
 
     if (isVisible && animationEnabled) {

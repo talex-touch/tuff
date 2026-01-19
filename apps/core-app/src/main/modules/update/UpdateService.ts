@@ -9,13 +9,20 @@ import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import type { UpdateRecordRow } from './update-repository'
 import fs from 'node:fs'
 import path from 'node:path'
-import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
+import {
+  AppPreviewChannel,
+  DownloadModule,
+  DownloadStatus,
+  UpdateProviderType
+} from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
+import { and, desc, eq } from 'drizzle-orm'
 import { app } from 'electron'
 import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
+import { downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 /**
@@ -650,12 +657,80 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return
     }
 
+    const existingTaskId = await this.getExistingDownloadedUpdateTaskId(tag)
+    if (existingTaskId) {
+      this.autoDownloadTasks.set(tag, existingTaskId)
+      updateLog.info(`Update ${tag} already downloaded, skipping auto download`, {
+        meta: { taskId: existingTaskId }
+      })
+      return
+    }
+
     try {
       const taskId = await this.updateSystem.downloadUpdate(release)
       this.autoDownloadTasks.set(tag, taskId)
       updateLog.info(`Auto download started for ${tag}`, { meta: { taskId } })
     } catch (error) {
       updateLog.warn('Auto download failed', { error, meta: { tag } })
+    }
+  }
+
+  private async getExistingDownloadedUpdateTaskId(tag: string): Promise<string | null> {
+    try {
+      const db = databaseModule.getDb()
+      const tasks = await db
+        .select({
+          id: downloadTasks.id,
+          destination: downloadTasks.destination,
+          filename: downloadTasks.filename,
+          metadata: downloadTasks.metadata
+        })
+        .from(downloadTasks)
+        .where(
+          and(
+            eq(downloadTasks.module, DownloadModule.APP_UPDATE),
+            eq(downloadTasks.status, DownloadStatus.COMPLETED)
+          )
+        )
+        .orderBy(desc(downloadTasks.completedAt))
+        .limit(20)
+
+      for (const task of tasks) {
+        const metadata = this.parseDownloadTaskMetadata(task.metadata)
+        if (metadata?.version !== tag) {
+          continue
+        }
+
+        const filePath = path.join(task.destination, task.filename)
+        if (await this.fileExists(filePath)) {
+          return task.id
+        }
+      }
+    } catch (error) {
+      updateLog.warn('Failed to check existing update downloads', { error, meta: { tag } })
+    }
+
+    return null
+  }
+
+  private parseDownloadTaskMetadata(metadata?: string | null): Record<string, any> | null {
+    if (!metadata) {
+      return null
+    }
+    try {
+      return JSON.parse(metadata) as Record<string, any>
+    } catch (error) {
+      updateLog.warn('Failed to parse download task metadata', { error })
+      return null
+    }
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.promises.stat(filePath)
+      return true
+    } catch {
+      return false
     }
   }
 

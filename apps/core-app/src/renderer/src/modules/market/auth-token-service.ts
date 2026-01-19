@@ -1,6 +1,7 @@
-import { useClerkProvider } from '@talex-touch/utils/renderer'
+import { useAuthState, useClerkProvider } from '@talex-touch/utils/renderer'
 import {
   clearAppAuthToken,
+  clearDevAuthUser,
   getAppAuthToken,
   getAuthBaseUrl,
   getDevAuthToken,
@@ -10,6 +11,8 @@ import {
 
 let cachedToken: string | null = null
 let tokenExpiry: number = 0
+let unauthorizedHandling = false
+let lastUnauthorizedAt = 0
 
 const APP_TOKEN_REFRESH_WINDOW_MS = 12 * 60 * 60 * 1000
 
@@ -121,6 +124,45 @@ export function clearAuthToken(): void {
   cachedToken = null
   tokenExpiry = 0
   clearAppAuthToken()
+}
+
+export async function handleUnauthorized(context?: string): Promise<void> {
+  if (unauthorizedHandling) {
+    return
+  }
+
+  unauthorizedHandling = true
+  try {
+    const now = Date.now()
+    if (now - lastUnauthorizedAt > 1000) {
+      lastUnauthorizedAt = now
+      console.warn('[AuthTokenService] Unauthorized, clearing auth state', { context })
+    }
+    clearAuthToken()
+
+    const { authState } = useAuthState()
+    authState.isLoaded = true
+    authState.isSignedIn = false
+    authState.user = null
+    authState.sessionId = null
+
+    if (isLocalAuthMode()) {
+      clearDevAuthUser()
+      return
+    }
+
+    const { getClerk } = useClerkProvider()
+    const clerk = getClerk()
+    if (clerk) {
+      try {
+        await clerk.signOut()
+      } catch (error) {
+        console.warn('[AuthTokenService] Failed to sign out Clerk after 401:', error)
+      }
+    }
+  } finally {
+    unauthorizedHandling = false
+  }
 }
 
 /**

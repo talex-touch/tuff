@@ -4,6 +4,7 @@ import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { appSetting } from '~/modules/channel/storage'
 
 interface UseResizeOptions {
   results: ComputedRef<TuffItem[]>
@@ -58,7 +59,10 @@ export function useResize(options: UseResizeOptions): void {
     const activationCount = activeActivations.value?.length ?? 0
     const resultCount = results.value.length
     const isLoading = loading.value
-    const isRecommendationPending = recommendationPending?.value ?? false
+    const recommendationEnabled = appSetting.recommendation?.enabled !== false
+    const isRecommendationPending = recommendationEnabled
+      ? (recommendationPending?.value ?? false)
+      : false
 
     const height = calculateDesiredHeight(resultCount)
 
@@ -103,6 +107,7 @@ export function useResize(options: UseResizeOptions): void {
     }
 
     window.removeEventListener('corebox:shown', handleCoreBoxShown)
+    window.removeEventListener('corebox:layout-refresh', handleLayoutRefresh)
   })
 
   onMounted(() => {
@@ -111,10 +116,15 @@ export function useResize(options: UseResizeOptions): void {
     }, 100)
 
     window.addEventListener('corebox:shown', handleCoreBoxShown)
+    window.addEventListener('corebox:layout-refresh', handleLayoutRefresh)
   })
 
   function handleCoreBoxShown(): void {
     scheduleLayoutUpdate('shown')
+  }
+
+  function handleLayoutRefresh(): void {
+    scheduleLayoutUpdate('manual')
   }
 
   watch(
