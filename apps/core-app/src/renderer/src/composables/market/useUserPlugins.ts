@@ -1,7 +1,8 @@
 import type { MarketPlugin } from '@talex-touch/utils/market'
 import { computed, ref } from 'vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
-import { getAuthToken, isAuthenticated } from '~/modules/market/auth-token-service'
+import { isAuthenticated } from '~/modules/market/auth-token-service'
+import { fetchNexusWithAuth } from '~/modules/market/nexus-auth-client'
 
 export interface UserPluginStats {
   total: number
@@ -39,21 +40,22 @@ export function useUserPlugins() {
     error.value = null
 
     try {
-      const token = await getAuthToken()
-      if (!token) {
+      const baseUrl = getAuthBaseUrl()
+      const response = await fetchNexusWithAuth(
+        '/api/dashboard/plugins',
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json'
+          }
+        },
+        'user-plugins'
+      )
+
+      if (!response) {
         error.value = 'NO_TOKEN'
         return
       }
-
-      const baseUrl = getAuthBaseUrl()
-      const response = await fetch(`${baseUrl}/api/dashboard/plugins`, {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`
-        }
-      })
-
       if (!response.ok) {
         if (response.status === 401) {
           error.value = 'UNAUTHORIZED'

@@ -206,9 +206,15 @@ function removeTask(_taskId: string) {
 
 <style lang="scss" scoped>
 .download-center {
-  padding: 24px;
+  padding: 20px;
   max-width: 900px;
   margin: 0 auto;
+  --download-surface: var(--el-bg-color);
+  --download-surface-muted: var(--el-fill-color-light);
+  --download-border: var(--el-border-color-light);
+  --download-strong: var(--el-text-color-primary);
+  --download-muted: var(--el-text-color-secondary);
+  --download-soft: var(--el-text-color-regular);
 }
 
 // Stats Grid
@@ -223,45 +229,42 @@ function removeTask(_taskId: string) {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
-  background: var(--el-fill-color-lighter);
-  border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  transition: all 0.2s;
+  padding: 14px 16px;
+  background: var(--download-surface);
+  border-radius: 14px;
+  border: 1px solid var(--download-border);
+  transition: border-color 0.2s ease;
 
   &:hover {
     border-color: var(--el-border-color);
   }
 
   &.speed.active {
-    background: rgba(var(--el-color-primary-rgb), 0.08);
-    border-color: var(--el-color-primary-light-5);
+    border-color: var(--download-strong);
   }
 
   .stat-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
-    background: var(--el-fill-color);
-    color: var(--el-text-color-secondary);
+    font-size: 14px;
+    background: transparent;
+    border: 1px solid var(--download-border);
+    color: var(--download-muted);
 
     &.downloading {
-      background: rgba(var(--el-color-primary-rgb), 0.1);
-      color: var(--el-color-primary);
+      color: var(--download-strong);
     }
 
     &.completed {
-      background: rgba(var(--el-color-success-rgb), 0.1);
-      color: var(--el-color-success);
+      color: var(--download-strong);
     }
 
     &.failed {
-      background: rgba(var(--el-color-danger-rgb), 0.1);
-      color: var(--el-color-danger);
+      color: var(--download-muted);
     }
   }
 
@@ -270,16 +273,16 @@ function removeTask(_taskId: string) {
     min-width: 0;
 
     .stat-value {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 600;
-      color: var(--el-text-color-primary);
+      color: var(--download-strong);
       font-variant-numeric: tabular-nums;
     }
 
     .stat-label {
-      font-size: 12px;
-      color: var(--el-text-color-secondary);
-      margin-top: 2px;
+      font-size: 11px;
+      color: var(--download-muted);
+      margin-top: 4px;
     }
   }
 }
@@ -292,10 +295,10 @@ function removeTask(_taskId: string) {
 }
 
 .task-section {
-  background: var(--el-fill-color-lighter);
+  background: transparent;
   border-radius: 12px;
-  padding: 16px;
-  border: 1px solid var(--el-border-color-lighter);
+  padding: 14px 16px;
+  border: 1px solid var(--download-border);
 
   .section-header {
     display: flex;
@@ -304,34 +307,36 @@ function removeTask(_taskId: string) {
     margin-bottom: 12px;
 
     .section-icon {
-      font-size: 16px;
+      font-size: 12px;
+      opacity: 0.6;
 
       &.downloading {
-        color: var(--el-color-primary);
+        color: var(--download-muted);
       }
       &.pending {
-        color: var(--el-color-warning);
+        color: var(--download-muted);
       }
       &.completed {
-        color: var(--el-color-success);
+        color: var(--download-muted);
       }
       &.failed {
-        color: var(--el-color-danger);
+        color: var(--download-muted);
       }
     }
 
     .section-title {
       font-size: 14px;
-      font-weight: 500;
-      color: var(--el-text-color-primary);
+      font-weight: 600;
+      color: var(--download-strong);
     }
 
     .section-count {
-      font-size: 12px;
-      color: var(--el-text-color-secondary);
-      background: var(--el-fill-color);
+      font-size: 11px;
+      color: var(--download-muted);
+      background: transparent;
+      border: 1px solid var(--download-border);
       padding: 2px 8px;
-      border-radius: 10px;
+      border-radius: 999px;
     }
   }
 
@@ -349,18 +354,18 @@ function removeTask(_taskId: string) {
   align-items: center;
   justify-content: center;
   padding: 80px 20px;
-  color: var(--el-text-color-secondary);
+  color: var(--download-muted);
 
   .empty-icon {
-    font-size: 48px;
+    font-size: 40px;
     margin-bottom: 16px;
-    opacity: 0.5;
+    opacity: 0.4;
   }
 
   .empty-text {
     font-size: 16px;
-    font-weight: 500;
-    color: var(--el-text-color-primary);
+    font-weight: 600;
+    color: var(--download-strong);
     margin-bottom: 8px;
   }
 
@@ -380,12 +385,12 @@ function removeTask(_taskId: string) {
   }
 
   .stat-card {
-    padding: 12px;
+    padding: 12px 14px;
 
     .stat-icon {
-      width: 32px;
-      height: 32px;
-      font-size: 16px;
+      width: 24px;
+      height: 24px;
+      font-size: 12px;
     }
 
     .stat-info .stat-value {

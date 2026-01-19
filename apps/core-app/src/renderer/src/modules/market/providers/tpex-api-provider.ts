@@ -1,5 +1,5 @@
 import type { MarketPlugin, MarketProviderListOptions } from '@talex-touch/utils/market'
-import { getAuthToken } from '../auth-token-service'
+import { requestNexusWithAuth } from '../nexus-auth-client'
 import { BaseMarketProvider } from './base-provider'
 
 interface TpexApiPlugin {
@@ -124,22 +124,27 @@ export class TpexApiProvider extends BaseMarketProvider {
       return []
     }
 
-    const token = await getAuthToken()
-    if (!token) {
+    const apiUrl = `${baseUrl}/api/dashboard/plugins`
+
+    const response = await requestNexusWithAuth<TpexApiResponse>(
+      (options) => this.request<TpexApiResponse>(options),
+      {
+        url: apiUrl,
+        method: 'GET',
+        headers: {
+          Accept: 'application/json'
+        }
+      },
+      'tpex-api:user-plugins'
+    )
+
+    if (!response) {
       console.warn('[TpexApiProvider] Not authenticated, cannot fetch user plugins')
       return []
     }
-
-    const apiUrl = `${baseUrl}/api/dashboard/plugins`
-
-    const response = await this.request<TpexApiResponse>({
-      url: apiUrl,
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`
-      }
-    })
+    if (response.status < 200 || response.status >= 300) {
+      return []
+    }
 
     if (!response.data?.plugins || !Array.isArray(response.data.plugins)) {
       return []

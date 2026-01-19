@@ -1199,13 +1199,14 @@ export class SearchEngineCore
     const itemId = this._getItemId(item)
 
     try {
+      const now = new Date()
       await this.dbUtils.addUsageLog({
         sessionId,
         itemId,
         source: item.source.type,
         action: 'execute',
         keyword: '', // Keyword is not relevant for an execute action
-        timestamp: new Date(),
+        timestamp: now,
         context: JSON.stringify({
           scoring: item.scoring
         })
@@ -1221,6 +1222,10 @@ export class SearchEngineCore
         // Fallback to direct database call
         await this.dbUtils.incrementUsageStats(item.source.id, itemId, item.source.type, 'execute')
       }
+
+      void this.dbUtils.incrementUsageTrendDaily(item.source.id, itemId, now).catch((error) => {
+        searchEngineLog.warn(`Failed to update trend stats for item ${itemId}`, { error })
+      })
 
       // Invalidate cache for this item
       this.usageStatsCache?.invalidate(item.source.id, itemId)

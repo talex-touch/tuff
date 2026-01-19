@@ -1,0 +1,102 @@
+# OutlineBorder 描边容器
+
+`TxOutlineBorder` 用于给任意内容添加可配置的描边（border/ring/ring-offset），并提供多种裁切方式（overflow/clipPath/mask）。它本身不关心内部内容形态，完全通过 slot 组合。
+
+## 基础用法
+
+<DemoBlock title="Basic">
+<template #preview>
+<div style="display:flex; gap:16px; align-items:center;">
+  <TxOutlineBorder :ring-width="2" ring-color="var(--tx-color-primary)" :offset="2" offset-bg="var(--tx-bg-color)">
+    <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  </TxOutlineBorder>
+
+  <TxOutlineBorder variant="border" :border-width="2" border-color="var(--tx-border-color)" :padding="2" shape="rect" :border-radius="12">
+    <img src="https://avatars.githubusercontent.com/u/2?v=4" style="width:40px;height:40px;object-fit:cover;border-radius:12px;">
+  </TxOutlineBorder>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxOutlineBorder :ring-width="2" ring-color="var(--tx-color-primary)" :offset="2" offset-bg="var(--tx-bg-color)">
+    <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  </TxOutlineBorder>
+
+  <TxOutlineBorder
+    variant="border"
+    :border-width="2"
+    border-color="var(--tx-border-color)"
+    :padding="2"
+    shape="rect"
+    :border-radius="12"
+  >
+    <img
+      src="https://avatars.githubusercontent.com/u/2?v=4"
+      style="width:40px;height:40px;object-fit:cover;border-radius:12px;"
+    >
+  </TxOutlineBorder>
+</template>
+```
+</template>
+</DemoBlock>
+
+## Mask 裁切（示例：六边形）
+
+<DemoBlock title="Mask Clip">
+<template #preview>
+<div style="display:flex; gap:16px; align-items:center;">
+  <TxOutlineBorder
+    variant="ring"
+    :ring-width="2"
+    ring-color="var(--tx-color-primary)"
+    clip-mode="mask"
+    clip-shape="hexagon"
+  >
+    <img src="https://avatars.githubusercontent.com/u/3?v=4" style="width:48px;height:48px;object-fit:cover;">
+  </TxOutlineBorder>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxOutlineBorder
+    variant="ring"
+    :ring-width="2"
+    ring-color="var(--tx-color-primary)"
+    clip-mode="mask"
+    clip-shape="hexagon"
+  >
+    <img
+      src="https://avatars.githubusercontent.com/u/3?v=4"
+      style="width:48px;height:48px;object-fit:cover;"
+    >
+  </TxOutlineBorder>
+</template>
+```
+</template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| as | `string` | `div` | 根节点标签 |
+| variant | `'border' \| 'ring' \| 'ring-offset' \| 'ring-inset'` | `'ring-offset'` | 描边模式 |
+| shape | `'circle' \| 'rect' \| 'squircle'` | `'circle'` | 默认形状（影响默认圆角与 auto 裁切形状） |
+| borderRadius | `string \| number` | - | 圆角（支持 px / CSS 字符串 / `inherit`） |
+| borderWidth | `string \| number` | `1px` | border 宽度（variant=border） |
+| borderColor | `string` | `var(--tx-border-color)` | border 颜色 |
+| borderStyle | `'solid' \| 'dashed' \| 'dotted'` | `solid` | border 样式 |
+| ringWidth | `string \| number` | - | ring 宽度（默认回退到 borderWidth） |
+| ringColor | `string` | - | ring 颜色（默认回退到 borderColor） |
+| offset | `string \| number` | `2px` | ring-offset 宽度（variant=ring-offset） |
+| offsetBg | `string` | `var(--tx-bg-color)` | ring-offset 颜色（variant=ring-offset） |
+| padding | `string \| number` | `0` | 内容内边距 |
+| clipMode | `'none' \| 'overflow' \| 'clipPath' \| 'mask'` | `overflow` | 裁切方式 |
+| clipShape | `'auto' \| 'circle' \| 'rounded' \| 'squircle' \| 'hexagon'` | `auto` | 裁切形状 |
+

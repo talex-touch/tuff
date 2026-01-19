@@ -19,6 +19,7 @@ export interface RendererPerfReport {
   eventName: string
   durationMs: number
   at: number
+  level?: 'warn' | 'error'
   payloadPreview?: string
   stack?: string
   meta?: Record<string, unknown>

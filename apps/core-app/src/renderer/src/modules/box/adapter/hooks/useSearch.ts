@@ -235,6 +235,7 @@ export function useSearch(
     recommendationPending.value = false
     pendingSearchEndById.clear()
     pendingSearchUpdatesById.clear()
+    window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
   }
 
   const broadcastDivisionBoxInput = (query: TuffQuery): void => {
@@ -814,11 +815,13 @@ export function useSearch(
     }
 
     if (payload.searchId === currentSearchId.value) {
+      const activateCount = Array.isArray(payload.activate) ? payload.activate.length : 0
+      const sourceCount = Array.isArray(payload.sources) ? payload.sources.length : 0
       logDebug('[useSearch] Applying search end:', {
         sessionId: payload.searchId,
         cancelled: Boolean(payload.cancelled),
-        activateCount: payload.activate?.length || 0,
-        sourceCount: payload.sources?.length || 0
+        activateCount,
+        sourceCount
       })
       applySearchEnd(payload as SearchEndData)
       return

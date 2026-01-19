@@ -7,6 +7,9 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxButton 按钮](./button.md)** - 按钮组件
 - **[TxIcon 图标](./icon.md)** - 图标组件
 - **[TxAvatar 头像](./avatar.md)** - 头像组件
+- **[Avatar Variants 头像变体](./avatar-variants.md)** - Avatar 组合配方集合
+- **[TxOutlineBorder 描边容器](./outline-border.md)** - 通用 ring/border + 裁切容器
+- **[TxCornerOverlay 角标容器](./corner-overlay.md)** - 通用角标/叠加容器
 - **[TxSwitch 开关](./switch.md)** - 开关组件
 - **[TxSelect 选择器](./select.md)** - 下拉选择组件
 - **[TxSlider 滑块](./slider.md)** - 区间取值滑块

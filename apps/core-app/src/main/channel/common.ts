@@ -125,6 +125,7 @@ interface RendererPerfReport {
   at: number
   eventName: string
   durationMs: number
+  level?: 'warn' | 'error'
   meta?: Record<string, unknown>
   payloadPreview?: unknown
   stack?: unknown

@@ -25,6 +25,7 @@ export interface RendererPerfReport {
   eventName: string
   durationMs: number
   at: number
+  level?: 'warn' | 'error'
   payloadPreview?: string
   stack?: string
   meta?: Record<string, unknown>
@@ -97,10 +98,14 @@ function resolveUiThreshold(kind: RendererPerfReport['kind']): { warn: number; e
 const LOOP_LAG_WARN_MS = 200
 const LOOP_LAG_ERROR_MS = 2_000
 
-const SUMMARY_INTERVAL_MS = 30_000
+const SUMMARY_INTERVAL_MS = 60_000
 const MAX_INCIDENTS = 80
 const PERF_LOOP_TASK_ID = 'perf-monitor.event-loop'
 const PERF_SUMMARY_TASK_ID = 'perf-monitor.summary'
+
+const IPC_LOG_THROTTLE_MS = 5_000
+const RENDERER_LOG_THROTTLE_MS = 5_000
+const LOOP_LOG_THROTTLE_MS = 3_000
 
 const pollingService = PollingService.getInstance()
 
@@ -219,6 +224,16 @@ export class PerfMonitor {
     durationMs: number
     at: number
   } | null = null
+  private logThrottle = new Map<string, number>()
+
+  private shouldLog(key: string, throttleMs: number, now: number): boolean {
+    const lastAt = this.logThrottle.get(key) ?? 0
+    if (now - lastAt < throttleMs) {
+      return false
+    }
+    this.logThrottle.set(key, now)
+    return true
+  }
 
   start(): void {
     if (!pollingService.isRegistered(PERF_LOOP_TASK_ID)) {
@@ -279,16 +294,23 @@ export class PerfMonitor {
     this.pushIncident(incident)
     queueNexusPerformance(incident)
 
-    const message = `${eventName} handler took ${formatDuration(durationMs)}`
-    const contexts = getPerfContextSnapshot(2)
-    if (severity === 'error') {
-      ipcPerfLog.error(message, {
-        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts })
-      })
-    } else {
-      ipcPerfLog.warn(message, {
-        meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts })
-      })
+    const shouldLog = this.shouldLog(
+      `ipc.handler.slow:${eventName}:${severity}`,
+      IPC_LOG_THROTTLE_MS,
+      now
+    )
+    if (shouldLog) {
+      const message = `${eventName} handler took ${formatDuration(durationMs)}`
+      const contexts = getPerfContextSnapshot(2)
+      if (severity === 'error') {
+        ipcPerfLog.error(message, {
+          meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts })
+        })
+      } else {
+        ipcPerfLog.warn(message, {
+          meta: toLogMeta({ ...meta, durationMs: Math.round(durationMs), contexts })
+        })
+      }
     }
     this.lastSlowIpc = {
       kind: 'ipc.handler.slow',
@@ -339,14 +361,16 @@ export class PerfMonitor {
       ? resolveUiThreshold(report.kind)
       : { warn: IPC_WARN_MS, error: IPC_ERROR_MS }
 
+    const explicitLevel = report.level === 'warn' || report.level === 'error' ? report.level : null
     const severity =
-      report.kind === 'channel.send.timeout'
+      explicitLevel ??
+      (report.kind === 'channel.send.timeout'
         ? 'error'
         : report.durationMs >= thresholds.error
           ? 'error'
           : report.durationMs >= thresholds.warn
             ? 'warn'
-            : null
+            : null)
 
     const key = `renderer:${report.kind}:${report.eventName}`
     this.updateAggregate(key, report.at, report.durationMs, severity)
@@ -369,21 +393,28 @@ export class PerfMonitor {
     this.pushIncident(incident)
     queueNexusPerformance(incident)
 
-    const message = `[renderer] ${report.eventName} ${report.kind} ${formatDuration(report.durationMs)}`
-    const logOptions = {
-      meta: toLogMeta({
-        kind: report.kind,
-        durationMs: Math.round(report.durationMs),
-        payload: payloadPreview,
-        ...report.meta
-      }),
-      error: severity === 'error' ? report.stack : undefined
-    }
+    const shouldLog = this.shouldLog(
+      `renderer:${report.kind}:${report.eventName}:${severity}`,
+      RENDERER_LOG_THROTTLE_MS,
+      report.at
+    )
+    if (shouldLog) {
+      const message = `[renderer] ${report.eventName} ${report.kind} ${formatDuration(report.durationMs)}`
+      const logOptions = {
+        meta: toLogMeta({
+          kind: report.kind,
+          durationMs: Math.round(report.durationMs),
+          payload: payloadPreview,
+          ...report.meta
+        }),
+        error: severity === 'error' ? report.stack : undefined
+      }
 
-    if (severity === 'error') {
-      ipcPerfLog.error(message, logOptions)
-    } else {
-      ipcPerfLog.warn(message, logOptions)
+      if (severity === 'error') {
+        ipcPerfLog.error(message, logOptions)
+      } else {
+        ipcPerfLog.warn(message, logOptions)
+      }
     }
     this.lastSlowIpc = {
       kind: report.kind,
@@ -392,7 +423,7 @@ export class PerfMonitor {
       at: report.at
     }
 
-    if (report.eventName === 'tuff:dashboard' || isUiSignal) {
+    if (shouldLog && (report.eventName === 'tuff:dashboard' || isUiSignal)) {
       appendWorkflowDebugLog({
         hid: report.eventName === 'tuff:dashboard' ? 'H2' : 'H6',
         loc: 'perf-monitor.recordRendererReport',
@@ -425,55 +456,58 @@ export class PerfMonitor {
     }
     this.pushIncident(incident)
 
-    const message = `Event loop lag ${formatDuration(lagMs)}`
-    const contexts = getPerfContextSnapshot(3)
-    const pollingDiagnostics = pollingService.getDiagnostics()
-    const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
-      id: task.id,
-      ageMs: Math.round(task.ageMs)
-    }))
-    const pollingRecent = pollingDiagnostics.recentTasks
-      .sort((a, b) => b.lastDurationMs - a.lastDurationMs)
-      .slice(0, 3)
-      .map((task) => ({
+    const shouldLog = this.shouldLog(`event_loop.lag:${severity}`, LOOP_LOG_THROTTLE_MS, now)
+    if (shouldLog) {
+      const message = `Event loop lag ${formatDuration(lagMs)}`
+      const contexts = getPerfContextSnapshot(3)
+      const pollingDiagnostics = pollingService.getDiagnostics()
+      const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
         id: task.id,
-        durationMs: Math.round(task.lastDurationMs),
-        ageMs: Math.max(0, now - task.lastEndAt)
+        ageMs: Math.round(task.ageMs)
       }))
-    const lastSlowIpc = this.lastSlowIpc
-      ? {
-          kind: this.lastSlowIpc.kind,
-          eventName: this.lastSlowIpc.eventName,
-          durationMs: Math.round(this.lastSlowIpc.durationMs),
-          ageMs: Math.max(0, now - this.lastSlowIpc.at)
-        }
-      : undefined
-    const meta = toLogMeta({
-      lagMs: Math.round(lagMs),
-      contexts,
-      pollingActive,
-      pollingRecent,
-      lastSlowIpc
-    })
-    if (severity === 'error') {
-      loopPerfLog.error(message, { meta })
-    } else {
-      loopPerfLog.warn(message, { meta })
-    }
-
-    appendWorkflowDebugLog({
-      hid: 'H4',
-      loc: 'perf-monitor.recordEventLoopLag',
-      msg: 'event_loop.lag',
-      data: {
-        lagMs,
-        severity,
+      const pollingRecent = pollingDiagnostics.recentTasks
+        .sort((a, b) => b.lastDurationMs - a.lastDurationMs)
+        .slice(0, 3)
+        .map((task) => ({
+          id: task.id,
+          durationMs: Math.round(task.lastDurationMs),
+          ageMs: Math.max(0, now - task.lastEndAt)
+        }))
+      const lastSlowIpc = this.lastSlowIpc
+        ? {
+            kind: this.lastSlowIpc.kind,
+            eventName: this.lastSlowIpc.eventName,
+            durationMs: Math.round(this.lastSlowIpc.durationMs),
+            ageMs: Math.max(0, now - this.lastSlowIpc.at)
+          }
+        : undefined
+      const meta = toLogMeta({
+        lagMs: Math.round(lagMs),
         contexts,
         pollingActive,
         pollingRecent,
         lastSlowIpc
+      })
+      if (severity === 'error') {
+        loopPerfLog.error(message, { meta })
+      } else {
+        loopPerfLog.warn(message, { meta })
       }
-    })
+
+      appendWorkflowDebugLog({
+        hid: 'H4',
+        loc: 'perf-monitor.recordEventLoopLag',
+        msg: 'event_loop.lag',
+        data: {
+          lagMs,
+          severity,
+          contexts,
+          pollingActive,
+          pollingRecent,
+          lastSlowIpc
+        }
+      })
+    }
   }
 
   private pushIncident(incident: PerfIncident): void {

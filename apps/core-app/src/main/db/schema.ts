@@ -181,6 +181,27 @@ export const usageLogs = sqliteTable('usage_logs', {
 })
 
 /**
+ * 按天聚合的执行统计，用于趋势计算，避免扫描 usage_logs。
+ */
+export const usageTrendDaily = sqliteTable(
+  'usage_trend_daily',
+  {
+    sourceId: text('source_id').notNull(),
+    itemId: text('item_id').notNull(),
+    day: integer('day').notNull(),
+    executeCount: integer('execute_count').notNull().default(0),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.sourceId, table.itemId, table.day] }),
+    dayIdx: index('idx_usage_trend_daily_day').on(table.day),
+    sourceItemIdx: index('idx_usage_trend_daily_source_item').on(table.sourceId, table.itemId)
+  })
+)
+
+/**
  * 行为频率汇总表，用于聚合与重排层快速获取常用项和最近使用项。
  * 避免了实时计算，是性能优化的关键。
  */

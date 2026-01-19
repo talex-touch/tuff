@@ -50,8 +50,8 @@ const _appSettingOriginData = {
     showReason: true,
   },
   animation: {
-    listItemStagger: true,
-    resultTransition: true,
+    listItemStagger: false,
+    resultTransition: false,
     coreBoxResize: false,
     autoDisableOnLowBattery: true,
     lowBatteryThreshold: 20,

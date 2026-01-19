@@ -20,6 +20,7 @@ import {
   intelligenceUsageStats,
   itemTimeStats,
   itemUsageStats,
+  usageTrendDaily,
   ocrJobs,
   ocrResults,
   pluginAnalytics,
@@ -246,6 +247,7 @@ export async function cleanupUsage(options?: CleanupUsageOptions): Promise<Stora
 
   await db.delete(usageSummary)
   await db.delete(itemUsageStats)
+  await db.delete(usageTrendDaily)
   await db.delete(itemTimeStats)
   await db.delete(recommendationCache)
 

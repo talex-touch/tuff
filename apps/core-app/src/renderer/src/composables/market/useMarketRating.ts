@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 import { ref, watch } from 'vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
-import { getAuthToken } from '~/modules/market/auth-token-service'
+import { fetchNexusWithAuth } from '~/modules/market/nexus-auth-client'
 
 export interface MarketPluginRatingSummary {
   average: number
@@ -70,23 +70,23 @@ export function useMarketRating(slug: Ref<string | undefined>) {
     error.value = null
 
     try {
-      const token = await getAuthToken()
-      if (!token) {
+      const response = await fetchNexusWithAuth(
+        `/api/market/plugins/${currentSlug}/rating`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ rating: normalized })
+        },
+        `market-rating:${currentSlug}`
+      )
+
+      if (!response) {
         error.value = 'NOT_AUTHENTICATED'
         return
       }
-
-      const baseUrl = getAuthBaseUrl()
-      const response = await fetch(`${baseUrl}/api/market/plugins/${currentSlug}/rating`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ rating: normalized })
-      })
-
       if (!response.ok) {
         if (response.status === 401) {
           error.value = 'UNAUTHORIZED'

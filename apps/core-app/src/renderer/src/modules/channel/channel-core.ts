@@ -207,6 +207,7 @@ class TouchChannel implements ITouchClientChannel {
           eventName,
           durationMs: timeoutMs,
           at: Date.now(),
+          level: 'error',
           payloadPreview: this.formatPayloadPreview(arg),
           stack,
           meta: { timeoutMs, syncId: uniqueId }
@@ -230,6 +231,7 @@ class TouchChannel implements ITouchClientChannel {
             eventName,
             durationMs: duration,
             at: Date.now(),
+            level: 'error',
             payloadPreview: this.formatPayloadPreview(arg),
             stack,
             meta: { threshold: CHANNEL_SEND_ERROR_MS, syncId: uniqueId }
@@ -244,6 +246,7 @@ class TouchChannel implements ITouchClientChannel {
             eventName,
             durationMs: duration,
             at: Date.now(),
+            level: 'warn',
             payloadPreview: this.formatPayloadPreview(arg),
             stack,
             meta: { threshold: CHANNEL_SEND_WARN_MS, syncId: uniqueId }
@@ -261,6 +264,7 @@ class TouchChannel implements ITouchClientChannel {
             eventName,
             durationMs: duration,
             at: Date.now(),
+            level: 'error',
             payloadPreview: this.formatPayloadPreview(arg),
             stack,
             meta: {
@@ -304,6 +308,7 @@ class TouchChannel implements ITouchClientChannel {
           eventName,
           durationMs: duration,
           at: Date.now(),
+          level: 'warn',
           payloadPreview: this.formatPayloadPreview(arg),
           stack: new Error().stack
         })
