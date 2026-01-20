@@ -3,8 +3,10 @@
  * 展示如何使用SDK发送消息
  */
 
+import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
+
 // 获取SDK实例
-const sdk = window.$touchSDK
+const sdk = useTouchSDK()
 
 // 发送消息示例
 async function sendMessageExamples() {

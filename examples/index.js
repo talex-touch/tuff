@@ -5,18 +5,11 @@
  */
 
 import { hasWindow } from '@talex-touch/utils/env'
+import { useChannel, usePluginInfo } from '@talex-touch/utils/plugin/sdk'
 
 // 检查运行环境
 if (!hasWindow()) {
   throw new TypeError('[Plugin SDK] This SDK must run in a browser environment')
-}
-
-if (!window.$channel) {
-  throw new Error('[Plugin SDK] Channel not available')
-}
-
-if (!window.$plugin) {
-  throw new Error('[Plugin SDK] Plugin context not available')
 }
 
 /**
@@ -24,8 +17,8 @@ if (!window.$plugin) {
  */
 class PluginSDK {
   constructor() {
-    this.channel = window.$channel
-    this.plugin = window.$plugin
+    this.channel = useChannel('[Plugin SDK] Channel not available')
+    this.plugin = usePluginInfo('[Plugin SDK] Plugin context not available')
     this.pluginName = this.plugin?.name || 'unknown'
 
     console.log(`[Plugin SDK] Initialized for plugin: ${this.pluginName}`)
