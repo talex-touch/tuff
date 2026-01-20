@@ -21,6 +21,14 @@ created_at: 2026-01-20T18:55:06+08:00
 5. 明确需求口径：同步方向、时序/冲突策略、迁移/回滚、兼容性与可观测性指标。
 6. 输出需求清单与风险清单，并形成后续实现/测试的验收标准草案。
 
+🧭 主进程配置存储入口与 JSON 路径
+- 读入口：`getMainConfig` → `StorageModule.getConfig`（`apps/core-app/src/main/modules/storage/index.ts:820` / `apps/core-app/src/main/modules/storage/index.ts:443`）
+- 写入口：`saveMainConfig` → `StorageModule.saveConfig`（`apps/core-app/src/main/modules/storage/index.ts:826` / `apps/core-app/src/main/modules/storage/index.ts:582`）
+- 订阅入口：`subscribeMainConfig` → `StorageModule.subscribe`（`apps/core-app/src/main/modules/storage/index.ts:842` / `apps/core-app/src/main/modules/storage/index.ts:727`）
+- 广播入口：`broadcastUpdate`（IPC 广播 `storageLegacyUpdateEvent`，50ms 去抖）（`apps/core-app/src/main/modules/storage/index.ts:68`）
+- JSON 路径：`StorageModule` 使用 BaseModule `dirName: 'config'`，在 `onInit` 读取 `file.dirPath`，插件配置在 `${file.dirPath}/plugins`（`apps/core-app/src/main/modules/storage/index.ts:121` / `apps/core-app/src/main/modules/storage/index.ts:141`）
+- 生命周期：`onInit` 启动 `StoragePollingService` 与 LRU 清理；`persistConfig` 在空闲后写入 `path.join(this.filePath, name)`（`apps/core-app/src/main/modules/storage/index.ts:141` / `apps/core-app/src/main/modules/storage/index.ts:662`）
+
 ✅ 已决事项
 - 本阶段仅做上下文与需求整理，目标是形成后续工作输入（来源: `plan/2026-01-20_18-55-03-context-requirements.md:14`）
 
