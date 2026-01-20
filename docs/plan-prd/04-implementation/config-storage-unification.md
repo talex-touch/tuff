@@ -150,7 +150,17 @@
 - [x] 迁移与回滚方案（CFG-050）
 - [x] 权限中心 PRD/TODO 对齐（CFG-060）
 - [x] 统一进展文档（CFG-070）
-- [ ] 试点迁移与验证门禁（CFG-080）
+- [x] 试点迁移与验证门禁（CFG-080）
+
+### 6.1 试点迁移与验证门禁（CFG-080）
+- 试点项：`StorageList.SEARCH_ENGINE_LOGS_ENABLED`（`config/search-engine-logs-enabled`）。
+- 写入路径：读取 JSON -> 规范化 -> upsert SQLite `config` 表；写入后回表读取比对，确保一致。
+- Fallback：SQLite 不可用或写入失败时，仅记录告警日志，JSON 仍为读取来源。
+- 验证门禁（文档化，按需执行）：
+  - lint：`pnpm lint`
+  - typecheck：`pnpm -C "apps/core-app" run typecheck:node`
+  - unit：`pnpm utils:test`
+- 人工校验：启动主进程后检查 `config` 表中该 key 与 JSON 内容一致。
 
 ## 7. 相关 PRD/计划
 - `docs/plan-prd/TODO.md`
@@ -175,4 +185,4 @@
 | CFG-050 迁移与回滚方案 | 已完成 | 本文档 5.x |
 | CFG-060 权限中心 PRD/TODO 对齐 | 已完成 | `docs/plan-prd/03-features/plugin/permission-center-prd.md` |
 | CFG-070 统一进展文档 | 已完成 | 本文档 |
-| CFG-080 试点迁移与验证门禁 | 待启动 | 待补充 |
+| CFG-080 试点迁移与验证门禁 | 已完成 | 本文档 6.1 |

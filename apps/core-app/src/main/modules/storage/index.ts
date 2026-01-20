@@ -2,20 +2,29 @@ import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/ut
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
 import type {
   StorageSaveRequest,
+  StorageSaveResult,
+  StorageGetRequest,
+  StorageGetVersionedResponse,
   StorageUpdateNotification
 } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { MainStorageKey, MainStorageSchema } from './main-storage-registry'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { eq } from 'drizzle-orm'
+import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
 import { appTaskGate } from '../../service/app-task-gate'
+import { config as configSchema } from '../../db/schema'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
+import { databaseModule } from '../database'
+import { mainStorageRegistry, resolveMainStorageValue } from './main-storage-registry'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
@@ -23,11 +32,33 @@ import { StoragePollingService } from './storage-polling-service'
 
 const storageLog = getLogger('storage')
 
+const storageLegacyGetEvent = defineRawEvent<StorageGetRequest, Record<string, unknown>>(
+  'storage:get'
+)
+const storageLegacyGetVersionedEvent = defineRawEvent<
+  StorageGetRequest,
+  StorageGetVersionedResponse | null
+>('storage:get-versioned')
+const storageLegacySaveEvent = defineRawEvent<StorageSaveRequest, StorageSaveResult>('storage:save')
+const storageLegacyReloadEvent = defineRawEvent<
+  string | StorageGetRequest,
+  Record<string, unknown>
+>('storage:reload')
+const storageLegacySaveAllEvent = defineRawEvent<void, void>('storage:saveall')
+const storageLegacySaveSyncEvent = defineRawEvent<StorageSaveRequest, StorageSaveResult>(
+  'storage:save-sync'
+)
+const storageLegacyUpdateEvent = defineRawEvent<{ name: string; version: number }, void>(
+  'storage:update'
+)
+
 let pluginConfigPath: string
 
 // Debounced broadcast mechanism to batch updates
 const pendingBroadcasts = new Map<string, NodeJS.Timeout>()
 let storageUpdateEmitter: ((name: string, version: number) => void) | null = null
+
+const SQLITE_PILOT_CONFIGS = new Set<string>([StorageList.SEARCH_ENGINE_LOGS_ENABLED])
 
 /**
  * Broadcast storage update to all windows
@@ -44,17 +75,15 @@ function broadcastUpdate(name: string, version: number, sourceWebContentsId?: nu
 
   // Debounce broadcasts to reduce IPC overhead
   const timer = setTimeout(() => {
-    const windows = BrowserWindow.getAllWindows()
-    for (const win of windows) {
-      // Skip the source window to avoid echo
-      if (sourceWebContentsId && win.webContents.id === sourceWebContentsId) {
-        continue
-      }
-      const channel = $app.channel as any
-      if (channel?.broadcastTo) {
-        channel.broadcastTo(win, ChannelType.MAIN, 'storage:update', { name, version })
-      } else {
-        channel?.sendTo?.(win, ChannelType.MAIN, 'storage:update', { name, version })
+    const channel = $app.channel as any
+    if (channel) {
+      const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const windows = BrowserWindow.getAllWindows()
+      for (const win of windows) {
+        if (sourceWebContentsId && win.webContents.id === sourceWebContentsId) {
+          continue
+        }
+        void transport.sendTo(win.webContents, storageLegacyUpdateEvent, { name, version })
       }
     }
     storageUpdateEmitter?.(name, version)
@@ -82,7 +111,7 @@ export class StorageModule extends BaseModule {
   private lruManager: StorageLRUManager
   private frequencyMonitor = new StorageFrequencyMonitor()
   private subscribers = new Map<string, Set<(data: object) => void>>()
-  private hotConfigs = new Set<string>(['app-setting.ini'])
+  private hotConfigs = new Set<string>([StorageList.APP_SETTING])
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private updateStreams = new Set<StreamContext<StorageUpdateNotification>>()
@@ -118,8 +147,6 @@ export class StorageModule extends BaseModule {
     this.pollingService.start()
     this.lruManager.startCleanup()
 
-    this.setupListeners()
-
     const channel = ((app as any)?.channel ?? ($app as any)?.channel) as any
     this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
     this.registerTransportHandlers()
@@ -127,6 +154,8 @@ export class StorageModule extends BaseModule {
     storageUpdateEmitter = (name, version) => {
       this.emitStorageUpdate(name, version)
     }
+
+    void this.runSqlitePilotMigration()
   }
 
   async onDestroy(): Promise<void> {
@@ -178,6 +207,77 @@ export class StorageModule extends BaseModule {
     return {
       cachedConfigs: this.cache.size(),
       pluginConfigs: this.pluginConfigs.size
+    }
+  }
+
+  private async runSqlitePilotMigration(): Promise<void> {
+    if (SQLITE_PILOT_CONFIGS.size === 0) {
+      return
+    }
+
+    for (const key of SQLITE_PILOT_CONFIGS) {
+      try {
+        const raw = this.getConfig(key)
+        const normalized = Object.prototype.hasOwnProperty.call(mainStorageRegistry, key)
+          ? resolveMainStorageValue(key as MainStorageKey, raw)
+          : raw
+        await this.upsertSqliteConfig(key, normalized)
+      } catch (error) {
+        storageLog.warn('SQLite pilot migration failed', { error, meta: { key } })
+      }
+    }
+  }
+
+  private async upsertSqliteConfig(
+    name: string,
+    data: unknown,
+    serialized?: string
+  ): Promise<void> {
+    if (!SQLITE_PILOT_CONFIGS.has(name)) {
+      return
+    }
+
+    let db
+    try {
+      db = databaseModule.getDb()
+    } catch (error) {
+      storageLog.warn('SQLite not ready for config migration', { error, meta: { name } })
+      return
+    }
+
+    let payload = serialized
+    if (!payload) {
+      const safeValue = data === undefined ? {} : data
+      try {
+        payload = JSON.stringify(safeValue)
+      } catch (error) {
+        storageLog.warn('Failed to serialize config for SQLite', { error, meta: { name } })
+        return
+      }
+    }
+
+    try {
+      await db
+        .insert(configSchema)
+        .values({ key: name, value: payload })
+        .onConflictDoUpdate({
+          target: configSchema.key,
+          set: { value: payload }
+        })
+
+      const record = await db
+        .select({ value: configSchema.value })
+        .from(configSchema)
+        .where(eq(configSchema.key, name))
+        .get()
+
+      if (!record || record.value !== payload) {
+        storageLog.warn('SQLite config verification mismatch', { meta: { name } })
+      } else {
+        storageLog.info('SQLite config synced', { meta: { name } })
+      }
+    } catch (error) {
+      storageLog.warn('Failed to upsert SQLite config', { error, meta: { name } })
     }
   }
 
@@ -250,6 +350,88 @@ export class StorageModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.onStream(StorageEvents.app.updated, (_payload, context) => {
         this.updateStreams.add(context)
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(storageLegacyGetEvent, (payload) => {
+        const key = typeof payload === 'string' ? payload : payload?.key
+        if (!key || typeof key !== 'string') {
+          return {}
+        }
+        return this.getConfig(key)
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(storageLegacyGetVersionedEvent, (payload) => {
+        const key = typeof payload === 'string' ? payload : payload?.key
+        if (!key || typeof key !== 'string') {
+          return null
+        }
+        return this.getConfigWithVersion(key)
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(storageLegacySaveEvent, (payload, context) => {
+        if (!payload || typeof payload.key !== 'string') {
+          return { success: false, version: 0 }
+        }
+        const { key, content, value, clear, force, version } = payload
+        const data = typeof content === 'string' ? content : value
+        return this.saveConfig(key, data, clear, force, context?.sender?.id, version)
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(storageLegacyReloadEvent, (payload) => {
+        const key = typeof payload === 'string' ? payload : payload?.key
+        if (!key || typeof key !== 'string') {
+          return {}
+        }
+        const result = this.reloadConfig(key)
+        const version = this.cache.getVersion(key)
+        broadcastUpdate(key, version)
+        return result
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(storageLegacySaveAllEvent, async () => {
+        await this.pollingService.forceSave()
+      })
+    )
+
+    this.transportDisposers.push(
+      this.transport.on(storageLegacySaveSyncEvent, (payload, context) => {
+        if (!payload || typeof payload.key !== 'string') {
+          return { success: false, version: 0 }
+        }
+        const { key, content, value, clear, force, version } = payload
+        const data = typeof content === 'string' ? content : value
+        const result = this.saveConfig(key, data, clear, force, context?.sender?.id, version)
+
+        if (result.success && !clear) {
+          try {
+            const stored = this.cache.getRaw(key)
+            if (stored !== undefined) {
+              const filePath = path.join(this.filePath!, key)
+              fse.ensureFileSync(filePath)
+              const cachedSerialized = this.cache.getSerialized(key)
+              const configData = cachedSerialized ?? JSON.stringify(stored)
+              if (!cachedSerialized) {
+                this.cache.setSerialized(key, configData)
+              }
+              fse.writeFileSync(filePath, configData, 'utf-8')
+            }
+          } catch (error) {
+            storageLog.error(`Failed to persist ${key} synchronously`, { error })
+          }
+          this.cache.clearDirty(key)
+        }
+
+        return result
       })
     )
   }
@@ -462,6 +644,7 @@ export class StorageModule extends BaseModule {
 
     // Set new data and get new version
     const newVersion = this.cache.set(name, parsed as object, true, serialized)
+    void this.upsertSqliteConfig(name, parsed, serialized)
 
     // Broadcast update to other windows (exclude source)
     setImmediate(() => {
@@ -605,109 +788,7 @@ export class StorageModule extends BaseModule {
   }
 
   setupListeners() {
-    const channel = $app.channel
-
-    // Get config data (returns data only for backward compatibility)
-    channel.regChannel(ChannelType.MAIN, 'storage:get', ({ data }) => {
-      if (!data || typeof data !== 'string') return {}
-      return this.getConfig(data)
-    })
-
-    // Get config data with version info
-    channel.regChannel(ChannelType.MAIN, 'storage:get-versioned', ({ data }) => {
-      if (!data || typeof data !== 'string') return null
-      return this.getConfigWithVersion(data)
-    })
-
-    // Save config with version tracking and conflict detection
-    channel.regChannel(ChannelType.MAIN, 'storage:save', ({ data, header }) => {
-      if (!data || typeof data !== 'object') return { success: false, version: 0 }
-      const {
-        key,
-        content,
-        value,
-        clear,
-        force,
-        version: clientVersion
-      } = data as {
-        key?: string
-        content?: string
-        value?: unknown
-        clear?: boolean
-        force?: boolean
-        version?: number
-      }
-      if (typeof key !== 'string') return { success: false, version: 0 }
-
-      // Get source webContents ID to exclude from broadcast
-      const sender = header?.event?.sender
-      const sourceWebContentsId = sender && 'id' in sender ? sender.id : undefined
-
-      const payload = typeof content === 'string' ? content : value
-      return this.saveConfig(key, payload, clear, force, sourceWebContentsId, clientVersion)
-    })
-
-    // Reload config from disk
-    channel.regChannel(ChannelType.MAIN, 'storage:reload', ({ data }) => {
-      if (!data || typeof data !== 'string') return {}
-      const result = this.reloadConfig(data)
-      const version = this.cache.getVersion(data)
-      broadcastUpdate(data, version)
-      return result
-    })
-
-    // Force save all dirty configs
-    channel.regChannel(ChannelType.MAIN, 'storage:saveall', async () => {
-      await this.pollingService.forceSave()
-    })
-
-    // Sync save (for window close) - immediate persist to disk
-    channel.regChannel(ChannelType.MAIN, 'storage:save-sync', ({ data, header }) => {
-      if (!data || typeof data !== 'object') return { success: false, version: 0 }
-      const {
-        key,
-        content,
-        value,
-        clear,
-        force,
-        version: clientVersion
-      } = data as {
-        key?: string
-        content?: string
-        value?: unknown
-        clear?: boolean
-        force?: boolean
-        version?: number
-      }
-      if (typeof key !== 'string') return { success: false, version: 0 }
-
-      const sender = header?.event?.sender
-      const sourceWebContentsId = sender && 'id' in sender ? sender.id : undefined
-      const payload = typeof content === 'string' ? content : value
-      const result = this.saveConfig(key, payload, clear, force, sourceWebContentsId, clientVersion)
-
-      // Immediately persist to disk for sync save
-      if (result.success && !clear) {
-        try {
-          const data = this.cache.getRaw(key)
-          if (data !== undefined) {
-            const p = path.join(this.filePath!, key)
-            fse.ensureFileSync(p)
-            const cachedSerialized = this.cache.getSerialized(key)
-            const configData = cachedSerialized ?? JSON.stringify(data)
-            if (!cachedSerialized) {
-              this.cache.setSerialized(key, configData)
-            }
-            fse.writeFileSync(p, configData, 'utf-8')
-          }
-        } catch (err) {
-          storageLog.error(`Failed to persist ${key} synchronously`, { error: err })
-        }
-        this.cache.clearDirty(key)
-      }
-
-      return result
-    })
+    // Legacy channel handlers are migrated to transport.
   }
 }
 
@@ -715,5 +796,63 @@ const storageModule = new StorageModule()
 
 export { storageModule }
 
-export const getConfig = (name: string) => storageModule.getConfig(name)
-export const saveConfig = storageModule.saveConfig.bind(storageModule)
+export function isMainStorageReady(): boolean {
+  return Boolean(storageModule.filePath)
+}
+
+export function useMainStorage(): StorageModule {
+  if (!storageModule.filePath) {
+    const error = new Error('StorageModule not ready: filePath not set')
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(error, useMainStorage)
+    }
+    throw error
+  }
+  return storageModule
+}
+
+export interface MainStorageSaveOptions {
+  clear?: boolean
+  force?: boolean
+  sourceWebContentsId?: number
+  version?: number
+}
+
+export function getMainConfig<K extends MainStorageKey>(key: K): MainStorageSchema[K] {
+  const entry = mainStorageRegistry[key]
+  const raw = useMainStorage().getConfig(entry.key)
+  return resolveMainStorageValue(key, raw)
+}
+
+export function saveMainConfig<K extends MainStorageKey>(
+  key: K,
+  value: MainStorageSchema[K],
+  options?: MainStorageSaveOptions
+) {
+  const entry = mainStorageRegistry[key]
+  return useMainStorage().saveConfig(
+    entry.key,
+    value,
+    options?.clear,
+    options?.force,
+    options?.sourceWebContentsId,
+    options?.version
+  )
+}
+
+export function subscribeMainConfig<K extends MainStorageKey>(
+  key: K,
+  callback: (value: MainStorageSchema[K]) => void
+): () => void {
+  const entry = mainStorageRegistry[key]
+  return useMainStorage().subscribe(entry.key, (value) => {
+    callback(resolveMainStorageValue(key, value))
+  })
+}
+
+export const getConfig = (name: string) => useMainStorage().getConfig(name)
+export function saveConfig(...args: Parameters<StorageModule['saveConfig']>) {
+  return useMainStorage().saveConfig(...args)
+}
+export { mainStorageRegistry }
+export type { MainStorageKey, MainStorageSchema } from './main-storage-registry'
