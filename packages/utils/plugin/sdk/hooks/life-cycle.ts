@@ -1,4 +1,8 @@
+import { getLogger } from '../../../common/logger'
 import { ensureRendererChannel } from '../channel'
+import { useTouchSDK } from '../touch-sdk'
+
+const sdkLog = getLogger('plugin-sdk')
 
 export enum LifecycleHooks {
   ENABLE = 'en',
@@ -9,27 +13,38 @@ export enum LifecycleHooks {
   CRASH = 'cr',
 }
 
-// @ts-ignore
-export function injectHook(type: LifecycleHooks, hook: Function, processFunc = ({ data, reply }) => {
-  // @ts-ignore
-  const hooks: Array<Function> = window.$touchSDK.__hooks[type]
-  if (hooks) {
-    hooks.forEach(hook => hook(data))
+type LifecycleHook = (data: unknown) => void
+type HookContext = { data: unknown, reply: (result: boolean) => void }
+type HookProcessor = (context: HookContext) => void
+
+export function injectHook(
+  type: LifecycleHooks,
+  hook: LifecycleHook,
+  processFunc: HookProcessor = ({ data, reply }) => {
+    const sdk = useTouchSDK('[Lifecycle Hook] TouchSDK not available. Make sure hooks run in plugin renderer context.')
+    const hooksMap = (sdk.__hooks ?? {}) as Record<LifecycleHooks, LifecycleHook[]>
+    const hooks = hooksMap[type]
+    if (hooks) {
+      hooks.forEach(hookItem => hookItem(data))
+    }
+    reply(true)
+  },
+) {
+  const sdk = useTouchSDK('[Lifecycle Hook] TouchSDK not available. Make sure hooks run in plugin renderer context.')
+  if (!sdk.__hooks || typeof sdk.__hooks !== 'object') {
+    sdk.__hooks = {}
   }
-  reply(true)
-}) {
-  // @ts-ignore
-  const __hooks = window.$touchSDK.__hooks
-  // @ts-ignore
-  const hooks: Array<Function> = __hooks[type] || (__hooks[type] = [])
+  const hooksMap = sdk.__hooks as Record<LifecycleHooks, LifecycleHook[]>
+  const hooks = hooksMap[type] || (hooksMap[type] = [])
 
   if (hooks.length === 0) {
     const channel = ensureRendererChannel('[Lifecycle Hook] Channel not available. Make sure hooks run in plugin renderer context.')
     channel.regChannel(`@lifecycle:${type}`, (obj: any) => {
       processFunc(obj)
 
-      // @ts-ignore
-      delete window.$touchSDK.__hooks[type]
+      if (sdk?.__hooks) {
+        delete sdk.__hooks[type]
+      }
     })
   }
 
@@ -38,7 +53,7 @@ export function injectHook(type: LifecycleHooks, hook: Function, processFunc = (
       hook(data)
     }
     catch (e) {
-      console.error(`[TouchSDK] ${type} hook error: `, e)
+      sdkLog.error(`[TouchSDK] ${type} hook error`, { error: e })
     }
   }
 
@@ -47,7 +62,9 @@ export function injectHook(type: LifecycleHooks, hook: Function, processFunc = (
   return wrappedHook
 }
 
-export const createHook = <T extends Function = (data: any) => any>(type: LifecycleHooks) => (hook: T) => injectHook(type, hook)
+export const createHook = <T extends LifecycleHook = (data: any) => void>(type: LifecycleHooks) => (
+  hook: T,
+) => injectHook(type, hook)
 
 /**
  * The plugin is enabled

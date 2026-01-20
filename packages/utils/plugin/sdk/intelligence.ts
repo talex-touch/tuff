@@ -3,8 +3,8 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
 } from '../../types/intelligence'
-import { hasWindow } from '../../env'
 import { ensureRendererChannel } from './channel'
+import { tryGetPluginSdkApi } from './plugin-info'
 
 export interface IntelligenceChatOptions {
   messages: IntelligenceMessage[]
@@ -27,9 +27,7 @@ export interface IntelligenceSDK {
 }
 
 function resolveSdkApi(): number | undefined {
-  const globalWindow = hasWindow() ? (window as any) : undefined
-  const sdkapi = globalWindow?.$plugin?.sdkapi
-  return typeof sdkapi === 'number' ? sdkapi : undefined
+  return tryGetPluginSdkApi()
 }
 
 async function invokeCapability<T = any>(

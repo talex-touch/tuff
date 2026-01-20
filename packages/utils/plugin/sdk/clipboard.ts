@@ -1,12 +1,5 @@
 import type { PluginClipboardHistoryResponse, PluginClipboardItem, PluginClipboardSearchOptions, PluginClipboardSearchResponse } from './types'
-
-function ensurePluginChannel() {
-  const channel = (window as any)?.$channel
-  if (!channel) {
-    throw new Error('[Plugin SDK] Clipboard channel requires plugin renderer context with $channel available.')
-  }
-  return channel
-}
+import { useChannel } from './channel'
 
 function normalizeItem(item: PluginClipboardItem | null): PluginClipboardItem | null {
   if (!item)
@@ -122,7 +115,7 @@ export function useClipboardHistory() {
  * ```
  */
 export function useClipboard() {
-  const channel = ensurePluginChannel()
+  const channel = useChannel('[Plugin SDK] Clipboard channel requires plugin renderer context with $channel available.')
 
   const history = {
     /**
