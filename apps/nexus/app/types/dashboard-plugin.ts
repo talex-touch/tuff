@@ -54,4 +54,3 @@ export interface DashboardPluginResponse {
   featured: DashboardPlugin[]
   total: number
 }
-

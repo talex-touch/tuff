@@ -3,9 +3,9 @@ import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { PendingReviewItem } from '~/components/dashboard/PendingReviewSection.vue'
 import type { ReviewItem } from '~/components/dashboard/ReviewModal.vue'
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
+import type { DashboardPlugin, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
 import { useUser } from '@clerk/vue'
 import { computed, ref } from 'vue'
-import type { DashboardPlugin, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
 import CreatePluginDrawer from '~/components/CreatePluginDrawer.vue'
 import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
@@ -88,15 +88,6 @@ function formatInstalls(count: number) {
   return numberFormatter.value.format(count)
 }
 
-function formatDate(value?: string) {
-  if (!value)
-    return ''
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime()))
-    return value
-  return dateFormatter.value.format(parsed)
-}
-
 const pluginCategoryOptions = computed(() =>
   PLUGIN_CATEGORIES.map(category => ({
     ...category,
@@ -112,18 +103,7 @@ function resolvePluginCategory(category: string) {
   return pluginCategoryLabels.value[category] ?? category
 }
 
-const pluginBadgeLabels = computed<Record<string, string>>(() => ({
-  featured: t('dashboard.sections.plugins.badges.featured'),
-  stable: t('dashboard.sections.plugins.badges.stable'),
-  beta: t('dashboard.sections.plugins.badges.beta'),
-  community: t('dashboard.sections.plugins.badges.community'),
-}))
-
-function resolveBadgeLabel(badge: string) {
-  return pluginBadgeLabels.value[badge] ?? badge
-}
-
-const PLUGIN_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/
+const PLUGIN_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/
 const PLUGIN_RESERVED_TOKENS = [
   'official',
   '官方',
@@ -186,21 +166,6 @@ function applyManifestToPluginForm(manifest: ExtractedManifest | null, readme: s
     pluginForm.readme = readme
 }
 
-function applyManifestToVersionForm(manifest: ExtractedManifest | null) {
-  if (!manifest)
-    return
-
-  if (typeof manifest.version === 'string' && !versionForm.version.trim())
-    versionForm.version = manifest.version
-
-  const manifestChannel = typeof manifest.channel === 'string' ? manifest.channel.toUpperCase() : undefined
-  if (manifestChannel && PACKAGE_CHANNELS.includes(manifestChannel as PluginChannel))
-    versionForm.channel = manifestChannel as PluginChannel
-
-  if (typeof manifest.changelog === 'string' && !versionForm.changelog.trim())
-    versionForm.changelog = manifest.changelog
-}
-
 function revokeObjectUrl(url: string | null) {
   if (!url)
     return
@@ -212,51 +177,6 @@ function createObjectUrl(file: File): string | null {
   if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function')
     return URL.createObjectURL(file)
   return null
-}
-
-const pluginStatusLabels = computed<Record<DashboardPlugin['status'], string>>(() => ({
-  draft: t('dashboard.sections.plugins.statuses.draft', 'Draft'),
-  pending: t('dashboard.sections.plugins.statuses.pending', 'Pending'),
-  approved: t('dashboard.sections.plugins.statuses.approved', 'Approved'),
-  rejected: t('dashboard.sections.plugins.statuses.rejected', 'Rejected'),
-}))
-
-const versionStatusLabels = computed<Record<DashboardPluginVersion['status'], string>>(() => ({
-  pending: t('dashboard.sections.plugins.versionStatuses.pending', 'Pending'),
-  approved: t('dashboard.sections.plugins.versionStatuses.approved', 'Approved'),
-  rejected: t('dashboard.sections.plugins.versionStatuses.rejected', 'Rejected'),
-}))
-
-function resolvePluginStatusLabel(status: DashboardPlugin['status']) {
-  return pluginStatusLabels.value[status] ?? status
-}
-
-function resolveVersionStatusLabel(status: DashboardPluginVersion['status']) {
-  return versionStatusLabels.value[status] ?? status
-}
-
-function pluginStatusClass(status: DashboardPlugin['status']) {
-  switch (status) {
-    case 'approved':
-      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200'
-    case 'pending':
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200'
-    case 'rejected':
-      return 'bg-rose-100 text-rose-700 dark:bg-rose-400/20 dark:text-rose-200'
-    default:
-      return 'bg-slate-100 text-slate-700 dark:bg-slate-400/20 dark:text-slate-200'
-  }
-}
-
-function versionStatusClass(status: DashboardPluginVersion['status']) {
-  switch (status) {
-    case 'approved':
-      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-200'
-    case 'rejected':
-      return 'bg-rose-100 text-rose-700 dark:bg-rose-400/20 dark:text-rose-200'
-    default:
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-400/20 dark:text-amber-200'
-  }
 }
 
 const defaultPluginCategoryId = PLUGIN_CATEGORIES[0]?.id ?? ''
@@ -436,7 +356,7 @@ watch(() => pluginForm.name, (name) => {
   pluginForm.slug = generated
 })
 
-watch(() => pluginForm.slug, (value, oldValue) => {
+watch(() => pluginForm.slug, (value, _oldValue) => {
   if (pluginFormMode.value !== 'create')
     return
   const normalized = slugify(value)
@@ -561,14 +481,6 @@ function canEditPlugin(plugin: DashboardPlugin) {
   return isAdmin.value || isPluginOwner(plugin)
 }
 
-function canDeletePlugin(plugin: DashboardPlugin) {
-  return canEditPlugin(plugin)
-}
-
-function canPublishPluginVersion(plugin: DashboardPlugin) {
-  return isPluginOwner(plugin)
-}
-
 function openEditPluginForm(plugin: DashboardPlugin) {
   pluginFormMode.value = 'edit'
   editingPluginId.value = plugin.id
@@ -648,22 +560,6 @@ async function handlePluginPackageInput(event: Event) {
   }
 }
 
-function canSubmitPluginForReview(plugin: DashboardPlugin) {
-  return isPluginOwner(plugin) && ['draft', 'rejected'].includes(plugin.status)
-}
-
-function canWithdrawPluginReview(plugin: DashboardPlugin) {
-  return isPluginOwner(plugin) && plugin.status === 'pending'
-}
-
-function canApprovePluginStatus(plugin: DashboardPlugin) {
-  return isAdmin.value && plugin.status === 'pending'
-}
-
-function canRejectPluginStatus(plugin: DashboardPlugin) {
-  return isAdmin.value && plugin.status === 'pending'
-}
-
 async function updatePluginStatusAction(plugin: DashboardPlugin, status: DashboardPlugin['status']) {
   pluginStatusUpdating.value = plugin.id
   pluginActionError.value = null
@@ -696,14 +592,6 @@ function approvePlugin(plugin: DashboardPlugin) {
 
 function rejectPlugin(plugin: DashboardPlugin) {
   return updatePluginStatusAction(plugin, 'rejected')
-}
-
-function canApproveVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
-  return isAdmin.value && version.status === 'pending'
-}
-
-function canRejectVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
-  return isAdmin.value && version.status === 'pending'
 }
 
 async function updateVersionStatus(plugin: DashboardPlugin, version: DashboardPluginVersion, status: DashboardPluginVersion['status']) {
@@ -819,6 +707,7 @@ async function submitPluginForm() {
 
 async function deletePluginItem(plugin: DashboardPlugin) {
   if (import.meta.client) {
+     
     const confirmed = window.confirm(t('dashboard.sections.plugins.confirmDelete', { name: plugin.name }))
     if (!confirmed)
       return
@@ -900,6 +789,7 @@ async function submitVersionForm(data: VersionFormData) {
 
 async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
   if (import.meta.client) {
+     
     const confirmed = window.confirm(t('dashboard.sections.plugins.confirmDeleteVersion', { version: version.version }))
     if (!confirmed)
       return

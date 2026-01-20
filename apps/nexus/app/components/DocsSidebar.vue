@@ -1,32 +1,39 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
 
-// Non-blocking auth check
-const isSignedIn = ref(false)
-onMounted(async () => {
-  try {
-    const { useUser } = await import('@clerk/vue')
-    const { isSignedIn: clerkSignedIn } = useUser()
-    isSignedIn.value = clerkSignedIn.value ?? false
-  }
-  catch {
-    // Clerk not available
-  }
-})
-
 const { data: navigationTree, pending, error } = await useAsyncData(
   'docs-navigation',
   () => queryCollectionNavigation('docs'),
+)
+const { data: componentDocs } = await useAsyncData(
+  'docs-components-meta',
+  () => queryCollection('docs')
+    .where('path', 'LIKE', '/docs/dev/components/%')
+    .all(),
 )
 const route = useRoute()
 const { t, locale } = useI18n()
 const localePath = useLocalePath()
 const SUPPORTED_LOCALES = ['en', 'zh']
 
-const TOP_SECTIONS = [
-  { key: 'guide', label: 'Guide', icon: 'i-carbon-book', description: 'User Guide' },
-  { key: 'dev', label: 'Developer', icon: 'i-carbon-code', description: 'Developer Docs' },
-] as const
+const TOP_SECTIONS = computed(() => ([
+  {
+    key: 'components',
+    basePath: '/docs/dev/components',
+    entryPath: '/docs/dev/components/index',
+    label: t('docsSidebar.components'),
+    icon: 'i-carbon-cube',
+    description: 'Components',
+  },
+  {
+    key: 'extensions',
+    basePath: '/docs/dev',
+    entryPath: '/docs/dev/index',
+    label: t('docsSidebar.extensions'),
+    icon: 'i-carbon-code',
+    description: 'Extensions',
+  },
+]))
 
 const SECTION_ORDER: Record<string, string[]> = {
   '/docs/dev': [
@@ -96,6 +103,25 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/tools/tuff-cli',
     '/docs/dev/tools/tuffex',
   ],
+  '/docs/dev/components': [
+    '/docs/dev/components/index',
+    '/docs/dev/components/button',
+    '/docs/dev/components/icon',
+    '/docs/dev/components/input',
+    '/docs/dev/components/switch',
+    '/docs/dev/components/dialog',
+    '/docs/dev/components/drawer',
+    '/docs/dev/components/tooltip',
+    '/docs/dev/components/toast',
+    '/docs/dev/components/progress',
+    '/docs/dev/components/progress-bar',
+    '/docs/dev/components/status-badge',
+    '/docs/dev/components/tag',
+    '/docs/dev/components/avatar',
+    '/docs/dev/components/grid',
+    '/docs/dev/components/skeleton',
+    '/docs/dev/components/layout-skeleton',
+  ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
     '/docs/dev/reference/manifest',
@@ -129,7 +155,15 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-const defaultSection = computed(() => isSignedIn.value ? 'dev' : 'guide')
+const COMPONENT_CATEGORY_ORDER = computed(() => ([
+  { key: 'Basic', label: t('docsSidebar.categories.basic') },
+  { key: 'Form', label: t('docsSidebar.categories.form') },
+  { key: 'Feedback', label: t('docsSidebar.categories.feedback') },
+  { key: 'Layout', label: t('docsSidebar.categories.layout') },
+  { key: 'Data', label: t('docsSidebar.categories.data') },
+]))
+
+const defaultSection = computed(() => 'extensions')
 
 const docLabels = computed<Record<string, string>>(() => ({
   '/docs/guide/start': t('docsNav.start'),
@@ -216,7 +250,9 @@ function sortTree(items: any[], parentPath: string | null): any[] {
 }
 
 const items = computed(() => navigationTree.value ?? [])
+const componentItems = computed(() => filterByLocale((componentDocs.value ?? []) as any[]))
 const normalizedRoutePath = computed(() => stripLocalePrefix(route.path))
+const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
 
 const allSections = computed(() => {
   if (!items.value.length)
@@ -227,42 +263,135 @@ const allSections = computed(() => {
   return items.value
 })
 
+function findSectionByPath(list: any[], targetPath: string): any | null {
+  const normalizedTarget = normalizeContentPath(targetPath)
+  if (!normalizedTarget)
+    return null
+  for (const item of list) {
+    const itemPath = normalizeContentPath(item.path)
+    if (itemPath === normalizedTarget)
+      return item
+    if (Array.isArray(item.children)) {
+      const found = findSectionByPath(item.children, targetPath)
+      if (found)
+        return found
+    }
+  }
+  return null
+}
+
+const componentSections = computed(() => {
+  const sourceItems = componentItems.value ?? []
+  if (!sourceItems.length)
+    return []
+
+  const normalizedItems = sourceItems
+    .map(item => ({ ...item, _normalizedPath: normalizeContentPath(item.path) }))
+    .filter(item => item._normalizedPath?.startsWith('/docs/dev/components'))
+
+  if (!normalizedItems.length)
+    return []
+
+  const indexItem = normalizedItems.find(item => item._normalizedPath === '/docs/dev/components/index')
+  const entries = normalizedItems.filter(item => item._normalizedPath && item._normalizedPath !== '/docs/dev/components/index')
+
+  const used = new Set<string>()
+  const sections: any[] = []
+  const indexLinkPath = '/docs/dev/components'
+
+  if (indexItem) {
+    sections.push({
+      title: indexItem.title,
+      path: indexLinkPath,
+      children: [],
+      page: true,
+    })
+  }
+
+  for (const category of COMPONENT_CATEGORY_ORDER.value) {
+    const children = sortByOrder(
+      entries.filter(item => item.category === category.key),
+      '/docs/dev/components',
+    )
+    if (!children.length)
+      continue
+    for (const child of children) {
+      if (child._normalizedPath)
+        used.add(child._normalizedPath)
+    }
+    sections.push({
+      title: category.label,
+      path: children[0].path,
+      children,
+      page: false,
+    })
+  }
+
+  const remaining = sortByOrder(
+    entries.filter(item => !used.has(item._normalizedPath ?? '')),
+    '/docs/dev/components',
+  )
+  if (remaining.length) {
+    sections.push({
+      title: t('docsSidebar.categories.misc'),
+      path: remaining[0].path,
+      children: remaining,
+      page: false,
+    })
+  }
+
+  return sections
+})
+
 const activeTopSection = computed(() => {
+  if (isTutorialRoute.value)
+    return 'tutorial'
   const path = normalizedRoutePath.value
-  for (const section of TOP_SECTIONS) {
-    if (path.startsWith(`/docs/${section.key}`))
+  for (const section of TOP_SECTIONS.value) {
+    if (path.startsWith(section.basePath))
       return section.key
   }
   return defaultSection.value
 })
 
 const currentSectionData = computed(() => {
-  return allSections.value.find((s: any) => {
-    const sectionPath = normalizeContentPath(s.path)
-    return sectionPath === `/docs/${activeTopSection.value}`
-  })
+  if (isTutorialRoute.value) {
+    return allSections.value.find((s: any) => {
+      const sectionPath = normalizeContentPath(s.path)
+      return sectionPath === '/docs/guide'
+    })
+  }
+  const active = TOP_SECTIONS.value.find(section => section.key === activeTopSection.value)
+  const targetPath = active?.basePath ?? `/docs/${activeTopSection.value}`
+  return findSectionByPath(allSections.value, targetPath)
 })
 
 const sections = computed(() => {
+  if (activeTopSection.value === 'components' && componentSections.value.length)
+    return componentSections.value
+
   const data = currentSectionData.value
   if (!data)
     return []
 
   const children = sortTree(filterByLocale(data.children ?? []), normalizeContentPath(data.path))
+  const filtered = activeTopSection.value === 'extensions'
+    ? children.filter((child: any) => normalizeContentPath(child.path) !== '/docs/dev/components')
+    : children
 
   // If there are subdirectories (features, scenes, api, etc.), show them as sections
   // Otherwise, show the files directly as a flat list
-  const hasSubdirs = children.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
+  const hasSubdirs = filtered.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
 
   if (hasSubdirs) {
-    return children
+    return filtered
   }
 
   // For flat file lists, wrap them in a single section
   return [{
     title: data.title,
     path: data.path,
-    children,
+    children: filtered,
     page: false,
   }]
 })
@@ -365,12 +494,12 @@ watch(
 <template>
   <nav class="docs-nav relative flex flex-col">
     <!-- Top-level section tabs (sticky within sidebar) -->
-    <div class="sticky top-0 z-10 -mx-1 mb-3 bg-white/95 px-1 pb-1 pt-1 backdrop-blur-sm dark:bg-black/95">
+    <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 bg-white/95 px-1 pb-1 pt-1 backdrop-blur-sm dark:bg-black/95">
       <div class="flex gap-1 rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.08]">
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
-          :to="localePath({ path: `/docs/${sec.key}` })"
+          :to="localePath({ path: sec.entryPath || sec.basePath })"
           class="flex flex-1 items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium no-underline transition-all duration-200"
           :class="activeTopSection === sec.key
             ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'

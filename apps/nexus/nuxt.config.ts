@@ -5,8 +5,6 @@ import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
 
-/* eslint-disable nuxt/nuxt-config-keys-order */
-
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
 loadEnv({ path: '.env.local', override: true })
@@ -34,55 +32,6 @@ export default defineNuxtConfig({
     ...(isDev ? ['nitro-cloudflare-dev'] : []),
   ],
 
-  css: ['vue-sonner/style.css'],
-
-  sentry: {
-    sourceMapsUploadOptions: {
-      org: 'quotawish',
-      project: 'tuff-nexus',
-      // store your auth token in an environment variable
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-    },
-  },
-
-  content: {
-    experimental: {
-      nativeSqlite: true,
-    },
-    build: {
-      markdown: {
-        highlight: {
-          theme: {
-            light: 'github-light',
-            dark: 'github-dark',
-          },
-        },
-        toc: {
-          depth: 3,
-          searchDepth: 3,
-        },
-      },
-    },
-  },
-
-  i18n: {
-    locales: [
-      { code: 'en', file: 'en.ts' },
-      { code: 'zh', file: 'zh.ts' },
-    ],
-    restructureDir: 'i18n',
-    langDir: 'locales',
-    defaultLocale: 'en',
-    strategy: 'no_prefix',
-    detectBrowserLanguage: false,
-  },
-
-  debug: false,
-
-  build: {
-    transpile: ['@talex-touch/tuffex'],
-  },
-
   devtools: {
     enabled: false,
   },
@@ -105,8 +54,55 @@ export default defineNuxtConfig({
     },
   },
 
+  css: ['vue-sonner/style.css'],
+
   colorMode: {
     classSuffix: '',
+  },
+
+  content: {
+    experimental: {
+      nativeSqlite: true,
+    },
+    build: {
+      markdown: {
+        highlight: {
+          theme: {
+            default: 'github-light',
+            light: 'github-light',
+            dark: 'github-dark',
+          },
+        },
+        toc: {
+          depth: 3,
+          searchDepth: 3,
+        },
+      },
+    },
+  },
+
+  runtimeConfig: {
+    clerk: {
+      secretKey: process.env.CLERK_SECRET_KEY,
+      webhookSigningSecret: process.env.CLERK_WEBHOOK_SECRET,
+      jwtKey: process.env.CLERK_JWT_KEY,
+      machineSecretKey: process.env.CLERK_MACHINE_KEY,
+    },
+    appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
+    public: {
+      clerk: {
+        publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+        signInUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
+        signUpUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
+        domain: process.env.NUXT_PUBLIC_CLERK_DOMAIN,
+        proxyUrl: process.env.NUXT_PUBLIC_CLERK_PROXY_URL,
+        pricingTableId: process.env.NUXT_PUBLIC_CLERK_PRICING_TABLE_ID,
+      },
+    },
+  },
+
+  build: {
+    transpile: ['@talex-touch/tuffex'],
   },
 
   future: {
@@ -122,6 +118,27 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2024-08-14',
+
+  nitro: {
+    preset: 'cloudflare-pages',
+    ...(isDev
+      ? {
+          cloudflareDev: {
+            environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
+          },
+        }
+      : {}),
+    esbuild: {
+      options: {
+        target: 'esnext',
+      },
+    },
+    prerender: {
+      crawlLinks: false,
+      routes: ['/'],
+      ignore: ['/hi'],
+    },
+  },
 
   vite: {
     resolve: {
@@ -153,25 +170,14 @@ export default defineNuxtConfig({
     },
   },
 
-  nitro: {
-    preset: 'cloudflare-pages',
-    ...(isDev
-      ? {
-          cloudflareDev: {
-            environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
-          },
-        }
+  debug: false,
+
+  clerk: {
+    ...(process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+      ? { publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY }
       : {}),
-    esbuild: {
-      options: {
-        target: 'esnext',
-      },
-    },
-    prerender: {
-      crawlLinks: false,
-      routes: ['/'],
-      ignore: ['/hi'],
-    },
+    signInUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
+    signUpUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
   },
 
   eslint: {
@@ -183,35 +189,26 @@ export default defineNuxtConfig({
     },
   },
 
-  clerk: {
-    ...(process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-      ? { publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY }
-      : {}),
-    signInUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
-    signUpUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
-  },
-
-  runtimeConfig: {
-    clerk: {
-      secretKey: process.env.CLERK_SECRET_KEY,
-      webhookSigningSecret: process.env.CLERK_WEBHOOK_SECRET,
-      jwtKey: process.env.CLERK_JWT_KEY,
-      machineSecretKey: process.env.CLERK_MACHINE_KEY,
-    },
-    appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
-    public: {
-      clerk: {
-        publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-        signInUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
-        signUpUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
-        domain: process.env.NUXT_PUBLIC_CLERK_DOMAIN,
-        proxyUrl: process.env.NUXT_PUBLIC_CLERK_PROXY_URL,
-        pricingTableId: process.env.NUXT_PUBLIC_CLERK_PRICING_TABLE_ID,
-      },
-    },
+  i18n: {
+    locales: [
+      { code: 'en', file: 'en.ts' },
+      { code: 'zh', file: 'zh.ts' },
+    ],
+    restructureDir: 'i18n',
+    langDir: 'locales',
+    defaultLocale: 'en',
+    strategy: 'no_prefix',
+    detectBrowserLanguage: false,
   },
 
   pwa,
-})
 
-/* eslint-enable nuxt/nuxt-config-keys-order */
+  sentry: {
+    sourceMapsUploadOptions: {
+      org: 'quotawish',
+      project: 'tuff-nexus',
+      // store your auth token in an environment variable
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+    },
+  },
+})

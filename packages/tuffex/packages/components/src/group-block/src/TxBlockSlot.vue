@@ -4,19 +4,6 @@
  *
  * A block container with icon, title, description, and a slot for custom content.
  * Ideal for settings rows with custom controls.
- *
- * @example
- * ```vue
- * <TxBlockSlot
- *   title="Theme"
- *   description="Choose your preferred theme"
- *   default-icon="i-carbon-color-palette"
- * >
- *   <select>...</select>
- * </TxBlockSlot>
- * ```
- *
- * @component
  */
 import type { TxIconSource } from '../../icon'
 import type { BlockSlotEmits, BlockSlotProps } from './types'
@@ -26,8 +13,6 @@ import { TuffIcon } from '../../icon'
 defineOptions({
   name: 'TxBlockSlot',
 })
-
-type IconValue = TxIconSource | string | null | undefined
 
 const props = withDefaults(defineProps<BlockSlotProps>(), {
   title: '',
@@ -39,10 +24,8 @@ const props = withDefaults(defineProps<BlockSlotProps>(), {
 
 const emit = defineEmits<BlockSlotEmits>()
 
-/**
- * Handles click events on the block slot.
- * @param event - The mouse event
- */
+type IconValue = TxIconSource | string | null | undefined
+
 function handleClick(event: MouseEvent): void {
   if (props.disabled)
     return
@@ -132,6 +115,12 @@ const currentIcon = computed(() => {
   --fake-radius: 12px;
   --fake-opacity: 0.5;
 
+  &.disabled,
+  &--disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
   .tx-block-slot__content {
     display: flex;
     align-items: center;
@@ -182,10 +171,10 @@ const currentIcon = computed(() => {
     max-width: 100%;
     align-self: flex-start;
     height: auto;
-  }
 
-  .tx-block-slot__tags--after {
-    margin-top: 4px;
+    &--after {
+      margin-top: 4px;
+    }
   }
 
   .tx-block-slot__slot {
@@ -196,29 +185,18 @@ const currentIcon = computed(() => {
     flex-shrink: 0;
     gap: 8px;
   }
-}
 
-.tx-block-slot:hover,
-.TBlockSlot-Container:hover {
-  --fake-color: var(--tx-fill-color, #f0f2f5);
-}
-
-.tx-block-slot--disabled,
-.TBlockSlot-Container--disabled,
-.tx-block-slot.disabled,
-.TBlockSlot-Container.disabled {
-  opacity: 0.5;
-  pointer-events: none;
+  &:hover {
+    --fake-color: var(--tx-fill-color, #f0f2f5);
+  }
 }
 
 .touch-blur .tx-block-slot,
 .touch-blur .TBlockSlot-Container {
   --fake-color: var(--tx-fill-color, #f0f2f5);
 
-}
-
-.touch-blur .tx-block-slot:hover,
-.touch-blur .TBlockSlot-Container:hover {
-  --fake-color: var(--tx-fill-color-darker, #ebeef5);
+  &:hover {
+    --fake-color: var(--tx-fill-color-darker, #ebeef5);
+  }
 }
 </style>

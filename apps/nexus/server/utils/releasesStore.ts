@@ -1,8 +1,8 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
-import { useStorage } from 'nitropack/runtime/internal/storage'
 import { createError } from 'h3'
+import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
 
 const RELEASES_KEY = 'app:releases'
@@ -37,6 +37,7 @@ export interface ReleaseAsset {
   sourceType: AssetSourceType
   fileKey: string | null
   downloadUrl: string
+  signatureUrl?: string | null
   size: number
   sha256: string | null
   contentType: string
@@ -160,7 +161,7 @@ function getD1Database(event?: H3Event | null): D1Database | null {
 
   if (db) {
     if (!hasLoggedReleasesDb) {
-      console.info('[releasesStore] Connected to D1 database.')
+      console.warn('[releasesStore] Connected to D1 database.')
       hasLoggedReleasesDb = true
     }
   }
@@ -304,7 +305,7 @@ function validateArch(arch: string): asserts arch is AssetArch {
 }
 
 function validateSemanticVersion(version: string): boolean {
-  const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*))?(?:\+([0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/i
+  const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*)?(?:\+(?:[0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/i
   return semverPattern.test(version)
 }
 

@@ -1,17 +1,18 @@
 import type { TxButtonProps } from '../../button'
 import type { TxIconSource } from '../../icon'
 
-export type EmptyStateVariant =
-  | 'empty'
-  | 'blank-slate'
-  | 'no-data'
-  | 'no-selection'
-  | 'search-empty'
-  | 'loading'
-  | 'offline'
-  | 'permission'
-  | 'error'
-  | 'custom'
+export type EmptyStateVariant
+  = | 'empty'
+    | 'blank-slate'
+    | 'no-data'
+    | 'no-selection'
+    | 'search-empty'
+    | 'loading'
+    | 'offline'
+    | 'permission'
+    | 'error'
+    | 'guide'
+    | 'custom'
 
 export type EmptyStateLayout = 'vertical' | 'horizontal'
 

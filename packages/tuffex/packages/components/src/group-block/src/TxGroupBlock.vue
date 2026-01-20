@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import type { TxIconSource } from '../../icon'
 import type { GroupBlockEmits, GroupBlockProps } from './types'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { TuffIcon } from '../../icon'
+import gsap from 'gsap'
+import { computed, onMounted, ref, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
+import { TuffIcon } from '../../icon'
 
 defineOptions({
   name: 'TxGroupBlock',
 })
-
-type IconValue = TxIconSource | string | null | undefined
 
 const props = withDefaults(defineProps<GroupBlockProps>(), {
   description: '',
@@ -25,8 +24,12 @@ const props = withDefaults(defineProps<GroupBlockProps>(), {
 
 const emit = defineEmits<GroupBlockEmits>()
 
+type IconValue = TxIconSource | string | null | undefined
+
 const STORAGE_PREFIX = 'tuff-block-storage-'
 const LEGACY_STORAGE_PREFIX = 'tx-group-block-storage-'
+
+const storedExpand = ref<boolean | null>(readStoredExpand())
 
 function readStoredExpand(): boolean | null {
   if (!hasWindow() || !props.memoryName)
@@ -67,7 +70,6 @@ function resolveDefaultExpand(): boolean {
   return !props.collapsed
 }
 
-const storedExpand = ref<boolean | null>(readStoredExpand())
 const hasUserInteracted = ref(false)
 const expanded = ref(storedExpand.value ?? (props.shrink ? false : resolveDefaultExpand()))
 
@@ -104,7 +106,9 @@ function applyImmediate(state: boolean): void {
   const el = contentRef.value
   if (!el)
     return
-  el.style.transition = 'none'
+
+  gsap.killTweensOf(el)
+
   if (state) {
     el.style.display = 'block'
     el.style.height = 'auto'
@@ -115,60 +119,53 @@ function applyImmediate(state: boolean): void {
     el.style.height = '0px'
     el.style.opacity = '0'
   }
-  void el.offsetHeight
-  el.style.transition = ''
 }
 
-async function animateContent(state: boolean): Promise<void> {
+function animateContent(state: boolean): void {
   const el = contentRef.value
   if (!el)
     return
 
-  el.style.transition = ''
+  gsap.killTweensOf(el)
   el.style.overflow = 'hidden'
-  el.style.willChange = 'height, opacity'
 
   if (state) {
     el.style.display = 'block'
-    el.style.height = '0px'
-    el.style.opacity = '0'
-    await nextTick()
+    // Get the full height of the content
     const target = el.scrollHeight || 0
-    requestAnimationFrame(() => {
-      el.style.height = `${target}px`
-      el.style.opacity = '1'
-    })
+
+    gsap.fromTo(
+      el,
+      { height: 0, opacity: 0.2 },
+      {
+        height: target,
+        opacity: 1,
+        duration: 0.45,
+        ease: 'power3.out',
+        onComplete: () => {
+          el.style.height = 'auto'
+          el.style.overflow = '' // Restore overflow
+        },
+      },
+    )
   }
   else {
     const current = el.scrollHeight || el.offsetHeight || 0
-    el.style.height = `${current}px`
-    el.style.opacity = '1'
-    await nextTick()
-    requestAnimationFrame(() => {
-      el.style.height = '0px'
-      el.style.opacity = '0'
-    })
-  }
 
-  const onEnd = (e: TransitionEvent) => {
-    if (e.target !== el)
-      return
-    if (e.propertyName !== 'height')
-      return
-    el.removeEventListener('transitionend', onEnd)
-    if (state) {
-      el.style.height = 'auto'
-      el.style.opacity = '1'
-    }
-    else {
-      el.style.display = 'none'
-      el.style.height = '0px'
-      el.style.opacity = '0'
-    }
-    el.style.willChange = ''
+    gsap.fromTo(
+      el,
+      { height: current, opacity: 1 },
+      {
+        height: 0,
+        opacity: 0,
+        duration: 0.35,
+        ease: 'power2.inOut',
+        onComplete: () => {
+          el.style.display = 'none'
+        },
+      },
+    )
   }
-
-  el.addEventListener('transitionend', onEnd)
 }
 
 function toggle(): void {
@@ -228,7 +225,7 @@ onMounted(() => {
 <template>
   <div
     class="tx-group-block TGroupBlock-Container"
-    :class="{ 'tx-group-block--expanded': expanded, expand: expanded }"
+    :class="{ 'tx-group-block--expanded': expanded, 'expand': expanded }"
   >
     <div
       class="tx-group-block__header TGroupBlock-Header fake-background index-fix"
@@ -339,7 +336,7 @@ onMounted(() => {
 
   &__body {
     padding: 0;
-    transition: height 0.45s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.35s ease;
+    // Animation is handled by GSAP in JS
 
     :deep(.TBlockSelection),
     :deep(.tx-block-slot),

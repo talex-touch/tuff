@@ -1,9 +1,9 @@
 import type { H3Event } from 'h3'
+import { Buffer } from 'node:buffer'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { useRuntimeConfig } from '#imports'
 import { clerkClient } from '@clerk/nuxt/server'
 import { createError, getHeader } from 'h3'
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import { Buffer } from 'node:buffer'
-import { useRuntimeConfig } from '#imports'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
 const APP_TOKEN_AUDIENCE = 'tuff-app'
@@ -96,6 +96,9 @@ function verifyAppToken(token: string): AppTokenPayload | null {
   }
 
   const [headerPart, payloadPart, signaturePart] = parts
+  if (!headerPart || !payloadPart || !signaturePart) {
+    return null
+  }
   try {
     const signingInput = `${headerPart}.${payloadPart}`
     const expectedSignature = createHmac('sha256', secret).update(signingInput).digest()

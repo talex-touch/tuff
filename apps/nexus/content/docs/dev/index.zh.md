@@ -15,10 +15,12 @@
 
 ## 运行时行为
 - **[CoreBox 窗口与 UI View 缓存](./architecture/corebox-and-views.zh.md)** — 伸缩逻辑、推荐请求与 WebContentsView 缓存。
+- **[DeviceIdleService 与后台扫描调度](./architecture/device-idle-service.zh.md)** — 空闲与电量策略统一入口。
 
 ## 开发工具
 - **[TUFF CLI](./tools/tuff-cli.zh.md)** — 命令行工具，快速创建和管理插件项目。
 - **[TuffEx](./tools/tuffex.zh.md)** — Vue3 组件库，统一设计语言和交互体验。
+- **[Tuffex 组件中心](./components/index.zh.md)** — 组件清单、Demo 与 API（塔芙）。
 
 ## 发布
 - **[发布流程](./release/publish.zh.md)** — 将插件提交到市场。

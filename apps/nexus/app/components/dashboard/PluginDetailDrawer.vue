@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type {
   DashboardPlugin as Plugin,
-  DashboardPluginVersion as PluginVersion,
   PluginChannel,
   PluginStatus,
+  DashboardPluginVersion as PluginVersion,
   VersionStatus,
 } from '~/types/dashboard-plugin'
 import Button from '~/components/ui/Button.vue'
@@ -27,11 +27,11 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'edit', plugin: Plugin): void
   (e: 'delete', plugin: Plugin): void
-  (e: 'publish-version', plugin: Plugin): void
-  (e: 'submit-review', plugin: Plugin): void
-  (e: 'withdraw-review', plugin: Plugin): void
+  (e: 'publishVersion', plugin: Plugin): void
+  (e: 'submitReview', plugin: Plugin): void
+  (e: 'withdrawReview', plugin: Plugin): void
   (e: 'download-version', version: PluginVersion): void
-  (e: 'delete-version', plugin: Plugin, version: PluginVersion): void
+  (e: 'deleteVersion', plugin: Plugin, version: PluginVersion): void
 }>()
 
 const { t, locale } = useI18n()
@@ -241,7 +241,7 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
               v-if="canPublishVersion"
               type="primary"
               size="small"
-              @click="emit('publish-version', plugin)"
+              @click="emit('publishVersion', plugin)"
             >
               <span class="i-carbon-cloud-upload text-sm" />
               {{ t('dashboard.sections.plugins.publishVersion') }}
@@ -290,7 +290,7 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
                   </a>
                   <FlatButton
                     v-if="canDelete"
-                    @click="emit('delete-version', plugin, version)"
+                    @click="emit('deleteVersion', plugin, version)"
                   >
                     <span class="i-carbon-trash-can text-sm" />
                   </FlatButton>
@@ -311,7 +311,7 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
           v-if="canSubmitReview"
           size="small"
           :disabled="loading"
-          @click="emit('submit-review', plugin)"
+          @click="emit('submitReview', plugin)"
         >
           <span class="i-carbon-send text-sm" />
           {{ t('dashboard.sections.plugins.actions.submitReview') }}
@@ -320,7 +320,7 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
           v-if="canWithdrawReview"
           size="small"
           :disabled="loading"
-          @click="emit('withdraw-review', plugin)"
+          @click="emit('withdrawReview', plugin)"
         >
           <span class="i-carbon-undo text-sm" />
           {{ t('dashboard.sections.plugins.actions.withdrawReview') }}

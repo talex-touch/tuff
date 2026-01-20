@@ -11,10 +11,10 @@ import { TxGradualBlur } from '@talex-touch/tuffex'
       <TxGradualBlur position="top" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
       <TxGradualBlur position="bottom" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
       <TheHeader title="Tuff Docs" class="z-30" />
-      <div class="relative flex flex-1 justify-center px-4 pb-24 pt-24 lg:px-10 sm:px-6">
+      <div class="relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
         <div class="max-w-7xl w-full flex gap-6 lg:gap-8">
           <aside class="hidden w-[200px] shrink-0 xl:block">
-            <div class="docs-sidebar sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pb-8 pr-1.5">
+            <div class="docs-sidebar sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5">
               <DocsSidebar />
             </div>
           </aside>

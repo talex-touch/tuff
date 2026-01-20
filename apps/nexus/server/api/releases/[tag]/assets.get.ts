@@ -1,4 +1,5 @@
 import { createError } from 'h3'
+import { attachSignatureUrls } from '../../../utils/releaseSignature'
 import { getReleaseByTag } from '../../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {
@@ -12,7 +13,9 @@ export default defineEventHandler(async (event) => {
   if (!release)
     throw createError({ statusCode: 404, statusMessage: 'Release not found.' })
 
+  const releaseWithSignatures = attachSignatureUrls(release)
+
   return {
-    assets: release.assets ?? [],
+    assets: releaseWithSignatures.assets ?? [],
   }
 })

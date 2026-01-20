@@ -33,11 +33,14 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 
 ## 表单组件
 
+- **[TxForm 表单](./form.md)** - 表单容器与校验
 - **[TxInput 输入框](./input.md)** - 表单输入组件
 - **[TxSearchInput 搜索输入框](./search-input.md)** - 搜索输入框（Enter 触发 search）
 - **[TxCheckbox 复选框](./checkbox.md)** - 复选框组件
+- **[TxTagInput 标签输入](./tag-input.md)** - 标签录入
 - **[TxPicker 滚轮选择](./picker.md)** - 移动端风格滚轮选择
 - **[TxDatePicker 日期选择](./date-picker.md)** - 日期选择（YYYY-MM-DD）
+- **[TxTree 树形](./tree.md)** - 树形展示与选择
 - **[TxTreeSelect 树选择器](./tree-select.md)** - 下拉树选择（支持搜索/单选/多选）
 - **[TxCascader 级联选择](./cascader.md)** - 级联选择（支持搜索/单选/多选/异步加载）
 
@@ -50,6 +53,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxStack 堆叠](./stack.md)** - 通用堆叠布局容器
 - **[TxFlex 弹性布局](./flex.md)** - 通用 Flex 容器
 - **[TxScroll 滚动](./scroll.md)** - 滚动容器（BetterScroll / 原生）
+- **[TxVirtualList 虚拟列表](./virtual-list.md)** - 长列表虚拟化
 - **[TxGridLayout 网格布局](./grid-layout.md)** - 响应式网格与交互 hover
 - **[TxLayoutSkeleton 布局骨架](./layout-skeleton.md)** - 通用布局骨架占位
 - **[TxCardItem 卡片项](./card-item.md)** - 左侧头像/图标，右侧标题与描述，支持右侧操作区
@@ -63,6 +67,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 
 ## 反馈组件
 
+- **[TxDataTable 数据表格](./data-table.md)** - 数据表格与排序/选择
 - **[TxProgress 进度](./progress.md)** - 进度展示组件
 - **[TxProgressBar 进度条](./progress-bar.md)** - 多功能进度条，支持多种状态
 - **[TxSpinner 加载](./spinner.md)** - 旋转加载指示器
@@ -75,6 +80,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxChatComposer 消息输入](./chat-composer.md)** - 消息输入/发送
 - **[TxTypingIndicator 打字中](./typing-indicator.md)** - AI 回复中提示
 - **[TxImageUploader 图片上传](./image-uploader.md)** - 图片选择/预览/删除
+- **[TxFileUploader 文件上传](./file-uploader.md)** - 通用文件上传
 - **[TxImageGallery 图片预览](./image-gallery.md)** - 网格 + Modal 预览
 
 ## 覆盖层组件
@@ -82,6 +88,7 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxDrawer 抽屉](./drawer.md)** - 滑出面板组件
 - **[TxBottomDialog 底部对话框](./dialog.md)** - 底部定位对话框
 - **[TxBlowDialog 爆炸对话框](./dialog.md#blowdialog-爆炸对话框)** - 带爆炸动画的居中对话框
+- **[TxCommandPalette 命令面板](./command-palette.md)** - 全局命令/搜索面板
 
 ## 视觉效果
 

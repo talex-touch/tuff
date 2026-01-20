@@ -16,18 +16,27 @@ const mockVibrate = vi.fn()
 describe('vibrate Utils', () => {
   beforeEach(() => {
     // Mock window and navigator
+    const navigatorMock = {
+      vibrate: mockVibrate,
+    }
     Object.defineProperty(global, 'window', {
       value: {
-        navigator: {
-          vibrate: mockVibrate,
-        },
+        navigator: navigatorMock,
       },
       writable: true,
+      configurable: true,
     })
-    mockVibrate.mockClear()
+    Object.defineProperty(global, 'navigator', {
+      value: navigatorMock,
+      writable: true,
+      configurable: true,
+    })
+    mockVibrate.mockReset()
   })
 
   afterEach(() => {
+    delete (global as any).window
+    delete (global as any).navigator
     vi.clearAllMocks()
   })
 

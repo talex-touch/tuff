@@ -2,8 +2,9 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
-import { useStorage } from 'nitropack/runtime/internal/storage'
+import process from 'node:process'
 import { createError } from 'h3'
+import { useStorage } from 'nitropack/runtime/internal/storage'
 import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
 import { deleteImage, uploadImageFromBuffer } from './imageStorage'
@@ -532,7 +533,7 @@ function validateChannel(channel: string): asserts channel is PluginChannel {
  */
 function validateSemanticVersion(version: string): boolean {
   // Standard semver pattern: major.minor.patch with optional pre-release and build metadata
-  const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*))?(?:\+([0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/i
+  const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*)?(?:\+(?:[0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/i
   return semverPattern.test(version)
 }
 
@@ -1379,13 +1380,14 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
     const index = plugins.findIndex(item => item.id === pluginId)
     if (index !== -1) {
       const existing = plugins[index]
-      if (!existing)
+      if (!existing) {
         return {
           ...version,
           status,
           reviewedAt,
           updatedAt: now,
         }
+      }
       const refreshed = await getPluginById(event, pluginId, {
         includeVersions: true,
         viewerIsAdmin: true,

@@ -1,7 +1,8 @@
 export default {
   nav: {
     home: 'Home',
-    docs: 'Docs',
+    docs: 'Developer',
+    tutorial: 'Tutorial',
     api: 'API',
     marketplace: 'Marketplace',
     about: 'About',
@@ -11,7 +12,7 @@ export default {
     dashboard: 'Dashboard',
     pricing: 'Pricing',
     market: 'Market',
-    doc: 'Doc',
+    doc: 'Developer',
     developer: 'Developer',
     download: 'Updates',
     blog: 'Blog',
@@ -1039,6 +1040,16 @@ Tuff may update this agreement at any time. Continued submission indicates accep
   },
   docsSidebar: {
     error: 'Navigation failed to load. Please try again.',
+    extensions: 'Extensions',
+    components: 'Components',
+    categories: {
+      basic: 'Basic',
+      form: 'Form',
+      feedback: 'Feedback',
+      layout: 'Layout',
+      data: 'Data',
+      misc: 'Misc',
+    },
   },
   license: {
     title: 'Tuff Terms of Service',

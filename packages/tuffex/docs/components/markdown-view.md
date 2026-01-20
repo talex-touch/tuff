@@ -8,6 +8,39 @@ import { ref } from 'vue'
 const content = ref(
   '# Title\n\n- item 1\n- item 2\n\n`inline code`\n\n```ts\nconst a = 1\n```\n\n> Quote',
 )
+
+const richContent = ref(
+  [
+    '# Heading 1',
+    '## Heading 2',
+    '',
+    'This is **bold**, *italic*, ~~strikethrough~~, and a [link](https://github.com).',
+    '',
+    '- Unordered item',
+    '  - Nested item',
+    '- [x] Task done',
+    '- [ ] Task todo',
+    '',
+    '1. First ordered',
+    '2. Second ordered',
+    '',
+    '> Blockquote with multiple lines',
+    '>',
+    '> - Quote item',
+    '> - Another item',
+    '',
+    '---',
+    '',
+    '| Feature | Value |',
+    '| --- | --- |',
+    '| Table | Supported |',
+    '| Inline code | `const a = 1` |',
+    '',
+    '```ts',
+    'export const sum = (a: number, b: number) => a + b',
+    '```',
+  ].join('\n'),
+)
 </script>
 
 ## 基础用法
@@ -28,6 +61,39 @@ const content = ref(
 </template>
 </DemoBlock>
 
+## 渲染示例
+
+<DemoBlock title="常见 Markdown 结构">
+<template #preview>
+<div style="width: 680px; padding: 12px; border-radius: 14px; border: 1px solid var(--tx-border-color-lighter); background: var(--tx-fill-color-blank);">
+  <TxMarkdownView :content="richContent" />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxMarkdownView :content="richContent" />
+</template>
+```
+</template>
+</DemoBlock>
+
+## 主题预览
+
+<DemoBlock title="Light / Dark">
+<template #preview>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; width: 100%;">
+  <div style="padding: 12px; border-radius: 12px; border: 1px solid #d1d9e0; background: #ffffff;">
+    <TxMarkdownView :content="richContent" theme="light" />
+  </div>
+  <div style="padding: 12px; border-radius: 12px; border: 1px solid #30363d; background: #0d1117;">
+    <TxMarkdownView :content="richContent" theme="dark" />
+  </div>
+</div>
+</template>
+</DemoBlock>
+
 ## API
 
 ### Props
@@ -36,3 +102,4 @@ const content = ref(
 |------|------|---------|------|
 | `content` | `string` | *必填* | Markdown 内容 |
 | `sanitize` | `boolean` | `true` | 是否 sanitize（默认开启） |
+| `theme` | `auto \| light \| dark` | `auto` | 主题模式（auto 跟随外部主题 data-theme/class，未标记时默认 light） |

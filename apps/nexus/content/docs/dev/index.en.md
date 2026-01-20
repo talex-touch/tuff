@@ -15,10 +15,12 @@
 
 ## Runtime Behavior
 - **[CoreBox Window & UI View Cache](./architecture/corebox-and-views.en.md)** — resize logic, recommendation flow, and WebContentsView caching.
+- **[DeviceIdleService and Background Scan Scheduling](./architecture/device-idle-service.en.md)** — unified idle and power gating for scans.
 
 ## Developer Tools
 - **[TUFF CLI](./tools/tuff-cli.en.md)** — command-line tool for creating and managing plugin projects.
 - **[TuffEx](./tools/tuffex.en.md)** — Vue3 component library with unified design language.
+- **[Tuffex Components](./components/index.en.md)** — component catalog, demos, and API (Ta Fu).
 
 ## Publishing
 - **[Publish Flow](./release/publish.en.md)** — submit your plugin to the marketplace.

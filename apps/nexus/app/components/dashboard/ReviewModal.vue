@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type {
   DashboardPlugin as Plugin,
-  DashboardPluginVersion as PluginVersion,
   PluginChannel,
+  DashboardPluginVersion as PluginVersion,
 } from '~/types/dashboard-plugin'
 import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import AvatarVariantCard from './AvatarVariantCard.vue'
 
 type Category = 'All' | 'Status' | 'Activity' | 'Platform' | 'System' | 'Social' | 'Context'
@@ -10,23 +10,14 @@ const activeTab = ref<Category>('All')
 function isActive(category: Category) {
   return activeTab.value === 'All' || activeTab.value === category
 }
-
-const activeTabButtonClass = computed(() => 'tx-avatar-variants__tab tx-avatar-variants__tab--active')
-const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 </script>
 
 <template>
   <div class="tx-avatar-variants">
     <div class="tx-avatar-variants__tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab"
-        type="button"
-        :class="activeTab === tab ? activeTabButtonClass : tabButtonClass"
-        @click="activeTab = tab"
-      >
-        {{ tab }}
-      </button>
+      <TxRadioGroup v-model="activeTab" type="button" indicator-variant="glass" glass>
+        <TxRadio v-for="tab in tabs" :key="tab" :value="tab" :label="tab" />
+      </TxRadioGroup>
     </div>
 
     <div class="tx-avatar-variants__grid">
@@ -34,7 +25,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Online Dot" desc="Classic green status indicator with ring offset.">
         <template #preview>
           <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar src="https://i.pravatar.cc/150?u=online" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=online" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__dot tx-avatar-variants__dot--online" />
             </template>
@@ -45,7 +36,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Offline / Gray" desc="Muted gray status dot.">
         <template #preview>
           <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar src="https://i.pravatar.cc/150?u=offline" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=offline" size="large" class="tx-avatar-variants__grayscale" />
             <template #overlay>
               <span class="tx-avatar-variants__dot tx-avatar-variants__dot--offline" />
             </template>
@@ -55,8 +46,8 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Busy / DND" desc="Red circle with minus sign.">
         <template #preview>
-          <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar src="https://i.pravatar.cc/150?u=busy" />
+          <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
+            <TxAvatar src="https://i.pravatar.cc/150?u=busy" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__dnd">
                 <span class="tx-avatar-variants__dnd-line" />
@@ -68,8 +59,8 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Away / Idle" desc="Amber moon icon indicating away status.">
         <template #preview>
-          <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar src="https://i.pravatar.cc/150?u=away" />
+          <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
+            <TxAvatar src="https://i.pravatar.cc/150?u=away" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--amber">
                 <TxIcon name="i-carbon-moon" :size="14" class="tx-avatar-variants__icon--white" />
@@ -81,8 +72,8 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Muted" desc="Mic off in corner.">
         <template #preview>
-          <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar src="https://i.pravatar.cc/150?u=muted" />
+          <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
+            <TxAvatar src="https://i.pravatar.cc/150?u=muted" size="large" class="tx-avatar-variants__grayscale" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--dark">
                 <TxIcon name="i-carbon-microphone-off" :size="14" class="tx-avatar-variants__icon--white" />
@@ -95,7 +86,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Warning / Error" desc="Warning badge overlay.">
         <template #preview>
           <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar src="https://i.pravatar.cc/150?u=warn" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=warn" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--light">
                 <TxIcon name="i-carbon-warning" :size="16" style="color: var(--tx-color-warning)" />
@@ -107,9 +98,9 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Selected" desc="Thick outline + check.">
         <template #preview>
-          <TxOutlineBorder variant="ring" :ring-width="3" ring-color="var(--tx-color-primary)" :padding="2">
-            <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
-              <TxAvatar src="https://i.pravatar.cc/150?u=selected" />
+          <TxOutlineBorder variant="ring" :ring-width="3" ring-color="var(--tx-color-primary)" :padding="2" clip-mode="none" shape="squircle">
+            <TxCornerOverlay placement="top-right" :offset-x="-6" :offset-y="-6">
+              <TxAvatar src="https://i.pravatar.cc/150?u=selected" size="large" shape="square" />
               <template #overlay>
                 <span class="tx-avatar-variants__badge tx-avatar-variants__badge--primary">
                   <TxIcon name="i-carbon-checkmark-filled" :size="14" class="tx-avatar-variants__icon--white" />
@@ -123,7 +114,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Status')" category="Status" title="Deleted / Trash" desc="Scheduled deletion indicator.">
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
-            <TxAvatar src="https://i.pravatar.cc/150?u=trash" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=trash" size="large" class="tx-avatar-variants__opacity-60" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--danger">
                 <TxIcon name="i-carbon-trash-can" :size="14" class="tx-avatar-variants__icon--white" />
@@ -137,10 +128,8 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Activity')" category="Activity" title="Live Pulsing" desc="Double pulse ring for live status.">
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar>
-              <span class="tx-avatar-variants__tile-icon">
-                <TxIcon name="i-carbon-podcast" :size="20" style="color: #7c3aed" />
-              </span>
+            <TxAvatar shape="rounded" size="large" background-color="var(--tx-fill-color-light)">
+              <TxIcon name="i-carbon-podcast" :size="24" style="color: #7c3aed" />
             </TxAvatar>
             <template #overlay>
               <span class="tx-avatar-variants__ping">
@@ -153,11 +142,11 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 
       <AvatarVariantCard v-show="isActive('Activity')" category="Activity" title="Loading Spinner" desc="Spinning ring in corner.">
         <template #preview>
-          <TxOutlineBorder variant="ring" :ring-width="2" ring-color="var(--tx-color-primary)" :padding="2">
-            <div class="tx-avatar-variants__square-avatar">
-              <TxIcon name="i-carbon-cloud-upload" :size="18" style="color: var(--tx-text-color-secondary)" />
-              <span class="tx-avatar-variants__spinner-ring" aria-hidden="true" />
-            </div>
+          <TxOutlineBorder variant="ring" :ring-width="2" ring-color="var(--tx-color-primary)" :padding="2" clip-mode="none">
+            <TxAvatar size="large" background-color="var(--tx-fill-color-light)">
+              <TxIcon name="i-carbon-cloud-upload" :size="20" style="color: var(--tx-text-color-secondary)" />
+            </TxAvatar>
+            <span class="tx-avatar-variants__spinner-ring" aria-hidden="true" />
           </TxOutlineBorder>
         </template>
       </AvatarVariantCard>
@@ -165,7 +154,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Activity')" category="Activity" title="Typing Dots" desc="Bouncing dots indicator.">
         <template #preview>
           <TxCornerOverlay placement="bottom-right" :offset-x="-6" :offset-y="-6">
-            <TxAvatar src="https://i.pravatar.cc/150?u=typing" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=typing" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__typing">
                 <span class="tx-avatar-variants__typing-dot tx-avatar-variants__typing-dot--1" />
@@ -180,7 +169,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Activity')" category="Activity" title="Voice / Speaking" desc="Wave bars in corner.">
         <template #preview>
           <TxCornerOverlay placement="bottom-right" :offset-x="-6" :offset-y="-6">
-            <TxAvatar src="https://i.pravatar.cc/150?u=voice" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=voice" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--online tx-avatar-variants__badge--bars">
                 <span class="tx-avatar-variants__bar tx-avatar-variants__bar--1" />
@@ -195,10 +184,10 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Activity')" category="Activity" title="Hot / Trending" desc="Fire icon + pulse.">
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-6" :offset-y="-6">
-            <TxAvatar name="Topic" />
+            <TxAvatar name="Topic" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__pulse">
-                <TxIcon name="i-carbon-fire" :size="18" style="color: var(--tx-color-warning)" />
+                <TxIcon name="i-carbon-fire" :size="20" style="color: var(--tx-color-warning)" />
               </span>
             </template>
           </TxCornerOverlay>
@@ -208,8 +197,8 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Activity')" category="Activity" title="Syncing" desc="Rotating arrows overlay.">
         <template #preview>
           <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
-            <TxAvatar>
-              <TxIcon name="i-carbon-cloud" :size="20" style="color: var(--tx-text-color-secondary)" />
+            <TxAvatar size="large" background-color="var(--tx-fill-color-light)">
+              <TxIcon name="i-carbon-cloud" :size="24" style="color: var(--tx-text-color-secondary)" />
             </TxAvatar>
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--light">
@@ -270,8 +259,8 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Platform')" category="Platform" title="Mobile Only" desc="Small phone overlay.">
         <template #preview>
           <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
-            <TxAvatar>
-              <TxIcon name="i-carbon-chat" :size="20" style="color: var(--tx-color-success)" />
+            <TxAvatar size="large" background-color="var(--tx-fill-color-light)">
+              <TxIcon name="i-carbon-chat" :size="24" style="color: var(--tx-color-success)" />
             </TxAvatar>
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--light">
@@ -286,7 +275,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('System')" category="System" title="Beta Label" desc="Corner pill label for beta features.">
         <template #preview>
           <div class="tx-avatar-variants__beta-tile">
-            <TxIcon name="i-carbon-chemistry" :size="20" style="color: color-mix(in srgb, var(--tx-color-primary) 60%, #fff)" />
+            <TxIcon name="i-carbon-chemistry" :size="24" style="color: color-mix(in srgb, var(--tx-color-primary) 60%, #fff)" />
             <span class="tx-avatar-variants__beta">BETA</span>
           </div>
         </template>
@@ -308,7 +297,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('System')" category="System" title="New Feature" desc="Yellow ping dot for new features.">
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-2" :offset-y="-2">
-            <TxAvatar name="Dash" />
+            <TxAvatar name="Dash" size="large" shape="square" />
             <template #overlay>
               <span class="tx-avatar-variants__ping tx-avatar-variants__ping--yellow">
                 <span class="tx-avatar-variants__ping-inner tx-avatar-variants__ping-inner--yellow" />
@@ -321,7 +310,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('System')" category="System" title="Admin Shield" desc="Moderator / security badge.">
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
-            <TxAvatar src="https://i.pravatar.cc/150?u=admin" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=admin" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--light">
                 <TxIcon name="i-carbon-security" :size="18" style="color: var(--tx-color-primary)" />
@@ -373,9 +362,9 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 
       <AvatarVariantCard v-show="isActive('Social')" category="Social" title="Verified" desc="Blue checkmark badge.">
         <template #preview>
-          <TxOutlineBorder variant="ring" :ring-width="2" ring-color="var(--tx-color-primary)" :padding="2">
+          <TxOutlineBorder variant="ring" :ring-width="2" ring-color="var(--tx-color-primary)" :padding="2" clip-mode="none">
             <TxCornerOverlay placement="bottom-right" :offset-x="-4" :offset-y="-4">
-              <TxAvatar src="https://i.pravatar.cc/150?u=verified" />
+              <TxAvatar src="https://i.pravatar.cc/150?u=verified" size="large" />
               <template #overlay>
                 <span class="tx-avatar-variants__badge tx-avatar-variants__badge--primary">
                   <TxIcon name="i-carbon-checkmark-filled" :size="14" class="tx-avatar-variants__icon--white" />
@@ -400,7 +389,9 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Context')" category="Context" title="Edit Mode" desc="Pencil icon for editable content.">
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
-            <div class="tx-avatar-variants__tile-aa">AA</div>
+            <div class="tx-avatar-variants__tile-aa">
+              AA
+            </div>
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--light">
                 <TxIcon name="i-carbon-edit" :size="16" style="color: var(--tx-color-primary)" />
@@ -413,7 +404,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
       <AvatarVariantCard v-show="isActive('Context')" category="Context" title="Birthday" desc="Cake icon for special dates.">
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-6" :offset-y="-6">
-            <TxAvatar src="https://i.pravatar.cc/150?u=birthday" />
+            <TxAvatar src="https://i.pravatar.cc/150?u=birthday" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--pink tx-avatar-variants__tilt">
                 <TxIcon name="i-carbon-cake" :size="16" style="color: #db2777" />
@@ -438,7 +429,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
         <template #preview>
           <TxCornerOverlay placement="top-left" :offset-x="18" :offset-y="-10">
             <TxOutlineBorder variant="ring" :ring-width="2" ring-color="#facc15" :padding="2">
-              <TxAvatar src="https://i.pravatar.cc/150?u=premium" />
+              <TxAvatar src="https://i.pravatar.cc/150?u=premium" size="large" />
             </TxOutlineBorder>
             <template #overlay>
               <TxIcon name="i-carbon-crown" :size="18" style="color: #facc15" />
@@ -487,136 +478,37 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 
 .tx-avatar-variants__tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.tx-avatar-variants__tab {
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid var(--tx-border-color);
-  background: var(--tx-bg-color);
-  color: var(--tx-text-color-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tx-avatar-variants__tab:hover {
-  border-color: color-mix(in srgb, var(--tx-color-primary) 40%, var(--tx-border-color));
-  color: var(--tx-text-color-primary);
-}
-
-.tx-avatar-variants__tab--active {
-  background: var(--tx-color-primary);
-  border-color: var(--tx-color-primary);
-  color: #fff;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--tx-color-primary) 22%, transparent);
+  justify-content: center;
+  margin-bottom: 32px;
 }
 
 .tx-avatar-variants__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 24px;
 }
 
 @media (min-width: 640px) {
   .tx-avatar-variants__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
   .tx-avatar-variants__grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1280px) {
   .tx-avatar-variants__grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
-.tx-avatar-variants__card {
-  background: var(--tx-bg-color);
-  border: 1px solid var(--tx-border-color);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.25s ease;
-}
-
-.tx-avatar-variants__card:hover {
-  border-color: color-mix(in srgb, var(--tx-color-primary) 28%, var(--tx-border-color));
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
-}
-
-.tx-avatar-variants__preview {
-  position: relative;
-  height: 140px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color) 60%, transparent);
-  background: color-mix(in srgb, var(--tx-bg-color-page) 70%, transparent);
-}
-
-.tx-avatar-variants__grid-bg {
-  position: absolute;
-  inset: 0;
-  opacity: 0.04;
-  background-image: radial-gradient(var(--tx-color-primary) 1px, transparent 1px);
-  background-size: 10px 10px;
-}
-
-.tx-avatar-variants__preview-scale {
-  transform: scale(1.16);
-  transition: transform 0.3s ease;
-}
-
-.tx-avatar-variants__card:hover .tx-avatar-variants__preview-scale {
-  transform: scale(1.24);
-}
-
-.tx-avatar-variants__info {
-  padding: 12px;
-}
-
-.tx-avatar-variants__info-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.tx-avatar-variants__title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
-  margin: 0;
-}
-
-.tx-avatar-variants__tag {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tx-text-color-secondary);
-}
-
-.tx-avatar-variants__desc {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  margin: 0;
-  min-height: 32px;
-}
-
 .tx-avatar-variants__dot {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
   border: 2px solid var(--tx-bg-color);
   display: inline-block;
@@ -754,11 +646,11 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border-radius: 999px;
   background: var(--tx-bg-color);
   border: 1px solid color-mix(in srgb, var(--tx-border-color) 70%, transparent);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .tx-avatar-variants__typing-dot {
@@ -862,7 +754,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
   align-items: center;
   justify-content: center;
   position: relative;
-  background: color-mix(in srgb, var(--tx-border-color) 18%, transparent);
+  background: var(--tx-fill-color-light);
   border: 1px solid var(--tx-border-color);
 }
 
@@ -962,7 +854,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-border-color) 20%, transparent);
+  background: var(--tx-fill-color-light);
   border: 2px solid var(--tx-bg-color);
   display: inline-flex;
   align-items: center;
@@ -977,7 +869,7 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--tx-border-color) 18%, transparent);
+  background: var(--tx-fill-color-light);
   border: 1px solid var(--tx-border-color);
   display: inline-flex;
   align-items: center;
@@ -1067,12 +959,21 @@ const tabButtonClass = computed(() => 'tx-avatar-variants__tab')
 }
 
 .tx-avatar-variants__tile-icon {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
   background: color-mix(in srgb, #7c3aed 12%, var(--tx-bg-color));
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.tx-avatar-variants__grayscale {
+  filter: grayscale(100%);
+  opacity: 0.7;
+}
+
+.tx-avatar-variants__opacity-60 {
+  opacity: 0.6;
 }
 </style>
