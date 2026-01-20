@@ -58,6 +58,26 @@ created_at: 2026-01-20T18:55:06+08:00
 - 兼容性：保留 legacy `storage:*` IPC 与 JSON 文件格式，SQLite 表结构保持 key/value 不变，避免破坏已有读写路径（`apps/core-app/src/main/modules/storage/index.ts:283` / `apps/core-app/src/main/db/schema.ts:278`）
 - 可观测性：利用 `storageLog` 记录 SQLite 写入失败与慢写入告警，保持问题可追踪（`apps/core-app/src/main/modules/storage/index.ts:230` / `apps/core-app/src/main/modules/storage/index.ts:662`）
 
+📌 需求清单（草案）
+- 明确主进程配置入口与 JSON 存储路径/生命周期，保证读写/订阅/广播链路可追溯（`apps/core-app/src/main/modules/storage/index.ts:121`）
+- 明确 SQLite config 表结构、写入点与 pilot 范围，标注与 JSON 重叠的 key（`apps/core-app/src/main/db/schema.ts:278` / `apps/core-app/src/main/modules/storage/index.ts:60`）
+- 明确 main/renderer/plugin 调用链与一致性要求，覆盖跨窗口同步与版本策略（`apps/core-app/src/main/modules/storage/index.ts:283` / `packages/utils/renderer/storage/base-storage.ts:278` / `packages/utils/plugin/sdk/storage.ts:24`）
+- 明确 5 类同步口径与策略，作为后续实现评审的统一边界（`plan/2026-01-20_18-55-03-context-requirements.md:54`）
+- 保持 legacy IPC 与 JSON 存储的向后兼容，不引入破坏性改动（`apps/core-app/src/main/modules/storage/index.ts:283`）
+
+⚠️ 风险清单（草案）
+- 双写/版本冲突处理不一致导致配置漂移（`apps/core-app/src/main/modules/storage/index.ts:582`）
+- SQLite 不可用或迁移失败导致 pilot 数据缺失（`apps/core-app/src/main/modules/storage/index.ts:212`）
+- IPC 广播延迟造成跨窗口短暂不一致（`apps/core-app/src/main/modules/storage/index.ts:68`）
+- 插件存储与主配置通道误用导致依赖边界混乱（`packages/utils/plugin/sdk/storage.ts:24`）
+
+✅ 验收标准草案
+- 文档包含读/写/订阅/广播入口清单与 JSON 路径说明，并附 `path:line` 引用
+- 文档包含 SQLite config 表结构、写入点与 JSON 重叠范围说明，并附 `path:line` 引用
+- 文档包含 main/renderer/plugin 调用链与一致性要求说明，并附 `path:line` 引用
+- 文档包含 5 类同步口径与策略清单，并附 `path:line` 引用
+- 风险清单不少于 3 条，且与同步/迁移/广播相关
+
 ✅ 已决事项
 - 本阶段仅做上下文与需求整理，目标是形成后续工作输入（来源: `plan/2026-01-20_18-55-03-context-requirements.md:14`）
 
