@@ -123,12 +123,31 @@
 - One-time import：启动时迁移并标记版本。
 - Rollback：写回旧 JSON 并保留 SQLite 快照。
 
+### 5.1 迁移清单（初版）
+| 配置项 | 迁移路径 | Fallback | 回滚触发 |
+| --- | --- | --- | --- |
+| FILE_INDEX_SETTINGS | JSON 文件 -> SQLite | SQLite miss -> JSON | 数据校验不一致 |
+| APP_INDEX_SETTINGS | JSON 文件 -> SQLite | SQLite miss -> JSON | 读写失败 |
+| DEVICE_IDLE_SETTINGS | JSON 文件 -> SQLite | SQLite miss -> JSON | 数据校验不一致 |
+| SEARCH_ENGINE_LOGS_ENABLED | JSON 文件 -> SQLite | SQLite miss -> JSON | 读写失败 |
+| EVERYTHING_SETTINGS | JSON 文件 -> SQLite | SQLite miss -> JSON | 读写失败 |
+| FLOW_CONSENT | JSON 文件 -> SQLite | SQLite miss -> JSON | 数据校验不一致 |
+| SENTRY_CONFIG | JSON 文件 -> SQLite | SQLite miss -> JSON | 读写失败 |
+| NOTIFICATION_CENTER | JSON 文件 -> SQLite | SQLite miss -> JSON | 数据校验不一致 |
+| STARTUP_ANALYTICS | JSON 文件 -> SQLite | SQLite miss -> JSON | 数据校验不一致 |
+| STARTUP_ANALYTICS_REPORT_QUEUE | JSON 文件 -> SQLite | SQLite miss -> JSON | 读写失败 |
+| TELEMETRY_CLIENT | JSON 文件 -> SQLite | SQLite miss -> JSON | 读写失败 |
+| plugin_data | SQLite 原位维护 | N/A | 迁移不涉及 |
+| config | SQLite 原位维护 | N/A | 迁移不涉及 |
+| APP_SETTING / THEME_STYLE / SHORTCUT_SETTING | 拆分字段后迁移 | 字段级 fallback | 冲突不可合并 |
+| MARKET_SOURCES / Plugin 配置 | 依赖同步方案后迁移 | JSON 兜底 | 同步冲突 |
+
 ## 6. 进展清单（对齐 issues）
 - [x] 盘点现有配置项（CFG-010）
 - [x] 分类矩阵与目标存储策略（CFG-020）
 - [x] Source-of-truth 决策与冲突规则（CFG-030）
 - [x] 存储抽象设计（CFG-040）
-- [ ] 迁移与回滚方案（CFG-050）
+- [x] 迁移与回滚方案（CFG-050）
 - [ ] 权限中心 PRD/TODO 对齐（CFG-060）
 - [ ] 统一进展文档（CFG-070）
 - [ ] 试点迁移与验证门禁（CFG-080）
