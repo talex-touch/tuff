@@ -98,6 +98,18 @@ import type {
 } from './types/box-item'
 
 // ============================================================================
+// Transport Events
+// ============================================================================
+
+import type {
+  TransportPortClosePayload,
+  TransportPortConfirmPayload,
+  TransportPortErrorPayload,
+  TransportPortUpgradeRequest,
+  TransportPortUpgradeResponse,
+} from './types/transport'
+
+// ============================================================================
 // CoreBox Events
 // ============================================================================
 
@@ -2392,6 +2404,46 @@ export const ClipboardEvents = {
 } as const
 
 // ============================================================================
+// Transport Events
+// ============================================================================
+
+export const TransportEvents = {
+  port: {
+    /**
+     * Request to upgrade to MessagePort-based transport.
+     */
+    upgrade: defineEvent('transport')
+      .module('port')
+      .event('upgrade')
+      .define<TransportPortUpgradeRequest, TransportPortUpgradeResponse>(),
+
+    /**
+     * Confirm MessagePort upgrade and provide binding metadata.
+     */
+    confirm: defineEvent('transport')
+      .module('port')
+      .event('confirm')
+      .define<TransportPortConfirmPayload, void>(),
+
+    /**
+     * Close MessagePort transport channel.
+     */
+    close: defineEvent('transport')
+      .module('port')
+      .event('close')
+      .define<TransportPortClosePayload, void>(),
+
+    /**
+     * Report MessagePort transport errors.
+     */
+    error: defineEvent('transport')
+      .module('port')
+      .event('error')
+      .define<TransportPortErrorPayload, void>(),
+  },
+} as const
+
+// ============================================================================
 // Unified Export
 // ============================================================================
 
@@ -2419,6 +2471,7 @@ export const TuffEvents = {
   platform: PlatformEvents,
   agents: AgentsEvents,
   tray: TrayEvents,
+  transport: TransportEvents,
   sentry: SentryEvents,
   boxItem: BoxItemEvents,
   clipboard: ClipboardEvents,
