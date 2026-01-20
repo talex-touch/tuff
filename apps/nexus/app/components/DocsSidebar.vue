@@ -28,6 +28,107 @@ const TOP_SECTIONS = [
   { key: 'dev', label: 'Developer', icon: 'i-carbon-code', description: 'Developer Docs' },
 ] as const
 
+const SECTION_ORDER: Record<string, string[]> = {
+  '/docs/dev': [
+    '/docs/dev/index',
+    '/docs/dev/getting-started',
+    '/docs/dev/api',
+    '/docs/dev/architecture',
+    '/docs/dev/extensions',
+    '/docs/dev/intelligence',
+    '/docs/dev/release',
+    '/docs/dev/tools',
+    '/docs/dev/reference',
+  ],
+  '/docs/dev/getting-started': [
+    '/docs/dev/getting-started/index',
+    '/docs/dev/getting-started/overview',
+    '/docs/dev/getting-started/quickstart',
+  ],
+  '/docs/dev/api': [
+    '/docs/dev/api/index',
+    '/docs/dev/api/plugin-context',
+    '/docs/dev/api/box',
+    '/docs/dev/api/feature',
+    '/docs/dev/api/search',
+    '/docs/dev/api/clipboard',
+    '/docs/dev/api/storage',
+    '/docs/dev/api/temp-file',
+    '/docs/dev/api/download',
+    '/docs/dev/api/platform-capabilities',
+    '/docs/dev/api/account',
+    '/docs/dev/api/intelligence',
+    '/docs/dev/api/permission',
+    '/docs/dev/api/i18n',
+    '/docs/dev/api/transport',
+    '/docs/dev/api/transport-internals',
+    '/docs/dev/api/channel',
+    '/docs/dev/api/bridge-hooks',
+    '/docs/dev/api/event',
+    '/docs/dev/api/keyboard',
+    '/docs/dev/api/widget',
+    '/docs/dev/api/division-box',
+    '/docs/dev/api/flow-transfer',
+  ],
+  '/docs/dev/architecture': [
+    '/docs/dev/architecture/corebox-and-views',
+    '/docs/dev/architecture/intelligence-system',
+  ],
+  '/docs/dev/extensions': [
+    '/docs/dev/extensions/layout',
+    '/docs/dev/extensions/search-sorting',
+    '/docs/dev/extensions/toast',
+    '/docs/dev/extensions/unplugin-export-plugin',
+  ],
+  '/docs/dev/intelligence': [
+    '/docs/dev/intelligence/index',
+    '/docs/dev/intelligence/configuration',
+    '/docs/dev/intelligence/capabilities',
+    '/docs/dev/intelligence/troubleshooting',
+  ],
+  '/docs/dev/release': [
+    '/docs/dev/release/index',
+    '/docs/dev/release/publish',
+    '/docs/dev/release/migration',
+  ],
+  '/docs/dev/tools': [
+    '/docs/dev/tools/index',
+    '/docs/dev/tools/tuff-cli',
+    '/docs/dev/tools/tuffex',
+  ],
+  '/docs/dev/reference': [
+    '/docs/dev/reference/index',
+    '/docs/dev/reference/manifest',
+    '/docs/dev/reference/snippets',
+  ],
+  '/docs/guide': [
+    '/docs/guide/start',
+    '/docs/guide/features',
+    '/docs/guide/scenes',
+    '/docs/guide/tips',
+    '/docs/guide/index',
+  ],
+  '/docs/guide/features': [
+    '/docs/guide/features/workspace',
+    '/docs/guide/features/plugin-ecosystem',
+    '/docs/guide/features/marketplace',
+    '/docs/guide/features/preview',
+  ],
+  '/docs/guide/scenes': [
+    '/docs/guide/scenes/student',
+    '/docs/guide/scenes/creator',
+    '/docs/guide/scenes/developer',
+  ],
+  '/docs/guide/tips': [
+    '/docs/guide/tips/index',
+    '/docs/guide/tips/intelligence-workflow',
+    '/docs/guide/tips/intelligence-prompts',
+    '/docs/guide/tips/automation',
+    '/docs/guide/tips/productivity',
+    '/docs/guide/tips/faq',
+  ],
+}
+
 const defaultSection = computed(() => isSignedIn.value ? 'dev' : 'guide')
 
 const docLabels = computed<Record<string, string>>(() => ({
@@ -84,6 +185,36 @@ function filterByLocale(items: any[]): any[] {
     })
 }
 
+function sortByOrder(items: any[], parentPath: string | null): any[] {
+  const order = SECTION_ORDER[parentPath ?? ''] ?? []
+  const orderMap = new Map(order.map((path, index) => [path, index]))
+  return [...items].sort((a, b) => {
+    const aPath = normalizeContentPath(a.path) ?? ''
+    const bPath = normalizeContentPath(b.path) ?? ''
+    const aIndex = orderMap.has(aPath) ? orderMap.get(aPath)! : Number.POSITIVE_INFINITY
+    const bIndex = orderMap.has(bPath) ? orderMap.get(bPath)! : Number.POSITIVE_INFINITY
+    if (aIndex !== bIndex)
+      return aIndex - bIndex
+    const titleA = (a.title || '').toLowerCase()
+    const titleB = (b.title || '').toLowerCase()
+    return titleA.localeCompare(titleB)
+  })
+}
+
+function sortTree(items: any[], parentPath: string | null): any[] {
+  const sorted = sortByOrder(items, parentPath)
+  return sorted.map((item) => {
+    if (Array.isArray(item.children) && item.children.length > 0) {
+      const childParent = normalizeContentPath(item.path)
+      return {
+        ...item,
+        children: sortTree(item.children, childParent),
+      }
+    }
+    return item
+  })
+}
+
 const items = computed(() => navigationTree.value ?? [])
 const normalizedRoutePath = computed(() => stripLocalePrefix(route.path))
 
@@ -117,28 +248,21 @@ const sections = computed(() => {
   if (!data)
     return []
 
-  const children = filterByLocale(data.children ?? [])
+  const children = sortTree(filterByLocale(data.children ?? []), normalizeContentPath(data.path))
 
   // If there are subdirectories (features, scenes, api, etc.), show them as sections
   // Otherwise, show the files directly as a flat list
   const hasSubdirs = children.some((c: any) => Array.isArray(c.children) && c.children.length > 0)
 
-  // Sort sections alphabetically by title
-  const sortedChildren = [...children].sort((a, b) => {
-    const titleA = (a.title || '').toLowerCase()
-    const titleB = (b.title || '').toLowerCase()
-    return titleA.localeCompare(titleB)
-  })
-
   if (hasSubdirs) {
-    return sortedChildren
+    return children
   }
 
   // For flat file lists, wrap them in a single section
   return [{
     title: data.title,
     path: data.path,
-    children: sortedChildren,
+    children,
     page: false,
   }]
 })
@@ -241,13 +365,13 @@ watch(
 <template>
   <nav class="docs-nav relative flex flex-col">
     <!-- Top-level section tabs (sticky within sidebar) -->
-    <div class="sticky top-0 z-10 -mx-1 mb-4 bg-white/95 px-1 pb-1 pt-1 backdrop-blur-sm dark:bg-black/95">
+    <div class="sticky top-0 z-10 -mx-1 mb-3 bg-white/95 px-1 pb-1 pt-1 backdrop-blur-sm dark:bg-black/95">
       <div class="flex gap-1 rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.08]">
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
           :to="localePath({ path: `/docs/${sec.key}` })"
-          class="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium no-underline transition-all duration-200"
+          class="flex flex-1 items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium no-underline transition-all duration-200"
           :class="activeTopSection === sec.key
             ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
             : 'text-black/45 hover:text-black/65 dark:text-white/45 dark:hover:text-white/65'"
@@ -259,7 +383,7 @@ watch(
     </div>
 
     <!-- Scrollable content -->
-    <div class="flex flex-col gap-1">
+    <div class="flex flex-col gap-0.5">
       <template v-if="pending">
         <div v-for="index in 6" :key="index" class="h-8 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
       </template>
@@ -274,7 +398,7 @@ watch(
           <NuxtLink
             v-if="linkTarget(currentSectionData)"
             :to="localePath({ path: linkTarget(currentSectionData)! })"
-            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium no-underline transition-colors"
+            class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium no-underline transition-colors"
             :class="isLinkActive(linkTarget(currentSectionData) || '')
               ? 'bg-primary/10 text-primary'
               : 'text-black/70 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white'"
@@ -304,7 +428,7 @@ watch(
             <NuxtLink
               v-if="linkTarget(child)"
               :to="localePath({ path: linkTarget(child)! })"
-              class="group/link relative flex items-center py-1.5 pl-4 pr-2 text-[13px] no-underline transition-all duration-150"
+              class="group/link relative flex items-center py-1 pl-3 pr-2 text-[12.5px] no-underline transition-all duration-150"
               :class="isLinkActive(linkTarget(child) || child.path || '')
                 ? 'text-black font-medium dark:text-white'
                 : 'text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80'"

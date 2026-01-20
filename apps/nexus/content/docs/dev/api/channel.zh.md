@@ -4,9 +4,13 @@
 **已弃用：** Channel API 已弃用，建议使用 [TuffTransport](./transport.zh.md)。虽然它仍然可用，但我们建议新开发使用 TuffTransport。查看[迁移指南](./transport.zh.md#从传统-channel-迁移)。
 ::
 
+## 概述
+
 Channel SDK 提供插件与主程序之间的 IPC 通信能力，基于 Promise 异步返回。
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```ts
 import { useChannel, usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
@@ -24,7 +28,7 @@ await pluginChannel.send('my-plugin:action', { payload: 'data' })
 
 ## API 参考
 
-### useChannel()
+**useChannel()**
 
 获取底层 IPC channel 实例。
 
@@ -45,7 +49,7 @@ const unsubscribe = channel.regChannel('event-name', (data) => {
 unsubscribe()
 ```
 
-### usePluginRendererChannel()
+**usePluginRendererChannel()**
 
 获取插件专用的 channel 实例，提供更友好的 API。
 
@@ -55,7 +59,7 @@ import { usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
 const channel = usePluginRendererChannel()
 ```
 
-#### `send(eventName, payload)`
+**`send(eventName, payload)`**
 
 异步发送消息并等待响应。
 
@@ -63,7 +67,7 @@ const channel = usePluginRendererChannel()
 const result = await channel.send('clipboard:get-latest')
 ```
 
-#### `sendSync(eventName, payload)`
+**`sendSync(eventName, payload)`**
 
 同步发送消息（尽量避免使用）。
 
@@ -71,7 +75,7 @@ const result = await channel.send('clipboard:get-latest')
 const result = channel.sendSync('get-config')
 ```
 
-#### `on(eventName, handler)`
+**`on(eventName, handler)`**
 
 注册事件监听器。
 
@@ -84,7 +88,7 @@ const dispose = channel.on('core-box:input-change', (data) => {
 dispose()
 ```
 
-#### `once(eventName, handler)`
+**`once(eventName, handler)`**
 
 注册一次性监听器，触发后自动移除。
 
@@ -94,7 +98,7 @@ channel.once('plugin:ready', () => {
 })
 ```
 
-#### `raw`
+**`raw`**
 
 获取底层 channel 对象。
 
@@ -106,7 +110,7 @@ const rawChannel = channel.raw
 
 ## 内置事件
 
-### CoreBox 相关
+**CoreBox 相关**
 
 | 事件 | 说明 | 数据 |
 |------|------|------|
@@ -114,13 +118,13 @@ const rawChannel = channel.raw
 | `core-box:key-event` | 键盘事件转发 | `ForwardedKeyEvent` |
 | `core-box:clipboard-change` | 剪贴板变化 | `{ item: ClipboardItem }` |
 
-### 插件存储
+**插件存储**
 
 | 事件 | 说明 | 数据 |
 |------|------|------|
 | `plugin:storage:update` | 存储更新广播 | `{ name: string, fileName?: string }` |
 
-### DivisionBox
+**DivisionBox**
 
 | 事件 | 说明 | 数据 |
 |------|------|------|
@@ -130,7 +134,7 @@ const rawChannel = channel.raw
 
 ## 自定义事件通信
 
-### 发送到主进程
+**发送到主进程**
 
 ```ts
 const channel = useChannel()
@@ -146,7 +150,7 @@ if (result.success) {
 }
 ```
 
-### 监听主进程事件
+**监听主进程事件**
 
 ```ts
 const dispose = channel.regChannel('my-plugin:notification', (data) => {
@@ -176,6 +180,11 @@ try {
 ```
 
 ---
+
+## 技术原理
+
+- Channel API 通过主进程 IPC 通道处理请求与响应，统一异常与超时管理。
+- 事件名与 payload 结构需保持稳定，以保证插件侧调用兼容。
 
 ## 最佳实践
 

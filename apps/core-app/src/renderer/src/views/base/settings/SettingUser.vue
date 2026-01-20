@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useAppSdk } from '@talex-touch/utils/renderer'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -81,12 +81,12 @@ function openDeviceManagement() {
           {{ t('settingUser.verified', '已验证') }}
         </span>
       </template>
-      <FlatButton mini @click.stop="openDeviceManagement">
+      <TxButton variant="flat" size="sm" @click.stop="openDeviceManagement">
         <span class="i-carbon-devices text-sm" />
-      </FlatButton>
-      <FlatButton type="danger" @click.stop="handleLogout">
+      </TxButton>
+      <TxButton variant="flat" type="danger" @click.stop="handleLogout">
         {{ t('settingUser.logout') }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- Not logged in state -->
@@ -97,14 +97,19 @@ function openDeviceManagement() {
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
     >
-      <FlatButton type="primary" :disabled="authLoadingState.isLoggingIn" @click="handleLogin">
+      <TxButton
+        variant="flat"
+        type="primary"
+        :disabled="authLoadingState.isLoggingIn"
+        @click="handleLogin"
+      >
         <span v-if="authLoadingState.isLoggingIn" class="i-carbon-circle-dash animate-spin mr-1" />
         {{
           authLoadingState.isLoggingIn
             ? t('settingUser.loggingIn', '登录中...')
             : t('settingUser.login')
         }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- Dev mode: Auth server selector -->

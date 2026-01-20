@@ -1,8 +1,13 @@
 # TuffTransport Internals
 
+## Overview
 This document provides a deep dive into TuffTransport's architecture, explaining the technical decisions and implementation details.
 
-## Architecture Overview
+## Introduction
+Read this with the [TuffTransport API](/docs/dev/api/transport) to understand how the runtime and IPC layers connect.
+
+## Technical Notes
+**Architecture overview**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -50,7 +55,7 @@ TuffTransport
 
 ## 1. Event System Design
 
-### Why Not Strings?
+**Why Not Strings?**
 
 The legacy Channel API used string-based event names:
 
@@ -66,7 +71,7 @@ channel.send('core-box:search:query', { txt: 'hi' })  // Wrong field - no error!
 3. **Refactoring risk** - Renaming events requires manual find/replace
 4. **Runtime errors** - Typos only discovered at runtime
 
-### TuffEvent Solution
+**TuffEvent Solution**
 
 TuffEvent uses TypeScript's type system to enforce correctness:
 
@@ -90,7 +95,7 @@ interface TuffEvent<TRequest, TResponse, TNamespace, TModule, TAction> {
 3. **Immutable** - Events are frozen with `Object.freeze()`
 4. **String Conversion** - `toString()` returns event name for IPC
 
-### Event Builder Pattern
+**Event Builder Pattern**
 
 The builder pattern ensures events are constructed correctly:
 
@@ -111,7 +116,7 @@ defineEvent('namespace')     // Returns TuffEventBuilder<'namespace'>
 
 ## 2. Batch System Design
 
-### The Problem
+**The Problem**
 
 Each IPC call has overhead (~1-5ms). Multiple sequential calls compound this:
 
@@ -122,7 +127,7 @@ const b = await channel.send('storage:get', { key: 'b' })  // IPC #2
 const c = await channel.send('storage:get', { key: 'c' })  // IPC #3
 ```
 
-### Batch Flow
+**Batch Flow**
 
 ```
 Request 1 ─┐
@@ -142,7 +147,7 @@ Response 2 ◄─┼─ Demultiplex ◄─────────────�
 Response 3 ◄─┘
 ```
 
-### BatchManager Implementation
+**BatchManager Implementation**
 
 ```ts
 class BatchManager {
@@ -173,7 +178,7 @@ class BatchManager {
 }
 ```
 
-### Merge Strategies
+**Merge Strategies**
 
 **1. Queue (Default)**
 All requests are kept and processed in order:
@@ -197,7 +202,7 @@ Only the latest request per key is kept:
 
 ## 3. Stream System Design
 
-### Why MessagePort?
+**Why MessagePort?**
 
 Regular IPC has limitations for streaming:
 - Request-response pattern doesn't fit continuous data
@@ -210,7 +215,7 @@ Regular IPC has limitations for streaming:
 - Native backpressure support
 - Efficient for binary data
 
-### Stream Flow
+**Stream Flow**
 
 ```
 Renderer                              Main Process
@@ -231,7 +236,7 @@ Renderer                              Main Process
    │─── 6. Port closed ───────────────────►│
 ```
 
-### StreamServer (Main Process)
+**StreamServer (Main Process)**
 
 ```ts
 class StreamServer {
@@ -258,7 +263,7 @@ class StreamServer {
 }
 ```
 
-### Backpressure Handling
+**Backpressure Handling**
 
 When the consumer can't keep up:
 
@@ -278,7 +283,7 @@ const config: StreamConfig = {
 
 ## 4. Plugin Security
 
-### The Key Mechanism
+**The Key Mechanism**
 
 Plugins run in isolated WebContentsView. To prevent unauthorized access:
 
@@ -309,7 +314,7 @@ Plugins run in isolated WebContentsView. To prevent unauthorized access:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### PluginKeyManager
+**PluginKeyManager**
 
 ```ts
 interface PluginKeyManager {
@@ -320,7 +325,7 @@ interface PluginKeyManager {
 }
 ```
 
-### Security Context
+**Security Context**
 
 Every handler receives security context:
 
@@ -337,7 +342,7 @@ transport.on(SomeEvent, (payload, context) => {
 
 ## 5. Error Handling
 
-### Error Flow
+**Error Flow**
 
 ```
 Renderer                              Main Process
@@ -357,7 +362,7 @@ catch (err) {
 }
 ```
 
-### Error Serialization
+**Error Serialization**
 
 Errors are serialized for IPC:
 
@@ -385,7 +390,7 @@ class TuffTransportError extends Error {
 
 ## 6. Performance Considerations
 
-### IPC Overhead
+**IPC Overhead**
 
 | Operation | Approximate Time |
 |-----------|------------------|
@@ -395,14 +400,14 @@ class TuffTransportError extends Error {
 | MessagePort setup | 2-5ms |
 | MessagePort message | 0.1-0.5ms |
 
-### Optimization Strategies
+**Optimization Strategies**
 
 1. **Batch by default** - Enable batching for frequent events
 2. **Stream for large data** - Use MessagePort for >100KB
 3. **Dedupe when possible** - Share responses for identical requests
 4. **Lazy evaluation** - Only serialize when flushing batch
 
-### Memory Management
+**Memory Management**
 
 ```ts
 // Cleanup patterns
@@ -433,7 +438,7 @@ onUnmounted(() => {
 | Plugin Security | uniqueKey header | PluginKeyManager |
 | Backwards Compat | N/A | Full compatibility |
 
-### Migration Path
+**Migration Path**
 
 ```ts
 // Legacy code continues to work
@@ -446,6 +451,11 @@ transport.send(TuffEvent, data)
 ```
 
 ---
+
+## Best Practices
+- Use batching for high-frequency calls to reduce IPC overhead.
+- Stream large payloads to avoid blocking the main process.
+- Migrate core flows first, then cover edge capabilities.
 
 ## Summary
 

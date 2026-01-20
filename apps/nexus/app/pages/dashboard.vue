@@ -30,6 +30,7 @@ const sectionPaths: Record<string, string> = {
   'team': '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
   'updates': '/dashboard/updates',
+  'releases': '/dashboard/releases',
   'images': '/dashboard/images',
   'codes': '/dashboard/admin/codes',
   'analytics': '/dashboard/admin/analytics',
@@ -64,6 +65,11 @@ const menuItems = computed(() => {
     items.push({
       id: 'updates',
       label: t('dashboard.sections.menu.updates'),
+      section: 'main',
+    })
+    items.push({
+      id: 'releases',
+      label: t('dashboard.sections.menu.releases', 'Release Notes'),
       section: 'main',
     })
     items.push({
@@ -107,6 +113,8 @@ const activeSection = computed(() => {
     return 'codes'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
+  if (route.path.startsWith('/dashboard/releases'))
+    return 'releases'
   const segments = route.path.split('/').filter(Boolean)
   const section = segments[1] ?? 'overview'
   if (sectionPaths[section])

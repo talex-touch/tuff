@@ -4,9 +4,12 @@
 
 Bridge Hooks provide event subscription between plugin renderer and CoreBox main process. The SDK automatically handles event caching and replay to ensure plugins don't miss early initialization events.
 
+## Introduction
+Use these hooks when you need CoreBox input, clipboard, or key events without managing raw channels.
+
 ## Core Hooks
 
-### onCoreBoxInputChange
+**onCoreBoxInputChange**
 
 Listen to CoreBox input changes.
 
@@ -37,7 +40,7 @@ interface BridgeEventPayload<CoreBoxInputData> {
 }
 ```
 
-### onCoreBoxClipboardChange
+**onCoreBoxClipboardChange**
 
 Listen to clipboard content changes.
 
@@ -50,7 +53,7 @@ onCoreBoxClipboardChange(({ data, meta }) => {
 })
 ```
 
-### onCoreBoxKeyEvent
+**onCoreBoxKeyEvent**
 
 Listen to keyboard events forwarded from CoreBox.
 
@@ -85,11 +88,11 @@ interface BridgeEventPayload<CoreBoxKeyEventData> {
 
 ## Auto Event Caching
 
-### Problem
+**Problem**
 
 When plugin UIView attaches to CoreBox, the main process sends initial query on `dom-ready`. However, plugin JS may not have executed the hook registration code yet, causing the event to be lost.
 
-### Solution
+**Solution**
 
 SDK automatically implements event caching:
 
@@ -112,9 +115,9 @@ Plugin Renderer:
                             └─► replay cached event to handler
 ```
 
-### Control API
+**Control API**
 
-#### clearBridgeEventCache
+**clearBridgeEventCache**
 
 Manually clear event cache (usually not needed).
 
@@ -131,6 +134,10 @@ clearBridgeEventCache()
 **Use cases**:
 - Plugin needs to ignore old initial query
 - Plugin re-initialization requires clean state
+
+## Technical Notes
+- Hooks subscribe at module load and buffer events before handlers register.
+- Cached events replay in order and include `meta.fromCache` for differentiation.
 
 ## Best Practices
 

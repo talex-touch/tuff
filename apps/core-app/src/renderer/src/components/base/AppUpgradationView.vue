@@ -2,7 +2,7 @@
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppSdk } from '@talex-touch/utils/renderer'
-import FlatButton from '~/components/base/button//FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
 const props = defineProps({
@@ -63,15 +63,15 @@ const publishedAt = computed<string>(() => {
     </div>
 
     <div class="AppUpgradation-Content">
-      <FlatButton @click="handleSkip">
+      <TxButton variant="flat" @click="handleSkip">
         {{ t('updateModal.skip') }}
-      </FlatButton>
-      <FlatButton @click="handleRemindLater">
+      </TxButton>
+      <TxButton variant="flat" @click="handleRemindLater">
         {{ t('updateModal.remindLater') }}
-      </FlatButton>
-      <FlatButton :primary="true" @click="handleUpdateNow">
+      </TxButton>
+      <TxButton variant="flat" type="primary" @click="handleUpdateNow">
         {{ t('updateModal.updateNow') }}
-      </FlatButton>
+      </TxButton>
     </div>
   </div>
 </template>

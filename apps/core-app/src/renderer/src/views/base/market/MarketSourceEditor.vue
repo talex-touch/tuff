@@ -3,6 +3,7 @@ import type { MarketProviderType } from '@talex-touch/utils/market'
 import { onClickOutside } from '@vueuse/core'
 import { onMounted, reactive, ref } from 'vue'
 import { vDraggable } from 'vue-draggable-plus'
+import { TxButton } from '@talex-touch/tuffex'
 import { marketSourcesStorage } from '~/modules/storage/market-sources'
 
 const props = defineProps<{
@@ -158,7 +159,7 @@ function handleAdd() {
               <div mt-2 class="Item-Desc">
                 <FlatInput v-model="newSource.url" placeholder="Source url" />
               </div>
-              <FlatButton mt-2 @click="handleAdd"> Add </FlatButton>
+              <TxButton variant="flat" class="mt-2" @click="handleAdd"> Add </TxButton>
             </div>
           </div>
         </div>

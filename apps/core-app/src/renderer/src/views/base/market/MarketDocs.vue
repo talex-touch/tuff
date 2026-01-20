@@ -1,7 +1,7 @@
 <script setup lang="ts" name="MarketDocs">
 import { useI18n } from 'vue-i18n'
 import { useAppSdk } from '@talex-touch/utils/renderer'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import SettingPlatformCapabilities from '~/views/base/settings/SettingPlatformCapabilities.vue'
@@ -31,10 +31,10 @@ function openPlatformDocs(): void {
         active-icon="i-carbon-book"
         :icon-size="18"
       >
-        <FlatButton @click="openPlatformDocs">
+        <TxButton variant="flat" @click="openPlatformDocs">
           <div class="i-carbon-launch" />
           <span>{{ t('market.docsOpen') }}</span>
-        </FlatButton>
+        </TxButton>
       </TuffBlockSlot>
     </TuffGroupBlock>
 

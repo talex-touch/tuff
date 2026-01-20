@@ -1,6 +1,6 @@
 <script lang="ts" name="IntelligenceConfigSection" setup>
 import { ref } from 'vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 defineProps<{
   title: string
@@ -16,17 +16,13 @@ function toggleCollapse() {
 </script>
 
 <template>
-  <section
-    class="aisdk-config-section mb-6"
-    :aria-labelledby="`${sectionId}-heading`"
-  >
-    <FlatButton
+  <section class="aisdk-config-section mb-6" :aria-labelledby="`${sectionId}-heading`">
+    <TxButton
+      variant="flat"
       class="section-header flex items-center gap-2 mb-3 cursor-pointer select-none w-full text-left"
       :aria-expanded="!isCollapsed"
       :aria-controls="`${sectionId}-content`"
       @click="toggleCollapse"
-      @keydown.enter="toggleCollapse"
-      @keydown.space.prevent="toggleCollapse"
     >
       <i :class="icon" class="text-lg text-[var(--el-color-primary)]" aria-hidden="true" />
       <h3
@@ -43,7 +39,7 @@ function toggleCollapse() {
       <span class="sr-only">
         {{ isCollapsed ? 'Expand section' : 'Collapse section' }}
       </span>
-    </FlatButton>
+    </TxButton>
 
     <Transition name="collapse">
       <div
@@ -53,7 +49,9 @@ function toggleCollapse() {
         role="region"
         :aria-labelledby="`${sectionId}-heading`"
       >
-        <div class="p-4 rounded-lg border border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-blank)]">
+        <div
+          class="p-4 rounded-lg border border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-blank)]"
+        >
           <slot />
         </div>
       </div>

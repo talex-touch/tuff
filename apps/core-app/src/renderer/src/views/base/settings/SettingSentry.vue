@@ -10,7 +10,7 @@ import { toast } from 'vue-sonner'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -233,10 +233,15 @@ onBeforeUnmount(() => {
       active-icon="i-carbon-renew"
       @click="refreshStats()"
     >
-      <FlatButton mini :class="{ 'opacity-60': statsLoading }" @click.stop="refreshStats()">
+      <TxButton
+        variant="flat"
+        size="sm"
+        :class="{ 'opacity-60': statsLoading }"
+        @click.stop="refreshStats()"
+      >
         <span v-if="statsLoading" class="i-carbon-renew animate-spin text-sm" />
         {{ t('settingSentry.refresh', '刷新') }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <template v-if="isDev && enabled && telemetryStats">
@@ -301,9 +306,9 @@ onBeforeUnmount(() => {
       active-icon="i-carbon-security"
       @click="openPrivacySettings"
     >
-      <FlatButton mini>
+      <TxButton variant="flat" size="sm">
         <span class="i-carbon-launch text-sm" />
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -313,9 +318,9 @@ onBeforeUnmount(() => {
       active-icon="i-carbon-dashboard"
       @click="openNexusDashboard"
     >
-      <FlatButton mini>
+      <TxButton variant="flat" size="sm">
         <span class="i-carbon-launch text-sm" />
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>

@@ -1,6 +1,10 @@
 # SDK API Overview
 
+## Overview
 The Tuff Plugin SDK provides a complete set of APIs for developing CoreBox plugins. All APIs follow a functional design pattern, accessed through `use*` hook functions.
+
+## Introduction
+The SDK exposes window control, clipboard, search, storage, and transport capabilities through a unified runtime context, so plugins can stay small and focused.
 
 ## Installation
 
@@ -8,7 +12,7 @@ The Tuff Plugin SDK provides a complete set of APIs for developing CoreBox plugi
 pnpm add @talex-touch/utils
 ```
 
-## SDK Modules
+## API Reference
 
 | Module | Import | Description |
 |--------|--------|-------------|
@@ -74,9 +78,9 @@ async function init() {
 
 ---
 
-## Design Principles
+## Best Practices
 
-### 1. Functional API
+**1. Functional API**
 
 All SDKs are accessed through `use*` functions, no context passing required:
 
@@ -90,7 +94,7 @@ await storage.getFile('config.json')
 // await storage.getItem('key')
 ```
 
-### 2. Automatic Context Detection
+**2. Automatic Context Detection**
 
 SDKs automatically detect plugin context, no manual configuration needed:
 
@@ -99,7 +103,7 @@ const storage = usePluginStorage()
 // Automatically gets current plugin name
 ```
 
-### 3. Returns Dispose Function
+**3. Returns Dispose Function**
 
 All listeners return an unsubscribe function:
 
@@ -114,7 +118,7 @@ onUnmounted(() => {
 })
 ```
 
-### 4. Promise-based Async
+**4. Promise-based Async**
 
 All async operations return Promises:
 
@@ -124,6 +128,10 @@ await clipboard.copyAndPaste({ text: 'Hello' })
 ```
 
 ---
+
+## Technical Notes
+- `use*` hooks resolve plugin context at runtime to avoid manual wiring.
+- IPC and transport abstractions provide consistent cleanup via dispose functions.
 
 ## Type Imports
 
@@ -141,6 +149,6 @@ import type {
 
 ## Related Documentation
 
-- [Plugin Development Quick Start](../quickstart.en.md)
-- [Manifest Configuration](../manifest.en.md)
+- [Plugin Development Quick Start](../getting-started/quickstart.en.md)
+- [Manifest Configuration](../reference/manifest.en.md)
 - [Build Tool Unplugin](../extensions/unplugin-export-plugin.en.md)

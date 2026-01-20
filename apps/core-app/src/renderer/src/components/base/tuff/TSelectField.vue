@@ -1,11 +1,12 @@
 <script lang="ts" name="TSelectField" setup>
+import { TxButton } from '@talex-touch/tuffex'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 
 const props = withDefaults(
   defineProps<{
     modelValue?: string | number | null
     placeholder?: string
-    options?: Array<{ label: string, value: string | number }>
+    options?: Array<{ label: string; value: string | number }>
     disabled?: boolean
     clearable?: boolean
   }>(),
@@ -13,8 +14,8 @@ const props = withDefaults(
     placeholder: '',
     options: () => [],
     disabled: false,
-    clearable: false,
-  },
+    clearable: false
+  }
 )
 
 const emits = defineEmits<{
@@ -34,15 +35,14 @@ function handleChange(event: Event) {
     return
   }
 
-  const matched = props.options.find(option => String(option.value) === raw)
+  const matched = props.options.find((option) => String(option.value) === raw)
   const result = matched ? matched.value : raw
   emits('update:modelValue', result)
   emits('change', result)
 }
 
 function clearValue() {
-  if (!props.clearable)
-    return
+  if (!props.clearable) return
   value.value = null
   emits('update:modelValue', null)
   emits('change', null)
@@ -64,14 +64,15 @@ function clearValue() {
         {{ option.label }}
       </option>
     </select>
-    <button
+    <TxButton
       v-if="clearable && value !== null && value !== undefined && value !== ''"
-      type="button"
+      variant="bare"
+      native-type="button"
       class="clear-btn"
       @click="clearValue"
     >
       <i class="i-carbon-close" />
-    </button>
+    </TxButton>
     <span class="chevron i-carbon-chevron-down" />
   </div>
 </template>

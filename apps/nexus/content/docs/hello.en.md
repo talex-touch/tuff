@@ -14,8 +14,8 @@
 | Quick Start           | Install, account, sync, safety checklist           | [`guide/start.en.md`](./guide/start.en.md)                               |
 | Intelligence Workflow | Concepts, templates, debugging recipes             | [`tips/intelligence-workflow.en.md`](./tips/intelligence-workflow.en.md) |
 | Automation Control    | CoreBox commands, shortcuts, clipboard upgrades    | [`tips/automation.en.md`](./tips/automation.en.md)                       |
-| Dev Overview          | Plugin model, sandbox policy, dev commands         | [`dev/overview.en.md`](./dev/overview.en.md)                             |
-| Manifest              | Field reference, validation rules, pitfalls        | [`dev/manifest.en.md`](./dev/manifest.en.md)                             |
+| Dev Overview          | Plugin model, sandbox policy, dev commands         | [`dev/getting-started/overview.en.md`](./dev/getting-started/overview.en.md)                             |
+| Manifest              | Field reference, validation rules, pitfalls        | [`dev/reference/manifest.en.md`](./dev/reference/manifest.en.md)                             |
 
 ## Experience Principles
 

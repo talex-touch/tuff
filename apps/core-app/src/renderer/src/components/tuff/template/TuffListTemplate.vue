@@ -1,5 +1,6 @@
 <script setup lang="ts" name="TuffListTemplate">
 import { reactive } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 export interface TuffListGroup<TItem> {
   id: string
@@ -31,8 +32,7 @@ const emits = defineEmits<{
 const collapsedState = reactive<Record<string, boolean>>({})
 
 function isGroupCollapsed(group: TuffListGroup<any>): boolean {
-  if (!group.collapsible)
-    return false
+  if (!group.collapsible) return false
   const stored = collapsedState[group.id]
   if (typeof stored === 'boolean') {
     return stored
@@ -41,17 +41,15 @@ function isGroupCollapsed(group: TuffListGroup<any>): boolean {
 }
 
 function toggleGroup(group: TuffListGroup<any>): void {
-  if (!group.collapsible)
-    return
+  if (!group.collapsible) return
   const next = !isGroupCollapsed(group)
   collapsedState[group.id] = next
   emits('toggle-group', group.id, next)
 }
 
 function setGroupCollapsed(groupId: string, collapsed: boolean): void {
-  const group = props.groups.find(item => item.id === groupId)
-  if (!group || !group.collapsible)
-    return
+  const group = props.groups.find((item) => item.id === groupId)
+  if (!group || !group.collapsible) return
   collapsedState[group.id] = collapsed
 }
 
@@ -59,7 +57,7 @@ const variantTitleColorMap: Record<NonNullable<TuffListGroup<any>['badgeVariant'
   info: 'var(--el-color-info)',
   success: 'var(--el-color-success)',
   warning: 'var(--el-color-warning)',
-  danger: 'var(--el-color-danger)',
+  danger: 'var(--el-color-danger)'
 }
 
 function resolveTitleColor(group: TuffListGroup<any>): string {
@@ -73,7 +71,7 @@ function resolveTitleColor(group: TuffListGroup<any>): string {
 }
 
 function getGroupItems(groupId: string) {
-  return props.groups.find(group => group.id === groupId)?.items ?? []
+  return props.groups.find((group) => group.id === groupId)?.items ?? []
 }
 
 // Used in template v-for :key binding
@@ -89,7 +87,7 @@ defineExpose({
   toggleGroup,
   setGroupCollapsed,
   isGroupCollapsed,
-  getGroupItems,
+  getGroupItems
 })
 </script>
 
@@ -124,21 +122,23 @@ defineExpose({
           <div class="TuffListTemplate-GroupMeta">
             <span v-if="group.badgeText" class="TuffListTemplate-Badge">{{ group.badgeText }}</span>
             <span v-else-if="group.meta" class="TuffListTemplate-Meta">{{ group.meta }}</span>
-            <button
+            <TxButton
               v-if="group.collapsible"
-              type="button"
+              variant="bare"
+              native-type="button"
               class="TuffListTemplate-Toggle"
               aria-label="Toggle group"
               :aria-expanded="!isGroupCollapsed(group)"
               @click.stop="toggleGroup(group)"
             >
               <i
-                class="transition-transform duration-200" :class="[
-                  isGroupCollapsed(group) ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-up-s-line',
+                class="transition-transform duration-200"
+                :class="[
+                  isGroupCollapsed(group) ? 'i-ri-arrow-down-s-line' : 'i-ri-arrow-up-s-line'
                 ]"
                 aria-hidden="true"
               />
-            </button>
+            </TxButton>
           </div>
         </template>
       </header>

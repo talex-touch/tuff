@@ -1,9 +1,13 @@
 # Event API
 
-## TouchEventBus
-Broadcasts app-wide lifecycle events to plugins so they can react without polling.
+## Overview
+`TouchEventBus` broadcasts app lifecycle events so plugins can react without polling.
 
-### Event Enum
+## Introduction
+Use the event bus for lifecycle coordination, status sync, and lightweight cross-module notifications.
+
+## API Reference
+**TouchEventBus**
 | Event | Trigger |
 | --- | --- |
 | `APP_READY` | App boot complete |
@@ -12,7 +16,7 @@ Broadcasts app-wide lifecycle events to plugins so they can react without pollin
 | `WINDOW_ALL_CLOSED` | Every window closed |
 | `PLUGIN_STORAGE_UPDATED` | Plugin storage mutated |
 
-### Subscribe
+**Subscribe**
 ```ts
 const dispose = ctx.events.on('APP_READY', () => {
   ctx.logger.info('App ready')
@@ -21,10 +25,15 @@ const dispose = ctx.events.on('APP_READY', () => {
 ctx.events.emit('PLUGIN_STORAGE_UPDATED', { pluginId: ctx.meta.id })
 ```
 
-## Custom Namespaces
+**Custom namespaces**
 - `ctx.events.createNamespace('todo')` keeps plugin events isolated.
 - Always release handlers in `onDestroy`.
 
-## Debugging
-- Log payloads with `ctx.logger.debug`.
-- Turn on DevTools Performance to visualize the event timeline.
+## Best Practices
+- Keep payloads small to avoid expensive broadcasts.
+- Namespace plugin events to prevent collisions.
+- Log critical payloads with `ctx.logger.debug` during debugging.
+
+## Technical Notes
+- Events originate in the main-process `TouchEventBus` and are bridged to plugins.
+- `ctx.events` wraps subscriptions and always returns a dispose function.

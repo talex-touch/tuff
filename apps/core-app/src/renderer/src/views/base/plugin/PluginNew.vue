@@ -11,7 +11,7 @@ import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TCheckBox from '~/components/base/checkbox/TCheckBox.vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 
@@ -379,14 +379,24 @@ async function handleInstallDegit(): Promise<void> {
           <div i-ri-arrow-left-s-line class="PluginNew-Back" @click="emits('close')" />
           <p class="PluginNew-Title">Plugin Workspace</p>
           <div class="PluginNew-TabGroup">
-            <FlatButton :primary="activeTab === 'install'" mini @click="activeTab = 'install'">
+            <TxButton
+              variant="flat"
+              size="sm"
+              :type="activeTab === 'install' ? 'primary' : undefined"
+              @click="activeTab = 'install'"
+            >
               <i class="i-ri-download-cloud-2-line" />
               <span>Install</span>
-            </FlatButton>
-            <FlatButton :primary="activeTab === 'create'" mini @click="activeTab = 'create'">
+            </TxButton>
+            <TxButton
+              variant="flat"
+              size="sm"
+              :type="activeTab === 'create' ? 'primary' : undefined"
+              @click="activeTab = 'create'"
+            >
               <i class="i-ri-flask-line" />
               <span>Develop</span>
-            </FlatButton>
+            </TxButton>
           </div>
         </div>
         <span class="PluginNew-Subtitle">
@@ -471,8 +481,9 @@ async function handleInstallDegit(): Promise<void> {
         </div>
 
         <div class="InstallActions">
-          <FlatButton
-            :primary="true"
+          <TxButton
+            variant="flat"
+            type="primary"
             :disabled="disableManualInstall"
             @click="installPluginFromSource"
           >
@@ -484,7 +495,7 @@ async function handleInstallDegit(): Promise<void> {
               <i v-else-if="manualStatusIcon" :class="manualStatusIcon" />
               <span>{{ currentInstallLabel }}</span>
             </div>
-          </FlatButton>
+          </TxButton>
         </div>
       </BlockTemplate>
     </section>
@@ -530,7 +541,8 @@ async function handleInstallDegit(): Promise<void> {
             <div inline-block mr-2 class="i-simple-icons-vuedotjs" />
           </div>
           <span block text-xs>Contains default dev-env, with using Vue3 and Vite.</span>
-          <button
+          <TxButton
+            variant="bare"
             text-xs
             cursor-pointer
             bg-transparent
@@ -543,14 +555,15 @@ async function handleInstallDegit(): Promise<void> {
             my-2
           >
             Download
-          </button>
+          </TxButton>
         </BrickTemplate>
         <BrickTemplate>
           <div>
             <div inline-block mr-2 class="i-simple-icons-react" />
           </div>
           <span block text-xs>Contains default dev-env, with using React18 and Vite.</span>
-          <button
+          <TxButton
+            variant="bare"
             text-xs
             cursor-pointer
             bg-transparent
@@ -563,14 +576,15 @@ async function handleInstallDegit(): Promise<void> {
             my-2
           >
             Download
-          </button>
+          </TxButton>
         </BrickTemplate>
         <BrickTemplate>
           <div>
             <div inline-block mr-2 class="i-simple-icons-svelte" />
           </div>
           <span block text-xs>Contains default dev-env, with using Svelte3 and Vite.</span>
-          <button
+          <TxButton
+            variant="bare"
             text-xs
             cursor-pointer
             bg-transparent
@@ -583,7 +597,7 @@ async function handleInstallDegit(): Promise<void> {
             my-2
           >
             Download
-          </button>
+          </TxButton>
         </BrickTemplate>
       </BlockTemplate>
 
@@ -638,9 +652,9 @@ async function handleInstallDegit(): Promise<void> {
           Agree with <i>Touch Plugin Development</i>
         </TCheckBox>
         <div flex relative mt-8 gap-4 w-4>
-          <FlatButton hover:bg-red> Cancel </FlatButton>
+          <TxButton variant="flat" hover:bg-red> Cancel </TxButton>
           <ActionTemplate :action="createAction">
-            <FlatButton :primary="true"> Create </FlatButton>
+            <TxButton variant="flat" type="primary"> Create </TxButton>
           </ActionTemplate>
         </div>
       </BlockTemplate>
@@ -682,7 +696,7 @@ async function handleInstallDegit(): Promise<void> {
   gap: 8px;
 }
 
-.PluginNew-TabGroup :deep(.FlatButton-Container) {
+.PluginNew-TabGroup :deep(.tx-button) {
   min-width: 0;
   padding: 0 12px;
 }
@@ -769,7 +783,7 @@ async function handleInstallDegit(): Promise<void> {
   justify-content: flex-start;
 }
 
-.InstallActions :deep(.FlatButton-Container) {
+.InstallActions :deep(.tx-button) {
   min-width: 180px;
 }
 

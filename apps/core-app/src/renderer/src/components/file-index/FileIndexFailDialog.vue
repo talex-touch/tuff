@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import TBottomDialog from '../base/dialog/TBottomDialog.vue'
 
@@ -74,11 +75,11 @@ defineExpose({ updateProgress })
       </div>
 
       <div class="actions">
-        <button class="btn-rebuild" :disabled="rebuilding" @click="handleRebuild">
+        <TxButton variant="bare" class="btn-rebuild" :disabled="rebuilding" @click="handleRebuild">
           {{ rebuilding ? '重建中...' : '重新建立索引' }}
-        </button>
+        </TxButton>
 
-        <button class="btn-later" @click="handleLater">稍后处理</button>
+        <TxButton variant="bare" class="btn-later" @click="handleLater">稍后处理</TxButton>
 
         <label class="checkbox-label">
           <input v-model="dontRemindAgain" type="checkbox" />

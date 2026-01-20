@@ -8,6 +8,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import CapabilityTestInput from '~/components/intelligence/capabilities/CapabilityTestInput.vue'
@@ -478,17 +479,18 @@ onBeforeUnmount(() => {
       <template #default>
         <div>
           <div class="prompt-filters" role="tablist">
-            <button
+            <TxButton
               v-for="option in filterOptions"
               :key="option.value"
+              variant="bare"
               class="prompt-filter"
-              type="button"
+              native-type="button"
               role="tab"
               :class="{ 'is-active': filterMode === option.value }"
               @click="filterMode = option.value as FilterMode"
             >
               {{ option.label }}
-            </button>
+            </TxButton>
           </div>
         </div>
 
@@ -508,10 +510,16 @@ onBeforeUnmount(() => {
           <p v-if="false" class="prompt-footer-hint">
             {{ t('settings.intelligence.landing.prompts.statsDesc', { words: totalWordsApprox }) }}
           </p>
-          <FlatButton class="primary mt-2" type="button" @click="handleCreatePrompt">
+          <TxButton
+            variant="flat"
+            type="primary"
+            native-type="button"
+            class="mt-2"
+            @click="handleCreatePrompt"
+          >
             <i class="i-carbon-add" aria-hidden="true" />
             <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
-          </FlatButton>
+          </TxButton>
         </div>
       </template>
 
@@ -529,22 +537,42 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="prompt-main-actions">
-                <button class="aisdk-btn ghost" type="button" @click="handleOpenDocs">
+                <TxButton
+                  variant="bare"
+                  class="aisdk-btn ghost"
+                  native-type="button"
+                  @click="handleOpenDocs"
+                >
                   <i class="i-carbon-link" aria-hidden="true" />
                   <span>{{ t('settings.intelligence.docsButton') }}</span>
-                </button>
-                <button class="aisdk-btn ghost" type="button" @click="handleOpenFolder">
+                </TxButton>
+                <TxButton
+                  variant="bare"
+                  class="aisdk-btn ghost"
+                  native-type="button"
+                  @click="handleOpenFolder"
+                >
                   <i class="i-carbon-folder-open" aria-hidden="true" />
                   <span>{{ t('settings.intelligence.landing.prompts.folderButton') }}</span>
-                </button>
-                <button class="aisdk-btn ghost" type="button" @click="triggerImport">
+                </TxButton>
+                <TxButton
+                  variant="bare"
+                  class="aisdk-btn ghost"
+                  native-type="button"
+                  @click="triggerImport"
+                >
                   <i class="i-carbon-download" aria-hidden="true" />
                   <span>{{ t('settings.intelligence.promptImportButton') }}</span>
-                </button>
-                <button class="aisdk-btn ghost" type="button" @click="handleExportPrompts">
+                </TxButton>
+                <TxButton
+                  variant="bare"
+                  class="aisdk-btn ghost"
+                  native-type="button"
+                  @click="handleExportPrompts"
+                >
                   <i class="i-carbon-upload" aria-hidden="true" />
                   <span>{{ t('settings.intelligence.promptExportButton') }}</span>
-                </button>
+                </TxButton>
               </div>
             </div>
           </template>
@@ -676,10 +704,15 @@ onBeforeUnmount(() => {
               active-icon="i-carbon-copy"
               @click="handleDuplicatePrompt"
             >
-              <button class="aisdk-btn ghost" type="button" @click="handleDuplicatePrompt">
+              <TxButton
+                variant="bare"
+                class="aisdk-btn ghost"
+                native-type="button"
+                @click="handleDuplicatePrompt"
+              >
                 <i class="i-carbon-copy" aria-hidden="true" />
                 <span>{{ t('settings.intelligence.promptDuplicateButton') }}</span>
-              </button>
+              </TxButton>
             </TuffBlockSlot>
 
             <TuffBlockSlot
@@ -689,10 +722,15 @@ onBeforeUnmount(() => {
               active-icon="i-carbon-document"
               @click="handleCopyContent"
             >
-              <button class="aisdk-btn ghost" type="button" @click="handleCopyContent">
+              <TxButton
+                variant="bare"
+                class="aisdk-btn ghost"
+                native-type="button"
+                @click="handleCopyContent"
+              >
                 <i class="i-carbon-document" aria-hidden="true" />
                 <span>{{ t('settings.intelligence.promptCopyButton') }}</span>
-              </button>
+              </TxButton>
             </TuffBlockSlot>
 
             <TuffBlockSlot
@@ -703,15 +741,16 @@ onBeforeUnmount(() => {
               :disabled="!isCustomEditable"
               @click="handleDeletePrompt"
             >
-              <button
+              <TxButton
+                variant="bare"
                 class="aisdk-btn danger"
-                type="button"
+                native-type="button"
                 :disabled="!isCustomEditable"
                 @click="handleDeletePrompt"
               >
                 <i class="i-carbon-trash-can" aria-hidden="true" />
                 <span>{{ t('settings.intelligence.promptDeleteButton') }}</span>
-              </button>
+              </TxButton>
             </TuffBlockSlot>
 
             <TuffBlockSlot
@@ -737,15 +776,16 @@ onBeforeUnmount(() => {
                     class="i-carbon-checkmark text-[var(--el-color-success)]"
                   />
                 </div>
-                <button
+                <TxButton
+                  variant="bare"
                   class="aisdk-btn primary"
-                  type="button"
+                  native-type="button"
                   :disabled="!isCustomEditable || !isDirty"
                   @click="handleSavePrompt"
                 >
                   <i class="i-carbon-checkmark" aria-hidden="true" />
                   <span>{{ t('settings.intelligence.promptSaveButton') }}</span>
-                </button>
+                </TxButton>
               </div>
             </TuffBlockSlot>
           </TuffGroupBlock>
@@ -759,10 +799,15 @@ onBeforeUnmount(() => {
           <p class="prompt-empty-state__desc">
             {{ t('settings.intelligence.promptEmptyStateDesc') }}
           </p>
-          <button class="aisdk-btn primary" type="button" @click="handleCreatePrompt">
+          <TxButton
+            variant="bare"
+            class="aisdk-btn primary"
+            native-type="button"
+            @click="handleCreatePrompt"
+          >
             <i class="i-carbon-add" aria-hidden="true" />
             <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
-          </button>
+          </TxButton>
         </div>
       </template>
     </TuffAsideTemplate>

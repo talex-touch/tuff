@@ -1,5 +1,7 @@
 # TuffTransport API
 
+## Overview
+
 TuffTransport is the next-generation IPC communication system for Tuff plugins, providing type-safe, high-performance messaging with built-in support for batching and streaming.
 
 ::alert{type="info"}
@@ -18,7 +20,9 @@ TuffTransport replaces the legacy Channel API. While the old API remains functio
 
 ---
 
-## Quick Start
+## Introduction
+
+**Quick Start**
 
 ```ts
 import { useTuffTransport, CoreBoxEvents, StorageEvents } from '@talex-touch/utils/transport'
@@ -44,7 +48,7 @@ const [theme, lang] = await Promise.all([
 
 ## Core Concepts
 
-### TuffEvent
+**TuffEvent**
 
 Every communication in TuffTransport uses a `TuffEvent` - a type-safe event definition that encodes request/response types at compile time.
 
@@ -57,7 +61,7 @@ transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
 //                                          ↑ TypeScript enforces correct payload
 ```
 
-### Event Builder
+**Event Builder**
 
 Create custom events using the `defineEvent` builder:
 
@@ -83,7 +87,7 @@ console.log(result.name, result.value) // ✅ Type-safe access
 
 ## API Reference
 
-### useTuffTransport()
+**useTuffTransport()**
 
 Get the transport instance in a plugin renderer.
 
@@ -93,7 +97,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 const transport = useTuffTransport()
 ```
 
-### transport.send(event, payload?, options?)
+**transport.send(event, payload?, options?)**
 
 Send a request and wait for response.
 
@@ -127,7 +131,7 @@ await transport.send(StorageEvents.app.set,
 await transport.send(SlowEvent, data, { timeout: 30000 })
 ```
 
-### transport.stream(event, payload, options)
+**transport.stream(event, payload, options)**
 
 Initiate a streaming request via MessagePort.
 
@@ -152,7 +156,7 @@ const controller = await transport.stream(
 controller.cancel()
 ```
 
-### transport.on(event, handler)
+**transport.on(event, handler)**
 
 Register an event handler for incoming messages.
 
@@ -166,7 +170,7 @@ const cleanup = transport.on(SomeEvent, (payload) => {
 onUnmounted(() => cleanup())
 ```
 
-### transport.flush()
+**transport.flush()**
 
 Force flush all pending batch requests.
 
@@ -178,7 +182,7 @@ await transport.flush()
 
 ## Predefined Events
 
-### CoreBoxEvents
+**CoreBoxEvents**
 
 ```ts
 import { CoreBoxEvents } from '@talex-touch/utils/transport'
@@ -202,7 +206,7 @@ CoreBoxEvents.provider.deactivate    // Deactivate provider
 CoreBoxEvents.provider.getDetails    // Get provider details (batching)
 ```
 
-### StorageEvents
+**StorageEvents**
 
 ```ts
 import { StorageEvents } from '@talex-touch/utils/transport'
@@ -217,7 +221,7 @@ StorageEvents.plugin.get    // Get plugin value
 StorageEvents.plugin.set    // Set plugin value
 ```
 
-### PluginEvents
+**PluginEvents**
 
 ```ts
 import { PluginEvents } from '@talex-touch/utils/transport'
@@ -234,7 +238,7 @@ PluginEvents.feature.trigger    // Trigger feature
 PluginEvents.log.write          // Write log entry
 ```
 
-### BoxItemEvents
+**BoxItemEvents**
 
 ```ts
 import { BoxItemEvents } from '@talex-touch/utils/transport'
@@ -251,7 +255,7 @@ BoxItemEvents.batch.delete  // Batch delete
 BoxItemEvents.batch.clear   // Clear by source
 ```
 
-### ClipboardEvents :badge[v0.9.0]{type="info"}
+**ClipboardEvents :badge[v0.9.0]{type="info"}**
 
 ```ts
 import { ClipboardEvents } from '@talex-touch/utils/transport'
@@ -313,7 +317,7 @@ const [a, b, c] = await Promise.all([
 // Result: Single IPC with 3 requests, 500%+ faster
 ```
 
-### Batch Configuration
+**Batch Configuration**
 
 When defining custom events, configure batching:
 
@@ -410,7 +414,7 @@ try {
 
 ## Migration from Legacy Channel
 
-### Before (Legacy)
+**Before (Legacy)**
 
 ```ts
 import { useChannel } from '@talex-touch/utils/plugin/sdk'
@@ -419,7 +423,7 @@ const channel = useChannel()
 const result = await channel.send('core-box:search:query', { text: 'hello' })
 ```
 
-### After (TuffTransport)
+**After (TuffTransport)**
 
 ```ts
 import { useTuffTransport, CoreBoxEvents } from '@talex-touch/utils/transport'
@@ -428,7 +432,7 @@ const transport = useTuffTransport()
 const result = await transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
 ```
 
-### Gradual Migration
+**Gradual Migration**
 
 Both APIs work simultaneously - migrate at your own pace:
 
@@ -441,6 +445,12 @@ await transport.send(StorageEvents.app.get, { key: 'theme' })
 ```
 
 ---
+
+## Technical Notes
+
+- Events are defined via `defineEvent().module().event().define()` with compile-time request/response typing.
+- Batching aggregates client requests and merges them by strategy before dispatch.
+- Streaming uses MessagePort for continuous data delivery.
 
 ## Best Practices
 

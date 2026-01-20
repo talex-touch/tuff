@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginEmptyState" setup>
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 const { t } = useI18n()
 </script>
@@ -18,25 +18,25 @@ const { t } = useI18n()
       <p class="text-[var(--el-text-color-regular)] opacity-80 mb-6">
         {{ t('plugin.emptyState.message') }}
       </p>
-      <FlatButton class="cta-button text-sm" @click="() => $router.push('/market')">
+      <TxButton variant="flat" class="cta-button text-sm" @click="() => $router.push('/market')">
         <i class="i-ri-store-line" />
         {{ t('plugin.emptyState.exploreMarket') }}
-      </FlatButton>
+      </TxButton>
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.cta-button :deep(.FlatButton-Container) {
+.cta-button :deep(.tx-button) {
   @apply px-8 py-3 bg-[var(--el-color-primary)] text-white rounded-full font-semibold flex items-center gap-3 transition-all duration-300 ease-out relative overflow-hidden;
 }
 
-.cta-button :deep(.FlatButton-Container:hover) {
+.cta-button :deep(.tx-button:hover) {
   @apply bg-[var(--el-color-primary-dark-2)] -translate-y-0.5 scale-105;
   box-shadow: 0 12px 30px rgba(var(--el-color-primary-rgb), 0.4);
 }
 
-.cta-button :deep(.FlatButton-Container) i {
+.cta-button :deep(.tx-button) i {
   @apply text-lg;
 }
 </style>

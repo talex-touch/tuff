@@ -10,7 +10,7 @@ pnpm add -D @talex-touch/unplugin-export-plugin
 
 ## 快速开始
 
-### Vite 配置
+**Vite 配置**
 
 ```ts
 // vite.config.ts
@@ -31,7 +31,7 @@ export default defineConfig({
 })
 ```
 
-### Webpack 配置
+**Webpack 配置**
 
 ```js
 // webpack.config.js
@@ -44,7 +44,7 @@ module.exports = {
 }
 ```
 
-### Rollup 配置
+**Rollup 配置**
 
 ```js
 // rollup.config.js
@@ -61,21 +61,21 @@ export default {
 
 ## 功能特性
 
-### 1. 自动 Manifest 处理
+**1. 自动 Manifest 处理**
 
 插件会自动读取项目根目录的 `manifest.json`，并在构建时：
 - 验证必需字段
 - 注入版本信息
 - 生成生产环境 manifest
 
-### 2. 资源导出
+**2. 资源导出**
 
 自动处理以下资源：
 - **HTML 入口文件**：自动注入必要的脚本和样式
 - **静态资源**：复制 `public/` 目录到输出
 - **图标文件**：处理 manifest 中声明的图标
 
-### 3. 开发模式支持
+**3. 开发模式支持**
 
 在开发模式下：
 - 自动配置 HMR（热模块替换）
@@ -144,7 +144,7 @@ export default defineConfig({
 })
 ```
 
-### 配置项说明
+**配置项说明**
 
 | 选项 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -164,7 +164,7 @@ export default defineConfig({
 | `versionSync.auto` | `boolean` | `false` | 自动同步版本 |
 | `maxSizeMB` | `number` | `10` | 最大插件体积警告阈值 |
 
-### 版本同步
+**版本同步**
 
 当 `versionSync.enabled` 为 `true` 时，构建过程中会检查 `package.json` 和 `manifest.json` 的版本是否一致：
 
@@ -172,7 +172,7 @@ export default defineConfig({
 - 设置 `versionSync.auto: true` 可自动同步，无需手动确认
 - 也可以通过命令行参数 `--sync-version` 触发同步
 
-### 体积警告
+**体积警告**
 
 当打包后的 `.tpex` 文件超过 `maxSizeMB`（默认 10MB）时，会显示警告：
 
@@ -236,7 +236,7 @@ my-plugin/
 
 ## 开发模式
 
-### 启用开发模式
+**启用开发模式**
 
 在 `manifest.json` 中配置：
 
@@ -249,7 +249,7 @@ my-plugin/
 }
 ```
 
-### 热重载
+**热重载**
 
 开发模式下，以下变更会触发热重载：
 - Vue 组件变更
@@ -258,7 +258,7 @@ my-plugin/
 
 `manifest.json` 变更会触发插件重新加载。
 
-### 调试技巧
+**调试技巧**
 
 1. **打开 DevTools**：在插件窗口按 `Cmd+Option+I` (Mac) 或 `Ctrl+Shift+I` (Windows)
 2. **查看日志**：主进程日志在终端输出
@@ -305,13 +305,13 @@ const storage = usePluginStorage()
 
 ## 常见问题
 
-### Q: 构建后插件无法加载
+**Q: 构建后插件无法加载**
 
 1. 检查 `manifest.json` 的 `id` 字段是否符合格式 `com.xxx.xxx`
 2. 确保 `main` 字段指向正确的入口文件
 3. 查看主程序日志获取详细错误信息
 
-### Q: 开发模式下样式不生效
+**Q: 开发模式下样式不生效**
 
 确保在 `vite.config.ts` 中正确配置了 CSS 预处理器：
 
@@ -327,7 +327,7 @@ export default defineConfig({
 })
 ```
 
-### Q: 资源路径错误
+**Q: 资源路径错误**
 
 使用相对路径或 `@/` 别名：
 

@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { TxButton, TxLoadingState } from '@talex-touch/tuffex'
+import { Toaster, toast } from 'vue-sonner'
+import { defineComponent, h, render } from 'vue'
+
 definePageMeta({
   layout: 'docs',
 })
 
 const route = useRoute()
+const nuxtApp = useNuxtApp()
 const { locale, t } = useI18n()
 const localePath = useLocalePath()
 
@@ -27,8 +32,6 @@ onMounted(async () => {
 })
 
 const SUPPORTED_LOCALES = ['en', 'zh']
-const GITHUB_EDIT_BASE_URL = 'https://github.com/talex-touch/tuff-nexus/edit/main'
-
 function stripLocalePrefix(path: string) {
   if (!path)
     return '/'
@@ -55,6 +58,8 @@ const localizedPath = computed(() => {
   return `${docPath.value}.${locale.value}`
 })
 
+const requestKey = computed(() => `doc:${docPath.value}:${locale.value}`)
+
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
     return null
@@ -63,7 +68,7 @@ function normalizeContentPath(path: string | null | undefined) {
 }
 
 const { data: doc, status } = await useAsyncData(
-  () => `doc:${docPath.value}:${locale.value}`,
+  () => requestKey.value,
   async () => {
     const localizedDoc = await queryCollection('docs').path(localizedPath.value).first()
     if (localizedDoc)
@@ -73,6 +78,29 @@ const { data: doc, status } = await useAsyncData(
   },
   { watch: [docPath, locale] },
 )
+
+const isLoading = ref(status.value === 'pending' || status.value === 'idle')
+
+watch(requestKey, () => {
+  isLoading.value = true
+})
+
+watch(
+  () => status.value,
+  (value) => {
+    if (value === 'success' || value === 'error')
+      isLoading.value = false
+  },
+  { immediate: true },
+)
+
+const viewState = computed(() => {
+  if (isLoading.value)
+    return 'loading'
+  if (doc.value)
+    return 'content'
+  return 'not-found'
+})
 
 const { data: navigationTree } = await useAsyncData(
   'docs:navigation',
@@ -164,16 +192,6 @@ const docPager = computed(() => {
   return { prev: null, next: null, sectionTitle: null }
 })
 
-const githubEditUrl = computed(() => {
-  const entry = doc.value
-  if (!entry)
-    return null
-  const stem = entry.stem
-  const extension = entry.extension || 'md'
-  const normalizedStem = stem.replace(/^\//, '')
-  return [GITHUB_EDIT_BASE_URL, 'content', `${normalizedStem}.${extension}`].join('/')
-})
-
 const lastUpdatedDate = computed(() => {
   const source = doc.value
   if (!source)
@@ -251,6 +269,134 @@ onBeforeUnmount(() => {
 const viewCount = ref<number | null>(null)
 const viewCountLoading = ref(false)
 
+const copyLabels = computed(() => {
+  const isZh = locale.value === 'zh'
+  return {
+    copy: isZh ? '复制' : 'Copy',
+    copied: isZh ? '已复制' : 'Copied',
+    failed: isZh ? '复制失败' : 'Copy failed',
+    text: isZh ? '文本' : 'Text',
+  }
+})
+
+function resolveCodeLanguage(codeEl: HTMLElement | null, preEl: HTMLElement | null) {
+  const attrLang = codeEl?.getAttribute('data-language')
+    ?? codeEl?.getAttribute('data-lang')
+    ?? preEl?.getAttribute('data-language')
+  if (attrLang)
+    return attrLang.trim()
+
+  const className = codeEl?.className ?? preEl?.className ?? ''
+  const match = className.match(/(?:language|lang)-([a-z0-9_-]+)/i)
+  return match?.[1] ?? ''
+}
+
+function formatLanguageLabel(language: string) {
+  if (!language)
+    return copyLabels.value.text
+  return language.replace(/[^a-z0-9+#.-]/gi, '').toUpperCase()
+}
+
+async function writeToClipboard(text: string) {
+  if (!text)
+    return
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', 'true')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+
+const CodeHeader = defineComponent({
+  name: 'DocsCodeHeader',
+  props: {
+    language: { type: String, default: '' },
+    codeText: { type: String, default: '' },
+  },
+  setup(props) {
+    const label = computed(() => formatLanguageLabel(props.language))
+
+    const handleCopy = async () => {
+      try {
+        await writeToClipboard(props.codeText)
+        toast.success(copyLabels.value.copied)
+      }
+      catch {
+        toast.error(copyLabels.value.failed)
+      }
+    }
+
+    return () => [
+      h('span', { class: 'docs-code-language' }, label.value),
+      h(
+        TxButton,
+        {
+          size: 'sm',
+          variant: 'ghost',
+          class: 'docs-code-copy',
+          'aria-label': copyLabels.value.copy,
+          onClick: handleCopy,
+        },
+        () => copyLabels.value.copy,
+      ),
+    ]
+  },
+})
+
+function renderCodeHeader(target: HTMLElement, language: string, codeText: string) {
+  const vnode = h(CodeHeader, { language, codeText })
+  vnode.appContext = nuxtApp.vueApp._context
+  render(vnode, target)
+}
+
+function enhanceCodeBlocks() {
+  if (import.meta.server)
+    return
+
+  const blocks = document.querySelectorAll<HTMLPreElement>('.docs-prose pre')
+  blocks.forEach((pre) => {
+    const code = pre.querySelector<HTMLElement>('code')
+    if (!code)
+      return
+
+    const language = resolveCodeLanguage(code, pre)
+    pre.dataset.language = language || 'text'
+
+    let header = pre.querySelector<HTMLDivElement>('.docs-code-header')
+    if (!header) {
+      header = document.createElement('div')
+      header.className = 'docs-code-header'
+      pre.insertBefore(header, pre.firstChild)
+    }
+    renderCodeHeader(header, language, code.textContent ?? '')
+  })
+}
+
+async function scheduleCodeEnhance(delay = 0) {
+  if (import.meta.server)
+    return
+  if (delay > 0) {
+    window.setTimeout(() => {
+      void scheduleCodeEnhance()
+    }, delay)
+    return
+  }
+  await nextTick()
+  requestAnimationFrame(() => {
+    enhanceCodeBlocks()
+  })
+}
+
 async function trackView() {
   if (!docPath.value)
     return
@@ -290,6 +436,7 @@ async function fetchViewCount() {
 // Track view on mount
 onMounted(() => {
   trackView()
+  scheduleCodeEnhance()
 })
 
 // Refetch view count when doc changes (for admins)
@@ -302,226 +449,419 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => [doc.value, status.value, locale.value],
+  () => {
+    if (status.value === 'success' && doc.value)
+      scheduleCodeEnhance()
+  },
+)
+
+watch(
+  () => viewState.value,
+  (value) => {
+    if (!import.meta.client)
+      return
+    if (value === 'content')
+      scheduleCodeEnhance(260)
+  },
+)
 </script>
 
 <template>
-  <div class="relative">
-    <div
-      v-if="status === 'pending'"
-      class="flex items-center justify-center px-6 py-20 text-sm text-gray-500 dark:bg-dark/70 dark:text-gray-300"
-    >
-      <span class="i-carbon-circle-dash text-lg" />
-      <span class="ml-3">{{ t('docs.loading') }}</span>
-    </div>
-
-    <div
-      v-else-if="doc"
-      class="docs-surface px-8 py-10 space-y-10"
-    >
-      <ContentRenderer
-        :value="doc"
-        class="docs-prose markdown-body max-w-none prose prose-neutral dark:prose-invert"
-      />
-      <div
-        v-if="githubEditUrl || formattedLastUpdated || isAdmin"
-        class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-dark/5 pt-6 text-sm text-black/40 dark:border-light/5 dark:text-light/40"
-      >
-        <div class="flex flex-wrap items-center gap-4">
-          <div v-if="formattedLastUpdated" class="flex items-center gap-1.5">
-            <span class="i-carbon-time" />
-            <span>
-              {{ t('docs.lastUpdatedLabel') }}
-              <span class="text-black/70 dark:text-light/70">{{ formattedLastUpdated }}</span>
-            </span>
-          </div>
-          <div v-if="isAdmin && viewCount !== null" class="flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-primary">
-            <span class="i-carbon-view" />
-            <span class="font-medium">{{ viewCount }}</span>
-          </div>
+  <div class="docs-root relative">
+    <Transition name="docs-state" mode="out-in">
+      <div :key="viewState" class="docs-state">
+        <div v-if="viewState === 'loading'" class="docs-state__body px-6 py-20">
+          <TxLoadingState title="" :description="t('docs.loading')" />
         </div>
-        <NuxtLink
-          v-if="githubEditUrl"
-          :href="githubEditUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="flex items-center gap-1.5 transition-colors hover:text-primary"
+
+        <div
+          v-else-if="viewState === 'content'"
+          class="docs-surface px-8 py-10 space-y-10"
         >
-          <span class="i-carbon-logo-github" />
-          {{ t('docs.editOnGitHub') }}
-        </NuxtLink>
-      </div>
-
-      <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
-        <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.2em] uppercase dark:text-light/40">
-          {{ docPager.sectionTitle }}
-        </div>
-        <div class="grid gap-4 lg:grid-cols-2">
-          <NuxtLink
-            v-if="pagerPrevPath"
-            :to="localePath({ path: pagerPrevPath })"
-            class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
+          <ContentRenderer
+            :value="doc"
+            class="docs-prose markdown-body max-w-none prose prose-neutral dark:prose-invert"
+          />
+          <div
+            v-if="formattedLastUpdated || isAdmin"
+            class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-dark/5 pt-6 text-sm text-black/40 dark:border-light/5 dark:text-light/40"
           >
-            <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">
-              <span class="i-carbon-arrow-left text-base" />
-              {{ t('docs.previousChapter') }}
-            </span>
-            <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
-              {{ pagerPrevTitle }}
-            </span>
-          </NuxtLink>
+            <div class="flex flex-wrap items-center gap-4">
+              <div v-if="formattedLastUpdated" class="flex items-center gap-1.5">
+                <span class="i-carbon-time" />
+                <span>
+                  {{ t('docs.lastUpdatedLabel') }}
+                  <span class="text-black/70 dark:text-light/70">{{ formattedLastUpdated }}</span>
+                </span>
+              </div>
+              <div v-if="isAdmin && viewCount !== null" class="flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-primary">
+                <span class="i-carbon-view" />
+                <span class="font-medium">{{ viewCount }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
+            <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.2em] uppercase dark:text-light/40">
+              {{ docPager.sectionTitle }}
+            </div>
+            <div class="grid gap-4 lg:grid-cols-2">
+              <NuxtLink
+                v-if="pagerPrevPath"
+                :to="localePath({ path: pagerPrevPath })"
+                class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
+              >
+                <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">
+                  <span class="i-carbon-arrow-left text-base" />
+                  {{ t('docs.previousChapter') }}
+                </span>
+                <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
+                  {{ pagerPrevTitle }}
+                </span>
+              </NuxtLink>
+              <NuxtLink
+                v-if="pagerNextPath"
+                :to="localePath({ path: pagerNextPath })"
+                class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
+              >
+                <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">
+                  {{ t('docs.nextChapter') }}
+                  <span class="i-carbon-arrow-right text-base" />
+                </span>
+                <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
+                  {{ pagerNextTitle }}
+                </span>
+              </NuxtLink>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-else
+          class="docs-state__body p-10 text-center space-y-4"
+        >
+          <div class="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-dark/5 text-3xl text-black dark:bg-light/10 dark:text-light">
+            <span class="i-carbon-warning" />
+          </div>
+          <div class="text-lg text-black font-semibold dark:text-light">
+            {{ t('docs.notFoundTitle') }}
+          </div>
+          <p class="text-sm text-gray-500 dark:text-gray-300">
+            {{ t('docs.notFoundDescription') }}
+          </p>
           <NuxtLink
-            v-if="pagerNextPath"
-            :to="localePath({ path: pagerNextPath })"
-            class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
+            to="/docs"
+            class="inline-flex items-center justify-center gap-2 rounded-full bg-dark px-5 py-2 text-sm text-light font-medium no-underline transition dark:bg-light hover:bg-black dark:text-black dark:hover:bg-light/90"
           >
-            <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">
-              {{ t('docs.nextChapter') }}
-              <span class="i-carbon-arrow-right text-base" />
-            </span>
-            <span class="dark:group-hover:text-primary-200 text-base text-black font-semibold transition dark:text-light group-hover:text-primary">
-              {{ pagerNextTitle }}
-            </span>
+            <span class="i-carbon-arrow-left text-base" />
+            {{ t('docs.backHome') }}
           </NuxtLink>
         </div>
       </div>
-    </div>
-
-    <div
-      v-else
-      class="p-10 text-center space-y-4"
-    >
-      <div class="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-dark/5 text-3xl text-black dark:bg-light/10 dark:text-light">
-        <span class="i-carbon-warning" />
-      </div>
-      <div class="text-lg text-black font-semibold dark:text-light">
-        {{ t('docs.notFoundTitle') }}
-      </div>
-      <p class="text-sm text-gray-500 dark:text-gray-300">
-        {{ t('docs.notFoundDescription') }}
-      </p>
-      <NuxtLink
-        to="/docs"
-        class="inline-flex items-center justify-center gap-2 rounded-full bg-dark px-5 py-2 text-sm text-light font-medium no-underline transition dark:bg-light hover:bg-black dark:text-black dark:hover:bg-light/90"
-      >
-        <span class="i-carbon-arrow-left text-base" />
-        {{ t('docs.backHome') }}
-      </NuxtLink>
-    </div>
+    </Transition>
+    <ClientOnly>
+      <Toaster position="bottom-left" />
+    </ClientOnly>
   </div>
 </template>
 
 <style src="../../components/docs/github-markdown.css" />
 
 <style scoped>
-/* :deep(.docs-prose h1) {
+.docs-root {
+  min-height: 320px;
+}
+
+.docs-state__body {
+  border-radius: 20px;
+}
+
+.docs-state-enter-active,
+.docs-state-leave-active {
+  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
+}
+
+.docs-state-enter-from,
+.docs-state-leave-to {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateY(6px);
+}
+
+.docs-surface {
+  position: relative;
+  border-radius: 8px;
+  background: transparent;
+}
+
+:deep(.docs-prose) {
+  --docs-accent: #1bb5f4;
+  --docs-accent-strong: #0ea5e9;
+  --docs-ink: var(--fgColor-default);
+  --docs-muted: var(--fgColor-muted);
+  --docs-border: var(--borderColor-muted);
+  --docs-code-bg: var(--bgColor-muted);
+  --docs-code-border: var(--borderColor-default);
+  --docs-inline-code-bg: var(--bgColor-neutral-muted);
+  --docs-inline-code-border: var(--borderColor-muted);
+  --docs-hr-color: rgba(15, 23, 42, 0.18);
+  --tw-prose-body: var(--docs-ink);
+  --tw-prose-headings: var(--docs-accent-strong);
+  --tw-prose-lead: var(--docs-muted);
+  --tw-prose-links: var(--docs-accent);
+  --tw-prose-bold: var(--docs-ink);
+  --tw-prose-counters: var(--docs-muted);
+  --tw-prose-bullets: var(--docs-muted);
+  --tw-prose-hr: var(--docs-border);
+  --tw-prose-quotes: var(--docs-muted);
+  --tw-prose-quote-borders: var(--docs-border);
+  --tw-prose-captions: var(--docs-muted);
+  --tw-prose-code: var(--docs-ink);
+  --tw-prose-pre-code: var(--docs-ink);
+  --tw-prose-pre-bg: var(--docs-code-bg);
+  --tw-prose-th-borders: var(--docs-border);
+  --tw-prose-td-borders: var(--docs-border);
+  color: var(--docs-ink);
+}
+
+:deep(.dark .docs-prose),
+:deep([data-theme='dark'] .docs-prose) {
+  --docs-accent: #7dd3fc;
+  --docs-accent-strong: #38bdf8;
+  --docs-ink: #f8fafc;
+  --docs-muted: rgba(226, 232, 240, 0.8);
+  --docs-border: var(--borderColor-muted);
+  --docs-code-bg: var(--bgColor-muted);
+  --docs-code-border: var(--borderColor-default);
+  --docs-inline-code-bg: var(--bgColor-neutral-muted);
+  --docs-inline-code-border: var(--borderColor-muted);
+  --docs-hr-color: rgba(148, 163, 184, 0.32);
+  color: var(--docs-ink);
+}
+
+:deep(.docs-prose h1) {
   font-size: 2.25rem;
   font-weight: 700;
   margin-bottom: 2rem;
   letter-spacing: -0.02em;
+  color: var(--docs-accent-strong);
 }
 
 :deep(.docs-prose h2) {
   font-size: 1.75rem;
   font-weight: 600;
-  margin-top: 3rem;
-  margin-bottom: 1.25rem;
+  margin-top: 2.6rem;
+  margin-bottom: 1.1rem;
   letter-spacing: -0.01em;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  padding-bottom: 0.5rem;
-}
-
-:deep(.dark .docs-prose h2) {
-  border-bottom-color: rgba(255, 255, 255, 0.05);
+  padding-bottom: 0.45rem;
 }
 
 :deep(.docs-prose h3) {
   font-size: 1.25rem;
   font-weight: 600;
   margin-top: 2rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.85rem;
+  color: rgba(15, 23, 42, 0.9);
+}
+
+:deep(.dark .docs-prose h3),
+:deep([data-theme='dark'] .docs-prose h3) {
+  color: rgba(241, 245, 249, 0.92);
 }
 
 :deep(.docs-prose p),
 :deep(.docs-prose ul),
-:deep(.docs-prose ol) {
+:deep(.docs-prose ol),
+:deep(.docs-prose li) {
   line-height: 1.8;
-  margin-bottom: 1.25rem;
-  color: rgba(0, 0, 0, 0.8);
+  margin-bottom: 1.15rem;
+  color: var(--docs-ink);
 }
 
-:deep(.dark .docs-prose p),
-:deep(.dark .docs-prose ul),
-:deep(.dark .docs-prose ol) {
-  color: rgba(255, 255, 255, 0.8);
+:deep(.docs-prose strong) {
+  color: var(--docs-ink);
+}
+
+:deep(.dark .docs-prose strong),
+:deep([data-theme='dark'] .docs-prose strong) {
+  color: #9ad2ee;
+}
+
+:deep(.docs-prose del) {
+  color: var(--docs-muted);
+  text-decoration-color: currentColor;
 }
 
 :deep(.docs-prose code) {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.875em;
-  border-radius: 0.375rem;
-  padding: 0.2rem 0.3rem;
-  background-color: rgba(0, 0, 0, 0.05);
-  color: #eb5757;
+  border-radius: 4px;
+  padding: 0.2rem 0.35rem;
+  background-color: var(--docs-inline-code-bg);
+  border: 1px solid var(--docs-inline-code-border);
+  color: var(--docs-ink);
 }
 
-:deep(.dark .docs-prose code) {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #ff7b72;
+:deep(.dark .docs-prose code),
+:deep([data-theme='dark'] .docs-prose code) {
+  color: var(--docs-ink);
 }
 
 :deep(.docs-prose pre) {
-  margin: 1.5rem 0;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  background-color: #1e1e1e !important;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  position: relative;
+  margin: 1.4rem 0;
+  padding: 2.4rem 1rem 1rem;
+  border-radius: 8px;
+  background: var(--docs-code-bg) !important;
+  border: 1px solid var(--docs-code-border);
   overflow-x: auto;
-}
-
-:deep(.dark .docs-prose pre) {
-  border-color: rgba(255, 255, 255, 0.1);
-  background-color: #0d1117 !important;
 }
 
 :deep(.docs-prose pre code) {
   background-color: transparent !important;
   padding: 0;
   border-radius: 0;
+  border: none;
   color: inherit;
   font-size: 0.9em;
   line-height: 1.6;
 }
 
+:deep(.docs-prose pre .docs-code-header) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.03);
+}
+
+:deep(.dark .docs-prose pre .docs-code-header),
+:deep([data-theme='dark'] .docs-prose pre .docs-code-header) {
+  color: rgba(226, 232, 240, 0.88);
+  background: rgba(15, 23, 42, 0.55);
+  border-bottom-color: rgba(148, 163, 184, 0.24);
+}
+
+:deep(.docs-prose pre .docs-code-language) {
+  font-weight: 600;
+  color: inherit;
+}
+
+:deep(.docs-prose pre .docs-code-copy) {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}
+
+:deep(.docs-prose pre .docs-code-copy:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
 :deep(.docs-prose blockquote) {
-  border-left: 4px solid var(--color-primary, #3b82f6);
-  padding-left: 1rem;
-  margin: 1.5rem 0;
+  border-left: none;
+  padding-left: 0.4rem;
+  margin: 1.4rem 0;
   font-style: italic;
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--docs-muted);
 }
 
-:deep(.dark .docs-prose blockquote) {
-  color: rgba(255, 255, 255, 0.6);
-}
-
-:deep(.docs-prose ul) {
-  list-style-type: disc;
-  padding-left: 1.5rem;
-}
-
+:deep(.docs-prose ul),
 :deep(.docs-prose ol) {
-  list-style-type: decimal;
-  padding-left: 1.5rem;
+  padding-left: 1.6rem;
+}
+
+:deep(.docs-prose ul li::marker),
+:deep(.docs-prose ol li::marker) {
+  color: var(--docs-accent);
 }
 
 :deep(.docs-prose a) {
-  color: var(--color-primary, #3b82f6);
+  color: var(--docs-accent);
   text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.2s;
+  border-bottom: 1px solid rgba(27, 181, 244, 0.35);
 }
 
-:deep(.docs-prose a:hover) {
-  border-bottom-color: currentColor;
-} */
+:deep(.docs-prose hr) {
+  border: 0;
+  height: 1px;
+  margin: 2rem 0;
+  background-image: linear-gradient(90deg, transparent, var(--docs-hr-color), transparent);
+  background-size: 200% 100%;
+  animation: docs-hr-shimmer 6s ease-in-out infinite;
+}
+
+:deep(.docs-prose table) {
+  width: 100%;
+  border-collapse: collapse;
+  border: none;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+:deep(.docs-prose table th),
+:deep(.docs-prose table td) {
+  padding: 0.65rem 0.8rem;
+  border: none;
+  text-align: left;
+  color: var(--docs-ink);
+}
+
+:deep(.docs-prose table tr) {
+  border-top: none;
+}
+
+:deep(.docs-prose table tr:last-child td) {
+  border-bottom: 0;
+}
+
+:deep(.docs-prose table th) {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--docs-ink);
+  font-weight: 600;
+}
+
+:deep(.dark .docs-prose table th),
+:deep([data-theme='dark'] .docs-prose table th) {
+  background: rgba(148, 163, 184, 0.32);
+  color: var(--docs-ink);
+}
+
+:deep(.docs-prose table tbody tr:nth-child(2n)) {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+:deep(.dark .docs-prose table tbody tr:nth-child(2n)),
+:deep([data-theme='dark'] .docs-prose table tbody tr:nth-child(2n)) {
+  background: rgba(148, 163, 184, 0.16);
+}
+
+@keyframes docs-hr-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :deep(.docs-prose hr) {
+    animation: none;
+  }
+}
 </style>

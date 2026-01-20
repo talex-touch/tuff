@@ -1,8 +1,12 @@
 # Feature SDK
 
+## 概述
+
 Feature SDK 提供插件管理 CoreBox 搜索结果项（TuffItem）的能力。
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```typescript
 import { useFeature } from '@talex-touch/utils/plugin/sdk'
@@ -29,7 +33,7 @@ feature.onInputChange((input) => {
 
 ## API 参考
 
-### useFeature()
+**useFeature()**
 
 获取 Feature SDK 实例。
 
@@ -45,7 +49,7 @@ const feature = useFeature()
 
 ## 搜索结果管理
 
-### `pushItems(items)`
+**`pushItems(items)`**
 
 推送多个项目到 CoreBox 搜索结果。
 
@@ -61,7 +65,7 @@ feature.pushItems([
 ])
 ```
 
-### `updateItem(id, updates)`
+**`updateItem(id, updates)`**
 
 更新指定项目。
 
@@ -72,7 +76,7 @@ feature.updateItem('result-1', {
 })
 ```
 
-### `removeItem(id)`
+**`removeItem(id)`**
 
 移除指定项目。
 
@@ -80,7 +84,7 @@ feature.updateItem('result-1', {
 feature.removeItem('result-1')
 ```
 
-### `clearItems()`
+**`clearItems()`**
 
 清除当前插件的所有项目。
 
@@ -88,7 +92,7 @@ feature.removeItem('result-1')
 feature.clearItems()
 ```
 
-### `getItems()`
+**`getItems()`**
 
 获取当前插件的所有项目。
 
@@ -101,7 +105,7 @@ console.log(`当前显示 ${items.length} 个项目`)
 
 ## 事件监听
 
-### `onInputChange(handler)`
+**`onInputChange(handler)`**
 
 监听搜索输入变化。
 
@@ -118,7 +122,7 @@ const unsubscribe = feature.onInputChange((input) => {
 unsubscribe()
 ```
 
-### `onKeyEvent(handler)`
+**`onKeyEvent(handler)`**
 
 监听键盘事件。当插件 UI 附加到 CoreBox 时，某些按键事件会被转发。
 
@@ -188,7 +192,7 @@ interface TuffItem {
 
 ## 完整示例
 
-### 实时搜索插件
+**实时搜索插件**
 
 ```typescript
 import { useFeature, useBox } from '@talex-touch/utils/plugin/sdk'
@@ -252,3 +256,14 @@ interface FeatureSDK {
 type InputChangeHandler = (input: string) => void
 type KeyEventHandler = (event: ForwardedKeyEvent) => void
 ```
+
+## 最佳实践
+
+- 结果项 ID 保持稳定，避免频繁重建造成排序抖动。
+- 输入变化时做去抖，减少 pushItems 的调用频率。
+- 合理设置排序与权重字段，避免推荐权重失衡。
+
+## 技术原理
+
+- Feature SDK 在渲染进程构建结果项，并通过主进程 CoreBox 管理器渲染。
+- 结果数据进入统一的排序与推荐管线，最终合并展示给用户。

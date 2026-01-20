@@ -1,8 +1,12 @@
 # Intelligence SDK
 
+## 概述
+
 Intelligence SDK 提供插件访问 AI 能力的统一接口，支持多种 AI Provider（OpenAI、Anthropic、DeepSeek、SiliconFlow 等）。
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```typescript
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
@@ -40,7 +44,7 @@ console.log(ocrRes.result.text)
 
 ## API 参考
 
-### useIntelligence()
+**useIntelligence()**
 
 获取 Intelligence SDK 实例（Vue Composable）。
 
@@ -70,7 +74,7 @@ void intelligence
 
 ## 文本处理 (text)
 
-### `text.chat(payload, options?)`
+**`text.chat(payload, options?)`**
 
 AI 对话。
 
@@ -98,7 +102,7 @@ console.log(result.usage) // { promptTokens, completionTokens, totalTokens }
 | `topP` | `number` | Top-p 采样参数 |
 | `stop` | `string[]` | 停止序列 |
 
-### `text.translate(payload, options?)`
+**`text.translate(payload, options?)`**
 
 文本翻译。
 
@@ -112,7 +116,7 @@ const result = await text.translate({
 console.log(result.result) // "你好世界"
 ```
 
-### `text.summarize(payload, options?)`
+**`text.summarize(payload, options?)`**
 
 文本摘要。
 
@@ -126,7 +130,7 @@ const result = await text.summarize({
 console.log(result.result)
 ```
 
-### `text.rewrite(payload, options?)`
+**`text.rewrite(payload, options?)`**
 
 文本改写。
 
@@ -140,7 +144,7 @@ const result = await text.rewrite({
 console.log(result.result)
 ```
 
-### `text.grammarCheck(payload, options?)`
+**`text.grammarCheck(payload, options?)`**
 
 语法检查。
 
@@ -164,7 +168,7 @@ console.log(result.result)
 
 ## 代码处理 (code)
 
-### `code.generate(payload, options?)`
+**`code.generate(payload, options?)`**
 
 代码生成。
 
@@ -186,7 +190,7 @@ console.log(result.result)
 // }
 ```
 
-### `code.explain(payload, options?)`
+**`code.explain(payload, options?)`**
 
 代码解释。
 
@@ -208,7 +212,7 @@ console.log(result.result)
 // }
 ```
 
-### `code.review(payload, options?)`
+**`code.review(payload, options?)`**
 
 代码审查。
 
@@ -229,7 +233,7 @@ console.log(result.result)
 // }
 ```
 
-### `code.refactor(payload, options?)`
+**`code.refactor(payload, options?)`**
 
 代码重构。
 
@@ -243,7 +247,7 @@ const result = await code.refactor({
 console.log(result.result)
 ```
 
-### `code.debug(payload, options?)`
+**`code.debug(payload, options?)`**
 
 代码调试。
 
@@ -268,7 +272,7 @@ console.log(result.result)
 
 ## 分析能力 (analysis)
 
-### `analysis.detectIntent(payload, options?)`
+**`analysis.detectIntent(payload, options?)`**
 
 意图检测。
 
@@ -290,7 +294,7 @@ console.log(result.result)
 // }
 ```
 
-### `analysis.analyzeSentiment(payload, options?)`
+**`analysis.analyzeSentiment(payload, options?)`**
 
 情感分析。
 
@@ -310,7 +314,7 @@ console.log(result.result)
 // }
 ```
 
-### `analysis.extractContent(payload, options?)`
+**`analysis.extractContent(payload, options?)`**
 
 内容提取。
 
@@ -331,7 +335,7 @@ console.log(result.result)
 // }
 ```
 
-### `analysis.extractKeywords(payload, options?)`
+**`analysis.extractKeywords(payload, options?)`**
 
 关键词提取。
 
@@ -345,7 +349,7 @@ const result = await analysis.extractKeywords({
 console.log(result.result)
 ```
 
-### `analysis.classify(payload, options?)`
+**`analysis.classify(payload, options?)`**
 
 文本分类。
 
@@ -367,7 +371,7 @@ console.log(result.result)
 
 ## 视觉处理 (vision)
 
-### `vision.ocr(payload, options?)`
+**`vision.ocr(payload, options?)`**
 
 OCR 文字识别。
 
@@ -408,7 +412,7 @@ const sourceBase64 = { type: 'base64', base64: '...' } as const
 console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
 ```
 
-### `vision.caption(payload, options?)`
+**`vision.caption(payload, options?)`**
 
 图片描述生成。
 
@@ -427,7 +431,7 @@ console.log(result.result)
 // }
 ```
 
-### `vision.analyze(payload, options?)`
+**`vision.analyze(payload, options?)`**
 
 图片分析。
 
@@ -448,7 +452,7 @@ console.log(result.result)
 // }
 ```
 
-### `vision.generate(payload, options?)`
+**`vision.generate(payload, options?)`**
 
 图片生成。
 
@@ -472,7 +476,7 @@ console.log(result.result)
 
 ## 向量嵌入 (embedding)
 
-### `embedding.generate(payload, options?)`
+**`embedding.generate(payload, options?)`**
 
 生成文本向量。
 
@@ -490,7 +494,7 @@ console.log(result.result.length)
 
 ## RAG 检索 (rag)
 
-### `rag.query(payload, options?)`
+**`rag.query(payload, options?)`**
 
 RAG 查询。
 
@@ -504,7 +508,7 @@ const result = await rag.query({
 console.log(result.result)
 ```
 
-### `rag.semanticSearch(payload, options?)`
+**`rag.semanticSearch(payload, options?)`**
 
 语义搜索。
 
@@ -518,7 +522,7 @@ const result = await rag.semanticSearch({
 console.log(result.result)
 ```
 
-### `rag.rerank(payload, options?)`
+**`rag.rerank(payload, options?)`**
 
 结果重排序。
 
@@ -536,7 +540,7 @@ console.log(result.result)
 
 ## Agent 能力 (agent)
 
-### `agent.run(payload, options?)`
+**`agent.run(payload, options?)`**
 
 运行 Agent。
 
@@ -554,7 +558,7 @@ console.log(result.result)
 
 ## 通用调用
 
-### `invoke(capabilityId, payload, options?)`
+**`invoke(capabilityId, payload, options?)`**
 
 直接调用任意能力。
 
@@ -628,7 +632,7 @@ watch(lastError, error => console.log('error', error))
 
 ## 完整示例
 
-### 翻译插件
+**翻译插件**
 
 ```typescript
 import { useClipboard } from '@talex-touch/utils/plugin/sdk'
@@ -651,7 +655,7 @@ async function translateAndPaste(content: string, targetLang: string) {
 void translateAndPaste
 ```
 
-### OCR 识别插件
+**OCR 识别插件**
 
 ```typescript
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
@@ -714,3 +718,14 @@ enum IntelligenceCapabilityType {
 
 void IntelligenceCapabilityType.CHAT
 ```
+
+## 最佳实践
+
+- 根据配额与订阅状态选择能力，避免调用失败。
+- 对用户输入做敏感信息脱敏，必要时提示确认。
+- 对高频调用做缓存与限流，控制成本。
+
+## 技术原理
+
+- Intelligence SDK 在渲染进程封装调用，由主进程负责路由到具体 Provider。
+- 统一返回结构包含耗时与 token 统计，便于监控与优化。

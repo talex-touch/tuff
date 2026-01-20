@@ -32,7 +32,7 @@ New plugins should always declare the latest `sdkapi` version for complete permi
 
 The permission system controls plugin access to sensitive APIs. See [Permission API docs](/docs/dev/api/permission) for details.
 
-### Declaration Format
+**Declaration Format**
 
 ```json
 "permissions": {
@@ -45,7 +45,7 @@ The permission system controls plugin access to sensitive APIs. See [Permission 
 }
 ```
 
-### Available Permissions
+**Available Permissions**
 
 | Permission ID | Risk | Description |
 |--------------|------|-------------|

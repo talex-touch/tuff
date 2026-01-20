@@ -1,6 +1,10 @@
 # SDK API 概述
 
+## 概述
 Tuff 插件 SDK 提供了一套完整的 API，用于开发 CoreBox 插件。所有 API 都采用函数式设计，通过 `use*` 钩子函数获取实例。
+
+## 介绍
+SDK 以插件运行时上下文为基础，统一输出窗口控制、剪贴板、搜索、存储等能力，适合快速搭建可交互的 CoreBox 插件。
 
 ## 安装
 
@@ -8,7 +12,7 @@ Tuff 插件 SDK 提供了一套完整的 API，用于开发 CoreBox 插件。所
 pnpm add @talex-touch/utils
 ```
 
-## SDK 模块
+## API 参考
 
 | 模块 | 导入方式 | 说明 |
 |------|----------|------|
@@ -74,9 +78,9 @@ async function init() {
 
 ---
 
-## 设计原则
+## 最佳实践
 
-### 1. 函数式 API
+**1. 函数式 API**
 
 所有 SDK 都通过 `use*` 函数获取实例，无需手动传递 context：
 
@@ -90,7 +94,7 @@ await storage.getFile('config.json')
 // await storage.getItem('key')
 ```
 
-### 2. 自动上下文检测
+**2. 自动上下文检测**
 
 SDK 会自动检测插件上下文，无需手动配置：
 
@@ -99,7 +103,7 @@ const storage = usePluginStorage()
 // 自动获取当前插件名称，无需传递
 ```
 
-### 3. 返回 Dispose 函数
+**3. 返回 Dispose 函数**
 
 所有监听器都返回取消订阅函数：
 
@@ -114,7 +118,7 @@ onUnmounted(() => {
 })
 ```
 
-### 4. Promise 异步
+**4. Promise 异步**
 
 所有异步操作返回 Promise：
 
@@ -124,6 +128,10 @@ await clipboard.copyAndPaste({ text: 'Hello' })
 ```
 
 ---
+
+## 技术原理
+- `use*` 钩子在运行时自动解析插件上下文，避免手动传递 context。
+- 通信层基于 IPC/Transport 统一封装，监听器返回 dispose 函数用于清理。
 
 ## 类型导入
 
@@ -141,6 +149,6 @@ import type {
 
 ## 相关文档
 
-- [插件开发快速开始](../quickstart.zh.md)
-- [Manifest 配置](../manifest.zh.md)
+- [插件开发快速开始](../getting-started/quickstart.zh.md)
+- [Manifest 配置](../reference/manifest.zh.md)
 - [构建工具 Unplugin](../extensions/unplugin-export-plugin.zh.md)

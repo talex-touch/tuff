@@ -1,6 +1,6 @@
 <script setup lang="ts" name="TuffAsideSearchBar">
 import { computed } from 'vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 
 const props = withDefaults(
@@ -16,8 +16,8 @@ const props = withDefaults(
     searchLabel: '',
     searchPlaceholder: '',
     searchId: 'tuff-aside-template-search',
-    clearLabel: 'Clear search',
-  },
+    clearLabel: 'Clear search'
+  }
 )
 
 const emit = defineEmits<{
@@ -31,7 +31,7 @@ const searchValue = computed({
   set: (value: string) => {
     emit('update:modelValue', value)
     emit('search', value)
-  },
+  }
 })
 
 function handleClear(): void {
@@ -57,15 +57,16 @@ function handleClear(): void {
           <i class="i-carbon-search" aria-hidden="true" />
         </template>
       </FlatInput>
-      <FlatButton
+      <TxButton
         v-if="searchValue"
+        variant="flat"
+        size="sm"
         class="TuffAsideSearch-Clear"
-        mini
         :aria-label="props.clearLabel"
         @click="handleClear"
       >
         <i class="i-carbon-close" aria-hidden="true" />
-      </FlatButton>
+      </TxButton>
     </div>
   </div>
 </template>

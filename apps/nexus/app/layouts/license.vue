@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxGradualBlur } from '@talex-touch/tuffex'
 </script>
 
 <template>
@@ -7,6 +8,8 @@
       <div class="pointer-events-none absolute inset-0 overflow-hidden -z-10">
         <div class="docs-background absolute left-1/2 h-[420px] w-[820px] rounded-[200px] from-primary/6 via-primary/3 to-transparent bg-gradient-to-br blur-3xl -top-32 -translate-x-1/2 dark:from-light/10 dark:via-light/5 dark:to-transparent" />
       </div>
+      <TxGradualBlur position="top" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
+      <TxGradualBlur position="bottom" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
       <TheHeader title="Tuff" class="z-30" />
       <div class="relative flex flex-1 justify-center px-4 pb-24 pt-24 lg:px-10 sm:px-6">
         <div class="max-w-7xl w-full flex gap-6 lg:gap-10">

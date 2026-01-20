@@ -21,6 +21,7 @@ export function useTheme() {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const isAppearanceTransition = !prefersReducedMotion
       && ('startViewTransition' in document)
+    const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode?.matches)
 
     if (!isAppearanceTransition || !event) {
       applyPreference(mode)
@@ -28,7 +29,6 @@ export function useTheme() {
     }
 
     const [x, y] = [event.clientX, event.clientY]
-    const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode?.matches)
 
     const transition = document.startViewTransition(() => {
       applyPreference(mode)
@@ -37,14 +37,15 @@ export function useTheme() {
     transition.ready.then(() => {
       const endRadius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y))
       const clipPath = [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`]
-      const isReversed = isChangingToDark !== (color.value === 'dark')
-      const animationPath = isReversed ? clipPath.reverse() : clipPath
+      const animationPath = isChangingToDark ? clipPath : [...clipPath].reverse()
+      const target = isChangingToDark ? '::view-transition-new(root)' : '::view-transition-old(root)'
 
       document.documentElement.animate(
         [{ clipPath: animationPath[0] }, { clipPath: animationPath[1] }],
         {
           duration: 300,
           easing: 'ease-in',
+          pseudoElement: target,
         },
       )
     })

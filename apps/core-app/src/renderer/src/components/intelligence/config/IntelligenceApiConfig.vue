@@ -4,7 +4,7 @@ import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, getCurrentInstance, ref } from 'vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -273,11 +273,16 @@ async function fetchAvailableModels(provider: any) {
             <span>{{ testError }}</span>
           </div>
         </div>
-        <FlatButton :disabled="!canTest || isTesting" :loading="isTesting" @click="handleTest">
+        <TxButton
+          variant="flat"
+          :disabled="!canTest || isTesting"
+          :loading="isTesting"
+          @click="handleTest"
+        >
           <i v-if="isTesting" class="i-carbon-renew animate-spin" />
           <i v-else class="i-carbon-play-filled" />
           <span>{{ t('intelligence.config.api.testButton') }}</span>
-        </FlatButton>
+        </TxButton>
       </div>
     </TuffBlockSlot>
   </div>

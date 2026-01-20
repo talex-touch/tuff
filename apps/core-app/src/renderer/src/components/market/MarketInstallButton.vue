@@ -18,7 +18,7 @@
 import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 interface Props {
   /** Name of the plugin (used for display/tracking) */
@@ -189,9 +189,10 @@ function handleClick(event: MouseEvent): void {
 </script>
 
 <template>
-  <FlatButton
-    :primary="!isInstalled || hasUpgrade"
-    :mini="mini"
+  <TxButton
+    variant="flat"
+    :type="!isInstalled || hasUpgrade ? 'primary' : undefined"
+    :size="mini ? 'sm' : undefined"
     :disabled="isDisabled"
     :class="{ 'upgrade-available': hasUpgrade && isInstalled && !isActiveStage }"
     @click="handleClick"
@@ -204,7 +205,7 @@ function handleClick(event: MouseEvent): void {
       <i v-else :class="buttonIcon" />
       <span>{{ buttonLabel }}</span>
     </div>
-  </FlatButton>
+  </TxButton>
 </template>
 
 <style lang="scss" scoped>

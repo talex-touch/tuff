@@ -2,7 +2,7 @@
 import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
 import type { ReleaseChannelId } from '~/data/updates'
 import { computed, ref, watch } from 'vue'
-import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
+import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel, resolveReleaseNotesHtml } from '~/composables/useReleases'
 import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
 
 definePageMeta({
@@ -124,6 +124,16 @@ const allDownloads = computed(() => {
   if (!latestRelease.value?.assets)
     return []
   return latestRelease.value.assets
+})
+
+const latestReleaseNotes = computed(() => {
+  if (!latestRelease.value)
+    return ''
+  return resolveReleaseNotesHtml(
+    latestRelease.value.notesHtml,
+    latestRelease.value.notes,
+    locale.value,
+  )
 })
 
 watch(historyExpanded, (expanded) => {
@@ -248,9 +258,9 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 
           <!-- Release Notes -->
           <div
-            v-if="latestRelease.notes"
+            v-if="latestReleaseNotes"
             class="prose prose-sm prose-gray mb-6 max-w-none dark:prose-invert"
-            v-html="latestRelease.notesHtml || latestRelease.notes"
+            v-html="latestReleaseNotes"
           />
 
           <!-- Download Buttons -->

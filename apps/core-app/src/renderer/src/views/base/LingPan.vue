@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ElMessageBox, ElProgress, ElTabPane, ElTabs } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
@@ -561,15 +562,26 @@ onUnmounted(() => {
           </div>
           <div class="control-group">
             <label class="control-label">LOGS</label>
-            <button class="debug-btn debug-btn--compact" type="button" @click="toggleVerboseLogs">
+            <TxButton
+              variant="bare"
+              class="debug-btn debug-btn--compact"
+              native-type="button"
+              @click="toggleVerboseLogs"
+            >
               {{ verboseLogsEnabled ? 'VERBOSE ON' : 'VERBOSE OFF' }}
-            </button>
+            </TxButton>
           </div>
-          <button class="debug-btn" type="button" :disabled="loading" @click="load">
+          <TxButton
+            variant="bare"
+            class="debug-btn"
+            native-type="button"
+            :disabled="loading"
+            @click="load"
+          >
             <span v-if="loading" class="loading-dot" />
             <span v-else class="refresh-symbol">⟳</span>
             <span>{{ loading ? 'LOADING...' : 'REFRESH' }}</span>
-          </button>
+          </TxButton>
         </div>
       </div>
     </header>
@@ -581,14 +593,22 @@ onUnmounted(() => {
         CPU、内存与磁盘占用，并可能记录路径等敏感信息。建议仅在排查问题时短时开启。
       </div>
       <div class="warning-actions">
-        <button class="warning-btn" type="button" @click="requestVerboseLogs">开启详细日志</button>
-        <button
+        <TxButton
+          variant="bare"
+          class="warning-btn"
+          native-type="button"
+          @click="requestVerboseLogs"
+        >
+          开启详细日志
+        </TxButton>
+        <TxButton
+          variant="bare"
           class="warning-btn warning-btn--ghost"
-          type="button"
+          native-type="button"
           @click="verboseWarningDismissed = true"
         >
           仅查看
-        </button>
+        </TxButton>
       </div>
     </div>
 

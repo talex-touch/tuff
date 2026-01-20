@@ -4,9 +4,10 @@
 
 ## Reading Order
 1. **Intelligence Workflow** — build cross-plugin task chains.
-2. **Automation Control** — command palette, shortcuts, clipboard flows.
-3. **Productivity Canvas** — widgets, templates, shared layouts.
-4. **FAQ** — rapid answers grouped by theme.
+2. **Prompt Playbook** — write clearer inputs for more stable results.
+3. **Automation Control** — command palette, shortcuts, clipboard flows.
+4. **Productivity Canvas** — widgets, templates, shared layouts.
+5. **FAQ** — rapid answers grouped by theme.
 
 ## Shared Advice
 - Trigger everything from CoreBox whenever possible.

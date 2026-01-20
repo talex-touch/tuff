@@ -1,8 +1,12 @@
 # Account API
 
+## 概述
+
 账户 SDK 提供用户信息、订阅状态、配额管理等能力，适用于插件需要根据用户身份或订阅等级提供差异化功能的场景。
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```ts
 import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
@@ -35,7 +39,7 @@ if (await accountSDK.isPaidUser()) {
 
 ## API 参考
 
-### 获取 SDK 实例
+**获取 SDK 实例**
 
 ```ts
 import { accountSDK } from '@talex-touch/utils'
@@ -50,9 +54,9 @@ await accountSDK.getProfile()
 
 ---
 
-### 用户信息
+**用户信息**
 
-#### `getProfile()`
+**`getProfile()`**
 
 获取完整用户资料。
 
@@ -74,7 +78,7 @@ const profile = await accountSDK.getProfile()
 |--------|------|------|
 | `profile` | `UserProfile \| null` | 用户资料，未登录返回 `null` |
 
-#### `isLoggedIn()`
+**`isLoggedIn()`**
 
 检查用户是否已登录。
 
@@ -84,7 +88,7 @@ if (await accountSDK.isLoggedIn()) {
 }
 ```
 
-#### `getUserId()`
+**`getUserId()`**
 
 获取用户 ID。
 
@@ -93,7 +97,7 @@ const userId = await accountSDK.getUserId()
 // 'user_xxx' 或 null
 ```
 
-#### `getDisplayName()`
+**`getDisplayName()`**
 
 获取显示名称。
 
@@ -102,7 +106,7 @@ const name = await accountSDK.getDisplayName()
 // '张三'
 ```
 
-#### `getEmail()`
+**`getEmail()`**
 
 获取用户邮箱。
 
@@ -111,7 +115,7 @@ const email = await accountSDK.getEmail()
 // 'zhangsan@example.com'
 ```
 
-#### `getAvatarUrl()`
+**`getAvatarUrl()`**
 
 获取头像 URL。
 
@@ -122,9 +126,9 @@ const avatar = await accountSDK.getAvatarUrl()
 
 ---
 
-### 订阅检查
+**订阅检查**
 
-#### `getPlan()`
+**`getPlan()`**
 
 获取当前订阅计划。
 
@@ -133,7 +137,7 @@ const plan = await accountSDK.getPlan()
 // SubscriptionPlan.PRO
 ```
 
-#### `getSubscription()`
+**`getSubscription()`**
 
 获取完整订阅详情。
 
@@ -151,7 +155,7 @@ const subscription = await accountSDK.getSubscription()
 // }
 ```
 
-#### `isPaidUser()`
+**`isPaidUser()`**
 
 检查是否为付费用户。
 
@@ -161,7 +165,7 @@ if (await accountSDK.isPaidUser()) {
 }
 ```
 
-#### `isProOrAbove()`
+**`isProOrAbove()`**
 
 检查是否为 Pro 或更高等级。
 
@@ -171,7 +175,7 @@ if (await accountSDK.isProOrAbove()) {
 }
 ```
 
-#### `isPlusOrAbove()`
+**`isPlusOrAbove()`**
 
 检查是否为 Plus 或更高等级。
 
@@ -181,7 +185,7 @@ if (await accountSDK.isPlusOrAbove()) {
 }
 ```
 
-#### `isTeamOrAbove()`
+**`isTeamOrAbove()`**
 
 检查是否为 Team 或更高等级。
 
@@ -191,7 +195,7 @@ if (await accountSDK.isTeamOrAbove()) {
 }
 ```
 
-#### `isEnterprise()`
+**`isEnterprise()`**
 
 检查是否为企业版。
 
@@ -201,7 +205,7 @@ if (await accountSDK.isEnterprise()) {
 }
 ```
 
-#### `isTrialing()`
+**`isTrialing()`**
 
 检查是否在试用期。
 
@@ -212,7 +216,7 @@ if (await accountSDK.isTrialing()) {
 }
 ```
 
-#### `getDaysRemaining()`
+**`getDaysRemaining()`**
 
 获取当前订阅周期剩余天数。
 
@@ -223,9 +227,9 @@ const days = await accountSDK.getDaysRemaining()
 
 ---
 
-### 配额检查
+**配额检查**
 
-#### `getQuota()`
+**`getQuota()`**
 
 获取当前计划的配额限制。
 
@@ -242,7 +246,7 @@ const quota = await accountSDK.getQuota()
 // }
 ```
 
-#### `getUsage()`
+**`getUsage()`**
 
 获取当前使用量统计。
 
@@ -257,7 +261,7 @@ const usage = await accountSDK.getUsage()
 // }
 ```
 
-#### `checkAiRequestQuota()`
+**`checkAiRequestQuota()`**
 
 检查 AI 请求配额。
 
@@ -271,7 +275,7 @@ if (!result.allowed) {
 }
 ```
 
-#### `checkAiTokenQuota(estimatedTokens)`
+**`checkAiTokenQuota(estimatedTokens)`**
 
 检查 AI Token 配额。
 
@@ -286,7 +290,7 @@ if (!result.allowed) {
 |------|------|------|
 | `estimatedTokens` | `number` | 预估消耗的 Token 数量（可选，默认 0） |
 
-#### `checkStorageQuota(additionalBytes)`
+**`checkStorageQuota(additionalBytes)`**
 
 检查存储配额。
 
@@ -297,7 +301,7 @@ if (!result.allowed) {
 }
 ```
 
-#### `checkPluginQuota()`
+**`checkPluginQuota()`**
 
 检查插件安装配额。
 
@@ -308,7 +312,7 @@ if (!result.allowed) {
 }
 ```
 
-#### `getUsagePercentage(type)`
+**`getUsagePercentage(type)`**
 
 获取特定配额的使用百分比。
 
@@ -328,9 +332,9 @@ if (storageUsage > 80) {
 
 ---
 
-### 功能权限
+**功能权限**
 
-#### `hasApiAccess()`
+**`hasApiAccess()`**
 
 检查是否有 API 访问权限。
 
@@ -340,7 +344,7 @@ if (await accountSDK.hasApiAccess()) {
 }
 ```
 
-#### `hasCustomModelAccess()`
+**`hasCustomModelAccess()`**
 
 检查是否可以使用自定义模型。
 
@@ -350,7 +354,7 @@ if (await accountSDK.hasCustomModelAccess()) {
 }
 ```
 
-#### `hasPrioritySupport()`
+**`hasPrioritySupport()`**
 
 检查是否享有优先支持。
 
@@ -360,7 +364,7 @@ if (await accountSDK.hasPrioritySupport()) {
 }
 ```
 
-#### `hasAdvancedAnalytics()`
+**`hasAdvancedAnalytics()`**
 
 检查是否有高级分析功能。
 
@@ -370,7 +374,7 @@ if (await accountSDK.hasAdvancedAnalytics()) {
 }
 ```
 
-#### `hasFeature(featureId)`
+**`hasFeature(featureId)`**
 
 检查特定功能标志是否启用。
 
@@ -382,9 +386,9 @@ if (await accountSDK.hasFeature('beta-ai-v2')) {
 
 ---
 
-### 团队管理
+**团队管理**
 
-#### `getTeams()`
+**`getTeams()`**
 
 获取用户所属的所有团队。
 
@@ -396,7 +400,7 @@ const teams = await accountSDK.getTeams()
 // ]
 ```
 
-#### `isInTeam()`
+**`isInTeam()`**
 
 检查用户是否在任何团队中。
 
@@ -406,7 +410,7 @@ if (await accountSDK.isInTeam()) {
 }
 ```
 
-#### `isTeamOwner(teamId?)`
+**`isTeamOwner(teamId?)`**
 
 检查用户是否为团队所有者。
 
@@ -420,7 +424,7 @@ if (await accountSDK.isTeamOwner('team_xxx')) {
 }
 ```
 
-#### `isTeamAdmin(teamId?)`
+**`isTeamAdmin(teamId?)`**
 
 检查用户是否为团队管理员（含所有者）。
 
@@ -432,9 +436,9 @@ if (await accountSDK.isTeamAdmin()) {
 
 ---
 
-### 升级与账单
+**升级与账单**
 
-#### `getUpgradeOptions()`
+**`getUpgradeOptions()`**
 
 获取可用的升级选项。
 
@@ -446,7 +450,7 @@ const options = accountSDK.getUpgradeOptions()
 // ]
 ```
 
-#### `getPlanComparison()`
+**`getPlanComparison()`**
 
 获取计划对比表。
 
@@ -458,7 +462,7 @@ const comparison = accountSDK.getPlanComparison()
 // ]
 ```
 
-#### `openUpgradePage(plan?)`
+**`openUpgradePage(plan?)`**
 
 打开升级页面。
 
@@ -467,7 +471,7 @@ await accountSDK.openUpgradePage() // 打开升级页
 await accountSDK.openUpgradePage(SubscriptionPlan.PLUS) // 直接跳转到 Plus
 ```
 
-#### `openBillingPage()`
+**`openBillingPage()`**
 
 打开账单管理页面。
 
@@ -477,9 +481,9 @@ await accountSDK.openBillingPage()
 
 ---
 
-### 账户操作
+**账户操作**
 
-#### `requestLogin()`
+**`requestLogin()`**
 
 请求用户登录（打开登录对话框）。
 
@@ -490,7 +494,7 @@ if (success) {
 }
 ```
 
-#### `logout()`
+**`logout()`**
 
 登出当前用户。
 
@@ -498,7 +502,7 @@ if (success) {
 await accountSDK.logout()
 ```
 
-#### `openAccountSettings()`
+**`openAccountSettings()`**
 
 打开账户设置页面。
 
@@ -508,9 +512,14 @@ await accountSDK.openAccountSettings()
 
 ---
 
+## 技术原理
+
+- Account SDK 通过统一的账户服务查询用户登录态、订阅与配额信息。
+- 权限与配额判断在客户端进行，避免在 UI 侧散落重复逻辑。
+
 ## 最佳实践
 
-### 1. 付费功能门控
+**1. 付费功能门控**
 
 ```ts
 async function showPremiumFeature() {
@@ -525,7 +534,7 @@ async function showPremiumFeature() {
 }
 ```
 
-### 2. 配额预检
+**2. 配额预检**
 
 ```ts
 async function beforeAiRequest(estimatedTokens: number) {
@@ -539,7 +548,7 @@ async function beforeAiRequest(estimatedTokens: number) {
 }
 ```
 
-### 3. 团队功能适配
+**3. 团队功能适配**
 
 ```ts
 async function initTeamFeatures() {

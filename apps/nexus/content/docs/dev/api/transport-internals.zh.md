@@ -1,8 +1,13 @@
 # TuffTransport 技术内幕
 
+## 概述
 本文档深入介绍 TuffTransport 的架构设计，解释技术决策和实现细节。
 
-## 架构概览
+## 介绍
+适合需要理解 IPC 与传输层实现的开发者，建议结合 [TuffTransport API](/docs/dev/api/transport) 一起阅读。
+
+## 技术原理
+**架构概览**
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -50,7 +55,7 @@ TuffTransport
 
 ## 1. 事件系统设计
 
-### 为什么不用字符串？
+**为什么不用字符串？**
 
 传统 Channel API 使用字符串事件名：
 
@@ -66,7 +71,7 @@ channel.send('core-box:search:query', { txt: 'hi' })  // 字段错误 - 没有�
 3. **重构风险** - 重命名事件需要手动查找替换
 4. **运行时错误** - 拼写错误只能在运行时发现
 
-### TuffEvent 解决方案
+**TuffEvent 解决方案**
 
 TuffEvent 使用 TypeScript 类型系统强制正确性：
 
@@ -90,7 +95,7 @@ interface TuffEvent<TRequest, TResponse, TNamespace, TModule, TAction> {
 3. **不可变** - 事件使用 `Object.freeze()` 冻结
 4. **字符串转换** - `toString()` 返回事件名用于 IPC
 
-### Event Builder 模式
+**Event Builder 模式**
 
 构建器模式确保事件正确构造：
 
@@ -111,7 +116,7 @@ defineEvent('namespace')     // 返回 TuffEventBuilder<'namespace'>
 
 ## 2. 批量系统设计
 
-### 问题
+**问题**
 
 每次 IPC 调用都有开销（约 1-5ms）。多次顺序调用会累积：
 
@@ -122,7 +127,7 @@ const b = await channel.send('storage:get', { key: 'b' })  // IPC #2
 const c = await channel.send('storage:get', { key: 'c' })  // IPC #3
 ```
 
-### 批量流程
+**批量流程**
 
 ```
 请求 1 ─┐
@@ -142,7 +147,7 @@ const c = await channel.send('storage:get', { key: 'c' })  // IPC #3
 响应 3 ◄─┘
 ```
 
-### BatchManager 实现
+**BatchManager 实现**
 
 ```ts
 class BatchManager {
@@ -173,7 +178,7 @@ class BatchManager {
 }
 ```
 
-### 合并策略
+**合并策略**
 
 **1. Queue（默认）**
 所有请求按顺序保留并处理：
@@ -197,7 +202,7 @@ class BatchManager {
 
 ## 3. 流式系统设计
 
-### 为什么用 MessagePort？
+**为什么用 MessagePort？**
 
 常规 IPC 对流式传输有限制：
 - 请求-响应模式不适合连续数据
@@ -210,7 +215,7 @@ class BatchManager {
 - 原生背压支持
 - 对二进制数据高效
 
-### 流式流程
+**流式流程**
 
 ```
 渲染进程                                主进程
@@ -231,7 +236,7 @@ class BatchManager {
    │─── 6. 关闭端口 ──────────────────────►│
 ```
 
-### StreamServer（主进程）
+**StreamServer（主进程）**
 
 ```ts
 class StreamServer {
@@ -258,7 +263,7 @@ class StreamServer {
 }
 ```
 
-### 背压处理
+**背压处理**
 
 当消费者处理不过来时：
 
@@ -278,7 +283,7 @@ const config: StreamConfig = {
 
 ## 4. 插件安全
 
-### Key 机制
+**Key 机制**
 
 插件运行在隔离的 WebContentsView 中。为防止未授权访问：
 
@@ -309,7 +314,7 @@ const config: StreamConfig = {
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### PluginKeyManager
+**PluginKeyManager**
 
 ```ts
 interface PluginKeyManager {
@@ -320,7 +325,7 @@ interface PluginKeyManager {
 }
 ```
 
-### 安全上下文
+**安全上下文**
 
 每个处理器都接收安全上下文：
 
@@ -337,7 +342,7 @@ transport.on(SomeEvent, (payload, context) => {
 
 ## 5. 错误处理
 
-### 错误流程
+**错误流程**
 
 ```
 渲染进程                                主进程
@@ -357,7 +362,7 @@ catch (err) {
 }
 ```
 
-### 错误序列化
+**错误序列化**
 
 错误被序列化用于 IPC：
 
@@ -385,7 +390,7 @@ class TuffTransportError extends Error {
 
 ## 6. 性能考量
 
-### IPC 开销
+**IPC 开销**
 
 | 操作 | 大约耗时 |
 |------|----------|
@@ -395,14 +400,14 @@ class TuffTransportError extends Error {
 | MessagePort 建立 | 2-5ms |
 | MessagePort 消息 | 0.1-0.5ms |
 
-### 优化策略
+**优化策略**
 
 1. **默认批量** - 为频繁事件启用批量
 2. **大数据用流** - >100KB 用 MessagePort
 3. **尽量去重** - 相同请求共享响应
 4. **延迟求值** - 只在刷新批量时序列化
 
-### 内存管理
+**内存管理**
 
 ```ts
 // 清理模式
@@ -433,7 +438,7 @@ onUnmounted(() => {
 | 插件安全 | uniqueKey header | PluginKeyManager |
 | 向后兼容 | N/A | 完全兼容 |
 
-### 迁移路径
+**迁移路径**
 
 ```ts
 // 传统代码继续工作
@@ -446,6 +451,11 @@ transport.send(TuffEvent, data)
 ```
 
 ---
+
+## 最佳实践
+- 高频事件优先走批量队列，减少 IPC 调用次数。
+- 大体积数据使用流式传输，避免阻塞主线程。
+- 迁移时先替换核心链路，再覆盖边缘能力。
 
 ## 总结
 

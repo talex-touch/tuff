@@ -3,7 +3,7 @@ import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
@@ -198,13 +198,17 @@ onUnmounted(() => {
       default-icon="i-carbon-power"
       active-icon="i-carbon-power"
     >
-      <FlatButton :primary="!everythingStatus?.enabled" @click="toggleEverything">
+      <TxButton
+        variant="flat"
+        :type="!everythingStatus?.enabled ? 'primary' : undefined"
+        @click="toggleEverything"
+      >
         {{
           everythingStatus?.enabled
             ? t('settings.settingEverything.disable')
             : t('settings.settingEverything.enable')
         }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -214,13 +218,13 @@ onUnmounted(() => {
       default-icon="i-carbon-test-tool"
       active-icon="i-carbon-test-tool"
     >
-      <FlatButton :disabled="isTesting" @click="testSearch">
+      <TxButton variant="flat" :disabled="isTesting" @click="testSearch">
         {{
           isTesting
             ? t('settings.settingEverything.testing')
             : t('settings.settingEverything.testNow')
         }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -231,12 +235,12 @@ onUnmounted(() => {
       active-icon="i-carbon-download"
     >
       <div class="install-buttons">
-        <FlatButton primary @click="openEverythingDownload">
+        <TxButton variant="flat" type="primary" @click="openEverythingDownload">
           {{ t('settings.settingEverything.downloadEverything') }}
-        </FlatButton>
-        <FlatButton @click="openCLIDownload">
+        </TxButton>
+        <TxButton variant="flat" @click="openCLIDownload">
           {{ t('settings.settingEverything.downloadCLI') }}
-        </FlatButton>
+        </TxButton>
       </div>
     </TuffBlockSlot>
 
@@ -259,13 +263,13 @@ onUnmounted(() => {
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
-      <FlatButton :disabled="isChecking" @click="checkStatus">
+      <TxButton variant="flat" :disabled="isChecking" @click="checkStatus">
         {{
           isChecking
             ? t('settings.settingEverything.checking')
             : t('settings.settingEverything.checkNow')
         }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>

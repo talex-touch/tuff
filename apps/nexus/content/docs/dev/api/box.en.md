@@ -1,8 +1,12 @@
 # Box SDK
 
+## Overview
+
 The Box SDK provides plugins with the ability to control CoreBox window behavior, including show/hide, resizing, and input field control.
 
-## Quick Start
+## Introduction
+
+**Quick Start**
 
 ```typescript
 import { useBox } from '@talex-touch/utils/plugin/sdk'
@@ -23,7 +27,7 @@ const input = await box.getInput()
 
 ## API Reference
 
-### useBox()
+**useBox()**
 
 Get Box SDK instance.
 
@@ -39,7 +43,7 @@ const box = useBox()
 
 ## Window Control
 
-### `hide()`
+**`hide()`**
 
 Hide the CoreBox window.
 
@@ -47,7 +51,7 @@ Hide the CoreBox window.
 box.hide()
 ```
 
-### `show()`
+**`show()`**
 
 Show the CoreBox window.
 
@@ -55,7 +59,7 @@ Show the CoreBox window.
 box.show()
 ```
 
-### `expand(options?)`
+**`expand(options?)`**
 
 Expand the CoreBox window to show more results.
 
@@ -75,7 +79,7 @@ await box.expand()
 | `length` | `number` | Number of items to show |
 | `forceMax` | `boolean` | Force maximum expansion |
 
-### `shrink()`
+**`shrink()`**
 
 Shrink the CoreBox window to compact mode.
 
@@ -87,7 +91,7 @@ await box.shrink()
 
 ## Input Field Control
 
-### `hideInput()`
+**`hideInput()`**
 
 Hide the search input field.
 
@@ -95,7 +99,7 @@ Hide the search input field.
 await box.hideInput()
 ```
 
-### `showInput()`
+**`showInput()`**
 
 Show the search input field.
 
@@ -103,7 +107,7 @@ Show the search input field.
 await box.showInput()
 ```
 
-### `getInput()`
+**`getInput()`**
 
 Get current input field value.
 
@@ -112,7 +116,7 @@ const input = await box.getInput()
 console.log('Current input:', input)
 ```
 
-### `setInput(value)`
+**`setInput(value)`**
 
 Set input field value.
 
@@ -120,7 +124,7 @@ Set input field value.
 await box.setInput('hello world')
 ```
 
-### `clearInput()`
+**`clearInput()`**
 
 Clear the input field.
 
@@ -132,7 +136,7 @@ await box.clearInput()
 
 ## Monitoring Features
 
-### `allowInput()`
+**`allowInput()`**
 
 Enable input monitoring, allowing plugin to receive input change events.
 
@@ -151,7 +155,7 @@ channel.regChannel('core-box:input-change', ({ data }) => {
 })
 ```
 
-### `allowClipboard(types)`
+**`allowClipboard(types)`**
 
 Enable clipboard monitoring, allowing plugin to receive clipboard change events.
 
@@ -167,7 +171,7 @@ await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
 await box.allowClipboard(ClipboardTypePresets.ALL)
 ```
 
-#### ClipboardType Enum
+**ClipboardType Enum**
 
 | Value | Binary | Description |
 |-------|--------|-------------|
@@ -175,7 +179,7 @@ await box.allowClipboard(ClipboardTypePresets.ALL)
 | `IMAGE` | `0b0010` | Image |
 | `FILE` | `0b0100` | File |
 
-#### Preset Combinations
+**Preset Combinations**
 
 ```typescript
 import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
@@ -220,3 +224,14 @@ enum ClipboardType {
   FILE = 0b0100,
 }
 ```
+
+## Best Practices
+
+- Stop listeners when the feature is idle to reduce event noise.
+- Use `expand`/`shrink` based on result count for predictable UX.
+- Throttle heavy logic in input or clipboard callbacks.
+
+## Technical Notes
+
+- Box SDK sends IPC requests to the main process to manage window state safely.
+- Monitoring is filtered in the CoreBox main process before reaching plugins.

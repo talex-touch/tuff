@@ -1,21 +1,21 @@
 <script lang="ts" name="AgreementTemplate" setup>
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
 const props = defineProps({
   agreement: {
     type: String,
-    required: true,
+    required: true
   },
   agree: {
     type: Function,
-    required: true,
+    required: true
   },
   title: {
     type: String,
-    default: 'agreement.title',
-  },
+    default: 'agreement.title'
+  }
 })
 
 const { t } = useI18n()
@@ -44,12 +44,12 @@ async function dispose(agree: boolean): Promise<void> {
     </div>
 
     <div justify-center box-border w="85%" mt-4 flex gap-8>
-      <FlatButton hover:bg-red @click="dispose(false)">
+      <TxButton variant="flat" hover:bg-red @click="dispose(false)">
         {{ t('agreement.decline') }}
-      </FlatButton>
-      <FlatButton :primary="true" @click="dispose(true)">
+      </TxButton>
+      <TxButton variant="flat" type="primary" @click="dispose(true)">
         {{ t('agreement.accept') }}
-      </FlatButton>
+      </TxButton>
     </div>
   </div>
 </template>

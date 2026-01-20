@@ -5,6 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ElTooltip } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import PluginPerfCharts from '~/components/plugin/runtime/PluginPerfCharts.vue'
@@ -559,9 +560,14 @@ defineExpose({
           placement="bottom"
           effect="dark"
         >
-          <button class="toolbar-icon" type="button" @click="openHistoryDrawer">
+          <TxButton
+            variant="bare"
+            class="toolbar-icon"
+            native-type="button"
+            @click="openHistoryDrawer"
+          >
             <i class="i-ri-history-line" />
-          </button>
+          </TxButton>
         </ElTooltip>
 
         <ElTooltip
@@ -570,9 +576,14 @@ defineExpose({
           placement="bottom"
           effect="dark"
         >
-          <button class="toolbar-icon" type="button" @click="handleManualRefresh">
+          <TxButton
+            variant="bare"
+            class="toolbar-icon"
+            native-type="button"
+            @click="handleManualRefresh"
+          >
             <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
-          </button>
+          </TxButton>
         </ElTooltip>
 
         <ElTooltip
@@ -581,14 +592,15 @@ defineExpose({
           placement="bottom"
           effect="dark"
         >
-          <button
+          <TxButton
+            variant="bare"
             class="toolbar-icon"
-            type="button"
+            native-type="button"
             :disabled="!canOpenLogFile"
             @click="openSelectedSessionFile"
           >
             <i class="i-ri-file-text-line" />
-          </button>
+          </TxButton>
         </ElTooltip>
 
         <ElTooltip
@@ -597,14 +609,15 @@ defineExpose({
           placement="bottom"
           effect="dark"
         >
-          <button
+          <TxButton
+            variant="bare"
             class="toolbar-icon"
-            type="button"
+            native-type="button"
             :disabled="!canOpenLogDirectory"
             @click="openLogDirectory"
           >
             <i class="i-ri-folder-open-line" />
-          </button>
+          </TxButton>
         </ElTooltip>
       </div>
     </header>
@@ -627,15 +640,16 @@ defineExpose({
             placement="bottom"
             effect="dark"
           >
-            <button
+            <TxButton
+              variant="bare"
               class="terminal-icon terminal-icon-live"
-              type="button"
+              native-type="button"
               :disabled="!isViewingLiveSession"
               :class="{ active: isLiveStreaming, paused: isViewingLiveSession && isLivePaused }"
               @click="toggleLiveStream"
             >
               <i :class="isLivePaused ? 'i-ri-play-circle-line' : 'i-ri-pause-circle-line'" />
-            </button>
+            </TxButton>
           </ElTooltip>
 
           <ElTooltip
@@ -645,9 +659,14 @@ defineExpose({
             placement="bottom"
             effect="dark"
           >
-            <button class="terminal-icon terminal-icon-new" type="button" @click="jumpToLive">
+            <TxButton
+              variant="bare"
+              class="terminal-icon terminal-icon-new"
+              native-type="button"
+              @click="jumpToLive"
+            >
               <i class="i-ri-sparkling-fill" />
-            </button>
+            </TxButton>
           </ElTooltip>
 
           <ElTooltip
@@ -656,9 +675,14 @@ defineExpose({
             placement="bottom"
             effect="dark"
           >
-            <button class="terminal-icon" type="button" @click="clearTerminal">
+            <TxButton
+              variant="bare"
+              class="terminal-icon"
+              native-type="button"
+              @click="clearTerminal"
+            >
               <i class="i-ri-delete-bin-6-line" />
-            </button>
+            </TxButton>
           </ElTooltip>
 
           <ElTooltip
@@ -667,14 +691,15 @@ defineExpose({
             placement="bottom"
             effect="dark"
           >
-            <button
+            <TxButton
+              variant="bare"
               class="terminal-icon"
-              type="button"
+              native-type="button"
               :disabled="!terminalLogs.length"
               @click="exportTerminalLogs"
             >
               <i class="i-ri-download-2-line" />
-            </button>
+            </TxButton>
           </ElTooltip>
         </div>
       </header>
@@ -701,10 +726,11 @@ defineExpose({
   <TuffDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
     <section class="history-panel">
       <div v-if="historySessions.length" class="history-list">
-        <button
+        <TxButton
           v-for="session in historySessions"
           :key="session.id"
-          type="button"
+          variant="bare"
+          native-type="button"
           class="history-item"
           :class="{
             active: session.id === selectedSessionId,
@@ -719,29 +745,31 @@ defineExpose({
           <span v-if="session.id === latestSessionId" class="history-live-badge">{{
             liveLabel
           }}</span>
-        </button>
+        </TxButton>
       </div>
       <div v-else class="history-empty">
         {{ historyEmpty }}
       </div>
       <footer v-if="totalPages > 1" class="history-pagination">
-        <button
+        <TxButton
+          variant="bare"
           class="pager"
-          type="button"
+          native-type="button"
           :disabled="!hasPrevPage"
           @click="changePage(currentPage - 1)"
         >
           <i class="i-ri-arrow-left-s-line" />
-        </button>
+        </TxButton>
         <span class="pager-info">{{ currentPage }} / {{ totalPages }}</span>
-        <button
+        <TxButton
+          variant="bare"
           class="pager"
-          type="button"
+          native-type="button"
           :disabled="!hasNextPage"
           @click="changePage(currentPage + 1)"
         >
           <i class="i-ri-arrow-right-s-line" />
-        </button>
+        </TxButton>
       </footer>
     </section>
   </TuffDrawer>

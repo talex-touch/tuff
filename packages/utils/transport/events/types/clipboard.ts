@@ -16,6 +16,7 @@ export interface ClipboardItem {
   html?: string
   rtf?: string
   source?: string
+  tags?: string[]
   createdAt: number
   isFavorite?: boolean
 }

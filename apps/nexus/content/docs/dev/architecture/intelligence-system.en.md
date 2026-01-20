@@ -44,7 +44,7 @@ The Intelligence System provides a unified AI capability framework with multi-pr
 
 ## Core Components
 
-### 1. Capability Registry
+**1. Capability Registry**
 
 **Location**: `apps/core-app/src/main/modules/ai/intelligence-capability-registry.ts`
 
@@ -68,7 +68,7 @@ class AiCapabilityRegistry {
 - **RAG**: rag-query, semantic-search, rerank
 - **Agent**: agent execution
 
-### 2. Provider Manager
+**2. Provider Manager**
 
 **Location**: `apps/core-app/src/main/modules/ai/runtime/provider-manager.ts`
 
@@ -92,7 +92,7 @@ class IntelligenceProviderManager {
 - **Local**: Ollama, LM Studio, local models
 - **Custom**: User-defined API endpoints
 
-### 3. Strategy Manager
+**3. Strategy Manager**
 
 **Location**: `apps/core-app/src/main/modules/ai/intelligence-strategy-manager.ts`
 
@@ -112,7 +112,7 @@ interface StrategySelectionResult {
 }
 ```
 
-### 4. Intelligence SDK
+**4. Intelligence SDK**
 
 **Location**: `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
 
@@ -141,7 +141,7 @@ class AiSDK {
 
 ## Configuration System
 
-### Storage Structure
+**Storage Structure**
 
 **Location**: `<user-data>/config/intelligence.json`
 
@@ -183,7 +183,7 @@ class AiSDK {
 }
 ```
 
-### Capability Routing
+**Capability Routing**
 
 Each capability can be configured with:
 - **Provider Bindings**: Which providers can handle this capability
@@ -191,7 +191,7 @@ Each capability can be configured with:
 - **Priority**: Provider selection order
 - **Prompt Template**: Custom system prompt for the capability
 
-### Configuration Loading
+**Configuration Loading**
 
 **Location**: `apps/core-app/src/main/modules/ai/intelligence-config.ts`
 
@@ -212,7 +212,7 @@ Configuration is loaded:
 
 ## Invocation Flow
 
-### 1. Capability Invocation
+**1. Capability Invocation**
 
 ```typescript
 // User code
@@ -221,7 +221,7 @@ const result = await intelligence.text.chat({
 })
 ```
 
-### 2. SDK Processing
+**2. SDK Processing**
 
 ```typescript
 // intelligence-sdk.ts
@@ -266,7 +266,7 @@ async invoke(capabilityId, payload, options) {
 }
 ```
 
-### 3. Provider Execution
+**3. Provider Execution**
 
 ```typescript
 // providers/openai-provider.ts
@@ -305,7 +305,7 @@ async chat(payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions)
 
 ## Prompt Management
 
-### Prompt Templates
+**Prompt Templates**
 
 **Location**: `<user-data>/prompts/`
 
@@ -325,7 +325,7 @@ Prompts are stored as JSON files with metadata:
 }
 ```
 
-### Prompt Manager
+**Prompt Manager**
 
 **Location**: `apps/core-app/src/renderer/src/modules/intelligence/prompt-manager.ts`
 
@@ -341,7 +341,7 @@ class PromptManager {
 }
 ```
 
-### Capability-Prompt Binding
+**Capability-Prompt Binding**
 
 Prompts can be bound to capabilities in the configuration:
 
@@ -357,7 +357,7 @@ Prompts can be bound to capabilities in the configuration:
 
 ## Testing System
 
-### Capability Testers
+**Capability Testers**
 
 **Location**: `apps/core-app/src/main/modules/ai/capability-testers/`
 
@@ -395,7 +395,7 @@ class TextChatTester implements CapabilityTester {
 }
 ```
 
-### Test Execution
+**Test Execution**
 
 ```typescript
 // Main process
@@ -422,7 +422,7 @@ channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
 
 ## Audit & Monitoring
 
-### Audit Logger
+**Audit Logger**
 
 **Location**: `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
 
@@ -444,7 +444,7 @@ interface IntelligenceAuditLogEntry {
 }
 ```
 
-### Quota Manager
+**Quota Manager**
 
 **Location**: `apps/core-app/src/main/modules/ai/intelligence-quota-manager.ts`
 
@@ -460,7 +460,7 @@ class IntelligenceQuotaManager {
 
 ## IPC Channels
 
-### Main Process Channels
+**Main Process Channels**
 
 - `intelligence:invoke` - Invoke capability
 - `intelligence:test-capability` - Test capability
@@ -468,7 +468,7 @@ class IntelligenceQuotaManager {
 - `intelligence:fetch-models` - Fetch available models
 - `intelligence:reload-config` - Reload configuration
 
-### Renderer Process Hooks
+**Renderer Process Hooks**
 
 ```typescript
 // useIntelligence composable
@@ -487,28 +487,28 @@ await text.chat({ messages: [...] }, {
 
 ## Best Practices
 
-### 1. Capability Configuration
+**1. Capability Configuration**
 
 - **Always specify provider bindings** for production capabilities
 - **Set appropriate timeouts** based on capability type (vision: 60s, text: 30s)
 - **Use model preferences** to ensure consistent quality
 - **Enable audit logging** for debugging and monitoring
 
-### 2. Error Handling
+**2. Error Handling**
 
 - **Always handle errors** from AI invocations
 - **Implement fallback logic** for critical features
 - **Show user-friendly error messages**
 - **Log errors with context** for debugging
 
-### 3. Performance Optimization
+**3. Performance Optimization**
 
 - **Enable caching** for repeated queries
 - **Use streaming** for long-form content generation
 - **Set appropriate token limits** to control costs
 - **Implement request debouncing** for user input
 
-### 4. Security
+**4. Security**
 
 - **Never expose API keys** in client code
 - **Validate all user inputs** before sending to AI
@@ -517,7 +517,7 @@ await text.chat({ messages: [...] }, {
 
 ## Extension Points
 
-### Custom Providers
+**Custom Providers**
 
 Create custom provider adapters:
 
@@ -540,7 +540,7 @@ providerManager.registerFactory('custom', (config) => {
 })
 ```
 
-### Custom Capabilities
+**Custom Capabilities**
 
 Register new capabilities:
 
@@ -554,7 +554,7 @@ aiCapabilityRegistry.register({
 })
 ```
 
-### Custom Strategies
+**Custom Strategies**
 
 Implement custom provider selection strategies:
 

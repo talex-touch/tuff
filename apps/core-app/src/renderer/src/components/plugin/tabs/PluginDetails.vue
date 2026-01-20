@@ -3,7 +3,7 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { ElMessage } from 'element-plus'
 import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -300,11 +300,11 @@ watch(
         description="插件清单（只读展示）"
         default-icon="i-carbon-document"
       >
-        <FlatButton :disabled="manifestLoading" @click="loadManifest">
+        <TxButton variant="flat" :disabled="manifestLoading" @click="loadManifest">
           <i v-if="manifestLoading" class="i-ri-loader-4-line animate-spin" />
           <i v-else class="i-ri-refresh-line" />
           <span>{{ manifestLoading ? '刷新中...' : '刷新' }}</span>
-        </FlatButton>
+        </TxButton>
       </TuffBlockSlot>
 
       <TuffBlockLine v-if="manifestSummary.id" title="ID">
@@ -377,11 +377,11 @@ watch(
         default-icon="i-ri-save-line"
         active-icon="i-ri-save-line"
       >
-        <FlatButton :disabled="!hasChanges || isSaving" @click="saveDevSettings">
+        <TxButton variant="flat" :disabled="!hasChanges || isSaving" @click="saveDevSettings">
           <i v-if="isSaving" class="i-ri-loader-4-line animate-spin" />
           <i v-else class="i-ri-save-line" />
           <span>{{ isSaving ? t('plugin.details.saving') : t('plugin.details.save') }}</span>
-        </FlatButton>
+        </TxButton>
       </TuffBlockSlot>
 
       <TuffBlockSwitch

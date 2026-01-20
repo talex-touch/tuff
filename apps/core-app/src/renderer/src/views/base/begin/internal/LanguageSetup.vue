@@ -4,6 +4,7 @@ import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
 import Greeting from './Greeting.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
@@ -87,24 +88,25 @@ async function handleNext(): Promise<void> {
     </div>
 
     <div class="LanguageSetup-Options" :class="{ disabled: followSystem }">
-      <button
+      <TxButton
         v-for="lang in SUPPORTED_LANGUAGES"
         :key="lang.key"
+        variant="bare"
         :disabled="followSystem"
         :class="{ active: selectedLanguage === lang.key }"
-        type="button"
+        native-type="button"
         @click="handleSelectLang(lang)"
       >
         <span>{{ lang.name }}</span>
         <small v-if="systemLanguage === lang.key">
           {{ t('beginner.language.systemTag') }}
         </small>
-      </button>
+      </TxButton>
     </div>
 
-    <FlatButton class="LanguageSetup-Next" primary @click="handleNext">
+    <TxButton variant="flat" type="primary" class="LanguageSetup-Next" @click="handleNext">
       {{ t('beginner.language.next') }}
-    </FlatButton>
+    </TxButton>
   </div>
 </template>
 

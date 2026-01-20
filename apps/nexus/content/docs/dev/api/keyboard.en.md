@@ -4,17 +4,20 @@
 
 When a plugin's UI View is attached to CoreBox, the system provides automatic keyboard event handling and forwarding, allowing plugins to respond to user keyboard interactions.
 
+## Introduction
+Keyboard events are ideal for quick actions and navigation. Choose Feature SDK, Bridge Hooks, or raw Channel based on your needs.
+
 ## ESC Key Auto-Exit
 
 Pressing ESC in the UI View will **automatically exit UI mode** (deactivate providers), without requiring manual handling by the plugin.
 
-### Behavior
+**Behavior**
 - User presses ESC in the plugin UI View
 - System automatically calls `exitUIMode()` to exit UI mode
 - Plugin UI View is unmounted, CoreBox returns to search state
 - This is consistent with ESC behavior in the main CoreBox interface
 
-### Technical Implementation
+**Technical Implementation**
 The system captures ESC key by listening to WebContents' `before-input-event`:
 
 ```typescript
@@ -31,7 +34,7 @@ uiView.webContents.on('before-input-event', (event, input) => {
 
 When focus is on the CoreBox main input, specific keys are forwarded to the plugin UI View.
 
-### Forwarded Keys
+**Forwarded Keys**
 | Key | Description |
 | --- | --- |
 | `Enter` | Confirm/Submit action |
@@ -41,9 +44,9 @@ When focus is on the CoreBox main input, specific keys are forwarded to the plug
 
 > **Note**: `ArrowLeft` and `ArrowRight` are NOT forwarded as they are used for text editing in the input field. If you need left/right navigation, use `Meta/Ctrl + ArrowLeft/ArrowRight`.
 
-### Listening to Keyboard Events
+**Listening to Keyboard Events**
 
-#### Method 1: Using Feature SDK
+**Method 1: Using Feature SDK**
 
 ```typescript
 import { useFeature } from '@talex-touch/utils/plugin/sdk'
@@ -72,7 +75,7 @@ onUnmounted(() => {
 })
 ```
 
-#### Method 2: Using Bridge Hook
+**Method 2: Using Bridge Hook**
 
 ```typescript
 import { onCoreBoxKeyEvent } from '@talex-touch/utils/plugin/sdk/hooks/bridge'
@@ -86,7 +89,7 @@ onCoreBoxKeyEvent((event) => {
 })
 ```
 
-#### Method 3: Direct Channel Listening
+**Method 3: Direct Channel Listening**
 
 ```typescript
 // In plugin renderer
@@ -128,12 +131,16 @@ interface ForwardedKeyEvent {
 | `core-box:get-ui-view-state` | Renderer → Main | Query UI View state |
 | `core-box:ui-mode-exited` | Main → Renderer | UI mode exited notification |
 
+## Technical Notes
+- The main process handles ESC via `before-input-event` for consistent behavior.
+- Key events are forwarded through CoreBox and wrapped by SDK/hooks.
+
 ## Best Practices
 
-### 1. Avoid Duplicate Handling
+**1. Avoid Duplicate Handling**
 ESC key is already handled by the system. Plugins should not listen for ESC to exit UI mode.
 
-### 2. Check repeat Flag
+**2. Check repeat Flag**
 For single-trigger actions (like submit), check the `repeat` flag:
 
 ```typescript
@@ -145,7 +152,7 @@ feature.onKeyEvent((event) => {
 })
 ```
 
-### 3. Modifier Key Handling
+**3. Modifier Key Handling**
 When handling modifier keys, be aware of platform differences:
 
 ```typescript
@@ -160,7 +167,7 @@ feature.onKeyEvent((event) => {
 })
 ```
 
-### 4. Cleanup Listeners
+**4. Cleanup Listeners**
 Unsubscribe when component unmounts to avoid memory leaks:
 
 ```typescript

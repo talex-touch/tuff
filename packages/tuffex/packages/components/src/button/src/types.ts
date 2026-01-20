@@ -1,7 +1,7 @@
 import type { VibrateType } from '../../../../utils/vibrate'
 
 export interface ButtonProps {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info'
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info' | 'flat' | 'bare'
   size?: 'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'
   block?: boolean
   /** 按钮类型 */

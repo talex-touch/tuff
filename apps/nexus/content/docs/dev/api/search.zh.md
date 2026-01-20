@@ -5,12 +5,16 @@ description: CoreBox 搜索匹配系统的 API 文档，包括拼音匹配、模
 
 # 搜索匹配 API
 
+## 概述
 CoreBox 搜索系统提供强大的搜索匹配能力，支持：
 
 - **中文拼音匹配**：搜索 `fanyi` 可以匹配 `翻译`
 - **首字母缩写**：搜索 `fy` 可以匹配 `翻译`
 - **模糊匹配**：容错搜索，如 `helol` 匹配 `hello`
 - **高亮显示**：搜索结果中高亮匹配的部分
+
+## 介绍
+搜索匹配由 Feature 的标题、描述、关键词与剪贴板输入组合生成，适合用于构建自定义搜索与高亮 UI。
 
 ## 搜索令牌 (Search Tokens)
 
@@ -22,7 +26,7 @@ CoreBox 搜索系统提供强大的搜索匹配能力，支持：
 - 关键词
 - 命令值
 
-### 自定义关键词
+**自定义关键词**
 
 在 `manifest.json` 中为 Feature 添加 `keywords` 可以增强搜索匹配：
 
@@ -69,7 +73,7 @@ interface FeatureExtension {
 }
 ```
 
-### 渲染器中使用高亮
+**渲染器中使用高亮**
 
 BoxItem 组件自动处理 `matchResult` 高亮：
 
@@ -99,7 +103,7 @@ function getHighlightedHTML(
 
 ## 在插件中使用搜索匹配
 
-### 使用 matchFeature 函数
+**使用 matchFeature 函数**
 
 `@talex-touch/utils/search` 导出的 `matchFeature` 函数可用于自定义搜索：
 
@@ -121,7 +125,7 @@ if (result.matched) {
 }
 ```
 
-### FeatureMatchResult 接口
+**FeatureMatchResult 接口**
 
 ```typescript
 interface FeatureMatchResult {
@@ -140,7 +144,7 @@ interface FeatureMatchResult {
 
 ## 模糊匹配 API
 
-### fuzzyMatch 函数
+**fuzzyMatch 函数**
 
 用于容错搜索，支持拼写错误：
 
@@ -158,7 +162,7 @@ if (result.matched) {
 }
 ```
 
-### FuzzyMatchResult 接口
+**FuzzyMatchResult 接口**
 
 ```typescript
 interface FuzzyMatchResult {
@@ -220,7 +224,7 @@ interface TuffQueryInput {
 }
 ```
 
-### 声明接受的输入类型
+**声明接受的输入类型**
 
 在 Feature 中声明 `acceptedInputTypes` 以接收剪贴板内容：
 
@@ -249,8 +253,12 @@ interface TuffQueryInput {
 3. **声明 acceptedInputTypes**：明确 Feature 能处理的输入类型
 4. **合理使用命令类型**：`over` 用于通用功能，`match` 用于特定前缀触发
 
+## 技术原理
+- 搜索令牌在 Feature 注册时生成，并以 `searchTokens` 参与评分。
+- `matchFeature` 与 `fuzzyMatch` 负责计算匹配类型、分数与高亮范围。
+
 ## 相关链接
 
 - [Feature API](/docs/dev/api/feature)
 - [Box API](/docs/dev/api/box)
-- [Manifest 配置](/docs/dev/manifest)
+- [Manifest 配置](/docs/dev/reference/manifest)

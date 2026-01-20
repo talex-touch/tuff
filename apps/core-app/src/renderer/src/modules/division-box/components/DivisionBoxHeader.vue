@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useDivisionBoxStore } from '../store/division-box'
 
 /**
@@ -69,19 +70,25 @@ function handlePin() {
 
     <div class="header-right">
       <!-- Pin button -->
-      <button
+      <TxButton
+        variant="bare"
         class="header-action-btn"
         :class="{ 'is-pinned': isPinned }"
         :title="isPinned ? 'Unpin' : 'Pin'"
         @click="handlePin"
       >
         <i class="i-ri-pushpin-line" />
-      </button>
+      </TxButton>
 
       <!-- Close button -->
-      <button class="header-action-btn header-close-btn" title="Close" @click="handleClose">
+      <TxButton
+        variant="bare"
+        class="header-action-btn header-close-btn"
+        title="Close"
+        @click="handleClose"
+      >
         <i class="i-ri-close-line" />
-      </button>
+      </TxButton>
     </div>
   </div>
 </template>

@@ -4,6 +4,7 @@ import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 // import Protocol from './Protocol.vue'
 // import AccountDo from './AccountDo.vue'
 import SetupPermissions from './SetupPermissions.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
@@ -22,7 +23,7 @@ function goon(): void {
     <LottieFrame :loop="true" :data="HelloData" />
     <div class="Greeting-Content">
       <p>Welcome to Tuff</p>
-      <FlatButton primary @click="goon"> Get Started </FlatButton>
+      <TxButton variant="flat" type="primary" @click="goon"> Get Started </TxButton>
     </div>
   </div>
 </template>

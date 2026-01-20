@@ -2,9 +2,13 @@
 
 <div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #0ea5e9, #22c55e);"></div>
 
-## Introduction
+## Overview
 
 The TempFile SDK creates short-lived files for caching downloads, exporting temporary content, or passing file handles across modules.
+
+## Introduction
+
+Use TempFile when you need short-lived, namespaced files with automatic cleanup.
 
 ## How it works
 
@@ -12,14 +16,14 @@ The TempFile SDK creates short-lived files for caching downloads, exporting temp
 - IPC channels `temp-file:create` / `temp-file:delete` handle creation and deletion.
 - Optional `retentionMs` controls cleanup schedules.
 
-## Implementation notes
+## Technical Notes
 
 - Temp files live under `userData/temp/<namespace>`.
 - The SDK only wraps parameters and validates responses; file lifecycle remains in the main process.
 
 ## Usage
 
-### Plugin side
+**Plugin side**
 
 ```typescript
 import { useTempPluginFiles } from '@talex-touch/utils/plugin/sdk'
@@ -34,7 +38,7 @@ const result = await temp.create({
 console.log(result.url)
 ```
 
-### Renderer side
+**Renderer side**
 
 ```typescript
 import { useTouchSDK } from '@talex-touch/utils/renderer'
@@ -60,3 +64,9 @@ A: Yes. When `retentionMs` is provided, the main process periodically removes ex
 
 **Q: Why does `tfile://` not load?**  
 A: `tfile://` is Electron-only; browsers will block it.
+
+## Best Practices
+
+- Use clear `namespace` values to simplify cleanup and debugging.
+- Set a reasonable `retentionMs` to prevent temp bloat.
+- Prefer file paths for large payloads instead of embedding big text blobs.

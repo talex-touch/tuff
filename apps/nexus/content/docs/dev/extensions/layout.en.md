@@ -7,7 +7,7 @@ CoreBox supports two layout modes, controlled by backend via `TuffSearchResult.c
 
 ## DSL Type Definitions
 
-### TuffContainerLayout
+**TuffContainerLayout**
 ```typescript
 interface TuffContainerLayout {
   mode: 'list' | 'grid'
@@ -28,7 +28,7 @@ interface TuffSection {
 }
 ```
 
-### TuffMeta Extensions
+**TuffMeta Extensions**
 ```typescript
 interface TuffMeta {
   // Pin configuration
@@ -65,7 +65,7 @@ The recommendation engine generates recommendations based on:
 
 ## Usage Examples
 
-### Plugin Returns Grid Layout
+**Plugin Returns Grid Layout**
 ```typescript
 const result: TuffSearchResult = {
   items: [...],
@@ -83,7 +83,7 @@ const result: TuffSearchResult = {
 }
 ```
 
-### Mark Pinned Item
+**Mark Pinned Item**
 ```typescript
 const item: TuffItem = {
   id: 'my-app',

@@ -34,6 +34,16 @@ describe('txButton', () => {
     expect(wrapper.classes()).toContain('tx-size-lg')
   })
 
+  it('renders flat variant', () => {
+    const wrapper = mount(Button, {
+      props: {
+        variant: 'flat',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('variant-flat')
+  })
+
   it('handles disabled state', () => {
     const wrapper = mount(Button, {
       props: {

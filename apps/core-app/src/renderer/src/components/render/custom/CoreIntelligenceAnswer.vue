@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TuffItem } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -136,9 +137,15 @@ function copyAnswer(): void {
           {{ statusLabel }}
         </div>
       </div>
-      <button v-if="hasAnswer" class="CoreIntelligence__action" type="button" @click="copyAnswer">
+      <TxButton
+        v-if="hasAnswer"
+        variant="bare"
+        native-type="button"
+        class="CoreIntelligence__action"
+        @click="copyAnswer"
+      >
         {{ t('coreBox.intelligence.copy') }}
-      </button>
+      </TxButton>
     </header>
 
     <div v-if="hasAnswer" class="CoreIntelligence__answer" v-html="answerHtml" />

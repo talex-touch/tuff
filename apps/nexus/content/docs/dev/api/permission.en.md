@@ -1,10 +1,14 @@
 # Permission System
 
+## Overview
 The plugin permission system controls access to sensitive resources and APIs. Starting from SDK API version `251212`, all permission declarations are enforced.
+
+## Introduction
+Permissions follow a least-privilege model and pair `permissions` with `permissionReasons` to explain intent to users.
 
 ## Quick Start
 
-### 1. Declare Permissions in manifest.json
+**1. Declare Permissions in manifest.json**
 
 ```json
 {
@@ -23,7 +27,7 @@ The plugin permission system controls access to sensitive resources and APIs. St
 }
 ```
 
-### 2. Permission Categories
+**2. Permission Categories**
 
 | Category | Permission ID | Risk Level | Description |
 |----------|--------------|------------|-------------|
@@ -46,13 +50,13 @@ The plugin permission system controls access to sensitive resources and APIs. St
 | **Window** | `window.create` | Low | Create windows (auto-granted) |
 | | `window.capture` | High | Screen capture |
 
-### 3. Risk Level Explanation
+**3. Risk Level Explanation**
 
 - **Low**: Auto-granted or single confirmation
 - **Medium**: Requires explicit user authorization
 - **High**: Requires double confirmation with warning
 
-### 4. Default Auto-granted Permissions
+**4. Default Auto-granted Permissions**
 
 These permissions are automatically granted:
 
@@ -62,7 +66,7 @@ These permissions are automatically granted:
 
 ## SDK Version and Permission Enforcement
 
-### sdkapi Field
+**sdkapi Field**
 
 The `sdkapi` field determines whether permission checking is enabled:
 
@@ -72,7 +76,7 @@ The `sdkapi` field determines whether permission checking is enabled:
 | < 251212 | Skipped | Shows legacy SDK warning |
 | >= 251212 | Enabled | Full permission enforcement |
 
-### Migration Guide
+**Migration Guide**
 
 If your plugin doesn't declare `sdkapi` or has a lower version:
 
@@ -86,9 +90,13 @@ If your plugin doesn't declare `sdkapi` or has a lower version:
 }
 ```
 
+## Technical Notes
+- Permission enforcement is managed by the centralized permission center once `sdkapi` meets the threshold.
+- Grants are persisted at `<appData>/config/permission/permissions.json` and synchronized to the renderer via IPC.
+
 ## API Reference
 
-### Check Permissions in Prelude (index.js)
+**Check Permissions in Prelude (index.js)**
 
 ```javascript
 const { permission } = globalThis
@@ -105,7 +113,7 @@ if (granted) {
 }
 ```
 
-### Use in Surface (Vue)
+**Use in Surface (Vue)**
 
 ```typescript
 import { usePermission } from '@talex-touch/utils/plugin/sdk'
@@ -124,7 +132,7 @@ const allStatus = await status()
 
 ## Best Practices
 
-### 1. Principle of Least Privilege
+**1. Principle of Least Privilege**
 
 Only declare permissions you actually need:
 
@@ -141,7 +149,7 @@ Only declare permissions you actually need:
 }
 ```
 
-### 2. Provide Permission Reasons
+**2. Provide Permission Reasons**
 
 ```json
 "permissionReasons": {
@@ -150,7 +158,7 @@ Only declare permissions you actually need:
 }
 ```
 
-### 3. Graceful Degradation
+**3. Graceful Degradation**
 
 ```javascript
 async function translateText(text) {
@@ -169,7 +177,7 @@ async function translateText(text) {
 }
 ```
 
-### 4. Distinguish Required vs Optional
+**4. Distinguish Required vs Optional**
 
 ```json
 "permissions": {
@@ -187,7 +195,7 @@ Users can manage plugin permissions at:
 
 ## FAQ
 
-### Q: Why does my plugin show "Legacy SDK" warning?
+**Q: Why does my plugin show "Legacy SDK" warning?**
 
 A: Your `manifest.json` doesn't declare `sdkapi` or the version is below `251212`. Add:
 
@@ -195,7 +203,7 @@ A: Your `manifest.json` doesn't declare `sdkapi` or the version is below `251212
 "sdkapi": 251212
 ```
 
-### Q: How to handle permission denial?
+**Q: How to handle permission denial?**
 
 A: Provide degraded experience or clear error message:
 
@@ -210,6 +218,6 @@ if (!granted) {
 }
 ```
 
-### Q: Where is permission data stored?
+**Q: Where is permission data stored?**
 
 A: Permission grants are stored in `<appData>/config/permission/permissions.json`.

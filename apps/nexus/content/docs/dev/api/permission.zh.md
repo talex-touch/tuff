@@ -1,10 +1,14 @@
 # Permission 权限系统
 
+## 概述
 插件权限系统用于控制插件对敏感资源和 API 的访问。从 SDK API `251212` 版本开始，所有权限声明都会被强制校验。
+
+## 介绍
+权限声明强调最小授权，通过 `permissions` 与 `permissionReasons` 对用户解释用途，提升授权通过率。
 
 ## 快速开始
 
-### 1. 在 manifest.json 中声明权限
+**1. 在 manifest.json 中声明权限**
 
 ```json
 {
@@ -23,7 +27,7 @@
 }
 ```
 
-### 2. 权限分类
+**2. 权限分类**
 
 | 类别 | 权限 ID | 风险等级 | 说明 |
 |------|---------|----------|------|
@@ -46,13 +50,13 @@
 | **窗口** | `window.create` | 低 | 创建窗口（自动授予） |
 | | `window.capture` | 高 | 屏幕截图 |
 
-### 3. 风险等级说明
+**3. 风险等级说明**
 
 - **低风险 (low)**: 自动授予或一次确认即可
 - **中风险 (medium)**: 需要用户明确授权
 - **高风险 (high)**: 需要用户二次确认，显示警告
 
-### 4. 默认自动授予的权限
+**4. 默认自动授予的权限**
 
 以下权限会自动授予，无需用户确认：
 
@@ -62,7 +66,7 @@
 
 ## SDK 版本与权限校验
 
-### sdkapi 字段
+**sdkapi 字段**
 
 `sdkapi` 字段决定是否启用权限校验：
 
@@ -72,7 +76,7 @@
 | < 251212 | 跳过 | 显示旧版 SDK 警告 |
 | >= 251212 | 启用 | 完整权限校验 |
 
-### 迁移指南
+**迁移指南**
 
 如果您的插件未声明 `sdkapi` 或版本较低：
 
@@ -86,9 +90,13 @@
 }
 ```
 
+## 技术原理
+- 权限校验由权限中心统一管理，`sdkapi` 达到门槛才启用完整校验。
+- 授权结果持久化在 `<appData>/config/permission/permissions.json`，并通过 IPC 同步到渲染进程。
+
 ## API 参考
 
-### 在 Prelude (index.js) 中检查权限
+**在 Prelude (index.js) 中检查权限**
 
 ```javascript
 const { permission } = globalThis
@@ -105,7 +113,7 @@ if (granted) {
 }
 ```
 
-### 在 Surface (Vue) 中使用
+**在 Surface (Vue) 中使用**
 
 ```typescript
 import { usePermission } from '@talex-touch/utils/plugin/sdk'
@@ -124,7 +132,7 @@ const allStatus = await status()
 
 ## 最佳实践
 
-### 1. 最小权限原则
+**1. 最小权限原则**
 
 只声明实际需要的权限：
 
@@ -141,7 +149,7 @@ const allStatus = await status()
 }
 ```
 
-### 2. 提供权限说明
+**2. 提供权限说明**
 
 ```json
 "permissionReasons": {
@@ -150,7 +158,7 @@ const allStatus = await status()
 }
 ```
 
-### 3. 优雅降级
+**3. 优雅降级**
 
 ```javascript
 async function translateText(text) {
@@ -169,7 +177,7 @@ async function translateText(text) {
 }
 ```
 
-### 4. 区分必需和可选权限
+**4. 区分必需和可选权限**
 
 ```json
 "permissions": {
@@ -187,7 +195,7 @@ async function translateText(text) {
 
 ## 常见问题
 
-### Q: 为什么我的插件显示"旧版 SDK"警告？
+**Q: 为什么我的插件显示"旧版 SDK"警告？**
 
 A: 您的 `manifest.json` 中未声明 `sdkapi` 字段或版本低于 `251212`。添加：
 
@@ -195,7 +203,7 @@ A: 您的 `manifest.json` 中未声明 `sdkapi` 字段或版本低于 `251212`�
 "sdkapi": 251212
 ```
 
-### Q: 如何处理用户拒绝权限？
+**Q: 如何处理用户拒绝权限？**
 
 A: 提供降级方案或清晰的错误提示：
 
@@ -210,6 +218,6 @@ if (!granted) {
 }
 ```
 
-### Q: 权限数据存储在哪里？
+**Q: 权限数据存储在哪里？**
 
 A: 权限授予数据存储在 `<appData>/config/permission/permissions.json`。

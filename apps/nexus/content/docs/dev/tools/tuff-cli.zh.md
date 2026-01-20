@@ -19,7 +19,7 @@ npx tuff <command>
 
 ## 命令
 
-### `tuff builder`
+**`tuff builder`**
 
 将插件项目构建为可分发的 `.tpex` 包。
 
@@ -32,7 +32,7 @@ tuff builder
 - 生成清单文件并打包资源
 - 输出可分发的 `.tpex` 文件
 
-### `tuff publish`
+**`tuff publish`**
 
 将插件发布到 Tuff Nexus 服务器。
 
@@ -55,7 +55,7 @@ tuff publish \
   --notes "### 新功能\n- 添加深色模式支持\n- 性能优化"
 ```
 
-### `tuff login`
+**`tuff login`**
 
 保存发布所需的认证令牌。
 
@@ -65,7 +65,7 @@ tuff login <token>
 
 令牌存储在 `~/.tuff/auth.json`。
 
-### `tuff logout`
+**`tuff logout`**
 
 删除已保存的认证凭据。
 

@@ -5,7 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
@@ -146,15 +146,16 @@ onMounted(() => {
       </template>
 
       <template #footer>
-        <FlatButton
+        <TxButton
+          variant="flat"
           class="w-full"
-          type="button"
+          native-type="button"
           :aria-label="t('settings.intelligence.addChannel')"
           @click="handleAddProvider"
         >
           <i class="i-carbon-add" aria-hidden="true" />
           <span>{{ t('settings.intelligence.addChannel') }}</span>
-        </FlatButton>
+        </TxButton>
       </template>
 
       <template #main>

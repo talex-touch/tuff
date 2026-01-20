@@ -3,7 +3,7 @@ import { Download } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
-import FlatButton from '../base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import DownloadCenter from './DownloadCenter.vue'
 
 // const { ipcRenderer } = require('electron')
@@ -36,7 +36,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <FlatButton :class="{ active: isLoggedIn }" class="download-btn" @click="handleClick">
+  <TxButton
+    variant="flat"
+    :class="{ active: isLoggedIn }"
+    class="download-btn"
+    @click="handleClick"
+  >
     <el-icon :size="16">
       <Download />
     </el-icon>
@@ -49,7 +54,7 @@ onBeforeUnmount(() => {
         {{ failedCount }}
       </span>
     </div>
-  </FlatButton>
+  </TxButton>
 
   <el-dialog
     v-model="downloadDialogVisible"

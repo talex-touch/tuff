@@ -1,8 +1,12 @@
 # Plugin index.js Context API
 
+## Overview
+
 The plugin's `index.js` runs in a Node.js sandbox environment as a backend script. The system injects a set of global objects for plugin use.
 
-## Global Context Objects
+## Introduction
+
+**Global Context Objects**
 
 Plugin index.js can access the following APIs via `globalThis`:
 
@@ -449,6 +453,11 @@ module.exports = pluginLifecycle
 ```
 
 ---
+
+## Technical Notes
+
+- Context objects are injected by the main process into the plugin sandbox runtime.
+- Capability limits and permission checks are enforced before exposing APIs.
 
 ## Best Practices
 

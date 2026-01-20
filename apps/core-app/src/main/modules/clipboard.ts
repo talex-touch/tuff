@@ -39,6 +39,7 @@ import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { activeAppService } from './system/active-app'
 import { tempFileService } from '../service/temp-file.service'
+import { detectClipboardTags } from './clipboard-tagging'
 
 const clipboardLog = createLogger('Clipboard')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
@@ -511,6 +512,25 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
+  private extractTags(item: IClipboardItem): string[] | undefined {
+    const metaTags = item.meta?.tags
+    if (Array.isArray(metaTags) && metaTags.every((tag) => typeof tag === 'string')) {
+      return metaTags
+    }
+
+    if (typeof item.metadata === 'string' && item.metadata.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(item.metadata) as { tags?: unknown }
+        const tags = parsed?.tags
+        if (Array.isArray(tags) && tags.every((tag) => typeof tag === 'string')) {
+          return tags
+        }
+      } catch {}
+    }
+
+    return undefined
+  }
+
   public async cleanupHistory(options?: {
     beforeDays?: number
     type?: 'all' | 'text' | 'image' | 'files'
@@ -581,6 +601,7 @@ export class ClipboardModule extends BaseModule {
           ? item.thumbnail
           : (item.content ?? '')
         : (item.content ?? '')
+    const tags = this.extractTags(item)
 
     return {
       id: item.id,
@@ -589,7 +610,8 @@ export class ClipboardModule extends BaseModule {
       html: item.type === 'text' ? (item.rawContent ?? undefined) : undefined,
       source: item.sourceApp ?? undefined,
       createdAt,
-      isFavorite: item.isFavorite ?? undefined
+      isFavorite: item.isFavorite ?? undefined,
+      tags
     }
   }
 
@@ -988,15 +1010,20 @@ export class ClipboardModule extends BaseModule {
 
   private async persistMetaEntries(
     clipboardId: number,
-    meta: Record<string, unknown>
+    meta: Record<string, unknown>,
+    entries?: ClipboardMetaEntry[]
   ): Promise<void> {
     if (!this.db) return
-    const values = Object.entries(meta)
-      .filter(([, value]) => value !== undefined)
-      .map(([key, value]) => ({
+    const resolvedEntries =
+      entries && entries.length > 0
+        ? entries
+        : Object.entries(meta).map(([key, value]) => ({ key, value }))
+    const values = resolvedEntries
+      .filter((entry) => entry.value !== undefined)
+      .map((entry) => ({
         clipboardId,
-        key,
-        value: JSON.stringify(value ?? null)
+        key: entry.key,
+        value: JSON.stringify(entry.value ?? null)
       }))
 
     if (values.length === 0) return
@@ -1227,6 +1254,18 @@ export class ClipboardModule extends BaseModule {
         return
       }
 
+      const tags = detectClipboardTags({
+        type: item.type,
+        content: item.content,
+        rawContent: item.rawContent ?? null
+      })
+      if (tags.length > 0) {
+        metaEntries.push({ key: 'tags', value: tags })
+        for (const tag of tags) {
+          metaEntries.push({ key: 'tag', value: tag })
+        }
+      }
+
       const activeApp = await this.getActiveAppSnapshot()
       if (activeApp) {
         item.sourceApp = activeApp.bundleId || activeApp.identifier || activeApp.displayName || null
@@ -1251,6 +1290,7 @@ export class ClipboardModule extends BaseModule {
       const metaObject: Record<string, unknown> = {}
       for (const { key, value } of metaEntries) {
         if (value === undefined) continue
+        if (key === 'tag') continue
         metaObject[key] = value
       }
 
@@ -1279,7 +1319,7 @@ export class ClipboardModule extends BaseModule {
       persisted.meta = metaObject
 
       if (persisted.id) {
-        await this.persistMetaEntries(persisted.id, metaObject)
+        await this.persistMetaEntries(persisted.id, metaObject, metaEntries)
         setImmediate(() => {
           ocrService
             .enqueueFromClipboard({

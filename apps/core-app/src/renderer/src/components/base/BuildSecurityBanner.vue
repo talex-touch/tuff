@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -81,9 +82,9 @@ function dismissBanner() {
             }}
           </div>
         </div>
-        <button class="banner-close" @click="dismissBanner">
+        <TxButton variant="bare" class="banner-close" @click="dismissBanner">
           <i class="i-ri-close-line" />
-        </button>
+        </TxButton>
       </div>
     </div>
   </Transition>

@@ -225,7 +225,16 @@
     "copiedImage": "Copied Image",
     "copiedFiles": "Copied Files",
     "copiedHtml": "Copied Html",
-    "command": "COMMAND"
+    "command": "COMMAND",
+    "fromApp": "From {app}",
+    "tags": {
+      "url": "URL",
+      "api_key": "API Key",
+      "token": "Token",
+      "password": "Password",
+      "account": "Account",
+      "email": "Email"
+    }
   },
   "flatController": {
     "useNative": "Use native window control instead"

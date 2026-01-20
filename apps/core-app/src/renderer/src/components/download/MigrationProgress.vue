@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 interface MigrationProgress {
   phase: 'scanning' | 'migrating' | 'validating' | 'complete' | 'error'
@@ -24,7 +25,7 @@ const progress = ref<MigrationProgress>({
   current: 0,
   total: 100,
   message: '',
-  percentage: 0,
+  percentage: 0
 })
 const result = ref<MigrationResult | null>(null)
 
@@ -32,7 +33,7 @@ const phases = [
   { key: 'scanning', icon: 'icon-search' },
   { key: 'migrating', icon: 'icon-download' },
   { key: 'validating', icon: 'icon-check-circle' },
-  { key: 'complete', icon: 'icon-success' },
+  { key: 'complete', icon: 'icon-success' }
 ]
 
 const showDetails = computed(() => {
@@ -42,14 +43,14 @@ const showDetails = computed(() => {
 const progressClass = computed(() => {
   return {
     'progress-error': progress.value.phase === 'error',
-    'progress-success': progress.value.phase === 'complete',
+    'progress-success': progress.value.phase === 'complete'
   }
 })
 
 const messageClass = computed(() => {
   return {
     'message-error': progress.value.phase === 'error',
-    'message-success': progress.value.phase === 'complete',
+    'message-success': progress.value.phase === 'complete'
   }
 })
 
@@ -104,8 +105,7 @@ async function checkMigrationNeeded() {
       visible.value = true
       window.electron?.ipcRenderer.send('download:start-migration')
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('Failed to check migration status:', error)
   }
 }
@@ -144,9 +144,7 @@ onUnmounted(() => {
               :class="progressClass"
             />
           </div>
-          <div class="progress-text">
-            {{ progress.percentage }}%
-          </div>
+          <div class="progress-text">{{ progress.percentage }}%</div>
         </div>
 
         <!-- Phase Indicator -->
@@ -157,7 +155,7 @@ onUnmounted(() => {
             class="phase-item"
             :class="{
               active: progress.phase === phase.key,
-              completed: isPhaseCompleted(phase.key),
+              completed: isPhaseCompleted(phase.key)
             }"
           >
             <div class="phase-icon">
@@ -211,20 +209,22 @@ onUnmounted(() => {
       </div>
 
       <div class="migration-footer">
-        <button
+        <TxButton
           v-if="progress.phase === 'complete'"
+          variant="bare"
           class="btn-primary"
           @click="handleClose"
         >
           {{ $t('common.close') }}
-        </button>
-        <button
+        </TxButton>
+        <TxButton
           v-else-if="progress.phase === 'error'"
+          variant="bare"
           class="btn-secondary"
           @click="handleRetry"
         >
           {{ $t('common.retry') }}
-        </button>
+        </TxButton>
         <div v-else class="loading-text">
           {{ $t('download.migration.pleaseWait') }}
         </div>
@@ -293,7 +293,9 @@ onUnmounted(() => {
 .progress-fill {
   height: 100%;
   background: var(--color-primary);
-  transition: width 0.3s ease, background-color 0.3s ease;
+  transition:
+    width 0.3s ease,
+    background-color 0.3s ease;
   border-radius: 4px;
 }
 

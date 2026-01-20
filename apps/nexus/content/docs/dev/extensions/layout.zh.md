@@ -7,7 +7,7 @@ CoreBox 支持两种布局模式，由后端通过 `TuffSearchResult.containerLa
 
 ## DSL 类型定义
 
-### TuffContainerLayout
+**TuffContainerLayout**
 ```typescript
 interface TuffContainerLayout {
   mode: 'list' | 'grid'
@@ -28,7 +28,7 @@ interface TuffSection {
 }
 ```
 
-### TuffMeta 扩展
+**TuffMeta 扩展**
 ```typescript
 interface TuffMeta {
   // 固定配置
@@ -65,7 +65,7 @@ interface TuffMeta {
 
 ## 使用示例
 
-### 插件返回宫格布局
+**插件返回宫格布局**
 ```typescript
 const result: TuffSearchResult = {
   items: [...],
@@ -83,7 +83,7 @@ const result: TuffSearchResult = {
 }
 ```
 
-### 标记固定项目
+**标记固定项目**
 ```typescript
 const item: TuffItem = {
   id: 'my-app',

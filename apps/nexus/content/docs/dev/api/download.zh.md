@@ -2,6 +2,10 @@
 
 <div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #f59e0b, #ef4444);"></div>
 
+## 概述
+
+Download SDK 提供统一的下载任务管理能力，适用于应用更新、资源预取、插件安装等场景。
+
 ## 介绍
 
 Download SDK 提供统一的下载任务管理能力，适用于应用更新、资源预取、插件安装等场景。
@@ -50,3 +54,9 @@ A: 使用 `onTaskProgress` 监听推送事件即可。
 
 **Q: 下载任务如何隐藏？**  
 A: 传入 `metadata.hidden: true`，生产环境将不展示任务与通知。
+
+## 最佳实践
+
+- 为任务设置合理的 `priority` 与 `module`，便于调度与排查。
+- 避免频繁创建大量任务，必要时进行合并或节流。
+- 对失败任务做好错误提示与重试策略。

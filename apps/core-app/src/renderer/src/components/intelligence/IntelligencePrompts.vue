@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -55,10 +55,10 @@ function handleCreatePrompt() {
       active-icon="i-carbon-edit"
       @click="handlePromptsClick"
     >
-      <FlatButton primary @click="handlePromptsClick">
+      <TxButton variant="flat" type="primary" @click="handlePromptsClick">
         <i class="i-carbon-launch" />
         <span>{{ t('settings.intelligence.landing.prompts.editButton') }}</span>
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- 打开文件夹 -->
@@ -69,10 +69,10 @@ function handleCreatePrompt() {
       active-icon="i-carbon-folder"
       @click="handleOpenFolder"
     >
-      <FlatButton @click="handleOpenFolder">
+      <TxButton variant="flat" @click="handleOpenFolder">
         <i class="i-carbon-folder-open" />
         <span>{{ t('settings.intelligence.landing.prompts.folderButton') }}</span>
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- 提示词统计 -->
@@ -83,10 +83,10 @@ function handleCreatePrompt() {
       active-icon="i-carbon-chart-bar"
       @click="handleCreatePrompt"
     >
-      <FlatButton @click="handleCreatePrompt">
+      <TxButton variant="flat" @click="handleCreatePrompt">
         <i class="i-carbon-add" />
         <span>{{ t('settings.intelligence.landing.prompts.newPromptButton') }}</span>
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>

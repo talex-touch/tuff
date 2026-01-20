@@ -2,15 +2,16 @@
 import type { Ref } from 'vue'
 import Done from './Done.vue'
 import Forbidden from './Forbidden.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
-type StepFunction = (call: { comp: any, rect?: { width: number, height: number } }) => void
+type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 
 const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!
 
 function handleAgree(): void {
   step({
-    comp: !choice.value ? Forbidden : Done,
+    comp: !choice.value ? Forbidden : Done
   })
 }
 </script>
@@ -56,9 +57,7 @@ function handleAgree(): void {
     </div>
 
     <div class="OptionMode-Next">
-      <FlatButton primary @click="handleAgree">
-        Continue
-      </FlatButton>
+      <TxButton variant="flat" type="primary" @click="handleAgree"> Continue </TxButton>
     </div>
   </div>
 </template>

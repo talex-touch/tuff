@@ -6,7 +6,7 @@
 
 Tuff includes 9 preview abilities covering calculations, conversions, time, colors, and more.
 
-### Advanced Expression Calculator
+**Advanced Expression Calculator**
 
 **Examples**: `sqrt(16)`, `sin(45)`, `log(100)`, `2^10`, `10% of 200`
 
@@ -21,7 +21,7 @@ Powered by mathjs with high-precision BigNumber support.
 
 ---
 
-### Basic Expression Calculator
+**Basic Expression Calculator**
 
 **Examples**: `1+2`, `100*3`, `(10+5)/3`, `50%`
 
@@ -29,7 +29,7 @@ Quick calculation for pure numbers and basic operators (`+`, `-`, `*`, `/`, `%`,
 
 ---
 
-### Unit Conversion
+**Unit Conversion**
 
 **Examples**: `10km to mi`, `100kg to lb`, `32f to c`, `1gb to mb`
 
@@ -47,7 +47,7 @@ Also supports Chinese unit names like 米, 千克, 公斤.
 
 ---
 
-### Scientific Constants
+**Scientific Constants**
 
 **Examples**: `gravity`, `speed of light`, `planck constant`, `π`
 
@@ -61,7 +61,7 @@ Displays constant value, unit, source (CODATA 2018), and aliases.
 
 ---
 
-### Color Parser
+**Color Parser**
 
 **Examples**: `#ff5500`, `rgb(255, 100, 50)`, `hsl(30, 100%, 50%)`, `red`, `blue`
 
@@ -75,7 +75,7 @@ Preview card shows color swatch and automatically converts between HEX, RGB, and
 
 ---
 
-### Time Calculator
+**Time Calculator**
 
 **Examples**:
 
@@ -90,7 +90,7 @@ Supports multiple time units: seconds (s), minutes (m/min), hours (h/hr), days (
 
 ---
 
-### Currency Conversion
+**Currency Conversion**
 
 **Examples**: `100 usd to cny`, `$50 to eur`, `¥1000 to jpy`
 
@@ -112,7 +112,7 @@ Supported currencies:
 
 ---
 
-### Percentage Calculator
+**Percentage Calculator**
 
 **Examples**:
 
@@ -125,7 +125,7 @@ Supported currencies:
 
 ---
 
-### Text Statistics
+**Text Statistics**
 
 **Examples**: `len "Hello World"`, `count "some text"`, `words "hello"`
 

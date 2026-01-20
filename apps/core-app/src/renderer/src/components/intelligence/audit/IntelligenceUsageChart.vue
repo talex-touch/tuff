@@ -2,6 +2,7 @@
 import type { IntelligenceUsageSummary } from '@talex-touch/utils/renderer'
 import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -174,21 +175,33 @@ function formatDate(period: string): string {
     <div v-else class="chart-container">
       <!-- Metric Selector -->
       <div class="metric-tabs">
-        <button :class="{ active: activeMetric === 'requests' }" @click="activeMetric = 'requests'">
+        <TxButton
+          variant="bare"
+          :class="{ active: activeMetric === 'requests' }"
+          @click="activeMetric = 'requests'"
+        >
           <i class="i-carbon-send-alt" />
           <span>{{ t('intelligence.usage.requests') }}</span>
           <span class="metric-value">{{ totalStats.requests.toLocaleString() }}</span>
-        </button>
-        <button :class="{ active: activeMetric === 'tokens' }" @click="activeMetric = 'tokens'">
+        </TxButton>
+        <TxButton
+          variant="bare"
+          :class="{ active: activeMetric === 'tokens' }"
+          @click="activeMetric = 'tokens'"
+        >
           <i class="i-carbon-text-short-paragraph" />
           <span>{{ t('intelligence.usage.tokens') }}</span>
           <span class="metric-value">{{ formatValue(totalStats.tokens, 'tokens') }}</span>
-        </button>
-        <button :class="{ active: activeMetric === 'cost' }" @click="activeMetric = 'cost'">
+        </TxButton>
+        <TxButton
+          variant="bare"
+          :class="{ active: activeMetric === 'cost' }"
+          @click="activeMetric = 'cost'"
+        >
           <i class="i-carbon-currency-dollar" />
           <span>{{ t('intelligence.usage.cost') }}</span>
           <span class="metric-value">{{ formatValue(totalStats.cost, 'cost') }}</span>
-        </button>
+        </TxButton>
       </div>
 
       <!-- Chart Area -->

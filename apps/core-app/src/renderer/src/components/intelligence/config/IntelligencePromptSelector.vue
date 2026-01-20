@@ -3,7 +3,7 @@ import { ElInput, ElOption, ElOptionGroup, ElSelect, ElTag } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { getPromptManager } from '~/modules/hooks/usePromptManager'
 
 const props = defineProps<{
@@ -27,8 +27,7 @@ const customPrompts = computed(() => promptManager.prompts.custom)
 
 // 当前选中的提示词
 const selectedPrompt = computed(() => {
-  if (!selectedPromptId.value || selectedPromptId.value === '__create_new__')
-    return null
+  if (!selectedPromptId.value || selectedPromptId.value === '__create_new__') return null
   return promptManager.getPromptById(selectedPromptId.value) || null
 })
 
@@ -38,23 +37,19 @@ watch(
   (newValue) => {
     customInstructions.value = newValue || ''
     // 尝试匹配是否使用了预设提示词
-    const matchedPrompt = promptManager.getAllPrompts()
-      .find(p => p.content === newValue)
+    const matchedPrompt = promptManager.getAllPrompts().find((p) => p.content === newValue)
     selectedPromptId.value = matchedPrompt?.id || null
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 // 监听选中提示词变化
-watch(
-  selectedPrompt,
-  (newPrompt) => {
-    if (newPrompt) {
-      customInstructions.value = newPrompt.content
-      emits('update:modelValue', newPrompt.content)
-    }
-  },
-)
+watch(selectedPrompt, (newPrompt) => {
+  if (newPrompt) {
+    customInstructions.value = newPrompt.content
+    emits('update:modelValue', newPrompt.content)
+  }
+})
 
 function handlePromptSelect(promptId: string) {
   if (promptId === '__create_new__') {
@@ -93,16 +88,17 @@ function handleManagePrompts() {
       <label class="block text-sm font-medium text-[var(--el-text-color-primary)]">
         {{ t('intelligence.instructions') }}
       </label>
-      <FlatButton
-        mini
-        text
+      <TxButton
+        variant="flat"
+        size="sm"
+        type="text"
         class="manage-prompts-btn"
         :aria-label="t('intelligence.managePrompts')"
         @click="handleManagePrompts"
       >
         <i class="i-carbon-settings" aria-hidden="true" />
         <span>{{ t('intelligence.managePrompts') }}</span>
-      </FlatButton>
+      </TxButton>
     </div>
 
     <!-- Quick Prompt Selection -->
@@ -117,10 +113,7 @@ function handleManagePrompts() {
         @clear="handlePromptClear"
       >
         <!-- Built-in Prompts Group -->
-        <ElOptionGroup
-          v-if="builtinPrompts.length > 0"
-          :label="t('intelligence.builtinPrompts')"
-        >
+        <ElOptionGroup v-if="builtinPrompts.length > 0" :label="t('intelligence.builtinPrompts')">
           <ElOption
             v-for="prompt in builtinPrompts"
             :key="prompt.id"
@@ -137,10 +130,7 @@ function handleManagePrompts() {
         </ElOptionGroup>
 
         <!-- Custom Prompts Group -->
-        <ElOptionGroup
-          v-if="customPrompts.length > 0"
-          :label="t('intelligence.customPrompts')"
-        >
+        <ElOptionGroup v-if="customPrompts.length > 0" :label="t('intelligence.customPrompts')">
           <ElOption
             v-for="prompt in customPrompts"
             :key="prompt.id"
@@ -157,10 +147,7 @@ function handleManagePrompts() {
         </ElOptionGroup>
 
         <!-- Add New Prompt Option -->
-        <ElOption
-          value="__create_new__"
-          :label="t('intelligence.createNewPrompt')"
-        >
+        <ElOption value="__create_new__" :label="t('intelligence.createNewPrompt')">
           <div class="flex items-center gap-2 text-[var(--el-color-primary)]">
             <i class="i-carbon-add" aria-hidden="true" />
             <span>{{ t('intelligence.createNewPrompt') }}</span>
@@ -198,10 +185,7 @@ function handleManagePrompts() {
         <span class="text-sm font-medium text-[var(--el-text-color-primary)]">
           {{ selectedPrompt.name }}
         </span>
-        <ElTag
-          size="small"
-          :type="selectedPrompt.builtin ? 'info' : 'success'"
-        >
+        <ElTag size="small" :type="selectedPrompt.builtin ? 'info' : 'success'">
           {{ selectedPrompt.builtin ? t('intelligence.builtin') : t('intelligence.custom') }}
         </ElTag>
       </div>

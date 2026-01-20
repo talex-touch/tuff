@@ -1,8 +1,12 @@
 # Storage API
 
+## 概述
+
 插件存储 SDK 提供基于文件的持久化存储能力，数据在应用重启后仍然保留。
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```ts
 import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
@@ -29,7 +33,7 @@ console.log(settings) // { theme: 'dark', fontSize: 14 }
 
 ## API 参考
 
-### 获取 Storage 实例
+**获取 Storage 实例**
 
 ```ts
 import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
@@ -39,9 +43,9 @@ const storage = usePluginStorage()
 
 > **注意**：必须在插件渲染器上下文中调用。
 
-### 文件操作
+**文件操作**
 
-#### `getFile(fileName)`
+**`getFile(fileName)`**
 
 读取存储文件内容。
 
@@ -55,7 +59,7 @@ const config = await storage.getFile('config.json')
 | `fileName` | `string` | 文件名（支持子目录如 `data/cache.json`） |
 | 返回值 | `Promise<any>` | 文件内容（自动 JSON 解析），不存在返回 `null` |
 
-#### `setFile(fileName, content)`
+**`setFile(fileName, content)`**
 
 写入存储文件。
 
@@ -73,7 +77,7 @@ await storage.setFile('settings.json', {
 | `content` | `any` | 要存储的内容（自动 JSON 序列化） |
 | 返回值 | `Promise<{ success: boolean, error?: string }>` | 操作结果 |
 
-#### `deleteFile(fileName)`
+**`deleteFile(fileName)`**
 
 删除存储文件。
 
@@ -81,7 +85,7 @@ await storage.setFile('settings.json', {
 await storage.deleteFile('old-cache.json')
 ```
 
-#### `listFiles()`
+**`listFiles()`**
 
 列出插件所有存储文件。
 
@@ -90,7 +94,7 @@ const files = await storage.listFiles()
 // ['settings.json', 'data/cache.json']
 ```
 
-#### `clearAll()`
+**`clearAll()`**
 
 清空插件所有存储数据。
 
@@ -101,9 +105,9 @@ await storage.clearAll()
 
 ---
 
-### 高级功能
+**高级功能**
 
-#### `getStats()`
+**`getStats()`**
 
 获取存储统计信息。
 
@@ -117,7 +121,7 @@ const stats = await storage.getStats()
 // }
 ```
 
-#### `getTree()`
+**`getTree()`**
 
 获取存储目录树结构。
 
@@ -129,7 +133,7 @@ const tree = await storage.getTree()
 // ]
 ```
 
-#### `getFileDetails(fileName)`
+**`getFileDetails(fileName)`**
 
 获取文件详细信息。
 
@@ -143,7 +147,7 @@ const details = await storage.getFileDetails('settings.json')
 // }
 ```
 
-#### `openFolder()`
+**`openFolder()`**
 
 在系统文件管理器中打开插件存储目录。
 
@@ -154,7 +158,7 @@ await storage.openFolder()
 
 ---
 
-### 监听变更
+**监听变更**
 
 监听存储文件的变化，适用于多窗口同步场景。
 
@@ -170,9 +174,14 @@ unsubscribe()
 
 ---
 
+## 技术原理
+
+- 数据以文件形式保存在插件独立目录中，避免跨插件访问。
+- 写入时自动进行文件名清理与 JSON 序列化，降低安全风险。
+
 ## 最佳实践
 
-### 1. 结构化配置管理
+**1. 结构化配置管理**
 
 ```ts
 interface PluginSettings {
@@ -197,7 +206,7 @@ async function saveSettings(settings: PluginSettings) {
 }
 ```
 
-### 2. 缓存过期处理
+**2. 缓存过期处理**
 
 ```ts
 interface CacheEntry<T> {
@@ -226,7 +235,7 @@ async function setCache<T>(key: string, data: T, ttlMs: number = 3600000) {
 }
 ```
 
-### 3. 容量监控
+**3. 容量监控**
 
 ```ts
 async function checkStorageQuota() {

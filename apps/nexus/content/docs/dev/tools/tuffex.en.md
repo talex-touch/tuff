@@ -5,9 +5,12 @@ description: Modern Vue3 component library with beautiful animations
 
 # TuffEx
 
-TuffEx is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
+TuffEx (Chinese name: Ta Fu, 塔芙) is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
 
 > **Migration in Progress** - TuffEx is migrating components from Tuff core app. Tech stack upgraded to Vue 3.5 / Vite 6 / TypeScript 5.8.
+
+## Component Gallery
+- **[Tuffex Components](../components/index.en.md)** — component catalog, demos, and API (bilingual).
 
 
 ## Installation
@@ -25,7 +28,7 @@ pnpm add @talex-touch/tuffex
 
 ## Quick Start
 
-### Full Import
+**Full Import**
 
 ```typescript
 import { createApp } from 'vue'
@@ -37,7 +40,7 @@ app.use(TuffUI)
 app.mount('#app')
 ```
 
-### On-Demand Import (Recommended)
+**On-Demand Import (Recommended)**
 
 ```typescript
 import { createApp } from 'vue'
@@ -62,7 +65,7 @@ app.use(TuffFlatButton)
 
 ## Available Components
 
-### Released
+**Released**
 
 | Component | Description | Source |
 |-----------|-------------|--------|
@@ -75,7 +78,7 @@ app.use(TuffFlatButton)
 | `TuffSelectItem` | Select option item | `base/select/TSelectItem` |
 | `TuffProgress` | Progress bar with indeterminate mode | `base/ProgressBar` |
 
-### Planned
+**Planned**
 
 | Component | Description | Source |
 |-----------|-------------|--------|

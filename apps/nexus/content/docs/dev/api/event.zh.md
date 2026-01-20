@@ -1,9 +1,13 @@
 # Event API
 
-## TouchEventBus
+## 概述
 `TouchEventBus` 将应用内关键节点统一广播，插件可以订阅以便响应系统事件。
 
-### 事件枚举
+## 介绍
+事件系统适合做生命周期联动、状态同步与跨模块通知。插件侧通过 `ctx.events` 进行订阅与派发。
+
+## API 参考
+**TouchEventBus**
 | 事件 | 触发时机 |
 | --- | --- |
 | `APP_READY` | 主应用初始化完毕 |
@@ -12,7 +16,7 @@
 | `WINDOW_ALL_CLOSED` | 所有窗口关闭 |
 | `PLUGIN_STORAGE_UPDATED` | 插件存储变更 |
 
-### 插件订阅
+**插件订阅**
 ```ts
 const dispose = ctx.events.on('APP_READY', () => {
   ctx.logger.info('应用已就绪')
@@ -21,10 +25,15 @@ const dispose = ctx.events.on('APP_READY', () => {
 ctx.events.emit('PLUGIN_STORAGE_UPDATED', { pluginId: ctx.meta.id })
 ```
 
-## 自定义事件
+**自定义事件**
 - 插件可创建内部事件 `ctx.events.createNamespace('todo')`，避免冲突。
 - 所有事件都返回取消句柄，记得在 `onDestroy` 中释放。
 
-## 调试建议
-- 使用 `ctx.logger.debug` 打印事件 payload。
-- 开启 DevTools Performance 后可看到事件时间线。
+## 最佳实践
+- 事件 payload 保持轻量，避免大对象频繁广播。
+- 使用命名空间区分插件私有事件，减少冲突。
+- 调试时用 `ctx.logger.debug` 打印关键事件。
+
+## 技术原理
+- 事件枚举来自主进程的 `TouchEventBus`，通过 IPC 广播至插件运行时。
+- `ctx.events` 在插件上下文中封装订阅与派发，统一返回 dispose 函数。

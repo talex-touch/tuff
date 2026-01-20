@@ -1,6 +1,10 @@
 # Widget API
 
+## Overview
 Widgets are lightweight UI components that plugins can render in CoreBox or DivisionBox.
+
+## Introduction
+Declare widgets in the manifest, then provide the renderer entry in your plugin workspace.
 
 ## Supported File Types
 
@@ -113,9 +117,13 @@ Widgets run in a sandboxed environment. Only these packages are allowed:
 - `ctx.widget.send` exchanges size, theme, or focus signals
 - Access plugin storage via `ctx.storage`
 
-## Craft Guidelines
+## Best Practices
 
 - Respect light/dark mode automatically
 - Keep animations subtle; re-render within 16 ms
 - Provide empty states and clear error hints
 - Use `@talex-touch/utils` hooks for consistent behavior
+
+## Technical Notes
+- Widgets run in a sandboxed renderer context with controlled dependencies.
+- File processing is handled by the widget processors listed above.

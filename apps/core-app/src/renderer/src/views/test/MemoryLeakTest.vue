@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { createApp, ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useAuth } from '~/modules/auth/useAuth'
 
 const componentStatus = ref('未创建')
@@ -42,6 +43,7 @@ function createComponent() {
 
     // 创建测试组件
     const TestComponent = {
+      components: { TxButton },
       setup() {
         const { isAuthenticated, isLoading, isLoggedIn, currentUser } = useAuth()
 
@@ -52,7 +54,7 @@ function createComponent() {
           isAuthenticated,
           isLoading,
           isLoggedIn,
-          currentUser,
+          currentUser
         }
       },
       template: `
@@ -60,15 +62,15 @@ function createComponent() {
           <h4>测试组件</h4>
           <p>认证状态: {{ isAuthenticated }}</p>
           <p>登录状态: {{ isLoggedIn() }}</p>
-          <button @click="close">关闭</button>
+          <TxButton variant="flat" @click="close">关闭</TxButton>
         </div>
       `,
       methods: {
         close() {
           addLog('测试组件关闭按钮被点击')
           destroyComponent()
-        },
-      },
+        }
+      }
     }
 
     testApp = createApp(TestComponent)
@@ -78,8 +80,7 @@ function createComponent() {
     componentStatus.value = '已创建'
     createCount.value++
     addLog('测试组件创建成功')
-  }
-  catch (error) {
+  } catch (error) {
     addLog(`创建组件失败: ${error}`)
     console.error('Create component error:', error)
   }
@@ -106,12 +107,10 @@ function destroyComponent() {
       setTimeout(() => {
         addLog('内存检查: 组件应该已被完全清理')
       }, 1000)
-    }
-    else {
+    } else {
       addLog('没有可销毁的组件')
     }
-  }
-  catch (error) {
+  } catch (error) {
     addLog(`销毁组件失败: ${error}`)
     console.error('Destroy component error:', error)
   }
@@ -128,15 +127,9 @@ function clearLogs() {
     <h2>内存泄漏测试</h2>
 
     <div class="test-controls">
-      <el-button type="primary" @click="createComponent">
-        创建组件
-      </el-button>
-      <el-button type="danger" @click="destroyComponent">
-        销毁组件
-      </el-button>
-      <el-button type="default" @click="clearLogs">
-        清除日志
-      </el-button>
+      <el-button type="primary" @click="createComponent"> 创建组件 </el-button>
+      <el-button type="danger" @click="destroyComponent"> 销毁组件 </el-button>
+      <el-button type="default" @click="clearLogs"> 清除日志 </el-button>
     </div>
 
     <div class="test-info">

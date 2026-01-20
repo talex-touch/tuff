@@ -225,7 +225,16 @@
     "copiedImage": "已复制图片",
     "copiedFiles": "已复制文件",
     "copiedHtml": "已复制HTML",
-    "command": "命令"
+    "command": "命令",
+    "fromApp": "来自 {app}",
+    "tags": {
+      "url": "链接",
+      "api_key": "API Key",
+      "token": "Token",
+      "password": "密码",
+      "account": "账号",
+      "email": "邮箱"
+    }
   },
   "flatController": {
     "useNative": "使用原生窗口控件"

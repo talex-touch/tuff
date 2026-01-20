@@ -1,4 +1,5 @@
 <script name="BrickTemplate" setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex'
 const _disabled: any = inject('disabled')
 
 const disabled = computed(() => _disabled.value)
@@ -24,7 +25,8 @@ const disabled = computed(() => _disabled.value)
         Template
       </div>
       <span text-sm> This is a template brick template. </span>
-      <button
+      <TxButton
+        variant="bare"
         cursor-pointer
         bg-transparent
         class="color-template fake-background"
@@ -36,7 +38,7 @@ const disabled = computed(() => _disabled.value)
         my-2
       >
         Open in window
-      </button>
+      </TxButton>
     </slot>
   </div>
 </template>
