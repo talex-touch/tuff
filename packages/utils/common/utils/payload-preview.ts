@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer'
+
 export interface PayloadPreviewOptions {
   maxOutputChars?: number
   maxStringChars?: number
@@ -11,18 +13,21 @@ const DEFAULT_OPTIONS: Required<PayloadPreviewOptions> = {
   maxStringChars: 200,
   maxDepth: 4,
   maxKeys: 30,
-  maxArrayLength: 20
+  maxArrayLength: 20,
 }
 
 function truncate(value: string, maxChars: number): string {
-  if (maxChars <= 0) return ''
+  if (maxChars <= 0)
+    return ''
   return value.length > maxChars ? `${value.slice(0, maxChars)}…` : value
 }
 
 function redactDataUrl(value: string, maxPrefixChars: number): string {
-  if (!value.startsWith('data:')) return value
+  if (!value.startsWith('data:'))
+    return value
   const base64Index = value.indexOf(';base64,')
-  if (base64Index === -1) return value
+  if (base64Index === -1)
+    return value
 
   const prefixEnd = base64Index + ';base64,'.length
   const prefix = value.slice(0, prefixEnd)
@@ -54,7 +59,8 @@ function bufferLength(value: unknown): number | null {
 export function formatPayloadPreview(payload: unknown, options?: PayloadPreviewOptions): string {
   const opts = { ...DEFAULT_OPTIONS, ...(options ?? {}) }
 
-  if (payload === null || payload === undefined) return String(payload)
+  if (payload === null || payload === undefined)
+    return String(payload)
   if (typeof payload === 'string') {
     const redacted = redactDataUrl(payload, opts.maxStringChars)
     return truncate(redacted, opts.maxOutputChars)
@@ -63,36 +69,44 @@ export function formatPayloadPreview(payload: unknown, options?: PayloadPreviewO
   const seen = typeof WeakSet !== 'undefined' ? new WeakSet<object>() : null
 
   const simplify = (value: unknown, depth: number): unknown => {
-    if (value === null || value === undefined) return value
-    if (depth >= opts.maxDepth) return '[max-depth]'
+    if (value === null || value === undefined)
+      return value
+    if (depth >= opts.maxDepth)
+      return '[max-depth]'
 
     const valueType = typeof value
     if (valueType === 'string') {
       const redacted = redactDataUrl(value as string, opts.maxStringChars)
       return truncate(redacted, opts.maxStringChars)
     }
-    if (valueType === 'number' || valueType === 'boolean') return value
-    if (valueType === 'bigint') return `${value.toString()}n`
-    if (valueType === 'symbol') return String(value)
-    if (valueType === 'function') return '[function]'
+    if (valueType === 'number' || valueType === 'boolean')
+      return value
+    if (valueType === 'bigint')
+      return `${value.toString()}n`
+    if (valueType === 'symbol')
+      return String(value)
+    if (valueType === 'function')
+      return '[function]'
 
     if (value instanceof Error) {
       return {
         name: value.name,
         message: truncate(value.message ?? '', opts.maxStringChars),
-        stack: typeof value.stack === 'string' ? truncate(value.stack, opts.maxOutputChars) : undefined
+        stack: typeof value.stack === 'string' ? truncate(value.stack, opts.maxOutputChars) : undefined,
       }
     }
 
     const bufLen = bufferLength(value)
-    if (typeof bufLen === 'number') return `[buffer ${bufLen} bytes]`
-    if (isTypedArray(value)) return `[typed-array ${value.byteLength} bytes]`
+    if (typeof bufLen === 'number')
+      return `[buffer ${bufLen} bytes]`
+    if (isTypedArray(value))
+      return `[typed-array ${value.byteLength} bytes]`
     if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
       return `[array-buffer ${value.byteLength} bytes]`
     }
 
     if (Array.isArray(value)) {
-      const items = value.slice(0, opts.maxArrayLength).map((item) => simplify(item, depth + 1))
+      const items = value.slice(0, opts.maxArrayLength).map(item => simplify(item, depth + 1))
       if (value.length > opts.maxArrayLength) {
         items.push(`[+${value.length - opts.maxArrayLength} more]`)
       }
@@ -102,7 +116,8 @@ export function formatPayloadPreview(payload: unknown, options?: PayloadPreviewO
     if (valueType === 'object') {
       const obj = value as Record<string, unknown>
       if (seen) {
-        if (seen.has(obj)) return '[circular]'
+        if (seen.has(obj))
+          return '[circular]'
         seen.add(obj)
       }
 
@@ -112,7 +127,7 @@ export function formatPayloadPreview(payload: unknown, options?: PayloadPreviewO
           size: obj.size,
           entries: Array.from(obj.entries())
             .slice(0, opts.maxArrayLength)
-            .map(([k, v]) => [simplify(k, depth + 1), simplify(v, depth + 1)])
+            .map(([k, v]) => [simplify(k, depth + 1), simplify(v, depth + 1)]),
         }
       }
 
@@ -122,7 +137,7 @@ export function formatPayloadPreview(payload: unknown, options?: PayloadPreviewO
           size: obj.size,
           values: Array.from(obj.values())
             .slice(0, opts.maxArrayLength)
-            .map((v) => simplify(v, depth + 1))
+            .map(v => simplify(v, depth + 1)),
         }
       }
 
@@ -158,4 +173,3 @@ export function formatPayloadPreview(payload: unknown, options?: PayloadPreviewO
     return '[unserializable]'
   }
 }
-

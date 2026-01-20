@@ -1,3 +1,5 @@
+import process from 'node:process'
+
 /**
  * Interface for command line argument mapper options
  * @interface IArgMapperOptions
@@ -35,7 +37,7 @@ declare global {
  * @param args - Array of command line arguments (defaults to process.argv)
  * @returns Mapped command line arguments as key-value pairs
  */
-export function useArgMapper(args: string[] = process.argv): IArgMapperOptions {
+export function useArgMapper(args: string[] = process?.argv ?? []): IArgMapperOptions {
   if (window.$argMapper)
     return window.$argMapper
 

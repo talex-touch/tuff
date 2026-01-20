@@ -6,6 +6,7 @@
 
 import type { ITouchChannel, ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import type { IPluginFeature } from '../index'
+import path from 'node:path'
 
 /**
  * Handler signature for plugin channel events.
@@ -510,14 +511,14 @@ export interface IEventManager {
    * @param event - The event name to listen for
    * @param callback - The callback function to execute when event is emitted
    */
-  on: (event: string, callback: Function) => void
+  on: (event: string, callback: PluginEventHandler) => void
 
   /**
    * Removes an event listener
    * @param event - The event name to stop listening for
    * @param callback - The callback function to remove
    */
-  off: (event: string, callback: Function) => void
+  off: (event: string, callback: PluginEventHandler) => void
 
   /**
    * Emits an event with optional arguments
@@ -526,6 +527,8 @@ export interface IEventManager {
    */
   emit: (event: string, ...args: any[]) => void
 }
+
+export type PluginEventHandler = (...args: any[]) => void
 
 /**
  * Plugin configuration interface
@@ -658,7 +661,6 @@ export function createStorageManager(
   pluginPath: string,
   fse: any,
 ): IStorageManager {
-  const path = require('node:path')
   const dataPath = path.join(pluginPath, 'data')
 
   /**

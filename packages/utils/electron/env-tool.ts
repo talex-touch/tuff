@@ -13,23 +13,19 @@ export function checkGlobalPackageExist(packageName: string): Promise<IGlobalPkg
   return new Promise((resolve, reject) => {
     exec(`npm list -g ${packageName}`, (error, stdout, stderr) => {
       if (error) {
-        reject({
-          exits: false,
-          error,
-        })
+        const execError = Object.assign(new Error('Failed to check global package'), { error })
+        reject(execError)
         return
       }
       if (stderr) {
-        reject({
-          exits: false,
-          error: stderr,
-        })
+        const stderrError = Object.assign(new Error('Failed to check global package'), { error: stderr })
+        reject(stderrError)
         return
       }
 
       const lines = stdout.split('\n')
       const lastLine = lines[lines.length - 3]
-      const match = lastLine.match(/(\S+)@(\S+)/)
+      const match = lastLine.match(/([^@\s]+)@(\S+)/)
       if (match) {
         resolve({
           exist: true,

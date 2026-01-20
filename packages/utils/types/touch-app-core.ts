@@ -1,6 +1,7 @@
 import type { BrowserWindowConstructorOptions, OpenDevToolsOptions } from 'electron'
 import type { IBaseModule, IBaseModuleManager } from './modules'
 
+ 
 export namespace TalexTouch {
   export interface TouchApp {
     app: Electron.App
@@ -26,13 +27,13 @@ export namespace TalexTouch {
      * the close button of the window. The web page may cancel the close though. See
      * the close event.
      */
-    close(): void
+    close: () => void
 
     /**
      * Minimizes the window. On some platforms the minimized window will be shown in
      * the Dock.
      */
-    minimize(): void
+    minimize: () => void
 
     /**
      * Opens the devtools.
@@ -43,16 +44,16 @@ export namespace TalexTouch {
      * On Windows, if Windows Control Overlay is enabled, Devtools will be opened with
      * `mode: 'detach'`.
      */
-    openDevTools(options?: OpenDevToolsOptions): void
+    openDevTools: (options?: OpenDevToolsOptions) => void
 
-    loadURL(
+    loadURL: (
       url: string,
       options?: LoadURLOptions | undefined,
-    ): Promise<Electron.WebContents>
-    loadFile(
+    ) => Promise<Electron.WebContents>
+    loadFile: (
       filePath: string,
       options?: LoadFileOptions | undefined,
-    ): Promise<Electron.WebContents>
+    ) => Promise<Electron.WebContents>
   }
 
   export type TouchWindowConstructorOptions
@@ -76,7 +77,7 @@ export namespace TalexTouch {
   export interface IConfiguration {
     configPath: string
     data: TouchAppConfig
-    triggerSave: Function
+    triggerSave: () => void
   }
 
   export interface TouchAppConfig {

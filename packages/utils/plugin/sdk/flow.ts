@@ -132,6 +132,7 @@ export interface IFlowSDK {
  * Creates a Flow SDK instance
  *
  * @param channel - Channel for IPC communication
+ * @param channel.send - Send function for IPC communication
  * @param pluginId - Current plugin ID
  * @returns Flow SDK instance
  */
@@ -282,8 +283,6 @@ export function createFlowSDK(
         }).catch((err: unknown) => {
           console.warn('[FlowSDK] Failed to register flow handler:', err)
         })
-
-        void hasWindow
       }
 
       return () => {
