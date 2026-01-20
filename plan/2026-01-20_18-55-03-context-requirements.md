@@ -37,6 +37,20 @@ created_at: 2026-01-20T18:55:06+08:00
   - `saveConfig` 写入内存后触发 SQLite upsert（`apps/core-app/src/main/modules/storage/index.ts:582`）
 - JSON 重叠范围：仅 `SQLITE_PILOT_CONFIGS` 内 key（当前为 `StorageList.SEARCH_ENGINE_LOGS_ENABLED`）同时存在 JSON 文件与 SQLite 记录，其余 key 仅走 JSON（`apps/core-app/src/main/modules/storage/index.ts:60`）
 
+🔗 调用链与一致性要求
+- Main 调用链：
+  - 入口由 `registerTransportHandlers` 处理（`StorageEvents.app.*` 与 legacy `storage:*`）→ `getConfig`/`saveConfig`（`apps/core-app/src/main/modules/storage/index.ts:283` / `apps/core-app/src/main/modules/storage/index.ts:582`）
+  - `saveConfig` 触发 `broadcastUpdate`（IPC 广播）与 `notifySubscribers`（本地订阅），具备版本冲突检测（`apps/core-app/src/main/modules/storage/index.ts:582` / `apps/core-app/src/main/modules/storage/index.ts:68`）
+  - 一致性要求：主进程内读取与写入为强一致（同进程内缓存即时更新），跨窗口/跨进程通过 IPC 异步广播 → 最终一致
+- Renderer 调用链：
+  - `TouchStorage` 通过 `storage:get`/`storage:save` 或 `StorageEvents.app.save` 访问主进程（`packages/utils/renderer/storage/base-storage.ts:278` / `packages/utils/renderer/storage/base-storage.ts:308`）
+  - 更新订阅通过 `storage:update` 或 `StorageEvents.app.updated` 拉取新版本（`packages/utils/renderer/storage/base-storage.ts:318`）
+  - 一致性要求：窗口间更新依赖异步广播与版本比较，默认最终一致
+- Plugin 调用链：
+  - `usePluginStorage` 通过 `plugin:storage:*` 通道读写（`packages/utils/plugin/sdk/storage.ts:24`）
+  - `onDidChange` 监听 `plugin:storage:update` 变更（`packages/utils/plugin/sdk/storage.ts:109`）
+  - 一致性要求：插件侧更新基于事件通知与异步 IPC，默认最终一致
+
 ✅ 已决事项
 - 本阶段仅做上下文与需求整理，目标是形成后续工作输入（来源: `plan/2026-01-20_18-55-03-context-requirements.md:14`）
 
