@@ -65,6 +65,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "test": "vitest run",
     "tuff:builder": "tuff builder",
     "lint": "node ../../node_modules/eslint/bin/eslint.js --cache \"src/**/*.{ts,tsx}\"",
     "lint:fix": "node ../../node_modules/eslint/bin/eslint.js --cache --fix \"src/**/*.{ts,tsx}\"",

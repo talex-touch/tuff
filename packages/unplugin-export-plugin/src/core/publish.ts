@@ -5,6 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import fs from 'fs-extra'
+import { parsePublishArgs } from '../cli/args'
 import type { PublishConfig } from '../types'
 import { resolvePublishConfig } from './config'
 
@@ -260,28 +261,7 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
 
 export async function runPublish(): Promise<void> {
   const args = process.argv.slice(3)
-
-  const cliOverrides: PublishConfig = {}
-
-  if (args.includes('--dry-run')) {
-    cliOverrides.dryRun = true
-  }
-
-  // Parse arguments
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--tag' && args[i + 1]) {
-      cliOverrides.tag = args[++i]
-    }
-    else if (args[i] === '--channel' && args[i + 1]) {
-      cliOverrides.channel = args[++i] as 'RELEASE' | 'BETA' | 'SNAPSHOT'
-    }
-    else if (args[i] === '--notes' && args[i + 1]) {
-      cliOverrides.notes = args[++i]
-    }
-    else if (args[i] === '--api-url' && args[i + 1]) {
-      cliOverrides.apiUrl = args[++i]
-    }
-  }
+  const cliOverrides: PublishConfig = parsePublishArgs(args)
 
   const resolved = await resolvePublishConfig(process.cwd(), cliOverrides)
   await publish(resolved)
