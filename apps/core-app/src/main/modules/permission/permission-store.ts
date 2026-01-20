@@ -4,28 +4,17 @@
  * Persistent storage for plugin permissions.
  */
 
-import type { PermissionGrant, PluginPermissionStatus } from '@talex-touch/utils/permission'
+import type {
+  PermissionAuditLog,
+  PermissionGrant,
+  PluginPermissionStatus
+} from '@talex-touch/utils/permission'
 import path from 'node:path'
 import { DEFAULT_PERMISSIONS, getPluginPermissionStatus } from '@talex-touch/utils/permission'
 import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 import fse from 'fs-extra'
 
-interface AuditLogEntry {
-  /** Unique ID */
-  id: string
-  /** Timestamp */
-  timestamp: number
-  /** Plugin ID */
-  pluginId: string
-  /** Action type */
-  action: 'grant' | 'revoke' | 'check' | 'deny'
-  /** Permission ID */
-  permissionId: string
-  /** Who triggered this action */
-  triggeredBy: 'user' | 'auto' | 'system' | 'plugin'
-  /** Additional details */
-  details?: string
-}
+type AuditLogEntry = PermissionAuditLog
 
 interface PermissionData {
   /** Version for migration */
@@ -125,7 +114,7 @@ export class PermissionStore {
 
     // Add audit log
     this.addAuditLog(
-      'grant',
+      'granted',
       pluginId,
       permissionId,
       grantedBy === 'trust' ? 'system' : grantedBy === 'auto' ? 'auto' : 'user'
@@ -143,7 +132,7 @@ export class PermissionStore {
       delete this.data.grants[pluginId][permissionId]
 
       // Add audit log
-      this.addAuditLog('revoke', pluginId, permissionId, 'user')
+      this.addAuditLog('revoked', pluginId, permissionId, 'user')
 
       this.dirty = true
       this.save()
@@ -159,7 +148,7 @@ export class PermissionStore {
 
     // Add audit logs for each revoked permission
     for (const permissionId of permissions) {
-      this.addAuditLog('revoke', pluginId, permissionId, 'user', 'Revoked via "revoke all"')
+      this.addAuditLog('revoked', pluginId, permissionId, 'user', 'Revoked via "revoke all"')
     }
 
     this.dirty = true
@@ -174,7 +163,7 @@ export class PermissionStore {
       this.sessionGrants[pluginId] = new Set()
     }
     this.sessionGrants[pluginId].add(permissionId)
-    this.addAuditLog('grant', pluginId, permissionId, 'user', 'Session-only grant')
+    this.addAuditLog('granted', pluginId, permissionId, 'user', 'Session-only grant')
   }
 
   /**
@@ -186,7 +175,7 @@ export class PermissionStore {
     }
     for (const permissionId of permissionIds) {
       this.sessionGrants[pluginId].add(permissionId)
-      this.addAuditLog('grant', pluginId, permissionId, 'user', 'Session-only grant')
+      this.addAuditLog('granted', pluginId, permissionId, 'user', 'Session-only grant')
     }
   }
 
@@ -272,11 +261,16 @@ export class PermissionStore {
     action: AuditLogEntry['action'],
     pluginId: string,
     permissionId: string,
-    triggeredBy: AuditLogEntry['triggeredBy'] = 'system',
-    details?: string
+    triggeredBy: 'user' | 'auto' | 'system' | 'plugin' = 'system',
+    reason?: string
   ): void {
     if (!this.data.auditLogs) {
       this.data.auditLogs = []
+    }
+
+    const context: Record<string, unknown> = { triggeredBy }
+    if (reason) {
+      context.reason = reason
     }
 
     const entry: AuditLogEntry = {
@@ -285,8 +279,7 @@ export class PermissionStore {
       pluginId,
       action,
       permissionId,
-      triggeredBy,
-      details
+      context
     }
 
     this.data.auditLogs.unshift(entry)
@@ -308,7 +301,7 @@ export class PermissionStore {
     action?: AuditLogEntry['action']
     limit?: number
     offset?: number
-  }): { logs: AuditLogEntry[]; total: number } {
+  }): AuditLogEntry[] {
     let logs = this.data.auditLogs || []
 
     // Apply filters
@@ -319,14 +312,12 @@ export class PermissionStore {
       logs = logs.filter((l) => l.action === options.action)
     }
 
-    const total = logs.length
-
     // Apply pagination
     const offset = options?.offset || 0
     const limit = options?.limit || 50
     logs = logs.slice(offset, offset + limit)
 
-    return { logs, total }
+    return logs
   }
 
   /**

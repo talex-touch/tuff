@@ -1,15 +1,20 @@
 import type { IntelligenceProviderConfig, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { IntelligenceCapabilityType, IntelligenceProviderType } from '@talex-touch/utils'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import { genTouchChannel } from '../../core/channel-core'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
-import { withPermission } from '../permission/channel-guard'
+import { withPermission } from '../permission'
 import { capabilityTesterRegistry } from './capability-testers'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
-import { debugPrintConfig, ensureAiConfigLoaded, getCapabilityOptions, setupConfigUpdateListener } from './intelligence-config'
+import {
+  debugPrintConfig,
+  ensureAiConfigLoaded,
+  getCapabilityOptions,
+  setupConfigUpdateListener
+} from './intelligence-config'
 import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
 import { fetchProviderModels } from './provider-models'
 import { AnthropicProvider } from './providers/anthropic-provider'
@@ -20,6 +25,25 @@ import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
 
 const intelligenceLog = createLogger('Intelligence')
+
+const intelligenceInvokeEvent = defineRawEvent<any, any>('intelligence:invoke')
+const intelligenceChatLangchainEvent = defineRawEvent<any, any>('intelligence:chat-langchain')
+const intelligenceTestProviderEvent = defineRawEvent<any, any>('intelligence:test-provider')
+const intelligenceGetCapabilityTestMetaEvent = defineRawEvent<any, any>(
+  'intelligence:get-capability-test-meta'
+)
+const intelligenceTestCapabilityEvent = defineRawEvent<any, any>('intelligence:test-capability')
+const intelligenceFetchModelsEvent = defineRawEvent<any, any>('intelligence:fetch-models')
+const intelligenceGetAuditLogsEvent = defineRawEvent<any, any>('intelligence:get-audit-logs')
+const intelligenceGetTodayStatsEvent = defineRawEvent<any, any>('intelligence:get-today-stats')
+const intelligenceGetMonthStatsEvent = defineRawEvent<any, any>('intelligence:get-month-stats')
+const intelligenceGetUsageStatsEvent = defineRawEvent<any, any>('intelligence:get-usage-stats')
+const intelligenceGetQuotaEvent = defineRawEvent<any, any>('intelligence:get-quota')
+const intelligenceSetQuotaEvent = defineRawEvent<any, any>('intelligence:set-quota')
+const intelligenceDeleteQuotaEvent = defineRawEvent<any, any>('intelligence:delete-quota')
+const intelligenceGetAllQuotasEvent = defineRawEvent<void, any>('intelligence:get-all-quotas')
+const intelligenceCheckQuotaEvent = defineRawEvent<any, any>('intelligence:check-quota')
+const intelligenceGetCurrentUsageEvent = defineRawEvent<any, any>('intelligence:get-current-usage')
 
 /**
  * Intelligence Module - Manages AI capabilities and providers.
@@ -33,19 +57,21 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   name: ModuleKey = IntelligenceModule.key
 
   private manager: IntelligenceProviderManager | null = null
-  private channel: ITouchChannel | null = null
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
     super(IntelligenceModule.key)
   }
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
-    // 在 onInit 阶段获取已初始化的 TouchChannel
-    this.channel = genTouchChannel()
-
-    if (!this.channel) {
+    // 在 onInit 阶段获取已初始化的 transport
+    const channel = genTouchApp().channel
+    if (!channel) {
       throw new Error('[Intelligence] Touch channel not ready')
     }
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    this.transport = getTuffTransportMain(channel as any, keyManager as any)
 
     intelligenceLog.info('Initializing Intelligence module')
 
@@ -90,19 +116,30 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册内置 Provider Factories
    */
   private registerBuiltinProviders(): void {
-    if (!this.manager)
-      return
+    if (!this.manager) return
 
     intelligenceLog.info('Registering builtin provider factories')
 
-    this.manager.registerFactory(IntelligenceProviderType.OPENAI, config => new OpenAIProvider(config))
-    this.manager.registerFactory(IntelligenceProviderType.ANTHROPIC, config => new AnthropicProvider(config))
-    this.manager.registerFactory(IntelligenceProviderType.DEEPSEEK, config => new DeepSeekProvider(config))
+    this.manager.registerFactory(
+      IntelligenceProviderType.OPENAI,
+      (config) => new OpenAIProvider(config)
+    )
+    this.manager.registerFactory(
+      IntelligenceProviderType.ANTHROPIC,
+      (config) => new AnthropicProvider(config)
+    )
+    this.manager.registerFactory(
+      IntelligenceProviderType.DEEPSEEK,
+      (config) => new DeepSeekProvider(config)
+    )
     this.manager.registerFactory(
       IntelligenceProviderType.SILICONFLOW,
-      config => new SiliconflowProvider(config),
+      (config) => new SiliconflowProvider(config)
     )
-    this.manager.registerFactory(IntelligenceProviderType.LOCAL, config => new LocalProvider(config))
+    this.manager.registerFactory(
+      IntelligenceProviderType.LOCAL,
+      (config) => new LocalProvider(config)
+    )
 
     intelligenceLog.success('Builtin provider factories registered')
   }
@@ -111,8 +148,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册自定义 Provider Factory (OpenAI-compatible)
    */
   private registerCustomProvider(): void {
-    if (!this.manager)
-      return
+    if (!this.manager) return
 
     intelligenceLog.info('Registering custom provider factory')
 
@@ -137,14 +173,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       IntelligenceProviderType.DEEPSEEK,
       IntelligenceProviderType.SILICONFLOW,
       IntelligenceProviderType.LOCAL,
-      IntelligenceProviderType.CUSTOM,
+      IntelligenceProviderType.CUSTOM
     ]
 
     const VISION_PROVIDERS = [
       IntelligenceProviderType.OPENAI,
       IntelligenceProviderType.ANTHROPIC,
       IntelligenceProviderType.SILICONFLOW,
-      IntelligenceProviderType.CUSTOM,
+      IntelligenceProviderType.CUSTOM
     ]
 
     // ========================================================================
@@ -156,7 +192,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CHAT,
       name: 'Text Chat',
       description: 'General-purpose text chat capability',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -164,7 +200,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.TRANSLATE,
       name: 'Translation',
       description: 'Multi-language text translation',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -172,7 +208,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.SUMMARIZE,
       name: 'Summarization',
       description: 'Generate concise summaries of text content',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -180,7 +216,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.REWRITE,
       name: 'Text Rewrite',
       description: 'Rewrite text with different styles and tones',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -188,7 +224,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.GRAMMAR_CHECK,
       name: 'Grammar Check',
       description: 'Check and correct grammar, spelling, and style',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     // ========================================================================
@@ -205,8 +241,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         IntelligenceProviderType.DEEPSEEK,
         IntelligenceProviderType.SILICONFLOW,
         IntelligenceProviderType.LOCAL,
-        IntelligenceProviderType.CUSTOM,
-      ],
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     // ========================================================================
@@ -218,7 +254,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_GENERATE,
       name: 'Code Generation',
       description: 'Generate code from natural language descriptions',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -226,7 +262,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_EXPLAIN,
       name: 'Code Explanation',
       description: 'Explain code functionality and logic',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -234,7 +270,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_REVIEW,
       name: 'Code Review',
       description: 'Review code for issues, security, and best practices',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -242,7 +278,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_REFACTOR,
       name: 'Code Refactoring',
       description: 'Refactor code for better readability and maintainability',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -250,7 +286,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CODE_DEBUG,
       name: 'Code Debugging',
       description: 'Analyze and fix code bugs',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     // ========================================================================
@@ -262,7 +298,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.INTENT_DETECT,
       name: 'Intent Detection',
       description: 'Detect user intent from text input',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -270,7 +306,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.SENTIMENT_ANALYZE,
       name: 'Sentiment Analysis',
       description: 'Analyze sentiment and emotions in text',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -278,7 +314,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CONTENT_EXTRACT,
       name: 'Content Extraction',
       description: 'Extract entities and key information from text',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -286,7 +322,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.KEYWORDS_EXTRACT,
       name: 'Keyword Extraction',
       description: 'Extract keywords and key phrases from text',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -294,7 +330,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.CLASSIFICATION,
       name: 'Text Classification',
       description: 'Classify text into predefined categories',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     // ========================================================================
@@ -306,7 +342,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.VISION_OCR,
       name: 'Vision OCR',
       description: 'Optical character recognition from images',
-      supportedProviders: VISION_PROVIDERS,
+      supportedProviders: VISION_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -314,7 +350,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_CAPTION,
       name: 'Image Captioning',
       description: 'Generate descriptive captions for images',
-      supportedProviders: VISION_PROVIDERS,
+      supportedProviders: VISION_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -322,7 +358,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_ANALYZE,
       name: 'Image Analysis',
       description: 'Analyze image content, objects, and scenes',
-      supportedProviders: VISION_PROVIDERS,
+      supportedProviders: VISION_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -330,7 +366,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_GENERATE,
       name: 'Image Generation',
       description: 'Generate images from text prompts',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [
+        IntelligenceProviderType.OPENAI,
+        IntelligenceProviderType.SILICONFLOW,
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     aiCapabilityRegistry.register({
@@ -338,7 +378,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.IMAGE_EDIT,
       name: 'Image Editing',
       description: 'Edit and modify images with AI',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM]
     })
 
     // ========================================================================
@@ -350,7 +390,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.TTS,
       name: 'Text-to-Speech',
       description: 'Convert text to natural speech',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [
+        IntelligenceProviderType.OPENAI,
+        IntelligenceProviderType.SILICONFLOW,
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     aiCapabilityRegistry.register({
@@ -358,7 +402,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.STT,
       name: 'Speech-to-Text',
       description: 'Convert speech to text',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [
+        IntelligenceProviderType.OPENAI,
+        IntelligenceProviderType.SILICONFLOW,
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     aiCapabilityRegistry.register({
@@ -366,7 +414,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.AUDIO_TRANSCRIBE,
       name: 'Audio Transcription',
       description: 'Transcribe audio with timestamps and speaker detection',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [
+        IntelligenceProviderType.OPENAI,
+        IntelligenceProviderType.SILICONFLOW,
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     // ========================================================================
@@ -378,7 +430,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.RAG_QUERY,
       name: 'RAG Query',
       description: 'Query documents with retrieval-augmented generation',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -386,7 +438,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.SEMANTIC_SEARCH,
       name: 'Semantic Search',
       description: 'Search documents by semantic similarity',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [
+        IntelligenceProviderType.OPENAI,
+        IntelligenceProviderType.SILICONFLOW,
+        IntelligenceProviderType.CUSTOM
+      ]
     })
 
     aiCapabilityRegistry.register({
@@ -394,7 +450,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.RERANK,
       name: 'Document Reranking',
       description: 'Rerank search results by relevance',
-      supportedProviders: [IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM],
+      supportedProviders: [IntelligenceProviderType.SILICONFLOW, IntelligenceProviderType.CUSTOM]
     })
 
     // ========================================================================
@@ -406,7 +462,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.WORKFLOW,
       name: 'Workflow Execution',
       description: 'Execute multi-step prompt workflows',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     aiCapabilityRegistry.register({
@@ -414,7 +470,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       type: IntelligenceCapabilityType.AGENT,
       name: 'Agent Execution',
       description: 'Run autonomous AI agents with tool access',
-      supportedProviders: ALL_PROVIDERS,
+      supportedProviders: ALL_PROVIDERS
     })
 
     intelligenceLog.success(`Registered ${aiCapabilityRegistry.size()} capabilities`)
@@ -424,13 +480,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 注册 IPC 通道处理器
    */
   private registerChannels(): void {
-    if (!this.channel)
-      return
+    if (!this.transport) return
+
+    const transport = this.transport
 
     intelligenceLog.info('Registering IPC channels')
 
     // 调用 AI 能力
-    const invokeHandler = async ({ data, reply }: any) => {
+    const invokeHandler = async (data: any) => {
       try {
         if (!data || typeof data !== 'object' || typeof (data as any).capabilityId !== 'string') {
           throw new Error('Invalid invoke payload')
@@ -446,40 +503,30 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
         const result = await ai.invoke(capabilityId, payload, options)
         intelligenceLog.success(
-          `Capability ${capabilityId} completed via ${result.provider} (${result.model})`,
+          `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
-        reply(DataCode.SUCCESS, { ok: true, result })
-      }
-      catch (error) {
+        return { ok: true, result }
+      } catch (error) {
         intelligenceLog.error('Invoke failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     }
 
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:invoke', invokeHandler)
-    this.channel.regChannel(
-      ChannelType.PLUGIN,
-      'intelligence:invoke',
-      withPermission({ permissionId: 'ai.basic' }, invokeHandler),
+    transport.on(
+      intelligenceInvokeEvent,
+      withPermission({ permissionId: 'ai.basic' }, invokeHandler)
     )
 
-    const chatHandler = async ({ data, reply }: any) => {
+    const chatHandler = async (data: any) => {
       try {
         if (!data || typeof data !== 'object' || !Array.isArray((data as any).messages)) {
           throw new Error('Invalid chat payload')
         }
 
-        const {
-          messages,
-          providerId,
-          model,
-          promptTemplate,
-          promptVariables,
-          metadata,
-        } = data as {
+        const { messages, providerId, model, promptTemplate, promptVariables, metadata } = data as {
           messages: any[]
           providerId?: string
           model?: string
@@ -490,36 +537,37 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
         ensureAiConfigLoaded()
 
-        const result = await ai.invoke('text.chat', { messages }, {
-          preferredProviderId: providerId,
-          modelPreference: model ? [model] : undefined,
-          metadata: {
-            ...metadata,
-            promptTemplate,
-            promptVariables,
-          },
-        })
+        const result = await ai.invoke(
+          'text.chat',
+          { messages },
+          {
+            preferredProviderId: providerId,
+            modelPreference: model ? [model] : undefined,
+            metadata: {
+              ...metadata,
+              promptTemplate,
+              promptVariables
+            }
+          }
+        )
 
-        reply(DataCode.SUCCESS, { ok: true, result })
-      }
-      catch (error) {
+        return { ok: true, result }
+      } catch (error) {
         intelligenceLog.error('LangChain chat failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     }
 
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:chat-langchain', chatHandler)
-    this.channel.regChannel(
-      ChannelType.PLUGIN,
-      'intelligence:chat-langchain',
-      withPermission({ permissionId: 'ai.basic' }, chatHandler),
+    transport.on(
+      intelligenceChatLangchainEvent,
+      withPermission({ permissionId: 'ai.basic' }, chatHandler)
     )
 
     // 测试 Provider
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:test-provider', async ({ data, reply }) => {
+    transport.on(intelligenceTestProviderEvent, async (data) => {
       try {
         if (!data || typeof data !== 'object' || !(data as any).provider) {
           throw new Error('Missing provider payload')
@@ -531,136 +579,132 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         const result = await ai.testProvider(provider)
         intelligenceLog.success(`Provider ${provider.id} test success`)
 
-        reply(DataCode.SUCCESS, {
+        return {
           ok: true,
-          result,
-        })
-      }
-      catch (error) {
+          result
+        }
+      } catch (error) {
         intelligenceLog.error('Provider test failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 获取能力测试元数据
-    this.channel.regChannel(
-      ChannelType.MAIN,
-      'intelligence:get-capability-test-meta',
-      async ({ data, reply }) => {
-        try {
-          if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
-            throw new Error('Invalid capability ID')
-          }
+    transport.on(intelligenceGetCapabilityTestMetaEvent, async (data) => {
+      try {
+        if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
+          throw new Error('Invalid capability ID')
+        }
 
-          const { capabilityId } = data as { capabilityId: string }
-          const tester = capabilityTesterRegistry.get(capabilityId)
+        const { capabilityId } = data as { capabilityId: string }
+        const tester = capabilityTesterRegistry.get(capabilityId)
 
-          if (!tester) {
-            reply(DataCode.SUCCESS, {
-              ok: true,
-              result: {
-                requiresUserInput: false,
-                inputHint: '',
-              },
-            })
-            return
-          }
-
-          reply(DataCode.SUCCESS, {
+        if (!tester) {
+          return {
             ok: true,
             result: {
-              requiresUserInput: tester.requiresUserInput(),
-              inputHint: tester.getDefaultInputHint(),
-            },
-          })
+              requiresUserInput: false,
+              inputHint: ''
+            }
+          }
         }
-        catch (error) {
-          intelligenceLog.error('Get capability test meta failed:', { error })
-          reply(DataCode.ERROR, {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          })
+
+        return {
+          ok: true,
+          result: {
+            requiresUserInput: tester.requiresUserInput(),
+            inputHint: tester.getDefaultInputHint()
+          }
         }
-      },
-    )
+      } catch (error) {
+        intelligenceLog.error('Get capability test meta failed:', { error })
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    })
 
     // 测试能力
-    this.channel.regChannel(
-      ChannelType.MAIN,
-      'intelligence:test-capability',
-      async ({ data, reply }) => {
-        try {
-          if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
-            throw new Error('Invalid capability test payload')
-          }
-
-          const { capabilityId, providerId, userInput, model, promptTemplate, promptVariables, ...rest } = data as {
-            capabilityId: string
-            providerId?: string
-            userInput?: string
-            model?: string
-            promptTemplate?: string
-            promptVariables?: Record<string, any>
-            [key: string]: any
-          }
-
-          const capability = aiCapabilityRegistry.get(capabilityId)
-          if (!capability) {
-            throw new Error(`Capability ${capabilityId} not registered`)
-          }
-
-          const tester = capabilityTesterRegistry.get(capabilityId)
-          if (!tester) {
-            throw new Error(`No tester registered for capability ${capabilityId}`)
-          }
-
-          ensureAiConfigLoaded()
-          const options = getCapabilityOptions(capabilityId)
-          const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
-
-          intelligenceLog.info(`Testing capability: ${capabilityId}`)
-
-          // 使用测试器生成 payload
-          const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
-
-          // 执行测试
-          const result = await ai.invoke(capabilityId, payload, {
-            modelPreference: model ? [model] : options.modelPreference,
-            allowedProviderIds,
-            metadata: {
-              promptTemplate,
-              promptVariables,
-              caller: 'system',
-            },
-          })
-
-          // 格式化结果
-          const formattedResult = tester.formatTestResult(result)
-
-          intelligenceLog.success(
-            `Capability ${capabilityId} test success via ${result.provider} (${result.model})`,
-          )
-
-          reply(DataCode.SUCCESS, {
-            ok: true,
-            result: formattedResult,
-          })
+    transport.on(intelligenceTestCapabilityEvent, async (data) => {
+      try {
+        if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
+          throw new Error('Invalid capability test payload')
         }
-        catch (error) {
-          intelligenceLog.error('Capability test failed:', { error })
-          reply(DataCode.ERROR, {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          })
+
+        const {
+          capabilityId,
+          providerId,
+          userInput,
+          model,
+          promptTemplate,
+          promptVariables,
+          ...rest
+        } = data as {
+          capabilityId: string
+          providerId?: string
+          userInput?: string
+          model?: string
+          promptTemplate?: string
+          promptVariables?: Record<string, any>
+          [key: string]: any
         }
-      },
-    )
+
+        const capability = aiCapabilityRegistry.get(capabilityId)
+        if (!capability) {
+          throw new Error(`Capability ${capabilityId} not registered`)
+        }
+
+        const tester = capabilityTesterRegistry.get(capabilityId)
+        if (!tester) {
+          throw new Error(`No tester registered for capability ${capabilityId}`)
+        }
+
+        ensureAiConfigLoaded()
+        const options = getCapabilityOptions(capabilityId)
+        const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
+
+        intelligenceLog.info(`Testing capability: ${capabilityId}`)
+
+        // 使用测试器生成 payload
+        const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
+
+        // 执行测试
+        const result = await ai.invoke(capabilityId, payload, {
+          modelPreference: model ? [model] : options.modelPreference,
+          allowedProviderIds,
+          metadata: {
+            promptTemplate,
+            promptVariables,
+            caller: 'system'
+          }
+        })
+
+        // 格式化结果
+        const formattedResult = tester.formatTestResult(result)
+
+        intelligenceLog.success(
+          `Capability ${capabilityId} test success via ${result.provider} (${result.model})`
+        )
+
+        return {
+          ok: true,
+          result: formattedResult
+        }
+      } catch (error) {
+        intelligenceLog.error('Capability test failed:', { error })
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    })
 
     // 获取可用模型
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:fetch-models', async ({ data, reply }) => {
+    transport.on(intelligenceFetchModelsEvent, async (data) => {
       try {
         if (!data || typeof data !== 'object' || !(data as any).provider) {
           throw new Error('Missing provider payload')
@@ -673,21 +717,20 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         const models = await fetchProviderModels(provider)
         intelligenceLog.success(`Loaded ${models.length} models for provider ${provider.id}`)
 
-        reply(DataCode.SUCCESS, {
+        return {
           ok: true,
           result: {
             success: true,
-            models,
-          },
-        })
-      }
-      catch (error) {
+            models
+          }
+        }
+      } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         intelligenceLog.error('Fetch models failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: message,
-        })
+          error: message
+        }
       }
     })
 
@@ -696,55 +739,52 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // ========================================================================
 
     // 获取审计日志
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-audit-logs', async ({ data, reply }) => {
+    transport.on(intelligenceGetAuditLogsEvent, async (data) => {
       try {
         const options = (data as any) || {}
         const logs = await ai.queryAuditLogs(options)
-        reply(DataCode.SUCCESS, { ok: true, result: logs })
-      }
-      catch (error) {
+        return { ok: true, result: logs }
+      } catch (error) {
         intelligenceLog.error('Get audit logs failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 获取今日统计
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-today-stats', async ({ data, reply }) => {
+    transport.on(intelligenceGetTodayStatsEvent, async (data) => {
       try {
         const { callerId } = (data as any) || {}
         const stats = await ai.getTodayStats(callerId)
-        reply(DataCode.SUCCESS, { ok: true, result: stats })
-      }
-      catch (error) {
+        return { ok: true, result: stats }
+      } catch (error) {
         intelligenceLog.error('Get today stats failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 获取本月统计
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-month-stats', async ({ data, reply }) => {
+    transport.on(intelligenceGetMonthStatsEvent, async (data) => {
       try {
         const { callerId } = (data as any) || {}
         const stats = await ai.getMonthStats(callerId)
-        reply(DataCode.SUCCESS, { ok: true, result: stats })
-      }
-      catch (error) {
+        return { ok: true, result: stats }
+      } catch (error) {
         intelligenceLog.error('Get month stats failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 获取用量统计
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-usage-stats', async ({ data, reply }) => {
+    transport.on(intelligenceGetUsageStatsEvent, async (data) => {
       try {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid payload')
@@ -756,14 +796,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           endPeriod?: string
         }
         const stats = await ai.getUsageStats(callerId, periodType, startPeriod, endPeriod)
-        reply(DataCode.SUCCESS, { ok: true, result: stats })
-      }
-      catch (error) {
+        return { ok: true, result: stats }
+      } catch (error) {
         intelligenceLog.error('Get usage stats failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
@@ -772,7 +811,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // ========================================================================
 
     // 获取配额
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-quota', async ({ data, reply }) => {
+    transport.on(intelligenceGetQuotaEvent, async (data) => {
       try {
         const { callerId, callerType } = (data as any) || {}
         if (!callerId) {
@@ -780,38 +819,36 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
         const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
         const quota = await intelligenceQuotaManager.getQuota(callerId, callerType || 'plugin')
-        reply(DataCode.SUCCESS, { ok: true, result: quota })
-      }
-      catch (error) {
+        return { ok: true, result: quota }
+      } catch (error) {
         intelligenceLog.error('Get quota failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 设置配额
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:set-quota', async ({ data, reply }) => {
+    transport.on(intelligenceSetQuotaEvent, async (data) => {
       try {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid quota config')
         }
         const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
         await intelligenceQuotaManager.setQuota(data as any)
-        reply(DataCode.SUCCESS, { ok: true })
-      }
-      catch (error) {
+        return { ok: true }
+      } catch (error) {
         intelligenceLog.error('Set quota failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 删除配额
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:delete-quota', async ({ data, reply }) => {
+    transport.on(intelligenceDeleteQuotaEvent, async (data) => {
       try {
         const { callerId, callerType } = (data as any) || {}
         if (!callerId) {
@@ -819,70 +856,73 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
         const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
         await intelligenceQuotaManager.deleteQuota(callerId, callerType || 'plugin')
-        reply(DataCode.SUCCESS, { ok: true })
-      }
-      catch (error) {
+        return { ok: true }
+      } catch (error) {
         intelligenceLog.error('Delete quota failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 获取所有配额
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-all-quotas', async ({ reply }) => {
+    transport.on(intelligenceGetAllQuotasEvent, async () => {
       try {
         const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
         const quotas = await intelligenceQuotaManager.getAllQuotas()
-        reply(DataCode.SUCCESS, { ok: true, result: quotas })
-      }
-      catch (error) {
+        return { ok: true, result: quotas }
+      } catch (error) {
         intelligenceLog.error('Get all quotas failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 检查配额
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:check-quota', async ({ data, reply }) => {
+    transport.on(intelligenceCheckQuotaEvent, async (data) => {
       try {
         const { callerId, callerType, estimatedTokens } = (data as any) || {}
         if (!callerId) {
           throw new Error('callerId is required')
         }
         const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        const result = await intelligenceQuotaManager.checkQuota(callerId, callerType || 'plugin', estimatedTokens || 0)
-        reply(DataCode.SUCCESS, { ok: true, result })
-      }
-      catch (error) {
+        const result = await intelligenceQuotaManager.checkQuota(
+          callerId,
+          callerType || 'plugin',
+          estimatedTokens || 0
+        )
+        return { ok: true, result }
+      } catch (error) {
         intelligenceLog.error('Check quota failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 
     // 获取当前用量
-    this.channel.regChannel(ChannelType.MAIN, 'intelligence:get-current-usage', async ({ data, reply }) => {
+    transport.on(intelligenceGetCurrentUsageEvent, async (data) => {
       try {
         const { callerId, callerType } = (data as any) || {}
         if (!callerId) {
           throw new Error('callerId is required')
         }
         const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        const usage = await intelligenceQuotaManager.getCurrentUsage(callerId, callerType || 'plugin')
-        reply(DataCode.SUCCESS, { ok: true, result: usage })
-      }
-      catch (error) {
+        const usage = await intelligenceQuotaManager.getCurrentUsage(
+          callerId,
+          callerType || 'plugin'
+        )
+        return { ok: true, result: usage }
+      } catch (error) {
         intelligenceLog.error('Get current usage failed:', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     })
 

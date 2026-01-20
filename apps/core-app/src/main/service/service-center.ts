@@ -2,12 +2,13 @@ import type {
   IService,
   IServiceCenter,
   IServiceEvent,
-  IServiceHandler,
+  IServiceHandler
 } from '@talex-touch/utils/service'
 import type { TalexTouch } from '../types'
 import path from 'node:path'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { suffix2Service } from '@talex-touch/utils/service/protocol'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { dialog } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -37,8 +38,7 @@ class ServiceCenter implements IServiceCenter {
   }
 
   unRegService(service: IService): boolean {
-    if (!this.hasService(service))
-      return false
+    if (!this.hasService(service)) return false
 
     this.serviceMap.delete(service.id.description!)
     return true
@@ -54,8 +54,7 @@ class ServiceCenter implements IServiceCenter {
   useService(service: IService, data: object): boolean | Promise<boolean> {
     const handler = this.serviceMap.get(service.name)
 
-    if (!handler)
-      return false
+    if (!handler) return false
 
     let cancelled = false
 
@@ -66,7 +65,7 @@ class ServiceCenter implements IServiceCenter {
       },
       isCancelled() {
         return cancelled
-      },
+      }
     }
 
     return handler.handle(event, data)
@@ -92,10 +91,10 @@ class ServiceCenter implements IServiceCenter {
           this.getPerPath(service),
           JSON.stringify({
             pluginScope: handler.pluginScope,
-            service,
-          }),
+            service
+          })
         )
-      }),
+      })
     )
 
     await Promise.all(promises)
@@ -103,6 +102,10 @@ class ServiceCenter implements IServiceCenter {
 }
 
 let serviceCenter: ServiceCenter
+
+const serviceRegisterEvent = defineRawEvent<{ service: string }, boolean>('service:reg')
+const serviceUnregisterEvent = defineRawEvent<{ service: string }, boolean>('service:unreg')
+const serviceHandleEvent = defineRawEvent<{ data: any }, any>('service:handle')
 
 export function genServiceCenter(rootPath?: string): IServiceCenter {
   if (!serviceCenter) {
@@ -116,29 +119,27 @@ export default {
   name: Symbol('ServiceCenter'),
   filePath: 'services',
   listeners: new Array<Function>(),
-  touchChannel: undefined as any,
+  transport: null as ReturnType<typeof getTuffTransportMain> | null,
   modulePath: undefined as any,
   init(ctx: any) {
-    this.touchChannel = ctx.app.channel
+    const channel = ctx.app.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    this.transport = getTuffTransportMain(channel as any, keyManager as any)
     this.modulePath = ctx.file?.dirPath
-
-    const touchChannel = this.touchChannel
 
     touchEventBus.on(TalexEvents.APP_SECONDARY_LAUNCH, (event: any) => {
       // AppSecondaryLaunch
       const { argv } = event
 
       const arr = argv.slice(1)
-      if (arr.length === 0)
-        return
+      if (arr.length === 0) return
 
       // check each arg (if path)
       arr.forEach((arg) => {
-        if (!path.isAbsolute(arg))
-          return
+        if (!path.isAbsolute(arg)) return
 
-        if (!fse.pathExistsSync(arg))
-          return
+        if (!fse.pathExistsSync(arg)) return
 
         if (fse.statSync(arg).isFile()) {
           let extName = path.extname(arg)
@@ -152,7 +153,7 @@ export default {
           if (!service) {
             dialog.showErrorBox(
               'Error',
-              `The type ${extName} has no plugin to handle, please install in plugin market!`,
+              `The type ${extName} has no plugin to handle, please install in plugin market!`
             )
             return
           }
@@ -164,10 +165,9 @@ export default {
             type: 'file',
             name: path.basename(arg),
             extName,
-            service,
+            service
           })
-        }
-        else {
+        } else {
           // Folder not support
           dialog.showErrorBox('Error', 'Folder not support yet!')
         }
@@ -178,52 +178,56 @@ export default {
 
     genServiceCenter(perPath)
 
-    this.listeners.push(
-      this.touchChannel.regChannel(ChannelType.PLUGIN, 'service:reg', ({ data, plugin }) => {
-        const { service } = data
+    const transport = this.transport
+    if (!transport) return
 
-        if (serviceCenter.hasServiceBySymbolStr(service))
-          return false
+    this.listeners.push(
+      transport.on(serviceRegisterEvent, async (payload, context) => {
+        const { service } = payload || {}
+        const plugin = context.plugin?.name
+
+        if (!service || !plugin) return false
+
+        if (serviceCenter.hasServiceBySymbolStr(service)) return false
 
         console.log(`[Service] Plugin register service as ${service}`)
 
         serviceCenter.regServiceBySymbolStr(service, {
           pluginScope: plugin,
-          handle(event, _data) {
+          async handle(event, _data) {
             console.log(`[Service] Plugin ${plugin} handle service: ${service}`, event, _data)
             const data = {
               ..._data,
-              service: event.service.name,
+              service: event.service.name
             }
 
-            const res = touchChannel.sendSync(ChannelType.PLUGIN, 'service:handle', {
-              plugin,
-              data,
-            })
-
+            const res = await transport.sendToPlugin(plugin, serviceHandleEvent, { data })
             event.setCancelled(res === true)
-          },
+            return res
+          }
         })
 
         return true
-      }),
+      })
     )
 
     this.listeners.push(
-      this.touchChannel.regChannel(ChannelType.PLUGIN, 'service:unreg', ({ data }) => {
-        const { service } = data
+      transport.on(serviceUnregisterEvent, (payload, context) => {
+        const { service } = payload || {}
+        const plugin = context.plugin?.name
 
-        if (!serviceCenter.hasServiceBySymbolStr(service))
-          return false
+        if (!service || !plugin) return false
+
+        if (!serviceCenter.hasServiceBySymbolStr(service)) return false
 
         serviceCenter.unRegService(service)
         return true
-      }),
+      })
     )
   },
   destroy() {
-    this.listeners.forEach(listener => listener())
+    this.listeners.forEach((listener) => listener())
 
     serviceCenter.save()
-  },
+  }
 } as any as TalexTouch.IModule<TalexEvents>

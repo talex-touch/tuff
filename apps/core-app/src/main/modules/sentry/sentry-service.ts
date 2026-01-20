@@ -13,7 +13,7 @@ import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
 import { StorageList } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { app, BrowserWindow } from 'electron'
@@ -237,30 +237,33 @@ export class SentryServiceModule extends BaseModule {
   private setupIPCChannels(): void {
     const channel = $app.channel
     if (!channel) return
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
 
     // Listen for user context updates from renderer
-    channel.regChannel(ChannelType.MAIN, 'sentry:update-user', ({ data }) => {
-      if (data && typeof data === 'object') {
-        const user = (data.user as ClerkUser | null) || null
+    transport.on(SentryEvents.api.updateUser, (payload) => {
+      if (payload && typeof payload === 'object') {
+        const user = (payload.user as ClerkUser | null) || null
         this.updateUserContext(user)
       }
     })
 
     // Expose config getter
-    channel.regChannel(ChannelType.MAIN, 'sentry:get-config', () => {
+    transport.on(SentryEvents.api.getConfig, () => {
       return this.getConfig()
     })
 
-    channel.regChannel(ChannelType.MAIN, 'sentry:get-search-count', () => {
+    transport.on(SentryEvents.api.getSearchCount, () => {
       return this.getSearchCountFromDb()
     })
 
-    channel.regChannel(ChannelType.MAIN, 'sentry:get-telemetry-stats', () => {
+    transport.on(SentryEvents.api.getTelemetryStats, () => {
       return this.getTelemetryStatsFromDb()
     })
 
-    channel.regChannel(ChannelType.MAIN, 'sentry:record-performance', ({ data }) => {
-      this.recordRendererPerformance(data)
+    transport.on(SentryEvents.api.recordPerformance, (payload) => {
+      this.recordRendererPerformance(payload)
       return { success: true }
     })
   }

@@ -5,8 +5,7 @@
  */
 
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
-import { BrowserWindow } from 'electron'
+import { getTuffTransportMain, PermissionEvents } from '@talex-touch/utils/transport'
 import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
@@ -35,6 +34,7 @@ export class PermissionModule extends BaseModule {
 
   private store!: PermissionStore
   private guard!: PermissionGuard
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
     super(PermissionModule.key, {
@@ -51,6 +51,11 @@ export class PermissionModule extends BaseModule {
     this.guard = new PermissionGuard(this.store)
 
     // Register IPC channels
+    if ($app.channel) {
+      const keyManager =
+        ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
+      this.transport = getTuffTransportMain($app.channel as any, keyManager as any)
+    }
     this.registerChannels()
 
     // Set global reference
@@ -60,113 +65,120 @@ export class PermissionModule extends BaseModule {
   }
 
   private registerChannels(): void {
-    const channel = $app.channel
+    const transport = this.transport
+    if (!transport) return
 
     // Get all permissions for a plugin
-    channel.regChannel(ChannelType.MAIN, 'permission:get-plugin', async ({ data }) => {
-      if (!data?.pluginId) return []
-      return this.store.getPluginPermissions(data.pluginId)
+    transport.on(PermissionEvents.api.getPlugin, async (payload) => {
+      if (!payload?.pluginId) return []
+      return this.store.getPluginPermissions(payload.pluginId)
     })
 
     // Get permission status for a plugin
-    channel.regChannel(ChannelType.MAIN, 'permission:get-status', async ({ data }) => {
-      if (!data?.pluginId) return null
-      return this.store.getPluginPermissionStatus(data.pluginId, data.sdkapi, {
-        required: data.required || [],
-        optional: data.optional || []
+    transport.on(PermissionEvents.api.getStatus, async (payload) => {
+      if (!payload?.pluginId) return null
+      return this.store.getPluginPermissionStatus(payload.pluginId, payload.sdkapi, {
+        required: payload.required || [],
+        optional: payload.optional || []
       })
     })
 
     // Grant permission
-    channel.regChannel(ChannelType.MAIN, 'permission:grant', async ({ data }) => {
-      if (!data?.pluginId || !data?.permissionId) return { success: false }
-      await this.store.grant(data.pluginId, data.permissionId, data.grantedBy || 'user')
-      this.broadcastUpdate(data.pluginId)
+    transport.on(PermissionEvents.api.grant, async (payload) => {
+      if (!payload?.pluginId || !payload?.permissionId) return { success: false }
+      await this.store.grant(payload.pluginId, payload.permissionId, payload.grantedBy || 'user')
+      this.broadcastUpdate(payload.pluginId)
       return { success: true }
     })
 
     // Revoke permission
-    channel.regChannel(ChannelType.MAIN, 'permission:revoke', async ({ data }) => {
-      if (!data?.pluginId || !data?.permissionId) return { success: false }
-      await this.store.revoke(data.pluginId, data.permissionId)
-      this.broadcastUpdate(data.pluginId)
+    transport.on(PermissionEvents.api.revoke, async (payload) => {
+      if (!payload?.pluginId || !payload?.permissionId) return { success: false }
+      await this.store.revoke(payload.pluginId, payload.permissionId)
+      this.broadcastUpdate(payload.pluginId)
       return { success: true }
     })
 
     // Grant multiple permissions at once
-    channel.regChannel(ChannelType.MAIN, 'permission:grant-multiple', async ({ data }) => {
-      if (!data?.pluginId || !data?.permissionIds) return { success: false }
-      for (const permissionId of data.permissionIds) {
-        await this.store.grant(data.pluginId, permissionId, data.grantedBy || 'user')
+    transport.on(PermissionEvents.api.grantMultiple, async (payload) => {
+      if (!payload?.pluginId || !payload?.permissionIds) return { success: false }
+      for (const permissionId of payload.permissionIds) {
+        await this.store.grant(payload.pluginId, permissionId, payload.grantedBy || 'user')
       }
-      this.broadcastUpdate(data.pluginId)
+      this.broadcastUpdate(payload.pluginId)
 
       // Notify plugin module to retry enabling the plugin
-      touchEventBus.emit(TalexEvents.PERMISSION_GRANTED, new PermissionGrantedEvent(data.pluginId))
+      touchEventBus.emit(
+        TalexEvents.PERMISSION_GRANTED,
+        new PermissionGrantedEvent(payload.pluginId)
+      )
 
       return { success: true }
     })
 
     // Grant session-only permissions (memory only, not persisted)
-    channel.regChannel(ChannelType.MAIN, 'permission:grant-session', async ({ data }) => {
-      if (!data?.pluginId || !data?.permissionIds) return { success: false }
-      this.store.grantSessionMultiple(data.pluginId, data.permissionIds)
-      this.broadcastUpdate(data.pluginId)
+    transport.on(PermissionEvents.api.grantSession, async (payload) => {
+      if (!payload?.pluginId || !payload?.permissionIds) return { success: false }
+      this.store.grantSessionMultiple(payload.pluginId, payload.permissionIds)
+      this.broadcastUpdate(payload.pluginId)
 
       // Notify plugin module to retry enabling the plugin
-      touchEventBus.emit(TalexEvents.PERMISSION_GRANTED, new PermissionGrantedEvent(data.pluginId))
+      touchEventBus.emit(
+        TalexEvents.PERMISSION_GRANTED,
+        new PermissionGrantedEvent(payload.pluginId)
+      )
 
       return { success: true }
     })
 
     // Revoke all permissions for a plugin
-    channel.regChannel(ChannelType.MAIN, 'permission:revoke-all', async ({ data }) => {
-      if (!data?.pluginId) return { success: false }
-      await this.store.revokeAll(data.pluginId)
-      this.broadcastUpdate(data.pluginId)
+    transport.on(PermissionEvents.api.revokeAll, async (payload) => {
+      if (!payload?.pluginId) return { success: false }
+      await this.store.revokeAll(payload.pluginId)
+      this.broadcastUpdate(payload.pluginId)
       return { success: true }
     })
 
     // Check if plugin has specific permission
-    channel.regChannel(ChannelType.MAIN, 'permission:check', async ({ data }) => {
-      if (!data?.pluginId || !data?.permissionId) return false
-      return this.store.hasPermission(data.pluginId, data.permissionId, data.sdkapi)
+    transport.on(PermissionEvents.api.check, async (payload) => {
+      if (!payload?.pluginId || !payload?.permissionId) return false
+      return this.store.hasPermission(payload.pluginId, payload.permissionId, payload.sdkapi)
     })
 
     // Get all plugin permission statuses
-    channel.regChannel(ChannelType.MAIN, 'permission:get-all', async () => {
+    transport.on(PermissionEvents.api.getAll, async () => {
       return this.store.getAllPluginPermissions()
     })
 
     // Get permission registry
-    channel.regChannel(ChannelType.MAIN, 'permission:get-registry', async () => {
+    transport.on(PermissionEvents.api.getRegistry, async () => {
       const { permissionRegistry } = await import('@talex-touch/utils/permission')
       return permissionRegistry.all()
     })
 
     // Get audit logs
-    channel.regChannel(ChannelType.MAIN, 'permission:get-audit-logs', async ({ data }) => {
+    transport.on(PermissionEvents.api.getAuditLogs, async (payload) => {
       return this.store.getAuditLogs({
-        pluginId: data?.pluginId,
-        action: data?.action,
-        limit: data?.limit || 50,
-        offset: data?.offset || 0
+        pluginId: payload?.pluginId,
+        action: payload?.action,
+        limit: payload?.limit || 50,
+        offset: payload?.offset || 0
       })
     })
 
     // Clear audit logs
-    channel.regChannel(ChannelType.MAIN, 'permission:clear-audit-logs', async () => {
+    transport.on(PermissionEvents.api.clearAuditLogs, async () => {
       this.store.clearAuditLogs()
       return { success: true }
     })
 
     // Get performance statistics (Phase 5 verification)
-    channel.regChannel(ChannelType.MAIN, 'permission:get-performance', async () => {
+    transport.on(PermissionEvents.api.getPerformance, async () => {
       return this.guard.getPerformanceStats()
     })
 
     // Reset performance statistics
-    channel.regChannel(ChannelType.MAIN, 'permission:reset-performance', async () => {
+    transport.on(PermissionEvents.api.resetPerformance, async () => {
       this.guard.resetPerformanceStats()
       return { success: true }
     })
@@ -176,10 +188,16 @@ export class PermissionModule extends BaseModule {
    * Broadcast permission update to all renderer windows
    */
   private broadcastUpdate(pluginId: string): void {
-    const windows = BrowserWindow.getAllWindows()
-    for (const win of windows) {
-      $app.channel?.sendTo(win, ChannelType.MAIN, 'permission:updated', { pluginId })
-    }
+    const transport =
+      this.transport ??
+      ($app.channel
+        ? getTuffTransportMain(
+            $app.channel as any,
+            (($app.channel as any)?.keyManager ?? $app.channel) as any
+          )
+        : null)
+
+    transport?.broadcast(PermissionEvents.push.updated, { pluginId })
   }
 
   /**
