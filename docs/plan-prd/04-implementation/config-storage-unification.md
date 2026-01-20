@@ -149,7 +149,7 @@
 - [x] 存储抽象设计（CFG-040）
 - [x] 迁移与回滚方案（CFG-050）
 - [x] 权限中心 PRD/TODO 对齐（CFG-060）
-- [ ] 统一进展文档（CFG-070）
+- [x] 统一进展文档（CFG-070）
 - [ ] 试点迁移与验证门禁（CFG-080）
 
 ## 7. 相关 PRD/计划
@@ -157,3 +157,22 @@
 - `docs/plan-prd/03-features/plugin/permission-center-prd.md`
 - `docs/plan-prd/03-features/search/EVERYTHING-SDK-INTEGRATION-PRD.md`
 - `docs/plan-prd/04-implementation/CoreAppRefactor260111.md`
+
+## 8. 执行方式（How-to）
+1. 先补齐本地配置盘点与分类，确认 Local-only 与 Sync-needed 边界。
+2. 明确 source-of-truth 与冲突规则，落盘到本文档并记录 sign-off 状态。
+3. 设计存储抽象与迁移清单，优先选择低风险配置试点。
+4. 对齐 PRD/TODO 文档状态，保证“代码为准”的可追踪性。
+5. 小步迁移 + 回滚验证，再逐步扩大覆盖面。
+
+## 9. 当前状态总览
+| 工作项 | 状态 | 证据 |
+| --- | --- | --- |
+| CFG-010 盘点现有配置项 | 已完成 | 本文档 1.x |
+| CFG-020 分类矩阵与目标策略 | 已完成 | 本文档 2.x |
+| CFG-030 Source-of-truth 规则 | 已完成 | 本文档 3.x |
+| CFG-040 存储抽象设计 | 已完成 | 本文档 4.x |
+| CFG-050 迁移与回滚方案 | 已完成 | 本文档 5.x |
+| CFG-060 权限中心 PRD/TODO 对齐 | 已完成 | `docs/plan-prd/03-features/plugin/permission-center-prd.md` |
+| CFG-070 统一进展文档 | 已完成 | 本文档 |
+| CFG-080 试点迁移与验证门禁 | 待启动 | 待补充 |
