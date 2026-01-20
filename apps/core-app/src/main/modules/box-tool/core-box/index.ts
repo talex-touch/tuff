@@ -2,11 +2,9 @@ import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../../core/eventbus/touch-event'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { genTouchApp } from '../../../core'
 import { createLogger } from '../../../utils/logger'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
@@ -88,7 +86,6 @@ export class CoreBoxModule extends BaseModule {
     })
 
     shortcutModule.registerMainShortcut('core.box.aiQuickCall', 'CommandOrControl+Shift+I', () => {
-      const touchApp = genTouchApp()
       const curScreen = windowManager.getCurScreen()
       const currentWindow = windowManager.current
 
@@ -104,10 +101,15 @@ export class CoreBoxModule extends BaseModule {
       if (!targetWindow || targetWindow.isDestroyed()) {
         return
       }
+      const targetWindowId = targetWindow.id
+      const transport = this.transport
+      if (!transport) {
+        return
+      }
 
       setTimeout(() => {
-        touchApp.channel
-          .sendTo(targetWindow, ChannelType.MAIN, 'core-box:set-query', { value: 'ai ' })
+        transport
+          .sendToWindow(targetWindowId, CoreBoxEvents.input.setQuery, { value: 'ai ' })
           .catch((error) => {
             coreBoxLog.error('Failed to set AI quick call query', { error })
           })

@@ -1,23 +1,41 @@
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
 import type { FSWatcher } from 'chokidar'
 import type { WidgetCompilationContext } from './widget-processor'
-import { ChannelType } from '@talex-touch/utils/channel'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import chokidar from 'chokidar'
-import { genTouchChannel } from '../../../core/channel-core'
+import { genTouchApp } from '../../../core'
 import { compileWidgetSource } from './widget-compiler'
 import { pluginWidgetLoader } from './widget-loader'
 
 type WidgetEvent = 'plugin:widget:register' | 'plugin:widget:update'
+const pluginWidgetRegisterEvent = defineRawEvent<WidgetRegistrationPayload, void>(
+  'plugin:widget:register'
+)
+const pluginWidgetUpdateEvent = defineRawEvent<WidgetRegistrationPayload, void>(
+  'plugin:widget:update'
+)
+const pluginWidgetUnregisterEvent = defineRawEvent<{ widgetId: string }, void>(
+  'plugin:widget:unregister'
+)
 
 export class WidgetManager {
   private readonly cache = new Map<string, WidgetRegistrationPayload>()
   private readonly watchers = new Map<string, FSWatcher>()
 
-  private get channel(): ITouchChannel {
-    return genTouchChannel()
+  private get transport() {
+    const app = genTouchApp()
+    const channel = app.channel as ITouchChannel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    return getTuffTransportMain(channel as any, keyManager as any)
+  }
+
+  private get mainWindowId(): number {
+    return genTouchApp().window.window.id
   }
 
   async registerWidget(
@@ -94,7 +112,7 @@ export class WidgetManager {
   }
 
   async unregisterWidget(widgetId: string): Promise<void> {
-    await this.channel.send(ChannelType.MAIN, 'plugin:widget:unregister', { widgetId })
+    await this.transport.sendToWindow(this.mainWindowId, pluginWidgetUnregisterEvent, { widgetId })
   }
 
   async releasePlugin(pluginName: string): Promise<void> {
@@ -122,7 +140,9 @@ export class WidgetManager {
   }
 
   private async emitPayload(event: WidgetEvent, payload: WidgetRegistrationPayload): Promise<void> {
-    await this.channel.send(ChannelType.MAIN, event, payload)
+    const eventHandler =
+      event === 'plugin:widget:update' ? pluginWidgetUpdateEvent : pluginWidgetRegisterEvent
+    await this.transport.sendToWindow(this.mainWindowId, eventHandler, payload)
   }
 
   private pushIssue(

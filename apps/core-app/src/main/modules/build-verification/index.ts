@@ -4,10 +4,21 @@ import path from 'node:path'
 import axios from 'axios'
 import fse from 'fs-extra'
 import { BrowserWindow, app } from 'electron'
-import { ChannelType } from '@talex-touch/utils/channel'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BaseModule } from '../abstract-base-module'
 import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
+
+const buildVerificationStatusEvent = defineRawEvent<
+  {
+    isOfficialBuild: boolean
+    verificationFailed: boolean
+    hasOfficialKey: boolean
+  },
+  void
+>('build:verification-status')
 
 /**
  * 构建完整性验证模块
@@ -252,10 +263,20 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   private pushVerificationStatus(window: BrowserWindow): void {
-    $app.channel?.sendTo(window, ChannelType.MAIN, 'build:verification-status', {
+    const channel = $app.channel as ITouchChannel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const payload = {
       isOfficialBuild: this.isOfficialBuild,
       verificationFailed: this.verificationFailed,
       hasOfficialKey: this.isVerified
+    }
+
+    transport.sendToWindow(window.id, buildVerificationStatusEvent, payload).catch((error) => {
+      this.log.warn('[BuildVerification] Failed to push verification status.', {
+        error: error instanceof Error ? error.message : String(error)
+      })
     })
   }
 

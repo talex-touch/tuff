@@ -6,7 +6,7 @@
  */
 
 import { getLogger } from '../../common/logger'
-import { genChannel } from '../channel'
+import { useChannel } from './channel'
 
 const sdkLog = getLogger('plugin-sdk')
 
@@ -17,7 +17,7 @@ const sdkLog = getLogger('plugin-sdk')
  * @returns Whether the shortcut is registered successfully
  */
 export function regShortcut(key: string, func: () => void): boolean {
-  const channel = genChannel()
+  const channel = useChannel('[Plugin SDK] Shortcut registration requires renderer channel.')
 
   const res = channel.sendSync('shortcon:reg', { key })
   if (typeof res === 'string' || Object.prototype.toString.call(res) === '[object String]')
@@ -40,7 +40,7 @@ export async function communicateWithPlugin(
   key: string,
   info: any = {},
 ): Promise<any> {
-  const channel = genChannel()
+  const channel = useChannel('[Plugin SDK] Communication requires renderer channel.')
 
   try {
     return await channel.send('index:communicate', {
@@ -61,7 +61,7 @@ export async function communicateWithPlugin(
  * @returns Promise<any> The message result
  */
 export async function sendMessage(message: string, data: any = {}): Promise<any> {
-  const channel = genChannel()
+  const channel = useChannel('[Plugin SDK] Messaging requires renderer channel.')
 
   try {
     return await channel.send(`plugin:${message}`, data)
@@ -78,7 +78,7 @@ export async function sendMessage(message: string, data: any = {}): Promise<any>
  * @returns The channel object for the plugin
  */
 export function getChannel() {
-  return genChannel()
+  return useChannel('[Plugin SDK] Channel requires renderer context.')
 }
 
 export * from './window'
