@@ -60,6 +60,9 @@ export * from './sentry'
 // Storage domain types
 export * from './storage'
 
+// Transport domain types
+export * from './transport'
+
 // Tray domain types
 export * from './tray'
 
