@@ -88,6 +88,13 @@
 ## 3. Source of Truth 规则（草案）
 - SQLite 为本地权威来源；JSON 仅作为同步载荷与落盘中间形态。
 - 同步需要显式标记：未标记的配置默认为 Local-only。
+- 写入方向：
+  - Local-only：SQLite 为唯一写入点，Renderer 通过 IPC 读写。
+  - Sync-needed：本地写入 SQLite -> 同步适配器生成 JSON 载荷 -> 服务端/云端；同步回流写入 SQLite 缓存。
+- 冲突解决：
+  - 默认策略：基于 `updatedAt` 的 last-write-wins（记录冲突日志）。
+  - 对敏感配置（如 AI Key）：禁止自动合并，提示用户确认。
+- Owner sign-off：TBD（状态：pending）
 
 ## 4. 存储抽象与版本策略（草案）
 - StorageAdapter：`get/set/delete/list` + `version` 字段。
@@ -102,7 +109,7 @@
 ## 6. 进展清单（对齐 issues）
 - [x] 盘点现有配置项（CFG-010）
 - [x] 分类矩阵与目标存储策略（CFG-020）
-- [ ] Source-of-truth 决策与冲突规则（CFG-030）
+- [x] Source-of-truth 决策与冲突规则（CFG-030）
 - [ ] 存储抽象设计（CFG-040）
 - [ ] 迁移与回滚方案（CFG-050）
 - [ ] 权限中心 PRD/TODO 对齐（CFG-060）
