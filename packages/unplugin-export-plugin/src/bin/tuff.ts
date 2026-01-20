@@ -4,7 +4,8 @@ import type { Locale } from '../cli/i18n'
 import type { SelectOption } from '../cli/prompts'
 import { createRequire } from 'node:module'
 import process from 'node:process'
-import { createServer } from 'vite'
+import type { RollupWatcher } from 'rollup'
+import { build as viteBuild, createServer } from 'vite'
 import { runCreate } from '../cli/commands'
 import {
   initI18n,
@@ -34,6 +35,7 @@ function printHelp() {
   console.log('')
   console.log('Commands:')
   console.log('  create      Create a new Tuff plugin from template')
+  console.log('  build       Run Vite build and package .tpex output')
   console.log('  builder     Build and package the current project into .tpex')
   console.log('  dev         Start Vite dev server for plugin development')
   console.log('  publish     Publish a release to Tuff Nexus')
@@ -57,9 +59,21 @@ function printAbout() {
   console.log('')
   console.log('Tools:')
   console.log('  - create:  Create new plugins from templates')
+  console.log('  - build:   Run Vite build and package .tpex output')
   console.log('  - builder: Package plugins into .tpex format')
   console.log('  - dev:     Start a Vite dev server for plugin development')
   console.log('  - publish: Publish app releases to Nexus server')
+}
+
+function printBuildHelp() {
+  console.log('Usage: tuff build [options]')
+  console.log('')
+  console.log('Options:')
+  console.log('  --watch         Watch files and rebuild on changes')
+  console.log('  --dev           Use development mode (no minify, sourcemap)')
+  console.log('  --output <dir>  Output directory (default: dist)')
+  console.log('  --help, -h      Show this help message')
+  console.log('')
 }
 
 function printDevHelp() {
@@ -76,6 +90,125 @@ function printDevHelp() {
 async function runBuilder() {
   console.log('Running: tuff builder')
   await build()
+}
+
+async function runBuild() {
+  const args = process.argv.slice(3)
+  if (args.includes('--help') || args.includes('-h')) {
+    printBuildHelp()
+    return
+  }
+
+  let watch = false
+  let dev = false
+  let outputDir: string | undefined
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--watch') {
+      watch = true
+    }
+    else if (arg === '--dev') {
+      dev = true
+    }
+    else if (arg === '--output') {
+      const next = args[i + 1]
+      if (!next || next.startsWith('-'))
+        throw new Error('Missing value for --output')
+      outputDir = next
+      i++
+    }
+    else if (arg.startsWith('--output=')) {
+      outputDir = arg.slice(9)
+      if (!outputDir)
+        throw new Error('Missing value for --output')
+    }
+    else if (arg.startsWith('-')) {
+      throw new Error(`Unknown option: ${arg}`)
+    }
+  }
+
+  const resolvedOutput = outputDir || 'dist'
+  const mode = dev ? 'development' : 'production'
+
+  const exporterOptions = {
+    outDir: resolvedOutput,
+    minify: dev ? false : undefined,
+    sourcemap: dev ? true : undefined,
+  }
+
+  try {
+    const viteResult = await viteBuild({
+      root: process.cwd(),
+      mode,
+      plugins: [TouchPluginExport()],
+      build: {
+        outDir: resolvedOutput,
+        minify: dev ? false : undefined,
+        sourcemap: dev ? true : undefined,
+        watch: watch ? {} : undefined,
+      },
+    })
+
+    if (!watch) {
+      await build(exporterOptions)
+      return
+    }
+
+    if (!viteResult || typeof (viteResult as RollupWatcher).on !== 'function')
+      throw new Error('Vite watch mode did not return a watcher')
+
+    const watcher = viteResult as RollupWatcher
+    let packaging = false
+    let pending = false
+
+    const runPackage = async () => {
+      if (packaging) {
+        pending = true
+        return
+      }
+      packaging = true
+      try {
+        await build(exporterOptions)
+      }
+      catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(`tuff build failed: ${message}`)
+        process.exitCode = 1
+      }
+      finally {
+        packaging = false
+        if (pending) {
+          pending = false
+          await runPackage()
+        }
+      }
+    }
+
+    watcher.on('event', (event) => {
+      if (event.code === 'END') {
+        void runPackage()
+      }
+      else if (event.code === 'ERROR') {
+        const message = event.error instanceof Error ? event.error.message : String(event.error)
+        console.error(`tuff build failed: ${message}`)
+        process.exitCode = 1
+      }
+    })
+
+    const shutdown = async () => {
+      await watcher.close()
+      process.exit(0)
+    }
+
+    process.on('SIGINT', () => void shutdown())
+    process.on('SIGTERM', () => void shutdown())
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`tuff build failed: ${message}`)
+    process.exitCode = 1
+  }
 }
 
 async function runDev() {
@@ -182,7 +315,7 @@ async function runInteractiveMode(): Promise<void> {
       await runCreate()
       break
     case 'build':
-      await runBuilder()
+      await runBuild()
       break
     case 'dev':
       await runDev()
@@ -268,7 +401,13 @@ async function main() {
         name: nameArg && !nameArg.startsWith('-') ? nameArg : undefined,
       })
     }
-    else if (command === 'builder' || command === 'build') {
+    else if (command === 'build') {
+      if (hasHelpFlag)
+        printBuildHelp()
+      else
+        await runBuild()
+    }
+    else if (command === 'builder') {
       await runBuilder()
     }
     else if (command === 'dev') {
