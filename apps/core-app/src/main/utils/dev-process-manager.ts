@@ -1,4 +1,8 @@
+import process from 'node:process'
 import { app, BrowserWindow } from 'electron'
+import { createLogger } from './logger'
+
+const devProcessLog = createLogger('DevProcessManager')
 
 /**
  * @file dev-process-manager.ts
@@ -36,12 +40,15 @@ export class DevProcessManager {
 
     // Listen for uncaught exceptions
     process.on('uncaughtException', (error) => {
-      console.error('[DevProcessManager] Uncaught exception:', error)
+      devProcessLog.error('Uncaught exception', { error })
       this.handleGracefulShutdown()
     })
 
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('[DevProcessManager] Unhandled rejection at:', promise, 'reason:', reason)
+      devProcessLog.error('Unhandled rejection', {
+        meta: { reason: String(reason) },
+        error: promise
+      })
     })
   }
 
@@ -56,11 +63,11 @@ export class DevProcessManager {
     }
 
     this.isShuttingDown = true
-    console.log('[DevProcessManager] Graceful shutdown initiated...')
+    devProcessLog.info('Graceful shutdown initiated')
 
     // Set a timeout to ensure that the process does not wait indefinitely
     this.shutdownTimeout = setTimeout(() => {
-      console.log('[DevProcessManager] Shutdown timeout reached, forcing exit...')
+      devProcessLog.warn('Shutdown timeout reached, forcing exit')
       process.exit(1)
     }, 3000)
 
@@ -69,11 +76,11 @@ export class DevProcessManager {
         if (this.shutdownTimeout) {
           clearTimeout(this.shutdownTimeout)
         }
-        console.log('[DevProcessManager] Graceful shutdown completed.')
+        devProcessLog.info('Graceful shutdown completed')
         process.exit(0)
       })
       .catch((error) => {
-        console.error('[DevProcessManager] Error during shutdown:', error)
+        devProcessLog.error('Error during shutdown', { error })
         if (this.shutdownTimeout) {
           clearTimeout(this.shutdownTimeout)
         }
@@ -87,10 +94,10 @@ export class DevProcessManager {
    * and that all processes are terminated.
    */
   private async cleanupProcesses(): Promise<void> {
-    console.log('[DevProcessManager] Cleaning up processes...')
+    devProcessLog.info('Cleaning up processes')
 
     const windows = BrowserWindow.getAllWindows()
-    console.log(`[DevProcessManager] Found ${windows.length} windows to cleanup`)
+    devProcessLog.info(`Found ${windows.length} windows to cleanup`)
 
     for (const window of windows) {
       if (!window.isDestroyed()) {
@@ -102,31 +109,29 @@ export class DevProcessManager {
             window.webContents.send('app-will-quit')
 
             // Wait for a short period to allow the renderer process to clean up
-            await new Promise(resolve => setTimeout(resolve, 100))
+            await new Promise((resolve) => setTimeout(resolve, 100))
 
             // If the renderer process is still running, forcefully crash it
             if (!window.webContents.isDestroyed()) {
               try {
                 window.webContents.forcefullyCrashRenderer()
-              }
-              catch (error) {
-                console.warn('[DevProcessManager] Error crashing renderer:', error)
+              } catch (error) {
+                devProcessLog.warn('Error crashing renderer', { error })
               }
             }
           }
 
           // Close the Window
           window.destroy()
-        }
-        catch (error) {
-          console.warn(`[DevProcessManager] Error cleaning up window:`, error)
+        } catch (error) {
+          devProcessLog.warn('Error cleaning up window', { error })
         }
       }
     }
 
-    await new Promise(resolve => setTimeout(resolve, 200))
+    await new Promise((resolve) => setTimeout(resolve, 200))
 
-    console.log('[DevProcessManager] Process cleanup completed')
+    devProcessLog.info('Process cleanup completed')
   }
 
   /**

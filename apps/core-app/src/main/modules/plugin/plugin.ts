@@ -39,6 +39,7 @@ import {
   touchEventBus
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
+import { createLogger } from '../../utils/logger'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
@@ -90,6 +91,11 @@ const disallowedArrays = [
   '排行',
   '排名系统'
 ]
+
+const pluginSystemLog = createLogger('PluginSystem').child('Plugin')
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
+}
 
 /**
  * Plugin implementation
@@ -203,7 +209,7 @@ export class TouchPlugin implements ITouchPlugin {
           return feature.toJSONObject()
         }
         // 如果不是 PluginFeature 实例，尝试手动构造对象
-        console.warn(
+        pluginSystemLog.warn(
           `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`
         )
         return {
@@ -251,14 +257,16 @@ export class TouchPlugin implements ITouchPlugin {
 
     const regex = /^[\w-]+$/
     if (!regex.test(id)) {
-      console.error(`[Plugin] Feature add error, id ${id} not valid.`)
+      pluginSystemLog.error(`[Plugin ${this.name}] Feature add error, id ${id} not valid.`)
       return false
     }
 
     if (
       disallowedArrays.filter((item: string) => name.includes(item) || desc.includes(item)).length
     ) {
-      console.error(`[Plugin] Feature add error, name or desc contains disallowed words.`)
+      pluginSystemLog.error(
+        `[Plugin ${this.name}] Feature add error, name or desc contains disallowed words.`
+      )
       return false
     }
 
@@ -365,7 +373,7 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   public clearCoreBoxItems(): void {
-    console.debug(
+    pluginSystemLog.debug(
       `[Plugin ${this.name}] clearItems() called - clearing ${this._searchItems.length} items`
     )
 
@@ -373,7 +381,12 @@ export class TouchPlugin implements ITouchPlugin {
     this._searchTimestamp = Date.now()
 
     const coreBoxWindow = getCoreBoxWindow()
-    console.debug(`[Plugin ${this.name}] CoreBox window available for clearing:`, !!coreBoxWindow)
+    const coreBoxAvailable = !!coreBoxWindow
+    const coreBoxDestroyed = coreBoxWindow?.window.isDestroyed()
+
+    pluginSystemLog.debug(
+      `[Plugin ${this.name}] CoreBox window available for clearing: ${coreBoxAvailable}`
+    )
 
     if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
       const channel = genTouchChannel()
@@ -383,18 +396,23 @@ export class TouchPlugin implements ITouchPlugin {
         timestamp: this._searchTimestamp
       }
 
-      console.debug(`[Plugin ${this.name}] Sending core-box:clear-items with payload:`, payload)
+      pluginSystemLog.debug(`[Plugin ${this.name}] Sending core-box:clear-items`, {
+        meta: { timestamp: this._searchTimestamp }
+      })
 
       channel
         .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:clear-items', payload)
         .catch((error) => {
-          console.error(`[Plugin ${this.name}] Failed to clear search results from CoreBox:`, error)
+          pluginSystemLog.error(
+            `[Plugin ${this.name}] Failed to clear search results from CoreBox`,
+            { error: toError(error) }
+          )
         })
 
-      console.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
+      pluginSystemLog.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
     } else {
-      console.warn(
-        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
+      pluginSystemLog.warn(
+        `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${coreBoxAvailable}, destroyed: ${coreBoxDestroyed}`
       )
     }
   }
@@ -570,7 +588,7 @@ export class TouchPlugin implements ITouchPlugin {
       } else {
         // Prod mode: load from local file
         const featureIndex = path.resolve(this.pluginPath, 'index.js')
-        console.log(`[Plugin ${this.name}] Loading index.js from: ${featureIndex}`)
+        pluginSystemLog.debug(`[Plugin ${this.name}] Loading index.js from: ${featureIndex}`)
         if (fse.existsSync(featureIndex)) {
           this.pluginLifecycle = loadPluginFeatureContext(
             this,
@@ -616,8 +634,10 @@ export class TouchPlugin implements ITouchPlugin {
       genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:enabled', this.toJSONObject())
     }
 
-    console.log(`[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`)
-    console.log(`[Plugin] Plugin ${this.name} is enabled.`)
+    pluginSystemLog.debug(
+      `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`
+    )
+    pluginSystemLog.debug(`[Plugin] Plugin ${this.name} is enabled.`)
 
     return true
   }
@@ -652,7 +672,9 @@ export class TouchPlugin implements ITouchPlugin {
       try {
         if (!win.window.isDestroyed()) {
           if (!app.isPackaged) {
-            console.log(`[Plugin] Gracefully closing window ${id} for plugin ${this.name}`)
+            pluginSystemLog.debug(
+              `[Plugin] Gracefully closing window ${id} for plugin ${this.name}`
+            )
             win.window.hide()
             setTimeout(() => {
               if (!win.window.isDestroyed()) {
@@ -665,7 +687,9 @@ export class TouchPlugin implements ITouchPlugin {
         }
         this._windows.delete(id)
       } catch (error: unknown) {
-        console.warn(`[Plugin] Error closing window ${id} for plugin ${this.name}:`, error)
+        pluginSystemLog.warn(
+          `[Plugin] Error closing window ${id} for plugin ${this.name}: ${toError(error).message}`
+        )
         this._windows.delete(id)
       }
     })
@@ -910,10 +934,9 @@ export class TouchPlugin implements ITouchPlugin {
        * @param items - Array of search items to display
        */
       pushItems: async (items: TuffItem[]) => {
-        console.debug(`[Plugin ${this.name}] pushItems() called with ${items.length} items`)
-        console.debug(
-          `[Plugin ${this.name}] Items to push:`,
-          items.map((item) => item.id)
+        pluginSystemLog.debug(`[Plugin ${this.name}] pushItems() called with ${items.length} items`)
+        pluginSystemLog.debug(
+          `[Plugin ${this.name}] Items to push: ${items.map((item) => item.id).join(', ')}`
         )
 
         // 使用 TuffIconImpl 解析 items 中的 icon 相对路径为绝对路径
@@ -967,7 +990,9 @@ export class TouchPlugin implements ITouchPlugin {
         this._searchTimestamp = Date.now()
 
         const coreBoxWindow = getCoreBoxWindow()
-        console.debug(`[Plugin ${this.name}] CoreBox window available:`, !!coreBoxWindow)
+        const coreBoxAvailable = !!coreBoxWindow
+        const coreBoxDestroyed = coreBoxWindow?.window.isDestroyed()
+        pluginSystemLog.debug(`[Plugin ${this.name}] CoreBox window available: ${coreBoxAvailable}`)
 
         if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
           const channel = appChannel
@@ -980,23 +1005,25 @@ export class TouchPlugin implements ITouchPlugin {
             total: processedItems.length
           }
 
-          console.debug(`[Plugin ${this.name}] Sending core-box:push-items with payload:`, payload)
+          pluginSystemLog.debug(`[Plugin ${this.name}] Sending core-box:push-items`, {
+            meta: { total: processedItems.length }
+          })
 
           channel
             .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:push-items', payload)
             .catch((error) => {
-              console.error(
-                `[Plugin ${this.name}] Failed to push search results to CoreBox:`,
-                error
+              pluginSystemLog.error(
+                `[Plugin ${this.name}] Failed to push search results to CoreBox`,
+                { error: toError(error) }
               )
             })
 
-          console.debug(
+          pluginSystemLog.debug(
             `[Plugin ${this.name}] Successfully sent ${processedItems.length} search results to CoreBox`
           )
         } else {
-          console.warn(
-            `[Plugin ${this.name}] CoreBox window not available for pushing search results - window exists: ${!!coreBoxWindow}, destroyed: ${coreBoxWindow?.window.isDestroyed()}`
+          pluginSystemLog.warn(
+            `[Plugin ${this.name}] CoreBox window not available for pushing search results - window exists: ${coreBoxAvailable}, destroyed: ${coreBoxDestroyed}`
           )
         }
       },
@@ -1203,7 +1230,9 @@ export class TouchPlugin implements ITouchPlugin {
           const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:list', { filters })
           return response || []
         } catch (error) {
-          console.error(`[Plugin ${pluginName}] Failed to list plugins:`, error)
+          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to list plugins`, {
+            error: toError(error)
+          })
           return []
         }
       },
@@ -1218,7 +1247,9 @@ export class TouchPlugin implements ITouchPlugin {
           const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get', { name })
           return response
         } catch (error) {
-          console.error(`[Plugin ${pluginName}] Failed to get plugin ${name}:`, error)
+          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin ${name}`, {
+            error: toError(error)
+          })
           return null
         }
       },
@@ -1235,7 +1266,9 @@ export class TouchPlugin implements ITouchPlugin {
           })
           return response
         } catch (error) {
-          console.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}:`, error)
+          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}`, {
+            error: toError(error)
+          })
           throw error
         }
       }
@@ -1309,7 +1342,7 @@ export class TouchPlugin implements ITouchPlugin {
   __index__(): string | undefined {
     const dev = this.dev && this.dev.enable
 
-    if (dev) console.log(`[Plugin] Plugin is now dev-mode: ${this.name}`)
+    if (dev) pluginSystemLog.debug(`[Plugin] Plugin is now dev-mode: ${this.name}`)
 
     return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
   }
@@ -1617,7 +1650,7 @@ export class TouchPlugin implements ITouchPlugin {
           result.content = `data:image/${ext.slice(1)};base64,${buffer.toString('base64')}`
         }
       } catch (error) {
-        console.error(`Failed to read file content: ${fileName}`, error)
+        pluginSystemLog.error(`Failed to read file content: ${fileName}`, { error: toError(error) })
       }
     } else {
       result.truncated = true

@@ -1,21 +1,22 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type {
+  PackageInfo,
   ReadFileRequest,
   StartupRequest,
   StartupResponse
 } from '@talex-touch/utils/transport/events/types'
-import { TalexTouch } from '../types'
-import { execFile } from 'node:child_process'
+import type { Locale } from '../utils/i18n-helper'
+import { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
 import { isLocalhostUrl } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow, powerMonitor, shell } from 'electron'
 import packageJson from '../../../package.json'
@@ -24,23 +25,18 @@ import { genTouchChannel } from '../core/channel-core'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
+import { appProvider } from '../modules/box-tool/addon/apps/app-provider'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { buildVerificationModule } from '../modules/build-verification'
-import { activeAppService } from '../modules/system/active-app'
-import type { Locale } from '../utils/i18n-helper'
-import { setLocale } from '../utils/i18n-helper'
-import { enterPerfContext } from '../utils/perf-context'
-import { perfMonitor } from '../utils/perf-monitor'
-import { tempFileService } from '../service/temp-file.service'
-import { getStorageUsageReport } from '../utils/storage-usage'
-import { databaseModule } from '../modules/database'
-import { storageModule } from '../modules/storage'
 import { clipboardModule } from '../modules/clipboard'
-import { checkPlatformCompatibility } from '../utils/common-util'
+import { databaseModule } from '../modules/database'
 import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
+import { storageModule } from '../modules/storage'
+import { activeAppService } from '../modules/system/active-app'
+import { deviceIdleService } from '../service/device-idle-service'
 import {
   cleanupAnalytics,
   cleanupClipboard,
@@ -54,8 +50,15 @@ import {
   cleanupUpdates,
   cleanupUsage
 } from '../service/storage-maintenance'
+import { tempFileService } from '../service/temp-file.service'
+import { TalexTouch } from '../types'
+import { checkPlatformCompatibility } from '../utils/common-util'
+import { setLocale } from '../utils/i18n-helper'
+import { createLogger } from '../utils/logger'
+import { enterPerfContext } from '../utils/perf-context'
+import { perfMonitor } from '../utils/perf-monitor'
+import { getStorageUsageReport, type StorageUsageIncludeOptions } from '../utils/storage-usage'
 
-const execFileAsync = promisify(execFile)
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
 const READ_FILE_CACHE_TTL_MS = 60_000
@@ -63,9 +66,63 @@ const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const PLUGIN_TEMP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+const log = createLogger('CommonChannel')
+
+const legacyCloseEvent = defineRawEvent<void, void>('close')
+const legacyHideEvent = defineRawEvent<void, void>('hide')
+const legacyMinimizeEvent = defineRawEvent<void, void>('minimize')
+const legacyDevToolsEvent = defineRawEvent<void, void>('dev-tools')
+const legacyGetPackageEvent = defineRawEvent<void, PackageInfo>('get-package')
+const legacyOpenExternalEvent = defineRawEvent<{ url: string }, void>('open-external')
+const legacyGetOsEvent = defineRawEvent<void, OSInformation>('get-os')
+const legacyCommonCwdEvent = defineRawEvent<void, string>('common:cwd')
+const legacyCommonGetPathEvent = defineRawEvent<{ name: string }, string | null>('common:get-path')
+const legacyFolderOpenEvent = defineRawEvent<{ path: string }, void>('folder:open')
+const legacyOpenPromptsFolderEvent = defineRawEvent<void, void>('app:open-prompts-folder')
+const legacyModuleFolderEvent = defineRawEvent<{ name: string }, void>('module:folder')
+const legacyExecuteCmdEvent = defineRawEvent<
+  { command: string },
+  { success: boolean; error?: string }
+>('execute:cmd')
+const legacyAppOpenEvent = defineRawEvent<{ appName?: string; path?: string }, void>('app:open')
+const legacyUrlOpenEvent = defineRawEvent<string, boolean>('url:open')
+const legacyFilesIndexProgressEvent = defineRawEvent<{ paths?: string[] }, unknown>(
+  'files:index-progress'
+)
+const legacySystemGetActiveAppEvent = defineRawEvent<{ forceRefresh?: boolean }, unknown>(
+  'system:get-active-app'
+)
+const legacySystemGetStorageUsageEvent = defineRawEvent<{ include?: string[] }, unknown>(
+  'system:get-storage-usage'
+)
+const legacyTempFileCreateEvent = defineRawEvent<
+  any,
+  { url: string; sizeBytes: number; createdAt: number }
+>('temp-file:create')
+const legacyTempFileDeleteEvent = defineRawEvent<any, { success: boolean }>('temp-file:delete')
+const legacyStorageCleanupClipboardEvent = defineRawEvent<any, unknown>('storage:cleanup:clipboard')
+const legacyStorageCleanupFileIndexEvent = defineRawEvent<any, unknown>(
+  'storage:cleanup:file-index'
+)
+const legacyStorageCleanupLogsEvent = defineRawEvent<any, unknown>('storage:cleanup:logs')
+const legacyStorageCleanupTempEvent = defineRawEvent<any, unknown>('storage:cleanup:temp')
+const legacyStorageCleanupAnalyticsEvent = defineRawEvent<any, unknown>('storage:cleanup:analytics')
+const legacyStorageCleanupUsageEvent = defineRawEvent<any, unknown>('storage:cleanup:usage')
+const legacyStorageCleanupOcrEvent = defineRawEvent<any, unknown>('storage:cleanup:ocr')
+const legacyStorageCleanupDownloadsEvent = defineRawEvent<any, unknown>('storage:cleanup:downloads')
+const legacyStorageCleanupIntelligenceEvent = defineRawEvent<any, unknown>(
+  'storage:cleanup:intelligence'
+)
+const legacyStorageCleanupConfigEvent = defineRawEvent<void, unknown>('storage:cleanup:config')
+const legacyStorageCleanupUpdatesEvent = defineRawEvent<void, unknown>('storage:cleanup:updates')
+const legacyBuildVerificationEvent = defineRawEvent<
+  void,
+  { isOfficialBuild: boolean; verificationFailed: boolean; hasOfficialKey: boolean }
+>('build:get-verification-status')
+const legacyBatteryStatusEvent = defineRawEvent<BatteryStatusPayload, void>('power:battery-status')
 
 function safeNamespaceSegment(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 64) || 'unknown'
+  return value.replace(/[^\w.-]+/g, '-').slice(0, 64) || 'unknown'
 }
 
 function resolveTfilePath(urlOrPath: string): string {
@@ -110,16 +167,9 @@ interface OSInformation {
   version: ReturnType<typeof os.version>
 }
 
-type KeyManagerHolder = { keyManager?: unknown }
-type BroadcastCapable = {
-  broadcastTo?: (
-    window: BrowserWindow,
-    channelType: ChannelType,
-    eventName: string,
-    payload?: unknown
-  ) => void
+interface KeyManagerHolder {
+  keyManager?: unknown
 }
-
 interface RendererPerfReport {
   kind: string
   at: number
@@ -287,6 +337,10 @@ export class CommonChannelModule extends BaseModule {
     const channel = genTouchChannel(touchApp)
     this.channel = channel
     this.transport = getTuffTransportMain(channel, getKeyManager(channel) ?? channel)
+    const transport = this.transport
+    if (!transport) {
+      return
+    }
 
     const broadcastBatteryStatus = async (): Promise<void> => {
       const onBattery = safeIsOnBatteryPower()
@@ -296,12 +350,7 @@ export class CommonChannelModule extends BaseModule {
       const windows = BrowserWindow.getAllWindows()
       for (const win of windows) {
         try {
-          ;(channel as unknown as BroadcastCapable).broadcastTo?.(
-            win,
-            ChannelType.MAIN,
-            'power:battery-status',
-            payload
-          )
+          void transport.sendTo(win.webContents, legacyBatteryStatusEvent, payload)
         } catch {
           // Ignore broadcast errors
         }
@@ -345,33 +394,32 @@ export class CommonChannelModule extends BaseModule {
         void broadcastBatteryStatus()
       })
     } catch (error) {
-      console.warn('[CommonChannel] Failed to initialize battery status broadcaster:', error)
+      log.warn('[CommonChannel] Failed to initialize battery status broadcaster:', { error })
     }
 
-    channel.regChannel(ChannelType.MAIN, 'close', () => closeApp(app as TalexTouch.TouchApp))
-    channel.regChannel(ChannelType.MAIN, 'hide', () =>
-      (app as TalexTouch.TouchApp).window.window.hide()
+    this.transportDisposers.push(
+      transport.on(legacyCloseEvent, () => closeApp(app as TalexTouch.TouchApp)),
+      transport.on(legacyHideEvent, () => (app as TalexTouch.TouchApp).window.window.hide()),
+      transport.on(legacyMinimizeEvent, () => (app as TalexTouch.TouchApp).window.minimize()),
+      transport.on(legacyDevToolsEvent, () => {
+        log.debug('[dev-tools] Open dev tools!')
+        ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'undocked' })
+        ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'detach' })
+        ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'right' })
+      }),
+      transport.on(legacyGetPackageEvent, () => packageJson),
+      transport.on(legacyOpenExternalEvent, (payload) => {
+        const url = payload?.url
+        if (url) {
+          return shell.openExternal(url)
+        }
+        return undefined
+      }),
+      transport.on(legacyGetOsEvent, () => getOSInformation()),
+      transport.on(legacySystemGetActiveAppEvent, (payload) =>
+        activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
+      )
     )
-
-    channel.regChannel(ChannelType.MAIN, 'minimize', () =>
-      (app as TalexTouch.TouchApp).window.minimize()
-    )
-    channel.regChannel(ChannelType.MAIN, 'dev-tools', () => {
-      console.debug('[dev-tools] Open dev tools!')
-      ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'undocked' })
-      ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'detach' })
-      ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'right' })
-    })
-    channel.regChannel(ChannelType.MAIN, 'get-package', () => packageJson)
-    channel.regChannel(ChannelType.MAIN, 'open-external', ({ data }) =>
-      shell.openExternal(data!.url)
-    )
-
-    channel.regChannel(ChannelType.MAIN, 'get-os', () => getOSInformation())
-    const systemGetActiveApp = async ({ data }: { data?: { forceRefresh?: boolean } }) =>
-      activeAppService.getActiveApp(Boolean(data?.forceRefresh))
-    channel.regChannel(ChannelType.MAIN, 'system:get-active-app', systemGetActiveApp)
-    channel.regChannel(ChannelType.PLUGIN, 'system:get-active-app', systemGetActiveApp)
 
     const registeredTempNamespaces = new Map<string, number | null>()
     const ensureTempNamespace = (namespace: string, retentionMs: number | null) => {
@@ -382,267 +430,249 @@ export class CommonChannelModule extends BaseModule {
       tempFileService.startCleanup()
     }
 
-    channel.regChannel(ChannelType.MAIN, 'temp-file:create', async ({ data }) => {
-      const namespace = typeof data?.namespace === 'string' ? data.namespace : 'misc'
-      const retentionMs =
-        typeof data?.retentionMs === 'number' &&
-        Number.isFinite(data.retentionMs) &&
-        data.retentionMs > 0
-          ? Number(data.retentionMs)
-          : 24 * 60 * 60 * 1000
+    this.transportDisposers.push(
+      transport.on(legacyTempFileCreateEvent, async (payload, context) => {
+        const pluginName = context.plugin?.name
 
-      ensureTempNamespace(namespace, retentionMs)
+        if (pluginName) {
+          const segment = safeNamespaceSegment(pluginName)
+          const namespace = `plugins/${segment}`
+          const retentionMs =
+            typeof payload?.retentionMs === 'number' &&
+            Number.isFinite(payload.retentionMs) &&
+            payload.retentionMs > 0
+              ? Number(payload.retentionMs)
+              : PLUGIN_TEMP_RETENTION_MS
 
-      const res = await tempFileService.createFile({
-        namespace,
-        ext: typeof data?.ext === 'string' ? data.ext : undefined,
-        text: typeof data?.text === 'string' ? data.text : undefined,
-        base64: typeof data?.base64 === 'string' ? data.base64 : undefined,
-        prefix: typeof data?.prefix === 'string' ? data.prefix : 'temp'
-      })
+          ensureTempNamespace(namespace, retentionMs)
 
-      return {
-        url: `${FILE_SCHEMA}://${res.path}`,
-        sizeBytes: res.sizeBytes,
-        createdAt: res.createdAt
-      }
-    })
+          const res = await tempFileService.createFile({
+            namespace,
+            ext: typeof payload?.ext === 'string' ? payload.ext : undefined,
+            text: typeof payload?.text === 'string' ? payload.text : undefined,
+            base64: typeof payload?.base64 === 'string' ? payload.base64 : undefined,
+            prefix: typeof payload?.prefix === 'string' ? payload.prefix : segment
+          })
 
-    channel.regChannel(ChannelType.MAIN, 'temp-file:delete', async ({ data }) => {
-      const target =
-        typeof data?.url === 'string' ? data.url : typeof data?.path === 'string' ? data.path : ''
-      const filePath = resolveTfilePath(target)
-      const success = filePath ? await tempFileService.deleteFile(filePath) : false
-      return { success }
-    })
-
-    channel.regChannel(ChannelType.PLUGIN, 'temp-file:create', async (ctx: any) => {
-      const pluginName = typeof ctx?.plugin === 'string' ? ctx.plugin : 'unknown'
-      const segment = safeNamespaceSegment(pluginName)
-      const namespace = `plugins/${segment}`
-      const retentionMs =
-        typeof ctx?.data?.retentionMs === 'number' &&
-        Number.isFinite(ctx.data.retentionMs) &&
-        ctx.data.retentionMs > 0
-          ? Number(ctx.data.retentionMs)
-          : PLUGIN_TEMP_RETENTION_MS
-
-      ensureTempNamespace(namespace, retentionMs)
-
-      const res = await tempFileService.createFile({
-        namespace,
-        ext: typeof ctx?.data?.ext === 'string' ? ctx.data.ext : undefined,
-        text: typeof ctx?.data?.text === 'string' ? ctx.data.text : undefined,
-        base64: typeof ctx?.data?.base64 === 'string' ? ctx.data.base64 : undefined,
-        prefix: typeof ctx?.data?.prefix === 'string' ? ctx.data.prefix : segment
-      })
-
-      return {
-        url: `${FILE_SCHEMA}://${res.path}`,
-        sizeBytes: res.sizeBytes,
-        createdAt: res.createdAt
-      }
-    })
-
-    channel.regChannel(ChannelType.PLUGIN, 'temp-file:delete', async (ctx: any) => {
-      const pluginName = typeof ctx?.plugin === 'string' ? ctx.plugin : 'unknown'
-      const segment = safeNamespaceSegment(pluginName)
-      const pluginDir = tempFileService.resolveNamespaceDir(`plugins/${segment}`)
-
-      const target =
-        typeof ctx?.data?.url === 'string'
-          ? ctx.data.url
-          : typeof ctx?.data?.path === 'string'
-            ? ctx.data.path
-            : ''
-      const filePath = resolveTfilePath(target)
-      if (!filePath) return { success: false }
-
-      const resolvedPluginDir = path.resolve(pluginDir)
-      const resolvedFilePath = path.resolve(filePath)
-      if (!resolvedFilePath.startsWith(`${resolvedPluginDir}${path.sep}`)) {
-        return { success: false }
-      }
-
-      const success = await tempFileService.deleteFile(resolvedFilePath)
-      return { success }
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'system:get-storage-usage', async ({ data }) => {
-      const storageStats = storageModule.getCacheStats()
-      const clipboardStats = clipboardModule.getCacheStats()
-      return await getStorageUsageReport({
-        dbClient: databaseModule.getClient(),
-        cacheStats: {
-          'storage.lru': storageStats.cachedConfigs,
-          'storage.plugins': storageStats.pluginConfigs,
-          'clipboard.memory': clipboardStats.memoryItems
-        },
-        include: data?.include
-      })
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:clipboard', async ({ data }) => {
-      return await cleanupClipboard(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:file-index', async ({ data }) => {
-      return await cleanupFileIndex(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:logs', async ({ data }) => {
-      return await cleanupLogs(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:temp', async ({ data }) => {
-      return await cleanupTemp(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:analytics', async ({ data }) => {
-      return await cleanupAnalytics(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:usage', async ({ data }) => {
-      return await cleanupUsage(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:ocr', async ({ data }) => {
-      return await cleanupOcr(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:downloads', async ({ data }) => {
-      return await cleanupDownloads(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:intelligence', async ({ data }) => {
-      return await cleanupIntelligence(data)
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:config', async () => {
-      return await cleanupConfig()
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'storage:cleanup:updates', async () => {
-      return await cleanupUpdates()
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'common:cwd', process.cwd)
-
-    channel.regChannel(ChannelType.MAIN, 'common:get-path', ({ data }) => {
-      const name = typeof data?.name === 'string' ? data.name : ''
-      if (!name) {
-        return null
-      }
-      try {
-        return touchApp.app.getPath(name as any)
-      } catch (error) {
-        console.warn(`[CommonChannel] Failed to resolve app path: ${name}`, error)
-        return null
-      }
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'folder:open', ({ data }) => {
-      if (data?.path) {
-        shell.showItemInFolder(data.path)
-      }
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'app:open-prompts-folder', async () => {
-      const basePath = storageModule.filePath
-      if (!basePath) {
-        throw new Error('Config path not available')
-      }
-
-      const promptFilePath = path.join(basePath, 'intelligence', 'prompt-library')
-      try {
-        await fs.stat(promptFilePath)
-        shell.showItemInFolder(promptFilePath)
-        return
-      } catch {
-        // Ignore and fallback to opening config root
-      }
-
-      const error = await shell.openPath(basePath)
-      if (error) {
-        throw new Error(error)
-      }
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'module:folder', ({ data }) => {
-      if (data?.name) {
-        const modulePath = path.join(
-          (app as TalexTouch.TouchApp).rootPath,
-          'modules',
-          data?.name ? data.name : undefined
-        )
-        shell.openPath(modulePath)
-
-        console.debug(
-          `[Channel] Open path [${modulePath}] with module folder @${data?.name ?? 'defaults'}`
-        )
-      }
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'execute:cmd', async ({ data }) => {
-      if (data?.command) {
-        try {
-          const error = await shell.openPath(data.command)
-          if (error) {
-            console.error(`[CommonChannel] Failed to open path: ${data.command}, error: ${error}`)
-            return { success: false, error }
+          return {
+            url: `${FILE_SCHEMA}://${res.path}`,
+            sizeBytes: res.sizeBytes,
+            createdAt: res.createdAt
           }
-          return { success: true }
-        } catch (error) {
-          console.error(`[CommonChannel] Error opening path: ${data.command}`, error)
-          return { success: false, error: error instanceof Error ? error.message : String(error) }
         }
-      }
-      return { success: false, error: 'No command provided' }
-    })
 
-    channel.regChannel(ChannelType.MAIN, 'app:open', ({ data }) => {
-      if (data?.appName || data?.path) {
-        shell.openPath(data.appName || data.path)
-      }
-    })
+        const namespace = typeof payload?.namespace === 'string' ? payload.namespace : 'misc'
+        const retentionMs =
+          typeof payload?.retentionMs === 'number' &&
+          Number.isFinite(payload.retentionMs) &&
+          payload.retentionMs > 0
+            ? Number(payload.retentionMs)
+            : 24 * 60 * 60 * 1000
 
-    channel.regChannel(ChannelType.MAIN, 'url:open', ({ data }) => {
-      if (typeof data === 'string') {
-        void onOpenUrl(data)
-      }
-    })
+        ensureTempNamespace(namespace, retentionMs)
 
-    channel.regChannel(ChannelType.MAIN, 'files:index-progress', async ({ data }) => {
-      const paths = Array.isArray(data?.paths) ? data.paths : undefined
-      return fileProvider.getIndexingProgress(paths)
-    })
+        const res = await tempFileService.createFile({
+          namespace,
+          ext: typeof payload?.ext === 'string' ? payload.ext : undefined,
+          text: typeof payload?.text === 'string' ? payload.text : undefined,
+          base64: typeof payload?.base64 === 'string' ? payload.base64 : undefined,
+          prefix: typeof payload?.prefix === 'string' ? payload.prefix : 'temp'
+        })
 
-    // Analytics channels
-    channel.regChannel(ChannelType.MAIN, 'analytics:get-current', () => {
-      const analytics = getStartupAnalytics()
-      return analytics.getCurrentMetrics()
-    })
+        return {
+          url: `${FILE_SCHEMA}://${res.path}`,
+          sizeBytes: res.sizeBytes,
+          createdAt: res.createdAt
+        }
+      }),
+      transport.on(legacyTempFileDeleteEvent, async (payload, context) => {
+        const pluginName = context.plugin?.name
+        if (pluginName) {
+          const segment = safeNamespaceSegment(pluginName)
+          const pluginDir = tempFileService.resolveNamespaceDir(`plugins/${segment}`)
 
-    channel.regChannel(ChannelType.MAIN, 'analytics:get-history', () => {
-      const analytics = getStartupAnalytics()
-      return analytics.getHistory()
-    })
+          const target =
+            typeof payload?.url === 'string'
+              ? payload.url
+              : typeof payload?.path === 'string'
+                ? payload.path
+                : ''
+          const filePath = resolveTfilePath(target)
+          if (!filePath) return { success: false }
 
-    channel.regChannel(ChannelType.MAIN, 'analytics:get-summary', () => {
-      const analytics = getStartupAnalytics()
-      return analytics.getPerformanceSummary()
-    })
+          const resolvedPluginDir = path.resolve(pluginDir)
+          const resolvedFilePath = path.resolve(filePath)
+          if (!resolvedFilePath.startsWith(`${resolvedPluginDir}${path.sep}`)) {
+            return { success: false }
+          }
 
-    channel.regChannel(ChannelType.MAIN, 'analytics:export', () => {
-      const analytics = getStartupAnalytics()
-      return analytics.exportMetrics()
-    })
+          const success = await tempFileService.deleteFile(resolvedFilePath)
+          return { success }
+        }
 
-    channel.regChannel(ChannelType.MAIN, 'analytics:report', async ({ data }) => {
-      const analytics = getStartupAnalytics()
-      await analytics.reportMetrics(data?.endpoint)
-      return { success: true }
-    })
+        const target =
+          typeof payload?.url === 'string'
+            ? payload.url
+            : typeof payload?.path === 'string'
+              ? payload.path
+              : ''
+        const filePath = resolveTfilePath(target)
+        const success = filePath ? await tempFileService.deleteFile(filePath) : false
+        return { success }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(legacySystemGetStorageUsageEvent, async (payload) => {
+        const storageStats = storageModule.getCacheStats()
+        const clipboardStats = clipboardModule.getCacheStats()
+        const include = payload?.include
+          ? payload.include.reduce<StorageUsageIncludeOptions>((acc, key) => {
+              if (
+                key === 'modules' ||
+                key === 'plugins' ||
+                key === 'database' ||
+                key === 'databaseTables' ||
+                key === 'caches' ||
+                key === 'includeOther'
+              ) {
+                acc[key] = true
+              }
+              return acc
+            }, {})
+          : undefined
+        return await getStorageUsageReport({
+          dbClient: databaseModule.getClient(),
+          cacheStats: {
+            'storage.lru': storageStats.cachedConfigs,
+            'storage.plugins': storageStats.pluginConfigs,
+            'clipboard.memory': clipboardStats.memoryItems
+          },
+          include
+        })
+      }),
+      transport.on(legacyStorageCleanupClipboardEvent, async (payload) => {
+        return await cleanupClipboard(payload)
+      }),
+      transport.on(legacyStorageCleanupFileIndexEvent, async (payload) => {
+        return await cleanupFileIndex(payload)
+      }),
+      transport.on(legacyStorageCleanupLogsEvent, async (payload) => {
+        return await cleanupLogs(payload)
+      }),
+      transport.on(legacyStorageCleanupTempEvent, async (payload) => {
+        return await cleanupTemp(payload)
+      }),
+      transport.on(legacyStorageCleanupAnalyticsEvent, async (payload) => {
+        return await cleanupAnalytics(payload)
+      }),
+      transport.on(legacyStorageCleanupUsageEvent, async (payload) => {
+        return await cleanupUsage(payload)
+      }),
+      transport.on(legacyStorageCleanupOcrEvent, async (payload) => {
+        return await cleanupOcr(payload)
+      }),
+      transport.on(legacyStorageCleanupDownloadsEvent, async (payload) => {
+        return await cleanupDownloads(payload)
+      }),
+      transport.on(legacyStorageCleanupIntelligenceEvent, async (payload) => {
+        return await cleanupIntelligence(payload)
+      }),
+      transport.on(legacyStorageCleanupConfigEvent, async () => {
+        return await cleanupConfig()
+      }),
+      transport.on(legacyStorageCleanupUpdatesEvent, async () => {
+        return await cleanupUpdates()
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(legacyCommonCwdEvent, () => process.cwd()),
+      transport.on(legacyCommonGetPathEvent, (payload) => {
+        const name = typeof payload?.name === 'string' ? payload.name : ''
+        if (!name) {
+          return null
+        }
+        try {
+          return touchApp.app.getPath(name as any)
+        } catch (error) {
+          log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
+          return null
+        }
+      }),
+      transport.on(legacyFolderOpenEvent, (payload) => {
+        if (payload?.path) {
+          shell.showItemInFolder(payload.path)
+        }
+      }),
+      transport.on(legacyOpenPromptsFolderEvent, async () => {
+        const basePath = storageModule.filePath
+        if (!basePath) {
+          throw new Error('Config path not available')
+        }
+
+        const promptFilePath = path.join(basePath, 'intelligence', 'prompt-library')
+        try {
+          await fs.stat(promptFilePath)
+          shell.showItemInFolder(promptFilePath)
+          return
+        } catch {
+          // Ignore and fallback to opening config root
+        }
+
+        const error = await shell.openPath(basePath)
+        if (error) {
+          throw new Error(error)
+        }
+      }),
+      transport.on(legacyModuleFolderEvent, (payload) => {
+        if (payload?.name) {
+          const modulePath = path.join(
+            (app as TalexTouch.TouchApp).rootPath,
+            'modules',
+            payload.name
+          )
+          shell.openPath(modulePath)
+
+          log.debug(
+            `[Channel] Open path [${modulePath}] with module folder @${payload?.name ?? 'defaults'}`
+          )
+        }
+      }),
+      transport.on(legacyExecuteCmdEvent, async (payload) => {
+        if (payload?.command) {
+          try {
+            const error = await shell.openPath(payload.command)
+            if (error) {
+              log.error(`[CommonChannel] Failed to open path: ${payload.command}`, { error })
+              return { success: false, error }
+            }
+            return { success: true }
+          } catch (error) {
+            log.error(`[CommonChannel] Error opening path: ${payload.command}`, { error })
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        }
+        return { success: false, error: 'No command provided' }
+      }),
+      transport.on(legacyAppOpenEvent, (payload) => {
+        const target = payload?.appName ?? payload?.path
+        if (target) {
+          shell.openPath(target)
+        }
+      }),
+      transport.on(legacyUrlOpenEvent, (payload) => {
+        if (typeof payload === 'string') {
+          void onOpenUrl(payload)
+          return true
+        }
+        return false
+      }),
+      transport.on(legacyFilesIndexProgressEvent, async (payload) => {
+        const paths = Array.isArray((payload as any)?.paths) ? (payload as any).paths : undefined
+        return fileProvider.getIndexingProgress(paths)
+      })
+    )
 
     type OpenUrlDecision = 'skip' | 'open' | 'confirm'
 
@@ -699,10 +729,14 @@ export class CommonChannelModule extends BaseModule {
         return
       }
 
-      const data = await channel.send(ChannelType.MAIN, 'url:open', url)
-      console.debug('open url', url, data)
+      const data = await transport.sendTo(
+        touchApp.window.window.webContents,
+        legacyUrlOpenEvent,
+        url
+      )
+      log.debug('open url', { meta: { url, data } })
 
-      if (data.data) {
+      if (data) {
         shell.openExternal(url)
       }
     }
@@ -710,8 +744,7 @@ export class CommonChannelModule extends BaseModule {
     touchApp.app.addListener('open-url', (event, url) => {
       event.preventDefault()
 
-      const regex =
-        /(^https:\/\/localhost)|(^http:\/\/localhost)|(^http:\/\/127\.0\.0\.1)|(^https:\/\/127\.0\.0\.1)/
+      const regex = /^https?:\/\/(?:localhost|127\.0\.0\.1)/
       if (regex.test(url) && url.includes('/#/')) {
         return
       }
@@ -721,25 +754,27 @@ export class CommonChannelModule extends BaseModule {
 
     touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) => onOpenUrl(event.data))
 
-    channel.regChannel(ChannelType.MAIN, 'build:get-verification-status', () => {
-      try {
-        if (buildVerificationModule?.getVerificationStatus) {
-          const status = buildVerificationModule.getVerificationStatus()
-          return {
-            isOfficialBuild: status.isOfficialBuild,
-            verificationFailed: status.verificationFailed,
-            hasOfficialKey: status.isOfficialBuild || status.verificationFailed
+    this.transportDisposers.push(
+      transport.on(legacyBuildVerificationEvent, () => {
+        try {
+          if (buildVerificationModule?.getVerificationStatus) {
+            const status = buildVerificationModule.getVerificationStatus()
+            return {
+              isOfficialBuild: status.isOfficialBuild,
+              verificationFailed: status.verificationFailed,
+              hasOfficialKey: status.isVerified
+            }
           }
+        } catch (error) {
+          log.warn('[CommonChannel] Failed to get build verification status:', { error })
         }
-      } catch (error) {
-        console.warn('[CommonChannel] Failed to get build verification status:', error)
-      }
-      return {
-        isOfficialBuild: false,
-        verificationFailed: false,
-        hasOfficialKey: false
-      }
-    })
+        return {
+          isOfficialBuild: false,
+          verificationFailed: false,
+          hasOfficialKey: false
+        }
+      })
+    )
 
     this.registerTransportHandlers()
   }
@@ -832,7 +867,7 @@ export class CommonChannelModule extends BaseModule {
         try {
           return electronApp.getPath(name as any)
         } catch (error) {
-          console.warn(`[CommonChannel] Failed to resolve app path: ${name}`, error)
+          log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
           return null
         }
       }),
@@ -864,12 +899,12 @@ export class CommonChannelModule extends BaseModule {
         try {
           const error = await shell.openPath(command)
           if (error) {
-            console.error(`[CommonChannel] Failed to open path: ${command}, error: ${error}`)
+            log.error(`[CommonChannel] Failed to open path: ${command}`, { error })
             return { success: false, error }
           }
           return { success: true }
         } catch (error) {
-          console.error(`[CommonChannel] Error opening path: ${command}`, error)
+          log.error(`[CommonChannel] Error opening path: ${command}`, { error })
           return { success: false, error: error instanceof Error ? error.message : String(error) }
         }
       }),
@@ -928,34 +963,30 @@ export class CommonChannelModule extends BaseModule {
     )
 
     this.transportDisposers.push(
-      this.channel.regChannel(ChannelType.MAIN, AppEvents.fileIndex.status.toEventName(), () =>
-        fileProvider.getIndexingStatus()
-      ),
-      this.channel.regChannel(ChannelType.MAIN, AppEvents.fileIndex.stats.toEventName(), () =>
-        fileProvider.getIndexStats()
-      ),
-      this.channel.regChannel(
-        ChannelType.MAIN,
-        AppEvents.fileIndex.batteryLevel.toEventName(),
-        () => fileProvider.getBatteryLevel()
-      ),
-      this.channel.regChannel(
-        ChannelType.MAIN,
-        AppEvents.fileIndex.rebuild.toEventName(),
-        async ({ data }) => {
-          try {
-            return await fileProvider.rebuildIndex(data)
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            return { success: false, error: message }
-          }
+      this.transport.on(AppEvents.fileIndex.status, () => fileProvider.getIndexingStatus()),
+      this.transport.on(AppEvents.fileIndex.stats, () => fileProvider.getIndexStats()),
+      this.transport.on(AppEvents.fileIndex.batteryLevel, () => fileProvider.getBatteryLevel()),
+      this.transport.on(AppEvents.fileIndex.rebuild, async (payload) => {
+        try {
+          return await fileProvider.rebuildIndex(payload ?? undefined)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { success: false, error: message }
         }
+      }),
+      this.transport.on(AppEvents.deviceIdle.getSettings, () => deviceIdleService.getSettings()),
+      this.transport.on(AppEvents.deviceIdle.updateSettings, (payload) =>
+        deviceIdleService.updateSettings(payload ?? {})
+      ),
+      this.transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
+      this.transport.on(AppEvents.appIndex.updateSettings, (payload) =>
+        appProvider.updateAppIndexSettings(payload ?? {})
       )
     )
   }
 
   onDestroy(): MaybePromise<void> {
-    console.log('[CommonChannel] CommonChannelModule destroyed')
+    log.info('[CommonChannel] CommonChannelModule destroyed')
 
     if (this.batteryPollTimer) {
       clearInterval(this.batteryPollTimer)
@@ -976,61 +1007,11 @@ export class CommonChannelModule extends BaseModule {
 }
 
 function safeIsOnBatteryPower(): boolean {
-  try {
-    return powerMonitor.isOnBatteryPower()
-  } catch {
-    return false
-  }
+  return deviceIdleService.isOnBatteryPower()
 }
 
 async function safeGetBatteryPercent(): Promise<number | null> {
-  try {
-    if (process.platform === 'darwin') {
-      const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
-      const match = /\b(\d{1,3})%\b/.exec(stdout)
-      if (!match) return null
-      const value = Number.parseInt(match[1], 10)
-      if (Number.isNaN(value)) return null
-      return Math.max(0, Math.min(100, value))
-    }
-
-    if (process.platform === 'win32') {
-      const { stdout } = await execFileAsync('powershell', [
-        '-NoProfile',
-        '-Command',
-        'Get-CimInstance -ClassName Win32_Battery | Select-Object -ExpandProperty EstimatedChargeRemaining | Select-Object -First 1'
-      ])
-      const value = Number.parseInt(stdout.trim(), 10)
-      if (Number.isNaN(value)) return null
-      return Math.max(0, Math.min(100, value))
-    }
-
-    if (process.platform === 'linux') {
-      try {
-        const powerSupplyPath = '/sys/class/power_supply'
-        // Check if directory exists
-        await fs.access(powerSupplyPath).catch(() => {
-          throw new Error('No power supply class')
-        })
-
-        const files = await fs.readdir(powerSupplyPath)
-        // Find first battery (BAT0, BAT1, etc.)
-        const bat = files.find((f) => f.startsWith('BAT'))
-        if (bat) {
-          const capacityPath = path.join(powerSupplyPath, bat, 'capacity')
-          const content = await fs.readFile(capacityPath, 'utf8')
-          const val = Number.parseInt(content.trim(), 10)
-          if (!Number.isNaN(val)) return Math.max(0, Math.min(100, val))
-        }
-      } catch {
-        // Fallback or ignore
-      }
-    }
-
-    return null
-  } catch {
-    return null
-  }
+  return deviceIdleService.getBatteryPercent()
 }
 
 const commonChannelModule = new CommonChannelModule()

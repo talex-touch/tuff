@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginEmptyState" setup>
-import { useI18n } from 'vue-i18n'
 import { TxButton } from '@talex-touch/tuffex'
+import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 </script>

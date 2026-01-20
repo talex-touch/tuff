@@ -7,6 +7,7 @@ import type { CapabilityTestPayload } from './base-tester'
 import { existsSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { getCapabilityPrompt } from '../intelligence-config'
 import { BaseCapabilityTester } from './base-tester'
 
@@ -57,7 +58,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
       throw new Error('Sample image directory not found')
     }
 
-    const files = readdirSync(dir).filter((file) => /\.(png|jpe?g|webp|gif|bmp)$/i.test(file))
+    const files = readdirSync(dir).filter((file) => /\.(?:png|jpe?g|webp|gif|bmp)$/i.test(file))
 
     if (files.length === 0) {
       throw new Error('Sample image folder is empty')

@@ -2,7 +2,7 @@ import type { MarketProviderDefinition, MarketSourcesPayload } from '@talex-touc
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTpexApiBase, NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { DEFAULT_MARKET_PROVIDERS, MARKET_SOURCES_STORAGE_KEY } from '@talex-touch/utils/market'
-import { getConfig } from '../modules/storage'
+import { getMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
 import { performMarketHttpRequest } from './market-http.service'
 
@@ -13,7 +13,7 @@ const log = createLogger('MarketApiService')
  */
 export function getMarketSources(): MarketProviderDefinition[] {
   try {
-    const payload = getConfig(MARKET_SOURCES_STORAGE_KEY) as MarketSourcesPayload | null
+    const payload = getMainConfig(MARKET_SOURCES_STORAGE_KEY) as MarketSourcesPayload | null
     if (payload?.sources && Array.isArray(payload.sources)) {
       return payload.sources
     }

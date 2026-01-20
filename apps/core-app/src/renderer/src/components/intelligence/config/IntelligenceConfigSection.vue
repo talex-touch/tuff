@@ -1,6 +1,6 @@
 <script lang="ts" name="IntelligenceConfigSection" setup>
-import { ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { ref } from 'vue'
 
 defineProps<{
   title: string

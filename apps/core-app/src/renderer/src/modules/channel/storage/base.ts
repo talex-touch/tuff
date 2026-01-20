@@ -10,11 +10,12 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 const transport = useTuffTransport()
 const channel = tryUseChannel()
 
-initStorageTransport(transport)
-const hasStorageChannel = (value: typeof channel): boolean =>
-  !!value && typeof value.sendSync === 'function' && typeof value.unRegChannel === 'function'
+function hasStorageChannel(value: typeof channel): boolean {
+  return !!value && typeof value.sendSync === 'function' && typeof value.unRegChannel === 'function'
+}
 
 if (hasStorageChannel(channel)) {
+  initStorageTransport(transport)
   initStorageChannel(channel as IStorageChannel)
   initStorageSubscription(channel as IStorageChannel, transport)
 }

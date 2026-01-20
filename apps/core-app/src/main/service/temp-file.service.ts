@@ -53,7 +53,7 @@ function ensureExt(ext?: string): string {
 function safeBasename(value?: string): string {
   const raw = (value ?? '').trim()
   if (!raw) return 'tmp'
-  return raw.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 32) || 'tmp'
+  return raw.replace(/[^\w-]+/g, '-').slice(0, 32) || 'tmp'
 }
 
 async function ensureDir(dirPath: string): Promise<void> {

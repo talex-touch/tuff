@@ -19,13 +19,13 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
-import { getLogger } from '@talex-touch/utils/common/logger'
 import type {
   SearchIndexItem,
   SearchIndexKeyword,
   SearchIndexService
 } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
+import type { Buffer } from 'node:buffer'
 import type { FileTypeTag } from './constants'
 import type { ScannedFileInfo } from './types'
 import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
@@ -36,6 +36,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
+import process from 'node:process'
 import { promisify } from 'node:util'
 import {
   StorageList,
@@ -43,12 +44,14 @@ import {
   TuffInputType,
   TuffSearchResultBuilder
 } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
-import { app, powerMonitor, shell } from 'electron'
+import { app, shell } from 'electron'
 import extractFileIcon from 'extract-file-icon'
 import plist from 'plist'
 import { FileAddedEvent, TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
@@ -61,18 +64,20 @@ import {
   scanProgress
 } from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import {
   AppUsageActivityTracker,
   BackgroundTaskService
 } from '../../../../service/background-task-service'
+import { deviceIdleService } from '../../../../service/device-idle-service'
 import { createFailedFilesCleanupTask } from '../../../../service/failed-files-cleanup-task'
 import { FILE_TIMING_BASE_OPTIONS } from '../../../../utils/file-indexing-utils'
 import { TYPE_ALIAS_MAP } from '../../../../utils/file-types'
 import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
-import { getConfig, saveConfig } from '../../../storage'
+import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import { searchLogger } from '../../search-engine/search-logger'
 import {
@@ -116,7 +121,7 @@ interface FileUpdateRecord {
   isDir: boolean
 }
 
-interface FileIndexSettings {
+export interface FileIndexSettings {
   autoScanEnabled: boolean
   autoScanIntervalMs: number
   autoScanIdleThresholdMs: number
@@ -158,6 +163,19 @@ interface ResolvedOpener {
   path?: string
   lastResolvedAt: string
 }
+
+const openerResolveEvent = defineRawEvent<{ extension: string }, ResolvedOpener | null>(
+  'openers:resolve'
+)
+const fileIndexFailedEvent = defineRawEvent<
+  {
+    error: string
+    stack?: string
+    timestamp: number
+  },
+  void
+>('file-index:failed')
+const EMPTY_OPENER_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(emptyOpenerSvg.trim())}`
 
 // class ProgressLogger {
 //   private processed = 0
@@ -245,7 +263,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private openersChannelRegistered = false
-  private indexingChannelsRegistered = false
   private readonly progressStreamContexts = new Set<StreamContext<FileIndexProgressPayload>>()
   private launchServicesLoadPromise: Promise<any[]> | null = null
   private readonly openerNegativeCache = new Map<string, number>()
@@ -260,6 +277,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly fileIndexWorker = new FileIndexWorkerClient((payload) =>
     this.handleIndexWorkerFile(payload)
   )
+
   private readonly iconWorker = new IconWorkerClient()
   private readonly openerCache = new Map<string, ResolvedOpener>()
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
@@ -467,13 +485,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private loadFileIndexSettings(): void {
     try {
-      const raw = getConfig(StorageList.FILE_INDEX_SETTINGS) as
+      const raw = getMainConfig(StorageList.FILE_INDEX_SETTINGS) as
         | Partial<FileIndexSettings>
         | undefined
       this.fileIndexSettings = this.normalizeFileIndexSettings(raw)
 
       if (!raw || Object.keys(raw).length === 0) {
-        saveConfig(StorageList.FILE_INDEX_SETTINGS, JSON.stringify(this.fileIndexSettings, null, 2))
+        saveMainConfig(StorageList.FILE_INDEX_SETTINGS, this.fileIndexSettings)
       }
     } catch (error) {
       this.fileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
@@ -543,17 +561,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private getSystemIdleMs(): number | null {
-    try {
-      if (typeof powerMonitor.getSystemIdleTime === 'function') {
-        return powerMonitor.getSystemIdleTime() * 1000
-      }
-    } catch (error) {
-      this.logWarn('Failed to read system idle time', error)
-    }
-    return null
-  }
-
   private async getScanEligibility(): Promise<{
     newPaths: string[]
     stalePaths: string[]
@@ -593,32 +600,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { newPaths, stalePaths, lastScannedAt }
   }
 
-  private async checkAutoBatteryPolicy(): Promise<{
-    allowed: boolean
-    reason?: string
-    battery?: FileIndexBatteryStatus | null
-  }> {
-    const battery = await this.getBatteryLevel()
-    if (!battery) {
-      return { allowed: true, battery }
-    }
-
-    const critical = this.fileIndexSettings.autoScanBlockBatteryBelowPercent
-    if (battery.level < critical) {
-      return { allowed: false, reason: 'battery-critical', battery }
-    }
-
-    if (battery.level >= this.fileIndexSettings.autoScanMinBatteryPercent) {
-      return { allowed: true, battery }
-    }
-
-    if (battery.charging && this.fileIndexSettings.autoScanAllowWhenCharging) {
-      return { allowed: true, battery }
-    }
-
-    return { allowed: false, reason: 'battery-low', battery }
-  }
-
   private async shouldRunAutoIndexing(): Promise<{
     allowed: boolean
     reason?: string
@@ -644,17 +625,27 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return { allowed: false, reason: 'app-busy' }
     }
 
-    const idleMs = this.getSystemIdleMs()
-    if (idleMs !== null && idleMs < this.fileIndexSettings.autoScanIdleThresholdMs) {
-      return { allowed: false, reason: 'not-idle' }
-    }
-
     const eligibility = await this.getScanEligibility()
     if (eligibility.newPaths.length === 0 && eligibility.stalePaths.length === 0) {
       return { allowed: false, reason: 'interval' }
     }
 
-    return this.checkAutoBatteryPolicy()
+    const decision = await deviceIdleService.canRun({
+      idleThresholdMs: this.fileIndexSettings.autoScanIdleThresholdMs,
+      minBatteryPercent: this.fileIndexSettings.autoScanMinBatteryPercent,
+      blockBatteryBelowPercent: this.fileIndexSettings.autoScanBlockBatteryBelowPercent,
+      allowWhenCharging: this.fileIndexSettings.autoScanAllowWhenCharging
+    })
+
+    const battery = decision.snapshot.battery
+      ? { level: decision.snapshot.battery.level, charging: decision.snapshot.battery.charging }
+      : null
+
+    if (!decision.allowed) {
+      return { allowed: false, reason: decision.reason, battery }
+    }
+
+    return { allowed: true, battery }
   }
 
   private async runAutoIndexing(): Promise<void> {
@@ -935,10 +926,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    const channel = context.touchApp.channel
+    const channel = context.touchApp.channel as unknown
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
 
-    channel.regChannel(ChannelType.MAIN, 'openers:resolve', async ({ data }) => {
-      const extension = typeof data?.extension === 'string' ? data.extension : null
+    transport.on(openerResolveEvent, async (payload) => {
+      const extension = typeof payload?.extension === 'string' ? payload.extension : null
       if (!extension) {
         return null
       }
@@ -965,15 +959,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    this.touchApp.channel
-      .send(ChannelType.MAIN, 'file-index:failed', {
+    const channel = this.touchApp.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
+
+    try {
+      transport.broadcast(fileIndexFailedEvent, {
         error: error.message,
         stack: error.stack,
         timestamp: Date.now()
       })
-      .catch((err) => {
-        this.logError('Failed to send indexing failure notification', err)
-      })
+    } catch (err) {
+      this.logError('Failed to send indexing failure notification', err)
+    }
   }
 
   /**
@@ -1057,77 +1056,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * Get battery level and charging status
    */
   public async getBatteryLevel(): Promise<FileIndexBatteryStatus | null> {
-    try {
-      const onBattery =
-        typeof powerMonitor.isOnBatteryPower === 'function'
-          ? powerMonitor.isOnBatteryPower()
-          : ((powerMonitor as any)?.onBatteryPower ?? false)
-
-      // For macOS, we can get more detailed battery info
-      if (process.platform === 'darwin') {
-        try {
-          const { stdout } = await execFileAsync('pmset', ['-g', 'batt'])
-          const match = /\d+%/.exec(stdout)
-          if (match) {
-            const level = Number.parseInt(match[0].replace('%', ''), 10)
-            return {
-              level,
-              charging: !onBattery
-            }
-          }
-        } catch (error) {
-          this.logWarn('Failed to get battery level from pmset', error)
-        }
-      }
-
-      if (process.platform === 'win32') {
-        try {
-          const { stdout } = await execFileAsync('powershell', [
-            '-NoProfile',
-            '-Command',
-            'Get-CimInstance -ClassName Win32_Battery | Select-Object -ExpandProperty EstimatedChargeRemaining | Select-Object -First 1'
-          ])
-          const value = Number.parseInt(stdout.trim(), 10)
-          if (!Number.isNaN(value)) {
-            const level = Math.max(0, Math.min(100, value))
-            return { level, charging: !onBattery }
-          }
-        } catch (error) {
-          this.logWarn('Failed to get battery level from PowerShell', error)
-        }
-      }
-
-      if (process.platform === 'linux') {
-        try {
-          const powerSupplyPath = '/sys/class/power_supply'
-          const entries = await fs.readdir(powerSupplyPath)
-          const battery = entries.find((entry) => entry.startsWith('BAT'))
-          if (battery) {
-            const capacityPath = path.join(powerSupplyPath, battery, 'capacity')
-            const content = await fs.readFile(capacityPath, 'utf8')
-            const value = Number.parseInt(content.trim(), 10)
-            if (!Number.isNaN(value)) {
-              const level = Math.max(0, Math.min(100, value))
-              return { level, charging: !onBattery }
-            }
-          }
-        } catch (error) {
-          this.logWarn('Failed to get battery level from sysfs', error)
-        }
-      }
-
-      if (onBattery) {
-        return { level: 0, charging: false }
-      }
-
-      // Fallback: assume full battery if on AC power
-      return {
-        level: 100,
-        charging: true
-      }
-    } catch (error) {
-      this.logError('Failed to check battery status', error)
-      return null
+    const status = await deviceIdleService.getBatteryStatus()
+    if (!status) return null
+    return {
+      level: status.level,
+      charging: status.charging
     }
   }
 
@@ -1191,47 +1124,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   /**
    * 注册索引管理相关的 IPC 通道
    */
-  private registerIndexingChannels(context: ProviderContext): void {
-    if (this.indexingChannelsRegistered) return
-    this.indexingChannelsRegistered = true
-
-    const channel = context.touchApp.channel
-
-    // 查询索引状态
-    channel.regChannel(ChannelType.MAIN, 'file-index:status', () => {
-      return this.getIndexingStatus()
-    })
-
-    // 手动触发重建
-    channel.regChannel(ChannelType.MAIN, 'file-index:rebuild', async ({ data }) => {
-      try {
-        return await this.rebuildIndex(data)
-      } catch (error: any) {
-        this.logError('Failed to trigger index rebuild', error)
-        return { success: false, error: error.message }
-      }
-    })
-
-    // 查询电池状态
-    channel.regChannel(ChannelType.MAIN, 'file-index:battery-level', async () => {
-      try {
-        const batteryStatus = await this.getBatteryLevel()
-        return batteryStatus
-      } catch (error: any) {
-        this.logError('Failed to get battery level', error)
-        return null
-      }
-    })
-
-    // 查询索引统计信息
-    channel.regChannel(ChannelType.MAIN, 'file-index:stats', async () => {
-      try {
-        return await this.getIndexStats()
-      } catch (error: any) {
-        this.logError('Failed to get index stats', error)
-        return { totalFiles: 0, failedFiles: 0, skippedFiles: 0 }
-      }
-    })
+  private registerIndexingChannels(_context: ProviderContext): void {
+    // Legacy channel handlers migrated to transport (AppEvents.fileIndex).* in common channel module.
   }
 
   public registerProgressStream(context: StreamContext<FileIndexProgressPayload>): void {
@@ -1532,12 +1426,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return null
     }
 
-    if (this.isOpenerNegativeCached(normalized)) {
-      return null
-    }
-
     if (this.openerCache.has(normalized)) {
       return this.openerCache.get(normalized)!
+    }
+
+    const stored = this.getOpenerFromStorageByExtension(normalized)
+    if (stored) {
+      const opener: ResolvedOpener = {
+        bundleId: stored.bundleId,
+        name: stored.name,
+        logo: this.resolveOpenerLogo(stored.logo),
+        path: stored.path,
+        lastResolvedAt: stored.lastResolvedAt ?? new Date().toISOString()
+      }
+      this.openerCache.set(normalized, opener)
+      return opener
+    }
+
+    if (this.isOpenerNegativeCached(normalized)) {
+      return null
     }
 
     let pending = this.openerPromises.get(normalized)
@@ -1606,20 +1513,44 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.scheduleOpenerIconUpdate(sanitized, bundleId, appInfo)
     }
 
+    const resolvedLogo = this.resolveOpenerLogo(logo)
     const opener: ResolvedOpener = {
       bundleId,
       name: appInfo.name,
-      logo: logo ?? '',
+      logo: resolvedLogo,
       path: appInfo.path,
       lastResolvedAt: new Date().toISOString()
     }
 
+    this.persistOpenerToStorage(sanitized, opener)
+
     return opener
+  }
+
+  private resolveOpenerLogo(logo?: string | null): string {
+    if (logo && logo.trim().length > 0) {
+      return logo
+    }
+    return EMPTY_OPENER_LOGO
+  }
+
+  private getOpenerFromStorageByExtension(extension: string): OpenerInfo | null {
+    try {
+      const raw = getMainConfig(StorageList.OPENERS) as unknown
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return null
+      }
+      const entry = (raw as Record<string, OpenerInfo>)[extension]
+      return entry ?? null
+    } catch (error) {
+      this.logWarn('Failed to read openers cache', error, { extension })
+      return null
+    }
   }
 
   private getOpenerFromStorage(extension: string, bundleId: string): OpenerInfo | null {
     try {
-      const raw = getConfig(StorageList.OPENERS) as unknown
+      const raw = getMainConfig(StorageList.OPENERS) as unknown
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
         return null
       }
@@ -1659,7 +1590,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private persistOpenerToStorage(extension: string, opener: OpenerInfo): void {
     try {
-      const raw = getConfig(StorageList.OPENERS) as unknown
+      const raw = getMainConfig(StorageList.OPENERS) as unknown
       const current =
         raw && typeof raw === 'object' && !Array.isArray(raw)
           ? (raw as Record<string, OpenerInfo>)
@@ -1679,7 +1610,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
 
       const updated = { ...current, [extension]: next }
-      saveConfig(StorageList.OPENERS, JSON.stringify(updated))
+      saveMainConfig(StorageList.OPENERS, updated)
     } catch (error) {
       this.logWarn('Failed to persist opener cache', error, { extension })
     }
@@ -2333,10 +2264,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       startTime: this.indexingStartTime,
       estimatedRemainingMs,
       averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
-    }
-
-    if (this.touchApp) {
-      this.touchApp.channel.broadcast(ChannelType.MAIN, 'file-index:progress', payload)
     }
 
     this.emitProgressStream(payload)

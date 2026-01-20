@@ -1,7 +1,7 @@
 import type { ComputedRef } from 'vue'
-import { watch } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { watch } from 'vue'
 import { openers } from '~/modules/channel/storage'
 
 interface RemoteOpener {

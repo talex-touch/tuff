@@ -3,7 +3,7 @@ import type {
   PluginInstallResult,
   PluginProvider,
   PluginProviderContext,
-  PluginProviderType,
+  PluginProviderType
 } from '@talex-touch/utils/plugin/providers'
 import type { RiskPromptHandler } from '@talex-touch/utils/plugin/risk'
 import { defaultRiskPromptHandler } from '@talex-touch/utils/plugin/risk'
@@ -29,19 +29,19 @@ export function registerProvider(provider: PluginProvider): void {
   const existing = registeredProviders.get(provider.type)
   if (existing) {
     providerRegistryLog.warn('Provider already registered, skip duplicate', {
-      meta: { provider: provider.type },
+      meta: { provider: provider.type }
     })
     return
   }
 
   const entry: ProviderEntry = {
     provider,
-    log: createProviderLogger(provider.type),
+    log: createProviderLogger(provider.type)
   }
 
   registeredProviders.set(provider.type, entry)
-  providerRegistryLog.info('Registered plugin provider', {
-    meta: { provider: provider.type },
+  providerRegistryLog.debug('Registered plugin provider', {
+    meta: { provider: provider.type }
   })
 }
 
@@ -49,12 +49,11 @@ const DEFAULT_PROVIDER_FACTORIES: Array<() => PluginProvider> = [
   () => new GithubPluginProvider(),
   () => new NpmPluginProvider(),
   () => new TpexPluginProvider(),
-  () => new FilePluginProvider(),
+  () => new FilePluginProvider()
 ]
 
 export function ensureDefaultProvidersRegistered(): void {
-  if (defaultsRegistered)
-    return
+  if (defaultsRegistered) return
 
   for (const createProvider of DEFAULT_PROVIDER_FACTORIES) {
     const provider = createProvider()
@@ -65,17 +64,17 @@ export function ensureDefaultProvidersRegistered(): void {
 }
 
 export function getRegisteredProviders(): PluginProvider[] {
-  return Array.from(registeredProviders.values(), entry => entry.provider)
+  return Array.from(registeredProviders.values(), (entry) => entry.provider)
 }
 
 export async function installFromRegistry(
   request: PluginInstallRequest,
-  context: PluginProviderContext = {},
+  context: PluginProviderContext = {}
 ): Promise<PluginInstallResult | undefined> {
   ensureDefaultProvidersRegistered()
 
   providerRegistryLog.debug('Resolving provider for request', {
-    meta: { source: request.source, hint: request.hintType },
+    meta: { source: request.source, hint: request.hintType }
   })
 
   let selected: ProviderEntry | undefined
@@ -84,11 +83,10 @@ export async function installFromRegistry(
     let handled = false
     try {
       handled = entry.provider.canHandle(request)
-    }
-    catch (error) {
+    } catch (error) {
       entry.log.error('canHandle() threw exception', {
         meta: { source: request.source },
-        error,
+        error
       })
       handled = false
     }
@@ -96,8 +94,8 @@ export async function installFromRegistry(
     entry.log.debug('Provider capability check', {
       meta: {
         source: request.source,
-        handled: handled ? 'true' : 'false',
-      },
+        handled: handled ? 'true' : 'false'
+      }
     })
 
     if (handled) {
@@ -108,7 +106,7 @@ export async function installFromRegistry(
 
   if (!selected) {
     providerRegistryLog.warn('No provider found to handle this request', {
-      meta: { source: request.source, hint: request.hintType },
+      meta: { source: request.source, hint: request.hintType }
     })
     return undefined
   }
@@ -116,12 +114,12 @@ export async function installFromRegistry(
   const timer = selected.log.time('install')
   const resolvedContext: PluginProviderContext = {
     ...context,
-    riskPrompt: resolveRiskPrompt(context.riskPrompt),
+    riskPrompt: resolveRiskPrompt(context.riskPrompt)
   }
 
   try {
     selected.log.info('Starting plugin resource installation', {
-      meta: { source: request.source },
+      meta: { source: request.source }
     })
 
     const result = await selected.provider.install(request, resolvedContext)
@@ -130,20 +128,19 @@ export async function installFromRegistry(
       meta: {
         provider: selected.provider.type,
         official: result.official ? 'true' : 'false',
-        filePath: result.filePath ?? 'N/A',
-      },
+        filePath: result.filePath ?? 'N/A'
+      }
     })
 
     timer.end('install')
     return result
-  }
-  catch (error) {
+  } catch (error) {
     selected.log.error('Plugin resource installation failed', {
       meta: {
         source: request.source,
-        provider: selected.provider.type,
+        provider: selected.provider.type
       },
-      error,
+      error
     })
     timer.end('install', { level: 'error' as any })
     throw error

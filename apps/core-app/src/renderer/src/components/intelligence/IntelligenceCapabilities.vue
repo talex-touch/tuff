@@ -1,8 +1,8 @@
 <script setup name="IntelligenceCapabilities" lang="ts">
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'

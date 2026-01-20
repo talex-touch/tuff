@@ -5,6 +5,7 @@ import type {
   WorkerMetricsResponse
 } from './worker-status'
 import { performance } from 'node:perf_hooks'
+import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { scanDirectory } from '@talex-touch/utils/common/file-scan-utils'
 

@@ -3,6 +3,9 @@ import type { TouchApp } from './touch-app'
 import path from 'node:path'
 import fse from 'fs-extra'
 import { checkDirWithCreate } from '../utils/common-util'
+import { createLogger } from '../utils/logger'
+
+const touchConfigLog = createLogger('TouchConfig')
 
 export class TouchConfig implements TalexTouch.IConfiguration {
   configPath: string
@@ -16,8 +19,8 @@ export class TouchConfig implements TalexTouch.IConfiguration {
     this.data = {
       frame: {
         height: 1280,
-        width: 780,
-      },
+        width: 780
+      }
     }
   }
 
@@ -25,6 +28,6 @@ export class TouchConfig implements TalexTouch.IConfiguration {
     const configFilePath = path.resolve(this.configPath, 'config.ini')
     fse.writeFileSync(configFilePath, JSON.stringify(this.data))
 
-    console.log('[TouchConfig] Default config updated!')
+    touchConfigLog.info('Default config updated')
   }
 }

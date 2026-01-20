@@ -29,10 +29,12 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PerfSummary } from '../../utils/perf-monitor'
 import type { AnalyticsMessageStore } from './message-store'
 import type { StartupHistory, StartupMetrics } from './types'
+import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import process from 'node:process'
 import { app } from 'electron'
 import { getStartupAnalytics } from '.'
 import { setIpcTracer } from '../../core/channel-core'
@@ -41,7 +43,7 @@ import { setPerfSummaryReporter } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { pluginModule } from '../plugin/plugin-module'
-import { getConfig } from '../storage'
+import { getMainConfig } from '../storage'
 import { SystemSampler } from './collectors/system-sampler'
 import { AnalyticsCore } from './core/analytics-core'
 import { getAnalyticsMessageStore } from './message-store'
@@ -432,7 +434,7 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private getMessageReportConfig(): { enabled: boolean; anonymous: boolean } {
-    const config = getConfig('sentry-config.json') as
+    const config = getMainConfig(StorageList.SENTRY_CONFIG) as
       | { enabled?: boolean; anonymous?: boolean }
       | undefined
     return {

@@ -1,7 +1,7 @@
 <script name="IconButton" lang="ts" setup>
+import { TxButton } from '@talex-touch/tuffex'
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { TxButton } from '@talex-touch/tuffex'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = defineProps({

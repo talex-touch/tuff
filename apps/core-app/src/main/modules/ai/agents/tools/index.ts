@@ -4,13 +4,14 @@
  * Built-in tools for agents to use.
  */
 
-export { registerFileTools } from './file-tools'
+import { registerFileTools } from './file-tools'
+
+export { registerFileTools }
 
 /**
  * Register all built-in tools
  */
 export function registerBuiltinTools(): void {
   // Import and register all tool categories
-  const { registerFileTools } = require('./file-tools')
   registerFileTools()
 }

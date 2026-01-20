@@ -15,6 +15,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import process from 'node:process'
+import { StorageList } from '@talex-touch/utils'
 import {
   getBooleanEnv,
   getEnvOrDefault,
@@ -24,18 +25,18 @@ import {
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
-import { getConfig, saveConfig } from '../storage'
+import { getMainConfig, saveMainConfig } from '../storage'
 import { ReportQueueStore } from './report-queue-store'
 import { getOrCreateTelemetryClientId } from './telemetry-client'
 
 const analyticsLog = createLogger('StartupAnalytics')
-const REPORT_QUEUE_FILE = 'startup-analytics-report-queue.json'
+const REPORT_QUEUE_FILE = StorageList.STARTUP_ANALYTICS_REPORT_QUEUE
 const REPORT_QUEUE_MAX_AGE = 14 * 24 * 60 * 60 * 1000
 const REPORT_QUEUE_MAX_COUNT = 120
 const REPORT_QUEUE_BACKOFF_BASE_MS = 30_000
 const REPORT_QUEUE_BACKOFF_MAX_MS = 10 * 60_000
 
-interface FileReportQueueItem {
+export interface FileReportQueueItem {
   payload: any
   endpoint: string
   createdAt: number
@@ -149,8 +150,8 @@ export class StartupAnalytics {
    */
   getHistory(): StartupHistory {
     try {
-      // Import storage module dynamically to avoid circular dependencies
-      const history = getConfig('startup-analytics.json') as StartupHistory
+      // Load persisted history from storage
+      const history = getMainConfig(StorageList.STARTUP_ANALYTICS) as StartupHistory
 
       if (history && Array.isArray(history.entries)) {
         return history
@@ -188,7 +189,7 @@ export class StartupAnalytics {
 
       history.lastUpdated = Date.now()
 
-      saveConfig('startup-analytics.json', JSON.stringify(history, null, 2))
+      saveMainConfig(StorageList.STARTUP_ANALYTICS, history)
 
       analyticsLog.success('Metrics saved to history', {
         meta: {
@@ -225,7 +226,7 @@ export class StartupAnalytics {
 
   private loadReportQueue(): FileReportQueueItem[] {
     try {
-      const data = getConfig(REPORT_QUEUE_FILE) as unknown
+      const data = getMainConfig(REPORT_QUEUE_FILE) as unknown
       if (Array.isArray(data)) return data as FileReportQueueItem[]
       if (typeof data === 'string') {
         const parsed = JSON.parse(data)
@@ -252,7 +253,7 @@ export class StartupAnalytics {
         lastAttemptAt: item.lastAttemptAt
       }))
 
-    saveConfig(REPORT_QUEUE_FILE, JSON.stringify(pruned, null, 2))
+    saveMainConfig(REPORT_QUEUE_FILE, pruned)
   }
 
   private getReportQueueStore(): ReportQueueStore | null {

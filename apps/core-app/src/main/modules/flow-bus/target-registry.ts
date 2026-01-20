@@ -285,7 +285,7 @@ export class FlowTargetRegistry {
    * Adapted plugins first, then unadapted plugins at the end
    */
   getTargetsSortedByAdaptation(payloadType?: FlowPayloadType): FlowTargetInfo[] {
-    let targets = payloadType ? this.getTargetsByPayloadType(payloadType) : this.getAllTargets()
+    const targets = payloadType ? this.getTargetsByPayloadType(payloadType) : this.getAllTargets()
 
     // Sort: native share first, then adapted, then unadapted
     return targets.sort((a, b) => {

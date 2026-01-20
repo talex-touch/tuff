@@ -13,6 +13,7 @@ import type {
   PluginStateEvent,
   TriggerFeatureRequest
 } from '@talex-touch/utils/plugin/sdk/types'
+import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 
@@ -45,6 +46,8 @@ class PluginSDK {
    */
   private initializeEventListener(): void {
     if (this.initialized) return
+
+    if (!tryUseChannel()) return
 
     this.transportDisposers.push(
       pluginTransportSdk.onStateChanged((event) => {

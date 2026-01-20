@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { app } from 'electron'
 
 /**
@@ -8,9 +9,7 @@ import { app } from 'electron'
  */
 export function getAppVersion(): string {
   // Priority 1: Global package object (set by polyfills.ts)
-  // @ts-ignore - globalThis.$pkg is defined in polyfills.ts
   if (typeof globalThis.$pkg !== 'undefined' && globalThis.$pkg?.version) {
-    // @ts-ignore
     return globalThis.$pkg.version
   }
 
@@ -22,8 +21,7 @@ export function getAppVersion(): string {
   // Priority 3: Electron app.getVersion() (if available)
   try {
     return app.getVersion()
-  }
-  catch {
+  } catch {
     // ignore
   }
 
@@ -35,9 +33,7 @@ export function getAppVersion(): string {
  * @returns Application version string or null if not available
  */
 export function getAppVersionFromGlobal(): string | null {
-  // @ts-ignore - globalThis.$pkg is defined in polyfills.ts
   if (typeof globalThis.$pkg !== 'undefined' && globalThis.$pkg?.version) {
-    // @ts-ignore
     return globalThis.$pkg.version
   }
   return null

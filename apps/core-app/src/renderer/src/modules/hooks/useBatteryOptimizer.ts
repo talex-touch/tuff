@@ -1,6 +1,6 @@
-import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 
 interface BatteryStatusPayload {

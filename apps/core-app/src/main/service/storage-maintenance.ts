@@ -2,11 +2,12 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { StorageCleanupResult } from './types/storage-maintenance'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { app } from 'electron'
 import { eq, lt, sql } from 'drizzle-orm'
+import { app } from 'electron'
 import {
   analyticsReportQueue,
   analyticsSnapshots,
+  appUpdateRecords,
   config,
   downloadChunks,
   downloadHistory,
@@ -20,7 +21,7 @@ import {
   intelligenceUsageStats,
   itemTimeStats,
   itemUsageStats,
-  usageTrendDaily,
+  keywordMappings,
   ocrJobs,
   ocrResults,
   pluginAnalytics,
@@ -31,8 +32,7 @@ import {
   telemetryUploadStats,
   usageLogs,
   usageSummary,
-  keywordMappings,
-  appUpdateRecords
+  usageTrendDaily
 } from '../db/schema'
 import { clipboardModule } from '../modules/clipboard'
 import { databaseModule } from '../modules/database'

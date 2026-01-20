@@ -1,9 +1,10 @@
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IClipboardOptions } from './types'
-import { useDocumentVisibility } from '@vueuse/core'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { useDocumentVisibility } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
@@ -35,9 +36,29 @@ export function useVisibility(options: UseVisibilityOptions) {
   const transport = useTuffTransport()
   const visibility = useDocumentVisibility()
   const wasTriggeredByShortcut = ref(false)
+  let lastVisibleState: boolean | null = null
+
+  const coreBoxTrigger = defineRawEvent<Record<string, unknown>, void>('core-box:trigger')
+
+  const applyVisibility = (visible: boolean): void => {
+    if (lastVisibleState === visible) return
+    lastVisibleState = visible
+    if (visible) {
+      onShow()
+    } else {
+      onHide()
+    }
+  }
 
   const unregisterShortcutTrigger = transport.on(CoreBoxEvents.ui.shortcutTriggered, () => {
     wasTriggeredByShortcut.value = true
+  })
+  const unregisterCoreBoxTrigger = transport.on(coreBoxTrigger, (payload) => {
+    if (!payload || typeof payload !== 'object') return
+    const show = (payload as { show?: unknown }).show
+    if (typeof show === 'boolean') {
+      applyVisibility(show)
+    }
   })
 
   function onHide(): void {
@@ -97,16 +118,15 @@ export function useVisibility(options: UseVisibilityOptions) {
   watch(
     () => visibility.value,
     (visible) => {
-      if (visible) {
-        onShow()
-      } else {
-        onHide()
-      }
+      applyVisibility(visible === 'visible')
     }
   )
 
   return {
     visibility,
-    cleanup: () => unregisterShortcutTrigger()
+    cleanup: () => {
+      unregisterShortcutTrigger()
+      unregisterCoreBoxTrigger()
+    }
   }
 }

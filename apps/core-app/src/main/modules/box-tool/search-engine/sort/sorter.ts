@@ -1,5 +1,8 @@
 import type { TuffItem, TuffQuery } from '@talex-touch/utils'
 import type { ISortMiddleware, SortStat } from '../types'
+import { createLogger } from '../../../../utils/logger'
+
+const sorterLog = createLogger('SearchEngine').child('Sorter')
 
 /**
  * The result of a sort operation, including the sorted items and performance statistics.
@@ -37,7 +40,7 @@ export class Sorter {
 
     for (const middleware of this.middlewares) {
       if (signal.aborted) {
-        console.debug(`[Sorter] Sorting aborted by signal during middleware: ${middleware.name}`)
+        sorterLog.debug(`Sorting aborted by signal during middleware: ${middleware.name}`)
         break // Exit the loop if sorting is aborted
       }
       const startTime = performance.now()
@@ -46,13 +49,13 @@ export class Sorter {
 
       stats.push({
         name: middleware.name,
-        duration: endTime - startTime,
+        duration: endTime - startTime
       })
     }
 
     return {
       sortedItems: processedItems,
-      stats,
+      stats
     }
   }
 }

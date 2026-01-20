@@ -6,11 +6,11 @@
  */
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { ElEmpty, ElTag } from 'element-plus'
-import { computed, onMounted, ref, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PermissionEvents } from '@talex-touch/utils/transport/events'
-import { TxButton } from '@talex-touch/tuffex'
+import { ElEmpty, ElTag } from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'

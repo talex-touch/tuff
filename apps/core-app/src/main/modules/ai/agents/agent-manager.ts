@@ -20,17 +20,17 @@ import type { AgentImpl, AgentRegistry } from './agent-registry'
 import type { AgentScheduler } from './agent-scheduler'
 import type { ToolExecutorFn, ToolRegistry } from './tool-registry'
 import { EventEmitter } from 'node:events'
-import chalk from 'chalk'
 import { agentExecutor } from './agent-executor'
 import { agentRegistry } from './agent-registry'
 import { agentScheduler } from './agent-scheduler'
-import { toolRegistry } from './tool-registry'
 import { agentContextManager } from './memory'
+import { toolRegistry } from './tool-registry'
+import { createLogger } from '../../../utils/logger'
 
-const TAG = chalk.hex('#9c27b0').bold('[AgentManager]')
-const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
-const logWarn = (...args: unknown[]) =>
-  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
+const agentManagerLog = createLogger('Intelligence').child('AgentManager')
+const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
+const logInfo = (...args: unknown[]) => agentManagerLog.info(formatLogArgs(args))
+const logWarn = (...args: unknown[]) => agentManagerLog.warn(formatLogArgs(args))
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null

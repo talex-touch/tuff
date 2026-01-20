@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 
 interface AppInfo {
   name: string
@@ -14,7 +15,7 @@ interface AppInfo {
 const APP_PATHS = [
   '/usr/share/applications',
   '/var/lib/snapd/desktop/applications',
-  `${os.homedir()}/.local/share/applications`,
+  `${os.homedir()}/.local/share/applications`
 ]
 
 async function findIconPath(iconName: string): Promise<string> {
@@ -89,10 +90,9 @@ async function parseDesktopFile(desktopFilePath: string): Promise<AppInfo | null
       icon: iconPath ? `file://${iconPath}` : '',
       bundleId: '',
       uniqueId: desktopFilePath, // Use .desktop file path as uniqueId
-      lastModified: stats.mtime,
+      lastModified: stats.mtime
     }
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -107,28 +107,25 @@ async function findDesktopFiles(dir: string): Promise<string[]> {
         const stats = await fs.stat(fullPath)
         if (stats.isDirectory()) {
           desktopFiles = desktopFiles.concat(await findDesktopFiles(fullPath))
-        }
-        else if (file.endsWith('.desktop')) {
+        } else if (file.endsWith('.desktop')) {
           desktopFiles.push(fullPath)
         }
-      }
-      catch {
+      } catch {
         // ignore individual file errors
       }
     }
-  }
-  catch {
+  } catch {
     // ignore directory errors
   }
   return desktopFiles
 }
 
 export async function getApps(): Promise<AppInfo[]> {
-  const allDesktopFilesPromises = APP_PATHS.map(p => findDesktopFiles(p))
+  const allDesktopFilesPromises = APP_PATHS.map((p) => findDesktopFiles(p))
   const nestedDesktopFiles = await Promise.all(allDesktopFilesPromises)
   const allDesktopFiles = nestedDesktopFiles.flat()
 
-  const appInfoPromises = allDesktopFiles.map(file => parseDesktopFile(file))
+  const appInfoPromises = allDesktopFiles.map((file) => parseDesktopFile(file))
   const results = await Promise.all(appInfoPromises)
 
   return results.filter((app): app is AppInfo => app !== null)

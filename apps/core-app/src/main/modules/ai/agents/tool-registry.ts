@@ -5,14 +5,13 @@
  */
 
 import type { AgentPermission, AgentTool, JsonSchema, ToolResult } from '@talex-touch/utils'
-import chalk from 'chalk'
+import { createLogger } from '../../../utils/logger'
 
-const TAG = chalk.hex('#9c27b0').bold('[ToolRegistry]')
-const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
-const logWarn = (...args: unknown[]) =>
-  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
-const logDebug = (...args: unknown[]) =>
-  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
+const toolRegistryLog = createLogger('Intelligence').child('ToolRegistry')
+const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
+const logInfo = (...args: unknown[]) => toolRegistryLog.info(formatLogArgs(args))
+const logWarn = (...args: unknown[]) => toolRegistryLog.warn(formatLogArgs(args))
+const logDebug = (...args: unknown[]) => toolRegistryLog.debug(formatLogArgs(args))
 
 /**
  * Tool execution context

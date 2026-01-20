@@ -1,9 +1,8 @@
 <script setup lang="ts" name="MarketHeader">
 import type { MarketProviderResultMeta } from '@talex-touch/utils/market'
-import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
+import { TxButton, TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
 import TLabelSelect from '~/components/base/select/TLabelSelect.vue'
 import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'

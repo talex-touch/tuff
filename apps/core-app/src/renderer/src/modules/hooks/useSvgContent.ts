@@ -1,5 +1,5 @@
 import type { RetrierOptions } from '@talex-touch/utils'
-import { DownloadModule, DownloadPriority, DownloadStatus, createRetrier } from '@talex-touch/utils'
+import { createRetrier, DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -220,7 +220,7 @@ export function useSvgContent(
   }
 
   async function doFetch(): Promise<string> {
-    let targetUrl = normalizeSource(url.value)
+    const targetUrl = normalizeSource(url.value)
     if (!targetUrl) return ''
 
     if (isLocalSource(targetUrl)) {

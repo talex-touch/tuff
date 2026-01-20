@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { Delete, Download, Refresh } from '@element-plus/icons-vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { ElMessageBox } from 'element-plus'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { DownloadEvents } from '@talex-touch/utils/transport/events'
 
 const props = defineProps<Props>()
 

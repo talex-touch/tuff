@@ -9,12 +9,25 @@ import type {
   BoxItemManagerOptions,
   BoxItemSyncResponseEvent,
   BoxItemUpdateEvent,
-  BoxItemUpsertEvent,
+  BoxItemUpsertEvent
 } from './types'
-import { ChannelType } from '@talex-touch/utils/channel'
-import { genTouchChannel } from '../../../core/channel-core'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { genTouchApp } from '../../../core'
 import { getCoreBoxWindow } from '../core-box'
 import { BOX_ITEM_CHANNELS } from './channels'
+
+const BOX_ITEM_EVENTS = {
+  CREATE: defineRawEvent<BoxItemCreateEvent, void>(BOX_ITEM_CHANNELS.CREATE),
+  UPDATE: defineRawEvent<BoxItemUpdateEvent, void>(BOX_ITEM_CHANNELS.UPDATE),
+  UPSERT: defineRawEvent<BoxItemUpsertEvent, void>(BOX_ITEM_CHANNELS.UPSERT),
+  DELETE: defineRawEvent<BoxItemDeleteEvent, void>(BOX_ITEM_CHANNELS.DELETE),
+  BATCH_UPSERT: defineRawEvent<BoxItemBatchUpsertEvent, void>(BOX_ITEM_CHANNELS.BATCH_UPSERT),
+  BATCH_DELETE: defineRawEvent<BoxItemBatchDeleteEvent, void>(BOX_ITEM_CHANNELS.BATCH_DELETE),
+  CLEAR: defineRawEvent<BoxItemClearEvent, void>(BOX_ITEM_CHANNELS.CLEAR),
+  SYNC: defineRawEvent<void, void>(BOX_ITEM_CHANNELS.SYNC),
+  SYNC_RESPONSE: defineRawEvent<BoxItemSyncResponseEvent, void>(BOX_ITEM_CHANNELS.SYNC_RESPONSE)
+} as const
 
 /**
  * BoxItem 管理器
@@ -23,14 +36,17 @@ import { BOX_ITEM_CHANNELS } from './channels'
 export class BoxItemManager {
   private items = new Map<string, TuffItem>()
   private readonly options: Required<BoxItemManagerOptions>
-  private readonly channel = genTouchChannel()
+  private readonly transport: ReturnType<typeof getTuffTransportMain>
 
   constructor(options: BoxItemManagerOptions = {}) {
     this.options = {
       enableLogging: options.enableLogging ?? false,
-      maxItems: options.maxItems ?? 10000,
+      maxItems: options.maxItems ?? 10000
     }
+    const channel = genTouchApp().channel as any
+    this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
 
+    this.registerTransportHandlers()
     this.log('BoxItemManager initialized')
   }
 
@@ -57,7 +73,7 @@ export class BoxItemManager {
     }
 
     this.items.set(item.id, item)
-    this.emitToRenderer<BoxItemCreateEvent>(BOX_ITEM_CHANNELS.CREATE, { item })
+    this.emitToRenderer<BoxItemCreateEvent>(BOX_ITEM_EVENTS.CREATE, { item })
     this.log(`Created item: ${item.id}`)
   }
 
@@ -81,7 +97,7 @@ export class BoxItemManager {
     }
 
     this.items.set(id, updated)
-    this.emitToRenderer<BoxItemUpdateEvent>(BOX_ITEM_CHANNELS.UPDATE, { id, updates })
+    this.emitToRenderer<BoxItemUpdateEvent>(BOX_ITEM_EVENTS.UPDATE, { id, updates })
     this.log(`Updated item: ${id}`)
   }
 
@@ -102,8 +118,7 @@ export class BoxItemManager {
       const existing = this.items.get(item.id)!
       const merged = this.deepMerge(existing, item)
       this.items.set(item.id, merged)
-    }
-    else {
+    } else {
       // 创建
       if (this.items.size >= this.options.maxItems) {
         this.logWarn(`Max items limit (${this.options.maxItems}) reached. Cannot upsert new item.`)
@@ -112,7 +127,9 @@ export class BoxItemManager {
       this.items.set(item.id, item)
     }
 
-    this.emitToRenderer<BoxItemUpsertEvent>(BOX_ITEM_CHANNELS.UPSERT, { item: this.items.get(item.id)! })
+    this.emitToRenderer<BoxItemUpsertEvent>(BOX_ITEM_EVENTS.UPSERT, {
+      item: this.items.get(item.id)!
+    })
     this.log(`Upserted item: ${item.id} (${exists ? 'updated' : 'created'})`)
   }
 
@@ -127,7 +144,7 @@ export class BoxItemManager {
     }
 
     this.items.delete(id)
-    this.emitToRenderer<BoxItemDeleteEvent>(BOX_ITEM_CHANNELS.DELETE, { id })
+    this.emitToRenderer<BoxItemDeleteEvent>(BOX_ITEM_EVENTS.DELETE, { id })
     this.log(`Deleted item: ${id}`)
   }
 
@@ -142,7 +159,7 @@ export class BoxItemManager {
       return
     }
 
-    const validItems = items.filter(item => this.validateItem(item, false))
+    const validItems = items.filter((item) => this.validateItem(item, false))
 
     if (validItems.length === 0) {
       this.logWarn('No valid items to upsert in batch')
@@ -150,10 +167,10 @@ export class BoxItemManager {
     }
 
     // 检查空间是否足够
-    const newItemsCount = validItems.filter(item => !this.items.has(item.id)).length
+    const newItemsCount = validItems.filter((item) => !this.items.has(item.id)).length
     if (this.items.size + newItemsCount > this.options.maxItems) {
       this.logWarn(
-        `Batch upsert would exceed max items limit (${this.options.maxItems}). Operation cancelled.`,
+        `Batch upsert would exceed max items limit (${this.options.maxItems}). Operation cancelled.`
       )
       return
     }
@@ -164,14 +181,13 @@ export class BoxItemManager {
       if (exists) {
         const existing = this.items.get(item.id)!
         this.items.set(item.id, this.deepMerge(existing, item))
-      }
-      else {
+      } else {
         this.items.set(item.id, item)
       }
     })
 
-    this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_CHANNELS.BATCH_UPSERT, {
-      items: validItems.map(item => this.items.get(item.id)!),
+    this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_EVENTS.BATCH_UPSERT, {
+      items: validItems.map((item) => this.items.get(item.id)!)
     })
     if (this.options.enableLogging) {
       this.log(`Batch upserted ${validItems.length} items`)
@@ -187,16 +203,16 @@ export class BoxItemManager {
       return
     }
 
-    const existingIds = ids.filter(id => this.items.has(id))
+    const existingIds = ids.filter((id) => this.items.has(id))
 
     if (existingIds.length === 0) {
       this.logWarn('No existing items to delete in batch')
       return
     }
 
-    existingIds.forEach(id => this.items.delete(id))
+    existingIds.forEach((id) => this.items.delete(id))
 
-    this.emitToRenderer<BoxItemBatchDeleteEvent>(BOX_ITEM_CHANNELS.BATCH_DELETE, { ids: existingIds })
+    this.emitToRenderer<BoxItemBatchDeleteEvent>(BOX_ITEM_EVENTS.BATCH_DELETE, { ids: existingIds })
     this.log(`Batch deleted ${existingIds.length} items`)
   }
 
@@ -225,7 +241,7 @@ export class BoxItemManager {
    * @returns 匹配的 items 数组
    */
   getBySource(source: string): TuffItem[] {
-    return Array.from(this.items.values()).filter(item => item.source?.id === source)
+    return Array.from(this.items.values()).filter((item) => item.source?.id === source)
   }
 
   /**
@@ -252,17 +268,16 @@ export class BoxItemManager {
         }
       })
 
-      toDelete.forEach(id => this.items.delete(id))
+      toDelete.forEach((id) => this.items.delete(id))
       this.log(`Cleared ${toDelete.length} items from source: ${source}`)
-    }
-    else {
+    } else {
       // 清空所有
       const count = this.items.size
       this.items.clear()
       this.log(`Cleared all ${count} items`)
     }
 
-    this.emitToRenderer<BoxItemClearEvent>(BOX_ITEM_CHANNELS.CLEAR, { source })
+    this.emitToRenderer<BoxItemClearEvent>(BOX_ITEM_EVENTS.CLEAR, { source })
   }
 
   // ==================== 同步操作 ====================
@@ -273,11 +288,71 @@ export class BoxItemManager {
    */
   handleSyncRequest(): void {
     const items = this.getAll()
-    this.emitToRenderer<BoxItemSyncResponseEvent>(BOX_ITEM_CHANNELS.SYNC_RESPONSE, { items })
+    this.emitToRenderer<BoxItemSyncResponseEvent>(BOX_ITEM_EVENTS.SYNC_RESPONSE, { items })
     this.log(`Synced ${items.length} items to renderer`)
   }
 
   // ==================== 内部方法 ====================
+
+  private registerTransportHandlers(): void {
+    const allowRenderer = (context: any): boolean => !context?.plugin
+
+    this.transport.on(BOX_ITEM_EVENTS.CREATE, (payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.create(payload.item)
+    })
+
+    this.transport.on(BOX_ITEM_EVENTS.UPDATE, (payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.update(payload.id, payload.updates)
+    })
+
+    this.transport.on(BOX_ITEM_EVENTS.UPSERT, (payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.upsert(payload.item)
+    })
+
+    this.transport.on(BOX_ITEM_EVENTS.DELETE, (payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.delete(payload.id)
+    })
+
+    this.transport.on(BOX_ITEM_EVENTS.BATCH_UPSERT, (payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.batchUpsert(payload.items)
+    })
+
+    this.transport.on(BOX_ITEM_EVENTS.BATCH_DELETE, (payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.batchDelete(payload.ids)
+    })
+
+    this.transport.on(BOX_ITEM_EVENTS.CLEAR, (payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.clear(payload.source)
+    })
+
+    this.transport.on(BOX_ITEM_EVENTS.SYNC, (_payload, context) => {
+      if (!allowRenderer(context)) {
+        return
+      }
+      this.handleSyncRequest()
+    })
+  }
 
   /**
    * 验证 item 是否有效
@@ -287,20 +362,17 @@ export class BoxItemManager {
    */
   private validateItem(item: TuffItem, logError = true): boolean {
     if (!item) {
-      if (logError)
-        this.logWarn('Item is null or undefined')
+      if (logError) this.logWarn('Item is null or undefined')
       return false
     }
 
     if (!item.id) {
-      if (logError)
-        this.logWarn('Item must have an id')
+      if (logError) this.logWarn('Item must have an id')
       return false
     }
 
     if (!item.source) {
-      if (logError)
-        this.logWarn(`Item ${item.id} must have a source`)
+      if (logError) this.logWarn(`Item ${item.id} must have a source`)
       return false
     }
 
@@ -324,10 +396,9 @@ export class BoxItemManager {
         // 递归合并对象
         result[key as keyof T] = this.deepMerge(
           targetValue || ({} as any),
-          sourceValue as any,
+          sourceValue as any
         ) as any
-      }
-      else {
+      } else {
         // 直接赋值（包括数组、基本类型、null、undefined）
         result[key as keyof T] = sourceValue as any
       }
@@ -341,18 +412,19 @@ export class BoxItemManager {
    * @param channel - channel 名称
    * @param data - 事件数据
    */
-  private emitToRenderer<T = any>(channel: string, data: T): void {
+  private emitToRenderer<T = any>(
+    event: (typeof BOX_ITEM_EVENTS)[keyof typeof BOX_ITEM_EVENTS],
+    data: T
+  ): void {
     const coreBoxWindow = this.getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.isDestroyed()) {
       this.logWarn('CoreBox window not available, cannot emit event')
       return
     }
 
-    this.channel
-      .sendTo(coreBoxWindow, ChannelType.MAIN, channel, data)
-      .catch((error) => {
-        this.logWarn(`Failed to send ${channel} event:`, error)
-      })
+    this.transport.sendToWindow(coreBoxWindow.id, event as any, data).catch((error) => {
+      this.logWarn(`Failed to send ${event.toEventName()} event:`, error)
+    })
   }
 
   /**

@@ -391,11 +391,12 @@ async function executeClean(
         changes += lowercaseStrings(cleaned)
         break
 
-      case 'removeEmpty':
+      case 'removeEmpty': {
         const removedCount = removeEmpty(cleaned)
         removed += removedCount
         changes += removedCount
         break
+      }
 
       case 'dedupe':
         if (Array.isArray(cleaned)) {

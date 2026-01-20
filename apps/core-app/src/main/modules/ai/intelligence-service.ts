@@ -1,11 +1,15 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/utils'
 import { IntelligenceProviderType } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
-import chalk from 'chalk'
 import { genTouchChannel } from '../../core/channel-core'
+import { createLogger } from '../../utils/logger'
 import { capabilityTesterRegistry } from './capability-testers'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
-import { ensureAiConfigLoaded, getCapabilityOptions, setupConfigUpdateListener } from './intelligence-config'
+import {
+  ensureAiConfigLoaded,
+  getCapabilityOptions,
+  setupConfigUpdateListener
+} from './intelligence-config'
 import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
 import { fetchProviderModels } from './provider-models'
 import { AnthropicProvider } from './providers/anthropic-provider'
@@ -15,9 +19,10 @@ import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
 
-const LOG = chalk.hex('#1e88e5').bold('[Intelligence]')
-const logInfo = (...args: any[]) => console.log(LOG, ...args)
-const logError = (...args: any[]) => console.error(LOG, ...args)
+const intelligenceServiceLog = createLogger('Intelligence').child('Service')
+const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
+const logInfo = (...args: unknown[]) => intelligenceServiceLog.info(formatLogArgs(args))
+const logError = (...args: unknown[]) => intelligenceServiceLog.error(formatLogArgs(args))
 
 let initialized = false
 
@@ -32,11 +37,20 @@ export function initAiSdkService(): void {
   initialized = true
 
   const manager = new IntelligenceProviderManager()
-  manager.registerFactory(IntelligenceProviderType.OPENAI, config => new OpenAIProvider(config))
-  manager.registerFactory(IntelligenceProviderType.DEEPSEEK, config => new DeepSeekProvider(config))
-  manager.registerFactory(IntelligenceProviderType.SILICONFLOW, config => new SiliconflowProvider(config))
-  manager.registerFactory(IntelligenceProviderType.LOCAL, config => new LocalProvider(config))
-  manager.registerFactory(IntelligenceProviderType.ANTHROPIC, config => new AnthropicProvider(config))
+  manager.registerFactory(IntelligenceProviderType.OPENAI, (config) => new OpenAIProvider(config))
+  manager.registerFactory(
+    IntelligenceProviderType.DEEPSEEK,
+    (config) => new DeepSeekProvider(config)
+  )
+  manager.registerFactory(
+    IntelligenceProviderType.SILICONFLOW,
+    (config) => new SiliconflowProvider(config)
+  )
+  manager.registerFactory(IntelligenceProviderType.LOCAL, (config) => new LocalProvider(config))
+  manager.registerFactory(
+    IntelligenceProviderType.ANTHROPIC,
+    (config) => new AnthropicProvider(config)
+  )
   setIntelligenceProviderManager(manager)
   logInfo('Provider factories registered')
 
@@ -61,14 +75,15 @@ export function initAiSdkService(): void {
       ensureAiConfigLoaded()
       logInfo(`Invoking capability ${capabilityId}`)
       const result = await ai.invoke(capabilityId, payload, options)
-      logInfo(`Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`)
+      logInfo(
+        `Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`
+      )
       reply(DataCode.SUCCESS, { ok: true, result })
-    }
-    catch (error) {
+    } catch (error) {
       logError('Invoke failed:', error)
       reply(DataCode.ERROR, {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
     }
   })
@@ -87,14 +102,13 @@ export function initAiSdkService(): void {
 
       reply(DataCode.SUCCESS, {
         ok: true,
-        result,
+        result
       })
-    }
-    catch (error) {
+    } catch (error) {
       logError('Provider test failed:', error)
       reply(DataCode.ERROR, {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
     }
   })
@@ -134,24 +148,25 @@ export function initAiSdkService(): void {
       // 执行测试
       const result = await ai.invoke(capabilityId, payload, {
         modelPreference: options.modelPreference,
-        allowedProviderIds,
+        allowedProviderIds
       })
 
       // 格式化结果
       const formattedResult = tester.formatTestResult(result)
 
-      logInfo(`Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`)
+      logInfo(
+        `Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`
+      )
 
       reply(DataCode.SUCCESS, {
         ok: true,
-        result: formattedResult,
+        result: formattedResult
       })
-    }
-    catch (error) {
+    } catch (error) {
       logError('Capability test failed:', error)
       reply(DataCode.ERROR, {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
     }
   })
@@ -170,15 +185,14 @@ export function initAiSdkService(): void {
         ok: true,
         result: {
           success: true,
-          models,
-        },
+          models
+        }
       })
-    }
-    catch (error) {
+    } catch (error) {
       logError('Fetch models failed:', error)
       reply(DataCode.ERROR, {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
     }
   })
@@ -188,12 +202,11 @@ export function initAiSdkService(): void {
       logInfo('Reloading config on demand')
       ensureAiConfigLoaded(true)
       reply(DataCode.SUCCESS, { ok: true })
-    }
-    catch (error) {
+    } catch (error) {
       logError('Reload config failed:', error)
       reply(DataCode.ERROR, {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       })
     }
   })

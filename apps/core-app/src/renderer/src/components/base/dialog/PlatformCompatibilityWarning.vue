@@ -1,6 +1,6 @@
 <script lang="ts" name="PlatformCompatibilityWarning" setup>
-import { ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { ref } from 'vue'
 
 /**
  * Props for the PlatformCompatibilityWarning component

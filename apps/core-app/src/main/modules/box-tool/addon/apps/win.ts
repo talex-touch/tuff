@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { shell } from 'electron'
 import { reportAppScanError } from './app-error-reporter'
 
@@ -25,8 +26,7 @@ async function getAppIcon(targetPath: string, appName: string): Promise<string> 
     await fs.access(iconPath)
     const buffer = await fs.readFile(iconPath)
     return `data:image/png;base64,${buffer.toString('base64')}`
-  }
-  catch {
+  } catch {
     // Icon does not exist, extract it
     try {
       const fileIcon = (await import('extract-file-icon')).default
@@ -35,8 +35,7 @@ async function getAppIcon(targetPath: string, appName: string): Promise<string> 
         await fs.writeFile(iconPath, buffer)
         return `data:image/png;base64,${buffer.toString('base64')}`
       }
-    }
-    catch (e) {
+    } catch (e) {
       console.warn(`[Win] Failed to extract icon for ${targetPath}:`, e)
     }
   }
@@ -56,12 +55,10 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
           if (fileName.endsWith('.lnk')) {
             try {
               appDetail = shell.readShortcutLink(fileDir)
-            }
-            catch {
+            } catch {
               continue // Ignore broken shortcuts
             }
-          }
-          else {
+          } else {
             appDetail.target = fileDir
           }
 
@@ -82,19 +79,16 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
             icon,
             bundleId: '', // Windows doesn't have bundleId
             uniqueId: targetPath, // Use full path as uniqueId
-            lastModified: targetStats.mtime,
+            lastModified: targetStats.mtime
           })
-        }
-        else if (stats.isDirectory()) {
+        } else if (stats.isDirectory()) {
           results = results.concat(await fileDisplay(fileDir))
         }
-      }
-      catch {
+      } catch {
         // Ignore errors for individual files/directories
       }
     }
-  }
-  catch (err) {
+  } catch (err) {
     console.warn(`[Win] Could not read directory: ${filePath}`, err)
   }
   return results
@@ -104,7 +98,7 @@ export async function getApps(): Promise<AppInfo[]> {
   const startMenuPath1 = path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs')
   const startMenuPath2 = path.join(
     os.homedir(),
-    'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs',
+    'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
   )
 
   const allAppsPromises = [fileDisplay(startMenuPath1), fileDisplay(startMenuPath2)]
@@ -119,7 +113,7 @@ export async function getApps(): Promise<AppInfo[]> {
   })
 
   // Remove duplicates based on uniqueId (the path)
-  const uniqueApps = Array.from(new Map(allApps.map(app => [app.uniqueId, app])).values())
+  const uniqueApps = Array.from(new Map(allApps.map((app) => [app.uniqueId, app])).values())
 
   return uniqueApps
 }
@@ -127,8 +121,7 @@ export async function getApps(): Promise<AppInfo[]> {
 export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
   try {
     const stats = await fs.stat(filePath)
-    if (!stats.isFile())
-      return null
+    if (!stats.isFile()) return null
 
     const appName = path.basename(filePath, path.extname(filePath))
     const icon = await getAppIcon(filePath, appName)
@@ -139,17 +132,16 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
       icon,
       bundleId: '', // Windows doesn't have bundleId
       uniqueId: filePath, // Use full path as uniqueId
-      lastModified: stats.mtime,
+      lastModified: stats.mtime
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.warn(`[Win] Failed to get app info for ${filePath}:`, error)
     const message = error instanceof Error ? error.message : String(error)
     reportAppScanError({
       platform: process.platform,
       path: filePath,
       message,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     })
     return null
   }

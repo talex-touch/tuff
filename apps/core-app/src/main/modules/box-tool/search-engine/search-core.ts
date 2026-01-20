@@ -8,22 +8,24 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type { StandardChannelData } from '@talex-touch/utils/channel'
 import type { ModuleInitContext } from 'packages/utils/types/modules'
 import type { TouchApp } from '../../../core/touch-app'
 import type { DbUtils } from '../../../db/utils'
 import type { ProviderContext } from './types'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
+import process from 'node:process'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { getLogger } from '@talex-touch/utils/common/logger'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import {
   ProviderDeactivatedEvent,
   TalexEvents,
   touchEventBus
 } from '../../../core/eventbus/touch-event'
 import { createDbUtils } from '../../../db/utils'
-import { getLogger } from '@talex-touch/utils/common/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
@@ -49,6 +51,17 @@ import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
 
 const searchEngineLog = getLogger('search-engine')
+const coreBoxGetRecommendationsEvent = defineRawEvent<
+  { limit?: number; forceRefresh?: boolean },
+  { items: TuffItem[]; duration: number; fromCache: boolean; error?: string }
+>('core-box:get-recommendations')
+const coreBoxAggregateTimeStatsEvent = defineRawEvent<void, { success: boolean; error?: string }>(
+  'core-box:aggregate-time-stats'
+)
+const coreBoxIsPinnedEvent = defineRawEvent<
+  { sourceId: string; itemId: string },
+  { success: boolean; isPinned: boolean }
+>('core-box:is-pinned')
 // import intelligenceSearchProvider from './providers/intelligence-provider' // Removed - 使用 internal-ai-plugin
 
 /**
@@ -178,6 +191,7 @@ export class SearchEngineCore
   private readonly pinnedCacheTtlMs = 10_000
 
   private touchApp: TouchApp | null = null
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
 
   constructor() {
@@ -187,6 +201,17 @@ export class SearchEngineCore
 
     SearchEngineCore._instance = this
     this.sorter = new Sorter()
+  }
+
+  private getTransport(): ReturnType<typeof getTuffTransportMain> {
+    if (!this.touchApp) {
+      throw new Error('[SearchEngineCore] TouchApp not initialized')
+    }
+    if (!this.transport) {
+      const channel = this.touchApp.channel as any
+      this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    }
+    return this.transport
   }
 
   private registerDefaults(): void {
@@ -394,12 +419,15 @@ export class SearchEngineCore
       // Notify the frontend that the search was cancelled
       const coreBoxWindow = windowManager.current?.window
       if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-        this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
-          searchId,
-          cancelled: true,
-          activate: this.getActivationState() ?? undefined,
-          sources: []
-        })
+        const transport = this.getTransport()
+        void transport
+          .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
+            searchId,
+            cancelled: true,
+            activate: this.getActivationState() ?? undefined,
+            sources: []
+          })
+          .catch(() => {})
       }
     }
   }
@@ -474,12 +502,12 @@ export class SearchEngineCore
           if (recommendationResult.items.length === 0) {
             const coreBoxWindow = windowManager.current?.window
             if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-              this.touchApp!.channel.sendTo(
-                coreBoxWindow,
-                ChannelType.MAIN,
-                'core-box:no-results',
-                { shouldShrink: true }
-              )
+              const transport = this.getTransport()
+              void transport
+                .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.noResults, {
+                  shouldShrink: true
+                })
+                .catch(() => {})
             }
           }
 
@@ -586,11 +614,14 @@ export class SearchEngineCore
         const coreBoxWindow = windowManager.current?.window
         if (coreBoxWindow) {
           const finalActivationState = this.getActivationState() ?? undefined
-          this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-end', {
-            searchId: sessionId,
-            activate: finalActivationState,
-            sources: []
-          })
+          const transport = this.getTransport()
+          void transport
+            .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
+              searchId: sessionId,
+              activate: finalActivationState,
+              sources: []
+            })
+            .catch(() => {})
         }
       }
 
@@ -652,10 +683,13 @@ export class SearchEngineCore
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
         const coreBoxWindow = windowManager.current?.window
         if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-          this.touchApp!.channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:search-update', {
-            items: itemsToSend,
-            searchId: sessionId
-          })
+          const transport = this.getTransport()
+          void transport
+            .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.update, {
+              items: itemsToSend,
+              searchId: sessionId
+            })
+            .catch(() => {})
         }
       }
 
@@ -751,16 +785,14 @@ export class SearchEngineCore
             const coreBoxWindow = windowManager.current?.window
             if (coreBoxWindow) {
               const finalActivationState = this.getActivationState() ?? undefined
-              this.touchApp!.channel.sendTo(
-                coreBoxWindow,
-                ChannelType.MAIN,
-                'core-box:search-end',
-                {
+              const transport = this.getTransport()
+              void transport
+                .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
                   searchId: sessionId,
                   activate: finalActivationState,
                   sources: update.sourceStats
-                }
-              )
+                })
+                .catch(() => {})
             }
             searchLogger.logSearchPhase(
               'Search End',
@@ -1361,73 +1393,42 @@ export class SearchEngineCore
     // Register IPC handlers
     // NOTE: 'core-box:query' is registered in core-box/ipc.ts via coreBoxManager.search()
     // Do NOT register it here to avoid duplicate handlers causing race conditions
-    const channel = this.touchApp!.channel
+    const transport = this.getTransport()
 
-    channel.regChannel(
-      ChannelType.MAIN,
-      'core-box:execute',
-      async (channelData: StandardChannelData) => {
-        const { reply } = channelData
-        const { item, searchResult } = channelData.data as {
-          item: TuffItem
-          searchResult?: TuffSearchResult
-        }
-        const provider = instance.providers.get(item.source.id)
-        if (!provider || !provider.onExecute) {
-          return
-        }
-
-        const activationResult = await provider.onExecute({ item, searchResult })
-
-        if (activationResult) {
-          let activation: IProviderActivate
-          if (typeof activationResult === 'object') {
-            // If the provider returns a full activation object, use it directly.
-            activation = activationResult
-          } else {
-            // Otherwise, create a default activation object.
-            activation = {
-              id: provider.id,
-              name: provider.name,
-              icon: provider.icon,
-              meta: item.meta?.extension || {}
-            }
-          }
-          instance.activateProviders([activation])
-
-          // Trigger a search with an empty query to get the initial items.
-          const query: TuffQuery = { text: '' }
-          await instance.search(query)
-        }
-
-        reply(DataCode.SUCCESS, instance.getActivationState())
+    transport.on(CoreBoxEvents.item.execute, async (payload) => {
+      const { item, searchResult } = payload as {
+        item: TuffItem
+        searchResult?: TuffSearchResult
       }
-    )
+      const provider = instance.providers.get(item.source.id)
+      if (!provider || !provider.onExecute) {
+        return instance.getActivationState()
+      }
 
-    channel.regChannel(ChannelType.MAIN, 'core-box:get-activated-providers', () => {
+      const activationResult = await provider.onExecute({ item, searchResult })
+
+      if (activationResult) {
+        let activation: IProviderActivate
+        if (typeof activationResult === 'object') {
+          activation = activationResult
+        } else {
+          activation = {
+            id: provider.id,
+            name: provider.name,
+            icon: provider.icon,
+            meta: item.meta?.extension || {}
+          }
+        }
+        instance.activateProviders([activation])
+
+        const query: TuffQuery = { text: '' }
+        await instance.search(query)
+      }
+
       return instance.getActivationState()
     })
 
-    channel.regChannel(ChannelType.MAIN, 'core-box:deactivate-provider', ({ data }) => {
-      instance.deactivateProvider(data.id)
-      return instance.getActivationState()
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'core-box:deactivate-providers', () => {
-      instance.deactivateProviders()
-      return instance.getActivationState()
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'core-box:get-provider-details', ({ data }) => {
-      const providers = instance.getProvidersByIds(data.providerIds)
-      return providers.map((_p) => ({
-        id: _p.id,
-        name: _p.name,
-        icon: _p.icon
-      }))
-    })
-
-    channel.regChannel(ChannelType.MAIN, 'core-box:get-recommendations', async ({ data }) => {
+    transport.on(coreBoxGetRecommendationsEvent, async (data) => {
       if (!instance.recommendationEngine) {
         return { items: [], duration: 0, fromCache: false }
       }
@@ -1450,8 +1451,7 @@ export class SearchEngineCore
       }
     })
 
-    // 手动触发时间统计汇总
-    channel.regChannel(ChannelType.MAIN, 'core-box:aggregate-time-stats', async () => {
+    transport.on(coreBoxAggregateTimeStatsEvent, async () => {
       if (!instance.timeStatsAggregator) {
         return { success: false, error: 'TimeStatsAggregator not initialized' }
       }
@@ -1465,8 +1465,7 @@ export class SearchEngineCore
       }
     })
 
-    // Pin/Unpin item
-    channel.regChannel(ChannelType.MAIN, 'core-box:toggle-pin', async ({ data }) => {
+    transport.on(CoreBoxEvents.item.togglePin, async (data) => {
       if (!instance.dbUtils) {
         return { success: false, error: 'Database not initialized' }
       }
@@ -1482,8 +1481,7 @@ export class SearchEngineCore
       }
     })
 
-    // Check if item is pinned
-    channel.regChannel(ChannelType.MAIN, 'core-box:is-pinned', async ({ data }) => {
+    transport.on(coreBoxIsPinnedEvent, async (data) => {
       if (!instance.dbUtils) {
         return { success: false, isPinned: false }
       }

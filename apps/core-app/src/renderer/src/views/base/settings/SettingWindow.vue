@@ -5,10 +5,10 @@
   Allows users to configure window closing, minimizing, and auto-start behavior
 -->
 <script setup lang="ts" name="SettingWindow">
-import { onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
+import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 // Import UI components

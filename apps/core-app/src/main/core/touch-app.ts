@@ -1,13 +1,13 @@
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import path from 'node:path'
-import { ChannelType } from '@talex-touch/utils/channel'
+import process from 'node:process'
+import { StorageList } from '@talex-touch/utils'
 import { app, BrowserWindow, dialog, screen } from 'electron'
 import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
-import { getStartupAnalytics } from '../modules/analytics'
-import { storageModule } from '../modules/storage'
+import { getMainConfig, saveMainConfig } from '../modules/storage'
 import { TalexTouch } from '../types'
-import { checkDirWithCreate, checkPlatformCompatibility } from '../utils/common-util'
+import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
 import { genTouchChannel } from './channel-core'
@@ -196,10 +196,6 @@ export class TouchApp implements TalexTouch.TouchApp {
   }
 
   private persistMainWindowBounds(): void {
-    if (!storageModule.filePath) {
-      return
-    }
-
     const win = this.window.window
     if (win.isDestroyed()) return
 
@@ -216,9 +212,9 @@ export class TouchApp implements TalexTouch.TouchApp {
     const bounds = normalizeBoundsToDisplays(rawBounds, displays, primary, minSize)
 
     try {
-      const appSettings = storageModule.getConfig('app-setting.ini') as Record<string, unknown>
+      const appSettings = getMainConfig(StorageList.APP_SETTING)
       upsertMainWindowStateProfile(appSettings, layoutSignature, bounds)
-      storageModule.saveConfig('app-setting.ini', appSettings, false, false)
+      saveMainConfig(StorageList.APP_SETTING, appSettings)
     } catch (error) {
       mainLog.warn('Failed to persist main window bounds', { error })
     }
@@ -230,62 +226,6 @@ export class TouchApp implements TalexTouch.TouchApp {
     touchEventBus.emit(TalexEvents.APP_START, new AppStartEvent())
 
     checkDirWithCreate(this.rootPath, true)
-
-    this.channel.regChannel(ChannelType.MAIN, 'app-ready', ({ header, data }) => {
-      const { event } = header
-      const { rendererStartTime } = data || {}
-
-      // Use renderer's performance.timeOrigin for accurate timing
-      // This ensures reload doesn't accumulate time incorrectly
-      const rendererStart = rendererStartTime || Date.now()
-      const currentTime = Date.now()
-
-      const senderWebContents = event?.sender as Electron.WebContents | undefined
-      const senderId = senderWebContents?.id
-      const primaryRendererId = this.window.window.webContents.id
-
-      if (senderId === primaryRendererId) {
-        // Record renderer process metrics for analytics (primary window only).
-        const analytics = getStartupAnalytics()
-        analytics.setRendererProcessMetrics({
-          startTime: rendererStart,
-          readyTime: currentTime,
-          domContentLoaded: undefined, // Will be set by renderer
-          firstInteractive: undefined, // Will be set by renderer
-          loadEventEnd: undefined // Will be set by renderer
-        })
-      }
-
-      return {
-        id: (event?.sender as Electron.WebContents).id,
-        version: this.version,
-        path: {
-          rootPath: this.rootPath,
-          appPath: app.getAppPath(),
-          appDataPath: app.getPath('appData'),
-          userDataPath: app.getPath('userData'),
-          tempPath: app.getPath('temp'),
-          homePath: app.getPath('home'),
-          exePath: app.getPath('exe'),
-          modulePath: path.join(this.rootPath, 'modules'),
-          configPath: path.join(this.rootPath, 'config'),
-          pluginPath: path.join(this.rootPath, 'plugins')
-        },
-        isPackaged: app.isPackaged,
-        isDev: this.version === TalexTouch.AppVersion.DEV,
-        isRelease: this.version === TalexTouch.AppVersion.RELEASE,
-        platform: process.platform,
-        arch: process.arch,
-        platformWarning: checkPlatformCompatibility(),
-        t: {
-          _s: process.getCreationTime(),
-          s: rendererStart,
-          e: currentTime,
-          p: process.uptime(),
-          h: process.hrtime()
-        }
-      }
-    })
 
     const startSilent = this._startSilent
 
@@ -342,13 +282,15 @@ export class TouchApp implements TalexTouch.TouchApp {
 
       if (!found) {
         // Log all debug information before showing dialog
-        console.error('[TouchApp] index.html not found!')
-        console.error('[TouchApp] __dirname:', __dirname)
-        console.error('[TouchApp] app.getAppPath():', appPath)
-        console.error('[TouchApp] process.resourcesPath:', process.resourcesPath || 'N/A')
-        console.error('[TouchApp] Tried paths:')
+        mainLog.error('[TouchApp] index.html not found!')
+        mainLog.error('[TouchApp] __dirname:', { meta: { __dirname: String(__dirname) } })
+        mainLog.error('[TouchApp] app.getAppPath():', { meta: { appPath } })
+        mainLog.error('[TouchApp] process.resourcesPath:', {
+          meta: { resourcesPath: process.resourcesPath || 'N/A' }
+        })
+        mainLog.error('[TouchApp] Tried paths:')
         possiblePaths.forEach((p, i) => {
-          console.error(`[TouchApp]   ${i + 1}. ${p} (exists: ${fse.existsSync(p)})`)
+          mainLog.error(`[TouchApp]   ${i + 1}. ${p} (exists: ${fse.existsSync(p)})`)
         })
 
         const errorMsg = `index.html not found. Tried paths:\n${possiblePaths.join('\n')}`

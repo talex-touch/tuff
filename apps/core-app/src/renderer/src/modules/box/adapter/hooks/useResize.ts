@@ -15,16 +15,25 @@ interface UseResizeOptions {
 
 const SCROLLBAR_WIDTH_ESTIMATE = 12
 const HEIGHT_SAFETY_PADDING = 10
-const HEADER_HEIGHT = 60
-const MIN_HEIGHT = 60
+const HEADER_HEIGHT = 64
+const MIN_HEIGHT = 64
 const MAX_HEIGHT = 600
 
 function clampHeight(height: number): number {
   return Math.max(MIN_HEIGHT, Math.min(height, MAX_HEIGHT))
 }
 
+function getHeaderHeight(): number {
+  const header = document.querySelector('.CoreBox') as HTMLElement | null
+  if (!header) return HEADER_HEIGHT
+  const rect = header.getBoundingClientRect()
+  if (!Number.isFinite(rect.height) || rect.height <= 0) return HEADER_HEIGHT
+  return rect.height
+}
+
 function calculateDesiredHeight(resultCount: number): number {
-  if (resultCount === 0) return MIN_HEIGHT
+  const headerHeight = getHeaderHeight()
+  if (resultCount === 0) return clampHeight(headerHeight)
 
   const scrollRoot = document.querySelector('.CoreBoxRes-Main .touch-scroll')
   if (!scrollRoot) return MIN_HEIGHT
@@ -44,7 +53,7 @@ function calculateDesiredHeight(resultCount: number): number {
   const clientHeight = wrap.clientHeight
   const extraBuffer = scrollHeight > clientHeight ? SCROLLBAR_WIDTH_ESTIMATE : 0
 
-  return clampHeight(scrollHeight + HEADER_HEIGHT + extraBuffer + HEIGHT_SAFETY_PADDING)
+  return clampHeight(scrollHeight + headerHeight + extraBuffer + HEIGHT_SAFETY_PADDING)
 }
 
 export function useResize(options: UseResizeOptions): void {

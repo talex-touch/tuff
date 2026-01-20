@@ -7,6 +7,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import axios from 'axios'
 import { app, shell } from 'electron'
 import { getAppVersionSafe } from '../../utils/version-util'
+import { SignatureVerifier } from '../../utils/release-signature'
 
 /**
  * Version information interface
@@ -40,6 +41,8 @@ interface ReleaseAsset {
   platform: string
   arch: string
   checksum?: string
+  signatureUrl?: string
+  signatureKeyUrl?: string
 }
 
 /**
@@ -73,6 +76,7 @@ export class UpdateSystem {
   private downloadCenterModule: any
   private notificationService: any
   private readonly pollingService = PollingService.getInstance()
+  private readonly signatureVerifier = new SignatureVerifier()
 
   /** Channel priority for version comparison (lower = more stable) */
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
@@ -192,7 +196,9 @@ export class UpdateSystem {
         metadata: {
           version: release.tag_name,
           releaseDate: release.published_at,
-          checksum: asset.checksum
+          checksum: asset.checksum,
+          signatureUrl: asset.signatureUrl,
+          signatureKeyUrl: asset.signatureKeyUrl
         },
         checksum: asset.checksum
       }
@@ -271,6 +277,20 @@ export class UpdateSystem {
 
         if (!isValid) {
           throw new Error('Checksum verification failed')
+        }
+      }
+
+      const signatureUrl = task.metadata?.signatureUrl
+      if (signatureUrl) {
+        const filePath = path.join(task.destination, task.filename)
+        const verifyResult = await this.signatureVerifier.verifyFileSignature(
+          filePath,
+          signatureUrl,
+          task.metadata?.signatureKeyUrl
+        )
+
+        if (!verifyResult.valid) {
+          console.warn('[UpdateSystem] Signature verification failed:', verifyResult.reason)
         }
       }
 
@@ -489,35 +509,98 @@ export class UpdateSystem {
     }
 
     const platformName = platformMap[platform] || platform
+    const signatureMap = new Map<string, string>()
+
+    for (const asset of assets) {
+      const name = String(asset?.name || '')
+      if (!name) {
+        continue
+      }
+
+      if (this.isSignatureAsset(name)) {
+        const url = asset.browser_download_url || asset.url
+        if (url) {
+          signatureMap.set(this.normalizeAssetKey(this.stripSignatureSuffix(name)), url)
+        }
+      }
+    }
 
     // Find matching asset
     for (const asset of assets) {
-      const name = asset.name.toLowerCase()
+      const name = String(asset?.name || '')
+      if (!name) {
+        continue
+      }
+
+      if (this.isSignatureAsset(name) || this.isChecksumAsset(name)) {
+        continue
+      }
+
+      const normalizedName = name.toLowerCase()
 
       // Check platform match
-      if (!name.includes(platformName)) {
+      if (!normalizedName.includes(platformName)) {
         continue
       }
 
       // Check architecture match (if specified)
-      if (arch === 'arm64' && !name.includes('arm64')) {
+      if (arch === 'arm64' && !normalizedName.includes('arm64')) {
         continue
       }
-      if (arch === 'x64' && name.includes('arm64')) {
+      if (arch === 'x64' && normalizedName.includes('arm64')) {
         continue
       }
 
+      const signatureUrl = asset.signatureUrl || signatureMap.get(this.normalizeAssetKey(name))
+      const signatureKeyUrl = asset.signatureKeyUrl
+      const checksum =
+        typeof asset.sha256 === 'string'
+          ? asset.sha256
+          : typeof asset.checksum === 'string'
+            ? asset.checksum
+            : undefined
+
       return {
         name: asset.name,
-        url: asset.browser_download_url,
+        url: asset.browser_download_url || asset.url,
         size: asset.size,
         platform: platformName,
         arch,
-        checksum: undefined // Will be extracted from release notes if available
+        checksum,
+        signatureUrl,
+        signatureKeyUrl
       }
     }
 
     return null
+  }
+
+  private isSignatureAsset(filename: string): boolean {
+    const lower = filename.toLowerCase()
+    return lower.endsWith('.sig') || lower.endsWith('.sig.txt') || lower.endsWith('.asc')
+  }
+
+  private stripSignatureSuffix(filename: string): string {
+    return filename.replace(/\.(sig|asc)(\.txt)?$/i, '')
+  }
+
+  private isChecksumAsset(filename: string): boolean {
+    const lower = filename.toLowerCase()
+    return (
+      lower.endsWith('.sha256') ||
+      lower.endsWith('.sha1') ||
+      lower.endsWith('.md5') ||
+      lower.endsWith('.sha256.txt') ||
+      lower.endsWith('.sha1.txt') ||
+      lower.endsWith('.md5.txt') ||
+      lower.endsWith('.sha256sum') ||
+      lower.endsWith('.sha1sum') ||
+      lower.endsWith('.md5sum')
+    )
+  }
+
+  private normalizeAssetKey(filename: string): string {
+    return filename.toLowerCase()
   }
 
   /**

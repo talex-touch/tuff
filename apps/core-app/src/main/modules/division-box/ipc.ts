@@ -16,6 +16,7 @@ import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { FlowPayload } from './flow-trigger'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxIPCChannel } from '@talex-touch/utils'
 import { DivisionBoxEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPermissionModule } from '../permission'
 import { flowTriggerManager } from './flow-trigger'
 import { DivisionBoxManager } from './manager'
@@ -413,11 +414,12 @@ export class DivisionBoxIPC {
 
         const plugin = session.getAttachedPlugin()
         if (plugin) {
-          this.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-            input,
-            query,
-            source: 'division-box'
-          })
+          void transport
+            .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
+              input,
+              query
+            })
+            .catch(() => {})
         }
 
         return createSuccessResponse({ received: true })

@@ -26,7 +26,7 @@ const props = defineProps({
 <template>
   <div class="TBlockSlot-Container TBlockSelection fake-background index-fix" :class="{ disabled }">
     <div class="TBlockSlot-Content TBlockSelection-Content">
-      <RemixIcon :name="icon" :style="'line'" />
+      <RemixIcon :name="icon" style="line" />
       <div class="TBlockSlot-Label TBlockSelection-Label">
         <slot name="label">
           <h3>{{ title }}</h3>

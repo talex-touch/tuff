@@ -1,23 +1,24 @@
 import type { AiCapabilityDescriptor, IntelligenceCapabilityType } from '@talex-touch/utils'
+import { createLogger } from '../../utils/logger'
+
+const capabilityRegistryLog = createLogger('Intelligence').child('CapabilityRegistry')
 
 export class AiCapabilityRegistry {
   private capabilities = new Map<string, AiCapabilityDescriptor>()
 
   register(capability: AiCapabilityDescriptor): void {
     if (this.capabilities.has(capability.id)) {
-      console.warn(
-        `[AiCapabilityRegistry] Capability ${capability.id} already registered, overwriting`
-      )
+      capabilityRegistryLog.warn(`Capability ${capability.id} already registered, overwriting`)
     }
     this.capabilities.set(capability.id, capability)
-    console.debug(`[AiCapabilityRegistry] Registered capability: ${capability.id}`)
+    capabilityRegistryLog.debug(`Registered capability: ${capability.id}`)
   }
 
   unregister(capabilityId: string): void {
     if (this.capabilities.delete(capabilityId)) {
-      console.debug(`[AiCapabilityRegistry] Unregistered capability: ${capabilityId}`)
+      capabilityRegistryLog.debug(`Unregistered capability: ${capabilityId}`)
     } else {
-      console.warn(`[AiCapabilityRegistry] Capability ${capabilityId} not found`)
+      capabilityRegistryLog.warn(`Capability ${capabilityId} not found`)
     }
   }
 
@@ -39,7 +40,7 @@ export class AiCapabilityRegistry {
 
   clear(): void {
     this.capabilities.clear()
-    console.log('[AiCapabilityRegistry] Cleared all capabilities')
+    capabilityRegistryLog.info('Cleared all capabilities')
   }
 
   size(): number {

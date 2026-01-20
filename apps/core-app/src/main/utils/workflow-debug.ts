@@ -3,6 +3,7 @@ import type { Primitive } from './logger'
 import fs from 'node:fs'
 import { appendFile, mkdir } from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { app } from 'electron'
 
 interface WorkflowDebugConfig {
@@ -20,7 +21,7 @@ interface WorkflowDebugLogEntry {
 const WORKFLOW_DEBUG_TTL_MS = 1_000
 const WORKFLOW_DEBUG_ACTIVE_FILE = 'active-session.json'
 
-let cachedConfig: {
+const cachedConfig: {
   loadedAt: number
   debugRoot: string | null
   config: WorkflowDebugConfig | null

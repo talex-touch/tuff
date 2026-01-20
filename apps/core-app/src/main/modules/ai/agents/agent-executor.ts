@@ -14,17 +14,16 @@ import type {
   AgentUsage
 } from '@talex-touch/utils'
 import type { AgentExecutionContext, AgentImpl } from './agent-registry'
-import type { ToolRegistry } from './tool-registry'
-import chalk from 'chalk'
-import { agentRegistry } from './agent-registry'
 import type { AgentContextManager } from './memory'
+import type { ToolRegistry } from './tool-registry'
+import { agentRegistry } from './agent-registry'
+import { createLogger } from '../../../utils/logger'
 
-const TAG = chalk.hex('#9c27b0').bold('[AgentExecutor]')
-const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
-const logWarn = (...args: unknown[]) =>
-  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
-const logDebug = (...args: unknown[]) =>
-  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
+const agentExecutorLog = createLogger('Intelligence').child('AgentExecutor')
+const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
+const logInfo = (...args: unknown[]) => agentExecutorLog.info(formatLogArgs(args))
+const logWarn = (...args: unknown[]) => agentExecutorLog.warn(formatLogArgs(args))
+const logDebug = (...args: unknown[]) => agentExecutorLog.debug(formatLogArgs(args))
 
 /**
  * Executor options

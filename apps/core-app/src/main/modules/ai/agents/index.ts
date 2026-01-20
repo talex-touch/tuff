@@ -23,12 +23,12 @@ export {
   registerSearchAgent,
   registerWorkflowAgent
 } from './builtin'
+// Memory & Context
+export * from './memory'
+
 export * from './tool-registry'
 
 export { toolRegistry } from './tool-registry'
 
 // Tools
 export { registerBuiltinTools } from './tools'
-
-// Memory & Context
-export * from './memory'

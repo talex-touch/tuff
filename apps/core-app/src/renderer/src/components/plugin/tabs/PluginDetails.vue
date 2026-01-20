@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import { TxButton } from '@talex-touch/tuffex'
 import { ElMessage } from 'element-plus'
 import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'

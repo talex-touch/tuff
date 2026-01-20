@@ -1,9 +1,10 @@
-import { getConfig } from '../modules/storage'
+import { StorageList } from '@talex-touch/utils'
+import { getMainConfig } from '../modules/storage'
 
 export function getJs(options) {
   const [name, _path, sdkapi, version] = options
 
-  const themeConfig = getConfig('theme-style.ini')
+  const themeConfig = getMainConfig(StorageList.THEME_STYLE)
 
   return `
         !(() => {

@@ -1,11 +1,11 @@
 <script setup lang="ts" name="SettingUpdate">
 import type { CachedUpdateRecord, DownloadAsset, UpdateSettings } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex'
 import { AppPreviewChannel, DownloadModule, DownloadPriority } from '@talex-touch/utils'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAppSdk } from '@talex-touch/utils/renderer'
 import { toast } from 'vue-sonner'
-import { TxButton } from '@talex-touch/tuffex'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
@@ -498,7 +498,9 @@ function openAssetsDialog(): void {
         </div>
         <div v-for="asset in cachedAssets" :key="asset.name" class="asset-item">
           <div class="asset-main">
-            <div class="asset-name">{{ asset.name }}</div>
+            <div class="asset-name">
+              {{ asset.name }}
+            </div>
             <div class="asset-meta">
               {{ formatPlatform(asset.platform) }} · {{ asset.arch }} ·
               {{ formatFileSize(asset.size) }}

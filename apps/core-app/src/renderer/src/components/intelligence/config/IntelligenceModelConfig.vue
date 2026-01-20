@@ -1,13 +1,13 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
+import { TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
-import { useTuffTransport } from '@talex-touch/utils/transport'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ElOption, ElOptionGroup, ElSelect, ElTransfer } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
@@ -389,7 +389,9 @@ watch(
             {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
           </span></span
         >
-        <TxButton variant="flat">{{ t('intelligence.config.model.editModels') }}</TxButton>
+        <TxButton variant="flat">
+          {{ t('intelligence.config.model.editModels') }}
+        </TxButton>
       </div>
     </TuffBlockSlot>
 

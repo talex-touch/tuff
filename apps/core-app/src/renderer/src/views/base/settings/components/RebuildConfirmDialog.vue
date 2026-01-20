@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   onConfirm: () => void

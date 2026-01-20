@@ -1,5 +1,6 @@
 <script name="BrickTemplate" setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex'
+
 const _disabled: any = inject('disabled')
 
 const disabled = computed(() => _disabled.value)

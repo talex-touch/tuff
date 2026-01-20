@@ -6,12 +6,12 @@
 -->
 <script setup lang="ts" name="SettingDownload">
 import type { DownloadConfig } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 
-import { TxButton } from '@talex-touch/tuffex'
+import { toast } from 'vue-sonner'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'

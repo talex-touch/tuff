@@ -5,10 +5,10 @@ import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import StatusIcon from '~/components/base/StatusIcon.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
-import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 
 type PluginCategoryId = string
 
@@ -188,8 +188,9 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
     plugin.status === EPluginStatus.ACTIVE ||
     plugin.status === EPluginStatus.ENABLED ||
     plugin.status === EPluginStatus.LOADED
-  )
+  ) {
     return 'success'
+  }
 
   return 'none'
 }

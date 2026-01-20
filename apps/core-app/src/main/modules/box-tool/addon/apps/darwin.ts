@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process'
+import process from 'node:process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -345,7 +346,7 @@ async function mapWithConcurrency<T, R>(
   let nextIndex = 0
 
   const workerCount = Math.min(Math.max(concurrency, 1), items.length)
-  const workers = new Array(workerCount).fill(0).map(async () => {
+  const workers = Array.from({ length: workerCount }, async () => {
     while (true) {
       const currentIndex = nextIndex++
       if (currentIndex >= items.length) {

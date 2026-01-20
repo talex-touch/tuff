@@ -8,6 +8,7 @@ import type { AgentPermission } from '@talex-touch/utils'
 import type { ToolExecutionContext } from '../tool-registry'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import process from 'node:process'
 import { toolRegistry } from '../tool-registry'
 
 /**

@@ -1,8 +1,8 @@
 <script setup name="SettingHeader" lang="ts">
+import { TxTag } from '@talex-touch/tuffex'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnv } from '~/modules/hooks/env-hooks'
-import { TxTag } from '@talex-touch/tuffex'
 
 const { t } = useI18n()
 const { packageJson, processInfo } = useEnv()
@@ -386,6 +386,10 @@ onBeforeUnmount(() => {
     background-size: 200% 200%;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     animation: header-flow 12s ease infinite;
+  }
+
+  :root:not(.dark) & {
+    filter: brightness(1.08) saturate(1.04);
   }
 }
 

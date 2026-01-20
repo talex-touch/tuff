@@ -1,11 +1,11 @@
 <script name="Storagable" setup lang="ts">
-import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
-import { formatBytesShort } from '~/components/plugin/runtime/format'
+import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { computed, onMounted, ref } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
+import { formatBytesShort } from '~/components/plugin/runtime/format'
 
 interface StorageUsageNode {
   key: string
@@ -93,7 +93,7 @@ const errorMessage = ref<string | null>(null)
 const report = ref<StorageUsageReport | null>(null)
 const cleaningKey = ref<string | null>(null)
 const transport = useTuffTransport()
-const sendRaw = <TRequest, TResponse>(eventName: string, payload?: TRequest) => {
+function sendRaw<TRequest, TResponse>(eventName: string, payload?: TRequest) {
   const event = defineRawEvent<TRequest, TResponse>(eventName)
   return transport.send(event, payload as TRequest)
 }
@@ -610,13 +610,21 @@ onMounted(() => {
       <template v-if="report">
         <div class="summary">
           <div class="card">
-            <div class="label">{{ totalLabel }}</div>
-            <div class="value">{{ formatBytesShort(totalDisplayBytes) }}</div>
-            <div class="sub">{{ report.rootPath }}</div>
+            <div class="label">
+              {{ totalLabel }}
+            </div>
+            <div class="value">
+              {{ formatBytesShort(totalDisplayBytes) }}
+            </div>
+            <div class="sub">
+              {{ report.rootPath }}
+            </div>
           </div>
           <div class="card">
             <div class="label">插件配置</div>
-            <div class="value">{{ formatBytesShort(pluginTotalBytes) }}</div>
+            <div class="value">
+              {{ formatBytesShort(pluginTotalBytes) }}
+            </div>
             <div class="sub">config/plugins</div>
           </div>
           <div class="card">
@@ -642,7 +650,9 @@ onMounted(() => {
             <div v-for="node in modulesSorted" :key="node.key" class="row">
               <div class="row-head">
                 <div class="row-head-main">
-                  <div class="name">{{ node.label }}</div>
+                  <div class="name">
+                    {{ node.label }}
+                  </div>
                   <div class="meta">
                     <span>{{ formatBytesShort(node.bytes) }}</span>
                     <span class="sep">·</span>
@@ -671,7 +681,9 @@ onMounted(() => {
                   :style="{ width: `${percentOf(node.bytes, report.totalBytes).toFixed(2)}%` }"
                 />
               </div>
-              <div class="path">{{ node.path }}</div>
+              <div class="path">
+                {{ node.path }}
+              </div>
             </div>
           </div>
         </div>
@@ -687,7 +699,9 @@ onMounted(() => {
           <div v-else class="list">
             <div v-for="p in pluginsSorted.slice(0, 12)" :key="p.name" class="row">
               <div class="row-head">
-                <div class="name">{{ p.name }}</div>
+                <div class="name">
+                  {{ p.name }}
+                </div>
                 <div class="meta">
                   <span>{{ formatBytesShort(p.bytes) }}</span>
                   <span class="sep">·</span>
@@ -717,22 +731,32 @@ onMounted(() => {
           <div class="db-grid">
             <div class="card">
               <div class="label">数据库文件</div>
-              <div class="value">{{ formatBytesShort(report.database.bytes) }}</div>
-              <div class="sub">{{ report.database.path }}</div>
+              <div class="value">
+                {{ formatBytesShort(report.database.bytes) }}
+              </div>
+              <div class="sub">
+                {{ report.database.path }}
+              </div>
             </div>
             <div class="card">
               <div class="label">WAL</div>
-              <div class="value">{{ formatBytesShort(report.database.walBytes) }}</div>
+              <div class="value">
+                {{ formatBytesShort(report.database.walBytes) }}
+              </div>
               <div class="sub">database.db-wal</div>
             </div>
             <div class="card">
               <div class="label">SHM</div>
-              <div class="value">{{ formatBytesShort(report.database.shmBytes) }}</div>
+              <div class="value">
+                {{ formatBytesShort(report.database.shmBytes) }}
+              </div>
               <div class="sub">database.db-shm</div>
             </div>
             <div class="card">
               <div class="label">数据库合计</div>
-              <div class="value">{{ formatBytesShort(databaseTotalBytes) }}</div>
+              <div class="value">
+                {{ formatBytesShort(databaseTotalBytes) }}
+              </div>
               <div class="sub">db + wal + shm</div>
             </div>
           </div>
@@ -753,7 +777,9 @@ onMounted(() => {
             <div v-for="group in databaseGroups" :key="group.category" class="row">
               <div class="row-head">
                 <div class="row-head-main">
-                  <div class="name">{{ group.label }}</div>
+                  <div class="name">
+                    {{ group.label }}
+                  </div>
                   <div class="meta">
                     <span>{{ group.sizeKnown ? formatBytesShort(group.bytes) : '未知' }}</span>
                     <span class="sep">·</span>
@@ -785,7 +811,9 @@ onMounted(() => {
               <div class="table-list">
                 <div v-for="table in group.tables" :key="table.name" class="table-row">
                   <div class="table-head">
-                    <div class="table-name">{{ table.label }}</div>
+                    <div class="table-name">
+                      {{ table.label }}
+                    </div>
                     <div class="meta">
                       <span>{{ table.sizeKnown ? formatBytesShort(table.bytes) : '未知' }}</span>
                       <span class="sep">·</span>
@@ -806,7 +834,9 @@ onMounted(() => {
           <div class="list">
             <div v-for="cache in cacheList" :key="cache.key" class="row">
               <div class="row-head">
-                <div class="name">{{ cache.label }}</div>
+                <div class="name">
+                  {{ cache.label }}
+                </div>
                 <div class="meta">
                   <span>{{ formatBytesShort(cache.bytes) }}</span>
                   <span class="sep">·</span>
@@ -817,7 +847,9 @@ onMounted(() => {
                   <span>TTL {{ formatTtl(cache.ttlMs) }}</span>
                 </div>
               </div>
-              <div v-if="cache.note" class="path">{{ cache.note }}</div>
+              <div v-if="cache.note" class="path">
+                {{ cache.note }}
+              </div>
             </div>
           </div>
         </div>

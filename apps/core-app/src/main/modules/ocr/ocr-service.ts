@@ -12,10 +12,11 @@ import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { desc, eq, inArray, sql } from 'drizzle-orm'
-import { genTouchChannel } from '../../core/channel-core'
+import { genTouchApp } from '../../core'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import {
   clipboardHistory,
@@ -58,6 +59,21 @@ interface AgentJobPayload {
 
 const PROCESS_INTERVAL_SECONDS = 5
 const MAX_ATTEMPTS = 3
+const coreBoxClipboardMetaUpdatedEvent = defineRawEvent<
+  {
+    clipboardId: number
+    patch: Record<string, unknown>
+  },
+  void
+>('core-box:clipboard-meta-updated')
+const ocrDashboardEvent = defineRawEvent<
+  { limit?: number },
+  {
+    ok: boolean
+    snapshot?: unknown
+    error?: string
+  }
+>('ocr:dashboard')
 const WORKER_CONCURRENCY = 1
 
 const MAX_OCR_IMAGE_BYTES = 8 * 1024 * 1024
@@ -159,21 +175,24 @@ class OcrService {
       return
     }
 
-    const channel = genTouchChannel()
+    const channel = genTouchApp().channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
 
-    channel.regChannel(ChannelType.MAIN, 'ocr:dashboard', async ({ reply, data }) => {
+    transport.on(ocrDashboardEvent, async (payload) => {
       try {
-        const limit = typeof data?.limit === 'number' && data.limit > 0 ? data.limit : 50
+        const limit = typeof payload?.limit === 'number' && payload.limit > 0 ? payload.limit : 50
         const snapshot = await this.getDashboardSnapshot(limit)
-        reply(DataCode.SUCCESS, {
+        return {
           ok: true,
           snapshot
-        })
+        }
       } catch (error) {
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
           error: error instanceof Error ? error.message : String(error)
-        })
+        }
       }
     })
 
@@ -1133,9 +1152,10 @@ class OcrService {
     // Notify attached plugin UI view if any
     const activePlugin = windowManager.getAttachedPlugin()
     if (activePlugin?._uniqueChannelKey) {
-      const touchChannel = genTouchChannel()
-      touchChannel
-        .sendToPlugin(activePlugin.name, 'core-box:clipboard-meta-updated', {
+      const channel = genTouchApp().channel as any
+      const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      void transport
+        .sendToPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent, {
           clipboardId,
           patch
         })

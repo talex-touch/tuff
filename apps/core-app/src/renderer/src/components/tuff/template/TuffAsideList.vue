@@ -5,6 +5,7 @@
   generic="T extends Record<string, any> = Record<string, any>"
 >
 import { TxButton } from '@talex-touch/tuffex'
+
 type BadgeVariant = 'default' | 'info' | 'success' | 'warning' | 'muted'
 
 interface BadgeInfo {

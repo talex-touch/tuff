@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 interface MigrationProgress {
   phase: 'scanning' | 'migrating' | 'validating' | 'complete' | 'error'

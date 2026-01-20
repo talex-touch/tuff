@@ -1,17 +1,17 @@
 <script lang="ts" name="Plugin" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
 import PluginInfo from '~/components/plugin/PluginInfo.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { appSetting } from '~/modules/channel/storage'
-import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import PluginNew from './plugin/PluginNew.vue'
 
 const { t } = useI18n()

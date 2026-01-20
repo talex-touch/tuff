@@ -1,8 +1,8 @@
 <script lang="ts" name="LayoutSection" setup>
 import type { Component } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { ElMessage } from 'element-plus'
 import { markRaw, reactive, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import { useDynamicTuffLayout } from '~/modules/layout'
 

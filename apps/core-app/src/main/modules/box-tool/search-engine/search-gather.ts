@@ -10,10 +10,10 @@ import type {
 import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
 import { withTimeout } from '@talex-touch/utils'
-import chalk from 'chalk'
-
-import { debounce } from 'lodash'
 import { getLogger } from '@talex-touch/utils/common/logger'
+
+import chalk from 'chalk'
+import { debounce } from 'lodash'
 import { analyticsModule } from '../../analytics'
 import { searchLogger } from './search-logger'
 

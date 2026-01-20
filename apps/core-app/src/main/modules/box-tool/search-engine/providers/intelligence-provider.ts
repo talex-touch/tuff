@@ -11,8 +11,9 @@ import type {
 import type { ProviderContext } from '../types'
 import crypto from 'node:crypto'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { genTouchApp } from '../../../../core/'
 import { ensureAiConfigLoaded } from '../../../ai/intelligence-config'
 import { ai } from '../../../ai/intelligence-sdk'
@@ -240,7 +241,6 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
 
   private async loadAiHistory(limit: number = 5): Promise<TuffItem[]> {
     try {
-      const touchChannel = genTouchApp().channel
       const coreWindow = windowManager.current?.window
 
       if (!coreWindow || coreWindow.isDestroyed()) {
@@ -248,16 +248,16 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       }
 
       // 使用统一查询接口按 category 筛选 AI 历史记录
-      const response = await touchChannel.send(ChannelType.MAIN, 'clipboard:query', {
+      const history = await clipboardModule.queryHistoryByMeta({
         category: 'ai-chat',
         limit
       })
 
-      if (!response || !Array.isArray(response.data)) {
+      if (!Array.isArray(history)) {
         return []
       }
 
-      const historyItems: TuffItem[] = response.data.map((item: any) => {
+      const historyItems: TuffItem[] = history.map((item: any) => {
         const meta = item.meta || {}
         const prompt = meta.prompt || ''
         const answer = meta.answer || ''
@@ -395,7 +395,11 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       return
     }
 
-    void app.channel.sendTo(coreWindow, ChannelType.MAIN, 'core-box:set-query', {
+    const transport = getTuffTransportMain(
+      app.channel as any,
+      (app.channel as any)?.keyManager ?? app.channel
+    )
+    void transport.sendTo(coreWindow.webContents, CoreBoxEvents.input.setQuery, {
       value: 'ai '
     })
   }

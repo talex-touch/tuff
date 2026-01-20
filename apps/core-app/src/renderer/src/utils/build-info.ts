@@ -10,8 +10,6 @@ export interface BuildInfo {
   isBeta: boolean
   isRelease: boolean
   gitCommitHash?: string
-  officialSignature?: string
-  hasOfficialKey: boolean
   refuse?: boolean
 }
 
@@ -30,11 +28,9 @@ export function getBuildTypeDisplayName(): string {
 
   if (info.isBeta) {
     return 'BETA'
-  }
-  else if (info.isSnapshot) {
+  } else if (info.isSnapshot) {
     return 'SNAPSHOT'
-  }
-  else if (info.isRelease) {
+  } else if (info.isRelease) {
     return 'RELEASE'
   }
 
@@ -77,17 +73,4 @@ export function getBuildTimeString(): string {
 export function getBuildIdentifier(): string {
   const info = getBuildInfo()
   return info.buildIdentifier || 'unknown'
-}
-
-/**
- * 检查是否为官方构建
- */
-export function isOfficialBuild(): boolean {
-  const info = getBuildInfo()
-  // 如果没有密钥，默认为非官方构建
-  if (!info.hasOfficialKey) {
-    return false
-  }
-  // 如果有签名，说明是官方构建
-  return !!info.officialSignature
 }

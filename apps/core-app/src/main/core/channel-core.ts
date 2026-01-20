@@ -8,6 +8,7 @@ import type {
 } from '@talex-touch/utils/channel'
 import type { WebContentsView } from 'electron'
 import type { TalexTouch } from '../types'
+import { Buffer } from 'node:buffer'
 import { performance } from 'node:perf_hooks'
 import { structuredStrictStringify } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'

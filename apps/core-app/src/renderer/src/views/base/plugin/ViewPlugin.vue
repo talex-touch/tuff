@@ -1,6 +1,6 @@
 <script name="ViewPlugin" setup>
-import PluginView from '~/components/plugin/PluginView.vue'
 import { tryUseChannel } from '@talex-touch/utils/renderer/hooks/use-channel'
+import PluginView from '~/components/plugin/PluginView.vue'
 import { appSetting } from '~/modules/channel/storage'
 
 const channel = tryUseChannel()

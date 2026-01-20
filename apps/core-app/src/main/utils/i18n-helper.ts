@@ -4,6 +4,7 @@
  */
 
 import { app } from 'electron'
+import { createLogger } from './logger'
 import enUS from '../../renderer/src/modules/lang/en-US.json'
 import zhCN from '../../renderer/src/modules/lang/zh-CN.json'
 
@@ -20,13 +21,14 @@ export type Locale = 'zh-CN' | 'en-US'
  */
 const messages: Record<Locale, TranslationMessages> = {
   'zh-CN': zhCN,
-  'en-US': enUS,
+  'en-US': enUS
 }
 
 /**
  * Current locale
  */
 let currentLocale: Locale = 'zh-CN'
+const i18nLog = createLogger('I18n')
 
 /**
  * Initialize i18n with system locale and register IPC handler
@@ -34,7 +36,7 @@ let currentLocale: Locale = 'zh-CN'
 export function initI18n(): void {
   const systemLocale = app.getLocale()
   currentLocale = resolveLocale(systemLocale)
-  console.log(`[I18n] Initialized with locale: ${currentLocale} (system: ${systemLocale})`)
+  i18nLog.info(`Initialized with locale: ${currentLocale} (system: ${systemLocale})`)
 }
 
 /**
@@ -56,10 +58,9 @@ function resolveLocale(locale: string): Locale {
 export function setLocale(locale: Locale): void {
   if (messages[locale]) {
     currentLocale = locale
-    console.log(`[I18n] Locale changed to: ${currentLocale}`)
-  }
-  else {
-    console.warn(`[I18n] Unsupported locale: ${locale}, keeping current: ${currentLocale}`)
+    i18nLog.info(`Locale changed to: ${currentLocale}`)
+  } else {
+    i18nLog.warn(`Unsupported locale: ${locale}, keeping current: ${currentLocale}`)
   }
 }
 
@@ -80,8 +81,7 @@ function getNestedValue(obj: any, path: string): any {
   for (const key of keys) {
     if (value && typeof value === 'object' && key in value) {
       value = value[key]
-    }
-    else {
+    } else {
       return undefined
     }
   }
@@ -150,8 +150,7 @@ export function formatDuration(seconds: number): string {
  * Format file size to human-readable string
  */
 export function formatFileSize(bytes: number): string {
-  if (bytes === 0)
-    return '0 B'
+  if (bytes === 0) return '0 B'
 
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   const k = 1024

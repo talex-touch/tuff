@@ -7,8 +7,8 @@
  */
 
 import type { AgentDescriptor, AgentPlanStep, AgentTask } from '@talex-touch/utils'
-import { AgentStatus } from '@talex-touch/utils'
 import type { AgentExecutionContext, AgentImpl } from '../agent-registry'
+import { AgentStatus } from '@talex-touch/utils'
 import { agentManager } from '../agent-manager'
 import { agentRegistry } from '../agent-registry'
 

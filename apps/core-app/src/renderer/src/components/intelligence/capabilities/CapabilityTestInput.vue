@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import IntelligencePromptSelector from '~/components/intelligence/config/IntelligencePromptSelector.vue'
 
 const props = defineProps<{

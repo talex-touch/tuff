@@ -5,14 +5,13 @@
  */
 
 import type { AgentCapability, AgentConfig, AgentDescriptor } from '@talex-touch/utils'
-import chalk from 'chalk'
+import { createLogger } from '../../../utils/logger'
 
-const TAG = chalk.hex('#9c27b0').bold('[Agents]')
-const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
-const logWarn = (...args: unknown[]) =>
-  console.warn(TAG, chalk.yellow(...args.map((arg) => String(arg))))
-const logDebug = (...args: unknown[]) =>
-  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
+const agentRegistryLog = createLogger('Intelligence').child('AgentRegistry')
+const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
+const logInfo = (...args: unknown[]) => agentRegistryLog.info(formatLogArgs(args))
+const logWarn = (...args: unknown[]) => agentRegistryLog.warn(formatLogArgs(args))
+const logDebug = (...args: unknown[]) => agentRegistryLog.debug(formatLogArgs(args))
 
 /**
  * Agent implementation interface

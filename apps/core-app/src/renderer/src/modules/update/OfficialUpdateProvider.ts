@@ -2,8 +2,8 @@ import type { DownloadAsset, GitHubRelease, UpdateSourceConfig } from '@talex-to
 import type { AxiosRequestConfig } from 'axios'
 import { AppPreviewChannel, UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
 import axios from 'axios'
-import { UpdateProvider } from './UpdateProvider'
 import { appSetting } from '~/modules/channel/storage'
+import { UpdateProvider } from './UpdateProvider'
 
 // Nexus API 响应类型
 interface NexusReleaseAsset {
@@ -15,6 +15,7 @@ interface NexusReleaseAsset {
   sourceType: 'github' | 'upload'
   fileKey: string | null
   downloadUrl: string
+  signatureUrl?: string | null
   size: number
   sha256: string | null
   contentType: string
@@ -113,6 +114,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
         platform: asset.platform,
         arch: asset.arch,
         sha256: asset.sha256,
+        signatureUrl: asset.signatureUrl ?? undefined,
         sourceType: asset.sourceType
       })),
       // 扩展字段
@@ -225,7 +227,8 @@ export class OfficialUpdateProvider extends UpdateProvider {
       size: asset.size || 0,
       platform: asset.platform || this.detectPlatform(asset.name),
       arch: asset.arch || this.detectArch(asset.name),
-      checksum: asset.sha256 || undefined
+      checksum: asset.sha256 || undefined,
+      signatureUrl: asset.signatureUrl || (asset.url ? `${asset.url}.sig` : undefined)
     }))
   }
 

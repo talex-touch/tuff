@@ -4,11 +4,11 @@
  * Handles permission confirmation requests when plugins are enabled.
  */
 
-import { ElButton, ElMessageBox } from 'element-plus'
-import { h, onMounted, onUnmounted, ref } from 'vue'
+import type { PermissionStartupRequestPayload } from '@talex-touch/utils/transport/events/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PermissionEvents } from '@talex-touch/utils/transport/events'
-import type { PermissionStartupRequestPayload } from '@talex-touch/utils/transport/events/types'
+import { ElButton, ElMessageBox } from 'element-plus'
+import { h, onMounted, onUnmounted, ref } from 'vue'
 
 type PermissionStartupRequest = PermissionStartupRequestPayload
 
