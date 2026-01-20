@@ -9,12 +9,14 @@ import {
   ChannelType,
   DataCode,
 } from '../channel'
-import { hasWindow } from '../env'
+import { getLogger } from '../common/logger'
 import { formatPayloadPreview } from '../common/utils/payload-preview'
+import { hasWindow } from '../env'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
 
 let cachedIpcRenderer: IpcRenderer | null = null
+const channelLog = getLogger('plugin-channel')
 
 // 使用惰性解析避免在打包阶段静态引入 electron
 function resolveIpcRenderer(): IpcRenderer | null {
@@ -25,9 +27,16 @@ function resolveIpcRenderer(): IpcRenderer | null {
   }
 
   try {
-    const electron = (globalThis as any)?.electron ?? (eval('require') as any)?.('electron')
-    if (electron?.ipcRenderer)
-      return electron.ipcRenderer as IpcRenderer
+    const electronFromGlobal = (globalThis as any)?.electron
+    if (electronFromGlobal?.ipcRenderer)
+      return electronFromGlobal.ipcRenderer as IpcRenderer
+
+    const requireFromGlobal = (globalThis as any)?.require
+    if (typeof requireFromGlobal === 'function') {
+      const electron = requireFromGlobal('electron')
+      if (electron?.ipcRenderer)
+        return electron.ipcRenderer as IpcRenderer
+    }
   }
   catch {
     // ignore – will throw below if no ipcRenderer is resolved
@@ -48,14 +57,17 @@ function ensureIpcRenderer(): IpcRenderer {
   return cachedIpcRenderer
 }
 
+type ChannelListener = (data: StandardChannelData) => unknown
+type PendingCallback = (data: RawStandardChannelData) => void
+
 /**
  * @deprecated This class is deprecated and will be removed in the future.
  * Due to the new secret system, ipc message transmission should unique Key, and will inject when ui view attached.
  */
 class TouchChannel implements ITouchClientChannel {
-  channelMap: Map<string, Function[]> = new Map()
+  channelMap: Map<string, ChannelListener[]> = new Map()
 
-  pendingMap: Map<string, Function> = new Map()
+  pendingMap: Map<string, PendingCallback> = new Map()
 
   plugin: string
 
@@ -68,7 +80,7 @@ class TouchChannel implements ITouchClientChannel {
   }
 
   __parse_raw_data(e: IpcRendererEvent | undefined, arg: any): RawStandardChannelData | null {
-    console.debug('Raw data: ', arg, e)
+    channelLog.debug('Raw data', { meta: { payload: formatPayloadPreview(arg) } })
     if (arg) {
       const { name, header, code, data, sync } = arg
 
@@ -88,7 +100,7 @@ class TouchChannel implements ITouchClientChannel {
       }
     }
 
-    console.error(e, arg)
+    channelLog.error('Invalid message payload', { error: { event: e, payload: arg } })
     return null
     // throw new Error("Invalid message!");
   }
@@ -156,7 +168,7 @@ class TouchChannel implements ITouchClientChannel {
 
   regChannel(
     eventName: string,
-    callback: Function,
+    callback: ChannelListener,
   ): () => void {
     const listeners = this.channelMap.get(eventName) || []
 
@@ -178,7 +190,7 @@ class TouchChannel implements ITouchClientChannel {
     }
   }
 
-  unRegChannel(eventName: string, callback: Function): boolean {
+  unRegChannel(eventName: string, callback: ChannelListener): boolean {
     const listeners = this.channelMap.get(eventName)
 
     if (!listeners) {
@@ -232,10 +244,10 @@ class TouchChannel implements ITouchClientChannel {
       }
       catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(
-          `[PluginChannel] Failed to send "${eventName}": ${errorMessage}`,
-          { payloadPreview: this.formatPayloadPreview(arg) },
-        )
+        channelLog.error(`Failed to send "${eventName}": ${errorMessage}`, {
+          meta: { payloadPreview: this.formatPayloadPreview(arg) },
+          error,
+        })
         reject(
           Object.assign(
             new Error(`Failed to send plugin channel message "${eventName}": ${errorMessage}`),
@@ -254,7 +266,7 @@ class TouchChannel implements ITouchClientChannel {
           new Error(`Plugin channel request "${eventName}" timed out after ${timeoutMs}ms`),
           { code: 'plugin_channel_timeout' },
         )
-        console.warn(timeoutError.message)
+        channelLog.warn(timeoutError.message)
         reject(timeoutError)
       }, timeoutMs)
 
@@ -292,10 +304,12 @@ class TouchChannel implements ITouchClientChannel {
     }
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      console.error('[PluginChannel] Failed to sendSync message', {
-        eventName,
-        error: errorMessage,
-        payloadPreview: this.formatPayloadPreview(arg),
+      channelLog.error('Failed to sendSync message', {
+        meta: {
+          eventName,
+          payloadPreview: this.formatPayloadPreview(arg),
+        },
+        error,
       })
       throw new Error(`Failed to sendSync plugin channel message "${eventName}": ${errorMessage}`)
     }

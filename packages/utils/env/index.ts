@@ -1,3 +1,5 @@
+import process from 'node:process'
+
 export const NEXUS_BASE_URL = 'https://tuff.tagzxia.com'
 
 export interface EnvLike {
@@ -20,7 +22,7 @@ function readGlobalEnv(): Record<string, string | undefined> {
     }
   }
 
-  const p: any = (globalThis as any).process
+  const p: any = process
   if (p && p.env && typeof p.env === 'object') {
     for (const [k, v] of Object.entries(p.env)) {
       if (typeof v === 'string') {
@@ -85,8 +87,9 @@ export function isBrowserRuntime(): boolean {
 }
 
 export function isNodeRuntime(): boolean {
-  return typeof process !== 'undefined'
-    && Boolean((process as any)?.versions?.node)
+  const proc: any = process
+  return typeof proc !== 'undefined'
+    && Boolean(proc?.versions?.node)
 }
 
 export function isElectronRuntime(): boolean {
@@ -101,7 +104,8 @@ export function isElectronRenderer(): boolean {
 
 export function isElectronMain(): boolean {
   return isElectronRuntime()
-    && ((process as any)?.type === 'browser' || !(process as any)?.type)
+    && ((process as any)?.type === 'browser'
+      || !(process as any)?.type)
 }
 
 export function isDevEnv(): boolean {
