@@ -2,6 +2,7 @@
 /* eslint-disable no-console */
 import type { Locale } from '../cli/i18n'
 import type { SelectOption } from '../cli/prompts'
+import type { BuildConfig, DevConfig } from '../types'
 import { createRequire } from 'node:module'
 import process from 'node:process'
 import type { RollupWatcher } from 'rollup'
@@ -20,6 +21,7 @@ import {
   printInfo,
   styled,
 } from '../cli/prompts'
+import { resolveBuildConfig, resolveDevConfig } from '../core/config'
 import { build } from '../core/exporter'
 import { login, logout, printPublishHelp, runPublish } from '../core/publish'
 import TouchPluginExport from '../vite'
@@ -99,7 +101,7 @@ async function runBuild() {
     return
   }
 
-  let watch = false
+  let watch: boolean | undefined
   let dev = false
   let outputDir: string | undefined
 
@@ -128,13 +130,24 @@ async function runBuild() {
     }
   }
 
-  const resolvedOutput = outputDir || 'dist'
+  const cliOverrides: BuildConfig = {}
+  if (watch !== undefined)
+    cliOverrides.watch = watch
+  if (outputDir)
+    cliOverrides.outDir = outputDir
+  if (dev) {
+    cliOverrides.minify = false
+    cliOverrides.sourcemap = true
+  }
+
+  const buildConfig = await resolveBuildConfig(process.cwd(), cliOverrides)
+  const resolvedOutput = buildConfig.outDir ?? 'dist'
   const mode = dev ? 'development' : 'production'
 
   const exporterOptions = {
-    outDir: resolvedOutput,
-    minify: dev ? false : undefined,
-    sourcemap: dev ? true : undefined,
+    outDir: buildConfig.outDir,
+    minify: buildConfig.minify,
+    sourcemap: buildConfig.sourcemap,
   }
 
   try {
@@ -144,13 +157,13 @@ async function runBuild() {
       plugins: [TouchPluginExport()],
       build: {
         outDir: resolvedOutput,
-        minify: dev ? false : undefined,
-        sourcemap: dev ? true : undefined,
-        watch: watch ? {} : undefined,
+        minify: buildConfig.minify,
+        sourcemap: buildConfig.sourcemap,
+        watch: buildConfig.watch ? {} : undefined,
       },
     })
 
-    if (!watch) {
+    if (!buildConfig.watch) {
       await build(exporterOptions)
       return
     }
@@ -220,7 +233,7 @@ async function runDev() {
 
   let host: string | boolean | undefined
   let port: number | undefined
-  let open = false
+  let open: boolean | undefined
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -259,13 +272,23 @@ async function runDev() {
   }
 
   try {
+    const cliOverrides: DevConfig = {}
+    if (host !== undefined)
+      cliOverrides.host = host
+    if (port !== undefined)
+      cliOverrides.port = port
+    if (open !== undefined)
+      cliOverrides.open = open
+
+    const devConfig = await resolveDevConfig(process.cwd(), cliOverrides)
+
     const server = await createServer({
       root: process.cwd(),
       plugins: [TouchPluginExport()],
       server: {
-        host,
-        port,
-        open,
+        host: devConfig.host,
+        port: devConfig.port,
+        open: devConfig.open,
       },
     })
 
