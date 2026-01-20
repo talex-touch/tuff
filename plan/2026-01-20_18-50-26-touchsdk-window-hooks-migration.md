@@ -70,3 +70,10 @@ created_at: 2026-01-20T18:50:39+0800
   - packages/utils/plugin/preload.ts:32（预加载内使用）
 - $config
   - packages/utils/plugin/preload.ts:18（声明）
+
+🧭 Hook 风格规范（TSDK-020）
+- 命名统一 `useX` 前缀；需要非抛错分支时提供 `tryUseX`/`tryGetX`。
+- 错误信息统一使用领域前缀（`[Plugin SDK]`/`[Feature SDK]`/`[TouchSDK]`），语义保持 “not available / Make sure this is called in a plugin renderer context”；低层 hook 接受 `errorMessage` 覆盖（如 useChannel/useBoxItems/useTouchSDK/usePluginInfo）。
+- 返回类型尽量显式（如 ITouchClientChannel/FeatureSDK/Notification SDK），避免 `any`（仅 window.$boxItems 等动态接口例外）。
+- 访问路径先通过 hook 获取上下文，再构建上层 SDK（参考 useFeature/useNotificationSdk）。
+- 样例基准：useChannel、useFeature、useNotificationSdk。
