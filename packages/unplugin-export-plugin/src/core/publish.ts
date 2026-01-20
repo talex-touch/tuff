@@ -14,16 +14,15 @@ interface PublishOptions {
   apiUrl?: string
 }
 
-interface AssetInfo {
+interface PackageInfo {
   path: string
   filename: string
-  platform: 'darwin' | 'win32' | 'linux'
-  arch: 'x64' | 'arm64' | 'universal'
   size: number
   sha256: string
+  mtimeMs: number
 }
 
-const DEFAULT_API_URL = `${NEXUS_BASE_URL}/api/releases`
+const DEFAULT_API_URL = `${NEXUS_BASE_URL}/api/market/plugins/publish`
 
 async function getAuthToken(): Promise<string | null> {
   const tokenPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.tuff', 'auth.json')
@@ -56,69 +55,40 @@ async function calculateSha256(filePath: string): Promise<string> {
   return createHash('sha256').update(content).digest('hex')
 }
 
-function detectPlatform(filename: string): 'darwin' | 'win32' | 'linux' {
-  const lower = filename.toLowerCase()
+async function scanPackages(packageDirs: string[]): Promise<PackageInfo[]> {
+  const packages: PackageInfo[] = []
 
-  if (lower.includes('.dmg') || lower.includes('mac') || lower.includes('darwin'))
-    return 'darwin'
-  if (lower.includes('.exe') || lower.includes('win') || lower.includes('windows'))
-    return 'win32'
-  if (lower.includes('.appimage') || lower.includes('.deb') || lower.includes('.rpm') || lower.includes('linux'))
-    return 'linux'
-
-  return 'darwin'
-}
-
-function detectArch(filename: string): 'x64' | 'arm64' | 'universal' {
-  const lower = filename.toLowerCase()
-
-  if (lower.includes('universal'))
-    return 'universal'
-  if (lower.includes('arm64') || lower.includes('aarch64'))
-    return 'arm64'
-  if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64'))
-    return 'x64'
-
-  return 'x64'
-}
-
-async function scanAssets(distPath: string): Promise<AssetInfo[]> {
-  const assets: AssetInfo[] = []
-  const extensions = ['.dmg', '.exe', '.AppImage', '.deb', '.rpm', '.zip', '.tar.gz']
-
-  if (!(await fs.pathExists(distPath))) {
-    console.warn(`⚠ Dist directory not found: ${distPath}`)
-    return assets
-  }
-
-  const files = await fs.readdir(distPath)
-
-  for (const file of files) {
-    const ext = extensions.find(e => file.endsWith(e))
-    if (!ext)
+  for (const dir of packageDirs) {
+    if (!(await fs.pathExists(dir)))
       continue
 
-    const filePath = path.join(distPath, file)
-    const stat = await fs.stat(filePath)
+    const files = await fs.readdir(dir)
 
-    if (!stat.isFile())
-      continue
+    for (const file of files) {
+      if (!file.endsWith('.tpex'))
+        continue
 
-    console.log(`  Found: ${file}`)
+      const filePath = path.join(dir, file)
+      const stat = await fs.stat(filePath)
 
-    const sha256 = await calculateSha256(filePath)
+      if (!stat.isFile())
+        continue
 
-    assets.push({
-      path: filePath,
-      filename: file,
-      platform: detectPlatform(file),
-      arch: detectArch(file),
-      size: stat.size,
-      sha256,
-    })
+      console.log(`  Found: ${file}`)
+
+      const sha256 = await calculateSha256(filePath)
+
+      packages.push({
+        path: filePath,
+        filename: file,
+        size: stat.size,
+        sha256,
+        mtimeMs: stat.mtimeMs,
+      })
+    }
   }
 
-  return assets
+  return packages
 }
 
 async function readPackageJson(): Promise<{ name: string, version: string } | null> {
@@ -127,6 +97,17 @@ async function readPackageJson(): Promise<{ name: string, version: string } | nu
   if (await fs.pathExists(pkgPath)) {
     const pkg = await fs.readJson(pkgPath)
     return { name: pkg.name, version: pkg.version }
+  }
+
+  return null
+}
+
+async function readManifest(): Promise<{ name: string, version: string } | null> {
+  const manifestPath = path.join(process.cwd(), 'manifest.json')
+
+  if (await fs.pathExists(manifestPath)) {
+    const manifest = await fs.readJson(manifestPath)
+    return { name: manifest.name, version: manifest.version }
   }
 
   return null
@@ -164,9 +145,8 @@ export async function logout(): Promise<void> {
 }
 
 export async function publish(options: PublishOptions = {}): Promise<void> {
-  console.log('\n📦 Tuff Release Publisher\n')
+  console.log('\n📦 Tuff Plugin Publisher\n')
 
-  // Check authentication
   const token = await getAuthToken()
   if (!token) {
     console.error('❌ Not authenticated. Run `tuff login <token>` first.')
@@ -174,19 +154,30 @@ export async function publish(options: PublishOptions = {}): Promise<void> {
     return
   }
 
-  // Read package.json
   const pkg = await readPackageJson()
-  if (!pkg) {
+  if (!pkg?.name || !pkg?.version) {
     console.error('❌ No package.json found in current directory')
     process.exitCode = 1
     return
   }
 
-  console.log(`Project: ${pkg.name}`)
+  const manifest = await readManifest()
+  if (!manifest?.name || !manifest?.version) {
+    console.error('❌ No manifest.json found in current directory')
+    process.exitCode = 1
+    return
+  }
+
+  if (manifest.version !== pkg.version) {
+    console.error(`❌ Version mismatch: manifest.json=${manifest.version} package.json=${pkg.version}`)
+    process.exitCode = 1
+    return
+  }
+
+  console.log(`Plugin: ${manifest.name}`)
   console.log(`Version: ${pkg.version}`)
 
-  // Determine tag and channel
-  const tag = options.tag || `v${pkg.version}`
+  const tag = options.tag || pkg.version
   const channel = options.channel || (
     tag.includes('snapshot') || tag.includes('alpha')
       ? 'SNAPSHOT'
@@ -199,30 +190,32 @@ export async function publish(options: PublishOptions = {}): Promise<void> {
   console.log(`Channel: ${channel}`)
   console.log('')
 
-  // Scan for assets
-  console.log('🔍 Scanning for release assets...')
+  console.log('🔍 Scanning for plugin packages...')
   const distPath = path.join(process.cwd(), 'dist')
-  const assets = await scanAssets(distPath)
+  const packages = await scanPackages([path.join(distPath, 'build'), distPath])
 
-  if (assets.length === 0) {
-    console.error('❌ No release assets found in dist/')
-    console.log('   Build your project first with `pnpm core:build:release`')
+  if (packages.length === 0) {
+    console.error('❌ No .tpex package found in dist/build or dist/')
+    console.log('   Build your plugin first with `tuff build`')
     process.exitCode = 1
     return
   }
 
-  console.log(`\n✓ Found ${assets.length} asset(s)\n`)
+  const sorted = [...packages].sort((a, b) => b.mtimeMs - a.mtimeMs)
+  const target = sorted[0]
 
-  // Summary
-  console.log('📋 Release Summary:')
-  console.log('─'.repeat(50))
-  console.log(`  Tag:     ${tag}`)
-  console.log(`  Channel: ${channel}`)
-  console.log(`  Assets:`)
-  for (const asset of assets) {
-    const sizeMB = (asset.size / 1024 / 1024).toFixed(2)
-    console.log(`    - ${asset.filename} (${asset.platform}/${asset.arch}, ${sizeMB} MB)`)
+  if (packages.length > 1) {
+    console.log(`\n⚠ Found ${packages.length} packages, using latest: ${target.filename}\n`)
   }
+
+  const sizeMB = (target.size / 1024 / 1024).toFixed(2)
+
+  console.log('📋 Publish Summary:')
+  console.log('─'.repeat(50))
+  console.log(`  Tag:      ${tag}`)
+  console.log(`  Channel:  ${channel}`)
+  console.log(`  Package:  ${target.filename} (${sizeMB} MB)`)
+  console.log(`  Sha256:   ${target.sha256}`)
   console.log('─'.repeat(50))
 
   if (options.dryRun) {
@@ -232,87 +225,38 @@ export async function publish(options: PublishOptions = {}): Promise<void> {
 
   const apiUrl = options.apiUrl || DEFAULT_API_URL
 
-  console.log('\n📤 Publishing to Nexus...')
+  console.log('\n📤 Publishing plugin package...')
 
   try {
-    // Step 1: Create release
-    console.log('  Creating release...')
+    const content = await fs.readFile(target.path)
+    const form = new FormData()
+    form.set('name', manifest.name)
+    form.set('version', pkg.version)
+    form.set('tag', tag)
+    form.set('channel', channel)
 
-    const createRes = await fetch(`${apiUrl}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        tag,
-        name: `${pkg.name} ${tag}`,
-        channel,
-        version: pkg.version,
-        notes: options.notes || `Release ${tag}`,
-      }),
-    })
-
-    if (!createRes.ok) {
-      const error = await createRes.text()
-      throw new Error(`Failed to create release: ${error}`)
+    if (options.notes) {
+      form.set('notes', options.notes)
+      form.set('changelog', options.notes)
     }
 
-    console.log('  ✓ Release created')
+    form.set('package', new Blob([content]), target.filename)
 
-    // Step 2: Link assets (using GitHub URLs or upload)
-    console.log('  Linking assets...')
-
-    for (const asset of assets) {
-      // For now, we'll just log what would be uploaded
-      // In production, you'd upload to R2/S3 or link to GitHub
-      console.log(`    → ${asset.filename}`)
-
-      // Link as GitHub asset (assuming GitHub release exists)
-      const githubUrl = `https://github.com/talex-touch/tuff/releases/download/${tag}/${asset.filename}`
-
-      const linkRes = await fetch(`${apiUrl}/${encodeURIComponent(tag)}/link-github`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          platform: asset.platform,
-          arch: asset.arch,
-          filename: asset.filename,
-          downloadUrl: githubUrl,
-          size: asset.size,
-          sha256: asset.sha256,
-        }),
-      })
-
-      if (!linkRes.ok) {
-        const error = await linkRes.text()
-        console.warn(`    ⚠ Failed to link ${asset.filename}: ${error}`)
-      }
-      else {
-        console.log(`    ✓ Linked ${asset.filename}`)
-      }
-    }
-
-    // Step 3: Publish
-    console.log('  Publishing release...')
-
-    const publishRes = await fetch(`${apiUrl}/${encodeURIComponent(tag)}/publish`, {
+    const publishRes = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      body: form,
     })
 
     if (!publishRes.ok) {
       const error = await publishRes.text()
-      throw new Error(`Failed to publish: ${error}`)
+      throw new Error(`Failed to publish package: ${error}`)
     }
 
-    console.log('\n✅ Release published successfully!')
-    console.log(`   View at: https://tuff.talex.link/updates?channel=${channel.toLowerCase()}`)
+    console.log('\n✅ Plugin package published successfully!')
+    console.log(`   Package: ${target.filename}`)
   }
   catch (error) {
     console.error(`\n❌ Publish failed: ${error instanceof Error ? error.message : error}`)
@@ -350,13 +294,13 @@ export function printPublishHelp(): void {
   console.log('Usage: tuff publish [options]')
   console.log('')
   console.log('Options:')
-  console.log('  --tag <tag>        Release tag (default: v{package.version})')
+  console.log('  --tag <tag>        Release tag (default: {package.version})')
   console.log('  --channel <ch>     Channel: RELEASE, BETA, SNAPSHOT (auto-detected)')
-  console.log('  --notes <text>     Release notes')
+  console.log('  --notes <text>     Changelog/notes (supports Markdown)')
   console.log('  --dry-run          Preview without publishing')
-  console.log('  --api-url <url>    Custom API URL')
+  console.log('  --api-url <url>    Custom publish API URL')
   console.log('')
   console.log('Example:')
-  console.log('  tuff publish --tag v2.5.0 --channel RELEASE')
+  console.log('  tuff publish --tag 1.2.0 --channel RELEASE')
   console.log('  tuff publish --dry-run')
 }
