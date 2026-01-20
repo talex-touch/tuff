@@ -4,6 +4,7 @@ import type { Locale } from '../cli/i18n'
 import type { SelectOption } from '../cli/prompts'
 import { createRequire } from 'node:module'
 import process from 'node:process'
+import { createServer } from 'vite'
 import { runCreate } from '../cli/commands'
 import {
   initI18n,
@@ -20,6 +21,7 @@ import {
 } from '../cli/prompts'
 import { build } from '../core/exporter'
 import { login, logout, printPublishHelp, runPublish } from '../core/publish'
+import TouchPluginExport from '../vite'
 
 const require = createRequire(import.meta.url)
 const pkg = require('../../package.json')
@@ -33,6 +35,7 @@ function printHelp() {
   console.log('Commands:')
   console.log('  create      Create a new Tuff plugin from template')
   console.log('  builder     Build and package the current project into .tpex')
+  console.log('  dev         Start Vite dev server for plugin development')
   console.log('  publish     Publish a release to Tuff Nexus')
   console.log('  login       Authenticate with Tuff Nexus')
   console.log('  logout      Clear authentication')
@@ -55,12 +58,100 @@ function printAbout() {
   console.log('Tools:')
   console.log('  - create:  Create new plugins from templates')
   console.log('  - builder: Package plugins into .tpex format')
+  console.log('  - dev:     Start a Vite dev server for plugin development')
   console.log('  - publish: Publish app releases to Nexus server')
+}
+
+function printDevHelp() {
+  console.log('Usage: tuff dev [options]')
+  console.log('')
+  console.log('Options:')
+  console.log('  --port <port>   Dev server port')
+  console.log('  --host [host]   Dev server host (omit value to listen on all)')
+  console.log('  --open          Open browser on start')
+  console.log('  --help, -h      Show this help message')
+  console.log('')
 }
 
 async function runBuilder() {
   console.log('Running: tuff builder')
   await build()
+}
+
+async function runDev() {
+  const args = process.argv.slice(3)
+  if (args.includes('--help') || args.includes('-h')) {
+    printDevHelp()
+    return
+  }
+
+  let host: string | boolean | undefined
+  let port: number | undefined
+  let open = false
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--open') {
+      open = true
+    }
+    else if (arg === '--host') {
+      const next = args[i + 1]
+      if (next && !next.startsWith('-')) {
+        host = next
+        i++
+      }
+      else {
+        host = true
+      }
+    }
+    else if (arg.startsWith('--host=')) {
+      host = arg.slice(7)
+    }
+    else if (arg === '--port') {
+      const next = args[i + 1]
+      if (!next || next.startsWith('-'))
+        throw new Error('Missing value for --port')
+      const value = Number(next)
+      if (!Number.isFinite(value))
+        throw new Error(`Invalid --port value: ${next}`)
+      port = value
+      i++
+    }
+    else if (arg.startsWith('--port=')) {
+      const value = Number(arg.slice(7))
+      if (!Number.isFinite(value))
+        throw new Error(`Invalid --port value: ${arg.slice(7)}`)
+      port = value
+    }
+  }
+
+  try {
+    const server = await createServer({
+      root: process.cwd(),
+      plugins: [TouchPluginExport()],
+      server: {
+        host,
+        port,
+        open,
+      },
+    })
+
+    await server.listen()
+    server.printUrls()
+
+    const shutdown = async () => {
+      await server.close()
+      process.exit(0)
+    }
+
+    process.on('SIGINT', () => void shutdown())
+    process.on('SIGTERM', () => void shutdown())
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`tuff dev failed: ${message}`)
+    process.exitCode = 1
+  }
 }
 
 /**
@@ -75,6 +166,7 @@ async function runInteractiveMode(): Promise<void> {
   const menuOptions: SelectOption<string>[] = [
     { label: t('menu.create'), value: 'create' },
     { label: t('menu.build'), value: 'build' },
+    { label: t('menu.dev'), value: 'dev' },
     { label: t('menu.publish'), value: 'publish' },
     { label: t('menu.login'), value: 'login' },
     { label: t('menu.logout'), value: 'logout' },
@@ -91,6 +183,9 @@ async function runInteractiveMode(): Promise<void> {
       break
     case 'build':
       await runBuilder()
+      break
+    case 'dev':
+      await runDev()
       break
     case 'publish':
       await runPublish()
@@ -175,6 +270,9 @@ async function main() {
     }
     else if (command === 'builder' || command === 'build') {
       await runBuilder()
+    }
+    else if (command === 'dev') {
+      await runDev()
     }
     else if (command === 'publish') {
       if (hasHelpFlag)
