@@ -26,6 +26,93 @@ export interface VersionSyncOptions {
   auto?: boolean
 }
 
+export interface BuildConfig {
+  /**
+   * Output directory for build artifacts
+   * @default 'dist'
+   */
+  outDir?: string
+
+  /**
+   * Watch files and rebuild on changes
+   * @default false
+   */
+  watch?: boolean
+
+  /**
+   * Minify output
+   * @default true (production) / false (development)
+   */
+  minify?: boolean
+
+  /**
+   * Generate source maps
+   * @default false
+   */
+  sourcemap?: boolean
+}
+
+export interface DevConfig {
+  /**
+   * Dev server host
+   */
+  host?: string | boolean
+
+  /**
+   * Dev server port
+   */
+  port?: number
+
+  /**
+   * Open browser on start
+   */
+  open?: boolean
+}
+
+export interface PublishConfig {
+  /**
+   * Release tag
+   */
+  tag?: string
+
+  /**
+   * Release channel
+   */
+  channel?: 'RELEASE' | 'BETA' | 'SNAPSHOT'
+
+  /**
+   * Changelog/notes
+   */
+  notes?: string
+
+  /**
+   * Dry-run without publishing
+   */
+  dryRun?: boolean
+
+  /**
+   * Custom publish API URL
+   */
+  apiUrl?: string
+}
+
+export interface TuffConfig extends BuildConfig {
+  /**
+   * Dev server configuration
+   */
+  dev?: DevConfig
+
+  /**
+   * Build configuration
+   */
+  build?: BuildConfig
+
+  /**
+   * Publish configuration
+   */
+  publish?: PublishConfig
+}
+
 export interface Options {
   /**
    * Project root directory
@@ -112,6 +199,8 @@ export interface Options {
 /**
  * Define plugin export configuration with type hints
  */
-export function defineConfig(options: Options): Options {
+export function defineConfig(options: TuffConfig): TuffConfig
+export function defineConfig(options: Options): Options
+export function defineConfig(options: TuffConfig | Options): TuffConfig | Options {
   return options
 }

@@ -5,14 +5,8 @@ import path from 'node:path'
 import process from 'node:process'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import fs from 'fs-extra'
-
-interface PublishOptions {
-  tag?: string
-  channel?: 'RELEASE' | 'BETA' | 'SNAPSHOT'
-  notes?: string
-  dryRun?: boolean
-  apiUrl?: string
-}
+import type { PublishConfig } from '../types'
+import { resolvePublishConfig } from './config'
 
 interface PackageInfo {
   path: string
@@ -144,7 +138,7 @@ export async function logout(): Promise<void> {
   }
 }
 
-export async function publish(options: PublishOptions = {}): Promise<void> {
+export async function publish(options: PublishConfig = {}): Promise<void> {
   console.log('\n📦 Tuff Plugin Publisher\n')
 
   const token = await getAuthToken()
@@ -267,27 +261,30 @@ export async function publish(options: PublishOptions = {}): Promise<void> {
 export async function runPublish(): Promise<void> {
   const args = process.argv.slice(3)
 
-  const options: PublishOptions = {
-    dryRun: args.includes('--dry-run'),
+  const cliOverrides: PublishConfig = {}
+
+  if (args.includes('--dry-run')) {
+    cliOverrides.dryRun = true
   }
 
   // Parse arguments
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--tag' && args[i + 1]) {
-      options.tag = args[++i]
+      cliOverrides.tag = args[++i]
     }
     else if (args[i] === '--channel' && args[i + 1]) {
-      options.channel = args[++i] as 'RELEASE' | 'BETA' | 'SNAPSHOT'
+      cliOverrides.channel = args[++i] as 'RELEASE' | 'BETA' | 'SNAPSHOT'
     }
     else if (args[i] === '--notes' && args[i + 1]) {
-      options.notes = args[++i]
+      cliOverrides.notes = args[++i]
     }
     else if (args[i] === '--api-url' && args[i + 1]) {
-      options.apiUrl = args[++i]
+      cliOverrides.apiUrl = args[++i]
     }
   }
 
-  await publish(options)
+  const resolved = await resolvePublishConfig(process.cwd(), cliOverrides)
+  await publish(resolved)
 }
 
 export function printPublishHelp(): void {
