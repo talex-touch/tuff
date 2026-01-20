@@ -51,6 +51,13 @@ created_at: 2026-01-20T18:55:06+08:00
   - `onDidChange` 监听 `plugin:storage:update` 变更（`packages/utils/plugin/sdk/storage.ts:109`）
   - 一致性要求：插件侧更新基于事件通知与异步 IPC，默认最终一致
 
+🧭 同步口径与策略（初稿）
+- 同步方向：JSON 作为主源；仅 `SQLITE_PILOT_CONFIGS` 内 key 做 JSON → SQLite 镜像写入（`apps/core-app/src/main/modules/storage/index.ts:60` / `apps/core-app/src/main/modules/storage/index.ts:230`）
+- 时序/冲突策略：主进程 `saveConfig` 先更新内存与 JSON，再异步 upsert SQLite；客户端携带版本号时执行冲突检测（旧版本拒绝），未携带版本默认接受并以最新写入为准（`apps/core-app/src/main/modules/storage/index.ts:582`）
+- 迁移/回滚：启动时执行 JSON → SQLite pilot 迁移；回滚只需移除 pilot key 或忽略 SQLite，JSON 文件仍为可用主源（`apps/core-app/src/main/modules/storage/index.ts:212`）
+- 兼容性：保留 legacy `storage:*` IPC 与 JSON 文件格式，SQLite 表结构保持 key/value 不变，避免破坏已有读写路径（`apps/core-app/src/main/modules/storage/index.ts:283` / `apps/core-app/src/main/db/schema.ts:278`）
+- 可观测性：利用 `storageLog` 记录 SQLite 写入失败与慢写入告警，保持问题可追踪（`apps/core-app/src/main/modules/storage/index.ts:230` / `apps/core-app/src/main/modules/storage/index.ts:662`）
+
 ✅ 已决事项
 - 本阶段仅做上下文与需求整理，目标是形成后续工作输入（来源: `plan/2026-01-20_18-55-03-context-requirements.md:14`）
 
