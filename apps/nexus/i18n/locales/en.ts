@@ -1021,7 +1021,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     },
   },
   docs: {
-    loading: 'Loading document…',
+    loading: 'Fetching document…',
     notFoundTitle: 'Document not found',
     notFoundDescription: 'We could not find content for this route yet. Head back to the docs overview.',
     backHome: 'Back to docs home',

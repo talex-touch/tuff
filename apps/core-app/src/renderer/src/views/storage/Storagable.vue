@@ -4,6 +4,7 @@ import { formatBytesShort } from '~/components/plugin/runtime/format'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 interface StorageUsageNode {
@@ -594,7 +595,9 @@ onMounted(() => {
       <div class="header">
         <div class="title">存储占用</div>
         <div class="actions">
-          <button class="btn" :disabled="summaryLoading" @click="loadAll">刷新</button>
+          <TxButton variant="bare" class="btn" :disabled="summaryLoading" @click="loadAll">
+            刷新
+          </TxButton>
         </div>
       </div>
 
@@ -649,16 +652,17 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="row-actions">
-                  <button
+                  <TxButton
                     v-for="action in moduleRowActions[node.key] || []"
                     :key="action.key"
+                    variant="bare"
                     class="btn action"
                     :class="{ danger: action.confirm.type === 'error' }"
                     :disabled="isBusy"
                     @click="runCleanup(action)"
                   >
                     {{ cleaningKey === action.key ? '处理中…' : action.label }}
-                  </button>
+                  </TxButton>
                 </div>
               </div>
               <div class="bar">
@@ -757,16 +761,17 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="row-actions">
-                  <button
+                  <TxButton
                     v-for="action in databaseGroupActions[group.category] || []"
                     :key="action.key"
+                    variant="bare"
                     class="btn action"
                     :class="{ danger: action.confirm.type === 'error' }"
                     :disabled="isBusy"
                     @click="runCleanup(action)"
                   >
                     {{ cleaningKey === action.key ? '处理中…' : action.label }}
-                  </button>
+                  </TxButton>
                 </div>
               </div>
               <template

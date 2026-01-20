@@ -2,18 +2,19 @@
 
 <div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #06b6d4, #3b82f6);"></div>
 
+## Overview
+
+The Platform Capabilities SDK provides a catalog of platform-level capabilities and their status.
+
 ## Introduction
 
 The Platform Capabilities SDK provides a catalog of platform-level capabilities and their status.
 
-## Technical Overview
+## Technical Notes
 
 - A main-process registry maintains capability definitions.
 - Capabilities are queried via `platform.capabilities.list` (TuffTransport).
 - Supports scope/status filters.
-
-## Implementation Notes
-
 - The SDK is a thin wrapper over transport events.
 - Capabilities are statically registered and can be extended over time.
 
@@ -40,3 +41,9 @@ const systemCaps = await platform.listCapabilities({ scope: 'system' })
 
 **Q: Where does the list come from?**  
 A: The main-process registry registers capabilities and expands over time.
+
+## Best Practices
+
+- Refresh capability lists only when needed to reduce overhead.
+- Filter by `status` and `scope` to avoid noisy results.
+- Surface capability maturity (beta/experimental) in UI.

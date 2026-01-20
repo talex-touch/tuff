@@ -1,6 +1,6 @@
 <script lang="ts" setup name="CapabilityModelTransfer">
 import { computed, ref, watch } from 'vue'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 const props = withDefaults(
   defineProps<{
@@ -11,8 +11,8 @@ const props = withDefaults(
   {
     modelValue: () => [],
     availableModels: () => [],
-    disabled: false,
-  },
+    disabled: false
+  }
 )
 
 const emit = defineEmits<{
@@ -30,8 +30,7 @@ function normalizeModel(value?: string): string {
 
 function trackModel(value?: string): void {
   const normalized = normalizeModel(value)
-  if (!normalized)
-    return
+  if (!normalized) return
   if (!seenModels.value.includes(normalized)) {
     seenModels.value = [...seenModels.value, normalized]
   }
@@ -42,18 +41,16 @@ watch(
   (list) => {
     list?.forEach(trackModel)
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 )
 
 watch(
   () => props.modelValue,
   (list) => {
     list?.forEach(trackModel)
-    selectedSelection.value = selectedSelection.value.filter(item =>
-      list?.includes(item),
-    )
+    selectedSelection.value = selectedSelection.value.filter((item) => list?.includes(item))
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 )
 
 const availableList = computed(() => {
@@ -61,103 +58,89 @@ const availableList = computed(() => {
   const pool = new Set<string>()
   ;(props.availableModels ?? []).forEach((model) => {
     const normalized = normalizeModel(model)
-    if (normalized)
-      pool.add(normalized)
+    if (normalized) pool.add(normalized)
   })
   seenModels.value.forEach((model) => {
-    if (model)
-      pool.add(model)
+    if (model) pool.add(model)
   })
-  return Array.from(pool).filter(model => !selectedSet.has(model))
+  return Array.from(pool).filter((model) => !selectedSet.has(model))
 })
 
 const selectedList = computed(() => (props.modelValue ?? []).map(normalizeModel).filter(Boolean))
 
 watch(availableList, (list) => {
-  availableSelection.value = availableSelection.value.filter(item => list.includes(item))
+  availableSelection.value = availableSelection.value.filter((item) => list.includes(item))
 })
 
 watch(selectedList, (list) => {
-  selectedSelection.value = selectedSelection.value.filter(item => list.includes(item))
+  selectedSelection.value = selectedSelection.value.filter((item) => list.includes(item))
 })
 
 function emitSelection(next: string[]): void {
   const deduped: string[] = []
   next.forEach((model) => {
     const normalized = normalizeModel(model)
-    if (!normalized)
-      return
-    if (!deduped.includes(normalized))
-      deduped.push(normalized)
+    if (!normalized) return
+    if (!deduped.includes(normalized)) deduped.push(normalized)
     trackModel(normalized)
   })
   emit('update:modelValue', deduped)
 }
 
 function handleToggleAvailable(model: string): void {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   availableSelection.value = availableSelection.value.includes(model)
-    ? availableSelection.value.filter(item => item !== model)
+    ? availableSelection.value.filter((item) => item !== model)
     : [...availableSelection.value, model]
 }
 
 function handleToggleSelected(model: string): void {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   selectedSelection.value = selectedSelection.value.includes(model)
-    ? selectedSelection.value.filter(item => item !== model)
+    ? selectedSelection.value.filter((item) => item !== model)
     : [...selectedSelection.value, model]
 }
 
 function moveToSelected(model?: string): void {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   const moveList = model ? [model] : availableSelection.value
-  if (!moveList.length)
-    return
-  const ordered = availableList.value.filter(item => moveList.includes(item))
+  if (!moveList.length) return
+  const ordered = availableList.value.filter((item) => moveList.includes(item))
   emitSelection([...selectedList.value, ...ordered])
   availableSelection.value = []
 }
 
 function removeFromSelected(model?: string): void {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   const removeList = model ? [model] : selectedSelection.value
-  if (!removeList.length)
-    return
-  emitSelection(selectedList.value.filter(item => !removeList.includes(item)))
+  if (!removeList.length) return
+  emitSelection(selectedList.value.filter((item) => !removeList.includes(item)))
   selectedSelection.value = []
 }
 
 function moveItem(model: string, direction: number): void {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   const current = [...selectedList.value]
-  const index = current.findIndex(item => item === model)
-  if (index === -1)
-    return
+  const index = current.findIndex((item) => item === model)
+  if (index === -1) return
   const nextIndex = index + direction
   if (nextIndex < 0 || nextIndex >= current.length) {
     return
-  }[current[index], current[nextIndex]] = [current[nextIndex], current[index]]
+  }
+  ;[current[index], current[nextIndex]] = [current[nextIndex], current[index]]
   emitSelection(current)
 }
 
 function handleAddCustom(): void {
-  if (props.disabled)
-    return
+  if (props.disabled) return
   const model = normalizeModel(customModelInput.value)
-  if (!model)
-    return
+  if (!model) return
   emitSelection([...selectedList.value, model])
   customModelInput.value = ''
 }
 
 function handleKeyAdd(event: KeyboardEvent): void {
-  if (event.key !== 'Enter')
-    return
+  if (event.key !== 'Enter') return
   event.preventDefault()
   handleAddCustom()
 }
@@ -176,10 +159,11 @@ function handleKeyAdd(event: KeyboardEvent): void {
         <p v-if="availableList.length === 0" class="capability-transfer__empty">
           暂无可选模型，先在渠道配置里同步一下吧。
         </p>
-        <button
+        <TxButton
           v-for="model in availableList"
           :key="model"
-          type="button"
+          variant="bare"
+          native-type="button"
           class="capability-transfer__item"
           :class="{ 'is-selected': availableSelection.includes(model) }"
           :aria-pressed="availableSelection.includes(model)"
@@ -188,7 +172,7 @@ function handleKeyAdd(event: KeyboardEvent): void {
         >
           <i class="i-carbon-model" aria-hidden="true" />
           <span>{{ model }}</span>
-        </button>
+        </TxButton>
       </div>
       <div class="capability-transfer__custom">
         <input
@@ -197,34 +181,44 @@ function handleKeyAdd(event: KeyboardEvent): void {
           type="text"
           placeholder="自定义模型 ID"
           @keyup="handleKeyAdd"
+        />
+        <TxButton
+          variant="flat"
+          size="sm"
+          :disabled="disabled || !customModelInput.trim()"
+          @click="handleAddCustom"
         >
-        <FlatButton :disabled="disabled || !customModelInput.trim()" mini @click="handleAddCustom">
           <i class="i-carbon-add" />
           添加
-        </FlatButton>
+        </TxButton>
       </div>
     </div>
 
     <div class="capability-transfer__actions" aria-hidden="true">
-      <button
-        type="button"
+      <TxButton
+        variant="bare"
+        native-type="button"
         class="capability-transfer__action-btn"
         :disabled="disabled || !availableSelection.length"
         @click="moveToSelected()"
       >
         <i class="i-carbon-chevron-right" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
+      </TxButton>
+      <TxButton
+        variant="bare"
+        native-type="button"
         class="capability-transfer__action-btn"
         :disabled="disabled || !selectedSelection.length"
         @click="removeFromSelected()"
       >
         <i class="i-carbon-chevron-left" aria-hidden="true" />
-      </button>
+      </TxButton>
     </div>
 
-    <div class="capability-transfer__panel capability-transfer__panel--selected" aria-label="Selected models">
+    <div
+      class="capability-transfer__panel capability-transfer__panel--selected"
+      aria-label="Selected models"
+    >
       <header>
         <div>
           <p>已绑定模型</p>
@@ -241,33 +235,41 @@ function handleKeyAdd(event: KeyboardEvent): void {
           class="capability-transfer__selected"
           :class="{ 'is-picked': selectedSelection.includes(model) }"
         >
-          <button
-            type="button"
+          <TxButton
+            variant="bare"
+            native-type="button"
             class="capability-transfer__item capability-transfer__item--selected"
             :aria-pressed="selectedSelection.includes(model)"
             @click="handleToggleSelected(model)"
           >
             <span class="capability-transfer__order">{{ index + 1 }}</span>
             <span>{{ model }}</span>
-          </button>
+          </TxButton>
           <div class="capability-transfer__selected-actions">
-            <button
-              type="button"
+            <TxButton
+              variant="bare"
+              native-type="button"
               :disabled="disabled || index === 0"
               @click="moveItem(model, -1)"
             >
               <i class="i-carbon-arrow-up" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
+            </TxButton>
+            <TxButton
+              variant="bare"
+              native-type="button"
               :disabled="disabled || index === selectedList.length - 1"
               @click="moveItem(model, 1)"
             >
               <i class="i-carbon-arrow-down" aria-hidden="true" />
-            </button>
-            <button type="button" :disabled="disabled" @click="removeFromSelected(model)">
+            </TxButton>
+            <TxButton
+              variant="bare"
+              native-type="button"
+              :disabled="disabled"
+              @click="removeFromSelected(model)"
+            >
               <i class="i-carbon-trash-can" aria-hidden="true" />
-            </button>
+            </TxButton>
           </div>
         </div>
       </div>
@@ -344,7 +346,9 @@ function handleKeyAdd(event: KeyboardEvent): void {
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 
   i {
     color: var(--el-text-color-placeholder);

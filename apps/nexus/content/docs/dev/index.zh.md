@@ -3,25 +3,25 @@
 > 构建插件、扩展功能，融入 Tuff 生态系统。
 
 ## 快速入门
-1. **[开发概览](./overview.zh.md)** — 了解插件模型和架构。
-2. **[快速开始](./quickstart.zh.md)** — 几分钟内搭建你的第一个插件。
-3. **[Manifest 参考](./manifest.zh.md)** — 配置功能和权限。
-4. **[旧版插件迁移](./migration.zh.md)** — 从旧版插件升级到新 SDK 体系。
+1. **[开发概览](./getting-started/overview.zh.md)** — 了解插件模型和架构。
+2. **[快速开始](./getting-started/quickstart.zh.md)** — 几分钟内搭建你的第一个插件。
+3. **[Manifest 参考](./reference/manifest.zh.md)** — 配置功能和权限。
+4. **[旧版插件迁移](./release/migration.zh.md)** — 从旧版插件升级到新 SDK 体系。
 
 ## 深入学习
 - **[API 参考](./api/)** — 存储、通道和 UI 的类型化接口。
 - **[扩展开发](./extensions/)** — 复杂集成的高级模式。
-- **[代码片段](./snippets.zh.md)** — 常见任务的复制粘贴示例。
+- **[代码片段](./reference/snippets.zh.md)** — 常见任务的复制粘贴示例。
 
 ## 运行时行为
-- **[CoreBox 窗口与 UI View 缓存](./corebox-and-views.zh.md)** — 伸缩逻辑、推荐请求与 WebContentsView 缓存。
+- **[CoreBox 窗口与 UI View 缓存](./architecture/corebox-and-views.zh.md)** — 伸缩逻辑、推荐请求与 WebContentsView 缓存。
 
 ## 开发工具
-- **[TUFF CLI](./tuff-cli.zh.md)** — 命令行工具，快速创建和管理插件项目。
-- **[TuffEx](./tuffex.zh.md)** — Vue3 组件库，统一设计语言和交互体验。
+- **[TUFF CLI](./tools/tuff-cli.zh.md)** — 命令行工具，快速创建和管理插件项目。
+- **[TuffEx](./tools/tuffex.zh.md)** — Vue3 组件库，统一设计语言和交互体验。
 
 ## 发布
-- **[发布流程](./publish.zh.md)** — 将插件提交到市场。
+- **[发布流程](./release/publish.zh.md)** — 将插件提交到市场。
 
 ## 资源
 - 加入 Discord 开发者社区获取实时支持。

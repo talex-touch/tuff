@@ -1,8 +1,12 @@
 # Box SDK
 
+## 概述
+
 Box SDK 提供插件控制 CoreBox 窗口行为的能力，包括显示/隐藏、大小调整、输入框控制等。
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```typescript
 import { useBox } from '@talex-touch/utils/plugin/sdk'
@@ -23,7 +27,7 @@ const input = await box.getInput()
 
 ## API 参考
 
-### useBox()
+**useBox()**
 
 获取 Box SDK 实例。
 
@@ -39,7 +43,7 @@ const box = useBox()
 
 ## 窗口控制
 
-### `hide()`
+**`hide()`**
 
 隐藏 CoreBox 窗口。
 
@@ -47,7 +51,7 @@ const box = useBox()
 box.hide()
 ```
 
-### `show()`
+**`show()`**
 
 显示 CoreBox 窗口。
 
@@ -55,7 +59,7 @@ box.hide()
 box.show()
 ```
 
-### `expand(options?)`
+**`expand(options?)`**
 
 展开 CoreBox 窗口以显示更多结果。
 
@@ -75,7 +79,7 @@ await box.expand()
 | `length` | `number` | 要显示的项目数量 |
 | `forceMax` | `boolean` | 强制最大展开 |
 
-### `shrink()`
+**`shrink()`**
 
 收缩 CoreBox 窗口到紧凑模式。
 
@@ -87,7 +91,7 @@ await box.shrink()
 
 ## 输入框控制
 
-### `hideInput()`
+**`hideInput()`**
 
 隐藏搜索输入框。
 
@@ -95,7 +99,7 @@ await box.shrink()
 await box.hideInput()
 ```
 
-### `showInput()`
+**`showInput()`**
 
 显示搜索输入框。
 
@@ -103,7 +107,7 @@ await box.hideInput()
 await box.showInput()
 ```
 
-### `getInput()`
+**`getInput()`**
 
 获取当前输入框的值。
 
@@ -112,7 +116,7 @@ const input = await box.getInput()
 console.log('当前输入:', input)
 ```
 
-### `setInput(value)`
+**`setInput(value)`**
 
 设置输入框的值。
 
@@ -120,7 +124,7 @@ console.log('当前输入:', input)
 await box.setInput('hello world')
 ```
 
-### `clearInput()`
+**`clearInput()`**
 
 清空输入框。
 
@@ -132,7 +136,7 @@ await box.clearInput()
 
 ## 监听功能
 
-### `allowInput()`
+**`allowInput()`**
 
 启用输入监听，允许插件接收输入变化事件。
 
@@ -151,7 +155,7 @@ channel.regChannel('core-box:input-change', ({ data }) => {
 })
 ```
 
-### `allowClipboard(types)`
+**`allowClipboard(types)`**
 
 启用剪贴板监听，允许插件接收剪贴板变化事件。
 
@@ -167,7 +171,7 @@ await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
 await box.allowClipboard(ClipboardTypePresets.ALL)
 ```
 
-#### ClipboardType 枚举
+**ClipboardType 枚举**
 
 | 值 | 二进制 | 说明 |
 |------|------|------|
@@ -175,7 +179,7 @@ await box.allowClipboard(ClipboardTypePresets.ALL)
 | `IMAGE` | `0b0010` | 图片 |
 | `FILE` | `0b0100` | 文件 |
 
-#### 预设组合
+**预设组合**
 
 ```typescript
 import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
@@ -194,7 +198,7 @@ ClipboardTypePresets.ALL
 
 ## 完整示例
 
-### 翻译插件示例
+**翻译插件示例**
 
 ```typescript
 import { useBox, useClipboard, ClipboardType } from '@talex-touch/utils/plugin/sdk'
@@ -224,7 +228,7 @@ async function outputTranslation(text: string) {
 }
 ```
 
-### 搜索插件示例
+**搜索插件示例**
 
 ```typescript
 import { useBox, useChannel } from '@talex-touch/utils/plugin/sdk'
@@ -276,3 +280,14 @@ enum ClipboardType {
   FILE = 0b0100,
 }
 ```
+
+## 最佳实践
+
+- 在输入监听或剪贴板监听不再需要时及时停用，减少事件噪音。
+- 根据结果数量调用 `expand`/`shrink`，保持 UI 反馈节奏一致。
+- 监听回调中避免重计算，必要时做节流处理。
+
+## 技术原理
+
+- Box SDK 通过 IPC 请求主进程执行窗口与输入控制，避免渲染进程直接操作窗口状态。
+- 监听能力由 CoreBox 主进程统一管理，按授权类型筛选后向插件分发事件。

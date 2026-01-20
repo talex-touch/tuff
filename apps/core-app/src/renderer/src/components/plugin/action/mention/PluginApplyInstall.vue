@@ -3,7 +3,7 @@ import { sleep } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import Loading from '~/assets/lotties/compress-loading.json'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { clearBufferedFile, getBufferedFile } from '~/modules/hooks/dropper-resolver'
 import { blowMention, forTouchTip } from '~/modules/mention/dialog-mention'
@@ -142,8 +142,8 @@ function onIgnore(): void {
       </h4>
       <span my-2 class="block text-center text-xs text-gray-500">{{ manifest.version }}</span>
       <div class="flex justify-between mt-16px gap-16px h-2.5rem">
-        <FlatButton v-wave flex-1 @click="onIgnore"> Ignore </FlatButton>
-        <FlatButton v-wave flex-1 :primary="true" @click="install"> Install </FlatButton>
+        <TxButton variant="flat" flex-1 @click="onIgnore"> Ignore </TxButton>
+        <TxButton variant="flat" type="primary" flex-1 @click="install()"> Install </TxButton>
       </div>
     </div>
   </div>

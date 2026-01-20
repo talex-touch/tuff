@@ -12,7 +12,7 @@
 
 - `vision.ocr`
 
-### OCR example
+**OCR example**
 
 ```ts
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
@@ -32,7 +32,7 @@ console.log(res.result.text)
 
 - `embedding.generate`
 
-### Embedding governance
+**Embedding governance**
 
 `embedding.generate` applies:
 

@@ -11,7 +11,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -409,12 +409,12 @@ function formatTimeout(ms: number): string {
       active-icon="i-carbon-settings-adjust"
     >
       <div class="actions-container">
-        <FlatButton :loading="cleaningTemp" @click="cleanupTempFiles">
+        <TxButton variant="flat" :loading="cleaningTemp" @click="cleanupTempFiles">
           {{ t('settings.settingDownload.cleanupTemp') }}
-        </FlatButton>
-        <FlatButton :loading="loading" @click="restoreDefaults">
+        </TxButton>
+        <TxButton variant="flat" :loading="loading" @click="restoreDefaults">
           {{ t('settings.settingDownload.restoreDefaults') }}
-        </FlatButton>
+        </TxButton>
       </div>
     </TuffBlockSlot>
   </TuffGroupBlock>

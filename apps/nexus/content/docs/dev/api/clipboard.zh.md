@@ -6,10 +6,13 @@ Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
 - **基础操作**：读写剪贴板内容（文本、HTML、图片、文件）
 - **历史管理**：查询、搜索、删除剪贴板历史记录
 - **复制粘贴**：将内容复制到剪贴板并自动粘贴到当前活动应用
+- **自动标签**：为文本内容打标签（URL、API Key、Token、账号/密码、邮箱），便于分类与匹配
 
 所有操作通过 IPC 在主进程执行，避免 WebContents 焦点问题导致的剪贴板操作失败。
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```typescript
 import { useClipboard } from '@talex-touch/utils/plugin/sdk'
@@ -29,7 +32,7 @@ await clipboard.copyAndPaste({ text: 'Pasted content' })
 
 ## API 参考
 
-### useClipboard()
+**useClipboard()**
 
 返回统一的剪贴板 SDK 实例。
 
@@ -41,7 +44,7 @@ const clipboard = useClipboard()
 
 ## 基础操作
 
-### writeText(text)
+**writeText(text)**
 
 写入纯文本到剪贴板。
 
@@ -49,7 +52,7 @@ const clipboard = useClipboard()
 await clipboard.writeText('Hello World')
 ```
 
-### write(options)
+**write(options)**
 
 写入多种格式内容到剪贴板。
 
@@ -79,7 +82,7 @@ await clipboard.write({
 | `image` | `string` | 图片 data URL |
 | `files` | `string[]` | 文件路径数组 |
 
-### read()
+**read()**
 
 读取当前剪贴板内容。
 
@@ -103,7 +106,7 @@ const content = await clipboard.read()
 | `hasFiles` | `boolean` | 是否包含文件 |
 | `formats` | `string[]` | 可用格式列表 |
 
-### readImage()
+**readImage()**
 
 读取剪贴板中的图片。
 
@@ -116,7 +119,7 @@ if (image) {
 
 **返回值**：`{ dataUrl: string, width: number, height: number } | null`
 
-### readFiles()
+**readFiles()**
 
 读取剪贴板中的文件路径。
 
@@ -125,7 +128,7 @@ const files = await clipboard.readFiles()
 // ['/path/to/file1.txt', '/path/to/file2.png']
 ```
 
-### clear()
+**clear()**
 
 清空剪贴板。
 
@@ -137,7 +140,7 @@ await clipboard.clear()
 
 ## 复制并粘贴
 
-### copyAndPaste(options)
+**copyAndPaste(options)**
 
 将内容写入剪贴板，然后模拟粘贴快捷键到当前活动应用。这是插件"输出"内容到用户当前应用的推荐方式。
 
@@ -187,7 +190,7 @@ await clipboard.copyAndPaste({
 
 通过 `clipboard.history` 访问历史记录相关操作。
 
-### history.getLatest()
+**history.getLatest()**
 
 获取最新的剪贴板记录。
 
@@ -198,7 +201,7 @@ if (latest) {
 }
 ```
 
-### history.getHistory(options)
+**history.getHistory(options)**
 
 分页获取剪贴板历史。
 
@@ -209,7 +212,7 @@ const { history, total, page, pageSize } = await clipboard.history.getHistory({
 })
 ```
 
-### history.searchHistory(options)
+**history.searchHistory(options)**
 
 高级搜索剪贴板历史。
 
@@ -252,7 +255,7 @@ const filtered = await clipboard.history.searchHistory({
 | `pageSize` | `number` | 每页数量 |
 | `sortOrder` | `'asc' \| 'desc'` | 排序方向 |
 
-### history.setFavorite(options)
+**history.setFavorite(options)**
 
 设置收藏状态。
 
@@ -263,7 +266,7 @@ await clipboard.history.setFavorite({
 })
 ```
 
-### history.deleteItem(options)
+**history.deleteItem(options)**
 
 删除历史记录。
 
@@ -271,7 +274,7 @@ await clipboard.history.setFavorite({
 await clipboard.history.deleteItem({ id: 123 })
 ```
 
-### history.clearHistory()
+**history.clearHistory()**
 
 清空所有历史记录。
 
@@ -283,7 +286,7 @@ await clipboard.history.clearHistory()
 
 ## 监听剪贴板变化
 
-### history.onDidChange(callback)
+**history.onDidChange(callback)**
 
 监听剪贴板变化事件。
 
@@ -344,15 +347,47 @@ interface PluginClipboardItem {
   sourceApp?: string        // 来源应用
   timestamp?: Date          // 时间戳
   isFavorite?: boolean      // 是否收藏
-  meta?: Record<string, unknown>  // 元数据
+  meta?: Record<string, unknown>  // 元数据（含 tags）
 }
 ```
 
 ---
 
+## 自动标签（tags）
+
+当剪贴板内容为文本时，系统会进行轻量规则识别并写入 `meta.tags`，用于快速分类、提示与匹配。标签仅表示**类别**，不会包含原始敏感值。
+
+**当前标签集合**：
+- `url`：URL/链接
+- `api_key`：API Key（常见前缀或字段形式）
+- `token`：Token/Bearer
+- `password`：密码字段
+- `account`：账号/用户名字段
+- `email`：邮箱
+
+**使用示例**：
+```typescript
+const latest = await clipboard.history.getLatest()
+const tags = Array.isArray(latest?.meta?.tags) ? latest?.meta?.tags : []
+
+if (tags.includes('api_key') || tags.includes('password')) {
+  // 例如：提示用户注意敏感信息
+}
+```
+
+> 建议：对 `history.searchHistory()` 的结果在插件侧按 `meta.tags` 做二次筛选，以实现更精准的匹配逻辑。
+
+---
+
+## 技术原理
+
+- 读写、历史记录与自动粘贴均在主进程执行，通过 IPC 返回结果，避免渲染进程焦点导致的剪贴板失败。
+- 历史记录落盘在数据库中，`meta`/`metadata` 承载附加信息并用于筛选与匹配。
+- 自动标签基于轻量规则匹配生成，只输出类别，不暴露原始敏感内容。
+
 ## 迁移指南
 
-### 从 useClipboardHistory 迁移
+**从 useClipboardHistory 迁移**
 
 `useClipboardHistory()` 已废弃，请迁移到 `useClipboard()`：
 

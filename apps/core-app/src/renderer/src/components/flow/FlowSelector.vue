@@ -9,6 +9,7 @@ import type { FlowPayload, FlowTargetInfo } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -263,9 +264,10 @@ function getPayloadPreview(): string {
               </div>
 
               <div v-else class="space-y-1">
-                <button
+                <TxButton
                   v-for="(target, index) in filteredTargets"
                   :key="target.fullId"
+                  variant="bare"
                   class="FlowTargetItem w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors"
                   :class="{
                     'bg-[var(--el-color-primary-light-9)]': index === selectedIndex,
@@ -317,7 +319,7 @@ function getPayloadPreview(): string {
                       {{ type }}
                     </span>
                   </div>
-                </button>
+                </TxButton>
               </div>
             </div>
           </TouchScroll>
@@ -334,12 +336,13 @@ function getPayloadPreview(): string {
               <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--el-fill-color)]">Esc</kbd>
               {{ t('flow.cancel', '取消') }}
             </div>
-            <button
+            <TxButton
+              variant="bare"
               class="px-3 py-1.5 text-sm rounded-lg bg-[var(--el-fill-color)] hover:bg-[var(--el-fill-color-dark)] transition-colors"
               @click="handleClose"
             >
               {{ t('common.cancel', '取消') }}
-            </button>
+            </TxButton>
           </div>
         </div>
       </div>
@@ -365,27 +368,30 @@ function getPayloadPreview(): string {
             }}
           </p>
           <div class="mt-4 flex items-center justify-end gap-2">
-            <button
+            <TxButton
+              variant="bare"
               class="px-3 py-1.5 text-sm rounded-md border border-[var(--el-border-color)] text-[var(--el-text-color-regular)] hover:bg-[var(--el-fill-color-light)]"
               :disabled="consentLoading"
               @click="handleConsentDeny"
             >
               {{ t('flow.consentDeny', '拒绝') }}
-            </button>
-            <button
+            </TxButton>
+            <TxButton
+              variant="bare"
               class="px-3 py-1.5 text-sm rounded-md border border-[var(--el-border-color)] text-[var(--el-text-color-regular)] hover:bg-[var(--el-fill-color-light)]"
               :disabled="consentLoading"
               @click="handleConsent('once')"
             >
               {{ t('flow.consentOnce', '仅本次') }}
-            </button>
-            <button
+            </TxButton>
+            <TxButton
+              variant="bare"
               class="px-3 py-1.5 text-sm rounded-md bg-[var(--el-color-primary)] text-white hover:opacity-90"
               :disabled="consentLoading"
               @click="handleConsent('always')"
             >
               {{ t('flow.consentAlways', '始终允许') }}
-            </button>
+            </TxButton>
           </div>
         </div>
       </div>

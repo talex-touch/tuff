@@ -3,6 +3,7 @@ import type { Ref } from 'vue'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import HelloData from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 type BackFunction = () => void
 
@@ -20,8 +21,8 @@ function close(): void {
     <div class="Forbidden-Content">
       <p>We're sorry, but we are unable to provide service at this time.</p>
       <div flex gap-8>
-        <FlatButton @click="close"> CLOSE </FlatButton>
-        <FlatButton primary @click="back"> BACK </FlatButton>
+        <TxButton variant="flat" @click="close"> CLOSE </TxButton>
+        <TxButton variant="flat" type="primary" @click="back"> BACK </TxButton>
       </div>
     </div>
   </div>

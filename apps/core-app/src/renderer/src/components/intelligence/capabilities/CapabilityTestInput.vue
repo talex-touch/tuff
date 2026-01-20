@@ -2,7 +2,7 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import IntelligencePromptSelector from '~/components/intelligence/config/IntelligencePromptSelector.vue'
 
 const props = defineProps<{
@@ -152,11 +152,18 @@ if (availableProviders.value.length > 0) {
     </div>
 
     <div class="action-section">
-      <FlatButton primary block :disabled="!canTest" :loading="isTesting" @click="handleTest">
+      <TxButton
+        variant="flat"
+        type="primary"
+        block
+        :disabled="!canTest"
+        :loading="isTesting"
+        @click="handleTest"
+      >
         <i v-if="!isTesting" class="i-carbon-play-filled" aria-hidden="true" />
         <i v-else class="i-carbon-circle-dash animate-spin" aria-hidden="true" />
         <span>{{ testButtonText }}</span>
-      </FlatButton>
+      </TxButton>
     </div>
   </div>
 </template>

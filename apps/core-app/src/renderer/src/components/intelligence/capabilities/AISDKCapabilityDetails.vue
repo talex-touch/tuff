@@ -9,7 +9,7 @@ import { useIntelligence } from '@talex-touch/utils/renderer/hooks/use-intellige
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { VueDraggable as draggable } from 'vue-draggable-plus'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -337,9 +337,10 @@ onBeforeUnmount(() => {
             </span>
           </div>
         </div>
-        <FlatButton
+        <TxButton
           class="test-button"
-          primary
+          variant="flat"
+          type="primary"
           :disabled="isTesting"
           :aria-busy="isTesting"
           @click="handleTest"
@@ -353,7 +354,7 @@ onBeforeUnmount(() => {
               ? t('settings.intelligence.testing')
               : t('settings.intelligence.capabilityTest')
           }}</span>
-        </FlatButton>
+        </TxButton>
       </div>
     </template>
 
@@ -392,8 +393,9 @@ onBeforeUnmount(() => {
                   @end="emitProvidersOrder"
                 >
                   <template #item="{ element }">
-                    <button
-                      type="button"
+                    <TxButton
+                      variant="bare"
+                      native-type="button"
                       class="provider-card"
                       :class="{
                         'is-focused': focusedProviderId === element.providerId
@@ -432,7 +434,7 @@ onBeforeUnmount(() => {
                           aria-hidden="true"
                         />
                       </div>
-                    </button>
+                    </TxButton>
                   </template>
                 </draggable>
               </div>
@@ -445,11 +447,12 @@ onBeforeUnmount(() => {
                 </p>
               </div>
               <div class="capability-providers__disabled-list">
-                <button
+                <TxButton
                   v-for="entry in disabledProviders"
                   :key="entry.providerId"
+                  variant="bare"
                   class="provider-card provider-card--disabled"
-                  type="button"
+                  native-type="button"
                   @click="handleProviderCardClick(entry.providerId)"
                 >
                   <div class="provider-card__content">
@@ -465,7 +468,7 @@ onBeforeUnmount(() => {
                       {{ t('settings.intelligence.capabilityChannelDisabled') }}
                     </span>
                   </div>
-                </button>
+                </TxButton>
               </div>
             </div>
           </div>
@@ -486,10 +489,15 @@ onBeforeUnmount(() => {
               <p class="capability-details__slot-summary">
                 {{ modelSummary }}
               </p>
-              <FlatButton primary :disabled="!canEditModels" @click="openModelDrawer">
+              <TxButton
+                variant="flat"
+                type="primary"
+                :disabled="!canEditModels"
+                @click="openModelDrawer"
+              >
                 <i class="i-carbon-settings" aria-hidden="true" />
                 <span>{{ t('settings.intelligence.manageModels') }}</span>
-              </FlatButton>
+              </TxButton>
             </div>
           </template>
         </TuffBlockSlot>
@@ -506,10 +514,10 @@ onBeforeUnmount(() => {
               <p class="capability-details__slot-summary">
                 {{ promptSummary }}
               </p>
-              <FlatButton text @click="openPromptDrawer">
+              <TxButton variant="flat" type="text" @click="openPromptDrawer">
                 <i class="i-carbon-edit" aria-hidden="true" />
                 <span>{{ t('settings.intelligence.editPrompt') }}</span>
-              </FlatButton>
+              </TxButton>
             </div>
           </template>
         </TuffBlockSlot>

@@ -125,9 +125,16 @@ const isIconOnly = computed(() => {
   return props.circle || (props.icon && !slotHasContent)
 })
 
+const toneClass = computed(() => {
+  if (!props.type)
+    return undefined
+  return `tone-${props.type}`
+})
+
 const classList = computed(() => {
   return [
     `variant-${normalizedVariant.value}`,
+    toneClass.value,
     `tx-size-${normalizedSize.value}`,
     {
       'block': props.block,

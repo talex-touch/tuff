@@ -3,7 +3,7 @@ import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events
 import { ElMessage } from 'element-plus'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
@@ -254,13 +254,13 @@ async function triggerRebuild() {
       default-icon="i-carbon-reset"
       active-icon="i-carbon-reset"
     >
-      <FlatButton primary @click="triggerRebuild">
+      <TxButton variant="flat" type="primary" @click="triggerRebuild">
         {{
           isRebuilding
             ? t('settings.settingFileIndex.rebuilding')
             : t('settings.settingFileIndex.rebuildNow')
         }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- 统计信息 -->

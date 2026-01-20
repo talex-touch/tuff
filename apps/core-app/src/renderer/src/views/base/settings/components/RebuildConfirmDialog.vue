@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   onConfirm: () => void
@@ -102,12 +102,12 @@ function close() {
     </div>
 
     <div class="dialog-footer">
-      <FlatButton @click="close">
+      <TxButton variant="flat" @click="close">
         {{ t('common.cancel') }}
-      </FlatButton>
-      <FlatButton primary :disabled="countdown > 0" @click="handleConfirm">
+      </TxButton>
+      <TxButton variant="flat" type="primary" :disabled="countdown > 0" @click="handleConfirm">
         {{ countdown > 0 ? `${t('common.confirm')} (${countdown}s)` : t('common.confirm') }}
-      </FlatButton>
+      </TxButton>
     </div>
   </div>
 </template>

@@ -1,8 +1,12 @@
 # DivisionBox API
 
+## 概述
+
 DivisionBox 是一个轻量级的子窗口系统，基于 `WebContentsView` 实现，用于承载插件 UI、系统工具和调试界面。
 
-## Scope
+## 介绍
+
+**Scope**
 
 本文档描述 **当前已落地** 的 DivisionBox 基础能力（open/close/state + 生命周期事件）。
 
@@ -15,7 +19,7 @@ DivisionBox 是一个轻量级的子窗口系统，基于 `WebContentsView` 实�
 
 ## 核心概念
 
-### 生命周期状态
+**生命周期状态**
 
 DivisionBox 有六个生命周期状态：
 
@@ -32,7 +36,7 @@ prepare → attach → active → inactive → detach → destroy
 | `detach` | 已从窗口分离 |
 | `destroy` | 已销毁，资源已释放 |
 
-### DivisionBox 配置
+**DivisionBox 配置**
 
 ```typescript
 interface DivisionBoxConfig {
@@ -81,7 +85,7 @@ interface DivisionBoxConfig {
 
 ## 使用方式
 
-### 插件 SDK（推荐）
+**插件 SDK（推荐）**
 
 ```typescript
 import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
@@ -106,7 +110,7 @@ await divisionBox.close(sessionId)
 unsubscribe()
 ```
 
-### 从渲染进程打开 DivisionBox
+**从渲染进程打开 DivisionBox**
 
 ```typescript
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -129,7 +133,7 @@ async function openDivisionBox() {
 }
 ```
 
-### 关闭 DivisionBox
+**关闭 DivisionBox**
 
 ```typescript
 async function closeDivisionBox(sessionId: string) {
@@ -145,7 +149,7 @@ async function closeDivisionBox(sessionId: string) {
 }
 ```
 
-### 获取会话状态
+**获取会话状态**
 
 ```typescript
 async function getSessionState(sessionId: string) {
@@ -160,7 +164,7 @@ async function getSessionState(sessionId: string) {
 }
 ```
 
-### 更新会话状态
+**更新会话状态**
 
 ```typescript
 async function updateSessionState(sessionId: string, key: string, value: any) {
@@ -173,7 +177,7 @@ async function updateSessionState(sessionId: string, key: string, value: any) {
 }
 ```
 
-### 获取所有活跃会话
+**获取所有活跃会话**
 
 ```typescript
 async function getActiveSessions() {
@@ -188,9 +192,9 @@ async function getActiveSessions() {
 
 ## 插件 SDK
 
-### 完整 API
+**完整 API**
 
-#### `open(config)`
+**`open(config)`**
 
 打开新的 DivisionBox 窗口。
 
@@ -212,7 +216,7 @@ const { sessionId } = await divisionBox.open({
 })
 ```
 
-#### `close(sessionId, options?)`
+**`close(sessionId, options?)`**
 
 关闭 DivisionBox 窗口。
 
@@ -230,7 +234,7 @@ await divisionBox.close(sessionId, {
 await divisionBox.close(sessionId, { force: true })
 ```
 
-#### `onStateChange(handler)`
+**`onStateChange(handler)`**
 
 监听状态变化。
 
@@ -245,7 +249,7 @@ const unsubscribe = divisionBox.onStateChange((data) => {
 unsubscribe()
 ```
 
-#### `onLifecycleChange(handler)`
+**`onLifecycleChange(handler)`**
 
 监听完整生命周期变化事件。
 
@@ -258,7 +262,7 @@ const unsubscribe = divisionBox.onLifecycleChange((event) => {
 unsubscribe()
 ```
 
-#### `updateState(sessionId, key, value)`
+**`updateState(sessionId, key, value)`**
 
 更新会话状态数据。
 
@@ -273,7 +277,7 @@ await divisionBox.updateState(sessionId, 'draft', {
 })
 ```
 
-#### `getState(sessionId, key)`
+**`getState(sessionId, key)`**
 
 获取会话状态数据。
 
@@ -342,6 +346,11 @@ function onFeatureTriggered(featureId: string, query: TuffQuery) {
 
 - 资源限制与缓存策略以主进程实现为准（`apps/core-app/src/main/modules/division-box/`）。
 
+## 技术原理
+
+- DivisionBox 以 `WebContentsView` 作为承载层，由主进程统一管理生命周期。
+- SDK 负责封装窗口创建、状态变更与事件订阅，隔离底层实现。
+
 ## 最佳实践
 
 1. **使用 keepAlive**：对于频繁使用的面板，启用 `keepAlive` 提升响应速度
@@ -353,4 +362,4 @@ function onFeatureTriggered(featureId: string, query: TuffQuery) {
 ## 相关文档
 
 - [Flow Transfer API](./flow-transfer.zh.md) - 插件间数据流转
-- [Plugin Manifest](../manifest.zh.md) - 插件配置
+- [Plugin Manifest](../reference/manifest.zh.md) - 插件配置

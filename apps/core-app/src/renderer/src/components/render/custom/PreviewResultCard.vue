@@ -3,6 +3,7 @@ import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   item: TuffItem
@@ -67,14 +68,14 @@ const accentStyle = computed(() => {
         <span class="ability-id">{{ resolvedPayload?.abilityId }}</span>
       </div>
       <div class="card-actions">
-        <button class="hint" type="button" @click="emit('copy-primary')">
+        <TxButton variant="bare" class="hint" native-type="button" @click="emit('copy-primary')">
           <span class="hint-key">↵</span>
           复制结果
-        </button>
-        <button class="hint" type="button" @click="emit('show-history')">
+        </TxButton>
+        <TxButton variant="bare" class="hint" native-type="button" @click="emit('show-history')">
           <span class="hint-key">{{ historyVisible ? '⌘→' : '⌘←' }}</span>
           最近处理
-        </button>
+        </TxButton>
       </div>
     </div>
     <div class="card-body">

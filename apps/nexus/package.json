@@ -27,6 +27,7 @@
     "@iconify-json/cib": "catalog:",
     "@sentry/nuxt": "catalog:",
     "@talex-touch/tuffex": "workspace:*",
+    "vue-sonner": "^2.0.9",
     "@talex-touch/utils": "workspace:*",
     "fighting-design": "catalog:",
     "gsap": "catalog:",

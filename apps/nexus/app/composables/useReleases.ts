@@ -6,6 +6,12 @@ export type ReleaseStatus = 'draft' | 'published' | 'archived'
 export type AssetPlatform = 'darwin' | 'win32' | 'linux'
 export type AssetArch = 'x64' | 'arm64' | 'universal'
 export type AssetSourceType = 'github' | 'upload'
+export type ReleaseNoteLocale = 'zh' | 'en'
+
+export interface ReleaseNotes {
+  zh: string
+  en: string
+}
 
 export interface ReleaseAsset {
   id: string
@@ -30,8 +36,8 @@ export interface AppRelease {
   name: string
   channel: ReleaseChannel
   version: string
-  notes: string
-  notesHtml?: string | null
+  notes: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
   status: ReleaseStatus
   publishedAt: string | null
   minAppVersion?: string | null
@@ -53,6 +59,68 @@ interface LatestReleaseResponse {
 
 interface ReleaseResponse {
   release: AppRelease
+}
+
+function normalizeReleaseNotes(input: unknown): ReleaseNotes {
+  if (typeof input === 'string') {
+    return { zh: input, en: input }
+  }
+
+  if (input && typeof input === 'object') {
+    const zh = typeof (input as any).zh === 'string' ? (input as any).zh : ''
+    const en = typeof (input as any).en === 'string' ? (input as any).en : ''
+    const resolved = { zh: zh || en, en: en || zh }
+    if (resolved.zh || resolved.en) {
+      return resolved
+    }
+  }
+
+  return { zh: '', en: '' }
+}
+
+function normalizeReleaseNotesHtml(input: unknown): ReleaseNotes | null {
+  if (!input) {
+    return null
+  }
+  const resolved = normalizeReleaseNotes(input)
+  if (!resolved.zh && !resolved.en) {
+    return null
+  }
+  return resolved
+}
+
+function normalizeRelease(release: AppRelease): AppRelease {
+  const notes = normalizeReleaseNotes((release as any).notes)
+  const notesHtml = normalizeReleaseNotesHtml((release as any).notesHtml)
+  return {
+    ...release,
+    notes,
+    notesHtml,
+  }
+}
+
+export function resolveReleaseLocale(locale?: string): ReleaseNoteLocale {
+  if (typeof locale === 'string' && locale.toLowerCase().startsWith('zh')) {
+    return 'zh'
+  }
+  return 'en'
+}
+
+export function resolveReleaseNotes(notes: ReleaseNotes, locale?: string): string {
+  const key = resolveReleaseLocale(locale)
+  return notes[key] || notes.en || notes.zh
+}
+
+export function resolveReleaseNotesHtml(
+  notesHtml: ReleaseNotes | null | undefined,
+  notes: ReleaseNotes,
+  locale?: string,
+): string {
+  if (notesHtml) {
+    const key = resolveReleaseLocale(locale)
+    return notesHtml[key] || notesHtml.en || notesHtml.zh
+  }
+  return resolveReleaseNotes(notes, locale)
 }
 
 export function useReleases() {
@@ -84,8 +152,9 @@ export function useReleases() {
       const url = `/api/releases${queryString ? `?${queryString}` : ''}`
 
       const data = await $fetch<ReleasesResponse>(url)
-      releases.value = data.releases
-      return data.releases
+      const normalized = data.releases.map(normalizeRelease)
+      releases.value = normalized
+      return normalized
     }
     catch (err) {
       error.value = err as Error
@@ -111,7 +180,7 @@ export function useReleases() {
         params.set('platform', platform)
 
       const data = await $fetch<LatestReleaseResponse>(`/api/releases/latest?${params.toString()}`)
-      return data.release
+      return data.release ? normalizeRelease(data.release) : null
     }
     catch (err) {
       error.value = err as Error
@@ -129,7 +198,7 @@ export function useReleases() {
 
     try {
       const data = await $fetch<ReleaseResponse>(`/api/releases/${encodeURIComponent(tag)}`)
-      return data.release
+      return data.release ? normalizeRelease(data.release) : null
     }
     catch (err) {
       error.value = err as Error

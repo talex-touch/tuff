@@ -5,7 +5,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { toast } from 'vue-sonner'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
@@ -452,12 +452,12 @@ function openAssetsDialog(): void {
       default-icon="i-carbon-settings-adjust"
       active-icon="i-carbon-settings-adjust"
     >
-      <FlatButton type="primary" :loading="manualChecking" @click="handleManualCheck">
+      <TxButton variant="flat" type="primary" :loading="manualChecking" @click="handleManualCheck">
         {{ t('settings.settingUpdate.actions.manualCheck') }}
-      </FlatButton>
-      <FlatButton :loading="clearingCache" @click="handleClearCache">
+      </TxButton>
+      <TxButton variant="flat" :loading="clearingCache" @click="handleClearCache">
         {{ t('settings.settingUpdate.actions.clearCache') }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -469,9 +469,14 @@ function openAssetsDialog(): void {
       <div class="assets-summary">
         {{ assetsSummary }}
       </div>
-      <FlatButton :primary="true" :disabled="!cachedRelease?.release" @click="openAssetsDialog">
+      <TxButton
+        variant="flat"
+        type="primary"
+        :disabled="!cachedRelease?.release"
+        @click="openAssetsDialog"
+      >
         {{ t('settings.settingUpdate.assetsOpen') }}
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 
@@ -500,12 +505,12 @@ function openAssetsDialog(): void {
             </div>
           </div>
           <div class="asset-actions">
-            <FlatButton mini @click="handleCopyAssetUrl(asset)">
+            <TxButton variant="flat" size="sm" @click="handleCopyAssetUrl(asset)">
               {{ t('settings.settingUpdate.assets.copyLink') }}
-            </FlatButton>
-            <FlatButton mini :primary="true" @click="handleDownloadAsset(asset)">
+            </TxButton>
+            <TxButton variant="flat" type="primary" size="sm" @click="handleDownloadAsset(asset)">
               {{ t('settings.settingUpdate.assets.download') }}
-            </FlatButton>
+            </TxButton>
           </div>
         </div>
       </div>

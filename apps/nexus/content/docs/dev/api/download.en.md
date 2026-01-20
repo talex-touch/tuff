@@ -2,9 +2,13 @@
 
 <div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #f59e0b, #ef4444);"></div>
 
-## Introduction
+## Overview
 
 The Download SDK provides a unified task manager for downloads such as updates, resource prefetching, and plugin installs.
+
+## Introduction
+
+Use this SDK when you need progress-aware downloads in the renderer without managing low-level IPC.
 
 ## How it works
 
@@ -12,7 +16,7 @@ The Download SDK provides a unified task manager for downloads such as updates, 
 - TuffTransport events are used for requests and push updates.
 - Supports queueing, priority, chunked downloads, and retries.
 
-## Implementation notes
+## Technical Notes
 
 - The SDK only wraps event calls and subscriptions.
 - The main process holds the task state and broadcasts updates.
@@ -50,3 +54,9 @@ A: Use `onTaskProgress` to listen to push events.
 
 **Q: How do I hide download tasks?**  
 A: Set `metadata.hidden: true`. Production will suppress UI and notifications.
+
+## Best Practices
+
+- Set meaningful `priority` and `module` values for scheduling and troubleshooting.
+- Avoid flooding the queue; batch or debounce task creation.
+- Provide clear error feedback and a retry strategy for failures.

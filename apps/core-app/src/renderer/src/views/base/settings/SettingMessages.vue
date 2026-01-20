@@ -4,7 +4,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
@@ -113,12 +113,12 @@ onMounted(() => {
     </TuffBlockLine>
 
     <section class="MessageActions">
-      <FlatButton mini @click="loadMessages">
+      <TxButton variant="flat" size="sm" @click="loadMessages">
         {{ t('settingMessages.refresh', 'Refresh') }}
-      </FlatButton>
-      <FlatButton mini :disabled="unreadCount === 0" @click="markAllRead">
+      </TxButton>
+      <TxButton variant="flat" size="sm" :disabled="unreadCount === 0" @click="markAllRead">
         {{ t('settingMessages.markAllRead', 'Mark all read') }}
-      </FlatButton>
+      </TxButton>
     </section>
 
     <div v-if="loading" class="MessageState">
@@ -151,9 +151,14 @@ onMounted(() => {
           {{ item.message }}
         </p>
         <div class="MessageFooter">
-          <FlatButton mini :disabled="item.status === 'read'" @click="markMessage(item)">
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="item.status === 'read'"
+            @click="markMessage(item)"
+          >
             {{ t('settingMessages.markRead', 'Mark read') }}
-          </FlatButton>
+          </TxButton>
         </div>
       </li>
     </ul>

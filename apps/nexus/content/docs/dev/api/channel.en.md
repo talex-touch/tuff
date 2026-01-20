@@ -4,9 +4,13 @@
 **Deprecated:** The Channel API is deprecated in favor of [TuffTransport](./transport.en.md). While it continues to work, we recommend migrating to TuffTransport for new development. See the [Migration Guide](./transport.en.md#migration-from-legacy-channel).
 ::
 
+## Overview
+
 The Channel SDK provides IPC communication between plugins and the main process.
 
-## Quick Start
+## Introduction
+
+**Quick Start**
 
 ```ts
 import { useChannel, usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
@@ -24,7 +28,7 @@ await pluginChannel.send('my-plugin:action', { payload: 'data' })
 
 ## API Reference
 
-### useChannel()
+**useChannel()**
 
 Get the underlying IPC channel instance.
 
@@ -45,7 +49,7 @@ const unsubscribe = channel.regChannel('event-name', (data) => {
 unsubscribe()
 ```
 
-### usePluginRendererChannel()
+**usePluginRendererChannel()**
 
 Get plugin-specific channel instance with a friendlier API.
 
@@ -55,7 +59,7 @@ import { usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
 const channel = usePluginRendererChannel()
 ```
 
-#### `send(eventName, payload)`
+**`send(eventName, payload)`**
 
 Async send message and wait for response.
 
@@ -63,7 +67,7 @@ Async send message and wait for response.
 const result = await channel.send('clipboard:get-latest')
 ```
 
-#### `on(eventName, handler)`
+**`on(eventName, handler)`**
 
 Register event listener.
 
@@ -76,7 +80,7 @@ const dispose = channel.on('core-box:input-change', (data) => {
 dispose()
 ```
 
-#### `once(eventName, handler)`
+**`once(eventName, handler)`**
 
 Register one-time listener, automatically removed after trigger.
 
@@ -90,7 +94,7 @@ channel.once('plugin:ready', () => {
 
 ## Built-in Events
 
-### CoreBox Related
+**CoreBox Related**
 
 | Event | Description | Data |
 |-------|-------------|------|
@@ -98,13 +102,18 @@ channel.once('plugin:ready', () => {
 | `core-box:key-event` | Keyboard event forwarded | `ForwardedKeyEvent` |
 | `core-box:clipboard-change` | Clipboard changed | `{ item: ClipboardItem }` |
 
-### Plugin Storage
+**Plugin Storage**
 
 | Event | Description | Data |
 |-------|-------------|------|
 | `plugin:storage:update` | Storage update broadcast | `{ name: string, fileName?: string }` |
 
 ---
+
+## Technical Notes
+
+- Channel requests are routed through the main process IPC layer with standardized error handling.
+- Keep event names and payload shapes stable to avoid breaking plugins.
 
 ## Best Practices
 

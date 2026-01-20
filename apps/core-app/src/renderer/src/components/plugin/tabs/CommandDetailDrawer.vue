@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { IFeatureCommand } from '@talex-touch/utils/plugin'
+import { TxButton } from '@talex-touch/tuffex'
 
 interface CommandData {
   name?: string
@@ -29,9 +30,9 @@ function closeDrawer(): void {
       <div class="command-drawer">
         <div class="drawer-header">
           <h3>Command Details</h3>
-          <button class="close-button" @click="closeDrawer">
+          <TxButton variant="bare" class="close-button" @click="closeDrawer">
             <i class="i-ri-close-line" />
-          </button>
+          </TxButton>
         </div>
 
         <div class="drawer-content">

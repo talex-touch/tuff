@@ -19,7 +19,7 @@ npx tuff <command>
 
 ## Commands
 
-### `tuff builder`
+**`tuff builder`**
 
 Build your plugin project into a distributable `.tpex` package.
 
@@ -32,7 +32,7 @@ tuff builder
 - Generates manifest and bundles resources
 - Outputs a `.tpex` file ready for distribution
 
-### `tuff publish`
+**`tuff publish`**
 
 Publish your plugin to the Tuff Nexus server.
 
@@ -55,7 +55,7 @@ tuff publish \
   --notes "### New Features\n- Added dark mode support\n- Performance improvements"
 ```
 
-### `tuff login`
+**`tuff login`**
 
 Save your authentication token for publishing.
 
@@ -65,7 +65,7 @@ tuff login <token>
 
 The token is stored in `~/.tuff/auth.json`.
 
-### `tuff logout`
+**`tuff logout`**
 
 Remove saved authentication credentials.
 

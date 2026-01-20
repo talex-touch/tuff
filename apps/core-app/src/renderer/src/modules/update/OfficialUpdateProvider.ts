@@ -1,16 +1,9 @@
-import type {
-  DownloadAsset,
-  GitHubRelease,
-  UpdateSourceConfig,
-} from '@talex-touch/utils'
+import type { DownloadAsset, GitHubRelease, UpdateSourceConfig } from '@talex-touch/utils'
 import type { AxiosRequestConfig } from 'axios'
-import {
-  AppPreviewChannel,
-  UpdateErrorType,
-  UpdateProviderType,
-} from '@talex-touch/utils'
+import { AppPreviewChannel, UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
 import axios from 'axios'
 import { UpdateProvider } from './UpdateProvider'
+import { appSetting } from '~/modules/channel/storage'
 
 // Nexus API 响应类型
 interface NexusReleaseAsset {
@@ -30,14 +23,19 @@ interface NexusReleaseAsset {
   updatedAt: string
 }
 
+interface ReleaseNotes {
+  zh: string
+  en: string
+}
+
 interface NexusRelease {
   id: string
   tag: string
   name: string
   channel: 'RELEASE' | 'BETA' | 'SNAPSHOT'
   version: string
-  notes: string
-  notesHtml?: string | null
+  notes: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
   status: 'draft' | 'published' | 'archived'
   publishedAt: string | null
   minAppVersion?: string | null
@@ -46,6 +44,27 @@ interface NexusRelease {
   createdAt: string
   updatedAt: string
   assets?: NexusReleaseAsset[]
+}
+
+function resolveReleaseLocale(): 'zh' | 'en' {
+  const locale =
+    appSetting?.lang?.locale || (typeof navigator !== 'undefined' ? navigator.language : 'en')
+  return locale.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+function resolveReleaseNotes(notes: ReleaseNotes, locale: 'zh' | 'en'): string {
+  return notes[locale] || notes.en || notes.zh
+}
+
+function resolveReleaseNotesHtml(
+  notesHtml: ReleaseNotes | null | undefined,
+  notes: ReleaseNotes,
+  locale: 'zh' | 'en'
+): string {
+  if (notesHtml) {
+    return notesHtml[locale] || notesHtml.en || notesHtml.zh
+  }
+  return resolveReleaseNotes(notes, locale)
 }
 
 interface NexusLatestResponse {
@@ -69,19 +88,22 @@ export class OfficialUpdateProvider extends UpdateProvider {
     const channelMap: Record<AppPreviewChannel, string> = {
       [AppPreviewChannel.RELEASE]: 'RELEASE',
       [AppPreviewChannel.BETA]: 'BETA',
-      [AppPreviewChannel.SNAPSHOT]: 'SNAPSHOT',
+      [AppPreviewChannel.SNAPSHOT]: 'SNAPSHOT'
     }
     return channelMap[channel] || 'RELEASE'
   }
 
   // 将 Nexus release 转换为 GitHubRelease 格式（兼容现有接口）
   private mapNexusToGitHubRelease(nexusRelease: NexusRelease): GitHubRelease {
+    const locale = resolveReleaseLocale()
+    const releaseNotes = resolveReleaseNotesHtml(nexusRelease.notesHtml, nexusRelease.notes, locale)
+
     return {
       tag_name: nexusRelease.tag,
       name: nexusRelease.name,
-      body: nexusRelease.notes,
+      body: releaseNotes,
       published_at: nexusRelease.publishedAt || nexusRelease.createdAt,
-      assets: (nexusRelease.assets || []).map(asset => ({
+      assets: (nexusRelease.assets || []).map((asset) => ({
         name: asset.filename,
         url: asset.downloadUrl,
         browser_download_url: asset.downloadUrl,
@@ -91,12 +113,12 @@ export class OfficialUpdateProvider extends UpdateProvider {
         platform: asset.platform,
         arch: asset.arch,
         sha256: asset.sha256,
-        sourceType: asset.sourceType,
+        sourceType: asset.sourceType
       })),
       // 扩展字段
       isCritical: nexusRelease.isCritical,
       minAppVersion: nexusRelease.minAppVersion,
-      channel: nexusRelease.channel,
+      channel: nexusRelease.channel
     } as GitHubRelease
   }
 
@@ -111,13 +133,13 @@ export class OfficialUpdateProvider extends UpdateProvider {
         url: `${this.apiUrl}/latest`,
         params: {
           channel: apiChannel,
-          platform,
+          platform
         },
         timeout: this.timeout,
         headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'TalexTouch-Updater/2.0',
-        },
+          Accept: 'application/json',
+          'User-Agent': 'TalexTouch-Updater/2.0'
+        }
       }
 
       const response = await axios(config)
@@ -126,7 +148,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
         throw this.createError(
           UpdateErrorType.API_ERROR,
           `Official API returned status ${response.status}`,
-          { response },
+          { response }
         )
       }
 
@@ -135,7 +157,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       if (!data.release) {
         throw this.createError(
           UpdateErrorType.API_ERROR,
-          data.message || `No releases found for channel: ${channel}`,
+          data.message || `No releases found for channel: ${channel}`
         )
       }
 
@@ -146,8 +168,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       this.validateRelease(release)
 
       return release
-    }
-    catch (error: any) {
+    } catch (error: any) {
       if (error.type) {
         throw error
       }
@@ -156,7 +177,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
         throw this.createError(
           UpdateErrorType.TIMEOUT_ERROR,
           'Request to Official API timed out',
-          error,
+          error
         )
       }
 
@@ -165,15 +186,13 @@ export class OfficialUpdateProvider extends UpdateProvider {
 
         if (statusCode >= 500) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Official API server error', error)
-        }
-        else if (statusCode === 404) {
+        } else if (statusCode === 404) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Release not found', error)
-        }
-        else {
+        } else {
           throw this.createError(
             UpdateErrorType.API_ERROR,
             `Official API error: ${statusCode}`,
-            error,
+            error
           )
         }
       }
@@ -182,14 +201,14 @@ export class OfficialUpdateProvider extends UpdateProvider {
         throw this.createError(
           UpdateErrorType.NETWORK_ERROR,
           'Unable to connect to Official API',
-          error,
+          error
         )
       }
 
       throw this.createError(
         UpdateErrorType.UNKNOWN_ERROR,
         'Unknown error occurred while fetching releases',
-        error,
+        error
       )
     }
   }
@@ -206,7 +225,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       size: asset.size || 0,
       platform: asset.platform || this.detectPlatform(asset.name),
       arch: asset.arch || this.detectArch(asset.name),
-      checksum: asset.sha256 || undefined,
+      checksum: asset.sha256 || undefined
     }))
   }
 
@@ -219,15 +238,14 @@ export class OfficialUpdateProvider extends UpdateProvider {
         params: { channel: 'RELEASE' },
         timeout: 5000,
         headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'TalexTouch-Updater/2.0',
-        },
+          Accept: 'application/json',
+          'User-Agent': 'TalexTouch-Updater/2.0'
+        }
       }
 
       const response = await axios(config)
       return response.status === 200
-    }
-    catch (error) {
+    } catch (error) {
       console.warn('[OfficialUpdateProvider] Health check failed:', error)
       return false
     }
@@ -239,15 +257,13 @@ export class OfficialUpdateProvider extends UpdateProvider {
 
     if (lower.includes('win') || lower.includes('windows') || lower.includes('.exe')) {
       return 'win32'
-    }
-    else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
+    } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
       return 'darwin'
-    }
-    else if (
-      lower.includes('linux')
-      || lower.includes('.deb')
-      || lower.includes('.rpm')
-      || lower.includes('.appimage')
+    } else if (
+      lower.includes('linux') ||
+      lower.includes('.deb') ||
+      lower.includes('.rpm') ||
+      lower.includes('.appimage')
     ) {
       return 'linux'
     }
@@ -261,8 +277,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
 
     if (lower.includes('arm64') || lower.includes('aarch64')) {
       return 'arm64'
-    }
-    else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
+    } else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
       return 'x64'
     }
 
@@ -280,7 +295,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       available: isHealthy,
       message: isHealthy
         ? 'Official update server is available'
-        : 'Official update server is temporarily unavailable',
+        : 'Official update server is temporarily unavailable'
     }
   }
 
@@ -301,8 +316,8 @@ export class OfficialUpdateProvider extends UpdateProvider {
         'GitHub + Upload dual mode',
         'Multi-channel releases (RELEASE/BETA/SNAPSHOT)',
         'Platform-specific assets',
-        'SHA256 checksum verification',
-      ],
+        'SHA256 checksum verification'
+      ]
     }
   }
 
@@ -315,7 +330,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
     return {
       inMaintenance: false,
       maintenanceMessage: undefined,
-      estimatedEndTime: undefined,
+      estimatedEndTime: undefined
     }
   }
 
@@ -330,7 +345,7 @@ export class OfficialUpdateProvider extends UpdateProvider {
       cpu: 0,
       memory: 0,
       network: 0,
-      status: 'healthy',
+      status: 'healthy'
     }
   }
 }

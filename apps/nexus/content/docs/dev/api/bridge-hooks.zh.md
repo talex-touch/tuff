@@ -4,9 +4,12 @@
 
 Bridge Hooks 提供了插件渲染进程与 CoreBox 主进程之间的事件订阅机制。系统自动处理事件缓存与回放，确保插件不会错过初始化时的早期事件。
 
+## 介绍
+适合需要感知输入、剪贴板、按键等 CoreBox 行为的插件，使用独立 hooks 免去手动注册 Channel。
+
 ## 核心 Hooks
 
-### onCoreBoxInputChange
+**onCoreBoxInputChange**
 
 监听 CoreBox 输入框变化。
 
@@ -37,7 +40,7 @@ interface BridgeEventPayload<CoreBoxInputData> {
 }
 ```
 
-### onCoreBoxClipboardChange
+**onCoreBoxClipboardChange**
 
 监听剪贴板内容变化。
 
@@ -50,7 +53,7 @@ onCoreBoxClipboardChange(({ data, meta }) => {
 })
 ```
 
-### onCoreBoxKeyEvent
+**onCoreBoxKeyEvent**
 
 监听从 CoreBox 转发的键盘事件。
 
@@ -85,11 +88,11 @@ interface BridgeEventPayload<CoreBoxKeyEventData> {
 
 ## 自动事件缓存
 
-### 问题背景
+**问题背景**
 
 当插件 UIView 挂载到 CoreBox 时，主进程会在 `dom-ready` 后立即发送初始 query。但此时插件 JS 可能还未执行到 hook 注册代码，导致事件丢失。
 
-### 解决方案
+**解决方案**
 
 SDK 自动实现事件缓存机制：
 
@@ -112,9 +115,9 @@ SDK 自动实现事件缓存机制：
                             └─► 回放缓存的事件给 handler
 ```
 
-### 控制 API
+**控制 API**
 
-#### clearBridgeEventCache
+**clearBridgeEventCache**
 
 手动清除事件缓存（通常不需要调用）。
 
@@ -131,6 +134,10 @@ clearBridgeEventCache()
 **使用场景**:
 - 插件需要忽略旧的初始查询
 - 插件重新初始化时清理状态
+
+## 技术原理
+- Hook 模块在加载阶段就订阅主进程事件并缓存。
+- 注册 hook 时按时间顺序回放缓存，并附带 `meta.fromCache`。
 
 ## 最佳实践
 

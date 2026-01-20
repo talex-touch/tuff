@@ -60,7 +60,9 @@ function updateMarker() {
 
   hasActive.value = true
   markerHeight.value = 16
-  markerTop.value = activeLink.offsetTop + (activeLink.offsetHeight - markerHeight.value) / 2
+  const navRect = navRef.value.getBoundingClientRect()
+  const linkRect = activeLink.getBoundingClientRect()
+  markerTop.value = linkRect.top - navRect.top + (activeLink.offsetHeight - markerHeight.value) / 2
 }
 
 function scrollToHeading(id: string) {
@@ -152,10 +154,10 @@ function flattenLinks(links: TocLink[] | undefined, bucket: TocLink[] = []) {
 const outlineEntries = computed(() => {
   const links = flattenLinks(tocState.value)
   return links
-    .filter(link => link.depth > 1)
+    .filter(link => link.depth <= 2)
     .map(link => ({
       ...link,
-      indent: Math.min(2, Math.max(0, link.depth - 2)),
+      indent: Math.min(1, Math.max(0, link.depth - 1)),
     }))
 })
 
@@ -229,12 +231,6 @@ watch(
         class="outline-item relative"
         :class="{ 'outline-item-nested': entry.indent > 0 }"
       >
-        <!-- Nested indent line -->
-        <div
-          v-if="entry.indent > 0"
-          class="absolute top-0 bottom-0 w-px bg-black/10 dark:bg-white/10"
-          :style="{ left: `${entry.indent * 12}px` }"
-        />
         <NuxtLink
           :to="`#${entry.id}`"
           replace

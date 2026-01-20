@@ -2,7 +2,7 @@
 import { computed, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
@@ -211,19 +211,21 @@ function clearBackgroundImage() {
             </p>
           </div>
           <div class="flex gap-2">
-            <button
+            <TxButton
+              variant="bare"
               class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
               @click="selectBackgroundImage"
             >
               {{ t('themeStyle.selectImage', 'Select') }}
-            </button>
-            <button
+            </TxButton>
+            <TxButton
               v-if="customBgPath"
+              variant="bare"
               class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
               @click="clearBackgroundImage"
             >
               {{ t('themeStyle.clearImage', 'Clear') }}
-            </button>
+            </TxButton>
           </div>
         </div>
 

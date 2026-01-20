@@ -14,8 +14,8 @@
 | 快速开始   | 安装、账号、同步、安全提示       | [`guide/start.zh.md`](./guide/start.zh.md)                               |
 | 智能工作流 | 工作流概念、模板、调试方法       | [`tips/intelligence-workflow.zh.md`](./tips/intelligence-workflow.zh.md) |
 | 自动化控制 | CoreBox 命令、快捷键、剪贴板增强 | [`tips/automation.zh.md`](./tips/automation.zh.md)                       |
-| 开发概览   | 插件模型、沙箱策略、开发命令     | [`dev/overview.zh.md`](./dev/overview.zh.md)                             |
-| Manifest   | 字段表、校验规则、常见错误       | [`dev/manifest.zh.md`](./dev/manifest.zh.md)                             |
+| 开发概览   | 插件模型、沙箱策略、开发命令     | [`dev/getting-started/overview.zh.md`](./dev/getting-started/overview.zh.md)                             |
+| Manifest   | 字段表、校验规则、常见错误       | [`dev/reference/manifest.zh.md`](./dev/reference/manifest.zh.md)                             |
 
 ## 体验原则
 

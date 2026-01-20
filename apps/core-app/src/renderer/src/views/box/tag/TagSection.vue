@@ -13,6 +13,15 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
+const TAG_LABEL_KEYS: Record<string, string> = {
+  url: 'tagSection.tags.url',
+  api_key: 'tagSection.tags.api_key',
+  token: 'tagSection.tags.token',
+  password: 'tagSection.tags.password',
+  account: 'tagSection.tags.account',
+  email: 'tagSection.tags.email'
+}
+
 // Truncate clipboard content for display (text only)
 const clipboardPreview = computed(() => {
   if (!props.clipboardOptions.last) return ''
@@ -37,6 +46,41 @@ const clipboardPreview = computed(() => {
     return `${preview.substring(0, maxLength)}... 共${totalLength}字`
   }
   return preview
+})
+
+const clipboardTagChips = computed(() => {
+  const last = props.clipboardOptions.last
+  if (!last) return { items: [] as Array<{ key: string; label: string }>, extraCount: 0 }
+
+  const items: Array<{ key: string; label: string }> = []
+  const sourceApp = typeof last.sourceApp === 'string' ? last.sourceApp.trim() : ''
+  if (sourceApp) {
+    items.push({
+      key: `source:${sourceApp}`,
+      label: t('tagSection.fromApp', { app: sourceApp })
+    })
+  }
+
+  const rawTags = Array.isArray(last.meta?.tags) ? (last.meta?.tags as unknown[]) : []
+  const normalizedTags = rawTags.filter(
+    (tag): tag is string => typeof tag === 'string' && tag.length > 0
+  )
+  const uniqueTags = Array.from(new Set(normalizedTags))
+  for (const tag of uniqueTags) {
+    const labelKey = TAG_LABEL_KEYS[tag]
+    const label = labelKey ? t(labelKey) : tag
+    items.push({
+      key: `tag:${tag}`,
+      label: label === labelKey ? tag : label
+    })
+  }
+
+  const maxTags = 3
+  const visibleItems = items.slice(0, maxTags)
+  return {
+    items: visibleItems,
+    extraCount: Math.max(items.length - visibleItems.length, 0)
+  }
 })
 
 // Determine which tag to show based on priority: image > file > text
@@ -110,6 +154,20 @@ const activeTag = computed(() => {
     <span v-else-if="activeTag.type === 'command'" class="fake-background">
       {{ t('tagSection.command') }}
     </span>
+
+    <div v-if="clipboardTagChips.items.length" class="CoreBox-TagList">
+      <span
+        v-for="item in clipboardTagChips.items"
+        :key="item.key"
+        class="fake-background tag-chip"
+        :title="item.label"
+      >
+        {{ item.label }}
+      </span>
+      <span v-if="clipboardTagChips.extraCount > 0" class="fake-background tag-chip">
+        +{{ clipboardTagChips.extraCount }}
+      </span>
+    </div>
   </div>
 </template>
 
@@ -145,6 +203,19 @@ const activeTag = computed(() => {
     --fake-color: var(--el-color-primary);
     border-radius: 8px;
     // background-color: var(--el-color-warning-light-5);
+  }
+}
+
+.CoreBox-TagList {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+
+  .tag-chip {
+    padding: 2px 6px;
+    font-size: 12px;
+    --fake-inner-opacity: 0.4 !important;
   }
 }
 </style>

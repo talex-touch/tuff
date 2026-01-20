@@ -3,7 +3,7 @@ import type { MarketProviderResultMeta } from '@talex-touch/utils/market'
 import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
 import TLabelSelect from '~/components/base/select/TLabelSelect.vue'
 import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'
@@ -83,9 +83,9 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
             </span>
           </span>
         </div>
-        <FlatButton mini @click="emit('open-source-editor')">
+        <TxButton variant="flat" size="sm" @click="emit('open-source-editor')">
           <div class="i-carbon-list" />
-        </FlatButton>
+        </TxButton>
       </div>
     </div>
 
@@ -105,10 +105,10 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
           <TLabelSelectItem value="list" icon="i-carbon-list-boxes" />
         </TLabelSelect>
 
-        <FlatButton mini :disabled="loading" @click="emit('refresh')">
+        <TxButton variant="flat" size="sm" :disabled="loading" @click="emit('refresh')">
           <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" text-base />
           <span>{{ loading ? t('market.loading') : t('market.refresh') }}</span>
-        </FlatButton>
+        </TxButton>
       </div>
     </div>
   </div>

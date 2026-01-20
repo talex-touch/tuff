@@ -4,7 +4,7 @@ import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { ElMessageBox } from 'element-plus'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 
@@ -14,7 +14,7 @@ enum IntelligenceProviderType {
   DEEPSEEK = 'deepseek',
   SILICONFLOW = 'siliconflow',
   LOCAL = 'local',
-  CUSTOM = 'custom',
+  CUSTOM = 'custom'
 }
 
 interface IntelligenceProviderConfig {
@@ -49,9 +49,12 @@ const providerIconMap: Record<IntelligenceProviderType, ITuffIcon> = {
   [IntelligenceProviderType.OPENAI]: { type: 'class', value: 'i-simple-icons-openai' },
   [IntelligenceProviderType.ANTHROPIC]: { type: 'class', value: 'i-simple-icons-anthropic' },
   [IntelligenceProviderType.DEEPSEEK]: { type: 'class', value: 'i-carbon-search-advanced' },
-  [IntelligenceProviderType.SILICONFLOW]: { type: 'class', value: 'i-carbon-ibm-watson-machine-learning' },
+  [IntelligenceProviderType.SILICONFLOW]: {
+    type: 'class',
+    value: 'i-carbon-ibm-watson-machine-learning'
+  },
   [IntelligenceProviderType.LOCAL]: { type: 'class', value: 'i-carbon-bare-metal-server' },
-  [IntelligenceProviderType.CUSTOM]: { type: 'class', value: 'i-carbon-settings' },
+  [IntelligenceProviderType.CUSTOM]: { type: 'class', value: 'i-carbon-settings' }
 }
 
 const overflowIcon: ITuffIcon = { type: 'class', value: 'i-carbon-overflow-menu-horizontal' }
@@ -62,7 +65,7 @@ const localEnabled = computed({
   get: () => props.provider.enabled,
   set: (value: boolean) => {
     intelligenceSettings.updateProvider(props.provider.id, { enabled: value })
-  },
+  }
 })
 
 const providerIcon = computed<ITuffIcon>(() => {
@@ -77,8 +80,8 @@ function handleDelete() {
       confirmButtonText: t('settings.intelligence.deleteConfirmButton'),
       cancelButtonText: t('common.cancel'),
       type: 'warning',
-      confirmButtonClass: 'el-button--danger',
-    },
+      confirmButtonClass: 'el-button--danger'
+    }
   )
     .then(() => {
       emits('delete')
@@ -105,9 +108,14 @@ function handleDelete() {
     </div>
     <div class="flex items-center gap-3" role="group" aria-label="Provider actions">
       <el-dropdown v-if="provider.type === 'custom'" trigger="click" placement="bottom-end">
-        <FlatButton text mini :aria-label="t('settings.intelligence.moreActions')">
+        <TxButton
+          variant="flat"
+          type="text"
+          size="sm"
+          :aria-label="t('settings.intelligence.moreActions')"
+        >
           <TuffIcon :icon="overflowIcon" :alt="t('settings.intelligence.moreActions')" :size="20" />
-        </FlatButton>
+        </TxButton>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item @click="handleDelete">

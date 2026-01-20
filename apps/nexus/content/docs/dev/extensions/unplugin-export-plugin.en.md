@@ -10,7 +10,7 @@ pnpm add -D @talex-touch/unplugin-export-plugin
 
 ## Quick Start
 
-### Vite Configuration
+**Vite Configuration**
 
 ```ts
 // vite.config.ts
@@ -31,7 +31,7 @@ export default defineConfig({
 })
 ```
 
-### Webpack Configuration
+**Webpack Configuration**
 
 ```js
 // webpack.config.js
@@ -44,7 +44,7 @@ module.exports = {
 }
 ```
 
-### Rollup Configuration
+**Rollup Configuration**
 
 ```js
 // rollup.config.js
@@ -61,21 +61,21 @@ export default {
 
 ## Features
 
-### 1. Automatic Manifest Processing
+**1. Automatic Manifest Processing**
 
 The plugin automatically reads `manifest.json` from project root and during build:
 - Validates required fields
 - Injects version information
 - Generates production manifest
 
-### 2. Resource Export
+**2. Resource Export**
 
 Automatically handles:
 - **HTML entry files**: Auto-injects necessary scripts and styles
 - **Static assets**: Copies `public/` directory to output
 - **Icon files**: Processes icons declared in manifest
 
-### 3. Development Mode Support
+**3. Development Mode Support**
 
 In development mode:
 - Automatic HMR (Hot Module Replacement) configuration
@@ -144,7 +144,7 @@ export default defineConfig({
 })
 ```
 
-### Configuration Reference
+**Configuration Reference**
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -164,7 +164,7 @@ export default defineConfig({
 | `versionSync.auto` | `boolean` | `false` | Auto sync version |
 | `maxSizeMB` | `number` | `10` | Max plugin size warning threshold |
 
-### Version Sync
+**Version Sync**
 
 When `versionSync.enabled` is `true`, the build process checks if `package.json` and `manifest.json` versions match:
 
@@ -172,7 +172,7 @@ When `versionSync.enabled` is `true`, the build process checks if `package.json`
 - Set `versionSync.auto: true` to auto-sync without confirmation
 - Can also trigger via `--sync-version` CLI flag
 
-### Size Warning
+**Size Warning**
 
 When the packaged `.tpex` file exceeds `maxSizeMB` (default 10MB), a warning is shown:
 
@@ -236,7 +236,7 @@ my-plugin/
 
 ## Development Mode
 
-### Enabling Development Mode
+**Enabling Development Mode**
 
 Configure in `manifest.json`:
 
@@ -249,7 +249,7 @@ Configure in `manifest.json`:
 }
 ```
 
-### Hot Reload
+**Hot Reload**
 
 In development mode, these changes trigger hot reload:
 - Vue component changes
@@ -258,7 +258,7 @@ In development mode, these changes trigger hot reload:
 
 `manifest.json` changes trigger plugin reload.
 
-### Debugging Tips
+**Debugging Tips**
 
 1. **Open DevTools**: Press `Cmd+Option+I` (Mac) or `Ctrl+Shift+I` (Windows) in plugin window
 2. **View logs**: Main process logs output to terminal
@@ -305,13 +305,13 @@ const storage = usePluginStorage()
 
 ## FAQ
 
-### Q: Plugin won't load after build
+**Q: Plugin won't load after build**
 
 1. Check if `manifest.json` `id` field follows format `com.xxx.xxx`
 2. Ensure `main` field points to correct entry file
 3. Check main process logs for detailed error messages
 
-### Q: Styles not working in dev mode
+**Q: Styles not working in dev mode**
 
 Ensure CSS preprocessor is configured correctly in `vite.config.ts`:
 
@@ -327,7 +327,7 @@ export default defineConfig({
 })
 ```
 
-### Q: Resource path errors
+**Q: Resource path errors**
 
 Use relative paths or `@/` alias:
 

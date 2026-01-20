@@ -17,7 +17,7 @@ import AppEntrance from './AppEntrance.vue'
 
 const { t } = useI18n()
 const { initializeLanguage } = useLanguage()
-const { startupInfo } = useStartupInfo()
+useStartupInfo()
 
 const beginner = ref(false)
 
@@ -51,12 +51,6 @@ async function init(): Promise<void> {
     <AppLayout>
       <template #title>
         <span text-sm>{{ t('app.title') }}</span>
-        <span
-          :title="startupInfo?.version"
-          style="--fake-radius: 4px"
-          class="app-version px-[3px] py-[1px] rounded-md text-xs version fake-background"
-          >{{ startupInfo?.version }}</span
-        >
       </template>
       <template #navbar>
         <TouchMenu>
@@ -102,16 +96,5 @@ async function init(): Promise<void> {
   opacity: 0.25;
   font-size: 12px;
   font-weight: 600;
-}
-
-.app-version {
-  display: inline-flex;
-  align-items: center;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: middle;
-  cursor: default;
 }
 </style>

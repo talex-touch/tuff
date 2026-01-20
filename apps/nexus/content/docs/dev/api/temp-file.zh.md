@@ -2,6 +2,10 @@
 
 <div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #0ea5e9, #22c55e);"></div>
 
+## 概述
+
+TempFile SDK 用于创建短生命周期的临时文件，适合缓存下载结果、临时导出内容或在插件间传递文件句柄。
+
 ## 介绍
 
 TempFile SDK 用于创建短生命周期的临时文件，适合缓存下载结果、临时导出内容或在插件间传递文件句柄。
@@ -19,7 +23,7 @@ TempFile SDK 用于创建短生命周期的临时文件，适合缓存下载结�
 
 ## 如何使用
 
-### 插件侧
+**插件侧**
 
 ```typescript
 import { useTempPluginFiles } from '@talex-touch/utils/plugin/sdk'
@@ -35,7 +39,7 @@ const result = await temp.create({
 console.log(result.url)
 ```
 
-### 应用渲染进程
+**应用渲染进程**
 
 ```typescript
 import { useTouchSDK } from '@talex-touch/utils/renderer'
@@ -61,3 +65,9 @@ A: 会。若设置了 `retentionMs`，主进程会周期性清理过期文件。
 
 **Q: 为什么访问不了 `tfile://`？**  
 A: 该协议仅在 Electron 环境可用，浏览器环境会被拒绝。
+
+## 最佳实践
+
+- 使用明确的 `namespace`，便于清理与排查。
+- 合理设置 `retentionMs`，避免临时文件长期堆积。
+- 大文件优先使用文件路径方式，避免大文本直接传输。

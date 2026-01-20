@@ -1,5 +1,6 @@
 <script lang="ts" name="PlatformCompatibilityWarning" setup>
 import { ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 /**
  * Props for the PlatformCompatibilityWarning component
@@ -19,7 +20,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   warningMessage: '',
   onContinue: undefined,
-  onDontShowAgain: undefined,
+  onDontShowAgain: undefined
 })
 
 /** Reactive reference to control dialog closing state */
@@ -85,27 +86,25 @@ function handleDontShowAgain() {
         <p class="mb-3">
           {{ warningMessage }}
         </p>
-        <p class="text-sm text-gray-500">
-          如果您遇到任何问题，请通过 GitHub 反馈给我们。
-        </p>
+        <p class="text-sm text-gray-500">如果您遇到任何问题，请通过 GitHub 反馈给我们。</p>
       </div>
 
       <!-- 按钮 -->
       <div class="flex justify-center gap-3">
-        <button
-          v-wave
+        <TxButton
+          variant="bare"
           class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors cursor-pointer select-none"
           @click="handleContinue"
         >
           我知道了，继续使用
-        </button>
-        <button
-          v-wave
+        </TxButton>
+        <TxButton
+          variant="bare"
           class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors cursor-pointer select-none"
           @click="handleDontShowAgain"
         >
           不再提醒
-        </button>
+        </TxButton>
       </div>
     </div>
   </div>

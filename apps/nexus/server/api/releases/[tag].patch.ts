@@ -1,9 +1,9 @@
 import { createError, readBody } from 'h3'
 import { requireAdmin } from '../../utils/auth'
-import { updateRelease } from '../../utils/releasesStore'
+import { createReleaseRevision, getReleaseByTag, updateRelease } from '../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event)
+  const { userId } = await requireAdmin(event)
 
   const tag = event.context.params?.tag
 
@@ -12,6 +12,11 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
 
+  const existing = await getReleaseByTag(event, tag, true)
+  if (!existing)
+    throw createError({ statusCode: 404, statusMessage: 'Release not found.' })
+
+  await createReleaseRevision(event, existing, userId)
   const release = await updateRelease(event, tag, body)
 
   return {

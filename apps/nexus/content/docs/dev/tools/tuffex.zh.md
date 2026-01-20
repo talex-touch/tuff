@@ -5,9 +5,12 @@ description: 具有精美动画效果的现代 Vue3 组件库
 
 # TuffEx
 
-TuffEx 是一个专注于触感体验和流畅动画的现代 Vue3 组件库。它是 Tuff 生态系统的一部分，提供美观、交互式的 UI 组件。
+TuffEx（中文名：塔芙）是一个专注于触感体验和流畅动画的现代 Vue3 组件库。它是 Tuff 生态系统的一部分，提供美观、交互式的 UI 组件。
 
 > **迁移中** - TuffEx 正在从 Tuff 核心应用迁移组件，技术栈已升级至 Vue 3.5 / Vite 6 / TypeScript 5.8。
+
+## 组件展示
+- **[Tuffex 组件中心](../components/index.zh.md)** — 组件清单、Demo 与 API（双语）。
 
 
 ## 安装
@@ -25,7 +28,7 @@ pnpm add @talex-touch/tuffex
 
 ## 快速开始
 
-### 完整导入
+**完整导入**
 
 ```typescript
 import { createApp } from 'vue'
@@ -37,7 +40,7 @@ app.use(TuffUI)
 app.mount('#app')
 ```
 
-### 按需导入（推荐）
+**按需导入（推荐）**
 
 ```typescript
 import { createApp } from 'vue'
@@ -62,7 +65,7 @@ app.use(TuffFlatButton)
 
 ## 可用组件
 
-### 已发布
+**已发布**
 
 | 组件 | 描述 | 来源 |
 |------|------|------|
@@ -75,7 +78,7 @@ app.use(TuffFlatButton)
 | `TuffSelectItem` | 选择器选项 | `base/select/TSelectItem` |
 | `TuffProgress` | 进度条，支持 indeterminate | `base/ProgressBar` |
 
-### 计划中
+**计划中**
 
 | 组件 | 描述 | 来源 |
 |------|------|------|

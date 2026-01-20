@@ -1,8 +1,12 @@
 # Flow Transfer API
 
+## 概述
+
 Flow Transfer 是一个插件间数据流转系统，允许插件将结构化数据传递给其他插件进行处理。类似于移动端的"分享"功能，但更加强大和灵活。
 
-## Scope
+## 介绍
+
+**Scope**
 
 本文档描述 **当前已落地** 的 Flow Transfer 基础能力：
 
@@ -19,7 +23,7 @@ Flow Transfer 是一个插件间数据流转系统，允许插件将结构化数
 
 ## 核心概念
 
-### Flow Payload（流转载荷）
+**Flow Payload（流转载荷）**
 
 发起插件提交的标准化数据包：
 
@@ -49,7 +53,7 @@ interface FlowPayload {
 > - Plugin targets：当前通过主进程通道 `flow:register-targets` 注册（由运行时/加载器负责触发）。
 >   如果你发现 manifest 声明的 targets 没有出现在列表中，说明对应注册流程尚未覆盖到你的运行路径。
 
-### Flow Target（流转目标）
+**Flow Target（流转目标）**
 
 接收端在 manifest 中声明的可接收 Flow 的端点：
 
@@ -86,7 +90,7 @@ Flow Transfer 提供两个全局快捷键（可在设置中自定义）：
 
 ## 插件配置
 
-### 在 manifest.json 中声明 Flow 能力
+**在 manifest.json 中声明 Flow 能力**
 
 Flow 的 manifest 配置结构以 `FlowManifestConfig` 为准：
 
@@ -123,7 +127,7 @@ Flow 的 manifest 配置结构以 `FlowManifestConfig` 为准：
 
 ## SDK 使用
 
-### 发起 Flow（发送方）
+**发起 Flow（发送方）**
 
 ```typescript
 import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
@@ -173,7 +177,7 @@ async function sendToSpecificTarget() {
 }
 ```
 
-### 获取可用目标
+**获取可用目标**
 
 ```typescript
 // 获取所有可用目标
@@ -184,7 +188,7 @@ const textTargets = await flow.getAvailableTargets('text')
 const imageTargets = await flow.getAvailableTargets('image')
 ```
 
-### 接收 Flow（接收方）⚡ 重要
+**接收 Flow（接收方）⚡ 重要**
 
 **插件必须注册 `onFlowTransfer` 处理器才能接收 Flow 数据。** 未注册的插件仍会在目标列表中显示，但会标记为"未适配"并排在列表末尾。
 
@@ -215,7 +219,7 @@ onUnmounted(() => {
 })
 ```
 
-#### 通过 Feature 触发（备选方式）
+**通过 Feature 触发（备选方式）**
 
 你也可以通过 Feature 的 `query` 参数接收 Flow 数据：
 
@@ -241,7 +245,7 @@ function onFeatureTriggered(featureId: string, query: TuffQuery) {
 }
 ```
 
-### 发送确认响应
+**发送确认响应**
 
 ```typescript
 async function processFlowPayload(sessionId: string, payload: FlowPayload) {
@@ -298,7 +302,7 @@ enum FlowErrorCode {
 
 Flow Transfer 集成了系统原生分享功能，可以将数据分享到 AirDrop、邮件、信息等系统应用。
 
-### 使用原生分享
+**使用原生分享**
 
 ```typescript
 const flow = createFlowSDK(channel, 'my-plugin-id')
@@ -322,7 +326,7 @@ if (result.success) {
 }
 ```
 
-### 支持的原生目标
+**支持的原生目标**
 
 | 平台 | 目标 | 说明 |
 |------|------|------|
@@ -375,6 +379,11 @@ interface FlowTargetInfo {
 
 ---
 
+## 技术原理
+
+- Flow Transfer 在主进程维护目标列表与路由，负责权限校验与能力匹配。
+- Sender/Target 通过标准化 payload 进行交换，避免插件间耦合。
+
 ## 最佳实践
 
 1. **注册 onFlowTransfer**：始终注册处理器以获得最佳用户体验
@@ -387,4 +396,4 @@ interface FlowTargetInfo {
 ## 相关文档
 
 - [DivisionBox API](./division-box.zh.md) - 独立窗口系统
-- [Plugin Manifest](../manifest.zh.md) - 插件配置
+- [Plugin Manifest](../reference/manifest.zh.md) - 插件配置

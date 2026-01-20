@@ -7,7 +7,7 @@ CoreBox height is driven by the renderer result list and applied in the main pro
 - Window position stays fixed (only height changes).
 - When window resize animation is enabled, bounds changes are animated in the main process.
 
-### Related settings
+**Related settings**
 
 - `appSetting.animation.coreBoxResize`
   - `true`: animate CoreBox bounds changes
@@ -23,11 +23,11 @@ To avoid “flash collapse” while recommendations are still in-flight, the ren
 
 For `webcontent` features, CoreBox can attach a plugin UI via Electron `WebContentsView`.
 
-### Goal
+**Goal**
 
 Reuse recently-used views so reopening a feature does not reload its page every time.
 
-### Cache config
+**Cache config**
 
 - `appSetting.viewCache.maxCachedViews`
   - `0`: disabled (always create/destroy views)
@@ -36,12 +36,12 @@ Reuse recently-used views so reopening a feature does not reload its page every 
 - `appSetting.viewCache.hotCacheDurationMs`
   - Used for stale cleanup.
 
-### Notes
+**Notes**
 
 - Cache key: `pluginName:featureId`.
 - Cache is best-effort: destroyed views are dropped automatically.
 
-### Resume event
+**Resume event**
 
 Whenever CoreBox attaches a plugin UI view, it emits `core-box:ui-resume` to the plugin process.
 

@@ -3,7 +3,7 @@ import type { ITouchPlugin } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
@@ -114,18 +114,19 @@ async function handleOpenPluginFolder(): Promise<void> {
     <!-- Footer with actions -->
     <template #footer>
       <div class="flex gap-2">
-        <FlatButton class="action-btn add-btn flex-1" @click="drawerVisible = true">
+        <TxButton variant="flat" class="action-btn add-btn flex-1" @click="drawerVisible = true">
           <i class="i-ri-add-line" />
           <span>{{ t('plugin.add', 'Add') }}</span>
-        </FlatButton>
-        <FlatButton
+        </TxButton>
+        <TxButton
+          variant="flat"
           class="action-btn folder-btn"
           :disabled="loadingStates.openFolder"
           @click="handleOpenPluginFolder"
         >
           <i v-if="!loadingStates.openFolder" class="i-ri-folder-open-line" />
           <i v-else class="i-ri-loader-4-line animate-spin" />
-        </FlatButton>
+        </TxButton>
       </div>
     </template>
 
@@ -151,32 +152,32 @@ async function handleOpenPluginFolder(): Promise<void> {
   height: 100%;
 }
 
-.action-btn :deep(.FlatButton-Container) {
+.action-btn :deep(.tx-button) {
   @apply h-9 flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200 ease-out px-3;
 }
 
-.action-btn :deep(.FlatButton-Container) i {
+.action-btn :deep(.tx-button) i {
   @apply text-base;
 }
 
-.action-btn :deep(.FlatButton-Container:disabled) {
+.action-btn :deep(.tx-button:disabled) {
   @apply opacity-60 cursor-not-allowed;
   transform: none !important;
 }
 
-.add-btn :deep(.FlatButton-Container) {
+.add-btn :deep(.tx-button) {
   @apply bg-[var(--el-color-primary)] text-white;
 }
 
-.add-btn :deep(.FlatButton-Container:hover:not(:disabled)) {
+.add-btn :deep(.tx-button:hover:not(:disabled)) {
   @apply bg-[var(--el-color-primary-light-3)] -translate-y-px;
 }
 
-.folder-btn :deep(.FlatButton-Container) {
+.folder-btn :deep(.tx-button) {
   @apply bg-[var(--el-fill-color)] text-[var(--el-text-color-primary)] border border-[var(--el-border-color)] px-3;
 }
 
-.folder-btn :deep(.FlatButton-Container:hover:not(:disabled)) {
+.folder-btn :deep(.tx-button:hover:not(:disabled)) {
   @apply bg-[var(--el-fill-color-light)] border-[var(--el-color-primary-light-5)] text-[var(--el-color-primary)];
 }
 

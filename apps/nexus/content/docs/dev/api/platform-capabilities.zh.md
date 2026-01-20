@@ -2,6 +2,10 @@
 
 <div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #06b6d4, #3b82f6);"></div>
 
+## 概述
+
+Platform Capabilities SDK 提供平台能力目录查询，用于查看当前可用的系统级能力与状态。
+
 ## 介绍
 
 Platform Capabilities SDK 提供平台能力目录查询，用于查看当前可用的系统级能力与状态。
@@ -40,3 +44,9 @@ const systemCaps = await platform.listCapabilities({ scope: 'system' })
 
 **Q: 能力清单来自哪里？**  
 A: 由主进程注册表维护，随着新模块接入持续扩展。
+
+## 最佳实践
+
+- 只在需要时刷新能力清单，避免频繁请求。
+- 对 `status` 与 `scope` 做显式过滤，减少无关能力展示。
+- 在 UI 中标注能力风险等级（例如 beta/experimental）。

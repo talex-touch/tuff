@@ -168,13 +168,12 @@ export class CoreBoxModule extends BaseModule {
     const activationCount = Number.isFinite(payload.activationCount)
       ? Math.max(0, payload.activationCount)
       : 0
+    const resultCount = Number.isFinite(payload.resultCount) ? Math.max(0, payload.resultCount) : 0
 
-    if (activationCount > 0) {
+    if (activationCount > 0 && resultCount > 0) {
       coreBoxManager.expand({ forceMax: true })
       return
     }
-
-    const resultCount = Number.isFinite(payload.resultCount) ? Math.max(0, payload.resultCount) : 0
 
     const loading = payload.loading === true
     const recommendationPending = payload.recommendationPending === true

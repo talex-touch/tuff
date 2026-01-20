@@ -2,6 +2,7 @@
 import type { Component } from 'vue'
 import { ElMessage } from 'element-plus'
 import { markRaw, reactive, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import { useDynamicTuffLayout } from '~/modules/layout'
 
@@ -65,10 +66,11 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     class="LayoutSection-Wrapper"
   >
     <div class="LayoutSection-List p-2">
-      <button
+      <TxButton
         v-for="(layout, key) in availableLayouts"
         :key="key"
-        type="button"
+        variant="bare"
+        native-type="button"
         class="LayoutSection-Item"
         :class="{ active: currentLayoutName === key }"
         :aria-pressed="currentLayoutName === key"
@@ -98,7 +100,7 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
             {{ t('layoutSection.currentTag') }}
           </span>
         </div>
-      </button>
+      </TxButton>
     </div>
   </TuffGroupBlock>
 </template>

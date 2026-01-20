@@ -2,17 +2,18 @@
 import HelloData from '~/assets/lotties/welcome.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { appSetting } from '~/modules/channel/storage'
+import { TxButton } from '@talex-touch/tuffex'
 
 const step: any = inject('step')!
 
 function goon(): void {
   step(
     {
-      comp: null,
+      comp: null
     },
     () => {
       appSetting.beginner.init = true
-    },
+    }
   )
 }
 </script>
@@ -23,9 +24,7 @@ function goon(): void {
 
     <div class="Greeting-Content">
       <p>You're all set! Let's get started.</p>
-      <FlatButton primary @click="goon">
-        Get Started
-      </FlatButton>
+      <TxButton variant="flat" type="primary" @click="goon"> Get Started </TxButton>
     </div>
   </div>
 </template>

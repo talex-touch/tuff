@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginNavTree" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { TxTransition, TxTransitionSmoothSize } from '@talex-touch/tuffex'
+import { TxButton, TxTransition, TxTransitionSmoothSize } from '@talex-touch/tuffex'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -206,8 +206,9 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
       :duration="180"
     >
       <section v-for="group in groups" :key="group.id" class="PluginNavTree-Group">
-        <button
-          type="button"
+        <TxButton
+          variant="bare"
+          native-type="button"
           class="PluginNavTree-GroupHeader"
           :aria-expanded="isExpanded(group.id)"
           @click="toggleGroup(group.id)"
@@ -221,7 +222,7 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
             :title="t('plugin.navTree.groupCount', { count: group.plugins.length })"
             >{{ group.plugins.length }}</span
           >
-        </button>
+        </TxButton>
 
         <TxTransitionSmoothSize
           v-if="isExpanded(group.id)"
@@ -239,10 +240,11 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
               :appear="false"
               :duration="180"
             >
-              <button
+              <TxButton
                 v-for="plugin in group.plugins"
                 :key="plugin.name"
-                type="button"
+                variant="bare"
+                native-type="button"
                 class="PluginNavTree-Item"
                 :class="{ active: isPluginRoute && curSelect?.name === plugin.name }"
                 @click="handleSelectPlugin(plugin)"
@@ -273,7 +275,7 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
                 >
                   <i class="i-ri-alert-line" />
                 </span>
-              </button>
+              </TxButton>
             </TxTransition>
           </div>
         </TxTransitionSmoothSize>
@@ -309,6 +311,8 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   border-radius: 10px;
   border: none;
   background: transparent;
+  --fake-inner-opacity: 0;
+  --fake-color: transparent;
   cursor: pointer;
   user-select: none;
   color: var(--el-text-color-secondary);
@@ -374,6 +378,8 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   border-radius: 12px;
   border: none;
   background: transparent;
+  --fake-inner-opacity: 0;
+  --fake-color: transparent;
   cursor: pointer;
   user-select: none;
   color: var(--el-text-color-primary);

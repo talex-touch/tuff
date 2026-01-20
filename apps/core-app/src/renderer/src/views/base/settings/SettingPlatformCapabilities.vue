@@ -8,7 +8,7 @@ import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
@@ -114,13 +114,13 @@ onMounted(() => {
           {{ t('settings.settingPlatformCapabilities.lastUpdated', { time: lastUpdatedText }) }}
         </span>
       </div>
-      <FlatButton :disabled="loading" @click="loadCapabilities">
+      <TxButton variant="flat" :disabled="loading" @click="loadCapabilities">
         {{
           loading
             ? t('settings.settingPlatformCapabilities.loading')
             : t('settings.settingPlatformCapabilities.refresh')
         }}
-      </FlatButton>
+      </TxButton>
     </div>
 
     <div v-if="loading" class="PlatformCapabilities-State">

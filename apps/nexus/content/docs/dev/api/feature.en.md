@@ -1,8 +1,12 @@
 # Feature SDK
 
+## Overview
+
 The Feature SDK provides plugins with the ability to manage CoreBox search result items (TuffItems).
 
-## Quick Start
+## Introduction
+
+**Quick Start**
 
 ```typescript
 import { useFeature } from '@talex-touch/utils/plugin/sdk'
@@ -29,7 +33,7 @@ feature.onInputChange((input) => {
 
 ## API Reference
 
-### useFeature()
+**useFeature()**
 
 Get Feature SDK instance.
 
@@ -45,7 +49,7 @@ const feature = useFeature()
 
 ## Search Result Management
 
-### `pushItems(items)`
+**`pushItems(items)`**
 
 Push multiple items to CoreBox search results.
 
@@ -61,7 +65,7 @@ feature.pushItems([
 ])
 ```
 
-### `updateItem(id, updates)`
+**`updateItem(id, updates)`**
 
 Update a specific item.
 
@@ -72,7 +76,7 @@ feature.updateItem('result-1', {
 })
 ```
 
-### `removeItem(id)`
+**`removeItem(id)`**
 
 Remove a specific item.
 
@@ -80,7 +84,7 @@ Remove a specific item.
 feature.removeItem('result-1')
 ```
 
-### `clearItems()`
+**`clearItems()`**
 
 Clear all items from current plugin.
 
@@ -88,7 +92,7 @@ Clear all items from current plugin.
 feature.clearItems()
 ```
 
-### `getItems()`
+**`getItems()`**
 
 Get all items from current plugin.
 
@@ -101,7 +105,7 @@ console.log(`Currently showing ${items.length} items`)
 
 ## Event Listening
 
-### `onInputChange(handler)`
+**`onInputChange(handler)`**
 
 Listen to search input changes.
 
@@ -118,7 +122,7 @@ const unsubscribe = feature.onInputChange((input) => {
 unsubscribe()
 ```
 
-### `onKeyEvent(handler)`
+**`onKeyEvent(handler)`**
 
 Listen to keyboard events. When plugin UI is attached to CoreBox, certain key events are forwarded.
 
@@ -202,3 +206,14 @@ interface FeatureSDK {
 type InputChangeHandler = (input: string) => void
 type KeyEventHandler = (event: ForwardedKeyEvent) => void
 ```
+
+## Best Practices
+
+- Keep item IDs stable to avoid reordering jitter.
+- Debounce input changes before pushing results.
+- Tune ranking metadata carefully to avoid bias in recommendations.
+
+## Technical Notes
+
+- Feature SDK builds items in the renderer and renders them via the CoreBox manager in the main process.
+- Items flow through a unified ranking and recommendation pipeline before display.

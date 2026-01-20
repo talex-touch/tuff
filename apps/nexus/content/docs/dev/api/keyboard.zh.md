@@ -4,17 +4,20 @@
 
 当插件的 UI View 附加到 CoreBox 时，系统提供键盘事件的自动处理和转发机制，让插件能够响应用户的键盘操作。
 
+## 介绍
+键盘事件适合做快捷操作与导航控制，插件侧可选择 Feature SDK、Bridge Hook 或 Channel 监听。
+
 ## ESC 键自动退出
 
 在 UI View 中按下 ESC 键会**自动退出 UI 模式**（deactivate providers），无需插件手动处理。
 
-### 行为说明
+**行为说明**
 - 用户在插件 UI View 中按下 ESC
 - 系统自动调用 `exitUIMode()` 退出 UI 模式
 - 插件 UI View 被卸载，CoreBox 恢复到搜索状态
 - 这与 CoreBox 主界面的 ESC 行为保持一致
 
-### 技术实现
+**技术实现**
 系统通过监听 WebContents 的 `before-input-event` 事件来捕获 ESC 键：
 
 ```typescript
@@ -31,7 +34,7 @@ uiView.webContents.on('before-input-event', (event, input) => {
 
 当焦点在 CoreBox 主输入框时，特定按键会被转发到插件 UI View。
 
-### 转发的按键
+**转发的按键**
 | 按键 | 说明 |
 | --- | --- |
 | `Enter` | 确认/提交操作 |
@@ -41,9 +44,9 @@ uiView.webContents.on('before-input-event', (event, input) => {
 
 > **注意**：`ArrowLeft` 和 `ArrowRight` 不会被转发，因为它们用于输入框中的文本编辑。如果需要左右导航，请使用 `Meta/Ctrl + ArrowLeft/ArrowRight`。
 
-### 监听键盘事件
+**监听键盘事件**
 
-#### 方式一：使用 Feature SDK
+**方式一：使用 Feature SDK**
 
 ```typescript
 import { useFeature } from '@talex-touch/utils/plugin/sdk'
@@ -72,7 +75,7 @@ onUnmounted(() => {
 })
 ```
 
-#### 方式二：使用 Bridge Hook
+**方式二：使用 Bridge Hook**
 
 ```typescript
 import { onCoreBoxKeyEvent } from '@talex-touch/utils/plugin/sdk/hooks/bridge'
@@ -86,7 +89,7 @@ onCoreBoxKeyEvent((event) => {
 })
 ```
 
-#### 方式三：直接监听 Channel
+**方式三：直接监听 Channel**
 
 ```typescript
 // 在插件 renderer 中
@@ -119,12 +122,16 @@ interface ForwardedKeyEvent {
 | `core-box:get-ui-view-state` | 渲染进程 → 主进程 | 查询 UI View 状态 |
 | `core-box:ui-mode-exited` | 主进程 → 渲染进程 | UI 模式已退出通知 |
 
+## 技术原理
+- 主进程监听 `before-input-event` 统一处理 ESC，保证行为一致。
+- 键盘事件经由 CoreBox 转发到插件渲染进程，供 SDK/Hook 封装消费。
+
 ## 最佳实践
 
-### 1. 避免重复处理
+**1. 避免重复处理**
 ESC 键已由系统自动处理，插件不应再监听 ESC 来退出 UI 模式。
 
-### 2. 检查 repeat 标志
+**2. 检查 repeat 标志**
 对于需要单次触发的操作（如提交），应检查 `repeat` 标志：
 
 ```typescript
@@ -136,7 +143,7 @@ feature.onKeyEvent((event) => {
 })
 ```
 
-### 3. 组合键处理
+**3. 组合键处理**
 处理组合键时，注意平台差异：
 
 ```typescript
@@ -151,7 +158,7 @@ feature.onKeyEvent((event) => {
 })
 ```
 
-### 4. 清理监听器
+**4. 清理监听器**
 在组件卸载时取消监听，避免内存泄漏：
 
 ```typescript

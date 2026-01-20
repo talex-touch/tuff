@@ -1,5 +1,7 @@
 # TuffTransport API
 
+## 概述
+
 TuffTransport 是 Tuff 插件的下一代 IPC 通信系统，提供类型安全、高性能的消息传递，内置批量处理和流式传输支持。
 
 ::alert{type="info"}
@@ -18,7 +20,9 @@ TuffTransport 替代传统 Channel API。旧 API 仍可使用，但建议新开�
 
 ---
 
-## 快速开始
+## 介绍
+
+**快速开始**
 
 ```ts
 import { useTuffTransport, CoreBoxEvents, StorageEvents } from '@talex-touch/utils/transport'
@@ -44,7 +48,7 @@ const [theme, lang] = await Promise.all([
 
 ## 核心概念
 
-### TuffEvent
+**TuffEvent**
 
 TuffTransport 的每次通信都使用 `TuffEvent` —— 一个在编译时编码请求/响应类型的类型安全事件定义。
 
@@ -57,7 +61,7 @@ transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
 //                                          ↑ TypeScript 强制正确的参数类型
 ```
 
-### Event Builder
+**Event Builder**
 
 使用 `defineEvent` 构建器创建自定义事件：
 
@@ -83,7 +87,7 @@ console.log(result.name, result.value) // ✅ 类型安全访问
 
 ## API 参考
 
-### useTuffTransport()
+**useTuffTransport()**
 
 在插件渲染进程中获取 transport 实例。
 
@@ -93,7 +97,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 const transport = useTuffTransport()
 ```
 
-### transport.send(event, payload?, options?)
+**transport.send(event, payload?, options?)**
 
 发送请求并等待响应。
 
@@ -127,7 +131,7 @@ await transport.send(StorageEvents.app.set,
 await transport.send(SlowEvent, data, { timeout: 30000 })
 ```
 
-### transport.stream(event, payload, options)
+**transport.stream(event, payload, options)**
 
 通过 MessagePort 发起流式请求。
 
@@ -152,7 +156,7 @@ const controller = await transport.stream(
 controller.cancel()
 ```
 
-### transport.on(event, handler)
+**transport.on(event, handler)**
 
 注册事件处理器接收消息。
 
@@ -166,7 +170,7 @@ const cleanup = transport.on(SomeEvent, (payload) => {
 onUnmounted(() => cleanup())
 ```
 
-### transport.flush()
+**transport.flush()**
 
 强制发送所有待处理的批量请求。
 
@@ -178,7 +182,7 @@ await transport.flush()
 
 ## 预定义事件
 
-### CoreBoxEvents
+**CoreBoxEvents**
 
 ```ts
 import { CoreBoxEvents } from '@talex-touch/utils/transport'
@@ -202,7 +206,7 @@ CoreBoxEvents.provider.deactivate    // 停用提供者
 CoreBoxEvents.provider.getDetails    // 获取提供者详情（批量）
 ```
 
-### StorageEvents
+**StorageEvents**
 
 ```ts
 import { StorageEvents } from '@talex-touch/utils/transport'
@@ -217,7 +221,7 @@ StorageEvents.plugin.get    // 获取插件值
 StorageEvents.plugin.set    // 设置插件值
 ```
 
-### PluginEvents
+**PluginEvents**
 
 ```ts
 import { PluginEvents } from '@talex-touch/utils/transport'
@@ -234,7 +238,7 @@ PluginEvents.feature.trigger    // 触发功能
 PluginEvents.log.write          // 写入日志
 ```
 
-### BoxItemEvents
+**BoxItemEvents**
 
 ```ts
 import { BoxItemEvents } from '@talex-touch/utils/transport'
@@ -251,7 +255,7 @@ BoxItemEvents.batch.delete  // 批量删除
 BoxItemEvents.batch.clear   // 按来源清空
 ```
 
-### ClipboardEvents :badge[v0.9.0]{type="info"}
+**ClipboardEvents :badge[v0.9.0]{type="info"}**
 
 ```ts
 import { ClipboardEvents } from '@talex-touch/utils/transport'
@@ -313,7 +317,7 @@ const [a, b, c] = await Promise.all([
 // 结果：单次 IPC 包含 3 个请求，性能提升 500%+
 ```
 
-### 批量配置
+**批量配置**
 
 定义自定义事件时配置批量：
 
@@ -410,7 +414,7 @@ try {
 
 ## 从传统 Channel 迁移
 
-### 之前（传统方式）
+**之前（传统方式）**
 
 ```ts
 import { useChannel } from '@talex-touch/utils/plugin/sdk'
@@ -419,7 +423,7 @@ const channel = useChannel()
 const result = await channel.send('core-box:search:query', { text: 'hello' })
 ```
 
-### 之后（TuffTransport）
+**之后（TuffTransport）**
 
 ```ts
 import { useTuffTransport, CoreBoxEvents } from '@talex-touch/utils/transport'
@@ -428,7 +432,7 @@ const transport = useTuffTransport()
 const result = await transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
 ```
 
-### 渐进式迁移
+**渐进式迁移**
 
 两套 API 可以同时使用 —— 按自己的节奏迁移：
 
@@ -441,6 +445,12 @@ await transport.send(StorageEvents.app.get, { key: 'theme' })
 ```
 
 ---
+
+## 技术原理
+
+- 事件通过 `defineEvent().module().event().define()` 构建类型约束，编译期校验请求/响应。
+- 批量处理在客户端聚合请求，按策略合并并在主进程侧拆分。
+- 流式传输基于 MessagePort，适用于持续数据推送场景。
 
 ## 最佳实践
 

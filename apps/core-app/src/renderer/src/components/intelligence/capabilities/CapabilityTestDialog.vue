@@ -2,7 +2,7 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
@@ -19,14 +19,14 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: boolean]
-  'test': [providerId: string, userInput?: string]
+  test: [providerId: string, userInput?: string]
 }>()
 
 const { t } = useI18n()
 
 const visible = computed({
   get: () => props.modelValue,
-  set: value => emits('update:modelValue', value),
+  set: (value) => emits('update:modelValue', value)
 })
 
 const selectedProviderId = ref<string>('')
@@ -39,7 +39,7 @@ watch(
       selectedProviderId.value = providers[0].id
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 watch(visible, (isVisible) => {
@@ -49,8 +49,7 @@ watch(visible, (isVisible) => {
 })
 
 function handleTest(): void {
-  if (!selectedProviderId.value)
-    return
+  if (!selectedProviderId.value) return
   emits('test', selectedProviderId.value, userInput.value || undefined)
 }
 
@@ -74,10 +73,11 @@ function handleCancel(): void {
         memory-name="capability-test-provider"
       >
         <div class="provider-select-list">
-          <button
+          <TxButton
             v-for="provider in enabledProviders"
             :key="provider.id"
-            type="button"
+            variant="bare"
+            native-type="button"
             class="provider-select-item"
             :class="{ 'is-selected': selectedProviderId === provider.id }"
             @click="selectedProviderId = provider.id"
@@ -90,7 +90,7 @@ function handleCancel(): void {
               v-if="selectedProviderId === provider.id"
               class="i-carbon-checkmark-filled provider-select-item__check"
             />
-          </button>
+          </TxButton>
           <div v-if="enabledProviders.length === 0" class="provider-select-empty">
             {{ t('settings.intelligence.noEnabledProviders') }}
           </div>
@@ -105,20 +105,16 @@ function handleCancel(): void {
         active-icon="i-carbon-edit"
         memory-name="capability-test-input"
       >
-        <el-input
-          v-model="userInput"
-          type="textarea"
-          :placeholder="testMeta.inputHint"
-          :rows="4"
-        />
+        <el-input v-model="userInput" type="textarea" :placeholder="testMeta.inputHint" :rows="4" />
       </TuffGroupBlock>
 
       <div class="capability-test-dialog__actions">
-        <FlatButton block @click="handleCancel">
+        <TxButton variant="flat" block @click="handleCancel">
           {{ t('common.cancel') }}
-        </FlatButton>
-        <FlatButton
-          primary
+        </TxButton>
+        <TxButton
+          variant="flat"
+          type="primary"
           block
           :disabled="isTesting || !selectedProviderId"
           :aria-busy="isTesting"
@@ -131,7 +127,7 @@ function handleCancel(): void {
           <span>{{
             isTesting ? t('settings.intelligence.testing') : t('settings.intelligence.runTest')
           }}</span>
-        </FlatButton>
+        </TxButton>
       </div>
     </div>
   </TuffDrawer>

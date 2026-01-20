@@ -1,8 +1,12 @@
 # Account API
 
+## Overview
+
 Account SDK provides user information, subscription status, and quota management capabilities for plugins that need to offer differentiated features based on user identity or subscription tier.
 
-## Quick Start
+## Introduction
+
+**Quick Start**
 
 ```ts
 import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
@@ -35,7 +39,7 @@ if (await accountSDK.isPaidUser()) {
 
 ## API Reference
 
-### Get SDK Instance
+**Get SDK Instance**
 
 ```ts
 import { accountSDK } from '@talex-touch/utils'
@@ -50,9 +54,9 @@ await accountSDK.getProfile()
 
 ---
 
-### User Information
+**User Information**
 
-#### `getProfile()`
+**`getProfile()`**
 
 Get complete user profile.
 
@@ -74,7 +78,7 @@ const profile = await accountSDK.getProfile()
 |--------|------|-------------|
 | `profile` | `UserProfile \| null` | User profile, `null` if not logged in |
 
-#### `isLoggedIn()`
+**`isLoggedIn()`**
 
 Check if user is logged in.
 
@@ -84,7 +88,7 @@ if (await accountSDK.isLoggedIn()) {
 }
 ```
 
-#### `getUserId()`
+**`getUserId()`**
 
 Get user ID.
 
@@ -93,7 +97,7 @@ const userId = await accountSDK.getUserId()
 // 'user_xxx' or null
 ```
 
-#### `getDisplayName()`
+**`getDisplayName()`**
 
 Get display name.
 
@@ -102,7 +106,7 @@ const name = await accountSDK.getDisplayName()
 // 'John Doe'
 ```
 
-#### `getEmail()`
+**`getEmail()`**
 
 Get user email.
 
@@ -111,7 +115,7 @@ const email = await accountSDK.getEmail()
 // 'john@example.com'
 ```
 
-#### `getAvatarUrl()`
+**`getAvatarUrl()`**
 
 Get avatar URL.
 
@@ -122,9 +126,9 @@ const avatar = await accountSDK.getAvatarUrl()
 
 ---
 
-### Subscription Checks
+**Subscription Checks**
 
-#### `getPlan()`
+**`getPlan()`**
 
 Get current subscription plan.
 
@@ -133,7 +137,7 @@ const plan = await accountSDK.getPlan()
 // SubscriptionPlan.PRO
 ```
 
-#### `getSubscription()`
+**`getSubscription()`**
 
 Get full subscription details.
 
@@ -151,7 +155,7 @@ const subscription = await accountSDK.getSubscription()
 // }
 ```
 
-#### `isPaidUser()`
+**`isPaidUser()`**
 
 Check if user is a paid subscriber.
 
@@ -161,7 +165,7 @@ if (await accountSDK.isPaidUser()) {
 }
 ```
 
-#### `isProOrAbove()`
+**`isProOrAbove()`**
 
 Check if Pro tier or higher.
 
@@ -171,7 +175,7 @@ if (await accountSDK.isProOrAbove()) {
 }
 ```
 
-#### `isPlusOrAbove()`
+**`isPlusOrAbove()`**
 
 Check if Plus tier or higher.
 
@@ -181,7 +185,7 @@ if (await accountSDK.isPlusOrAbove()) {
 }
 ```
 
-#### `isTeamOrAbove()`
+**`isTeamOrAbove()`**
 
 Check if Team tier or higher.
 
@@ -191,7 +195,7 @@ if (await accountSDK.isTeamOrAbove()) {
 }
 ```
 
-#### `isEnterprise()`
+**`isEnterprise()`**
 
 Check if Enterprise tier.
 
@@ -201,7 +205,7 @@ if (await accountSDK.isEnterprise()) {
 }
 ```
 
-#### `isTrialing()`
+**`isTrialing()`**
 
 Check if in trial period.
 
@@ -212,7 +216,7 @@ if (await accountSDK.isTrialing()) {
 }
 ```
 
-#### `getDaysRemaining()`
+**`getDaysRemaining()`**
 
 Get days remaining in current billing period.
 
@@ -223,9 +227,9 @@ const days = await accountSDK.getDaysRemaining()
 
 ---
 
-### Quota Checks
+**Quota Checks**
 
-#### `getQuota()`
+**`getQuota()`**
 
 Get current plan quota limits.
 
@@ -242,7 +246,7 @@ const quota = await accountSDK.getQuota()
 // }
 ```
 
-#### `getUsage()`
+**`getUsage()`**
 
 Get current usage statistics.
 
@@ -257,7 +261,7 @@ const usage = await accountSDK.getUsage()
 // }
 ```
 
-#### `checkAiRequestQuota()`
+**`checkAiRequestQuota()`**
 
 Check AI request quota.
 
@@ -271,7 +275,7 @@ if (!result.allowed) {
 }
 ```
 
-#### `checkAiTokenQuota(estimatedTokens)`
+**`checkAiTokenQuota(estimatedTokens)`**
 
 Check AI token quota.
 
@@ -286,7 +290,7 @@ if (!result.allowed) {
 |-----------|------|-------------|
 | `estimatedTokens` | `number` | Estimated tokens to consume (optional, default 0) |
 
-#### `checkStorageQuota(additionalBytes)`
+**`checkStorageQuota(additionalBytes)`**
 
 Check storage quota.
 
@@ -297,7 +301,7 @@ if (!result.allowed) {
 }
 ```
 
-#### `checkPluginQuota()`
+**`checkPluginQuota()`**
 
 Check plugin installation quota.
 
@@ -308,7 +312,7 @@ if (!result.allowed) {
 }
 ```
 
-#### `getUsagePercentage(type)`
+**`getUsagePercentage(type)`**
 
 Get usage percentage for specific quota type.
 
@@ -328,9 +332,9 @@ if (storageUsage > 80) {
 
 ---
 
-### Feature Access
+**Feature Access**
 
-#### `hasApiAccess()`
+**`hasApiAccess()`**
 
 Check if user has API access.
 
@@ -340,7 +344,7 @@ if (await accountSDK.hasApiAccess()) {
 }
 ```
 
-#### `hasCustomModelAccess()`
+**`hasCustomModelAccess()`**
 
 Check if user can use custom models.
 
@@ -350,7 +354,7 @@ if (await accountSDK.hasCustomModelAccess()) {
 }
 ```
 
-#### `hasPrioritySupport()`
+**`hasPrioritySupport()`**
 
 Check if user has priority support.
 
@@ -360,7 +364,7 @@ if (await accountSDK.hasPrioritySupport()) {
 }
 ```
 
-#### `hasAdvancedAnalytics()`
+**`hasAdvancedAnalytics()`**
 
 Check if user has advanced analytics.
 
@@ -370,7 +374,7 @@ if (await accountSDK.hasAdvancedAnalytics()) {
 }
 ```
 
-#### `hasFeature(featureId)`
+**`hasFeature(featureId)`**
 
 Check if specific feature flag is enabled.
 
@@ -382,9 +386,9 @@ if (await accountSDK.hasFeature('beta-ai-v2')) {
 
 ---
 
-### Team Management
+**Team Management**
 
-#### `getTeams()`
+**`getTeams()`**
 
 Get all teams user belongs to.
 
@@ -396,7 +400,7 @@ const teams = await accountSDK.getTeams()
 // ]
 ```
 
-#### `isInTeam()`
+**`isInTeam()`**
 
 Check if user is in any team.
 
@@ -406,7 +410,7 @@ if (await accountSDK.isInTeam()) {
 }
 ```
 
-#### `isTeamOwner(teamId?)`
+**`isTeamOwner(teamId?)`**
 
 Check if user is team owner.
 
@@ -420,7 +424,7 @@ if (await accountSDK.isTeamOwner('team_xxx')) {
 }
 ```
 
-#### `isTeamAdmin(teamId?)`
+**`isTeamAdmin(teamId?)`**
 
 Check if user is team admin (includes owner).
 
@@ -432,9 +436,9 @@ if (await accountSDK.isTeamAdmin()) {
 
 ---
 
-### Upgrade & Billing
+**Upgrade & Billing**
 
-#### `getUpgradeOptions()`
+**`getUpgradeOptions()`**
 
 Get available upgrade options.
 
@@ -446,7 +450,7 @@ const options = accountSDK.getUpgradeOptions()
 // ]
 ```
 
-#### `getPlanComparison()`
+**`getPlanComparison()`**
 
 Get plan comparison table.
 
@@ -458,7 +462,7 @@ const comparison = accountSDK.getPlanComparison()
 // ]
 ```
 
-#### `openUpgradePage(plan?)`
+**`openUpgradePage(plan?)`**
 
 Open upgrade page.
 
@@ -467,7 +471,7 @@ await accountSDK.openUpgradePage() // Open upgrade page
 await accountSDK.openUpgradePage(SubscriptionPlan.PLUS) // Jump to Plus
 ```
 
-#### `openBillingPage()`
+**`openBillingPage()`**
 
 Open billing management page.
 
@@ -477,9 +481,9 @@ await accountSDK.openBillingPage()
 
 ---
 
-### Account Actions
+**Account Actions**
 
-#### `requestLogin()`
+**`requestLogin()`**
 
 Request user login (opens login dialog).
 
@@ -490,7 +494,7 @@ if (success) {
 }
 ```
 
-#### `logout()`
+**`logout()`**
 
 Logout current user.
 
@@ -498,7 +502,7 @@ Logout current user.
 await accountSDK.logout()
 ```
 
-#### `openAccountSettings()`
+**`openAccountSettings()`**
 
 Open account settings page.
 
@@ -508,9 +512,14 @@ await accountSDK.openAccountSettings()
 
 ---
 
+## Technical Notes
+
+- Account SDK reads login state, subscription plan, and quota from the unified account service.
+- Client-side helpers consolidate permission and quota checks to avoid scattered logic.
+
 ## Best Practices
 
-### 1. Premium Feature Gating
+**1. Premium Feature Gating**
 
 ```ts
 async function showPremiumFeature() {
@@ -525,7 +534,7 @@ async function showPremiumFeature() {
 }
 ```
 
-### 2. Quota Pre-check
+**2. Quota Pre-check**
 
 ```ts
 async function beforeAiRequest(estimatedTokens: number) {
@@ -539,7 +548,7 @@ async function beforeAiRequest(estimatedTokens: number) {
 }
 ```
 
-### 3. Team Feature Adaptation
+**3. Team Feature Adaptation**
 
 ```ts
 async function initTeamFeatures() {

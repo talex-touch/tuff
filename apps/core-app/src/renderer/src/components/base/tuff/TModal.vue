@@ -1,4 +1,5 @@
 <script lang="ts" name="TModal" setup>
+import { TxButton } from '@talex-touch/tuffex'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 
 const props = withDefaults(
@@ -9,8 +10,8 @@ const props = withDefaults(
   }>(),
   {
     title: '',
-    width: '480px',
-  },
+    width: '480px'
+  }
 )
 
 const emits = defineEmits<{
@@ -35,9 +36,9 @@ function close() {
             <slot name="header">
               <h3>{{ title }}</h3>
             </slot>
-            <button type="button" class="close-btn" @click="close">
+            <TxButton variant="bare" native-type="button" class="close-btn" @click="close">
               <i class="i-carbon-close" />
-            </button>
+            </TxButton>
           </header>
           <section class="TModal-Body">
             <slot />

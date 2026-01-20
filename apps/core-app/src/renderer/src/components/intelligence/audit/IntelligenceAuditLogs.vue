@@ -3,7 +3,7 @@ import type { IntelligenceAuditLogEntry } from '@talex-touch/utils/renderer'
 import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   callerId?: string
@@ -73,18 +73,18 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
         <span class="logs-count">{{ logs.length }} {{ t('intelligence.audit.records') }}</span>
       </div>
       <div class="header-actions">
-        <FlatButton size="small" @click="loadLogs(false)">
+        <TxButton variant="flat" size="small" @click="loadLogs(false)">
           <i class="i-carbon-renew" />
           {{ t('common.refresh') }}
-        </FlatButton>
-        <FlatButton size="small" @click="handleExportCSV">
+        </TxButton>
+        <TxButton variant="flat" size="small" @click="handleExportCSV">
           <i class="i-carbon-document-export" />
           CSV
-        </FlatButton>
-        <FlatButton size="small" @click="handleExportJSON">
+        </TxButton>
+        <TxButton variant="flat" size="small" @click="handleExportJSON">
           <i class="i-carbon-document-export" />
           JSON
-        </FlatButton>
+        </TxButton>
       </div>
     </div>
 
@@ -161,10 +161,10 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
       </div>
 
       <div v-if="hasMore" class="load-more">
-        <FlatButton :loading="isLoading" @click="loadLogs(true)">
+        <TxButton variant="flat" :loading="isLoading" @click="loadLogs(true)">
           <i class="i-carbon-add" />
           {{ t('common.loadMore') }}
-        </FlatButton>
+        </TxButton>
       </div>
     </div>
   </div>

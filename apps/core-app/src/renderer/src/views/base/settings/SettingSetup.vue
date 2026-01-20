@@ -11,7 +11,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
 
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
 import TuffLinuxTag from '~/components/tuff/tags/TuffLinuxTag.vue'
 import TuffMacOSTag from '~/components/tuff/tags/TuffMacOSTag.vue'
@@ -376,14 +376,15 @@ function getStatusIconClass(status: string): string {
           :icon="getStatusIconClass(permissions.accessibility.status)"
           :text="getStatusText(permissions.accessibility.status)"
         />
-        <FlatButton
+        <TxButton
           v-if="permissions.accessibility.status !== 'granted'"
-          primary
-          mini
+          variant="flat"
+          type="primary"
+          size="sm"
           @click.stop="requestPermission('accessibility')"
         >
           {{ t('setupPermissions.openSettings') }}
-        </FlatButton>
+        </TxButton>
       </div>
     </TuffBlockSlot>
 
@@ -405,15 +406,16 @@ function getStatusIconClass(status: string): string {
           :icon="getStatusIconClass(permissions.adminPrivileges.status)"
           :text="getStatusText(permissions.adminPrivileges.status)"
         />
-        <FlatButton
-          primary
-          mini
+        <TxButton
+          variant="flat"
+          type="primary"
+          size="sm"
           :class="{ 'is-loading': isLoading }"
           @click.stop="checkAllPermissions"
         >
           <span v-if="isLoading" class="i-carbon-renew animate-spin" />
           {{ t('setupPermissions.recheck') }}
-        </FlatButton>
+        </TxButton>
       </div>
     </TuffBlockSlot>
 
@@ -432,14 +434,15 @@ function getStatusIconClass(status: string): string {
           :icon="getStatusIconClass(permissions.notifications.status)"
           :text="getStatusText(permissions.notifications.status)"
         />
-        <FlatButton
+        <TxButton
           v-if="permissions.notifications.status !== 'granted'"
-          primary
-          mini
+          variant="flat"
+          type="primary"
+          size="sm"
           @click.stop="requestPermission('notifications')"
         >
           {{ t('setupPermissions.openSettings') }}
-        </FlatButton>
+        </TxButton>
       </div>
     </TuffBlockSlot>
 
@@ -526,11 +529,11 @@ function getStatusIconClass(status: string): string {
   width: 100%;
 }
 
-.PermissionActions .FlatButton-Container {
+.PermissionActions .tx-button {
   min-width: 120px;
 }
 
-.PermissionActions .FlatButton-Container.is-loading {
+.PermissionActions .tx-button.is-loading {
   opacity: 0.6;
   pointer-events: none;
 }

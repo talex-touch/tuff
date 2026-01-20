@@ -5,12 +5,16 @@ description: API documentation for the CoreBox search matching system, including
 
 # Search Matching API
 
+## Overview
 The CoreBox search system provides powerful matching capabilities:
 
 - **Chinese Pinyin Matching**: Search `fanyi` to match `翻译`
 - **Initial Abbreviations**: Search `fy` to match `翻译`
 - **Fuzzy Matching**: Typo-tolerant search, e.g., `helol` matches `hello`
 - **Highlighting**: Highlight matched portions in search results
+
+## Introduction
+Search matching combines Feature metadata, keywords, and clipboard inputs to drive ranking and highlights in CoreBox.
 
 ## Search Tokens
 
@@ -22,7 +26,7 @@ Plugin Features automatically generate search tokens upon registration, includin
 - Keywords
 - Command values
 
-### Custom Keywords
+**Custom Keywords**
 
 Add `keywords` to Features in `manifest.json` to enhance search matching:
 
@@ -69,7 +73,7 @@ interface FeatureExtension {
 }
 ```
 
-### Using Highlighting in Renderer
+**Using Highlighting in Renderer**
 
 The BoxItem component automatically handles `matchResult` highlighting:
 
@@ -99,7 +103,7 @@ function getHighlightedHTML(
 
 ## Using Search Matching in Plugins
 
-### Using matchFeature Function
+**Using matchFeature Function**
 
 The `matchFeature` function from `@talex-touch/utils/search` enables custom search:
 
@@ -121,7 +125,7 @@ if (result.matched) {
 }
 ```
 
-### FeatureMatchResult Interface
+**FeatureMatchResult Interface**
 
 ```typescript
 interface FeatureMatchResult {
@@ -140,7 +144,7 @@ interface FeatureMatchResult {
 
 ## Fuzzy Matching API
 
-### fuzzyMatch Function
+**fuzzyMatch Function**
 
 For typo-tolerant search:
 
@@ -158,7 +162,7 @@ if (result.matched) {
 }
 ```
 
-### FuzzyMatchResult Interface
+**FuzzyMatchResult Interface**
 
 ```typescript
 interface FuzzyMatchResult {
@@ -220,7 +224,7 @@ interface TuffQueryInput {
 }
 ```
 
-### Declaring Accepted Input Types
+**Declaring Accepted Input Types**
 
 Declare `acceptedInputTypes` in Features to receive clipboard content:
 
@@ -249,8 +253,12 @@ Supported input types:
 3. **Declare acceptedInputTypes**: Explicitly state what input types your Feature can handle
 4. **Use appropriate command types**: `over` for general features, `match` for specific prefix triggers
 
+## Technical Notes
+- Search tokens are generated at Feature registration and feed the scoring pipeline.
+- `matchFeature` and `fuzzyMatch` return match types, scores, and highlight ranges for rendering.
+
 ## Related Links
 
 - [Feature API](/docs/dev/api/feature)
 - [Box API](/docs/dev/api/box)
-- [Manifest Configuration](/docs/dev/manifest)
+- [Manifest Configuration](/docs/dev/reference/manifest)

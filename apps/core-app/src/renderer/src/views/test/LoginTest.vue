@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'
 
@@ -22,14 +23,13 @@ async function handleLogin() {
       onError: (error) => {
         toast.error(`登录失败: ${error.message || error}`)
         console.error('登录失败:', error)
-      },
+      }
     })
 
     if (result.success) {
       userInfo.value = result.user
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error('登录过程出错:', error)
     toast.error('登录过程中发生错误')
   }
@@ -39,8 +39,7 @@ async function handleLogout() {
   try {
     await logout()
     userInfo.value = null
-  }
-  catch (error) {
+  } catch (error) {
     console.error('登出失败:', error)
     toast.error('登出失败')
   }
@@ -56,19 +55,17 @@ async function handleLogout() {
       <p>登录状态: {{ isLoggedIn ? '已登录' : '未登录' }}</p>
       <p>加载状态: {{ isLoading ? '加载中' : '已完成' }}</p>
       <p>认证状态: {{ isAuthenticated ? '已认证' : '未认证' }}</p>
-      <p v-if="userInfo">
-        用户信息: {{ JSON.stringify(userInfo) }}
-      </p>
+      <p v-if="userInfo">用户信息: {{ JSON.stringify(userInfo) }}</p>
     </div>
 
     <div class="actions-section">
       <h3>操作</h3>
-      <button :disabled="isLoading" @click="handleLogin">
+      <TxButton variant="flat" :disabled="isLoading" @click="handleLogin">
         {{ isLoggedIn ? '重新登录' : '登录' }}
-      </button>
-      <button :disabled="!isLoggedIn || isLoading" @click="handleLogout">
+      </TxButton>
+      <TxButton variant="flat" :disabled="!isLoggedIn || isLoading" @click="handleLogout">
         登出
-      </button>
+      </TxButton>
     </div>
   </div>
 </template>

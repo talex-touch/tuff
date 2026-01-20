@@ -44,7 +44,7 @@
 
 ## 核心组件
 
-### 1. 能力注册表
+**1. 能力注册表**
 
 **位置**: `apps/core-app/src/main/modules/ai/intelligence-capability-registry.ts`
 
@@ -68,7 +68,7 @@ class AiCapabilityRegistry {
 - **RAG**: rag-query, semantic-search, rerank
 - **智能体**: agent 执行
 
-### 2. 提供商管理器
+**2. 提供商管理器**
 
 **位置**: `apps/core-app/src/main/modules/ai/runtime/provider-manager.ts`
 
@@ -92,7 +92,7 @@ class IntelligenceProviderManager {
 - **Local**: Ollama, LM Studio, 本地模型
 - **Custom**: 用户自定义 API 端点
 
-### 3. 策略管理器
+**3. 策略管理器**
 
 **位置**: `apps/core-app/src/main/modules/ai/intelligence-strategy-manager.ts`
 
@@ -112,7 +112,7 @@ interface StrategySelectionResult {
 }
 ```
 
-### 4. Intelligence SDK
+**4. Intelligence SDK**
 
 **位置**: `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
 
@@ -141,7 +141,7 @@ class AiSDK {
 
 ## 配置系统
 
-### 存储结构
+**存储结构**
 
 **位置**: `<user-data>/config/intelligence.json`
 
@@ -183,7 +183,7 @@ class AiSDK {
 }
 ```
 
-### 能力路由
+**能力路由**
 
 每个能力可以配置：
 - **提供商绑定**: 哪些提供商可以处理此能力
@@ -191,7 +191,7 @@ class AiSDK {
 - **优先级**: 提供商选择顺序
 - **提示词模板**: 能力的自定义系统提示词
 
-### 配置加载
+**配置加载**
 
 **位置**: `apps/core-app/src/main/modules/ai/intelligence-config.ts`
 
@@ -212,7 +212,7 @@ export function getCapabilityPrompt(capabilityId: string): string | undefined
 
 ## 调用流程
 
-### 1. 能力调用
+**1. 能力调用**
 
 ```typescript
 // 用户代码
@@ -221,7 +221,7 @@ const result = await intelligence.text.chat({
 })
 ```
 
-### 2. SDK 处理
+**2. SDK 处理**
 
 ```typescript
 // intelligence-sdk.ts
@@ -266,7 +266,7 @@ async invoke(capabilityId, payload, options) {
 }
 ```
 
-### 3. 提供商执行
+**3. 提供商执行**
 
 ```typescript
 // providers/openai-provider.ts
@@ -305,7 +305,7 @@ async chat(payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions)
 
 ## 提示词管理
 
-### 提示词模板
+**提示词模板**
 
 **位置**: `<user-data>/prompts/`
 
@@ -325,7 +325,7 @@ async chat(payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions)
 }
 ```
 
-### 提示词管理器
+**提示词管理器**
 
 **位置**: `apps/core-app/src/renderer/src/modules/intelligence/prompt-manager.ts`
 
@@ -341,7 +341,7 @@ class PromptManager {
 }
 ```
 
-### 能力-提示词绑定
+**能力-提示词绑定**
 
 提示词可以在配置中绑定到能力：
 
@@ -357,7 +357,7 @@ class PromptManager {
 
 ## 测试系统
 
-### 能力测试器
+**能力测试器**
 
 **位置**: `apps/core-app/src/main/modules/ai/capability-testers/`
 
@@ -395,7 +395,7 @@ class TextChatTester implements CapabilityTester {
 }
 ```
 
-### 测试执行
+**测试执行**
 
 ```typescript
 // 主进程
@@ -422,7 +422,7 @@ channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
 
 ## 审计与监控
 
-### 审计日志
+**审计日志**
 
 **位置**: `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
 
@@ -444,7 +444,7 @@ interface IntelligenceAuditLogEntry {
 }
 ```
 
-### 配额管理器
+**配额管理器**
 
 **位置**: `apps/core-app/src/main/modules/ai/intelligence-quota-manager.ts`
 
@@ -460,7 +460,7 @@ class IntelligenceQuotaManager {
 
 ## IPC 通道
 
-### 主进程通道
+**主进程通道**
 
 - `intelligence:invoke` - 调用能力
 - `intelligence:test-capability` - 测试能力
@@ -468,7 +468,7 @@ class IntelligenceQuotaManager {
 - `intelligence:fetch-models` - 获取可用模型
 - `intelligence:reload-config` - 重新加载配置
 
-### 渲染进程钩子
+**渲染进程钩子**
 
 ```typescript
 // useIntelligence composable
@@ -487,28 +487,28 @@ await text.chat({ messages: [...] }, {
 
 ## 最佳实践
 
-### 1. 能力配置
+**1. 能力配置**
 
 - **始终为生产能力指定提供商绑定**
 - **根据能力类型设置适当的超时**（视觉：60秒，文本：30秒）
 - **使用模型偏好**确保一致的质量
 - **启用审计日志**用于调试和监控
 
-### 2. 错误处理
+**2. 错误处理**
 
 - **始终处理 AI 调用的错误**
 - **为关键功能实现回退逻辑**
 - **显示用户友好的错误消息**
 - **记录带上下文的错误**以便调试
 
-### 3. 性能优化
+**3. 性能优化**
 
 - **为重复查询启用缓存**
 - **对长篇内容生成使用流式传输**
 - **设置适当的 token 限制**以控制成本
 - **对用户输入实现请求防抖**
 
-### 4. 安全性
+**4. 安全性**
 
 - **永远不要在客户端代码中暴露 API 密钥**
 - **在发送到 AI 之前验证所有用户输入**
@@ -517,7 +517,7 @@ await text.chat({ messages: [...] }, {
 
 ## 扩展点
 
-### 自定义提供商
+**自定义提供商**
 
 创建自定义提供商适配器：
 
@@ -540,7 +540,7 @@ providerManager.registerFactory('custom', (config) => {
 })
 ```
 
-### 自定义能力
+**自定义能力**
 
 注册新能力：
 
@@ -554,7 +554,7 @@ aiCapabilityRegistry.register({
 })
 ```
 
-### 自定义策略
+**自定义策略**
 
 实现自定义提供商选择策略：
 

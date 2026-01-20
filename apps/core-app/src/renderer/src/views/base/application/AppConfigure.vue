@@ -1,7 +1,7 @@
 <script name="AppConfigure" setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useAppSdk } from '@talex-touch/utils/renderer'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   data: any
@@ -114,14 +114,14 @@ function handleHelp(): void {
         <div class="AppConfigure-Content-Inner">
           <t-group-block :name="t('appConfigure.action')" icon="auction">
             <t-block-slot :title="t('appConfigure.launch')" icon="external-link">
-              <FlatButton @click="handleLaunch">
+              <TxButton variant="flat" @click="handleLaunch">
                 {{ t('appConfigure.launchBtn') }}
-              </FlatButton>
+              </TxButton>
             </t-block-slot>
             <t-block-slot :title="t('appConfigure.openInExplorer')" icon="folder-2">
-              <FlatButton @click="handleOpenExplorer">
+              <TxButton variant="flat" @click="handleOpenExplorer">
                 {{ t('appConfigure.openBtn') }}
-              </FlatButton>
+              </TxButton>
             </t-block-slot>
             <t-block-slot icon="delete-bin-2">
               <template #label>
@@ -130,9 +130,9 @@ function handleHelp(): void {
                   <span color-red>{{ t('appConfigure.danger') }}</span>
                 </h3>
               </template>
-              <FlatButton hover:bg-red @click="handleDelete">
+              <TxButton variant="flat" hover:bg-red @click="handleDelete">
                 {{ t('appConfigure.uninstallBtn') }}
-              </FlatButton>
+              </TxButton>
             </t-block-slot>
             <t-block-switch
               guidance
@@ -189,7 +189,7 @@ function handleHelp(): void {
     </div>
     <div class="AppConfigure-Ends">
       {{ t('appConfigure.confirm') }}
-      <FlatButton> {{ t('appConfigure.save') }} </FlatButton>
+      <TxButton variant="flat"> {{ t('appConfigure.save') }} </TxButton>
     </div>
   </div>
 </template>

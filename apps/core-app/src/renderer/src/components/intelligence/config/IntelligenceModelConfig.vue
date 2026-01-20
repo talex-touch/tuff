@@ -7,7 +7,7 @@ import { ElOption, ElOptionGroup, ElSelect, ElTransfer } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
@@ -389,7 +389,7 @@ watch(
             {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
           </span></span
         >
-        <FlatButton>{{ t('intelligence.config.model.editModels') }}</FlatButton>
+        <TxButton variant="flat">{{ t('intelligence.config.model.editModels') }}</TxButton>
       </div>
     </TuffBlockSlot>
 
@@ -402,14 +402,15 @@ watch(
       :active="!!localDefaultModel"
       :disabled="disabled || localModels.length === 0"
     >
-      <FlatButton
+      <TxButton
+        variant="flat"
         class="config-action-button"
         :disabled="disabled || localModels.length === 0"
         @click="openDefaultModelDrawer"
       >
         <span>{{ defaultModelSummary }}</span>
         <i class="i-carbon-chevron-right" />
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- Instructions Prompt Selector -->
@@ -422,10 +423,10 @@ watch(
       :disabled="disabled"
       guidance
     >
-      <FlatButton :disabled="disabled" @click="openInstructionsDrawer">
+      <TxButton variant="flat" :disabled="disabled" @click="openInstructionsDrawer">
         <span>{{ instructionsSummary }}</span>
         <i class="i-carbon-chevron-right" />
-      </FlatButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <!-- Models Drawer -->
@@ -454,7 +455,8 @@ watch(
 
         <!-- Fetch Models Button -->
         <div class="fetch-models-section">
-          <FlatButton
+          <TxButton
+            variant="flat"
             class="fetch-models-button"
             :disabled="disabled || !canFetchModels || isFetching"
             :loading="isFetching"
@@ -463,7 +465,7 @@ watch(
             <i v-if="isFetching" class="i-carbon-renew animate-spin" />
             <i v-else class="i-carbon-download" />
             {{ t('intelligence.config.model.fetchModels') }}
-          </FlatButton>
+          </TxButton>
           <p class="text-xs text-[var(--el-text-color-secondary)]">
             {{ t('intelligence.config.model.fetchModelsHint') }}
           </p>
@@ -478,14 +480,15 @@ watch(
             class="add-model-input"
             @keyup.enter="handleAddModel"
           />
-          <FlatButton
+          <TxButton
+            variant="flat"
             class="add-model-button"
             :disabled="!newModelInput.trim()"
             @click="handleAddModel"
           >
             <i class="i-carbon-add" />
             {{ t('intelligence.config.model.addModel') }}
-          </FlatButton>
+          </TxButton>
         </div>
 
         <p v-if="modelsError" class="error-message">

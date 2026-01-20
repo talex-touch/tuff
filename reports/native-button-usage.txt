@@ -1,0 +1,200 @@
+./packages/tuffex/packages/components/src/alert/src/TxAlert.vue:62:    <button
+./plugins/touch-translation/src/pages/hi/[name].vue:17:      <button m-3 mt-8 text-sm btn @click="router.back()">
+./plugins/touch-translation/src/pages/multi-translate.vue:156:          <button
+./plugins/touch-translation/src/pages/multi-translate.vue:180:        <button
+./plugins/touch-translation/src/pages/multi-translate.vue:202:              <button class="ml-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200" @click="removeFromHistory(item.id)">
+./plugins/touch-translation/src/pages/multi-translate.vue:241:            <button
+./plugins/touch-translation/src/pages/multi-translate.vue:289:                <button
+./plugins/touch-translation/src/pages/multi-translate.vue:338:            <button
+./plugins/touch-translation/src/pages/multi-translate.vue:344:            <button
+./packages/tuffex/packages/components/src/rating/src/TxRating.vue:90:      <button
+./plugins/touch-translation/src/pages/index.vue:37:      <button
+./packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue:137:          <button
+./plugins/touch-translation/src/components/TheCounter.vue:12:    <button class="inc" @click="inc()">
+./plugins/touch-translation/src/components/TheCounter.vue:15:    <button class="dec" @click="dec()">
+./packages/tuffex/packages/components/src/tag/src/TxTag.vue:121:    <button
+./plugins/touch-translation/widgets/TestWidget.vue:33:    <button @click="increment">
+./plugins/touch-translation/src/components/TheFooter.vue:3:    <button icon-btn @click="toggleDark()">
+./plugins/touch-translation/src/components/ProviderConfigModal.vue:157:              <button
+./plugins/touch-translation/src/components/ProviderConfigModal.vue:391:              <button
+./plugins/touch-translation/src/components/ProviderConfigModal.vue:397:              <button
+./plugins/touch-translation/src/components/ProviderConfigModal.vue:408:              <button
+./plugins/touch-translation/src/components/TranslationCard.vue:45:        <button
+./plugins/touch-translation/src/components/TranslationCard.vue:55:        <button
+./packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue:258:        <button
+./packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue:304:                <button
+./apps/nexus/app/pages/updates.vue:185:        <button
+./apps/nexus/app/pages/updates.vue:271:              <button
+./apps/nexus/app/pages/updates.vue:320:        <button
+./packages/tuffex/packages/components/src/dialog/src/TxTouchTip.vue:145:          <button
+./apps/nexus/app/pages/[...all].vue:61:        <button
+./apps/nexus/app/pages/[...all].vue:68:        <button
+./packages/tuffex/packages/components/src/dialog/src/TxPopperDialog.vue:111:          <button
+./apps/nexus/app/pages/team/join.vue:72:        <button
+./packages/tuffex/packages/components/src/dialog/src/TxBlowDialog.vue:183:          <button
+./packages/tuffex/packages/components/src/picker/src/TxPicker.vue:284:      <button type="button" class="tx-picker__btn" :disabled="disabled" @click="onCancel">
+./packages/tuffex/packages/components/src/picker/src/TxPicker.vue:290:      <button type="button" class="tx-picker__btn is-primary" :disabled="disabled" @click="onConfirm">
+./packages/tuffex/packages/components/src/picker/src/TxPicker.vue:311:          <button
+./packages/tuffex/packages/components/src/picker/src/TxPicker.vue:336:            <button type="button" class="tx-picker__btn" :disabled="disabled" @click="onCancel">
+./packages/tuffex/packages/components/src/picker/src/TxPicker.vue:342:            <button type="button" class="tx-picker__btn is-primary" :disabled="disabled" @click="onConfirm">
+./packages/tuffex/packages/components/src/picker/src/TxPicker.vue:363:                <button
+./apps/nexus/app/pages/dashboard/api-keys.vue:159:      <button
+./apps/nexus/app/pages/dashboard/api-keys.vue:182:            <button
+./apps/nexus/app/pages/dashboard/api-keys.vue:190:        <button
+./apps/nexus/app/pages/dashboard/api-keys.vue:251:        <button
+./apps/nexus/app/pages/dashboard/api-keys.vue:271:      <button
+./apps/nexus/app/pages/dashboard/api-keys.vue:350:            <button
+./apps/nexus/app/pages/dashboard/api-keys.vue:356:            <button
+./packages/tuffex/packages/components/src/pagination/src/TxPagination.vue:84:        <button
+./packages/tuffex/packages/components/src/pagination/src/TxPagination.vue:101:        <button
+./packages/tuffex/packages/components/src/pagination/src/TxPagination.vue:115:        <button
+./packages/tuffex/packages/components/src/dialog/src/TxBottomDialog.vue:185:          <button
+./packages/tuffex/packages/components/src/image-uploader/src/TxImageUploader.vue:105:      <button
+./packages/tuffex/packages/components/src/image-uploader/src/TxImageUploader.vue:121:        <button
+./apps/nexus/app/pages/dashboard/images.vue:247:                <button
+./apps/nexus/app/pages/dashboard/images.vue:255:                <button
+./packages/tuffex/packages/components/src/chat/src/TxChatMessage.vue:73:          <button
+./apps/nexus/app/pages/dashboard/privacy.vue:170:        <button
+./apps/nexus/app/pages/dashboard/privacy.vue:180:        <button
+./apps/nexus/app/pages/dashboard/devices.vue:150:          <button
+./packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue:49:      <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:305:        <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:315:        <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:325:        <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:335:        <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:345:        <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:675:            <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:695:            <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:715:            <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:740:          <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:807:            <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:817:            <button
+./apps/nexus/app/pages/dashboard/admin/analytics.vue:827:            <button
+./apps/nexus/app/pages/dashboard/admin/codes.vue:193:      <button
+./apps/nexus/app/pages/dashboard/admin/codes.vue:214:        <button
+./apps/nexus/app/pages/dashboard/admin/codes.vue:264:                  <button
+./apps/nexus/app/pages/dashboard/team.vue:251:        <button
+./apps/nexus/app/pages/dashboard/team.vue:268:          <button
+./apps/nexus/app/pages/dashboard/team.vue:275:          <button
+./apps/nexus/app/pages/dashboard/team.vue:308:          <button
+./apps/nexus/app/pages/dashboard/team.vue:325:              <button
+./apps/nexus/app/pages/dashboard/team.vue:417:                <button
+./apps/nexus/app/pages/dashboard/team.vue:423:                <button
+./apps/nexus/app/pages/dashboard/team.vue:461:          <button
+./apps/nexus/app/pages/dashboard/team.vue:467:          <button
+./apps/nexus/app/pages/dashboard/team.vue:513:          <button
+./apps/nexus/app/pages/dashboard/team.vue:519:          <button
+./apps/nexus/app/pages/dashboard/team.vue:558:          <button
+./apps/nexus/app/pages/dashboard/team.vue:564:          <button
+./apps/nexus/app/pages/auth/app-callback.vue:120:          <button
+./packages/tuffex/packages/components/src/cascader/src/TxCascader.vue:384:        <button
+./packages/tuffex/packages/components/src/radio/src/TxRadio.vue:47:  <button
+./packages/tuffex/packages/components/src/toast/src/TxToastHost.vue:24:        <button class="tx-toast__close" type="button" @click="dismissToast(t.id)">
+./packages/tuffex/packages/components/src/nav-bar/src/TxNavBar.vue:55:          <button
+./packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue:60:      <button
+./packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue:78:          <button type="button" class="tx-image-gallery__nav" :disabled="index <= 0" @click="prev">
+./packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue:84:          <button type="button" class="tx-image-gallery__nav" :disabled="index >= list.length - 1" @click="next">
+./apps/nexus/app/components/InputEntry.vue:26:      <button
+./apps/nexus/app/components/HeaderControls.vue:101:      <button
+./packages/tuffex/packages/components/src/modal/src/TxModal.vue:47:            <button type="button" class="tx-modal__close" @click="close">
+./apps/nexus/app/components/icon/GlassIcon.vue:38:    <button
+./apps/nexus/app/components/ui/ToastHost.vue:38:          <button
+./apps/nexus/app/components/tuff/TuffHomeZh.vue:223:            <button
+./apps/nexus/app/components/ui/Tag.vue:56:    <button
+./apps/nexus/app/components/Counter.vue:7:    <button btn p-2 rounded-full @click="dec()">
+./apps/nexus/app/components/Counter.vue:13:    <button btn p-2 rounded-full @click="inc()">
+./packages/tuffex/packages/components/src/button/src/button.vue:190:  <button
+./apps/nexus/app/components/docs/DocSection.vue:35:    <button
+./apps/nexus/app/components/theme/components/base/TouchButton.vue:14:  <button class="touch-button" :class="{ 'touch-button--loading': loading }" :disabled="disabled || loading">
+./apps/nexus/app/components/dashboard/PluginListItem.vue:44:  <button
+./apps/nexus/app/components/dashboard/PendingReviewSection.vue:38:    <button
+./apps/nexus/app/components/dashboard/PendingReviewSection.vue:73:          <button
+./apps/nexus/app/components/tuff/landing/TuffLandingAiOverview.vue:143:                <button
+./apps/nexus/app/components/tuff/landing/TuffLandingAiOverview.vue:180:          <!-- <button
+./apps/nexus/app/components/tuff/landing/TuffLandingAiOverview.vue:186:            <button
+./apps/nexus/app/components/tuff/landing/TuffLandingExperience.vue:89:        <button
+./apps/nexus/app/components/tuff/landing/showcase/TuffShowcaseDisplayer.vue:267:          <button
+./apps/nexus/app/components/tuff/landing/TuffLandingWaitlist.vue:53:        <button
+./apps/nexus/app/components/tuff/landing/TuffLandingStarSnippets.vue:77:          <button
+./apps/nexus/app/components/tuff/carousel/apple/AppleCardCarousel.vue:94:      <button
+./apps/nexus/app/components/tuff/carousel/apple/AppleCardCarousel.vue:104:      <button
+./apps/nexus/app/components/tuff/carousel/apple/AppleCard.vue:95:          <button
+./packages/tuffex/packages/components/src/button/src/split-button.vue:73:    <button
+./packages/tuffex/packages/components/src/button/src/split-button.vue:99:          <button
+./apps/core-app/src/renderer/src/components/flow/FlowSelector.vue:266:                <button
+./apps/core-app/src/renderer/src/components/flow/FlowSelector.vue:337:            <button
+./apps/core-app/src/renderer/src/components/flow/FlowSelector.vue:368:            <button
+./apps/core-app/src/renderer/src/components/flow/FlowSelector.vue:375:            <button
+./apps/core-app/src/renderer/src/components/flow/FlowSelector.vue:382:            <button
+./apps/core-app/src/renderer/src/views/test/MemoryLeakTest.vue:63:          <button @click="close">关闭</button>
+./apps/core-app/src/renderer/src/views/test/LoginTest.vue:66:      <button :disabled="isLoading" @click="handleLogin">
+./apps/core-app/src/renderer/src/views/test/LoginTest.vue:69:      <button :disabled="!isLoggedIn || isLoading" @click="handleLogout">
+./apps/core-app/src/renderer/src/modules/division-box/components/DivisionBoxHeader.vue:72:      <button
+./apps/core-app/src/renderer/src/modules/division-box/components/DivisionBoxHeader.vue:82:      <button class="header-action-btn header-close-btn" title="Close" @click="handleClose">
+./apps/core-app/src/renderer/src/views/base/styles/LayoutSection.vue:68:      <button
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:482:            <button
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:539:                <button class="aisdk-btn ghost" type="button" @click="handleOpenDocs">
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:543:                <button class="aisdk-btn ghost" type="button" @click="handleOpenFolder">
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:547:                <button class="aisdk-btn ghost" type="button" @click="triggerImport">
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:551:                <button class="aisdk-btn ghost" type="button" @click="handleExportPrompts">
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:686:              <button class="aisdk-btn ghost" type="button" @click="handleDuplicatePrompt">
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:699:              <button class="aisdk-btn ghost" type="button" @click="handleCopyContent">
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:713:              <button
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:747:                <button
+./apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue:769:          <button class="aisdk-btn primary" type="button" @click="handleCreatePrompt">
+./apps/core-app/src/renderer/src/components/layout/LayoutBackButton.vue:17:    <button
+./apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue:91:      <button
+./apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceUsageChart.vue:177:        <button :class="{ active: activeMetric === 'requests' }" @click="activeMetric = 'requests'">
+./apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceUsageChart.vue:182:        <button :class="{ active: activeMetric === 'tokens' }" @click="activeMetric = 'tokens'">
+./apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceUsageChart.vue:187:        <button :class="{ active: activeMetric === 'cost' }" @click="activeMetric = 'cost'">
+./apps/core-app/src/renderer/src/views/base/LingPan.vue:564:            <button class="debug-btn debug-btn--compact" type="button" @click="toggleVerboseLogs">
+./apps/core-app/src/renderer/src/views/base/LingPan.vue:568:          <button class="debug-btn" type="button" :disabled="loading" @click="load">
+./apps/core-app/src/renderer/src/views/base/LingPan.vue:584:        <button class="warning-btn" type="button" @click="requestVerboseLogs">开启详细日志</button>
+./apps/core-app/src/renderer/src/views/base/LingPan.vue:585:        <button
+./apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue:544:          <button
+./apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue:564:          <button
+./apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue:584:          <button
+./apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue:214:            <button
+./apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue:220:            <button
+./apps/core-app/src/renderer/src/components/render/custom/PreviewResultCard.vue:70:        <button class="hint" type="button" @click="emit('copy-primary')">
+./apps/core-app/src/renderer/src/components/render/custom/PreviewResultCard.vue:74:        <button class="hint" type="button" @click="emit('show-history')">
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue:179:        <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue:214:      <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue:222:      <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue:249:          <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue:259:            <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue:266:            <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityModelTransfer.vue:273:            <button type="button" :disabled="disabled" @click="removeFromSelected(model)">
+./apps/core-app/src/renderer/src/components/render/custom/CoreIntelligenceAnswer.vue:139:      <button v-if="hasAnswer" class="CoreIntelligence__action" type="button" @click="copyAnswer">
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/AISDKCapabilityDetails.vue:396:                    <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/AISDKCapabilityDetails.vue:449:                <button
+./apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityTestDialog.vue:77:          <button
+./apps/core-app/src/renderer/src/components/base/tuff/TModal.vue:38:            <button type="button" class="close-btn" @click="close">
+./apps/core-app/src/renderer/src/components/plugin/PluginNavTree.vue:209:        <button
+./apps/core-app/src/renderer/src/components/plugin/PluginNavTree.vue:242:              <button
+./apps/core-app/src/renderer/src/components/file-index/FileIndexFailDialog.vue:77:        <button class="btn-rebuild" :disabled="rebuilding" @click="handleRebuild">
+./apps/core-app/src/renderer/src/components/file-index/FileIndexFailDialog.vue:81:        <button class="btn-later" @click="handleLater">稍后处理</button>
+./apps/core-app/src/renderer/src/components/base/tuff/TSelectField.vue:67:    <button
+./apps/core-app/src/renderer/src/components/base/dialog/PlatformCompatibilityWarning.vue:95:        <button
+./apps/core-app/src/renderer/src/components/base/dialog/PlatformCompatibilityWarning.vue:102:        <button
+./apps/core-app/src/renderer/src/components/download/MigrationProgress.vue:214:        <button
+./apps/core-app/src/renderer/src/components/download/MigrationProgress.vue:221:        <button
+./apps/core-app/src/renderer/src/components/tuff/template/TuffAsideList.vue:88:        <button
+./apps/core-app/src/renderer/src/components/base/BuildSecurityBanner.vue:84:        <button class="banner-close" @click="dismissBanner">
+./apps/core-app/src/renderer/src/components/base/template/BrickTemplate.vue:27:      <button
+./apps/core-app/src/renderer/src/components/tuff/template/TuffListTemplate.vue:127:            <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/CommandDetailDrawer.vue:32:          <button class="close-button" @click="closeDrawer">
+./apps/core-app/src/renderer/src/views/storage/Storagable.vue:597:          <button class="btn" :disabled="summaryLoading" @click="loadAll">刷新</button>
+./apps/core-app/src/renderer/src/views/storage/Storagable.vue:652:                  <button
+./apps/core-app/src/renderer/src/views/storage/Storagable.vue:760:                  <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:562:          <button class="toolbar-icon" type="button" @click="openHistoryDrawer">
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:573:          <button class="toolbar-icon" type="button" @click="handleManualRefresh">
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:584:          <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:600:          <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:630:            <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:648:            <button class="terminal-icon terminal-icon-new" type="button" @click="jumpToLive">
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:659:            <button class="terminal-icon" type="button" @click="clearTerminal">
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:670:            <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:704:        <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:728:        <button
+./apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue:737:        <button

@@ -1001,7 +1001,7 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
     },
   },
   docs: {
-    loading: '正在加载文档内容…',
+    loading: '正在获取文档…',
     notFoundTitle: '未找到文档',
     notFoundDescription: '当前路径暂未匹配到内容，请返回文档首页。',
     backHome: '返回文档首页',

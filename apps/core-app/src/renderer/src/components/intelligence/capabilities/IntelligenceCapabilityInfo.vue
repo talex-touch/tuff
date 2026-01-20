@@ -6,7 +6,7 @@ import type {
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { useI18n } from 'vue-i18n'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -329,10 +329,10 @@ onBeforeUnmount(() => {
             default-icon="i-carbon-model"
             @click="openModelDrawer"
           >
-            <FlatButton primary :disabled="!canEditModels">
+            <TxButton variant="flat" type="primary" :disabled="!canEditModels">
               <i class="i-carbon-settings" aria-hidden="true" />
               <span>{{ t('settings.intelligence.manageModels') }}</span>
-            </FlatButton>
+            </TxButton>
           </TuffBlockSlot>
         </template>
       </TuffGroupBlock>
@@ -350,10 +350,10 @@ onBeforeUnmount(() => {
             default-icon="i-carbon-notebook"
             @click="openPromptDrawer"
           >
-            <FlatButton text>
+            <TxButton variant="flat" type="text">
               <i class="i-carbon-edit" aria-hidden="true" />
               <span>{{ t('settings.intelligence.editPrompt') }}</span>
-            </FlatButton>
+            </TxButton>
           </TuffBlockSlot>
         </template>
       </TuffGroupBlock>

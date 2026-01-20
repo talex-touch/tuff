@@ -1,8 +1,12 @@
 # Intelligence SDK
 
+## Overview
+
 The Intelligence SDK provides a unified interface for plugins to access AI capabilities, supporting multiple AI Providers (OpenAI, Anthropic, DeepSeek, SiliconFlow, etc.).
 
-## Quick Start
+## Introduction
+
+**Quick Start**
 
 ```typescript
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
@@ -40,7 +44,7 @@ console.log(ocrRes.result.text)
 
 ## API Reference
 
-### useIntelligence()
+**useIntelligence()**
 
 Get Intelligence SDK instance (Vue Composable).
 
@@ -70,7 +74,7 @@ Returns an object with the following properties and methods:
 
 ## Text Processing (text)
 
-### `text.chat(payload, options?)`
+**`text.chat(payload, options?)`**
 
 AI Chat.
 
@@ -88,7 +92,7 @@ console.log(result.result) // Chat response
 console.log(result.usage) // { promptTokens, completionTokens, totalTokens }
 ```
 
-### `text.translate(payload, options?)`
+**`text.translate(payload, options?)`**
 
 Text translation.
 
@@ -101,7 +105,7 @@ const result = await text.translate({
 console.log(result.result)
 ```
 
-### `text.summarize(payload, options?)`
+**`text.summarize(payload, options?)`**
 
 Text summarization.
 
@@ -114,7 +118,7 @@ const result = await text.summarize({
 console.log(result.result)
 ```
 
-### `text.rewrite(payload, options?)`
+**`text.rewrite(payload, options?)`**
 
 Text rewriting.
 
@@ -127,7 +131,7 @@ const result = await text.rewrite({
 console.log(result.result)
 ```
 
-### `text.grammarCheck(payload, options?)`
+**`text.grammarCheck(payload, options?)`**
 
 Grammar checking.
 
@@ -144,7 +148,7 @@ console.log(res.result)
 
 ## Code Processing (code)
 
-### `code.generate(payload, options?)`
+**`code.generate(payload, options?)`**
 
 Code generation.
 
@@ -158,7 +162,7 @@ const res = await code.generate({
 console.log(res.result)
 ```
 
-### `code.explain(payload, options?)`
+**`code.explain(payload, options?)`**
 
 Code explanation.
 
@@ -172,7 +176,7 @@ const res = await code.explain({
 console.log(res.result)
 ```
 
-### `code.review(payload, options?)`
+**`code.review(payload, options?)`**
 
 Code review.
 
@@ -185,7 +189,7 @@ const res = await code.review({
 console.log(res.result)
 ```
 
-### `code.refactor(payload, options?)`
+**`code.refactor(payload, options?)`**
 
 Code refactoring.
 
@@ -198,7 +202,7 @@ const res = await code.refactor({
 console.log(res.result)
 ```
 
-### `code.debug(payload, options?)`
+**`code.debug(payload, options?)`**
 
 Code debugging.
 
@@ -215,7 +219,7 @@ console.log(res.result)
 
 ## Analysis Capabilities (analysis)
 
-### `analysis.detectIntent(payload, options?)`
+**`analysis.detectIntent(payload, options?)`**
 
 Intent detection.
 
@@ -227,7 +231,7 @@ const res = await analysis.detectIntent({
 console.log(res.result)
 ```
 
-### `analysis.analyzeSentiment(payload, options?)`
+**`analysis.analyzeSentiment(payload, options?)`**
 
 Sentiment analysis.
 
@@ -239,7 +243,7 @@ const res = await analysis.analyzeSentiment({
 console.log(res.result)
 ```
 
-### `analysis.extractContent(payload, options?)`
+**`analysis.extractContent(payload, options?)`**
 
 Content extraction.
 
@@ -251,7 +255,7 @@ const res = await analysis.extractContent({
 console.log(res.result)
 ```
 
-### `analysis.extractKeywords(payload, options?)`
+**`analysis.extractKeywords(payload, options?)`**
 
 Keyword extraction.
 
@@ -264,7 +268,7 @@ const res = await analysis.extractKeywords({
 console.log(res.result)
 ```
 
-### `analysis.classify(payload, options?)`
+**`analysis.classify(payload, options?)`**
 
 Text classification.
 
@@ -281,7 +285,7 @@ console.log(res.result)
 
 ## Vision Processing (vision)
 
-### `vision.ocr(payload, options?)`
+**`vision.ocr(payload, options?)`**
 
 OCR text recognition.
 
@@ -313,7 +317,7 @@ const sourceBase64 = { type: 'base64', base64: '...' } as const
 console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
 ```
 
-### `vision.caption(payload, options?)`
+**`vision.caption(payload, options?)`**
 
 Image captioning.
 
@@ -326,7 +330,7 @@ const res = await vision.caption({
 console.log(res.result)
 ```
 
-### `vision.analyze(payload, options?)`
+**`vision.analyze(payload, options?)`**
 
 Image analysis.
 
@@ -338,7 +342,7 @@ const res = await vision.analyze({
 console.log(res.result)
 ```
 
-### `vision.generate(payload, options?)`
+**`vision.generate(payload, options?)`**
 
 Image generation.
 
@@ -357,7 +361,7 @@ console.log(res.result)
 
 ## Embedding (embedding)
 
-### `embedding.generate(payload, options?)`
+**`embedding.generate(payload, options?)`**
 
 Generate text embeddings.
 
@@ -374,7 +378,7 @@ console.log(res.result.length)
 
 ## RAG (rag)
 
-### `rag.query(payload, options?)`
+**`rag.query(payload, options?)`**
 
 RAG query.
 
@@ -387,7 +391,7 @@ const res = await rag.query({
 console.log(res.result)
 ```
 
-### `rag.semanticSearch(payload, options?)`
+**`rag.semanticSearch(payload, options?)`**
 
 Semantic search.
 
@@ -400,7 +404,7 @@ const res = await rag.semanticSearch({
 console.log(res.result)
 ```
 
-### `rag.rerank(payload, options?)`
+**`rag.rerank(payload, options?)`**
 
 Result reranking.
 
@@ -417,7 +421,7 @@ console.log(res.result)
 
 ## Agent (agent)
 
-### `agent.run(payload, options?)`
+**`agent.run(payload, options?)`**
 
 Run an agent.
 
@@ -434,7 +438,7 @@ console.log(res.result)
 
 ## Generic Invocation
 
-### `invoke(capabilityId, payload, options?)`
+**`invoke(capabilityId, payload, options?)`**
 
 Directly invoke any capability.
 
@@ -547,3 +551,14 @@ enum IntelligenceCapabilityType {
 
 void IntelligenceCapabilityType.CHAT
 ```
+
+## Best Practices
+
+- Gate calls by quota/subscription to avoid failures.
+- Redact sensitive input where appropriate and prompt for confirmation.
+- Cache or rate-limit high-frequency requests to control cost.
+
+## Technical Notes
+
+- The SDK wraps calls in the renderer, while the main process routes to concrete providers.
+- Unified responses include timing and token usage for monitoring.

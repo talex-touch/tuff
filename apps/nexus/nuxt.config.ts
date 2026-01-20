@@ -34,6 +34,8 @@ export default defineNuxtConfig({
     ...(isDev ? ['nitro-cloudflare-dev'] : []),
   ],
 
+  css: ['vue-sonner/style.css'],
+
   sentry: {
     sourceMapsUploadOptions: {
       org: 'quotawish',
@@ -50,7 +52,10 @@ export default defineNuxtConfig({
     build: {
       markdown: {
         highlight: {
-          theme: 'github-dark',
+          theme: {
+            light: 'github-light',
+            dark: 'github-dark',
+          },
         },
         toc: {
           depth: 3,

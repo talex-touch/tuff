@@ -7,8 +7,10 @@ import { readCloudflareBindings } from './cloudflare'
 
 const RELEASES_KEY = 'app:releases'
 const RELEASE_ASSETS_KEY = 'app:release_assets'
+const RELEASE_REVISIONS_KEY = 'app:release_revisions'
 const RELEASES_TABLE = 'app_releases'
 const RELEASE_ASSETS_TABLE = 'app_release_assets'
+const RELEASE_REVISIONS_TABLE = 'app_release_revisions'
 
 let schemaInitialized = false
 let hasLoggedReleasesDb = false
@@ -19,6 +21,12 @@ export type ReleaseStatus = 'draft' | 'published' | 'archived'
 export type AssetPlatform = 'darwin' | 'win32' | 'linux'
 export type AssetArch = 'x64' | 'arm64' | 'universal'
 export type AssetSourceType = 'github' | 'upload'
+export type ReleaseNoteLocale = 'zh' | 'en'
+
+export interface ReleaseNotes {
+  zh: string
+  en: string
+}
 
 export interface ReleaseAsset {
   id: string
@@ -43,8 +51,8 @@ export interface AppRelease {
   name: string
   channel: ReleaseChannel
   version: string
-  notes: string
-  notesHtml?: string | null
+  notes: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
   status: ReleaseStatus
   publishedAt: string | null
   minAppVersion?: string | null
@@ -53,6 +61,15 @@ export interface AppRelease {
   createdAt: string
   updatedAt: string
   assets?: ReleaseAsset[]
+}
+
+export interface ReleaseRevision {
+  id: string
+  releaseId: string
+  tag: string
+  snapshot: AppRelease
+  createdBy: string
+  createdAt: string
 }
 
 interface D1ReleaseRow {
@@ -89,13 +106,22 @@ interface D1ReleaseAssetRow {
   updated_at: string
 }
 
+interface D1ReleaseRevisionRow {
+  id: string
+  release_id: string
+  tag: string
+  snapshot: string
+  created_by: string
+  created_at: string
+}
+
 interface CreateReleaseInput {
   tag: string
   name: string
   channel: ReleaseChannel
   version: string
-  notes: string
-  notesHtml?: string | null
+  notes: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
   status?: ReleaseStatus
   minAppVersion?: string | null
   isCritical?: boolean
@@ -104,8 +130,8 @@ interface CreateReleaseInput {
 
 interface UpdateReleaseInput {
   name?: string
-  notes?: string
-  notesHtml?: string | null
+  notes?: ReleaseNotes
+  notesHtml?: ReleaseNotes | null
   status?: ReleaseStatus
   minAppVersion?: string | null
   isCritical?: boolean
@@ -189,9 +215,23 @@ async function ensureReleasesSchema(db: D1Database) {
     );
   `).run()
 
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${RELEASE_REVISIONS_TABLE} (
+      id TEXT PRIMARY KEY,
+      release_id TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      snapshot TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (release_id) REFERENCES ${RELEASES_TABLE}(id) ON DELETE CASCADE
+    );
+  `).run()
+
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_releases_channel ON ${RELEASES_TABLE}(channel);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_releases_status ON ${RELEASES_TABLE}(status);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_assets_release_id ON ${RELEASE_ASSETS_TABLE}(release_id);`).run()
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_revisions_release_id ON ${RELEASE_REVISIONS_TABLE}(release_id);`).run()
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_release_revisions_tag ON ${RELEASE_REVISIONS_TABLE}(tag);`).run()
 
   schemaInitialized = true
 }
@@ -203,8 +243,8 @@ function mapReleaseRow(row: D1ReleaseRow): AppRelease {
     name: row.name,
     channel: row.channel as ReleaseChannel,
     version: row.version,
-    notes: row.notes,
-    notesHtml: row.notes_html,
+    notes: parseReleaseNotes(row.notes),
+    notesHtml: parseReleaseNotesHtml(row.notes_html),
     status: row.status as ReleaseStatus,
     publishedAt: row.published_at,
     minAppVersion: row.min_app_version,
@@ -266,6 +306,122 @@ function validateArch(arch: string): asserts arch is AssetArch {
 function validateSemanticVersion(version: string): boolean {
   const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*))?(?:\+([0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/i
   return semverPattern.test(version)
+}
+
+function normalizeReleaseNotes(input: unknown, fallback?: ReleaseNotes): ReleaseNotes {
+  if (typeof input === 'string') {
+    return { zh: input, en: input }
+  }
+
+  if (input && typeof input === 'object') {
+    const zh = typeof (input as any).zh === 'string' ? (input as any).zh : ''
+    const en = typeof (input as any).en === 'string' ? (input as any).en : ''
+    const resolved = { zh: zh || en, en: en || zh }
+    if (resolved.zh || resolved.en) {
+      return resolved
+    }
+  }
+
+  return fallback ?? { zh: '', en: '' }
+}
+
+function parseReleaseNotes(raw: string | null | undefined): ReleaseNotes {
+  if (!raw) {
+    return { zh: '', en: '' }
+  }
+
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      return normalizeReleaseNotes(parsed)
+    }
+    catch {
+      return normalizeReleaseNotes(raw)
+    }
+  }
+
+  return normalizeReleaseNotes(raw)
+}
+
+function parseReleaseNotesHtml(raw: string | null | undefined): ReleaseNotes | null {
+  if (!raw) {
+    return null
+  }
+
+  const parsed = parseReleaseNotes(raw)
+  if (!parsed.zh && !parsed.en) {
+    return null
+  }
+  return parsed
+}
+
+function serializeReleaseNotes(notes: ReleaseNotes): string {
+  return JSON.stringify(normalizeReleaseNotes(notes))
+}
+
+function serializeReleaseNotesHtml(notesHtml?: ReleaseNotes | null): string | null {
+  if (!notesHtml) {
+    return null
+  }
+  const normalized = normalizeReleaseNotes(notesHtml)
+  if (!normalized.zh && !normalized.en) {
+    return null
+  }
+  return JSON.stringify(normalized)
+}
+
+function normalizeReleaseRecord(release: AppRelease): AppRelease {
+  const notes = normalizeReleaseNotes((release as any).notes)
+  const notesHtmlRaw = (release as any).notesHtml
+  const notesHtml = notesHtmlRaw ? normalizeReleaseNotes(notesHtmlRaw) : null
+  return {
+    ...release,
+    notes,
+    notesHtml,
+  }
+}
+
+function fallbackRevisionSnapshot(raw: string): AppRelease {
+  const now = new Date().toISOString()
+  return {
+    id: '',
+    tag: '',
+    name: '',
+    channel: 'RELEASE',
+    version: '',
+    notes: normalizeReleaseNotes(raw),
+    notesHtml: null,
+    status: 'draft',
+    publishedAt: null,
+    minAppVersion: null,
+    isCritical: false,
+    createdBy: 'unknown',
+    createdAt: now,
+    updatedAt: now,
+    assets: [],
+  }
+}
+
+function parseReleaseRevisionSnapshot(raw: string): AppRelease {
+  try {
+    const parsed = JSON.parse(raw) as AppRelease
+    return normalizeReleaseRecord(parsed)
+  }
+  catch {
+    return fallbackRevisionSnapshot(raw)
+  }
+}
+
+function mapReleaseRevisionRow(row: D1ReleaseRevisionRow): ReleaseRevision {
+  return {
+    id: row.id,
+    releaseId: row.release_id,
+    tag: row.tag,
+    snapshot: parseReleaseRevisionSnapshot(row.snapshot),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  }
 }
 
 export async function listReleases(
@@ -345,7 +501,7 @@ export async function listReleases(
   }
 
   // Memory fallback
-  let releases = await readCollection<AppRelease>(RELEASES_KEY)
+  let releases = (await readCollection<AppRelease>(RELEASES_KEY)).map(normalizeReleaseRecord)
 
   if (options.channel)
     releases = releases.filter(r => r.channel === options.channel)
@@ -423,7 +579,7 @@ export async function getLatestRelease(
   }
 
   // Memory fallback
-  const releases = await readCollection<AppRelease>(RELEASES_KEY)
+  const releases = (await readCollection<AppRelease>(RELEASES_KEY)).map(normalizeReleaseRecord)
   const published = releases
     .filter(r => r.channel === channel && r.status === 'published')
     .sort((a, b) =>
@@ -481,7 +637,7 @@ export async function getReleaseByTag(
   }
 
   // Memory fallback
-  const releases = await readCollection<AppRelease>(RELEASES_KEY)
+  const releases = (await readCollection<AppRelease>(RELEASES_KEY)).map(normalizeReleaseRecord)
   const release = releases.find(r => r.tag === tag)
 
   if (!release)
@@ -517,16 +673,19 @@ export async function createRelease(
     throw createError({ statusCode: 400, statusMessage: 'Release tag already exists.' })
 
   const now = new Date().toISOString()
+  const normalizedNotes = normalizeReleaseNotes(input.notes)
+  const normalizedNotesHtml = input.notesHtml ? normalizeReleaseNotes(input.notesHtml) : null
+  const status = input.status ?? 'draft'
   const release: AppRelease = {
     id: randomUUID(),
     tag: input.tag,
     name: input.name,
     channel: input.channel,
     version: input.version,
-    notes: input.notes || '',
-    notesHtml: input.notesHtml ?? null,
-    status: input.status ?? 'draft',
-    publishedAt: null,
+    notes: normalizedNotes,
+    notesHtml: normalizedNotesHtml,
+    status,
+    publishedAt: status === 'published' ? now : null,
     minAppVersion: input.minAppVersion ?? null,
     isCritical: input.isCritical ?? false,
     createdBy: input.createdBy,
@@ -538,6 +697,8 @@ export async function createRelease(
 
   if (db) {
     await ensureReleasesSchema(db)
+    const serializedNotes = serializeReleaseNotes(normalizedNotes)
+    const serializedNotesHtml = serializeReleaseNotesHtml(normalizedNotesHtml)
 
     await db.prepare(`
       INSERT INTO ${RELEASES_TABLE} (
@@ -551,8 +712,8 @@ export async function createRelease(
       release.name,
       release.channel,
       release.version,
-      release.notes,
-      release.notesHtml,
+      serializedNotes,
+      serializedNotesHtml,
       release.status,
       release.publishedAt,
       release.minAppVersion,
@@ -583,11 +744,20 @@ export async function updateRelease(
     throw createError({ statusCode: 404, statusMessage: 'Release not found.' })
 
   const now = new Date().toISOString()
+  const resolvedNotes = input.notes
+    ? normalizeReleaseNotes(input.notes)
+    : normalizeReleaseNotes(existing.notes)
+  const resolvedNotesHtml = input.notesHtml === undefined
+    ? (existing.notesHtml ? normalizeReleaseNotes(existing.notesHtml) : null)
+    : input.notesHtml
+      ? normalizeReleaseNotes(input.notesHtml)
+      : null
+
   const updated: AppRelease = {
     ...existing,
     name: input.name ?? existing.name,
-    notes: input.notes ?? existing.notes,
-    notesHtml: input.notesHtml !== undefined ? input.notesHtml : existing.notesHtml,
+    notes: resolvedNotes,
+    notesHtml: resolvedNotesHtml,
     status: input.status ?? existing.status,
     minAppVersion: input.minAppVersion !== undefined ? input.minAppVersion : existing.minAppVersion,
     isCritical: input.isCritical ?? existing.isCritical,
@@ -603,6 +773,8 @@ export async function updateRelease(
 
   if (db) {
     await ensureReleasesSchema(db)
+    const serializedNotes = serializeReleaseNotes(resolvedNotes)
+    const serializedNotesHtml = serializeReleaseNotesHtml(resolvedNotesHtml)
 
     await db.prepare(`
       UPDATE ${RELEASES_TABLE}
@@ -611,8 +783,8 @@ export async function updateRelease(
       WHERE tag = ?9;
     `).bind(
       updated.name,
-      updated.notes,
-      updated.notesHtml,
+      serializedNotes,
+      serializedNotesHtml,
       updated.status,
       updated.minAppVersion,
       updated.isCritical ? 1 : 0,
@@ -633,6 +805,73 @@ export async function updateRelease(
   }
 
   return updated
+}
+
+export async function createReleaseRevision(
+  event: H3Event,
+  release: AppRelease,
+  createdBy: string,
+): Promise<ReleaseRevision> {
+  const db = getD1Database(event)
+  const now = new Date().toISOString()
+  const snapshot = normalizeReleaseRecord(release)
+
+  const revision: ReleaseRevision = {
+    id: randomUUID(),
+    releaseId: release.id,
+    tag: release.tag,
+    snapshot,
+    createdBy,
+    createdAt: now,
+  }
+
+  if (db) {
+    await ensureReleasesSchema(db)
+    await db.prepare(`
+      INSERT INTO ${RELEASE_REVISIONS_TABLE} (
+        id, release_id, tag, snapshot, created_by, created_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6);
+    `).bind(
+      revision.id,
+      revision.releaseId,
+      revision.tag,
+      JSON.stringify(revision.snapshot),
+      revision.createdBy,
+      revision.createdAt,
+    ).run()
+    return revision
+  }
+
+  const revisions = await readCollection<ReleaseRevision>(RELEASE_REVISIONS_KEY)
+  revisions.unshift(revision)
+  await writeCollection(RELEASE_REVISIONS_KEY, revisions)
+  return revision
+}
+
+export async function listReleaseRevisions(
+  event: H3Event | undefined,
+  tag: string,
+): Promise<ReleaseRevision[]> {
+  const db = getD1Database(event)
+  if (db) {
+    await ensureReleasesSchema(db)
+    const { results } = await db.prepare(`
+      SELECT *
+      FROM ${RELEASE_REVISIONS_TABLE}
+      WHERE tag = ?1
+      ORDER BY datetime(created_at) DESC;
+    `).bind(tag).all<D1ReleaseRevisionRow>()
+    return (results ?? []).map(mapReleaseRevisionRow)
+  }
+
+  const revisions = await readCollection<ReleaseRevision>(RELEASE_REVISIONS_KEY)
+  return revisions
+    .filter(revision => revision.tag === tag)
+    .map(revision => ({
+      ...revision,
+      snapshot: normalizeReleaseRecord(revision.snapshot),
+    }))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
 export async function deleteRelease(event: H3Event, tag: string): Promise<void> {

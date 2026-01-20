@@ -7,7 +7,7 @@ CoreBox 的高度由渲染进程结果列表驱动，并通过主进程应用到
 - 窗口位置固定（仅高度变化）。
 - 开启动画时，主进程对窗口 bounds 变化做平滑过渡。
 
-### 相关设置
+**相关设置**
 
 - `appSetting.animation.coreBoxResize`
   - `true`: 开启 CoreBox 窗口伸缩动画
@@ -23,11 +23,11 @@ CoreBox 的高度由渲染进程结果列表驱动，并通过主进程应用到
 
 对于 `webcontent` 类型 feature，CoreBox 通过 Electron `WebContentsView` attach 插件 UI。
 
-### 目标
+**目标**
 
 复用最近使用的 view，减少重复 load 带来的白屏与启动开销。
 
-### 缓存配置
+**缓存配置**
 
 - `appSetting.viewCache.maxCachedViews`
   - `0`: 禁用（每次都重新创建/销毁）
@@ -36,12 +36,12 @@ CoreBox 的高度由渲染进程结果列表驱动，并通过主进程应用到
 - `appSetting.viewCache.hotCacheDurationMs`
   - 用于 stale cleanup。
 
-### 说明
+**说明**
 
 - 缓存 key: `pluginName:featureId`。
 - 缓存是 best-effort：如果 view 被销毁会自动从缓存移除。
 
-### Resume 事件
+**Resume 事件**
 
 每次 CoreBox attach 插件 UI view 时，都会向插件进程发送 `core-box:ui-resume` 事件，插件可以自行决定是否处理（例如刷新数据、恢复焦点等）。
 

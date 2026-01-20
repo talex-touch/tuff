@@ -4,14 +4,14 @@ A curated collection of high-quality prompts for various AI capabilities in Tuff
 
 ## Quick Start
 
-### Importing Prompts
+**Importing Prompts**
 
 1. Download prompt files from this page
 2. Open Tuff → Settings → Intelligence → Prompts
 3. Click "Import" and select the downloaded JSON file
 4. Prompts will be available in your prompt library
 
-### Using Prompts
+**Using Prompts**
 
 Prompts can be used in two ways:
 
@@ -22,7 +22,7 @@ Prompts can be used in two ways:
 
 ## Text Processing Prompts
 
-### Professional Email Writer
+**Professional Email Writer**
 
 **Category**: Text Rewriting  
 **Description**: Transform casual messages into professional emails
@@ -43,7 +43,7 @@ Prompts can be used in two ways:
 
 ---
 
-### Technical Documentation Writer
+**Technical Documentation Writer**
 
 **Category**: Text Generation  
 **Description**: Generate clear technical documentation
@@ -64,7 +64,7 @@ Prompts can be used in two ways:
 
 ---
 
-### Meeting Notes Summarizer
+**Meeting Notes Summarizer**
 
 **Category**: Text Summarization  
 **Description**: Extract key points and action items from meeting notes
@@ -87,7 +87,7 @@ Prompts can be used in two ways:
 
 ## Code Prompts
 
-### Code Reviewer
+**Code Reviewer**
 
 **Category**: Code Review  
 **Description**: Comprehensive code review with security and performance focus
@@ -108,7 +108,7 @@ Prompts can be used in two ways:
 
 ---
 
-### Bug Analyzer
+**Bug Analyzer**
 
 **Category**: Code Debugging  
 **Description**: Analyze bugs and provide detailed debugging guidance
@@ -129,7 +129,7 @@ Prompts can be used in two ways:
 
 ---
 
-### API Documentation Generator
+**API Documentation Generator**
 
 **Category**: Code Documentation  
 **Description**: Generate comprehensive API documentation
@@ -152,7 +152,7 @@ Prompts can be used in two ways:
 
 ## Analysis Prompts
 
-### Content Analyzer
+**Content Analyzer**
 
 **Category**: Content Analysis  
 **Description**: Deep content analysis with insights and recommendations
@@ -173,7 +173,7 @@ Prompts can be used in two ways:
 
 ---
 
-### Data Insights Generator
+**Data Insights Generator**
 
 **Category**: Data Analysis  
 **Description**: Extract insights and patterns from data
@@ -196,7 +196,7 @@ Prompts can be used in two ways:
 
 ## Vision Prompts
 
-### Image Description Generator
+**Image Description Generator**
 
 **Category**: Vision Analysis  
 **Description**: Generate detailed, accessible image descriptions
@@ -219,7 +219,7 @@ Prompts can be used in two ways:
 
 ## Translation Prompts
 
-### Context-Aware Translator
+**Context-Aware Translator**
 
 **Category**: Translation  
 **Description**: Translate with cultural context and nuance preservation
@@ -242,7 +242,7 @@ Prompts can be used in two ways:
 
 ## Prompt Collections
 
-### Complete Starter Pack
+**Complete Starter Pack**
 
 Download all essential prompts in one package:
 
@@ -257,7 +257,7 @@ Download all essential prompts in one package:
 
 ---
 
-### Professional Workflow Pack
+**Professional Workflow Pack**
 
 Prompts optimized for professional workflows:
 
@@ -271,7 +271,7 @@ Prompts optimized for professional workflows:
 
 ---
 
-### Developer Pack
+**Developer Pack**
 
 Essential prompts for software development:
 
@@ -287,7 +287,7 @@ Essential prompts for software development:
 
 ## Creating Custom Prompts
 
-### Prompt Structure
+**Prompt Structure**
 
 ```json
 {
@@ -303,7 +303,7 @@ Essential prompts for software development:
 }
 ```
 
-### Best Practices
+**Best Practices**
 
 1. **Clear Instructions**: Be specific about what you want the AI to do
 2. **Structure**: Use headings and formatting to organize complex prompts
@@ -312,7 +312,7 @@ Essential prompts for software development:
 5. **Constraints**: Specify any limitations or requirements
 6. **Output Format**: Define the expected output structure
 
-### Variables
+**Variables**
 
 Use variables to make prompts reusable:
 
@@ -327,22 +327,22 @@ Variables are automatically replaced when the prompt is used.
 
 ## Prompt Engineering Tips
 
-### 1. Be Specific
+**1. Be Specific**
 
 ❌ "Summarize this"  
 ✅ "Create a 3-paragraph summary focusing on key decisions and action items"
 
-### 2. Provide Context
+**2. Provide Context**
 
 ❌ "Review this code"  
 ✅ "Review this TypeScript React component for security issues and performance optimization opportunities"
 
-### 3. Define Output Format
+**3. Define Output Format**
 
 ❌ "Analyze the data"  
 ✅ "Analyze the data and present findings in a structured format with: 1) Key insights, 2) Trends, 3) Recommendations"
 
-### 4. Use Examples
+**4. Use Examples**
 
 Include examples of desired output to guide the AI:
 
@@ -356,7 +356,7 @@ Example output:
 - Point 2
 ```
 
-### 5. Iterate and Refine
+**5. Iterate and Refine**
 
 Test your prompts and refine based on results. Small adjustments can significantly improve output quality.
 
@@ -375,14 +375,14 @@ Share your prompts with the community:
 
 ## Troubleshooting
 
-### Prompt Not Working as Expected
+**Prompt Not Working as Expected**
 
 1. **Check Variables**: Ensure all required variables are provided
 2. **Review Instructions**: Make instructions more specific
 3. **Test with Different Models**: Some prompts work better with certain models
 4. **Adjust Temperature**: Lower temperature for more consistent results
 
-### Inconsistent Results
+**Inconsistent Results**
 
 1. **Add Constraints**: Specify output format more strictly
 2. **Provide Examples**: Include example outputs

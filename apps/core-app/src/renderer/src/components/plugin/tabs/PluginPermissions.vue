@@ -10,7 +10,7 @@ import { ElEmpty, ElTag } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PermissionEvents } from '@talex-touch/utils/transport/events'
-import FlatButton from '~/components/base/button/FlatButton.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -328,18 +328,23 @@ onMounted(loadStatus)
           active-icon="i-carbon-settings"
         >
           <div class="flex items-center gap-2">
-            <FlatButton @click="loadStatus">
+            <TxButton variant="flat" @click="loadStatus">
               <i class="i-ri-refresh-line" />
               <span>刷新</span>
-            </FlatButton>
-            <FlatButton v-if="status?.missingRequired.length" @click="handleGrantAll">
+            </TxButton>
+            <TxButton v-if="status?.missingRequired.length" variant="flat" @click="handleGrantAll">
               <i class="i-ri-check-double-line" />
               <span>授予全部</span>
-            </FlatButton>
-            <FlatButton v-if="status?.granted.length" class="danger" @click="handleRevokeAll">
+            </TxButton>
+            <TxButton
+              v-if="status?.granted.length"
+              variant="flat"
+              class="danger"
+              @click="handleRevokeAll"
+            >
               <i class="i-ri-close-line" />
               <span>撤销全部</span>
-            </FlatButton>
+            </TxButton>
           </div>
         </TuffBlockSlot>
       </TuffGroupBlock>
