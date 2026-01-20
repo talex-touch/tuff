@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import process from 'node:process'
 import type { RollupWatcher } from 'rollup'
 import { build as viteBuild, createServer } from 'vite'
+import { parseBuildArgs, parseDevArgs } from '../cli/args'
 import { runCreate } from '../cli/commands'
 import {
   initI18n,
@@ -101,34 +102,7 @@ async function runBuild() {
     return
   }
 
-  let watch: boolean | undefined
-  let dev = false
-  let outputDir: string | undefined
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]
-    if (arg === '--watch') {
-      watch = true
-    }
-    else if (arg === '--dev') {
-      dev = true
-    }
-    else if (arg === '--output') {
-      const next = args[i + 1]
-      if (!next || next.startsWith('-'))
-        throw new Error('Missing value for --output')
-      outputDir = next
-      i++
-    }
-    else if (arg.startsWith('--output=')) {
-      outputDir = arg.slice(9)
-      if (!outputDir)
-        throw new Error('Missing value for --output')
-    }
-    else if (arg.startsWith('-')) {
-      throw new Error(`Unknown option: ${arg}`)
-    }
-  }
+  const { watch, dev, outputDir } = parseBuildArgs(args)
 
   const cliOverrides: BuildConfig = {}
   if (watch !== undefined)
@@ -231,45 +205,7 @@ async function runDev() {
     return
   }
 
-  let host: string | boolean | undefined
-  let port: number | undefined
-  let open: boolean | undefined
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]
-    if (arg === '--open') {
-      open = true
-    }
-    else if (arg === '--host') {
-      const next = args[i + 1]
-      if (next && !next.startsWith('-')) {
-        host = next
-        i++
-      }
-      else {
-        host = true
-      }
-    }
-    else if (arg.startsWith('--host=')) {
-      host = arg.slice(7)
-    }
-    else if (arg === '--port') {
-      const next = args[i + 1]
-      if (!next || next.startsWith('-'))
-        throw new Error('Missing value for --port')
-      const value = Number(next)
-      if (!Number.isFinite(value))
-        throw new Error(`Invalid --port value: ${next}`)
-      port = value
-      i++
-    }
-    else if (arg.startsWith('--port=')) {
-      const value = Number(arg.slice(7))
-      if (!Number.isFinite(value))
-        throw new Error(`Invalid --port value: ${arg.slice(7)}`)
-      port = value
-    }
-  }
+  const { host, port, open } = parseDevArgs(args)
 
   try {
     const cliOverrides: DevConfig = {}
