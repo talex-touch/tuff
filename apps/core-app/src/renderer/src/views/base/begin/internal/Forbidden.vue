@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { Ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import HelloData from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
-import { TxButton } from '@talex-touch/tuffex'
 
 type BackFunction = () => void
 

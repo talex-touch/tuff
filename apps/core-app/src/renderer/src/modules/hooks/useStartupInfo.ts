@@ -1,6 +1,6 @@
 import type { StartupInfo } from '@talex-touch/utils'
-import { AppEvents } from '@talex-touch/utils/transport/events'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import { shallowRef } from 'vue'
 
 const startupInfoRef = shallowRef<StartupInfo | null>(resolveInitialStartupInfo())

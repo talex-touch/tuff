@@ -10,14 +10,15 @@ import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-
 import VWave from 'v-wave'
 import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
-import '~/modules/channel/channel-core'
-
 import { setupI18n } from '~/modules/lang'
+import { registerNotificationHub } from '~/modules/notification/notification-hub'
 
 import { usePluginStore } from '~/stores/plugin'
-import App from './App.vue'
 
+import App from './App.vue'
 import router from './base/router'
+
+import '~/modules/channel/channel-core'
 import '~/modules/plugin/widget-registry'
 import './assets/main.css'
 import '@talex-touch/tuffex/style.css'
@@ -33,6 +34,8 @@ import 'virtual:unocss-devtools'
 setRuntimeEnv(import.meta.env as any)
 
 const transport = useTuffTransport()
+
+registerNotificationHub(transport)
 
 transport.on(AppEvents.window.navigate, (payload) => {
   const target = typeof payload?.path === 'string' ? payload.path : ''

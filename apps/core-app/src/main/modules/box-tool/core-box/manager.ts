@@ -4,11 +4,12 @@ import type { ProviderDeactivatedEvent } from '../../../core/eventbus/touch-even
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { genTouchApp } from '../../../core'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
-import { getConfig } from '../../storage'
+import { getMainConfig } from '../../storage'
 import { SearchEngineCore } from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import { ipcManager } from './ipc'
@@ -113,7 +114,7 @@ export class CoreBoxManager {
     // If trying to show, check if initialization is complete
     if (show) {
       try {
-        const appSetting = getConfig(StorageList.APP_SETTING) as any
+        const appSetting = getMainConfig(StorageList.APP_SETTING) as any
         if (!appSetting?.beginner?.init) {
           console.warn('[CoreBoxManager] Initialization not complete, cannot open CoreBox')
           // Show main window to guide user to complete initialization
@@ -192,7 +193,12 @@ export class CoreBoxManager {
 
       const coreBoxWindow = windowManager.current?.window
       if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-        genTouchApp().channel.sendTo(coreBoxWindow, ChannelType.MAIN, 'core-box:ui-mode-exited', {
+        const channel = genTouchApp().channel
+        const transport = getTuffTransportMain(
+          channel as any,
+          (channel as any)?.keyManager ?? channel
+        )
+        void transport.sendTo(coreBoxWindow.webContents, CoreBoxEvents.ui.uiModeExited, {
           resetInput: true
         })
 

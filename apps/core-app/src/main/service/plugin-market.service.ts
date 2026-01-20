@@ -12,6 +12,7 @@ import type {
 } from '@talex-touch/utils/plugin/providers'
 import { getTpexApiBase } from '@talex-touch/utils/env'
 import { PluginMarketClient } from '@talex-touch/utils/plugin/providers'
+import process from 'node:process'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('PluginMarketService')

@@ -1,10 +1,10 @@
 <script setup lang="ts" name="SetupPermissions">
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
 import { computed, inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
 import TGroupBlock from '~/components/base/group/TGroupBlock.vue'
 import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'

@@ -5,11 +5,11 @@ import type {
   IntelligenceProviderConfig
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
+import { TxButton } from '@talex-touch/tuffex'
 import { useIntelligence } from '@talex-touch/utils/renderer/hooks/use-intelligence'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { VueDraggable as draggable } from 'vue-draggable-plus'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'

@@ -1,6 +1,6 @@
 <script setup lang="ts" name="TuffListTemplate">
-import { reactive } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { reactive } from 'vue'
 
 export interface TuffListGroup<TItem> {
   id: string

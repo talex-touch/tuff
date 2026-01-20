@@ -14,9 +14,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
+
+const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
 import { pluginModule } from '../plugin/plugin-module'
 
 /**
@@ -246,7 +250,12 @@ export class DivisionBoxSession {
       }
 
       // Notify renderer about DivisionBox trigger via unified channel
-      genTouchApp().channel.sendTo(this.touchWindow.window, ChannelType.MAIN, 'core-box:trigger', {
+      const channel = genTouchApp().channel
+      const transport = getTuffTransportMain(
+        channel as any,
+        (channel as any)?.keyManager ?? channel
+      )
+      void transport.sendTo(this.touchWindow.window.webContents, coreBoxTriggerEvent, {
         type: 'division-box',
         sessionId: this.sessionId,
         config: this.config,
@@ -497,6 +506,12 @@ export class DivisionBoxSession {
   }
 
   window['$channel'] = new TouchChannel();
+  try {
+    const { createPluginTuffTransport } = require('@talex-touch/utils/transport');
+    window['$transport'] = createPluginTuffTransport(window['$channel']);
+  } catch (error) {
+    console.error('[DivisionBox] Failed to init plugin transport:', error);
+  }
 })();
 `
   }
@@ -536,7 +551,9 @@ export class DivisionBoxSession {
 
     // Send trigger to notify renderer about DivisionBox mode
     // This populates windowState.divisionBox in the renderer
-    genTouchApp().channel.sendTo(this.touchWindow.window, ChannelType.MAIN, 'core-box:trigger', {
+    const channel = genTouchApp().channel
+    const transport = getTuffTransportMain(channel as any, (channel as any)?.keyManager ?? channel)
+    void transport.sendTo(this.touchWindow.window.webContents, coreBoxTriggerEvent, {
       type: 'division-box',
       sessionId: this.sessionId,
       config: this.config,

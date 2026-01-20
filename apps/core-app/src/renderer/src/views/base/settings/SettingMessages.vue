@@ -1,10 +1,10 @@
 <script setup lang="ts" name="SettingMessages">
 import type { AnalyticsMessage } from '@talex-touch/utils/analytics'
+import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 

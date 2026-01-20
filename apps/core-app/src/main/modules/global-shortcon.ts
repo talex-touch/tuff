@@ -1,15 +1,23 @@
 import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
-import type { StandardChannelData } from '@talex-touch/utils/channel'
 import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import process from 'node:process'
 import { BrowserWindow, globalShortcut } from 'electron'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
-import { storageModule } from './storage'
+import { useMainStorage } from './storage'
 
 const shortconLog = createLogger('GlobalShortcon')
+const shortconUpdateEvent = defineRawEvent<{ id: string; accelerator: string }, boolean>(
+  'shortcon:update'
+)
+const shortconDisableAllEvent = defineRawEvent<void, void>('shortcon:disable-all')
+const shortconEnableAllEvent = defineRawEvent<void, void>('shortcon:enable-all')
+const shortconGetAllEvent = defineRawEvent<void, Shortcut[]>('shortcon:get-all')
+const shortconTriggerEvent = defineRawEvent<{ id: string }, void>('shortcon:trigger')
 
 // A runtime map to hold callbacks for 'main' type shortcuts
 const mainCallbackRegistry = new Map<string, () => void>()
@@ -62,9 +70,10 @@ export class ShortcutModule extends BaseModule {
   }
 
   onInit(): MaybePromise<void> {
+    const storage = useMainStorage()
     this.storage = new ShortcutStorage({
-      getConfig: storageModule.getConfig.bind(storageModule),
-      saveConfig: storageModule.saveConfig.bind(storageModule)
+      getConfig: storage.getConfig.bind(storage),
+      saveConfig: storage.saveConfig.bind(storage)
     })
     this.setupIpcListeners()
     this.reregisterAllShortcuts()
@@ -79,24 +88,23 @@ export class ShortcutModule extends BaseModule {
    * Sets up IPC listeners for renderer processes to call.
    */
   private setupIpcListeners(): void {
-    $app.channel.regChannel(
-      ChannelType.MAIN,
-      'shortcon:update',
-      ({ data }: StandardChannelData) => {
-        const { id, accelerator } = data as { id: string; accelerator: string }
-        return this.updateShortcut(id, accelerator)
-      }
-    )
+    const channel = $app.channel as any
+    const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
 
-    $app.channel.regChannel(ChannelType.MAIN, 'shortcon:disable-all', () => {
+    transport.on(shortconUpdateEvent, (data) => {
+      const { id, accelerator } = data
+      return this.updateShortcut(id, accelerator)
+    })
+
+    transport.on(shortconDisableAllEvent, () => {
       this.disableAll()
     })
 
-    $app.channel.regChannel(ChannelType.MAIN, 'shortcon:enable-all', () => {
+    transport.on(shortconEnableAllEvent, () => {
       this.enableAll()
     })
 
-    $app.channel.regChannel(ChannelType.MAIN, 'shortcon:get-all', () => {
+    transport.on(shortconGetAllEvent, () => {
       return this.storage!.getAllShortcuts()
     })
   }
@@ -224,8 +232,12 @@ export class ShortcutModule extends BaseModule {
       }
       case ShortcutType.RENDERER: {
         const allWindows = BrowserWindow.getAllWindows()
+        const channel = $app.channel as any
+        const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
         for (const win of allWindows) {
-          $app.channel.sendTo(win, ChannelType.MAIN, 'shortcon:trigger', { id: shortcut.id })
+          void transport
+            .sendToWindow(win.id, shortconTriggerEvent, { id: shortcut.id })
+            .catch(() => {})
         }
         shortconLog.debug(`Forwarded trigger '${shortcut.id}' to all renderer processes`)
         break

@@ -5,13 +5,13 @@
   Shows version, build information, system specs, and resource usage.
 -->
 <script setup lang="ts" name="SettingAbout">
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import OSIcon from '~/components/icon/OSIcon.vue'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 // Import UI components
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'

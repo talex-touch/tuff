@@ -1,9 +1,9 @@
 <script lang="ts" name="IntelligenceAgentsPage" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
-import { computed, onMounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AgentsEvents } from '@talex-touch/utils/transport/events'
+import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import AgentDetail from '~/components/intelligence/agents/AgentDetail.vue'
 import AgentsList from '~/components/intelligence/agents/AgentsList.vue'

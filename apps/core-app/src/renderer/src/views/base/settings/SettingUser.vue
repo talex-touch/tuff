@@ -1,13 +1,13 @@
 <script setup lang="ts" name="SettingUser">
+import { TxButton } from '@talex-touch/tuffex'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { useAppSdk } from '@talex-touch/utils/renderer'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { useAuth } from '~/modules/auth/useAuth'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { useAuth } from '~/modules/auth/useAuth'
 import { appSetting } from '~/modules/channel/storage'
 
 const { t } = useI18n()

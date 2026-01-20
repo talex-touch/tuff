@@ -3,13 +3,10 @@ import type {
   CustomUpdateConfig,
   DownloadAsset,
   GitHubRelease,
-  UpdateSourceConfig,
+  UpdateSourceConfig
 } from '@talex-touch/utils'
 import type { AxiosRequestConfig } from 'axios'
-import {
-  UpdateErrorType,
-  UpdateProviderType,
-} from '@talex-touch/utils'
+import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
 import axios from 'axios'
 import { UpdateProvider } from './UpdateProvider'
 
@@ -42,10 +39,10 @@ export class CustomUpdateProvider extends UpdateProvider {
         url: this.apiUrl,
         timeout: this.timeout,
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/1.0',
-          ...this.headers,
-        },
+          ...this.headers
+        }
       }
 
       const response = await axios(config)
@@ -54,7 +51,7 @@ export class CustomUpdateProvider extends UpdateProvider {
         throw this.createError(
           UpdateErrorType.API_ERROR,
           `Custom API returned status ${response.status}`,
-          { response },
+          { response }
         )
       }
 
@@ -63,24 +60,26 @@ export class CustomUpdateProvider extends UpdateProvider {
       if (this.apiFormat === 'github') {
         // 兼容GitHub API格式
         return this.parseGitHubFormat(data, _channel)
-      }
-      else {
+      } else {
         // 自定义格式
         return this.parseCustomFormat(data, _channel)
       }
-    }
-    catch (error: unknown) {
+    } catch (error: unknown) {
       if (error && typeof error === 'object' && 'type' in error) {
         throw error
       }
 
-      const axiosError = error as { code?: string, response?: { status?: number }, request?: unknown }
+      const axiosError = error as {
+        code?: string
+        response?: { status?: number }
+        request?: unknown
+      }
 
       if (axiosError.code === 'ECONNABORTED' || axiosError.code === 'ETIMEDOUT') {
         throw this.createError(
           UpdateErrorType.TIMEOUT_ERROR,
           'Request to custom API timed out',
-          error,
+          error
         )
       }
 
@@ -89,22 +88,19 @@ export class CustomUpdateProvider extends UpdateProvider {
 
         if (statusCode && statusCode >= 500) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Custom API server error', error)
-        }
-        else if (statusCode === 404) {
+        } else if (statusCode === 404) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Custom API endpoint not found', error)
-        }
-        else if (statusCode === 401 || statusCode === 403) {
+        } else if (statusCode === 401 || statusCode === 403) {
           throw this.createError(
             UpdateErrorType.API_ERROR,
             'Custom API authentication failed',
-            error,
+            error
           )
-        }
-        else {
+        } else {
           throw this.createError(
             UpdateErrorType.API_ERROR,
             `Custom API error: ${statusCode}`,
-            error,
+            error
           )
         }
       }
@@ -113,14 +109,14 @@ export class CustomUpdateProvider extends UpdateProvider {
         throw this.createError(
           UpdateErrorType.NETWORK_ERROR,
           'Unable to connect to custom API',
-          error,
+          error
         )
       }
 
       throw this.createError(
         UpdateErrorType.UNKNOWN_ERROR,
         'Unknown error occurred while fetching from custom API',
-        error,
+        error
       )
     }
   }
@@ -131,13 +127,14 @@ export class CustomUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map(asset => ({
+    return release.assets.map((asset) => ({
       name: asset.name,
       url: asset.url,
       size: asset.size || 0,
       platform: this.detectPlatform(asset.name),
       arch: this.detectArch(asset.name),
       checksum: asset.checksum,
+      signatureUrl: (asset as any).signatureUrl
     }))
   }
 
@@ -149,16 +146,15 @@ export class CustomUpdateProvider extends UpdateProvider {
         url: this.apiUrl,
         timeout: 5000,
         headers: {
-          'Accept': 'application/json',
+          Accept: 'application/json',
           'User-Agent': 'TalexTouch-Updater/1.0',
-          ...this.headers,
-        },
+          ...this.headers
+        }
       }
 
       const response = await axios(config)
       return response.status === 200
-    }
-    catch (error) {
+    } catch (error) {
       console.warn('Custom API health check failed:', error)
       return false
     }
@@ -174,15 +170,14 @@ export class CustomUpdateProvider extends UpdateProvider {
       if (channelReleases.length === 0) {
         throw this.createError(
           UpdateErrorType.API_ERROR,
-          `No releases found for channel: ${channel}`,
+          `No releases found for channel: ${channel}`
         )
       }
 
       const latestRelease = channelReleases[0]
       this.validateRelease(latestRelease)
       return latestRelease
-    }
-    else {
+    } else {
       // 单个发布版本
       const release = data as GitHubRelease
       this.validateRelease(release)
@@ -198,7 +193,7 @@ export class CustomUpdateProvider extends UpdateProvider {
     if (!data.version || !data.downloads) {
       throw this.createError(
         UpdateErrorType.PARSE_ERROR,
-        'Invalid custom API format: missing required fields',
+        'Invalid custom API format: missing required fields'
       )
     }
 
@@ -215,7 +210,8 @@ export class CustomUpdateProvider extends UpdateProvider {
         platform: this.detectPlatform(download.filename || download.name),
         arch: this.detectArch(download.filename || download.name),
         checksum: download.checksum || download.hash,
-      })),
+        signatureUrl: download.signatureUrl || download.sigUrl
+      }))
     }
 
     this.validateRelease(release)
@@ -228,15 +224,13 @@ export class CustomUpdateProvider extends UpdateProvider {
 
     if (lower.includes('win') || lower.includes('windows') || lower.includes('.exe')) {
       return 'win32'
-    }
-    else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
+    } else if (lower.includes('mac') || lower.includes('darwin') || lower.includes('.dmg')) {
       return 'darwin'
-    }
-    else if (
-      lower.includes('linux')
-      || lower.includes('.deb')
-      || lower.includes('.rpm')
-      || lower.includes('.AppImage')
+    } else if (
+      lower.includes('linux') ||
+      lower.includes('.deb') ||
+      lower.includes('.rpm') ||
+      lower.includes('.AppImage')
     ) {
       return 'linux'
     }
@@ -250,8 +244,7 @@ export class CustomUpdateProvider extends UpdateProvider {
 
     if (lower.includes('arm64') || lower.includes('aarch64')) {
       return 'arm64'
-    }
-    else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
+    } else if (lower.includes('x64') || lower.includes('amd64') || lower.includes('x86_64')) {
       return 'x64'
     }
 
@@ -263,12 +256,10 @@ export class CustomUpdateProvider extends UpdateProvider {
     try {
       if (this.apiFormat === 'github') {
         return Array.isArray(data) || (data.tag_name && data.assets)
-      }
-      else {
+      } else {
         return data.version && data.downloads
       }
-    }
-    catch {
+    } catch {
       return false
     }
   }
@@ -284,7 +275,7 @@ export class CustomUpdateProvider extends UpdateProvider {
       url: this.apiUrl,
       format: this.apiFormat,
       name: this.name,
-      hasAuth: !!this.headers,
+      hasAuth: !!this.headers
     }
   }
 
@@ -303,8 +294,8 @@ export class CustomUpdateProvider extends UpdateProvider {
         timeout: 5000,
         headers: {
           'User-Agent': 'TalexTouch-Updater/1.0',
-          ...this.headers,
-        },
+          ...this.headers
+        }
       }
 
       const response = await axios(config)
@@ -313,14 +304,13 @@ export class CustomUpdateProvider extends UpdateProvider {
       return {
         success: response.status === 200,
         message: `Connection successful (${response.status})`,
-        responseTime,
+        responseTime
       }
-    }
-    catch (error: unknown) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Connection failed'
       return {
         success: false,
-        message,
+        message
       }
     }
   }

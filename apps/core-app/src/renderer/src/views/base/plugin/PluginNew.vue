@@ -1,17 +1,17 @@
 <script setup lang="ts" name="PluginNew">
 import type { IManifest } from '@talex-touch/utils/plugin'
-import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
-import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
-import { tryUseChannel } from '@talex-touch/utils/renderer/hooks/use-channel'
-import { useTuffTransport } from '@talex-touch/utils/transport'
 import type { PluginInstallSourceRequest } from '@talex-touch/utils/transport/events/types'
-import { PluginEvents } from '@talex-touch/utils/transport/events'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-
-import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import { tryUseChannel } from '@talex-touch/utils/renderer/hooks/use-channel'
+import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
+
+import { useI18n } from 'vue-i18n'
+import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
 import TCheckBox from '~/components/base/checkbox/TCheckBox.vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 

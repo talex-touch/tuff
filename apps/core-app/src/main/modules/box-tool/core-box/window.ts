@@ -6,13 +6,15 @@ import type { CoreBoxInputChange } from './input-transport'
 import * as fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
-import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -22,21 +24,34 @@ import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
 import { createLogger } from '../../../utils/logger'
 import { pluginModule } from '../../plugin/plugin-module'
-import { getConfig } from '../../storage'
+import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
 import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 import { viewCacheManager } from './view-cache'
 
+interface CoreBoxUiResumePayload {
+  source: string
+  featureId?: string | number
+  url: string
+}
+
+const coreBoxUiResumeEvent = defineRawEvent<CoreBoxUiResumePayload, void>('core-box:ui-resume')
+const coreBoxTriggerEvent = defineRawEvent<
+  { id?: number; show?: boolean; [key: string]: unknown },
+  void
+>('core-box:trigger')
+
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
+const COREBOX_MIN_HEIGHT = 64
 
 const windowAnimation = useWindowAnimation()
 
 const CORE_BOX_THEME_FILE_NAME = 'tuff-element.css'
 const CORE_BOX_THEME_SUBDIR = ['core-box', 'theme'] as const
 
-interface ThemeStyleConfig {
+export interface ThemeStyleConfig {
   theme?: {
     style?: {
       dark?: boolean
@@ -208,7 +223,11 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.on('dom-ready', () => {
-      this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+      const transport = getTuffTransportMain(
+        this.touchApp.channel as any,
+        (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
+      )
+      void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
         id: window.window.webContents.id,
         show: window.window.isVisible()
       })
@@ -231,7 +250,11 @@ export class WindowManager {
 
     window.window.webContents.on('did-finish-load', () => {
       if (wasVisibleBeforeReload) {
-        this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+        const transport = getTuffTransportMain(
+          this.touchApp.channel as any,
+          (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
+        )
+        void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
           id: window.window.webContents.id,
           show: true
         })
@@ -447,12 +470,12 @@ export class WindowManager {
     const rawWidth = size.width
     const rawHeight = size.height
     const windowWidth = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 900
-    let windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 60
+    let windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : COREBOX_MIN_HEIGHT
 
     const margin = 12
     const maxAllowedHeight = rect.height - margin * 2
     if (Number.isFinite(maxAllowedHeight) && maxAllowedHeight > 0) {
-      windowHeight = Math.min(windowHeight, Math.max(60, maxAllowedHeight))
+      windowHeight = Math.min(windowHeight, Math.max(COREBOX_MIN_HEIGHT, maxAllowedHeight))
     }
 
     const baseLeft = rect.x + (rect.width - windowWidth) / 2
@@ -536,14 +559,18 @@ export class WindowManager {
       window.window.showInactive()
     }
 
-    this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+    const transport = getTuffTransportMain(
+      this.touchApp.channel as any,
+      (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
+    )
+    void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
       id: window.window.webContents.id,
       show: true
     })
 
     if (triggeredByShortcut) {
-      this.touchApp.channel
-        .sendTo(window.window, ChannelType.MAIN, 'core-box:shortcut-triggered', {})
+      void transport
+        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
         .catch(() => {})
     }
 
@@ -562,7 +589,11 @@ export class WindowManager {
     if (!window) return
 
     this.stopBoundsAnimation()
-    this.touchApp.channel.sendTo(window.window, ChannelType.MAIN, 'core-box:trigger', {
+    const transport = getTuffTransportMain(
+      this.touchApp.channel as any,
+      (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
+    )
+    void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
       id: window.window.webContents.id,
       show: false
     })
@@ -584,7 +615,7 @@ export class WindowManager {
     // Priority: customHeight > isUIMode > forceMax > calculated from length
     let height: number
     if (typeof customHeight === 'number' && customHeight > 0) {
-      height = Math.max(60, Math.min(customHeight, 600))
+      height = Math.max(COREBOX_MIN_HEIGHT, Math.min(customHeight, 600))
     } else if (isUIMode) {
       height = 600
     } else if (forceMax) {
@@ -631,25 +662,28 @@ export class WindowManager {
     if (currentWindow) {
       // Skip if already shrunk or shrinking (within tolerance)
       const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
-      if (Math.abs(currentHeight - 60) < 5) {
+      if (Math.abs(currentHeight - COREBOX_MIN_HEIGHT) < 5) {
         return
       }
 
       const display = this.getDisplayForWindow(currentWindow)
-      const bounds = this.calculateCoreBoxBounds(display, { width: 720, height: 60 })
+      const bounds = this.calculateCoreBoxBounds(display, {
+        width: 720,
+        height: COREBOX_MIN_HEIGHT
+      })
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
       const animationEnabled = settings.animation?.coreBoxResize === true
 
       if (currentWindow.window.isVisible() && animationEnabled) {
-        this.animateWindowBounds(currentWindow, bounds, { minHeight: 60 })
+        this.animateWindowBounds(currentWindow, bounds, { minHeight: COREBOX_MIN_HEIGHT })
       } else {
         this.stopBoundsAnimation()
         try {
           currentWindow.window.setBounds(bounds, false)
           this.lastSetBounds = { height: bounds.height, y: bounds.y }
-          currentWindow.window.setMinimumSize(720, 60)
+          currentWindow.window.setMinimumSize(720, COREBOX_MIN_HEIGHT)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
         }
@@ -664,7 +698,7 @@ export class WindowManager {
    * Set CoreBox to a specific height (called from frontend)
    */
   public setHeight(height: number): void {
-    const safeHeight = Math.max(60, Math.min(height, 600))
+    const safeHeight = Math.max(COREBOX_MIN_HEIGHT, Math.min(height, 600))
 
     const currentWindow = this.current
     if (!currentWindow) {
@@ -759,7 +793,7 @@ export class WindowManager {
   }
 
   public getAppSettingConfig(): AppSetting {
-    return getConfig(StorageList.APP_SETTING) as AppSetting
+    return getMainConfig(StorageList.APP_SETTING) as AppSetting
   }
 
   private syncViewCacheConfig(): void {
@@ -782,7 +816,7 @@ export class WindowManager {
   }
 
   private loadThemeStyleConfig(): ThemeStyleConfig {
-    const config = getConfig('theme-style.ini') as ThemeStyleConfig | undefined
+    const config = getMainConfig(StorageList.THEME_STYLE) as ThemeStyleConfig | undefined
     if (config && typeof config === 'object') {
       return config
     }
@@ -927,6 +961,11 @@ export class WindowManager {
       return
     }
 
+    const channel = this.touchApp.channel as unknown
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
+
     coreBoxWindowLog.debug(`AttachUIView - loading ${url}`)
 
     if (this.uiView) {
@@ -963,17 +1002,17 @@ export class WindowManager {
           if (query) {
             const normalizedQuery: TuffQuery =
               typeof query === 'string' ? { text: query } : { ...query }
-            void this.touchApp.channel
-              .sendToPlugin(plugin.name, 'core-box:input-change', {
+            void transport
+              .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
                 input: normalizedQuery.text ?? '',
                 query: normalizedQuery,
-                source: 'cached'
+                source: 'initial'
               })
               .catch(() => {})
           }
 
-          void this.touchApp.channel
-            .sendToPlugin(plugin.name, 'core-box:ui-resume', {
+          void transport
+            .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
               source: 'cache',
               featureId: feature?.id,
               url: cached.url
@@ -1263,6 +1302,12 @@ export class WindowManager {
   }
 
   window['$channel'] = new TouchChannel();
+  try {
+    const { createPluginTuffTransport } = require('@talex-touch/utils/transport');
+    window['$transport'] = createPluginTuffTransport(window['$channel']);
+  } catch (error) {
+    console.error('[CoreBox] Failed to init plugin transport:', error);
+  }
 })();
 `
 
@@ -1435,14 +1480,14 @@ export class WindowManager {
       }
 
       this.uiView.webContents.once('dom-ready', () => {
-        this.touchApp.channel.sendToPlugin(plugin.name, 'core-box:input-change', {
+        void transport.sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
           input: normalizedQuery.text ?? '',
           query: normalizedQuery,
           source: 'initial'
         })
 
-        void this.touchApp.channel
-          .sendToPlugin(plugin.name, 'core-box:ui-resume', {
+        void transport
+          .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
             source: 'attach',
             featureId: feature?.id,
             url: finalUrl
@@ -1453,8 +1498,8 @@ export class WindowManager {
 
     if (!query && plugin) {
       this.uiView.webContents.once('dom-ready', () => {
-        void this.touchApp.channel
-          .sendToPlugin(plugin.name, 'core-box:ui-resume', {
+        void transport
+          .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
             source: 'attach',
             featureId: feature?.id,
             url: finalUrl
@@ -1553,7 +1598,12 @@ export class WindowManager {
     if (!this.attachedPlugin) {
       return
     }
-    void this.touchApp.channel.sendToPlugin(this.attachedPlugin.name, eventName, data)
+    const channel = this.touchApp.channel as unknown
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const event = defineRawEvent<unknown, unknown>(eventName)
+    void transport.sendToPlugin(this.attachedPlugin.name, event, data as unknown).catch(() => {})
   }
 
   public getUIView(): WebContentsView | undefined {

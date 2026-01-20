@@ -86,8 +86,9 @@ const indicatorTone = computed<PluginIndicatorTone>(() => {
     status === EPluginStatus.ACTIVE ||
     status === EPluginStatus.ENABLED ||
     status === EPluginStatus.LOADED
-  )
+  ) {
     return 'success'
+  }
 
   return 'none'
 })

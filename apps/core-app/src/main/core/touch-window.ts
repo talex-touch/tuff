@@ -5,9 +5,13 @@ import type {
   RenderProcessGoneDetails,
   WebContents
 } from 'electron'
+import process from 'node:process'
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import { IS_WINDOWS_11, MicaBrowserWindow, WIN10 } from 'talex-mica-electron'
+import { IS_WINDOWS_11, MicaBrowserWindow, WIN10, useMicaElectron } from 'talex-mica-electron'
+import { createLogger } from '../utils/logger'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
+
+const touchWindowLog = createLogger('TouchWindow')
 
 // Determine if we should use MicaBrowserWindow (Windows only)
 const isWindows = process.platform === 'win32'
@@ -16,13 +20,10 @@ const isWindows = process.platform === 'win32'
 // useMicaElectron() must be called once before creating any MicaBrowserWindow
 if (isWindows) {
   try {
-    const { useMicaElectron } = require('talex-mica-electron') as {
-      useMicaElectron: (path?: string) => boolean | void
-    }
     useMicaElectron()
-    console.debug('[TouchWindow] Mica-Electron initialized')
+    touchWindowLog.debug('Mica-Electron initialized')
   } catch (error) {
-    console.warn('[TouchWindow] Failed to initialize Mica-Electron:', error)
+    touchWindowLog.warn('Failed to initialize Mica-Electron', { error })
   }
 }
 
@@ -38,10 +39,9 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
         this.isMicaWindow = true
         this.applyWindowsEffects()
       } catch (error) {
-        console.warn(
-          '[TouchWindow] Failed to create MicaBrowserWindow, falling back to BrowserWindow:',
+        touchWindowLog.warn('Failed to create MicaBrowserWindow, falling back to BrowserWindow', {
           error
-        )
+        })
         this.window = new BrowserWindow(options)
         this.isMicaWindow = false
       }
@@ -75,7 +75,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     } else if (!this.isMicaWindow) {
       // Fallback for Windows if MicaBrowserWindow is not used
       this.window.setBackgroundMaterial('mica')
-      console.debug('[TouchWindow] Apply MicaMaterial on window (fallback)')
+      touchWindowLog.debug('Apply MicaMaterial on window (fallback)')
     }
 
     this.window.once('ready-to-show', () => {
@@ -100,7 +100,7 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
   }
 
   openDevTools(options?: OpenDevToolsOptions): void {
-    console.debug('[TouchWindow] Open DevTools', options)
+    touchWindowLog.debug('Open DevTools', { meta: { hasOptions: Boolean(options) } })
     this.window.webContents.openDevTools(options)
   }
 
@@ -127,10 +127,10 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     // Apply Mica effect on Windows 11, Acrylic on Windows 10
     if (IS_WINDOWS_11) {
       micaWindow.setMicaEffect()
-      console.debug('[TouchWindow] Applied Mica effect (Windows 11)')
+      touchWindowLog.debug('Applied Mica effect (Windows 11)')
     } else if (WIN10) {
       micaWindow.setAcrylic()
-      console.debug('[TouchWindow] Applied Acrylic effect (Windows 10)')
+      touchWindowLog.debug('Applied Acrylic effect (Windows 10)')
     }
 
     // Listen for theme changes and update accordingly
@@ -146,46 +146,48 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     target: string,
     options?: TalexTouch.LoadURLOptions | undefined
   ): Promise<void> {
+    void options
     this.window.webContents.on(
       'did-fail-load',
       (event: ElectronEvent, errorCode: number, errorDescription: string, url: string) => {
-        console.error(
-          `[TouchWindow] Failed to load from target [${target}] - [${JSON.stringify(
-            options ?? {}
-          )}] with error:`,
-          errorCode,
-          errorDescription,
-          url,
-          event
-        )
+        touchWindowLog.error(`Failed to load from target [${target}]`, {
+          meta: {
+            errorCode,
+            errorDescription,
+            url
+          },
+          error: event
+        })
       }
     )
 
     this.window.webContents.addListener(
       'render-process-gone',
       (_event: ElectronEvent, details: RenderProcessGoneDetails) => {
-        console.error(
-          `[TouchWindow] Render process gone! Reason: ${details.reason}, Exit Code: ${
-            details.exitCode
-          }. Details: ${JSON.stringify(details)}`
-        )
+        touchWindowLog.error('Render process gone', {
+          meta: {
+            reason: details.reason,
+            exitCode: details.exitCode
+          },
+          error: details
+        })
 
         // In development mode, if the process is killed, it's likely due to a hot reload
         if (!app.isPackaged && details.reason === 'killed') {
-          console.log(
-            '[TouchWindow] Development mode: Process killed during hot reload, this is expected.'
+          touchWindowLog.info(
+            'Development mode: Process killed during hot reload, this is expected.'
           )
           return
         }
 
         // Other cases of crashes
         if (details.reason === 'crashed') {
-          console.error('[TouchWindow] Renderer process crashed unexpectedly!')
+          touchWindowLog.error('Renderer process crashed unexpectedly')
         }
       }
     )
 
-    console.debug(`[TouchWindow] Try load webContents from target [${target}]`)
+    touchWindowLog.debug(`Try load webContents from target [${target}]`)
   }
 
   async loadURL(

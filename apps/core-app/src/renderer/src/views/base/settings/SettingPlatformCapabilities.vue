@@ -4,11 +4,11 @@ import type {
   PlatformCapabilityScope,
   PlatformCapabilityStatus
 } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex'
 import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'

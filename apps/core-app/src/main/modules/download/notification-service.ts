@@ -1,7 +1,7 @@
 import type { DownloadTask } from '@talex-touch/utils'
 import path from 'node:path'
 import { DownloadModule } from '@talex-touch/utils'
-import { Notification, app, shell } from 'electron'
+import { app, Notification, shell } from 'electron'
 import { formatDuration, formatFileSize, t } from '../../utils/i18n-helper'
 
 /**

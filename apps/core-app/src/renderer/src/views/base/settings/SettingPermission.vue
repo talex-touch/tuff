@@ -5,7 +5,10 @@
   Allows users to view and manage plugin permissions
 -->
 <script setup lang="ts" name="SettingPermission">
+import type { PermissionAuditLog } from '@talex-touch/utils'
 import { Check, Clock, Delete, InfoFilled, Refresh, Search, Warning } from '@element-plus/icons-vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { PermissionEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import {
   ElButton,
   ElCollapse,
@@ -18,9 +21,6 @@ import {
   ElTag
 } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
-import type { PermissionAuditLog } from '@talex-touch/utils'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { PermissionEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 
 import { PermissionList } from '~/components/permission'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'

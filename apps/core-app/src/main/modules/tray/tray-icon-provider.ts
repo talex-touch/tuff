@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import process from 'node:process'
 import { app, nativeImage } from 'electron'
 import * as fse from 'fs-extra'
 

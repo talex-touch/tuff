@@ -1,6 +1,6 @@
+import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import fs from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { PermissionGuard } from './permission-guard'
 import { PermissionStore } from './permission-store'

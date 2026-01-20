@@ -13,17 +13,17 @@ import {
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
+import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
-import { ElButton, ElInput, ElMessageBox } from 'element-plus'
+import { appSetting } from '../channel/storage/index'
 import {
-  DEV_AUTH_STORAGE_KEY,
   clearAppAuthToken,
+  DEV_AUTH_STORAGE_KEY,
   getAuthBaseUrl,
   isLocalAuthMode,
   setAppAuthToken
 } from './auth-env'
-import { appSetting } from '../channel/storage/index'
 
 let eventListenerCleanup: (() => void) | null = null
 let authCallbackCleanup: (() => void) | null = null

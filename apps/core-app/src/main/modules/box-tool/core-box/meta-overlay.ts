@@ -15,8 +15,9 @@ import type {
 import type { BrowserWindow } from 'electron'
 import type { TouchApp } from '../../../core/touch-app'
 import path from 'node:path'
-import { ChannelType } from '@talex-touch/utils/channel'
+import process from 'node:process'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
@@ -25,6 +26,36 @@ import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from './window'
 
 const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
+const metaOverlayActionExecutedEvent = defineRawEvent<
+  {
+    actionId: string
+    item: TuffItem
+    pluginId: string
+  },
+  void
+>('meta-overlay:action-executed')
+const metaOverlayItemActionEvent = defineRawEvent<
+  {
+    actionId: string
+    item: TuffItem
+  },
+  void
+>('meta-overlay:item-action')
+const coreBoxTogglePinEvent = defineRawEvent<
+  {
+    sourceId: string
+    itemId: string
+    sourceType: string
+  },
+  void
+>('core-box:toggle-pin')
+const clipboardWriteTextEvent = defineRawEvent<{ text: string }, void>('clipboard:write-text')
+const shellShowItemInFolderEvent = defineRawEvent<{ path: string }, void>(
+  'shell:show-item-in-folder'
+)
+const metaOverlayFlowTransferEvent = defineRawEvent<{ item: TuffItem }, void>(
+  'meta-overlay:flow-transfer'
+)
 
 /**
  * Manages the MetaOverlay WebContentsView in persistent mode.
@@ -364,8 +395,10 @@ export class MetaOverlayManager {
     // Handle based on action type
     if (handler === 'plugin' && pluginId) {
       // Plugin action - notify the plugin
-      void touchApp.channel
-        .sendToPlugin(pluginId, 'meta-overlay:action-executed', {
+      const channel = touchApp.channel as any
+      const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      void transport
+        .sendToPlugin(pluginId, metaOverlayActionExecutedEvent, {
           actionId,
           item,
           pluginId
@@ -380,15 +413,14 @@ export class MetaOverlayManager {
       // Item action - broadcast to renderer to handle
       const coreBoxWindow = getCoreBoxWindow()
       if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-        void touchApp.channel.sendTo(
-          coreBoxWindow.window,
-          ChannelType.MAIN,
-          'meta-overlay:item-action',
-          {
+        const channel = touchApp.channel as any
+        const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+        void transport
+          .sendTo(coreBoxWindow.window.webContents, metaOverlayItemActionEvent, {
             actionId,
             item
-          }
-        )
+          })
+          .catch(() => {})
       }
     }
 
@@ -413,57 +445,40 @@ export class MetaOverlayManager {
       return
     }
 
+    const channel = touchApp.channel as any
+    const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+
     switch (actionId) {
       case 'toggle-pin': {
-        void touchApp.channel.sendTo(
-          coreBoxWindow.window,
-          ChannelType.MAIN,
-          'core-box:toggle-pin',
-          {
-            sourceId: item.source.id,
-            itemId: item.id,
-            sourceType: item.source.type
-          }
-        )
+        void transport.sendTo(coreBoxWindow.window.webContents, coreBoxTogglePinEvent, {
+          sourceId: item.source.id,
+          itemId: item.id,
+          sourceType: item.source.type
+        })
         break
       }
       case 'copy-title': {
         const title = item.render?.basic?.title
         if (title) {
-          void touchApp.channel.sendTo(
-            coreBoxWindow.window,
-            ChannelType.MAIN,
-            'clipboard:write-text',
-            {
-              text: title
-            }
-          )
+          void transport.sendTo(coreBoxWindow.window.webContents, clipboardWriteTextEvent, {
+            text: title
+          })
         }
         break
       }
       case 'reveal-in-finder': {
         const filePath = (item.meta as any)?.app?.path || (item.meta as any)?.file?.path
         if (filePath) {
-          void touchApp.channel.sendTo(
-            coreBoxWindow.window,
-            ChannelType.MAIN,
-            'shell:show-item-in-folder',
-            {
-              path: filePath
-            }
-          )
+          void transport.sendTo(coreBoxWindow.window.webContents, shellShowItemInFolderEvent, {
+            path: filePath
+          })
         }
         break
       }
       case 'flow-transfer': {
-        void touchApp.channel.sendTo(
-          coreBoxWindow.window,
-          ChannelType.MAIN,
-          'meta-overlay:flow-transfer',
-          {
-            item
-          }
-        )
+        void transport.sendTo(coreBoxWindow.window.webContents, metaOverlayFlowTransferEvent, {
+          item
+        })
         break
       }
       default:

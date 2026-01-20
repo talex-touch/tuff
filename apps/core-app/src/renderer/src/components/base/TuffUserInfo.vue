@@ -1,13 +1,12 @@
 <script lang="ts" setup>
+import { TxButton } from '@talex-touch/tuffex'
+import { useAppSdk, useClerkProvider } from '@talex-touch/utils/renderer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
-import { useAppSdk } from '@talex-touch/utils/renderer'
 import TModal from '~/components/base/tuff/TModal.vue'
-import { useAuth } from '~/modules/auth/useAuth'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { useAuth } from '~/modules/auth/useAuth'
 import { fetchNexusWithAuth } from '~/modules/market/nexus-auth-client'
-import { useClerkProvider } from '@talex-touch/utils/renderer'
 
 const { t } = useI18n()
 const { currentUser, isLoggedIn } = useAuth()

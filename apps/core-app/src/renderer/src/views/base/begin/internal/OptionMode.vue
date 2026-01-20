@@ -1,8 +1,8 @@
 <script setup lang="ts" name="OptionMode">
 import type { Ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Done from './Done.vue'
 import Forbidden from './Forbidden.vue'
-import { TxButton } from '@talex-touch/tuffex'
 
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 

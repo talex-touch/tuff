@@ -11,6 +11,7 @@ import type {
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
+import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import {

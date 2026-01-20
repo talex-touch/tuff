@@ -1,11 +1,11 @@
 <script lang="ts" name="IntelligenceChannelsPage" setup>
 import type { IntelligenceProviderConfig, TestResult } from '@talex-touch/utils/types/intelligence'
+import { TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'

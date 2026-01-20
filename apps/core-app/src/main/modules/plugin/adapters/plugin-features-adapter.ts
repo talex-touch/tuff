@@ -15,6 +15,8 @@ import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
 import { TuffFactory, TuffInputType } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { matchFeature } from '@talex-touch/utils/search'
 import { genTouchApp } from '../../../core'
@@ -105,10 +107,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     const hasContent = query.text || (query.inputs && query.inputs.length > 0)
 
-    genTouchApp().channel.sendToPlugin(plugin.name, 'core-box:input-change', {
-      source: 'feature-activation',
-      query
-    })
+    const channel = genTouchApp().channel as any
+    const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    void transport
+      .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
+        query
+      })
+      .catch(() => {})
 
     if (!hasContent) {
       return true

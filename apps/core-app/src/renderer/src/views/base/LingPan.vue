@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
+import { TxButton } from '@talex-touch/tuffex'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import { ElMessageBox, ElProgress, ElTabPane, ElTabs } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
-import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { appSetting } from '~/modules/channel/storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 

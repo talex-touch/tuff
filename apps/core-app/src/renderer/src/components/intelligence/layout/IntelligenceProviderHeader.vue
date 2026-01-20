@@ -1,10 +1,10 @@
 <script lang="ts" name="IntelligenceProviderHeader" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { ElMessageBox } from 'element-plus'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 

@@ -6,6 +6,7 @@
  */
 
 import type { BrowserWindow } from 'electron'
+import process from 'node:process'
 import { DivisionBoxWindowOption } from '../../config/default'
 import { TouchWindow } from '../../core/touch-window'
 import { devProcessManager } from '../../utils/dev-process-manager'

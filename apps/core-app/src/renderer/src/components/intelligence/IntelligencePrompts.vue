@@ -1,13 +1,13 @@
 <script setup name="IntelligencePrompts" lang="ts">
+import { TxButton } from '@talex-touch/tuffex'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 const { t } = useI18n()
 const router = useRouter()

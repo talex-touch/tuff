@@ -25,21 +25,28 @@ declare namespace NodeJS {
 }
 
 // add global types
+declare namespace NodeJS {
+  interface Global {
+    logger: Logger
+    errLogger: Logger
+    $app: TouchApp
+    $pkg: typeof import('../../../package.json')
+  }
+}
+
+// add console types
 declare global {
   var logger: Logger
   var errLogger: Logger
   var $app: TouchApp
   var $pkg: typeof import('../../../package.json')
-}
 
-// add console types
-declare global {
   interface Console {
-    _log(message?: any, ...optionalParams: any[]): void
-    _info(message?: any, ...optionalParams: any[]): void
-    _warn(message?: any, ...optionalParams: any[]): void
-    _error(message?: any, ...optionalParams: any[]): void
-    _debug(message?: any, ...optionalParams: any[]): void
-    _trace(message?: any, ...optionalParams: any[]): void
+    _log: (message?: any, ...optionalParams: any[]) => void
+    _info: (message?: any, ...optionalParams: any[]) => void
+    _warn: (message?: any, ...optionalParams: any[]) => void
+    _error: (message?: any, ...optionalParams: any[]) => void
+    _debug: (message?: any, ...optionalParams: any[]) => void
+    _trace: (message?: any, ...optionalParams: any[]) => void
   }
 }

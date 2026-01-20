@@ -1,8 +1,8 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { UseBoxItemsReturn } from './types'
-import { computed, onMounted, onUnmounted, readonly, ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { computed, onMounted, onUnmounted, readonly, ref } from 'vue'
 
 /**
  * BoxItem SDK Channel 常量（与主进程保持一致）

@@ -1,10 +1,10 @@
 <script setup lang="ts" name="LanguageSetup">
 import type { SupportedLanguage } from '~/modules/lang'
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, inject, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
 import Greeting from './Greeting.vue'
-import { TxButton } from '@talex-touch/tuffex'
 
 type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
 

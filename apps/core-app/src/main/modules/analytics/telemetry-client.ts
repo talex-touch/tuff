@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import { getConfig, saveConfig } from '../storage'
+import { StorageList } from '@talex-touch/utils'
+import { getMainConfig, saveMainConfig } from '../storage'
 
-const TELEMETRY_CLIENT_CONFIG = 'telemetry-client.json'
+const TELEMETRY_CLIENT_CONFIG = StorageList.TELEMETRY_CLIENT
 let cachedClientId: string | null = null
 
 export function getOrCreateTelemetryClientId(): string {
   if (cachedClientId) return cachedClientId
 
   try {
-    const config = getConfig(TELEMETRY_CLIENT_CONFIG) as { clientId?: unknown }
+    const config = getMainConfig(TELEMETRY_CLIENT_CONFIG) as { clientId?: unknown }
     const existing = typeof config?.clientId === 'string' ? config.clientId.trim() : ''
     if (existing) {
       cachedClientId = existing
@@ -20,7 +21,7 @@ export function getOrCreateTelemetryClientId(): string {
 
   const next = randomUUID()
   try {
-    saveConfig(TELEMETRY_CLIENT_CONFIG, JSON.stringify({ clientId: next }), undefined, true)
+    saveMainConfig(TELEMETRY_CLIENT_CONFIG, { clientId: next }, { force: true })
   } catch {
     // ignore write errors
   }

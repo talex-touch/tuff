@@ -4,6 +4,7 @@ import type {
   AnalyticsMessageStatus
 } from '@talex-touch/utils/analytics'
 import { randomUUID } from 'node:crypto'
+import process from 'node:process'
 import { app } from 'electron'
 
 const MESSAGE_MAX_AGE = 30 * 24 * 60 * 60 * 1000

@@ -5,7 +5,10 @@ import type {
   UpdateAvailableEvent
 } from '../../core/eventbus/touch-event'
 import type { TrayState } from './tray-state-manager'
-import { ChannelType, StorageList } from '@talex-touch/utils'
+import { StorageList } from '@talex-touch/utils'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { TrayEvents } from '@talex-touch/utils/transport/events'
+import process from 'node:process'
 import { app, Tray } from 'electron'
 import {
   TalexEvents,
@@ -15,7 +18,7 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TalexTouch } from '../../types'
 import { BaseModule } from '../abstract-base-module'
-import { getConfig } from '../storage'
+import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
 import { TrayStateManager } from './tray-state-manager'
@@ -32,6 +35,7 @@ export class TrayManager extends BaseModule {
   private tray: Tray | null = null
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
     super(TrayManager.key, {
@@ -42,6 +46,12 @@ export class TrayManager extends BaseModule {
   }
 
   async onInit(): Promise<void> {
+    if ($app.channel) {
+      const keyManager =
+        ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
+      this.transport = getTuffTransportMain($app.channel as any, keyManager as any)
+    }
+
     const shouldShowTray = this.shouldShowTray()
     this.registerWindowEvents()
     this.registerEventListeners()
@@ -95,7 +105,7 @@ export class TrayManager extends BaseModule {
 
   private shouldShowTray(): boolean {
     try {
-      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       const showTray = appConfig?.setup?.showTray
 
       if (showTray !== undefined) {
@@ -111,7 +121,7 @@ export class TrayManager extends BaseModule {
 
   private setupAutoStart(): void {
     try {
-      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       const autoStart = appConfig?.setup?.autoStart ?? false
       const startSilent = appConfig?.window?.startSilent ?? false
 
@@ -128,7 +138,7 @@ export class TrayManager extends BaseModule {
 
   public updateAutoStart(enabled: boolean): void {
     try {
-      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       const startSilent = appConfig?.window?.startSilent ?? false
 
       const options: Electron.Settings = {
@@ -261,22 +271,22 @@ export class TrayManager extends BaseModule {
       this.updateMenu({ hasUpdate: true, updateVersion: updateEvent.version })
     })
 
-    $app.channel?.regChannel(ChannelType.MAIN, 'tray:autostart:update', ({ data }) => {
-      if (typeof data === 'boolean') {
-        this.updateAutoStart(data)
+    this.transport?.on(TrayEvents.autostart.update, (enabled) => {
+      if (typeof enabled === 'boolean') {
+        this.updateAutoStart(enabled)
         return true
       }
       return false
     })
 
-    $app.channel?.regChannel(ChannelType.MAIN, 'tray:autostart:get', () => {
+    this.transport?.on(TrayEvents.autostart.get, () => {
       return this.getAutoStartStatus()
     })
   }
 
   private getHideDockConfig(): boolean {
     try {
-      const appConfig = getConfig(StorageList.APP_SETTING) as AppSetting
+      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
       return appConfig?.setup?.hideDock ?? false
     } catch (error) {
       console.error('[TrayManager] Failed to read hideDock config:', error)
@@ -367,24 +377,24 @@ export class TrayManager extends BaseModule {
   }
 
   private setupChannels(): void {
-    if (!$app.channel) return
+    if (!this.transport) return
 
-    $app.channel.regChannel(ChannelType.MAIN, 'tray:show:get', () => {
+    this.transport.on(TrayEvents.show.get, () => {
       return this.tray !== null
     })
 
-    $app.channel.regChannel(ChannelType.MAIN, 'tray:show:set', ({ data }) => {
-      const show = data === true
-      if (show && !this.tray) {
+    this.transport.on(TrayEvents.show.set, (show) => {
+      const shouldShow = show === true
+      if (shouldShow && !this.tray) {
         this.initializeTray()
         this.updateMenu()
-      } else if (!show && this.tray) {
+      } else if (!shouldShow && this.tray) {
         this.destroyTray()
       }
       return true
     })
 
-    $app.channel.regChannel(ChannelType.MAIN, 'tray:hidedock:set', () => {
+    this.transport.on(TrayEvents.hideDock.set, () => {
       if (process.platform === 'darwin') {
         this.updateDockVisibility()
       }

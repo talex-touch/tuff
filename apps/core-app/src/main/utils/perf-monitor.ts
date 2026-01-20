@@ -1,13 +1,13 @@
 import type { IpcMainEvent } from 'electron'
 import type { Primitive } from './logger'
 import { performance } from 'node:perf_hooks'
+import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { ipcMain } from 'electron'
 import { getSentryService } from '../modules/sentry/sentry-service'
 import { createLogger, formatDuration } from './logger'
 import { getPerfContextSnapshot } from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
-import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 
 export interface RendererPerfReport {
   kind:
@@ -224,6 +224,7 @@ export class PerfMonitor {
     durationMs: number
     at: number
   } | null = null
+
   private logThrottle = new Map<string, number>()
 
   private shouldLog(key: string, throttleMs: number, now: number): boolean {

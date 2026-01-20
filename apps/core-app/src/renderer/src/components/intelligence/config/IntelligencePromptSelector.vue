@@ -1,9 +1,9 @@
 <script lang="ts" name="IntelligencePromptSelector" setup>
+import { TxButton } from '@talex-touch/tuffex'
 import { ElInput, ElOption, ElOptionGroup, ElSelect, ElTag } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { TxButton } from '@talex-touch/tuffex'
 import { getPromptManager } from '~/modules/hooks/usePromptManager'
 
 const props = defineProps<{

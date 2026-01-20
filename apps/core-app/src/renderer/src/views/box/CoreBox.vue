@@ -1,12 +1,12 @@
 <script setup lang="ts" name="CoreBox">
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { IProviderActivate, ITuffIcon, TuffItem } from '@talex-touch/utils'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { ComponentPublicInstance } from 'vue'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 

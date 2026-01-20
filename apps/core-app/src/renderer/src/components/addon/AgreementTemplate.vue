@@ -1,6 +1,6 @@
 <script lang="ts" name="AgreementTemplate" setup>
-import { useI18n } from 'vue-i18n'
 import { TxButton } from '@talex-touch/tuffex'
+import { useI18n } from 'vue-i18n'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
 const props = defineProps({

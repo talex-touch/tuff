@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
+import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ElTooltip } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import PluginPerfCharts from '~/components/plugin/runtime/PluginPerfCharts.vue'

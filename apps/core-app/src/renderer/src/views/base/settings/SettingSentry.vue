@@ -4,13 +4,13 @@
   Sentry privacy controls and analytics settings
 -->
 <script setup lang="ts" name="SettingSentry">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
+import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'
-import { TxButton } from '@talex-touch/tuffex'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'

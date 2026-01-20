@@ -79,7 +79,7 @@ defineExpose({ updateProgress })
           {{ rebuilding ? '重建中...' : '重新建立索引' }}
         </TxButton>
 
-        <TxButton variant="bare" class="btn-later" @click="handleLater">稍后处理</TxButton>
+        <TxButton variant="bare" class="btn-later" @click="handleLater"> 稍后处理 </TxButton>
 
         <label class="checkbox-label">
           <input v-model="dontRemindAgain" type="checkbox" />

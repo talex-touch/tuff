@@ -1,9 +1,9 @@
 <script setup lang="ts" name="FlatDownload">
 import { Download } from '@element-plus/icons-vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
-import { TxButton } from '@talex-touch/tuffex'
 import DownloadCenter from './DownloadCenter.vue'
 
 // const { ipcRenderer } = require('electron')

@@ -34,7 +34,7 @@ export function getPluginCompositeKey(pluginId: string, providerId?: string): st
 }
 
 let initialized = false
-let transportDisposers: Array<() => void> = []
+const transportDisposers: Array<() => void> = []
 
 function getTranslator(): (key: string, params?: Record<string, unknown>) => string {
   const i18n = (

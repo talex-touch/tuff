@@ -1,5 +1,6 @@
 <script setup lang="ts" name="MarketGridView">
 import type { MarketPluginListItem } from '~/composables/market/useMarketData'
+import { TxAutoSizer, TxSpinner } from '@talex-touch/tuffex'
 /**
  * MarketGridView - Grid/List view for displaying market plugins
  *
@@ -14,7 +15,6 @@ import { useI18n } from 'vue-i18n'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
 import { hasUpgradeAvailable } from '~/composables/market/useVersionCompare'
 import MarketItemCard from './MarketItemCard.vue'
-import { TxSpinner } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   /** List of plugins to display */
@@ -40,28 +40,33 @@ const { getInstallTask } = useMarketInstall()
 const { t } = useI18n()
 const gridRef = ref<HTMLElement | null>(null)
 const isTransitioning = ref(false)
+const enterStagger = 0.04
+const flipStagger = 0.02
+const bounceEase = 'back.out(1.6)'
 
 // Smooth animation functions using GSAP
 function onBeforeEnter(el: Element) {
   gsap.set(el, {
     opacity: 0,
-    y: 30,
-    scale: 0.9,
-    rotateX: -15
+    y: 16,
+    scale: 0.96,
+    rotateX: -8
   })
 }
 
 function onEnter(el: Element, done: () => void) {
   const index = Number.parseInt((el as HTMLElement).dataset.index || '0')
+  const delay = index * enterStagger
 
+  gsap.killTweensOf(el)
   gsap.to(el, {
     opacity: 1,
     y: 0,
     scale: 1,
     rotateX: 0,
-    duration: 0.6,
-    delay: index * 0.1,
-    ease: 'back.out(1.2)',
+    duration: 0.5,
+    delay,
+    ease: bounceEase,
     onComplete: done
   })
 }
@@ -87,7 +92,18 @@ watch(
     if (!gridRef.value || isTransitioning.value) return
 
     isTransitioning.value = true
-    const items = Array.from(gridRef.value.children) as HTMLElement[]
+    const gridEl =
+      gridRef.value instanceof HTMLElement ? gridRef.value : (gridRef.value as any)?.$el
+    if (!gridEl) {
+      isTransitioning.value = false
+      return
+    }
+    const items = Array.from(gridEl.children) as HTMLElement[]
+    if (items.length === 0) {
+      isTransitioning.value = false
+      return
+    }
+    let remaining = items.length
 
     // First: capture initial positions
     const firstPositions = items.map((item) => ({
@@ -99,13 +115,15 @@ watch(
     await nextTick()
 
     // Invert & Play: calculate differences and animate
-    firstPositions.forEach(({ element, rect: first }) => {
+    firstPositions.forEach(({ element, rect: first }, index) => {
       const last = element.getBoundingClientRect()
       const deltaX = first.left - last.left
       const deltaY = first.top - last.top
       const deltaW = first.width / last.width
       const deltaH = first.height / last.height
+      const delay = index * flipStagger
 
+      gsap.killTweensOf(element)
       // Set initial transform (invert)
       gsap.set(element, {
         x: deltaX,
@@ -121,10 +139,12 @@ watch(
         y: 0,
         scaleX: 1,
         scaleY: 1,
-        duration: 0.5,
+        duration: 0.45,
+        delay,
         ease: 'power2.out',
         onComplete: () => {
-          isTransitioning.value = false
+          remaining -= 1
+          if (remaining <= 0) isTransitioning.value = false
         }
       })
     })
@@ -145,25 +165,32 @@ watch(
       name="market-items"
       tag="div"
       class="market-grid"
-      :class="[{ 'list-view': viewType === 'list' }]"
+      :class="[{ 'list-view': viewType === 'list' }, { 'is-flipping': isTransitioning }]"
       @before-enter="onBeforeEnter"
       @enter="onEnter"
       @leave="onLeave"
     >
-      <MarketItemCard
+      <TxAutoSizer
         v-for="(item, index) in plugins"
         :key="`${item.providerId}::${item.id}` || item.name || index"
-        :item="item"
-        :index="index"
         :data-index="index"
-        :is-installed="installedNames?.has(item.name) ?? false"
-        :installed-version="installedVersions?.get(item.name)"
-        :has-upgrade="hasUpgradeAvailable(installedVersions?.get(item.name), item.version)"
-        :install-task="getInstallTask(item.id, item.providerId)"
-        class="market-grid-item"
-        @install="emit('install', item)"
-        @open="emit('open-detail', item)"
-      />
+        :width="true"
+        :height="true"
+        :duration-ms="240"
+        easing="cubic-bezier(0.4, 0, 0.2, 1)"
+      >
+        <MarketItemCard
+          :item="item"
+          :index="index"
+          :is-installed="installedNames?.has(item.name) ?? false"
+          :installed-version="installedVersions?.get(item.name)"
+          :has-upgrade="hasUpgradeAvailable(installedVersions?.get(item.name), item.version)"
+          :install-task="getInstallTask(item.id, item.providerId)"
+          class="market-grid-item"
+          @install="emit('install', item)"
+          @open="emit('open-detail', item)"
+        />
+      </TxAutoSizer>
     </TransitionGroup>
 
     <div v-else class="market-empty w-full h-full flex flex-col items-center justify-center">
@@ -209,6 +236,18 @@ watch(
 
 .market-grid-item {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.market-grid.is-flipping {
+  .market-grid-item {
+    transition: none;
+  }
+
+  .market-items-move,
+  .market-items-enter-active,
+  .market-items-leave-active {
+    transition: none;
+  }
 }
 
 /* Transition Animations */

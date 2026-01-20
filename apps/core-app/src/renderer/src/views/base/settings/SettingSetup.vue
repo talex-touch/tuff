@@ -5,13 +5,13 @@
   Allows users to configure permissions, auto-start, and tray visibility
 -->
 <script setup lang="ts" name="SettingSetup">
-import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
-
 import { TxButton } from '@talex-touch/tuffex'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
+import { useI18n } from 'vue-i18n'
+
+import { toast } from 'vue-sonner'
 import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
 import TuffLinuxTag from '~/components/tuff/tags/TuffLinuxTag.vue'
 import TuffMacOSTag from '~/components/tuff/tags/TuffMacOSTag.vue'

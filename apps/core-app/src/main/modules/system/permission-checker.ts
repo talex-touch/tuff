@@ -2,7 +2,9 @@ import type { ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { ChannelType } from '@talex-touch/utils/channel'
+import process from 'node:process'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { shell, systemPreferences } from 'electron'
 import { BaseModule } from '../abstract-base-module'
 
@@ -10,15 +12,25 @@ export enum PermissionType {
   ACCESSIBILITY = 'accessibility',
   NOTIFICATIONS = 'notifications',
   ADMIN_PRIVILEGES = 'adminPrivileges',
-  FILE_ACCESS = 'fileAccess',
+  FILE_ACCESS = 'fileAccess'
 }
 
 export enum PermissionStatus {
   GRANTED = 'granted',
   DENIED = 'denied',
   NOT_DETERMINED = 'notDetermined',
-  UNSUPPORTED = 'unsupported',
+  UNSUPPORTED = 'unsupported'
 }
+
+const systemPermissionCheckEvent = defineRawEvent<string, PermissionCheckResult>(
+  'system:permission:check'
+)
+const systemPermissionRequestEvent = defineRawEvent<PermissionType, boolean>(
+  'system:permission:request'
+)
+const systemPermissionOpenSettingsEvent = defineRawEvent<void, boolean>(
+  'system:permission:open-settings'
+)
 
 interface PermissionCheckResult {
   status: PermissionStatus
@@ -46,7 +58,7 @@ export class PermissionChecker {
       return {
         status: PermissionStatus.UNSUPPORTED,
         canRequest: false,
-        message: 'Accessibility permission is only available on macOS',
+        message: 'Accessibility permission is only available on macOS'
       }
     }
 
@@ -57,15 +69,14 @@ export class PermissionChecker {
         canRequest: true,
         message: isTrusted
           ? 'Accessibility permission is granted'
-          : 'Accessibility permission is required for app scanning features',
+          : 'Accessibility permission is required for app scanning features'
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[PermissionChecker] Failed to check accessibility permission:', error)
       return {
         status: PermissionStatus.NOT_DETERMINED,
         canRequest: false,
-        message: 'Unable to check accessibility permission status',
+        message: 'Unable to check accessibility permission status'
       }
     }
   }
@@ -87,15 +98,14 @@ export class PermissionChecker {
                   ? PermissionStatus.DENIED
                   : PermissionStatus.NOT_DETERMINED,
             canRequest: status !== 'denied',
-            message: `Notification permission: ${status}`,
+            message: `Notification permission: ${status}`
           }
-        }
-        catch (error) {
+        } catch (error) {
           // Fallback for older macOS versions
           return {
             status: PermissionStatus.GRANTED,
             canRequest: false,
-            message: 'Notifications are enabled by default on this macOS version',
+            message: 'Notifications are enabled by default on this macOS version'
           }
         }
       }
@@ -103,23 +113,21 @@ export class PermissionChecker {
       return {
         status: PermissionStatus.GRANTED,
         canRequest: false,
-        message: 'Notifications are enabled by default on this macOS version',
+        message: 'Notifications are enabled by default on this macOS version'
       }
-    }
-    else if (process.platform === 'win32') {
+    } else if (process.platform === 'win32') {
       // Windows doesn't require explicit notification permission
       return {
         status: PermissionStatus.GRANTED,
         canRequest: false,
-        message: 'Notifications are enabled by default on Windows',
+        message: 'Notifications are enabled by default on Windows'
       }
-    }
-    else {
+    } else {
       // Linux - check if notification daemon is available
       return {
         status: PermissionStatus.GRANTED,
         canRequest: false,
-        message: 'Notifications depend on desktop environment support',
+        message: 'Notifications depend on desktop environment support'
       }
     }
   }
@@ -138,19 +146,17 @@ export class PermissionChecker {
           canRequest: true,
           message: isAdmin
             ? 'Administrator privileges are available'
-            : 'Administrator privileges are required to access system directories (e.g., C:\\ drive)',
+            : 'Administrator privileges are required to access system directories (e.g., C:\\ drive)'
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[PermissionChecker] Failed to check admin privileges:', error)
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
-          message: 'Unable to check administrator privileges status',
+          message: 'Unable to check administrator privileges status'
         }
       }
-    }
-    else if (process.platform === 'linux') {
+    } else if (process.platform === 'linux') {
       // On Linux, check if running as root (not recommended for security)
       const isRoot = process.getuid && process.getuid() === 0
       return {
@@ -158,14 +164,13 @@ export class PermissionChecker {
         canRequest: false,
         message: isRoot
           ? 'Running with root privileges'
-          : 'Root privileges may be needed for some system directories',
+          : 'Root privileges may be needed for some system directories'
       }
-    }
-    else {
+    } else {
       return {
         status: PermissionStatus.UNSUPPORTED,
         canRequest: false,
-        message: 'Admin privileges check is only available on Windows and Linux',
+        message: 'Admin privileges check is only available on Windows and Linux'
       }
     }
   }
@@ -183,29 +188,26 @@ export class PermissionChecker {
       return {
         status: PermissionStatus.GRANTED,
         canRequest: false,
-        message: `File access to ${testPath} is granted`,
+        message: `File access to ${testPath} is granted`
       }
-    }
-    catch (error: any) {
+    } catch (error: any) {
       if (error.code === 'EACCES' || error.code === 'EPERM') {
         return {
           status: PermissionStatus.DENIED,
           canRequest: true,
-          message: `File access to ${testPath} is denied. ${process.platform === 'win32' ? 'May require administrator privileges.' : 'May require file access permissions.'}`,
+          message: `File access to ${testPath} is denied. ${process.platform === 'win32' ? 'May require administrator privileges.' : 'May require file access permissions.'}`
         }
-      }
-      else if (error.code === 'ENOENT') {
+      } else if (error.code === 'ENOENT') {
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
-          message: `Path ${testPath} does not exist`,
+          message: `Path ${testPath} does not exist`
         }
-      }
-      else {
+      } else {
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
-          message: `Unable to check file access: ${error.message}`,
+          message: `Unable to check file access: ${error.message}`
         }
       }
     }
@@ -226,8 +228,7 @@ export class PermissionChecker {
         fs.writeFileSync(testPath, 'test')
         fs.unlinkSync(testPath)
         return true
-      }
-      catch {
+      } catch {
         // If write fails, check using alternative method
         // On Windows, check if we can access protected directories
         try {
@@ -235,13 +236,11 @@ export class PermissionChecker {
           // Additional check: try to list protected directory
           const files = fs.readdirSync('C:\\Windows\\System32')
           return files.length > 0
-        }
-        catch {
+        } catch {
           return false
         }
       }
-    }
-    catch {
+    } catch {
       // Fallback: check if running as administrator using environment
       const isAdmin = process.env.USERPROFILE?.includes('Administrator') || false
       return isAdmin
@@ -257,7 +256,7 @@ export class PermissionChecker {
         if (process.platform === 'darwin') {
           // Open macOS System Preferences > Security & Privacy > Privacy > Accessibility
           await shell.openExternal(
-            'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+            'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
           )
           return true
         }
@@ -266,12 +265,9 @@ export class PermissionChecker {
       case PermissionType.NOTIFICATIONS:
         if (process.platform === 'darwin') {
           // macOS notification settings
-          await shell.openExternal(
-            'x-apple.systempreferences:com.apple.preference.notifications',
-          )
+          await shell.openExternal('x-apple.systempreferences:com.apple.preference.notifications')
           return true
-        }
-        else if (process.platform === 'win32') {
+        } else if (process.platform === 'win32') {
           // Windows notification settings
           await shell.openExternal('ms-settings:notifications')
           return true
@@ -302,14 +298,14 @@ export class PermissionChecker {
     if (targetPlatform === 'darwin') {
       // Open macOS System Preferences
       await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy')
-    }
-    else if (targetPlatform === 'win32') {
+    } else if (targetPlatform === 'win32') {
       // Open Windows Settings > Privacy
       await shell.openExternal('ms-settings:privacy')
-    }
-    else {
+    } else {
       // Linux - show message or open relevant settings app
-      console.log('[PermissionChecker] Linux system settings location depends on desktop environment')
+      console.log(
+        '[PermissionChecker] Linux system settings location depends on desktop environment'
+      )
     }
   }
 }
@@ -325,7 +321,7 @@ export class PermissionCheckerModule extends BaseModule {
 
   constructor() {
     super(PermissionCheckerModule.key, {
-      create: false,
+      create: false
     })
     this.checker = PermissionChecker.getInstance()
   }
@@ -352,65 +348,69 @@ export class PermissionCheckerModule extends BaseModule {
       return
     }
 
+    const keyManager =
+      ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
+    const transport = getTuffTransportMain($app.channel as any, keyManager as any)
+
     // Check permission status
-    $app.channel.regChannel(ChannelType.MAIN, 'system:permission:check', ({ data }) => {
-      const permissionType = data as string
+    transport.on(systemPermissionCheckEvent, (permissionType) => {
       try {
         let result: PermissionCheckResult
 
         // Handle both enum and string values
         if (permissionType === 'accessibility' || permissionType === PermissionType.ACCESSIBILITY) {
           result = this.checker.checkAccessibility()
-        }
-        else if (permissionType === 'notifications' || permissionType === PermissionType.NOTIFICATIONS) {
+        } else if (
+          permissionType === 'notifications' ||
+          permissionType === PermissionType.NOTIFICATIONS
+        ) {
           result = this.checker.checkNotifications()
-        }
-        else if (permissionType === 'adminPrivileges' || permissionType === PermissionType.ADMIN_PRIVILEGES) {
+        } else if (
+          permissionType === 'adminPrivileges' ||
+          permissionType === PermissionType.ADMIN_PRIVILEGES
+        ) {
           result = this.checker.checkAdminPrivileges()
-        }
-        else if (permissionType === 'fileAccess' || permissionType === PermissionType.FILE_ACCESS) {
+        } else if (
+          permissionType === 'fileAccess' ||
+          permissionType === PermissionType.FILE_ACCESS
+        ) {
           result = this.checker.checkFileAccess()
-        }
-        else {
+        } else {
           result = {
             status: PermissionStatus.NOT_DETERMINED,
             canRequest: false,
-            message: `Unknown permission type: ${permissionType}`,
+            message: `Unknown permission type: ${permissionType}`
           }
         }
 
         // Return result directly - channel will auto-reply if handler doesn't use reply()
         return result
-      }
-      catch (error) {
+      } catch (error) {
         console.error(`[PermissionChecker] Failed to check permission ${permissionType}:`, error)
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
-          message: `Error checking permission: ${error}`,
+          message: `Error checking permission: ${error}`
         }
       }
     })
 
     // Request permission (opens system settings)
-    $app.channel.regChannel(ChannelType.MAIN, 'system:permission:request', async ({ data }) => {
-      const permissionType = data as PermissionType
+    transport.on(systemPermissionRequestEvent, async (permissionType) => {
       try {
         return await this.checker.requestPermission(permissionType)
-      }
-      catch (error) {
+      } catch (error) {
         console.error(`[PermissionChecker] Failed to request permission ${permissionType}:`, error)
         return false
       }
     })
 
     // Open system settings
-    $app.channel.regChannel(ChannelType.MAIN, 'system:permission:open-settings', async () => {
+    transport.on(systemPermissionOpenSettingsEvent, async () => {
       try {
         await this.checker.openSystemSettings()
         return true
-      }
-      catch (error) {
+      } catch (error) {
         console.error('[PermissionChecker] Failed to open system settings:', error)
         return false
       }

@@ -1,11 +1,11 @@
 <script setup lang="ts" name="MarketDocs">
-import { useI18n } from 'vue-i18n'
-import { useAppSdk } from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex'
+import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import SettingPlatformCapabilities from '~/views/base/settings/SettingPlatformCapabilities.vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import SettingPlatformCapabilities from '~/views/base/settings/SettingPlatformCapabilities.vue'
 
 const { t } = useI18n()
 const appSdk = useAppSdk()

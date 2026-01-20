@@ -2,11 +2,15 @@ import type { Plugin } from 'vite'
 import { execSync } from 'node:child_process'
 import crypto from 'node:crypto'
 import path from 'node:path'
+import process from 'node:process'
 import fse from 'fs-extra'
 
 import pkg from './package.json'
+import { createLogger } from './src/main/utils/logger'
 
-console.log('[Talex-Touch] Generate Information ...')
+const log = createLogger('BuildInfo')
+
+log.info('[Talex-Touch] Generate Information ...')
 
 /**
  * 生成构建标识符：基于时间戳后6位的哈希
@@ -37,51 +41,12 @@ function getGitCommitHash(): string | null {
     const hash = execSync('git rev-parse HEAD', {
       cwd: projectRoot,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'ignore']
     }).trim()
     return hash || null
-  }
-  catch {
+  } catch {
     // 没有就留空
     return null
-  }
-}
-
-/**
- * 生成官方构建签名（基于私钥 TUFF_ENCRYPTION_KEY）
- */
-function generateOfficialSignature(
-  version: string,
-  buildTime: number,
-  buildType: string,
-  gitCommitHash: string | null,
-): { officialSignature: string | null, hasOfficialKey: boolean } {
-  // 直接使用环境变量中的私钥
-  const encryptionKey = process.env.TUFF_ENCRYPTION_KEY
-
-  if (!encryptionKey) {
-    return {
-      officialSignature: null,
-      hasOfficialKey: false,
-    }
-  }
-
-  // 构建签名载荷
-  const payload = JSON.stringify({
-    version,
-    buildTime,
-    buildType,
-    gitCommitHash,
-  })
-
-  // 使用 HMAC-SHA256 生成签名（私钥作为密钥）
-  const hmac = crypto.createHmac('sha256', encryptionKey)
-  hmac.update(payload)
-  const signature = hmac.digest('hex')
-
-  return {
-    officialSignature: signature,
-    hasOfficialKey: true,
   }
 }
 
@@ -91,11 +56,9 @@ function generateOfficialSignature(
 function getBuildChannel(buildType: string): string {
   if (buildType === 'release') {
     return 'RELEASE'
-  }
-  else if (buildType === 'snapshot') {
+  } else if (buildType === 'snapshot') {
     return 'SNAPSHOT'
-  }
-  else if (buildType === 'beta') {
+  } else if (buildType === 'beta') {
     return 'BETA'
   }
   return 'UNKNOWN'
@@ -120,14 +83,6 @@ function generateBuildInfo() {
   // 获取构建 channel
   const channel = getBuildChannel(buildType)
 
-  // 生成官方签名（基于 SSH 密钥指纹）
-  const { officialSignature, hasOfficialKey } = generateOfficialSignature(
-    pkg.version,
-    buildTime,
-    buildType,
-    gitCommitHash,
-  )
-
   return {
     version: pkg.version,
     buildTime,
@@ -137,9 +92,7 @@ function generateBuildInfo() {
     isSnapshot,
     isBeta,
     isRelease,
-    gitCommitHash: gitCommitHash || undefined,
-    officialSignature: officialSignature || undefined,
-    hasOfficialKey,
+    gitCommitHash: gitCommitHash || undefined
   }
 }
 
@@ -169,15 +122,13 @@ export default function generatorInformation(): Plugin {
       const signaturePath = path.join(__dirname, 'signature.json')
       fse.writeJsonSync(signaturePath, buildInfo, { encoding: 'utf8', spaces: 2 })
 
-      console.log(`[Talex-Touch] Generated signature.json with build type: ${buildInfo.buildType}`)
-      console.log(`[Talex-Touch] Build identifier: ${buildInfo.buildIdentifier}`)
-      console.log(`[Talex-Touch] Channel: ${buildInfo.channel}`)
-      console.log(`[Talex-Touch] Git commit: ${buildInfo.gitCommitHash || 'N/A'}`)
-      console.log(`[Talex-Touch] Official build: ${buildInfo.hasOfficialKey ? 'Yes' : 'No'}`)
+      log.info(`[Talex-Touch] Generated signature.json with build type: ${buildInfo.buildType}`)
+      log.info(`[Talex-Touch] Build identifier: ${buildInfo.buildIdentifier}`)
+      log.info(`[Talex-Touch] Channel: ${buildInfo.channel}`)
+      log.info(`[Talex-Touch] Git commit: ${buildInfo.gitCommitHash || 'N/A'}`)
     },
     load(id) {
-      if (id !== resolvedVirtualModuleId)
-        return
+      if (id !== resolvedVirtualModuleId) return
 
       const devMode = config.command === 'serve'
 
@@ -186,7 +137,7 @@ export default function generatorInformation(): Plugin {
         const buildInfo = generateBuildInfo()
         const information = {
           refuse: false,
-          ...buildInfo,
+          ...buildInfo
         }
 
         return `
@@ -205,7 +156,7 @@ export default function generatorInformation(): Plugin {
         buildType: 'unknown',
         isSnapshot: false,
         isBeta: false,
-        isRelease: false,
+        isRelease: false
       }
 
       if (fse.existsSync(signaturePath)) {
@@ -213,11 +164,10 @@ export default function generatorInformation(): Plugin {
           const buildInfo = fse.readJsonSync(signaturePath, { encoding: 'utf8' })
           Object.assign(information, {
             refuse: false,
-            ...buildInfo,
+            ...buildInfo
           })
-        }
-        catch (error) {
-          console.warn('[Talex-Touch] Failed to read signature.json:', error)
+        } catch (error) {
+          log.warn('[Talex-Touch] Failed to read signature.json:', { error })
         }
       }
 
@@ -227,6 +177,6 @@ export default function generatorInformation(): Plugin {
 
         export default information
       `
-    },
+    }
   }
 }

@@ -1,10 +1,10 @@
+import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
 import {
   preloadDebugStep,
   preloadLog,
   preloadRemoveOverlay,
   preloadState
 } from '@talex-touch/utils/preload'
-import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
 import {
   initStorageChannel,
   initStorageTransport,
@@ -80,11 +80,11 @@ export function useAppLifecycle() {
 
       preloadDebugStep('Initializing Touch SDK and storage channels', 0.05)
       const transport = useTuffTransport()
-      initStorageTransport(transport)
       const channel = tryUseChannel()
       const hasStorageChannel = (value: typeof channel): boolean =>
         !!value && typeof value.sendSync === 'function' && typeof value.unRegChannel === 'function'
       if (hasStorageChannel(channel)) {
+        initStorageTransport(transport)
         initStorageChannel(channel as IStorageChannel)
       }
 

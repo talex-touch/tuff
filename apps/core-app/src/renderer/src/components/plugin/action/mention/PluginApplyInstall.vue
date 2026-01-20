@@ -1,9 +1,9 @@
 <script name="PluginApplyInstall" lang="ts" setup>
+import { TxButton } from '@talex-touch/tuffex'
 import { sleep } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import Loading from '~/assets/lotties/compress-loading.json'
-import { TxButton } from '@talex-touch/tuffex'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { clearBufferedFile, getBufferedFile } from '~/modules/hooks/dropper-resolver'
 import { blowMention, forTouchTip } from '~/modules/mention/dialog-mention'

@@ -1,14 +1,16 @@
 import type { ModuleLoadMetric } from './modules/analytics'
 import type { LogLevel } from './utils/logger'
 
+import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
+import process from 'node:process'
 import { app, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { addonOpenerModule } from './modules/addon-opener'
-import { intelligenceModule } from './modules/ai/intelligence-module'
 
+import { intelligenceModule } from './modules/ai/intelligence-module'
 import { analyticsModule, getStartupAnalytics } from './modules/analytics'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
@@ -21,10 +23,11 @@ import { fileProtocolModule } from './modules/file-protocol'
 import { flowBusModule } from './modules/flow-bus'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
+import { notificationModule } from './modules/notification'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { sentryModule } from './modules/sentry'
-import { storageModule } from './modules/storage'
+import { getMainConfig, storageModule, subscribeMainConfig } from './modules/storage'
 import { permissionCheckerModule } from './modules/system/permission-checker'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
 import { terminalModule } from './modules/terminal/terminal.manager'
@@ -132,6 +135,7 @@ const modulesToLoad = [
   analyticsModule,
   permissionCheckerModule,
   permissionModule, // Plugin permission management - before plugin module
+  notificationModule,
   sentryModule,
   buildVerificationModule,
   updateServiceModule,
@@ -195,9 +199,9 @@ app.whenReady().then(async () => {
 
     if (moduleCtor === storageModule) {
       try {
-        const appSettings = storageModule.getConfig('app-setting.ini')
+        const appSettings = getMainConfig(StorageList.APP_SETTING)
         applyLoggerConfig(appSettings)
-        storageModule.subscribe('app-setting.ini', (data) => {
+        subscribeMainConfig(StorageList.APP_SETTING, (data) => {
           applyLoggerConfig(data)
         })
       } catch (error) {

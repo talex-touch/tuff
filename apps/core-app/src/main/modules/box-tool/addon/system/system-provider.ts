@@ -9,15 +9,18 @@ import type {
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import { exec } from 'node:child_process'
+import process from 'node:process'
 import { promisify } from 'node:util'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { dialog, shell } from 'electron'
 import { pinyin } from 'pinyin-pro'
 import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
+import { createLogger } from '../../../../utils/logger'
 import { calculateHighlights } from '../apps/highlighting-service'
 
 const execAsync = promisify(exec)
+const systemProviderLog = createLogger('SystemProvider')
 
 interface SystemAction {
   id: string
@@ -307,7 +310,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     this.searchIndex = context.searchIndex
 
     await this.indexSystemActions()
-    console.log('[SystemProvider] System provider loaded with search index')
+    systemProviderLog.info('System provider loaded with search index')
   }
 
   private async indexSystemActions(): Promise<void> {
@@ -324,7 +327,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
     }))
 
     await this.searchIndex.indexItems(indexItems)
-    console.log(`[SystemProvider] Indexed ${indexItems.length} system actions`)
+    systemProviderLog.info(`Indexed ${indexItems.length} system actions`)
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
@@ -395,7 +398,7 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
       ? this.actions.find((candidate) => candidate.id === actionMeta.systemActionId)
       : undefined
     if (!action) {
-      console.error('[SystemProvider] Action not found in item meta')
+      systemProviderLog.error('Action not found in item meta')
       return null
     }
 
@@ -410,9 +413,9 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
 
     try {
       await action.execute()
-      console.log(`[SystemProvider] Executed action: ${action.name}`)
+      systemProviderLog.info(`Executed action: ${action.name}`)
     } catch (error) {
-      console.error(`[SystemProvider] Failed to execute action ${action.name}:`, error)
+      systemProviderLog.error(`Failed to execute action ${action.name}`, { error })
       await dialog.showMessageBox({
         type: 'error',
         title: '操作失败',

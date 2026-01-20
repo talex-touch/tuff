@@ -1,7 +1,7 @@
-import { ElLoading } from 'element-plus'
-import { h } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { ElLoading } from 'element-plus'
+import { h } from 'vue'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { blowMention, popperMention } from '../mention/dialog-mention'
 

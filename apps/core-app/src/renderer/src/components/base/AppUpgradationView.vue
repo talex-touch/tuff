@@ -1,8 +1,8 @@
 <script lang="ts" name="AppUpgradationView" setup>
+import { TxButton } from '@talex-touch/tuffex'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useAppSdk } from '@talex-touch/utils/renderer'
-import { TxButton } from '@talex-touch/tuffex'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 
 const props = defineProps({

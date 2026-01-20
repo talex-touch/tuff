@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { MarketProviderType } from '@talex-touch/utils/market'
+import { TxButton } from '@talex-touch/tuffex'
 import { onClickOutside } from '@vueuse/core'
 import { onMounted, reactive, ref } from 'vue'
 import { vDraggable } from 'vue-draggable-plus'
-import { TxButton } from '@talex-touch/tuffex'
 import { marketSourcesStorage } from '~/modules/storage/market-sources'
 
 const props = defineProps<{

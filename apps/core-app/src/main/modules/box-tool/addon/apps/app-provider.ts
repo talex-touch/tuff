@@ -16,8 +16,16 @@ import { existsSync } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
+import process from 'node:process'
 import { is } from '@electron-toolkit/utils'
-import { completeTiming, createRetrier, sleep, startTiming, timingLogger } from '@talex-touch/utils'
+import {
+  completeTiming,
+  createRetrier,
+  sleep,
+  startTiming,
+  StorageList,
+  timingLogger
+} from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
@@ -36,6 +44,8 @@ import {
 
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
+import { deviceIdleService } from '../../../../service/device-idle-service'
+import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
@@ -187,8 +197,30 @@ function runWithSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
 
 const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
 const PENDING_DELETION_CONFIG_KEY = 'app_provider_pending_deletion'
+const BACKFILL_LAST_RUN_CONFIG_KEY = 'app_provider_last_backfill'
+const FULL_SYNC_LAST_RUN_CONFIG_KEY = 'app_provider_last_full_sync'
 const DELETION_GRACE_PERIOD_MS = 3 * 60 * 1000 // 3 minutes grace period
 const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
+
+export interface AppIndexSettings {
+  startupBackfillEnabled: boolean
+  startupBackfillRetryMax: number
+  startupBackfillRetryBaseMs: number
+  startupBackfillRetryMaxMs: number
+  fullSyncEnabled: boolean
+  fullSyncIntervalMs: number
+  fullSyncCheckIntervalMs: number
+}
+
+const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
+  startupBackfillEnabled: true,
+  startupBackfillRetryMax: 5,
+  startupBackfillRetryBaseMs: 5000,
+  startupBackfillRetryMaxMs: 5 * 60 * 1000,
+  fullSyncEnabled: true,
+  fullSyncIntervalMs: 24 * 60 * 60 * 1000,
+  fullSyncCheckIntervalMs: 10 * 60 * 1000
+}
 
 interface PendingDeletionEntry {
   id: number
@@ -213,6 +245,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private processingPaths: Set<string> = new Set()
   private aliases: Record<string, string[]> = {}
   private searchIndex: SearchIndexService | null = null
+  private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
+  private startupBackfillStarted = false
+  private fullSyncRegistered = false
 
   constructor() {
     logApp('Initializing AppProvider service', LogStyle.info)
@@ -225,20 +260,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
 
-    if (!this.isInitializing) {
-      const initStart = startTiming()
-      this.isInitializing = this._initialize()
-      await this.isInitializing
-      logAppDuration('InitialDataLoad', initStart, {
-        label: 'Initial data load completed',
-        style: 'success',
-        unit: 's',
-        precision: 2
-      })
-    }
+    this.loadAppIndexSettings()
+    this._scheduleStartupBackfill()
+    this._scheduleFullSync()
 
-    // 注意：_initialize() 已在新增/更新应用时调用 _syncKeywordsForApp()
-    // 只在需要时异步同步，避免阻塞启动（如数据库迁移后）
+    // 注意：补漏/全量同步会在后台触发关键词同步
     this._subscribeToFSEvents()
     this._registerWatchPaths()
     this._scheduleMdlsUpdateScan()
@@ -252,10 +278,108 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
+  private loadAppIndexSettings(): void {
+    try {
+      const raw = getMainConfig(StorageList.APP_INDEX_SETTINGS) as
+        | Partial<AppIndexSettings>
+        | undefined
+      this.appIndexSettings = this.normalizeAppIndexSettings(raw)
+      saveMainConfig(StorageList.APP_INDEX_SETTINGS, this.appIndexSettings)
+    } catch (error) {
+      this.appIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
+      logApp('Failed to load app index settings, using defaults', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  private normalizeAppIndexSettings(raw?: Partial<AppIndexSettings> | null): AppIndexSettings {
+    const data = raw && typeof raw === 'object' ? raw : {}
+    const clampMs = (value: unknown, fallback: number) => {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        return fallback
+      }
+      return value
+    }
+    const clampCount = (value: unknown, fallback: number) => {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+        return fallback
+      }
+      return Math.floor(value)
+    }
+
+    const retryBaseMs = clampMs(
+      data.startupBackfillRetryBaseMs,
+      DEFAULT_APP_INDEX_SETTINGS.startupBackfillRetryBaseMs
+    )
+    const retryMaxMs = Math.max(
+      clampMs(data.startupBackfillRetryMaxMs, DEFAULT_APP_INDEX_SETTINGS.startupBackfillRetryMaxMs),
+      retryBaseMs
+    )
+
+    return {
+      startupBackfillEnabled:
+        typeof data.startupBackfillEnabled === 'boolean'
+          ? data.startupBackfillEnabled
+          : DEFAULT_APP_INDEX_SETTINGS.startupBackfillEnabled,
+      startupBackfillRetryMax: clampCount(
+        data.startupBackfillRetryMax,
+        DEFAULT_APP_INDEX_SETTINGS.startupBackfillRetryMax
+      ),
+      startupBackfillRetryBaseMs: retryBaseMs,
+      startupBackfillRetryMaxMs: retryMaxMs,
+      fullSyncEnabled:
+        typeof data.fullSyncEnabled === 'boolean'
+          ? data.fullSyncEnabled
+          : DEFAULT_APP_INDEX_SETTINGS.fullSyncEnabled,
+      fullSyncIntervalMs: clampMs(
+        data.fullSyncIntervalMs,
+        DEFAULT_APP_INDEX_SETTINGS.fullSyncIntervalMs
+      ),
+      fullSyncCheckIntervalMs: clampMs(
+        data.fullSyncCheckIntervalMs,
+        DEFAULT_APP_INDEX_SETTINGS.fullSyncCheckIntervalMs
+      )
+    }
+  }
+
   async onDestroy(): Promise<void> {
     logApp('Unloading AppProvider service', LogStyle.process)
     this._unsubscribeFromFSEvents()
     logApp('AppProvider service unloaded', LogStyle.success)
+  }
+
+  public getAppIndexSettings(): AppIndexSettings {
+    return { ...this.appIndexSettings }
+  }
+
+  public updateAppIndexSettings(input: Partial<AppIndexSettings>): AppIndexSettings {
+    const previous = this.appIndexSettings
+    this.appIndexSettings = this.normalizeAppIndexSettings({
+      ...this.appIndexSettings,
+      ...input
+    })
+
+    try {
+      saveMainConfig(StorageList.APP_INDEX_SETTINGS, this.appIndexSettings)
+    } catch (error) {
+      logApp('Failed to persist app index settings', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+
+    if (
+      previous.fullSyncEnabled !== this.appIndexSettings.fullSyncEnabled ||
+      previous.fullSyncCheckIntervalMs !== this.appIndexSettings.fullSyncCheckIntervalMs
+    ) {
+      this._refreshFullSyncSchedule()
+    }
+
+    if (previous.startupBackfillEnabled !== this.appIndexSettings.startupBackfillEnabled) {
+      this._scheduleStartupBackfill()
+    }
+
+    return { ...this.appIndexSettings }
   }
 
   public async setAliases(aliases: Record<string, string[]>): Promise<void> {
@@ -296,6 +420,283 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
 
     logApp('All app keywords synced successfully', LogStyle.success)
+  }
+
+  private _scheduleStartupBackfill(): void {
+    if (!this.appIndexSettings.startupBackfillEnabled) {
+      logApp('Startup backfill disabled, skipping', LogStyle.info)
+      return
+    }
+    if (this.startupBackfillStarted) return
+    this.startupBackfillStarted = true
+
+    logApp('Scheduling startup backfill', LogStyle.info)
+    queueMicrotask(() => {
+      void this._runStartupBackfillWithRetry()
+    })
+  }
+
+  private async _runStartupBackfillWithRetry(): Promise<void> {
+    const maxRetries = this.appIndexSettings.startupBackfillRetryMax
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const readiness = await this._shouldRunStartupBackfill()
+
+      if (readiness.allowed) {
+        const task = this._runStartupBackfill()
+        this.isInitializing = task
+        try {
+          await task
+          await this._setLastBackfillTime(Date.now())
+          return
+        } catch (error) {
+          logApp('Startup backfill failed', LogStyle.error, {
+            error: error instanceof Error ? error.message : String(error)
+          })
+        } finally {
+          if (this.isInitializing === task) {
+            this.isInitializing = null
+          }
+        }
+      }
+
+      if (attempt >= maxRetries) {
+        logApp('Startup backfill stopped after retries', LogStyle.warning, {
+          reason: readiness.reason
+        })
+        return
+      }
+
+      const delay = this._getBackfillRetryDelay(attempt + 1)
+      logApp(
+        `Startup backfill deferred (${readiness.reason || 'not-ready'}), retrying in ${Math.round(
+          delay / 1000
+        )}s`,
+        LogStyle.info
+      )
+      await sleep(delay)
+    }
+  }
+
+  private async _shouldRunStartupBackfill(): Promise<{ allowed: boolean; reason?: string }> {
+    if (!this.dbUtils || !this.searchIndex) {
+      return { allowed: false, reason: 'missing-context' }
+    }
+
+    if (appTaskGate.isActive()) {
+      return { allowed: false, reason: 'app-busy' }
+    }
+
+    const decision = await deviceIdleService.canRun({ idleThresholdMs: 0, forceAfterMs: 0 })
+    if (!decision.allowed) {
+      return { allowed: false, reason: decision.reason }
+    }
+
+    return { allowed: true }
+  }
+
+  private _getBackfillRetryDelay(attempt: number): number {
+    const base = this.appIndexSettings.startupBackfillRetryBaseMs
+    const maxDelay = this.appIndexSettings.startupBackfillRetryMaxMs
+    const multiplier = 3
+    const rawDelay = Math.min(base * multiplier ** Math.max(0, attempt - 1), maxDelay)
+    const jitter = 0.2
+    const factor = 1 - jitter + Math.random() * jitter * 2
+    return Math.round(rawDelay * factor)
+  }
+
+  private async _runStartupBackfill(): Promise<void> {
+    if (!this.dbUtils) {
+      logApp('Database not initialized, skipping startup backfill', LogStyle.error)
+      return
+    }
+
+    await appTaskGate.runAppTask(async () => {
+      const initStart = startTiming()
+      logApp('Starting startup backfill...', LogStyle.process)
+
+      const scanStart = startTiming()
+      const scannedApps = await appScanner.getApps()
+      logAppDuration('BackfillScanApps', scanStart, {
+        label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
+        style: 'info',
+        unit: 's',
+        precision: 2
+      })
+
+      await this._recordMissingIconApps(scannedApps)
+
+      const dbLoadStart = startTiming()
+      const dbApps = await this.dbUtils!.getFilesByType('app')
+      const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
+      logAppDuration('BackfillLoadDbApps', dbLoadStart, {
+        label: `Loaded ${chalk.cyan(dbApps.length)} DB app records`,
+        style: 'info',
+        unit: 's',
+        precision: 2
+      })
+
+      const existingIds = new Set(
+        dbAppsWithExtensions.map((app) => app.extensions.bundleId || app.path)
+      )
+      const toAdd = scannedApps.filter((app) => {
+        const uniqueId = app.uniqueId || app.path
+        return !!uniqueId && !existingIds.has(uniqueId)
+      })
+
+      logApp(`Startup backfill found ${chalk.green(toAdd.length)} missing apps`, LogStyle.info)
+
+      if (toAdd.length > 0) {
+        logApp(`Adding ${chalk.cyan(toAdd.length)} missing apps...`, LogStyle.process)
+        const addStartTime = startTiming()
+
+        await runAdaptiveTaskQueue(
+          toAdd,
+          async (app, index) => {
+            const [insertedFile] = await this.dbUtils!.getDb()
+              .insert(filesSchema)
+              .values({
+                path: app.path,
+                name: app.name,
+                displayName: app.displayName,
+                type: 'app' as const,
+                mtime: app.lastModified,
+                ctime: new Date()
+              })
+              .onConflictDoUpdate({
+                target: filesSchema.path,
+                set: {
+                  name: sql`excluded.name`,
+                  displayName: sql`excluded.display_name`,
+                  mtime: sql`excluded.mtime`
+                }
+              })
+              .returning()
+
+            if (insertedFile) {
+              const extensions: { fileId: number; key: string; value: any }[] = []
+              if (app.bundleId)
+                extensions.push({ fileId: insertedFile.id, key: 'bundleId', value: app.bundleId })
+              if (app.icon)
+                extensions.push({ fileId: insertedFile.id, key: 'icon', value: app.icon })
+
+              if (extensions.length > 0) await this.dbUtils!.addFileExtensions(extensions)
+
+              await this._syncKeywordsForApp(app)
+            }
+
+            if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
+              logApp(
+                `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
+                LogStyle.info
+              )
+            }
+          },
+          {
+            estimatedTaskTimeMs: 12,
+            label: 'AppProvider::backfillAddApps'
+          }
+        )
+
+        logAppDuration('BackfillAddApps', addStartTime, {
+          label: 'Missing apps added',
+          style: 'success',
+          unit: 's',
+          precision: 1
+        })
+      }
+
+      logAppDuration('StartupBackfill', initStart, {
+        label: 'Startup backfill complete',
+        style: 'success',
+        unit: 's',
+        precision: 2
+      })
+    }, 'AppProvider.startupBackfill')
+  }
+
+  private _scheduleFullSync(): void {
+    if (!this.appIndexSettings.fullSyncEnabled) {
+      logApp('Full sync disabled, skipping schedule', LogStyle.info)
+      return
+    }
+    if (this.fullSyncRegistered) return
+    this.fullSyncRegistered = true
+
+    const intervalMs = this.appIndexSettings.fullSyncCheckIntervalMs
+    logApp(
+      `Registering app full sync polling service (${Math.round(intervalMs / 60000)} min interval)`,
+      LogStyle.info
+    )
+    pollingService.register(
+      'app_provider_full_sync',
+      async () => {
+        await this._runFullSyncIfDue()
+      },
+      { interval: intervalMs, unit: 'milliseconds' }
+    )
+  }
+
+  private _refreshFullSyncSchedule(): void {
+    pollingService.unregister('app_provider_full_sync')
+    this.fullSyncRegistered = false
+    this._scheduleFullSync()
+  }
+
+  private async _runFullSyncIfDue(): Promise<void> {
+    if (!this.dbUtils) {
+      logApp('Database not initialized, skipping full sync', LogStyle.error)
+      return
+    }
+
+    const lastSync = await this._getLastFullSyncTime()
+    const now = Date.now()
+    if (lastSync && now - lastSync < this.appIndexSettings.fullSyncIntervalMs) {
+      appProviderLog.debug(
+        `${chalk.cyan(((now - lastSync) / (60 * 60 * 1000)).toFixed(2))} hours since last full sync, skipping`
+      )
+      return
+    }
+
+    if (appTaskGate.isActive()) {
+      logApp('App task active, skipping full sync', LogStyle.info)
+      return
+    }
+
+    const decision = await deviceIdleService.canRun({ lastRunAt: lastSync ?? undefined })
+    if (!decision.allowed) {
+      logApp(`Full sync skipped (${decision.reason || 'not-ready'})`, LogStyle.info)
+      return
+    }
+
+    await this._runFullSync(decision.forced === true)
+  }
+
+  private async _runFullSync(forced: boolean): Promise<void> {
+    if (!this.dbUtils) {
+      logApp('Database not initialized, skipping full sync', LogStyle.error)
+      return
+    }
+
+    await appTaskGate.runAppTask(async () => {
+      const syncStart = startTiming()
+      logApp(forced ? 'Starting forced full sync...' : 'Starting full sync...', LogStyle.process)
+
+      try {
+        await this._initialize()
+        await this._setLastFullSyncTime(Date.now())
+        logAppDuration('FullSync', syncStart, {
+          label: forced ? 'Forced full sync complete' : 'Full sync complete',
+          style: 'success',
+          unit: 's',
+          precision: 2
+        })
+      } catch (error) {
+        logApp('Full sync failed', LogStyle.error, {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }, 'AppProvider.fullSync')
   }
 
   private _mapDbAppToScannedInfo(app: any): any {
@@ -377,6 +778,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
+  private async _recordMissingIconApps(scannedApps: any[]): Promise<void> {
+    const knownMissingIconApps = await this._getKnownMissingIconApps()
+    let missingIconConfigUpdated = false
+
+    for (const app of scannedApps) {
+      if (app.icon) continue
+
+      const uniqueId = app.uniqueId || app.path
+      if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
+
+      logApp(`Icon not found for app: ${chalk.yellow(app.name)}`, LogStyle.warning)
+      knownMissingIconApps.add(uniqueId)
+      missingIconConfigUpdated = true
+    }
+
+    if (missingIconConfigUpdated) {
+      await this._saveKnownMissingIconApps(knownMissingIconApps)
+    }
+  }
+
   private async _generateKeywordsForApp(appInfo: any): Promise<Set<string>> {
     const generatedKeywords = new Set<string>()
     const names = [appInfo.name, appInfo.displayName, appInfo.fileName].filter(Boolean) as string[]
@@ -453,23 +874,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
     const scannedAppsMap = new Map(scannedApps.map((app) => [app.uniqueId, app]))
 
-    // Log apps with missing icons only the first time we see them
-    const knownMissingIconApps = await this._getKnownMissingIconApps()
-    let missingIconConfigUpdated = false
-    for (const app of scannedApps) {
-      if (app.icon) continue
-
-      const uniqueId = app.uniqueId || app.path
-      if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
-
-      logApp(`Icon not found for app: ${chalk.yellow(app.name)}`, LogStyle.warning)
-      knownMissingIconApps.add(uniqueId)
-      missingIconConfigUpdated = true
-    }
-
-    if (missingIconConfigUpdated) {
-      await this._saveKnownMissingIconApps(knownMissingIconApps)
-    }
+    await this._recordMissingIconApps(scannedApps)
 
     const dbLoadStart = startTiming()
     const dbApps = await this.dbUtils!.getFilesByType('app')
@@ -1185,42 +1590,59 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await db.delete(fileExtensions)
     await this.searchIndex?.removeByProvider(this.id)
 
-    logApp('Database cleared, re-initializing...', LogStyle.info)
+    logApp('Database cleared, rebuilding app index...', LogStyle.info)
 
     this.isInitializing = null
-    await this.onLoad(this.context)
+    await this._runFullSync(true)
 
     logApp('App database rebuild complete', LogStyle.success)
   }
 
-  private async _getLastScanTime(): Promise<number | null> {
+  private async _getConfigTimestamp(key: string): Promise<number | null> {
     if (!this.dbUtils) return null
 
     const db = this.dbUtils.getDb()
-    const result = await db
-      .select()
-      .from(configSchema)
-      .where(eq(configSchema.key, 'app_provider_last_mdls_scan'))
-      .limit(1)
+    const result = await db.select().from(configSchema).where(eq(configSchema.key, key)).limit(1)
 
     if (result.length > 0 && result[0].value) {
-      return Number.parseInt(result[0].value, 10)
+      const parsed = Number.parseInt(result[0].value, 10)
+      if (!Number.isNaN(parsed)) return parsed
     }
 
     return null
   }
 
-  private async _setLastScanTime(timestamp: number): Promise<void> {
+  private async _setConfigTimestamp(key: string, timestamp: number): Promise<void> {
     if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
     await db
       .insert(configSchema)
-      .values({ key: 'app_provider_last_mdls_scan', value: timestamp.toString() })
+      .values({ key, value: timestamp.toString() })
       .onConflictDoUpdate({
         target: configSchema.key,
         set: { value: timestamp.toString() }
       })
+  }
+
+  private async _setLastBackfillTime(timestamp: number): Promise<void> {
+    await this._setConfigTimestamp(BACKFILL_LAST_RUN_CONFIG_KEY, timestamp)
+  }
+
+  private async _getLastFullSyncTime(): Promise<number | null> {
+    return this._getConfigTimestamp(FULL_SYNC_LAST_RUN_CONFIG_KEY)
+  }
+
+  private async _setLastFullSyncTime(timestamp: number): Promise<void> {
+    await this._setConfigTimestamp(FULL_SYNC_LAST_RUN_CONFIG_KEY, timestamp)
+  }
+
+  private async _getLastScanTime(): Promise<number | null> {
+    return this._getConfigTimestamp('app_provider_last_mdls_scan')
+  }
+
+  private async _setLastScanTime(timestamp: number): Promise<void> {
+    await this._setConfigTimestamp('app_provider_last_mdls_scan', timestamp)
   }
 
   private async _getKnownMissingIconApps(): Promise<Set<string>> {

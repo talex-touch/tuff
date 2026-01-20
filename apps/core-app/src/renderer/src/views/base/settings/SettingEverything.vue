@@ -1,9 +1,9 @@
 <script setup lang="ts" name="SettingEverything">
+import { TxButton } from '@talex-touch/tuffex'
 import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 

@@ -1,21 +1,22 @@
-import type {
-  AiCapabilityRoutingConfig,
-  AiSDKPersistedConfig,
-} from '@talex-touch/utils'
+import type { AiCapabilityRoutingConfig, AiSDKPersistedConfig } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { storageModule } from '../storage'
+import { getMainConfig, saveMainConfig } from '../storage'
 import { ai } from './intelligence-sdk'
 
-const SUPPORTED_PROVIDER_TYPES = new Set(['openai', 'anthropic', 'deepseek', 'siliconflow', 'local', 'custom'])
+const SUPPORTED_PROVIDER_TYPES = new Set([
+  'openai',
+  'anthropic',
+  'deepseek',
+  'siliconflow',
+  'local',
+  'custom'
+])
 
 function normalizeStrategyId(value?: string) {
-  if (!value)
-    return undefined
-  if (value === 'priority')
-    return 'rule-based-default'
-  if (value === 'adaptive')
-    return 'adaptive-default'
+  if (!value) return undefined
+  if (value === 'priority') return 'rule-based-default'
+  if (value === 'adaptive') return 'adaptive-default'
   return value
 }
 
@@ -23,7 +24,7 @@ function normalizeStrategyId(value?: string) {
  * 实时从 storage 获取最新配置，不使用内部缓存
  */
 function getLatestConfig(): AiSDKPersistedConfig | undefined {
-  const stored = storageModule.getConfig(StorageList.IntelligenceConfig) as AiSDKPersistedConfig | undefined
+  const stored = getMainConfig(StorageList.IntelligenceConfig) as AiSDKPersistedConfig | undefined
   return stored
 }
 
@@ -35,8 +36,8 @@ export function ensureAiConfigLoaded(_force?: boolean): void {
     return
   }
 
-  const normalizedStrategy
-    = normalizeStrategyId(stored.globalConfig?.defaultStrategy) ?? 'adaptive-default'
+  const normalizedStrategy =
+    normalizeStrategyId(stored.globalConfig?.defaultStrategy) ?? 'adaptive-default'
 
   const providers = (stored.providers ?? []).filter((provider) => {
     if (!SUPPORTED_PROVIDER_TYPES.has(provider.type)) {
@@ -51,13 +52,11 @@ export function ensureAiConfigLoaded(_force?: boolean): void {
     enableAudit: stored.globalConfig?.enableAudit ?? true,
     enableCache: stored.globalConfig?.enableCache ?? false,
     cacheExpiration: stored.globalConfig?.cacheExpiration,
-    capabilities: stored.capabilities ?? {},
+    capabilities: stored.capabilities ?? {}
   })
 }
 
-export function getCapabilityOptions(
-  capabilityId: string,
-): {
+export function getCapabilityOptions(capabilityId: string): {
   allowedProviderIds?: string[]
   modelPreference?: string[]
   promptTemplate?: string
@@ -71,13 +70,15 @@ export function getCapabilityOptions(
     return {}
   }
 
-  const enabledBindings = config.providers?.filter(binding => binding.enabled !== false) ?? []
+  const enabledBindings = config.providers?.filter((binding) => binding.enabled !== false) ?? []
   return {
-    allowedProviderIds: enabledBindings.length ? enabledBindings.map(binding => binding.providerId) : undefined,
+    allowedProviderIds: enabledBindings.length
+      ? enabledBindings.map((binding) => binding.providerId)
+      : undefined,
     modelPreference: enabledBindings
-      .flatMap(binding => binding.models ?? [])
+      .flatMap((binding) => binding.models ?? [])
       .filter((model): model is string => Boolean(model)),
-    promptTemplate: config.promptTemplate,
+    promptTemplate: config.promptTemplate
   }
 }
 
@@ -111,7 +112,12 @@ export function setupConfigUpdateListener(): void {
   }
 
   channel.regChannel(ChannelType.MAIN, 'storage:update', ({ data }) => {
-    if (data && typeof data === 'object' && 'name' in data && data.name === StorageList.IntelligenceConfig) {
+    if (
+      data &&
+      typeof data === 'object' &&
+      'name' in data &&
+      data.name === StorageList.IntelligenceConfig
+    ) {
       ensureAiConfigLoaded()
     }
   })
@@ -121,7 +127,7 @@ export function setupConfigUpdateListener(): void {
  * Save AI SDK config to storage
  */
 export function saveAiConfig(config: AiSDKPersistedConfig): void {
-  storageModule.saveConfig(StorageList.IntelligenceConfig, JSON.stringify(config))
+  saveMainConfig(StorageList.IntelligenceConfig, config)
 }
 
 /**
@@ -130,6 +136,6 @@ export function saveAiConfig(config: AiSDKPersistedConfig): void {
 export function debugPrintConfig(): void {
   const stored = getLatestConfig()
   if (!stored) {
-
+    return
   }
 }

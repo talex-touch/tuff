@@ -1,25 +1,25 @@
+// generator-information.ts
+import { execSync } from 'node:child_process'
+import crypto from 'node:crypto'
 // electron.vite.config.ts
 import path2 from 'node:path'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import fse from 'fs-extra'
 import Unocss from 'unocss/vite'
+
 import AutoImport from 'unplugin-auto-import/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 import VueSetupExtend from 'vite-plugin-vue-setup-extend'
 
-// generator-information.ts
-import { execSync } from 'node:child_process'
-import crypto from 'node:crypto'
-import path from 'node:path'
-import fse from 'fs-extra'
-
 // package.json
-var package_default = {
+const package_default = {
   name: '@talex-touch/core-app',
   version: '2.4.7-beta.11',
   description: 'A strong adaptation more platform all-tool program.',
@@ -167,7 +167,7 @@ var package_default = {
 }
 
 // generator-information.ts
-var __electron_vite_injected_dirname =
+const __electron_vite_injected_dirname =
   '/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app'
 console.log('[Talex-Touch] Generate Information ...')
 function generateBuildIdentifier(timestamp) {
@@ -325,16 +325,16 @@ function generatorInformation() {
 }
 
 // electron.vite.config.ts
-var __electron_vite_injected_import_meta_url =
+const __electron_vite_injected_import_meta_url =
   'file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/electron.vite.config.ts'
-var __filename = fileURLToPath(__electron_vite_injected_import_meta_url)
-var __dirname2 = path2.dirname(__filename)
-var workspaceRoot = path2.resolve(__dirname2, '..', '..')
-var basePath = path2.join(__dirname2, 'src')
-var rendererPath = path2.join(basePath, 'renderer', 'src')
-var isProduction = process.env.BUILD_TYPE === 'release' || process.env.NODE_ENV === 'production'
-var enableSourcemap = !isProduction
-var electron_vite_config_default = defineConfig({
+const __filename = fileURLToPath(__electron_vite_injected_import_meta_url)
+const __dirname2 = path2.dirname(__filename)
+const workspaceRoot = path2.resolve(__dirname2, '..', '..')
+const basePath = path2.join(__dirname2, 'src')
+const rendererPath = path2.join(basePath, 'renderer', 'src')
+const isProduction = process.env.BUILD_TYPE === 'release' || process.env.NODE_ENV === 'production'
+const enableSourcemap = !isProduction
+const electron_vite_config_default = defineConfig({
   main: {
     plugins: [
       // 只保留必要的workspace包，其他依赖尽可能外部化以减小包体

@@ -1,5 +1,5 @@
-import { packageJson } from 'talex-touch:information'
 import { useAppSdk } from '@talex-touch/utils/renderer'
+import { packageJson } from 'talex-touch:information'
 
 const appSdk = useAppSdk()
 

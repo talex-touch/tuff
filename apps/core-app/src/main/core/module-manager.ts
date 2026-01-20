@@ -11,11 +11,12 @@ import type {
   ModuleRegistrant,
   ModuleStartContext,
   ModuleStopContext,
-  ResolvedModuleFileConfig,
+  ResolvedModuleFileConfig
 } from '@talex-touch/utils/types/modules'
 import type { ITouchChannel } from 'packages/utils/channel'
 import type { ITouchEventBus } from 'packages/utils/eventbus'
 import type { TalexEvents } from './eventbus/touch-event'
+import type { Buffer } from 'node:buffer'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { moduleLog } from '../utils/logger'
@@ -75,8 +76,7 @@ class FSModuleDirectory implements ModuleDirectory {
     try {
       const stat = await fs.stat(this.path)
       return stat.isDirectory()
-    }
-    catch {
+    } catch {
       return false
     }
   }
@@ -90,8 +90,7 @@ class FSModuleDirectory implements ModuleDirectory {
   async list(): Promise<string[]> {
     try {
       return await fs.readdir(this.path)
-    }
-    catch {
+    } catch {
       return []
     }
   }
@@ -202,7 +201,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       eventBus?: ITouchEventBus<TalexEvents>
       beforeQuitEventName?: TalexEvents.BEFORE_APP_QUIT
       modulesRoot?: string
-    },
+    }
   ) {
     this.app = app
     this.touchChannel = touchChannel
@@ -218,11 +217,10 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
         for (const key of keys) {
           try {
             await this.unloadModule(key, 'normal')
-          }
-          catch (err) {
+          } catch (err) {
             moduleLog.warn('Failed to unload module during shutdown', {
               meta: { module: key.description ?? 'anonymous' },
-              error: err,
+              error: err
             })
           }
         }
@@ -260,7 +258,9 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
   /**
    * Implementation: Retrieves a loaded module instance by constructor or ModuleKey.
    */
-  get<T extends IBaseModule<TalexEvents>>(ctorOrKey: ModuleCtor<T, TalexEvents> | ModuleKey): T | undefined {
+  get<T extends IBaseModule<TalexEvents>>(
+    ctorOrKey: ModuleCtor<T, TalexEvents> | ModuleKey
+  ): T | undefined {
     // If it's a Symbol (ModuleKey), use it directly
     if (typeof ctorOrKey === 'symbol') {
       return this.modules.get(ctorOrKey) as T | undefined
@@ -270,7 +270,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     const key = (ctorOrKey as any).key as ModuleKey | undefined
     if (!key) {
       throw new Error(
-        `[ModuleManager] Could not resolve key for ${(ctorOrKey as any).name}. Did you forget to define "static key: ModuleKey"?`,
+        `[ModuleManager] Could not resolve key for ${(ctorOrKey as any).name}. Did you forget to define "static key: ModuleKey"?`
       )
     }
     return this.modules.get(key) as T | undefined
@@ -301,7 +301,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    *          If a module with the same key is already loaded, this operation is a no-op and returns `false`.
    */
   public async loadModule<T extends TalexTouch.IModule<TalexEvents>>(
-    moduleOrCtor: ModuleRegistrant<T, TalexEvents>,
+    moduleOrCtor: ModuleRegistrant<T, TalexEvents>
   ): Promise<boolean> {
     const isCtor = typeof moduleOrCtor === 'function'
     const instance: T = isCtor
@@ -310,8 +310,8 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
             (moduleOrCtor as ModuleCtor<T, TalexEvents>).key ?? Symbol('anonymous-module'),
             { create: false },
             undefined,
-            undefined,
-          ),
+            undefined
+          )
         )
       : (moduleOrCtor as T)
 
@@ -323,7 +323,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     const moduleName = key.description ?? key.toString()
 
     moduleLog.info('Loading module', {
-      meta: { module: moduleName },
+      meta: { module: moduleName }
     })
 
     const timer = moduleLog.time('Module ready', 'success')
@@ -348,7 +348,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     this.modules.set(key, instance)
 
     timer.end('Module loaded', {
-      meta: { module: moduleName },
+      meta: { module: moduleName }
     })
 
     return true
@@ -366,11 +366,10 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    */
   public unloadModule(
     moduleKey: ModuleKey,
-    reason: ModuleStopContext<TalexEvents>['reason'] = 'normal',
+    reason: ModuleStopContext<TalexEvents>['reason'] = 'normal'
   ): boolean | Promise<boolean> {
     const mod = this.modules.get(moduleKey)
-    if (!mod)
-      return false
+    if (!mod) return false
 
     const fileCfg = this.resolveFileConfig(mod)
     const directory = this.buildDirectoryFromResolved(fileCfg)
@@ -399,7 +398,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    * @returns The loaded module instance, or `undefined` if not found.
    */
   public getModule<T extends TalexTouch.IModule<TalexEvents> = TalexTouch.IModule<TalexEvents>>(
-    moduleKey: ModuleKey,
+    moduleKey: ModuleKey
   ): T | undefined {
     return this.modules.get(moduleKey) as T | undefined
   }
@@ -480,10 +479,9 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    *          otherwise resolves to `undefined` if file system support is not required.
    */
   private async ensureDirectoryIfNeeded(
-    file: ResolvedModuleFileConfig,
+    file: ResolvedModuleFileConfig
   ): Promise<ModuleDirectory | undefined> {
-    if (!file.create || !file.dirPath)
-      return undefined
+    if (!file.create || !file.dirPath) return undefined
     const dir = new FSModuleDirectory(file.dirPath)
     await dir.ensure()
     return dir
@@ -500,8 +498,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    *          otherwise `undefined` if file system support is not required.
    */
   private buildDirectoryFromResolved(file: ResolvedModuleFileConfig): ModuleDirectory | undefined {
-    if (!file.create || !file.dirPath)
-      return undefined
+    if (!file.create || !file.dirPath) return undefined
     return new FSModuleDirectory(file.dirPath)
   }
 
@@ -517,7 +514,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    */
   private resolveEntryPath(
     module: TalexTouch.IModule<TalexEvents>,
-    file: ResolvedModuleFileConfig,
+    file: ResolvedModuleFileConfig
   ): string | undefined {
     const legacy = (module as any).filePath as string | undefined
     if (legacy)
@@ -549,10 +546,10 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
         ? {
             on: this.eventBus.on.bind(this.eventBus),
             off: this.eventBus.off.bind(this.eventBus),
-            emit: this.eventBus.emit.bind(this.eventBus),
+            emit: this.eventBus.emit.bind(this.eventBus)
           }
         : undefined,
-      directory,
+      directory
     }
   }
 
@@ -571,13 +568,13 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     moduleKey: ModuleKey,
     file: ResolvedModuleFileConfig,
     directory?: ModuleDirectory,
-    resolvedPath?: string,
+    resolvedPath?: string
   ): ModuleCreateContext<TalexEvents> {
     return {
       ...this.makeBaseContext(moduleKey, directory),
       file,
       resolvedPath,
-      hot: false,
+      hot: false
     } as ModuleCreateContext<TalexEvents>
   }
 
@@ -593,12 +590,12 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
   private makeInitContext(
     moduleKey: ModuleKey,
     file: ResolvedModuleFileConfig,
-    directory?: ModuleDirectory,
+    directory?: ModuleDirectory
   ): ModuleInitContext<TalexEvents> {
     return {
       ...this.makeBaseContext(moduleKey, directory),
       file,
-      depsReady: true,
+      depsReady: true
     } as ModuleInitContext<TalexEvents>
   }
 
@@ -615,12 +612,12 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
   private makeStartContext(
     moduleKey: ModuleKey,
     file: ResolvedModuleFileConfig,
-    directory?: ModuleDirectory,
+    directory?: ModuleDirectory
   ): ModuleStartContext<TalexEvents> {
     return {
       ...this.makeBaseContext(moduleKey, directory),
       file,
-      startArgs: {},
+      startArgs: {}
     } as ModuleStartContext<TalexEvents>
   }
 
@@ -638,12 +635,12 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     moduleKey: ModuleKey,
     file: ResolvedModuleFileConfig,
     directory: ModuleDirectory | undefined,
-    reason: ModuleStopContext<TalexEvents>['reason'],
+    reason: ModuleStopContext<TalexEvents>['reason']
   ): ModuleStopContext<TalexEvents> {
     return {
       ...this.makeBaseContext(moduleKey, directory),
       file,
-      reason,
+      reason
     } as ModuleStopContext<TalexEvents>
   }
 
@@ -662,12 +659,12 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     moduleKey: ModuleKey,
     file: ResolvedModuleFileConfig,
     directory: ModuleDirectory | undefined,
-    appClosing: boolean,
+    appClosing: boolean
   ): ModuleDestroyContext<TalexEvents> {
     return {
       ...this.makeBaseContext(moduleKey, directory),
       file,
-      appClosing,
+      appClosing
     } as ModuleDestroyContext<TalexEvents>
   }
 }

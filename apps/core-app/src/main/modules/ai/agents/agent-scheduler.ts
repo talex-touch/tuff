@@ -13,12 +13,12 @@ import type {
   TaskProgress
 } from '@talex-touch/utils'
 import { EventEmitter } from 'node:events'
-import chalk from 'chalk'
+import { createLogger } from '../../../utils/logger'
 
-const TAG = chalk.hex('#9c27b0').bold('[AgentScheduler]')
-const logInfo = (...args: unknown[]) => console.log(TAG, ...args)
-const logDebug = (...args: unknown[]) =>
-  console.debug(TAG, chalk.gray(...args.map((arg) => String(arg))))
+const agentSchedulerLog = createLogger('Intelligence').child('AgentScheduler')
+const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
+const logInfo = (...args: unknown[]) => agentSchedulerLog.info(formatLogArgs(args))
+const logDebug = (...args: unknown[]) => agentSchedulerLog.debug(formatLogArgs(args))
 
 type TaskExecutor = (task: AgentTask) => Promise<AgentResult>
 
@@ -147,7 +147,7 @@ export class AgentScheduler extends EventEmitter {
   private async processQueue(): Promise<void> {
     if (this.isProcessing) return
     if (!this.executor) {
-      console.warn(TAG, 'No executor set')
+      agentSchedulerLog.warn('No executor set')
       return
     }
 
@@ -167,7 +167,7 @@ export class AgentScheduler extends EventEmitter {
 
       // Execute task asynchronously
       this.executeTask(task).catch((error) => {
-        console.error(TAG, `Task ${taskId} failed:`, error)
+        agentSchedulerLog.error(`Task ${taskId} failed`, { error })
       })
     }
 

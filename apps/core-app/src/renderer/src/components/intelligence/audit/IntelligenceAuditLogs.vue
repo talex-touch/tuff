@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { IntelligenceAuditLogEntry } from '@talex-touch/utils/renderer'
+import { TxButton } from '@talex-touch/tuffex'
 import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxButton } from '@talex-touch/tuffex'
 
 const props = defineProps<{
   callerId?: string

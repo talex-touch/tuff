@@ -20,6 +20,7 @@ import { exec } from 'node:child_process'
 import path from 'node:path'
 import * as util from 'node:util'
 import { sleep } from '@talex-touch/utils'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -29,7 +30,6 @@ import {
   PermissionEvents,
   PluginEvents
 } from '@talex-touch/utils/transport/events'
-import { getLogger } from '@talex-touch/utils/common/logger'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
 import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
@@ -47,6 +47,7 @@ import {
 import { performMarketHttpRequest } from '../../service/market-http.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import { debounce } from '../../utils/common-util'
+import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
@@ -61,6 +62,7 @@ import { LocalPluginProvider } from './providers/local-provider'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 
 const pluginLog = getLogger('plugin-system')
+const pluginModuleLog = createLogger('PluginSystem')
 const devWatcherLog = pluginLog.child('DevWatcher')
 
 type IPluginManagerWithInternals = IPluginManager & {
@@ -107,7 +109,7 @@ class DevPluginWatcher {
         if (fse.existsSync(manifestPath)) {
           this.watcher.add(manifestPath)
         }
-        devWatcherLog.info('Watching dev plugin source', {
+        devWatcherLog.debug('Watching dev plugin source', {
           meta: { path: plugin.pluginPath, plugin: plugin.name }
         })
       }
@@ -127,7 +129,7 @@ class DevPluginWatcher {
         this.watcher.unwatch(manifestPath)
       }
       this.devPlugins.delete(pluginName)
-      devWatcherLog.info('Stopped watching dev plugin source', {
+      devWatcherLog.debug('Stopped watching dev plugin source', {
         meta: { path: plugin.pluginPath, plugin: plugin.name }
       })
     }
@@ -162,12 +164,12 @@ class DevPluginWatcher {
         )?.name
         if (pluginName) {
           const fileName = path.basename(filePath)
-          devWatcherLog.info('Dev plugin source changed, reloading', {
+          devWatcherLog.debug('Dev plugin source changed, reloading', {
             meta: { plugin: pluginName, file: filePath, fileName }
           })
 
           if (fileName === 'manifest.json') {
-            devWatcherLog.info('Manifest.json changed, reloading plugin with new configuration', {
+            devWatcherLog.debug('Manifest.json changed, reloading plugin with new configuration', {
               meta: { plugin: pluginName }
             })
           }
@@ -177,7 +179,7 @@ class DevPluginWatcher {
       }, 300)
     )
 
-    devWatcherLog.info('Started watching for dev plugin changes', {
+    devWatcherLog.debug('Started watching for dev plugin changes', {
       meta: { plugins: this.devPlugins.size }
     })
   }
@@ -189,7 +191,7 @@ class DevPluginWatcher {
     if (!this.watcher) return
     void fileWatchService.close(this.watcher)
     this.watcher = null
-    devWatcherLog.info('Stopped watching for dev plugin changes')
+    devWatcherLog.debug('Stopped watching for dev plugin changes')
   }
 }
 
@@ -241,10 +243,6 @@ function createPluginModuleInternal(
   const extractError = (args: unknown[]): Error | undefined => {
     return args.find((arg) => arg instanceof Error) as Error | undefined
   }
-  const logInfo = (...args: unknown[]): void => {
-    const message = formatLogArgs(args)
-    pluginLog.info(message)
-  }
   const logWarn = (...args: unknown[]): void => {
     const message = formatLogArgs(args)
     pluginLog.warn(message)
@@ -257,6 +255,10 @@ function createPluginModuleInternal(
   const logDebug = (...args: unknown[]): void => {
     const message = formatLogArgs(args)
     pluginLog.debug(message)
+  }
+  const logModuleInfo = (...args: unknown[]): void => {
+    const message = formatLogArgs(args)
+    pluginModuleLog.info(message)
   }
   const pluginTag = (name: string): string => `[${name}]`
 
@@ -297,7 +299,7 @@ function createPluginModuleInternal(
   const localProvider = new LocalPluginProvider(pluginPath)
 
   const getPluginList = (): Array<object> => {
-    logInfo('getPluginList called.')
+    logDebug('getPluginList called.')
     const list = new Array<object>()
 
     try {
@@ -316,7 +318,7 @@ function createPluginModuleInternal(
         list.push((plugin as TouchPlugin).toJSONObject())
       }
 
-      logInfo(`Returning plugin list with ${list.length} item(s).`)
+      logDebug(`Returning plugin list with ${list.length} item(s).`)
       return list
     } catch (error) {
       logError('Error in getPluginList:', error)
@@ -516,7 +518,7 @@ function createPluginModuleInternal(
 
   const reloadPlugin = async (pluginName: string): Promise<void> => {
     if (reloadingPlugins.has(pluginName)) {
-      logInfo('Skip reload because plugin already reloading:', pluginTag(pluginName))
+      logDebug('Skip reload because plugin already reloading:', pluginTag(pluginName))
       return
     }
 
@@ -529,7 +531,7 @@ function createPluginModuleInternal(
     reloadingPlugins.add(pluginName)
 
     try {
-      logInfo('Reloading plugin', pluginTag(pluginName))
+      logModuleInfo('Reloading plugin', pluginTag(pluginName))
 
       stopHealthMonitoring(pluginName)
 
@@ -542,7 +544,7 @@ function createPluginModuleInternal(
 
       await unloadPlugin(pluginName)
 
-      logInfo('Waiting 0.200s before reloading plugin...', pluginTag(pluginName))
+      logDebug('Waiting 0.200s before reloading plugin...', pluginTag(pluginName))
       await sleep(200)
 
       await loadPlugin(pluginName)
@@ -555,7 +557,7 @@ function createPluginModuleInternal(
           await persistEnabledPlugins()
           startHealthMonitoringIfNeeded(newPlugin)
         }
-        logInfo('Plugin reloaded successfully', pluginTag(pluginName))
+        logModuleInfo('Plugin reloaded successfully', pluginTag(pluginName))
       } else {
         logError('Plugin failed to reload, it could not be loaded again.', pluginTag(pluginName))
       }
@@ -573,7 +575,7 @@ function createPluginModuleInternal(
         'enabled_plugins',
         Array.from(enabledPlugins)
       )
-      logInfo('Persisted enabled plugins state.')
+      logDebug('Persisted enabled plugins state.')
     } catch (error) {
       logError('Failed to persist enabled plugins state:', error)
     }
@@ -585,7 +587,7 @@ function createPluginModuleInternal(
 
   const loadPlugin = async (pluginName: string): Promise<boolean> => {
     if (INTERNAL_PLUGIN_NAMES.has(pluginName)) {
-      logInfo('Skipping disk load for internal plugin', pluginTag(pluginName))
+      logDebug('Skipping disk load for internal plugin', pluginTag(pluginName))
       return true
     }
     if (loadingPlugins.has(pluginName)) {
@@ -678,7 +680,7 @@ function createPluginModuleInternal(
         plugins.set(pluginName, touchPlugin)
         devWatcherInstance.addPlugin(touchPlugin)
 
-        logInfo(
+        logDebug(
           'Plugin metadata loaded',
           pluginTag(pluginName),
           '| version:',
@@ -825,7 +827,7 @@ function createPluginModuleInternal(
 
     await persistEnabledPlugins()
 
-    logInfo('Plugin uninstalled successfully', pluginTag(folderName))
+    logModuleInfo('Plugin uninstalled successfully', pluginTag(folderName))
     return true
   }
 
@@ -850,7 +852,7 @@ function createPluginModuleInternal(
     plugins.set(pluginName, pluginInstance)
     INTERNAL_PLUGIN_NAMES.add(pluginName)
 
-    logInfo('Internal plugin registered', pluginTag(pluginName))
+    logDebug('Internal plugin registered', pluginTag(pluginName))
   }
 
   const managerInstance: IPluginManager = {
@@ -890,14 +892,14 @@ function createPluginModuleInternal(
   }
 
   const loadPersistedState = async (): Promise<void> => {
-    logInfo('Attempting to load persisted plugin states...')
+    logModuleInfo('Attempting to load persisted plugin states...')
     try {
       const data = await dbUtils.getPluginData('internal:plugin-module', 'enabled_plugins')
       if (data && data.value) {
         const enabled = JSON.parse(data.value) as string[]
         enabledPlugins.clear()
         enabled.forEach((p) => enabledPlugins.add(p))
-        logInfo(
+        logModuleInfo(
           `Loaded ${enabled.length} enabled plugin(s) from database:`,
           enabled.map(pluginTag).join(' ')
         )
@@ -914,19 +916,19 @@ function createPluginModuleInternal(
           )
           if (plugin && plugin.status === PluginStatus.DISABLED) {
             try {
-              logInfo('Auto-enabling plugin', pluginTag(pluginName))
+              logDebug('Auto-enabling plugin', pluginTag(pluginName))
 
               // Go through manager-level enable flow to enforce permission gating.
               await enablePlugin(pluginName)
 
-              logInfo('Auto-enable complete', pluginTag(pluginName))
+              logDebug('Auto-enable complete', pluginTag(pluginName))
             } catch (e) {
               logError('Failed to auto-enable plugin', pluginTag(pluginName), e)
             }
           }
         }
       } else {
-        logInfo('No persisted plugin state found in database.')
+        logDebug('No persisted plugin state found in database.')
       }
     } catch (error) {
       logError('Failed to load persisted plugin state:', error)
@@ -941,21 +943,21 @@ function createPluginModuleInternal(
         return
       }
 
-      logInfo('Initializing plugin module with root:', pluginPath)
+      logModuleInfo('Initializing plugin module with root:', pluginPath)
 
       __initDevWatcher()
 
       touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
         void localProvider.stopWatching()
         devWatcherInstance.stop()
-        logInfo('Watchers closed.')
+        logModuleInfo('Watchers closed.')
       })
 
       const initialPlugins = await localProvider.scan()
       if (initialPlugins.length === 0) {
         logWarn('No plugins found in directory yet.')
       } else {
-        logInfo(
+        logModuleInfo(
           `Discovered ${initialPlugins.length} plugin(s) on startup:`,
           initialPlugins.map(pluginTag).join(' ')
         )
@@ -1014,7 +1016,7 @@ function createPluginModuleInternal(
             return
           }
 
-          logInfo(
+          logDebug(
             'Detected file change, reloading plugin',
             pluginTag(pluginName),
             'file:',
@@ -1077,10 +1079,10 @@ function createPluginModuleInternal(
             return
           }
 
-          logInfo('Plugin directory added', pluginTag(pluginName))
+          logModuleInfo('Plugin directory added', pluginTag(pluginName))
 
           if (hasPlugin(pluginName)) {
-            logInfo('Reload existing plugin after directory add', pluginTag(pluginName))
+            logDebug('Reload existing plugin after directory add', pluginTag(pluginName))
             transport.broadcast(PluginEvents.push.reload, {
               source: 'disk',
               plugin: pluginName
@@ -1098,10 +1100,10 @@ function createPluginModuleInternal(
           await unloadPlugin(pluginName)
         },
         onReady: async () => {
-          logInfo('File watcher ready for changes.', pluginPath)
-          logInfo(`Waiting for ${initialLoadPromises.length} initial plugin load operation(s)...`)
+          logModuleInfo('File watcher ready for changes.', pluginPath)
+          logDebug(`Waiting for ${initialLoadPromises.length} initial plugin load operation(s)...`)
           await Promise.allSettled(initialLoadPromises)
-          logInfo('All initial plugins loaded.')
+          logModuleInfo('All initial plugins loaded.')
           await loadPersistedState()
         },
         onError: (error) => {

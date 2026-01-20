@@ -2,20 +2,20 @@ export type ClipboardTag = 'url' | 'api_key' | 'password' | 'account' | 'email' 
 
 const TAG_ORDER: ClipboardTag[] = ['url', 'api_key', 'token', 'password', 'account', 'email']
 
-const URL_PATTERN = /\bhttps?:\/\/[^\s]+/i
-const WWW_PATTERN = /\bwww\.[^\s]+/i
-const EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
+const URL_PATTERN = /\bhttps?:\/\/\S+/i
+const WWW_PATTERN = /\bwww\.\S+/i
+const EMAIL_PATTERN = /\b[\w.%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
 
 const API_KEY_FIELD_PATTERN =
-  /\b(api[-_ ]?key|x-api-key|access[-_ ]?key|secret[-_ ]?key|client[-_ ]?secret)\b\s*(?:[:=]|is)\s*[A-Za-z0-9\-_]{8,}/i
+  /\b(api[-_ ]?key|x-api-key|access[-_ ]?key|secret[-_ ]?key|client[-_ ]?secret)\b\s*(?:[:=]|is)\s*[\w\-]{8,}/i
 const API_KEY_PREFIX_PATTERN =
-  /\b(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{36}|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16})\b/
+  /\b(sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{36}|AIza[\w\-]{35}|AKIA[0-9A-Z]{16})\b/
 
-const TOKEN_FIELD_PATTERN = /\b(token|bearer)\b\s*(?:[:=]|is)\s*[A-Za-z0-9\-_\.=]{8,}/i
-const BEARER_PATTERN = /\bbearer\s+[A-Za-z0-9\-_\.=]{8,}\b/i
+const TOKEN_FIELD_PATTERN = /\b(token|bearer)\b\s*(?:[:=]|is)\s*[\w\-.=]{8,}/i
+const BEARER_PATTERN = /\bbearer\s+[\w\-.=]{8,}\b/i
 
-const PASSWORD_FIELD_PATTERN = /\b(pass(word)?|passwd|pwd)\b\s*(?:[:=]|is)\s*[^\s]+/i
-const ACCOUNT_FIELD_PATTERN = /\b(user(name)?|account|login)\b\s*(?:[:=]|is)\s*[^\s]+/i
+const PASSWORD_FIELD_PATTERN = /\b(pass(word)?|passwd|pwd)\b\s*(?:[:=]|is)\s*\S+/i
+const ACCOUNT_FIELD_PATTERN = /\b(user(name)?|account|login)\b\s*(?:[:=]|is)\s*\S+/i
 
 export function detectClipboardTags(payload: {
   type: 'text' | 'image' | 'files'

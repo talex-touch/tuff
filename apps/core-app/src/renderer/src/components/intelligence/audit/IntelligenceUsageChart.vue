@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { IntelligenceUsageSummary } from '@talex-touch/utils/renderer'
+import { TxButton } from '@talex-touch/tuffex'
 import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{

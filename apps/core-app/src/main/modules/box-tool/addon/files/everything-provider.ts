@@ -5,18 +5,20 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import { getLogger } from '@talex-touch/utils/common/logger'
 import type { ProviderContext } from '../../search-engine/types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
+import process from 'node:process'
 import { promisify } from 'node:util'
-import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { getLogger } from '@talex-touch/utils/common/logger'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { shell } from 'electron'
 import { formatDuration } from '../../../../utils/logger'
-import { storageModule } from '../../../storage'
+import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import { mapFileToTuffItem } from './utils'
 
@@ -31,6 +33,31 @@ interface EverythingSearchResult {
   mtime: Date
   ctime: Date
 }
+
+const everythingStatusEvent = defineRawEvent<
+  void,
+  {
+    enabled: boolean
+    available: boolean
+    version: string | null
+    esPath: string | null
+    error: string | null
+    lastChecked: number | null
+  }
+>('everything:status')
+const everythingToggleEvent = defineRawEvent<
+  { enabled: boolean },
+  { success: boolean; enabled: boolean }
+>('everything:toggle')
+const everythingTestEvent = defineRawEvent<
+  void,
+  {
+    success: boolean
+    error?: string
+    resultCount?: number
+    duration?: number
+  }
+>('everything:test')
 
 /**
  * Everything Provider for Windows
@@ -142,7 +169,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private async loadSettings(_context: ProviderContext): Promise<void> {
     try {
-      const settings = storageModule.getConfig('everything-settings.json') as
+      const settings = getMainConfig(StorageList.EVERYTHING_SETTINGS) as
         | { enabled?: boolean }
         | undefined
       if (settings && typeof settings.enabled === 'boolean') {
@@ -159,12 +186,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private saveSettings(): void {
     try {
-      storageModule.saveConfig(
-        'everything-settings.json',
-        JSON.stringify({
-          enabled: this.isEnabled
-        })
-      )
+      saveMainConfig(StorageList.EVERYTHING_SETTINGS, {
+        enabled: this.isEnabled
+      })
     } catch (error) {
       this.logError('Failed to save settings', error)
     }
@@ -172,8 +196,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
   private registerChannels(context: ProviderContext): void {
     const channel = context.touchApp.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
 
-    channel.regChannel(ChannelType.MAIN, 'everything:status', async () => {
+    transport.on(everythingStatusEvent, async () => {
       return {
         enabled: this.isEnabled,
         available: this.isAvailable,
@@ -184,19 +211,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       }
     })
 
-    channel.regChannel(ChannelType.MAIN, 'everything:toggle', async ({ data }) => {
-      if (typeof data?.enabled !== 'boolean') {
+    transport.on(everythingToggleEvent, async (payload) => {
+      if (typeof payload?.enabled !== 'boolean') {
         throw new TypeError('Invalid enabled value')
       }
 
-      this.isEnabled = data.enabled
+      this.isEnabled = payload.enabled
       this.saveSettings()
 
       this.logInfo('Everything toggled', { enabled: this.isEnabled })
       return { success: true, enabled: this.isEnabled }
     })
 
-    channel.regChannel(ChannelType.MAIN, 'everything:test', async () => {
+    transport.on(everythingTestEvent, async () => {
       if (!this.isAvailable || !this.isEnabled) {
         return {
           success: false,
@@ -248,7 +275,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           })
           return
         }
-      } catch (error) {
+      } catch (_error) {
         // Continue to next path
       }
     }

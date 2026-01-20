@@ -1,7 +1,7 @@
 <script name="AppConfigure" setup lang="ts">
-import { useI18n } from 'vue-i18n'
-import { useAppSdk } from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex'
+import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   data: any
@@ -189,7 +189,9 @@ function handleHelp(): void {
     </div>
     <div class="AppConfigure-Ends">
       {{ t('appConfigure.confirm') }}
-      <TxButton variant="flat"> {{ t('appConfigure.save') }} </TxButton>
+      <TxButton variant="flat">
+        {{ t('appConfigure.save') }}
+      </TxButton>
     </div>
   </div>
 </template>

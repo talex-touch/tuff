@@ -6,10 +6,10 @@
  * Used when dispatching a flow without a preferred target.
  */
 import type { FlowPayload, FlowTargetInfo } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'

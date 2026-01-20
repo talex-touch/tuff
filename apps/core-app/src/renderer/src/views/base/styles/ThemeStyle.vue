@@ -1,16 +1,16 @@
 <script name="ThemeStyle" lang="ts" setup>
+import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
-
-import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
+
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { appSetting } from '~/modules/channel/storage'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
 import LayoutSection from './LayoutSection.vue'

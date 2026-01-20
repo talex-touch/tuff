@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { createApp, ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { createApp, ref } from 'vue'
 import { useAuth } from '~/modules/auth/useAuth'
 
 const componentStatus = ref('未创建')

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { TuffItem } from '@talex-touch/utils'
-import { computed } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
-import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 
 interface IntelligencePayload {
   requestId: string

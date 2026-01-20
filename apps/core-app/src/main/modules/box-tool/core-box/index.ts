@@ -10,12 +10,13 @@ import { genTouchApp } from '../../../core'
 import { createLogger } from '../../../utils/logger'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
-import { getConfig } from '../../storage'
+import { getMainConfig } from '../../storage'
 import SearchEngineCore from '../search-engine/search-core'
 import { coreBoxManager } from './manager'
 import { windowManager } from './window'
 
 const coreBoxLog = createLogger('CoreBox')
+const COREBOX_MIN_HEIGHT = 64
 
 export { getCoreBoxWindow } from './window'
 
@@ -49,7 +50,7 @@ export class CoreBoxModule extends BaseModule {
     shortcutModule.registerMainShortcut('core.box.toggle', 'CommandOrControl+E', () => {
       // Check if initialization is complete
       try {
-        const appSetting = getConfig(StorageList.APP_SETTING) as any
+        const appSetting = getMainConfig(StorageList.APP_SETTING) as any
         if (!appSetting?.beginner?.init) {
           coreBoxLog.warn('Initialization not complete, CoreBox is disabled')
           // Optionally show a notification or dialog to user
@@ -190,12 +191,15 @@ export class CoreBoxModule extends BaseModule {
       return
     }
 
-    const safeHeight = Math.max(60, Math.min(Number(payload.height) || 60, 600))
+    const safeHeight = Math.max(
+      COREBOX_MIN_HEIGHT,
+      Math.min(Number(payload.height) || COREBOX_MIN_HEIGHT, 600)
+    )
 
     // Guard: if UI has results but height measurement isn't ready, skip this update.
-    if (resultCount > 0 && safeHeight <= 60) return
+    if (resultCount > 0 && safeHeight <= COREBOX_MIN_HEIGHT) return
 
-    if (safeHeight > 60 && coreBoxManager.isCollapsed) {
+    if (safeHeight > COREBOX_MIN_HEIGHT && coreBoxManager.isCollapsed) {
       coreBoxManager.markExpanded()
     }
 

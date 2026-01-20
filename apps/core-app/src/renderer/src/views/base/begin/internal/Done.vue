@@ -1,8 +1,8 @@
 <script setup lang="ts" name="Done">
+import { TxButton } from '@talex-touch/tuffex'
 import HelloData from '~/assets/lotties/welcome.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { appSetting } from '~/modules/channel/storage'
-import { TxButton } from '@talex-touch/tuffex'
 
 const step: any = inject('step')!
 

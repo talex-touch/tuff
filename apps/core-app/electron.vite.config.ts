@@ -1,4 +1,5 @@
 import path from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { sentryVitePlugin } from '@sentry/vite-plugin'

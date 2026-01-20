@@ -2,9 +2,13 @@ import { exec } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import chalk from 'chalk'
+import { createLogger } from '../../../../utils/logger'
 import { formatLog, LogStyle } from './app-utils'
+
+const appScannerLog = createLogger('AppScanner')
 
 /**
  * Service for scanning applications, responsible for app discovery and information retrieval.
@@ -72,13 +76,13 @@ export class AppScanner {
   }
 
   private async scanApps(): Promise<any[]> {
-    console.log(formatLog('AppScanner', 'Starting application scan...', LogStyle.process))
+    appScannerLog.info(formatLog('AppScanner', 'Starting application scan...', LogStyle.process))
 
     try {
       const apps =
         (await withOSAdapter<void, Promise<any[]>>({
           darwin: async () => {
-            console.log(
+            appScannerLog.info(
               formatLog(
                 'AppScanner',
                 'macOS detected, scanning applications using mdfind',
@@ -89,7 +93,7 @@ export class AppScanner {
             return await getApps()
           },
           win32: async () => {
-            console.log(
+            appScannerLog.info(
               formatLog(
                 'AppScanner',
                 'Windows detected, scanning Start Menu and Program Directories',
@@ -100,7 +104,7 @@ export class AppScanner {
             return await getApps()
           },
           linux: async () => {
-            console.log(
+            appScannerLog.info(
               formatLog('AppScanner', 'Linux detected, scanning .desktop files', LogStyle.info)
             )
             const { getApps } = await import('./linux')
@@ -108,7 +112,7 @@ export class AppScanner {
           }
         })) || []
 
-      console.log(
+      appScannerLog.info(
         formatLog(
           'AppScanner',
           `Scan complete, found ${chalk.green(apps.length)} applications`,
@@ -117,7 +121,7 @@ export class AppScanner {
       )
       return apps
     } catch (error) {
-      console.error(
+      appScannerLog.error(
         formatLog(
           'AppScanner',
           `Error scanning applications: ${error instanceof Error ? error.message : String(error)}`,
@@ -135,7 +139,7 @@ export class AppScanner {
    */
   async getAppInfoByPath(filePath: string): Promise<any> {
     try {
-      console.log(
+      appScannerLog.info(
         formatLog('AppScanner', `Getting app info for: ${chalk.cyan(filePath)}`, LogStyle.info)
       )
 
@@ -157,7 +161,7 @@ export class AppScanner {
 
       return appInfo || null
     } catch (error) {
-      console.error(
+      appScannerLog.error(
         formatLog(
           'AppScanner',
           `Failed to get app info for ${chalk.cyan(filePath)}: ${
@@ -181,18 +185,20 @@ export class AppScanner {
     deletedApps: any[]
   }> {
     if (process.platform !== 'darwin') {
-      console.log(formatLog('AppScanner', 'Not on macOS, skipping mdls scan', LogStyle.info))
+      appScannerLog.info(formatLog('AppScanner', 'Not on macOS, skipping mdls scan', LogStyle.info))
       return { updatedApps: [], updatedCount: 0, deletedApps: [] }
     }
 
-    console.log(formatLog('AppScanner', 'Starting mdls update scan', LogStyle.process))
+    appScannerLog.info(formatLog('AppScanner', 'Starting mdls update scan', LogStyle.process))
 
     if (apps.length === 0) {
-      console.log(formatLog('AppScanner', 'App list is empty, skipping mdls scan', LogStyle.info))
+      appScannerLog.info(
+        formatLog('AppScanner', 'App list is empty, skipping mdls scan', LogStyle.info)
+      )
       return { updatedApps: [], updatedCount: 0, deletedApps: [] }
     }
 
-    console.log(
+    appScannerLog.info(
       formatLog(
         'AppScanner',
         `Running mdls scan for ${chalk.cyan(apps.length)} apps`,
@@ -210,7 +216,7 @@ export class AppScanner {
     const existingApps: typeof apps = []
     for (const app of apps) {
       if (!existsSync(app.path)) {
-        console.warn(
+        appScannerLog.warn(
           formatLog(
             'AppScanner',
             `App not found, will be deleted from database: ${chalk.yellow(app.path)}`,
@@ -251,7 +257,7 @@ export class AppScanner {
           const currentDisplayName = app.displayName
 
           if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
-            console.debug(
+            appScannerLog.debug(
               formatLog(
                 'AppScanner',
                 `Updating app display name: ${chalk.cyan(app.name)}: "${
@@ -270,7 +276,7 @@ export class AppScanner {
         }
       } catch (error) {
         // 批量失败时回退到逐个处理
-        console.warn(
+        appScannerLog.warn(
           formatLog(
             'AppScanner',
             `Batch mdls failed, falling back to individual processing: ${
@@ -299,7 +305,7 @@ export class AppScanner {
       } finally {
         processedCount += batch.length
         if (processedCount % 100 === 0 || processedCount === existingApps.length) {
-          console.debug(
+          appScannerLog.debug(
             formatLog(
               'AppScanner',
               `mdls progress: processed ${chalk.cyan(processedCount)}/${chalk.cyan(existingApps.length)} apps`,
@@ -310,7 +316,7 @@ export class AppScanner {
       }
     }
 
-    console.log(
+    appScannerLog.info(
       formatLog(
         'AppScanner',
         `mdls update scan finished. Updated ${chalk.green(

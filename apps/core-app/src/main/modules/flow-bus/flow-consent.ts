@@ -1,10 +1,10 @@
 import type { FlowTargetInfo } from '@talex-touch/utils'
-import { storageModule } from '../storage'
+import { StorageList } from '@talex-touch/utils'
+import { getMainConfig, saveMainConfig } from '../storage'
 
-const FLOW_CONSENT_KEY = 'flow-consent.json'
 const FLOW_ONCE_TOKEN_TTL_MS = 5 * 60 * 1000
 
-type FlowConsentSnapshot = Record<string, string[]>
+export type FlowConsentSnapshot = Record<string, string[]>
 
 class FlowConsentStore {
   private loaded = false
@@ -15,10 +15,7 @@ class FlowConsentStore {
     if (this.loaded) {
       return
     }
-    if (!storageModule.filePath) {
-      return
-    }
-    const raw = storageModule.getConfig(FLOW_CONSENT_KEY) as FlowConsentSnapshot | undefined
+    const raw = getMainConfig(StorageList.FLOW_CONSENT) as FlowConsentSnapshot | undefined
     if (raw && typeof raw === 'object') {
       Object.entries(raw).forEach(([senderId, targets]) => {
         if (!Array.isArray(targets)) {
@@ -95,14 +92,11 @@ class FlowConsentStore {
   }
 
   private persist(): void {
-    if (!storageModule.filePath) {
-      return
-    }
     const snapshot: FlowConsentSnapshot = {}
     for (const [senderId, targets] of this.data) {
       snapshot[senderId] = Array.from(targets)
     }
-    storageModule.saveConfig(FLOW_CONSENT_KEY, snapshot)
+    saveMainConfig(StorageList.FLOW_CONSENT, snapshot)
   }
 }
 

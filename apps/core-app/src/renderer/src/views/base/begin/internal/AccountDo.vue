@@ -1,9 +1,9 @@
 <script setup lang="ts" name="AccountDo">
 import type { Ref } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { inject, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'
-import { TxButton } from '@talex-touch/tuffex'
 // import Forbidden from './Forbidden.vue'
 // import OptionMode from './OptionMode.vue'
 // import Done from './Done.vue'

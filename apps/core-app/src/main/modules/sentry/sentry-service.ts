@@ -12,6 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
+import { StorageList } from '@talex-touch/utils'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
@@ -22,7 +23,7 @@ import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
 import { databaseModule } from '../database'
-import { storageModule } from '../storage'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
 
 // User type from Clerk
@@ -40,7 +41,7 @@ const SENTRY_NEXUS_TASK_ID = 'sentry.nexus.flush'
 const SENTRY_DSN =
   'https://f8019096132f03a7a66c879a53462a67@o4508024637620224.ingest.us.sentry.io/4510196503871488'
 
-interface SentryConfig {
+export interface SentryConfig {
   enabled: boolean
   anonymous: boolean
 }
@@ -217,7 +218,7 @@ export class SentryServiceModule extends BaseModule {
     this.setupIPCChannels()
 
     try {
-      storageModule.subscribe('sentry-config.json', (data) => {
+      subscribeMainConfig(StorageList.SENTRY_CONFIG, (data) => {
         const cfg = data as Partial<SentryConfig>
         this.saveConfig(cfg)
       })
@@ -279,9 +280,7 @@ export class SentryServiceModule extends BaseModule {
    */
   private loadConfig(): void {
     try {
-      const config = storageModule.getConfig('sentry-config.json') as
-        | Partial<SentryConfig>
-        | undefined
+      const config = getMainConfig(StorageList.SENTRY_CONFIG) as Partial<SentryConfig> | undefined
       this.config = {
         enabled: config?.enabled ?? true,
         anonymous: config?.anonymous ?? true
@@ -368,7 +367,7 @@ export class SentryServiceModule extends BaseModule {
    */
   saveConfig(config: Partial<SentryConfig>): void {
     this.config = { ...this.config, ...config }
-    storageModule.saveConfig('sentry-config.json', JSON.stringify(this.config))
+    saveMainConfig(StorageList.SENTRY_CONFIG, this.config)
     sentryLog.info('Saved Sentry config', {
       meta: { enabled: this.config.enabled, anonymous: this.config.anonymous }
     })

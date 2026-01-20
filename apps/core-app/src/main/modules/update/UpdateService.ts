@@ -53,12 +53,12 @@ type UpdateSettings = SharedUpdateSettings & {
   lastCheckedAt: number | null
 }
 
-type ReleaseCacheRateLimit = {
+interface ReleaseCacheRateLimit {
   remaining?: number
   resetAt?: number
 }
 
-type ReleaseCacheEntry = {
+interface ReleaseCacheEntry {
   releases: GitHubRelease[]
   fetchedAt: number
   ttlMinutes: number
@@ -69,12 +69,12 @@ type ReleaseCacheEntry = {
   failureCount?: number
 }
 
-type ReleaseCacheStore = {
+interface ReleaseCacheStore {
   version: 1
   entries: Partial<Record<AppPreviewChannel, ReleaseCacheEntry>>
 }
 
-type UpdateFetchResult = {
+interface UpdateFetchResult {
   result: UpdateCheckResult
   usedNetwork: boolean
 }

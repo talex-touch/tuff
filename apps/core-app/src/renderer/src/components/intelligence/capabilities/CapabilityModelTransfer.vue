@@ -1,6 +1,6 @@
 <script lang="ts" setup name="CapabilityModelTransfer">
-import { computed, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { computed, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{

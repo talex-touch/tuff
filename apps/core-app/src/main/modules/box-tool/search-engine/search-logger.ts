@@ -1,6 +1,7 @@
+import { StorageList } from '@talex-touch/utils'
 import { loggerManager } from '@talex-touch/utils/common/logger'
 import chalk from 'chalk'
-import { storageModule } from '../../storage'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../../storage'
 
 /**
  * Search Engine Logger
@@ -28,7 +29,7 @@ export class SearchLogger {
     // Subscribe to app settings changes instead of polling
     try {
       // Subscribe to configuration changes
-      this.unsubscribe = storageModule.subscribe('app-setting.ini', (data) => {
+      this.unsubscribe = subscribeMainConfig(StorageList.APP_SETTING, (data) => {
         try {
           const settings = data as any
           const newEnabled = settings.searchEngine?.logsEnabled === true
@@ -74,15 +75,8 @@ export class SearchLogger {
    */
   private async loadSettings(): Promise<void> {
     try {
-      // Check if storageModule is initialized before trying to get config
-      if (!storageModule.filePath) {
-        // Storage module not yet initialized, use default
-        this.enabled = false
-        return
-      }
-
       // Try to get from app settings first
-      const appSettingsData = storageModule.getConfig('app-setting.ini') as any
+      const appSettingsData = getMainConfig(StorageList.APP_SETTING) as any
       const enabledFromAppSettings = appSettingsData?.searchEngine?.logsEnabled
       if (typeof enabledFromAppSettings === 'boolean') {
         this.enabled = enabledFromAppSettings
@@ -90,8 +84,8 @@ export class SearchLogger {
       }
 
       // Fallback to legacy setting
-      const settings = storageModule.getConfig('search-engine-logs-enabled') as any
-      this.enabled = settings === true || settings === 'true'
+      const settings = getMainConfig(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
+      this.enabled = settings === true
     } catch {
       // Silently fail if storage is not ready yet
       this.enabled = false
@@ -105,14 +99,14 @@ export class SearchLogger {
     this.enabled = enabled
     try {
       // Update app settings
-      const appSettingsData = storageModule.getConfig('app-setting.ini') as any
+      const appSettingsData = getMainConfig(StorageList.APP_SETTING) as any
       const parsed =
         typeof appSettingsData === 'object' && appSettingsData ? { ...appSettingsData } : {}
       if (!parsed.searchEngine) {
         parsed.searchEngine = {}
       }
       parsed.searchEngine.logsEnabled = enabled
-      storageModule.saveConfig('app-setting.ini', JSON.stringify(parsed))
+      saveMainConfig(StorageList.APP_SETTING, parsed)
       console.log(`[SearchLogger] Search engine logging ${enabled ? 'enabled' : 'disabled'}`)
     } catch (error) {
       console.error('[SearchLogger] Failed to save settings:', error)

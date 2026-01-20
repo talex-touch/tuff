@@ -17,9 +17,10 @@ import type {
   ModuleKey,
   ModuleStartContext,
   ModuleStopContext,
-  TalexTouch,
+  TalexTouch
 } from '@talex-touch/utils'
 import type { TalexEvents } from '../core/eventbus/touch-event'
+import { Buffer } from 'node:buffer'
 import * as path from 'node:path'
 
 export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<E> {
@@ -60,7 +61,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleInitContext<E>
       | ModuleStartContext<E>
       | ModuleStopContext<E>
-      | ModuleDestroyContext<E>,
+      | ModuleDestroyContext<E>
   ): ModuleDirectory | undefined {
     return ctx.directory
   }
@@ -72,7 +73,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleInitContext<E>
       | ModuleStartContext<E>
       | ModuleStopContext<E>
-      | ModuleDestroyContext<E>,
+      | ModuleDestroyContext<E>
   ): string | undefined {
     return ctx.file?.dirPath
   }
@@ -85,12 +86,12 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStartContext<E>
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
-    hint?: string,
+    hint?: string
   ): string {
     const p = this.dirPath(ctx)
     if (!p) {
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] Module directory is not created${hint ? `: ${hint}` : ''}`,
+        `[${String(this.name.description ?? this.name)}] Module directory is not created${hint ? `: ${hint}` : ''}`
       )
     }
     return p
@@ -123,7 +124,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
     const dir = this.directory(ctx)
     if (!dir) {
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory instance is undefined; enable file.create.`,
+        `[${String(this.name.description ?? this.name)}] directory instance is undefined; enable file.create.`
       )
     }
     const sub = dir.join(...segments)
@@ -147,26 +148,23 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     relativePath: string,
-    fallback?: T,
+    fallback?: T
   ): Promise<T> {
     const dir = this.directory(ctx)
     if (!dir) {
-      if (fallback !== undefined)
-        return fallback
+      if (fallback !== undefined) return fallback
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot read ${relativePath}`,
+        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot read ${relativePath}`
       )
     }
     try {
       const data = await dir.readFile(relativePath)
       const text = Buffer.isBuffer(data) ? data.toString('utf8') : (data as string)
       return JSON.parse(text) as T
-    }
-    catch {
-      if (fallback !== undefined)
-        return fallback
+    } catch {
+      if (fallback !== undefined) return fallback
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`,
+        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`
       )
     }
   }
@@ -180,12 +178,12 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     relativePath: string,
-    value: unknown,
+    value: unknown
   ): Promise<void> {
     const dir = this.directory(ctx)
     if (!dir) {
       throw new Error(
-        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`,
+        `[${String(this.name.description ?? this.name)}] directory is undefined; cannot write ${relativePath}`
       )
     }
     const text = JSON.stringify(value, null, 2)
@@ -201,7 +199,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     event: E,
-    args: T,
+    args: T
   ): void {
     ctx.events?.emit(event, args)
   }
@@ -215,7 +213,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
     event: E,
-    handler: EventHandler,
+    handler: EventHandler
   ): () => void {
     ctx.events?.on(event, handler)
     return () => ctx.events?.off(event, handler)
@@ -229,7 +227,7 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
       | ModuleStartContext<E>
       | ModuleStopContext<E>
       | ModuleDestroyContext<E>,
-    key: ModuleKey,
+    key: ModuleKey
   ): T | undefined {
     return ctx.manager.getModule<T>(key)
   }

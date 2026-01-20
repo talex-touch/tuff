@@ -1,10 +1,10 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AgentsEvents } from '@talex-touch/utils/transport/events'
 import { ElMessage } from 'element-plus'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AgentsEvents } from '@talex-touch/utils/transport/events'
 
 const props = defineProps<{
   agent: AgentDescriptor

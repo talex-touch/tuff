@@ -5,8 +5,8 @@ import type {
   IntelligenceProviderConfig
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
-import { useI18n } from 'vue-i18n'
 import { TxButton } from '@talex-touch/tuffex'
+import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'

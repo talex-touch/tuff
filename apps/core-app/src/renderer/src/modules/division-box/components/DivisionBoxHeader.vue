@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { computed } from 'vue'
 import { useDivisionBoxStore } from '../store/division-box'
 
 /**
