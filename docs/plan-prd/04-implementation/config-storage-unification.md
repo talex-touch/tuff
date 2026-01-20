@@ -60,6 +60,31 @@
 | Sync-needed | 需跨设备一致 | JSON 载荷（同步通道） | 主题、快捷键（待评估） |
 | Ephemeral | 临时/可重建 | 内存/缓存 | 搜索中间态 |
 
+### 2.1 条目级分类结果（初版）
+| 配置项 | 分类 | 目标介质 | Owner | 备注/截止 |
+| --- | --- | --- | --- | --- |
+| APP_SETTING | TBD | SQLite + JSON(sync payload) | Core App | 需拆分字段，截止 TBD |
+| SHORTCUT_SETTING | Sync-needed | JSON(sync payload) + SQLite cache | Core App | 需确认同步范围，截止 TBD |
+| OPENERS | Local-only | SQLite | Core App | 机器相关 |
+| FILE_INDEX_SETTINGS | Local-only | SQLite | File Provider | 机器相关 |
+| APP_INDEX_SETTINGS | Local-only | SQLite | App Provider | 机器相关 |
+| DEVICE_IDLE_SETTINGS | Local-only | SQLite | Core App | 机器相关 |
+| IntelligenceConfig | Local-only | SQLite | AI SDK | 敏感配置 |
+| MARKET_SOURCES | TBD | SQLite + JSON(sync payload) | Market | 需确认是否同步 |
+| THEME_STYLE | Sync-needed | JSON(sync payload) + SQLite cache | Core App | 主题偏好 |
+| SEARCH_ENGINE_LOGS_ENABLED | Local-only | SQLite | Search Engine | |
+| EVERYTHING_SETTINGS | Local-only | SQLite | Windows Provider | |
+| FLOW_CONSENT | Local-only | SQLite | Flow | |
+| SENTRY_CONFIG | Local-only | SQLite | Sentry | |
+| NOTIFICATION_CENTER | Local-only | SQLite | Notification | |
+| STARTUP_ANALYTICS | Local-only | SQLite | Analytics | |
+| STARTUP_ANALYTICS_REPORT_QUEUE | Local-only | SQLite | Analytics | |
+| TELEMETRY_CLIENT | Local-only | SQLite | Telemetry | |
+| Plugin 配置文件 | TBD | JSON(sync payload) + SQLite cache | Plugin | 需按插件声明决定 |
+| plugin_data | Local-only | SQLite | Plugin | 元数据 |
+| config | Local-only | SQLite | Core App | 全局键值 |
+| TxGroupBlock 展开状态 | Local-only | localStorage | Tuffex | 前端组件态 |
+
 ## 3. Source of Truth 规则（草案）
 - SQLite 为本地权威来源；JSON 仅作为同步载荷与落盘中间形态。
 - 同步需要显式标记：未标记的配置默认为 Local-only。
@@ -76,7 +101,7 @@
 
 ## 6. 进展清单（对齐 issues）
 - [x] 盘点现有配置项（CFG-010）
-- [ ] 分类矩阵与目标存储策略（CFG-020）
+- [x] 分类矩阵与目标存储策略（CFG-020）
 - [ ] Source-of-truth 决策与冲突规则（CFG-030）
 - [ ] 存储抽象设计（CFG-040）
 - [ ] 迁移与回滚方案（CFG-050）
