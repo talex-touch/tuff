@@ -29,6 +29,14 @@ created_at: 2026-01-20T18:55:06+08:00
 - JSON 路径：`StorageModule` 使用 BaseModule `dirName: 'config'`，在 `onInit` 读取 `file.dirPath`，插件配置在 `${file.dirPath}/plugins`（`apps/core-app/src/main/modules/storage/index.ts:121` / `apps/core-app/src/main/modules/storage/index.ts:141`）
 - 生命周期：`onInit` 启动 `StoragePollingService` 与 LRU 清理；`persistConfig` 在空闲后写入 `path.join(this.filePath, name)`（`apps/core-app/src/main/modules/storage/index.ts:141` / `apps/core-app/src/main/modules/storage/index.ts:662`）
 
+🧾 SQLite config 表与写入点
+- 表结构：`config(key text primaryKey, value text)`，`value` 为 JSON 字符串（`apps/core-app/src/main/db/schema.ts:278`）
+- 写入点：`StorageModule.upsertSqliteConfig` 使用 `db.insert(configSchema)` upsert（`apps/core-app/src/main/modules/storage/index.ts:230`）
+- 触发来源：
+  - `runSqlitePilotMigration` 启动时遍历 `SQLITE_PILOT_CONFIGS` 写入（`apps/core-app/src/main/modules/storage/index.ts:212` / `apps/core-app/src/main/modules/storage/index.ts:60`）
+  - `saveConfig` 写入内存后触发 SQLite upsert（`apps/core-app/src/main/modules/storage/index.ts:582`）
+- JSON 重叠范围：仅 `SQLITE_PILOT_CONFIGS` 内 key（当前为 `StorageList.SEARCH_ENGINE_LOGS_ENABLED`）同时存在 JSON 文件与 SQLite 记录，其余 key 仅走 JSON（`apps/core-app/src/main/modules/storage/index.ts:60`）
+
 ✅ 已决事项
 - 本阶段仅做上下文与需求整理，目标是形成后续工作输入（来源: `plan/2026-01-20_18-55-03-context-requirements.md:14`）
 
