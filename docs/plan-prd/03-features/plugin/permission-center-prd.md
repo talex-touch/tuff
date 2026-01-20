@@ -482,27 +482,27 @@ export function usePermissionAudit(filter?: AuditFilter) {
 ## 9. 实施计划
 
 ### Phase 1: 基础框架 (3-4 天)
-- [ ] 权限类型定义 (`packages/utils/permission/`)
-- [ ] PermissionRegistry 实现
-- [ ] PermissionStore 实现 (SQLite)
+- [x] 权限类型定义 (`packages/utils/permission/`)
+- [x] PermissionRegistry 实现
+- [x] PermissionStore 实现 (JSON 文件)
 - [ ] 数据库迁移脚本
 
 ### Phase 2: 运行时拦截 (2-3 天)
-- [ ] PermissionGuard 实现
-- [ ] Channel 层集成拦截器
-- [ ] 关键 API 权限保护 (fs/network/clipboard)
+- [x] PermissionGuard 实现
+- [x] Channel 层集成拦截器
+- [x] 关键 API 权限保护 (fs/network/clipboard)
 
 ### Phase 3: UI 集成 (3-4 天)
 - [ ] 安装时权限确认弹窗
-- [ ] 运行时权限请求弹窗
-- [ ] 权限中心设置页面
-- [ ] 审计日志查看
+- [x] 运行时权限请求弹窗
+- [x] 权限中心设置页面
+- [x] 审计日志查看
 
 ### Phase 4: SDK & 文档 (2 天)
-- [ ] permissionSDK 实现
-- [ ] usePermission hooks
-- [ ] 插件开发文档更新
-- [ ] 示例插件权限配置
+- [x] permissionSDK 实现
+- [x] usePermission hooks
+- [x] 插件开发文档更新
+- [x] 示例插件权限配置
 
 ### Phase 5: 测试与优化 (2 天)
 - [ ] 单元测试
@@ -516,18 +516,18 @@ export function usePermissionAudit(filter?: AuditFilter) {
 
 ### 功能
 - [ ] 插件安装时展示权限清单
-- [ ] 运行时拦截未授权 API 调用
-- [ ] 权限请求弹窗正常工作
-- [ ] 用户可查看/管理所有插件权限
-- [ ] 审计日志正确记录敏感操作
+- [x] 运行时拦截未授权 API 调用
+- [x] 权限请求弹窗正常工作
+- [x] 用户可查看/管理所有插件权限
+- [x] 审计日志正确记录敏感操作
 
 ### 性能
-- [ ] 权限检查耗时 < 5ms
+- [x] 权限检查耗时 < 5ms
 - [ ] 权限中心页面加载 < 500ms
 - [ ] 审计日志查询 < 100ms
 
 ### 安全
-- [ ] 未声明权限无法调用对应 API
+- [x] 未声明权限无法调用对应 API
 - [ ] 权限撤销后立即生效
 - [ ] 审计日志不可被插件修改
 

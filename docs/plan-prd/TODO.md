@@ -167,6 +167,8 @@
   - [x] 插件加载器权限解析
 
 - [ ] **Phase 5**: 测试与优化 (2天)
+  - [ ] SQLite 迁移与数据库脚本（PermissionStore 当前为 JSON）
+  - [ ] 安装时权限确认弹窗
 
 **已实现文件**:
 - `packages/utils/permission/types.ts` - 权限类型定义
