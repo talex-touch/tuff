@@ -13,6 +13,11 @@ export default antfu(
       '**/.wrangler/**',
       '**/node_modules/**',
       '**/*.min.js',
+      'scripts/**',
+      'apps/core-app/scripts/**',
+      'apps/core-app/electron.vite.config.*.mjs',
+      'plugins/**',
+      'apps/.workflow/**',
       'apps/core-app/tuff/**',
       'apps/core-app/.electron-builder-cache/**',
     ],
@@ -29,6 +34,12 @@ export default antfu(
       ],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    files: ['scripts/**', 'plugins/**', 'apps/.workflow/**'],
+    rules: {
+      'no-console': 'off',
     },
   },
 )

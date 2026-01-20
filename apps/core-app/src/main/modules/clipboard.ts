@@ -27,7 +27,8 @@ import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
 import { and, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage } from 'electron'
-import { genTouchChannel } from '../core/channel-core'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
+import { genTouchApp } from '../core'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { appTaskGate } from '../service/app-task-gate'
 import { tempFileService } from '../service/temp-file.service'
@@ -1560,8 +1561,10 @@ export class ClipboardModule extends BaseModule {
   }
 
   private registerTransportHandlers(): void {
-    const channel = genTouchChannel()
-    this.transport = getTuffTransportMain(channel as any, channel as any)
+    const channel = genTouchApp().channel as ITouchChannel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    this.transport = getTuffTransportMain(channel as any, keyManager as any)
 
     const writePayload = async (payload: ClipboardWritePayload): Promise<void> => {
       const { text, html, image, files } = payload ?? {}

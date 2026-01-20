@@ -3,10 +3,11 @@ import type {
   BrowserWindowConstructorOptions,
   WebContents,
 } from 'electron'
-import { genChannel } from '../../channel'
+import { useChannel } from '../channel'
 
 export function createWindow(options: BrowserWindowConstructorOptions & { file?: string } & { url?: string }): number {
-  const res = genChannel().sendSync('window:new', options)
+  const channel = useChannel('[Plugin SDK] Window creation requires renderer channel.')
+  const res = channel.sendSync('window:new', options)
   if (res.error)
     throw new Error(res.error)
 
@@ -14,7 +15,8 @@ export function createWindow(options: BrowserWindowConstructorOptions & { file?:
 }
 
 export function toggleWinVisible(id: number, visible?: boolean): boolean {
-  const res = genChannel().sendSync('window:visible', visible !== undefined ? { id, visible } : { id })
+  const channel = useChannel('[Plugin SDK] Window visibility requires renderer channel.')
+  const res = channel.sendSync('window:visible', visible !== undefined ? { id, visible } : { id })
   if (res.error)
     throw new Error(res.error)
 
@@ -22,7 +24,8 @@ export function toggleWinVisible(id: number, visible?: boolean): boolean {
 }
 
 export function setWindowProperty(id: number, property: WindowProperties): boolean {
-  const res = genChannel().sendSync('window:property', { id, property })
+  const channel = useChannel('[Plugin SDK] Window property requires renderer channel.')
+  const res = channel.sendSync('window:property', { id, property })
   if (res.error)
     throw new Error(res.error)
 

@@ -5,7 +5,7 @@
  * to share data with other plugins.
  */
 
-import type { FlowPayload, FlowTargetInfo, TuffQuery } from '@talex-touch/utils'
+import type { FlowPayload, TuffQuery } from '@talex-touch/utils'
 import { createFlowSDK, extractFlowData, isFlowTriggered } from '@talex-touch/utils/plugin/sdk'
 
 // Simulated channel for example purposes
