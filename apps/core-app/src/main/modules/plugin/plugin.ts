@@ -6,7 +6,6 @@ import type {
 } from '@talex-touch/utils/channel'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
-import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import type {
   IFeatureLifeCycle,
   IPlatform,
@@ -30,16 +29,15 @@ import {
   createMetaSDK,
   PluginStatus
 } from '@talex-touch/utils/plugin'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
-import { DataCode } from '@talex-touch/utils/channel'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
-import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
+import { app, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
-import { genTouchChannel } from '../../core/channel-core'
 import {
   PluginLogAppendEvent,
   PluginStorageUpdatedEvent,
@@ -772,12 +770,20 @@ export class TouchPlugin implements ITouchPlugin {
           return
         }
 
+        const pluginContextName = context?.plugin?.name
+        const headerType = pluginContextName ? ChannelType.PLUGIN : ChannelType.MAIN
         let replied = false
         let replyData: unknown
         const event: StandardChannelData = {
+          name: eventName,
+          header: {
+            status: 'request',
+            type: headerType,
+            plugin: pluginContextName
+          },
           code: DataCode.SUCCESS,
-          data: payload,
-          plugin: context?.plugin?.name,
+          data: payload as unknown,
+          plugin: pluginContextName,
           reply: (_code, data) => {
             replied = true
             replyData = data
@@ -1208,8 +1214,32 @@ export class TouchPlugin implements ITouchPlugin {
        */
       list: async (filters?: unknown) => {
         try {
-          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:list', { filters })
-          return response || []
+          const manager = await resolvePluginManager()
+          if (!manager) {
+            return []
+          }
+
+          const resolvedFilters = (filters ?? {}) as {
+            status?: number
+            enabled?: boolean
+            dev?: boolean
+          }
+          let plugins = Array.from(manager.plugins.values()) as TouchPlugin[]
+
+          if (resolvedFilters.status !== undefined) {
+            plugins = plugins.filter((plugin) => plugin.status === resolvedFilters.status)
+          }
+          if (resolvedFilters.enabled !== undefined) {
+            const enabledNames = manager.enabledPlugins
+            plugins = plugins.filter(
+              (plugin) => enabledNames.has(plugin.name) === resolvedFilters.enabled
+            )
+          }
+          if (resolvedFilters.dev !== undefined) {
+            plugins = plugins.filter((plugin) => plugin.dev?.enable === resolvedFilters.dev)
+          }
+
+          return plugins.map((plugin) => plugin.toJSONObject())
         } catch (error) {
           pluginSystemLog.error(`[Plugin ${pluginName}] Failed to list plugins`, {
             error: toError(error)
@@ -1225,8 +1255,17 @@ export class TouchPlugin implements ITouchPlugin {
        */
       get: async (name: string) => {
         try {
-          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get', { name })
-          return response
+          if (!name) {
+            return null
+          }
+
+          const manager = await resolvePluginManager()
+          if (!manager) {
+            return null
+          }
+
+          const plugin = manager.plugins.get(name) as TouchPlugin | undefined
+          return plugin ? plugin.toJSONObject() : null
         } catch (error) {
           pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin ${name}`, {
             error: toError(error)
@@ -1242,10 +1281,17 @@ export class TouchPlugin implements ITouchPlugin {
        */
       getStatus: async (name: string) => {
         try {
-          const response = await appChannel.send(ChannelType.MAIN, 'plugin:api:get-status', {
-            name
-          })
-          return response
+          if (!name) {
+            return -1
+          }
+
+          const manager = await resolvePluginManager()
+          if (!manager) {
+            return -1
+          }
+
+          const plugin = manager.plugins.get(name)
+          return plugin ? plugin.status : -1
         } catch (error) {
           pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}`, {
             error: toError(error)
@@ -1719,13 +1765,14 @@ export class TouchPlugin implements ITouchPlugin {
    * 广播存储更新事件
    */
   private broadcastStorageUpdate(fileName?: string): void {
-    const windows = BrowserWindow.getAllWindows()
-    for (const win of windows) {
-      $app.channel?.sendTo(win, ChannelType.MAIN, 'plugin:storage:update', {
-        name: this.name,
-        fileName
-      })
-    }
+    const channel = genTouchApp().channel as ITouchChannel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    transport.broadcast(PluginEvents.storage.update, {
+      name: this.name,
+      fileName
+    })
 
     touchEventBus.emit(
       TalexEvents.PLUGIN_STORAGE_UPDATED,
