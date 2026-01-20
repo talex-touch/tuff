@@ -12,15 +12,13 @@ import type {
   SessionInfo,
   StateChangeEvent,
 } from '../../types/division-box'
-import { hasWindow } from '../../env'
 import { createPluginTuffTransport } from '../../transport'
 import { DivisionBoxEvents } from '../../transport/events'
 import { ensureRendererChannel } from './channel'
+import { tryGetPluginSdkApi } from './plugin-info'
 
 function resolveSdkApi(): number | undefined {
-  const globalWindow = hasWindow() ? (window as any) : undefined
-  const sdkapi = globalWindow?.$plugin?.sdkapi
-  return typeof sdkapi === 'number' ? sdkapi : undefined
+  return tryGetPluginSdkApi()
 }
 
 /**

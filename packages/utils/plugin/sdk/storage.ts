@@ -1,5 +1,6 @@
 import type { FileDetails, StorageStats, StorageTreeNode } from '../../types/storage'
 import { ensureRendererChannel } from './channel'
+import { usePluginName } from './plugin-info'
 
 /**
  * Get the storage for the current plugin.
@@ -9,12 +10,7 @@ import { ensureRendererChannel } from './channel'
  * @returns An object with methods to interact with the storage.
  */
 export function usePluginStorage() {
-  // @ts-ignore
-  const pluginName = window.$plugin.name as string
-
-  if (!pluginName) {
-    throw new Error('[Plugin SDK] Cannot determine plugin name. Make sure this is called in a plugin context.')
-  }
+  const pluginName = usePluginName('[Plugin SDK] Cannot determine plugin name. Make sure this is called in a plugin context.')
 
   const channel = ensureRendererChannel('[Plugin Storage] Channel not available. Make sure this is called in a plugin context.')
 

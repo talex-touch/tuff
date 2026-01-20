@@ -1,20 +1,11 @@
-import type { IPluginRendererChannel } from './types'
+import { useChannel } from './channel'
+import { usePluginName } from './plugin-info'
 
-function ensurePluginContext(): { channel: IPluginRendererChannel, pluginName: string } {
-  const plugin = (window as any)?.$plugin
-  if (!plugin?.name) {
-    throw new Error('[TouchSDK] Unable to resolve plugin name inside renderer context.')
-  }
+function ensurePluginContext(): { channel: ReturnType<typeof useChannel>, pluginName: string } {
+  const pluginName = usePluginName('[TouchSDK] Unable to resolve plugin name inside renderer context.')
+  const channel = useChannel('[TouchSDK] Channel bridge is not available for the current plugin renderer.')
 
-  const channel = (window as any)?.$channel as IPluginRendererChannel | undefined
-  if (!channel) {
-    throw new Error('[TouchSDK] Channel bridge is not available for the current plugin renderer.')
-  }
-
-  return {
-    channel,
-    pluginName: plugin.name as string,
-  }
+  return { channel, pluginName }
 }
 
 /**

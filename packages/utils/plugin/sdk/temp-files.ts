@@ -1,10 +1,4 @@
-function ensurePluginChannel() {
-  const channel = (window as any)?.$channel
-  if (!channel) {
-    throw new Error('[Plugin SDK] Temp files require plugin renderer context with $channel available.')
-  }
-  return channel
-}
+import { useChannel } from './channel'
 
 export interface TempPluginFileCreateOptions {
   ext?: string
@@ -25,7 +19,7 @@ export interface TempPluginFileResult {
 }
 
 export function useTempPluginFiles() {
-  const channel = ensurePluginChannel()
+  const channel = useChannel('[Plugin SDK] Temp files require plugin renderer context with $channel available.')
 
   return {
     async create(options: TempPluginFileCreateOptions): Promise<TempPluginFileResult> {
@@ -42,7 +36,6 @@ export function useTempPluginFiles() {
         return Boolean((res as any).success)
       }
       return Boolean(res)
-    }
+    },
   }
 }
-
