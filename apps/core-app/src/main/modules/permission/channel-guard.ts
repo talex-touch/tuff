@@ -1,129 +1,91 @@
 /**
- * Channel Permission Guard
- *
- * Middleware for adding permission checks to channel handlers.
+ * Middleware for adding permission checks to transport handlers.
  */
-
-import type { ChannelCallback, StandardChannelData } from '@talex-touch/utils/channel'
-import { DataCode } from '@talex-touch/utils/channel'
+import type { HandlerContext } from '@talex-touch/utils/transport'
 import { getPermissionModule } from './index'
 
-/**
- * Options for permission-protected channel
- */
 export interface ProtectedChannelOptions {
-  /** Permission ID required for this channel */
   permissionId: string
-  /** Whether to allow if plugin has no sdkapi (legacy mode) */
-  allowLegacy?: boolean
-  /** Custom error message */
   errorMessage?: string
+  allowLegacy?: boolean
 }
 
+export type ProtectedHandler<TReq = any, TRes = any> = (
+  payload: TReq,
+  context: HandlerContext
+) => TRes | Promise<TRes>
+
 /**
- * Wrap a channel callback with permission checking
- *
- * @param options - Permission options
- * @param callback - Original channel callback
- * @returns Wrapped callback that checks permission first
- *
- * @example
- * ```typescript
- * channel.regChannel(
- *   ChannelType.PLUGIN,
- *   'fs:read',
- *   withPermission({ permissionId: 'fs.read' }, async ({ data, reply }) => {
- *     // Handler code - only runs if permission granted
- *   })
- * )
- * ```
+ * Wrap a transport handler with permission checks.
  */
-export function withPermission(
+export function withPermission<TReq = any, TRes = any>(
   options: ProtectedChannelOptions,
-  callback: ChannelCallback
-): ChannelCallback {
+  callback: ProtectedHandler<TReq, TRes>
+): ProtectedHandler<TReq, TRes> {
   const { permissionId, errorMessage } = options
 
-  return (channelData: StandardChannelData) => {
+  return async (payload: TReq, context: HandlerContext) => {
     const permModule = getPermissionModule()
 
     // If permission module not loaded, allow (during startup)
     if (!permModule) {
-      return callback(channelData)
+      return callback(payload, context)
     }
 
-    // Get plugin info from channel data
-    const pluginId = (channelData as any).plugin
-    const sdkapi = (channelData.data as any)?._sdkapi
+    // Get plugin info from transport context
+    const pluginId = context.plugin?.name
+    const sdkapi = (payload as any)?._sdkapi
 
     // If not from a plugin, allow
     if (!pluginId) {
-      return callback(channelData)
+      return callback(payload, context)
     }
 
     // Check permission
     const result = permModule.checkPermission(pluginId, permissionId, sdkapi)
 
     if (!result.allowed) {
-      // Permission denied
       const message = errorMessage || result.reason || `Permission '${permissionId}' denied`
-
-      // If showing request dialog, we could emit an event here
-      // For now, just return error
-      return channelData.reply(DataCode.ERROR, {
-        code: 'PERMISSION_DENIED',
-        message,
-        permissionId,
-        pluginId,
-        showRequest: result.showRequest
-      })
+      const error = new Error(message)
+      ;(error as any).code = 'PERMISSION_DENIED'
+      ;(error as any).permissionId = permissionId
+      ;(error as any).pluginId = pluginId
+      ;(error as any).showRequest = result.showRequest
+      throw error
     }
 
-    // Permission granted, proceed with original handler
-    return callback(channelData)
+    return callback(payload, context)
   }
 }
 
 /**
- * Create a permission-protected channel registrar
- *
- * @example
- * ```typescript
- * const protectedReg = createProtectedRegister(channel, ChannelType.PLUGIN)
- *
- * protectedReg('fs:read', { permissionId: 'fs.read' }, async ({ data, reply }) => {
- *   // Handler code
- * })
- * ```
+ * Helper for registering protected transport handlers.
  */
-export function createProtectedRegister(
-  channel: { regChannel: (type: any, name: string, cb: ChannelCallback) => () => void },
-  channelType: any
-) {
-  return (
-    name: string,
+export function createProtectedRegister(transport: {
+  on: <TReq = any, TRes = any>(event: any, handler: ProtectedHandler<TReq, TRes>) => () => void
+}) {
+  return <TReq = any, TRes = any>(
+    event: any,
     options: ProtectedChannelOptions,
-    callback: ChannelCallback
+    callback: ProtectedHandler<TReq, TRes>
   ): (() => void) => {
-    return channel.regChannel(channelType, name, withPermission(options, callback))
+    return transport.on(event, withPermission(options, callback))
   }
 }
 
-/**
- * Batch register protected channels
- */
-export interface ProtectedChannelDefinition {
-  name: string
+export interface ProtectedChannelDefinition<TReq = any, TRes = any> {
+  event: any
   options: ProtectedChannelOptions
-  callback: ChannelCallback
+  callback: ProtectedHandler<TReq, TRes>
 }
 
 export function registerProtectedChannels(
-  channel: { regChannel: (type: any, name: string, cb: ChannelCallback) => () => void },
-  channelType: any,
+  transport: {
+    on: <TReq = any, TRes = any>(event: any, handler: ProtectedHandler<TReq, TRes>) => () => void
+  },
   definitions: ProtectedChannelDefinition[]
 ): (() => void)[] {
   return definitions.map((def) =>
-    channel.regChannel(channelType, def.name, withPermission(def.options, def.callback))
+    transport.on(def.event, withPermission(def.options, def.callback))
   )
 }

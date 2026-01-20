@@ -5,8 +5,10 @@
  */
 
 import type { AgentDescriptor, AgentResult, AgentTask, AgentTool } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
-import { genTouchChannel } from '../../../core/channel-core'
+import { AgentsEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { genTouchApp } from '../../../core'
+import type { AgentInstallOptions, AgentSearchOptions } from '../../../service/agent-market.service'
 import { agentMarketService } from '../../../service/agent-market.service'
 import { createLogger } from '../../../utils/logger'
 import { agentManager } from './agent-manager'
@@ -15,11 +17,23 @@ const agentChannelsLog = createLogger('Intelligence').child('AgentChannels')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
 const logInfo = (...args: unknown[]) => agentChannelsLog.info(formatLogArgs(args))
 
+const agentUpdatePriorityEvent = defineRawEvent<
+  { taskId?: string; priority?: number },
+  { success: boolean }
+>('agents:update-priority')
+const agentTaskStartedEvent = defineRawEvent<any, void>('agents:task-started')
+const agentTaskProgressEvent = defineRawEvent<any, void>('agents:task-progress')
+const agentTaskCompletedEvent = defineRawEvent<any, void>('agents:task-completed')
+const agentTaskFailedEvent = defineRawEvent<any, void>('agents:task-failed')
+const agentTaskCancelledEvent = defineRawEvent<any, void>('agents:task-cancelled')
+
 /**
  * Register all agent IPC channels
  */
 export function registerAgentChannels(): () => void {
-  const channel = genTouchChannel()
+  const channel = genTouchApp().channel
+  const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+  const transport = getTuffTransportMain(channel as any, keyManager as any)
   const cleanups: Array<() => void> = []
 
   // ============================================================================
@@ -28,31 +42,27 @@ export function registerAgentChannels(): () => void {
 
   // List all available agents
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:list', async (): Promise<AgentDescriptor[]> => {
+    transport.on(AgentsEvents.api.list, async (): Promise<AgentDescriptor[]> => {
       return agentManager.getAvailableAgents()
     })
   )
 
   // List all agents (including disabled)
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:list-all',
-      async (): Promise<AgentDescriptor[]> => {
-        return agentManager.getAllAgents()
-      }
-    )
+    transport.on(AgentsEvents.api.listAll, async (): Promise<AgentDescriptor[]> => {
+      return agentManager.getAllAgents()
+    })
   )
 
   // Get specific agent
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:get',
-      async ({ data }): Promise<AgentDescriptor | null> => {
-        return agentManager.getAgent(data?.agentId)
+    transport.on(AgentsEvents.api.get, async (payload): Promise<AgentDescriptor | null> => {
+      const agentId = payload?.id
+      if (!agentId) {
+        return null
       }
-    )
+      return agentManager.getAgent(agentId)
+    })
   )
 
   // ============================================================================
@@ -61,61 +71,50 @@ export function registerAgentChannels(): () => void {
 
   // Execute a task (queued)
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:execute',
-      async ({ data }): Promise<{ taskId: string }> => {
-        const taskId = await agentManager.executeTask(data as AgentTask)
-        return { taskId }
-      }
-    )
+    transport.on(AgentsEvents.api.execute, async (payload): Promise<{ taskId: string }> => {
+      const taskId = await agentManager.executeTask(payload as AgentTask)
+      return { taskId }
+    })
   )
 
   // Execute a task immediately
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:execute-immediate',
-      async ({ data }): Promise<AgentResult> => {
-        return agentManager.executeTaskImmediate(data as AgentTask)
-      }
-    )
+    transport.on(AgentsEvents.api.executeImmediate, async (payload): Promise<AgentResult> => {
+      return agentManager.executeTaskImmediate(payload as AgentTask)
+    })
   )
 
   // Cancel a task
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:cancel',
-      async ({ data }): Promise<{ success: boolean }> => {
-        const success = await agentManager.cancelTask(data?.taskId)
-        return { success }
+    transport.on(AgentsEvents.api.cancel, async (payload): Promise<{ success: boolean }> => {
+      if (!payload?.taskId) {
+        return { success: false }
       }
-    )
+      const success = await agentManager.cancelTask(payload.taskId)
+      return { success }
+    })
   )
 
   // Get task status
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:task-status',
-      async ({ data }): Promise<{ status: string }> => {
-        const status = agentManager.getTaskStatus(data?.taskId)
-        return { status }
+    transport.on(AgentsEvents.api.taskStatus, async (payload): Promise<{ status: string }> => {
+      if (!payload?.taskId) {
+        return { status: 'idle' }
       }
-    )
+      const status = agentManager.getTaskStatus(payload.taskId)
+      return { status }
+    })
   )
 
   // Update task priority
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:update-priority',
-      async ({ data }): Promise<{ success: boolean }> => {
-        const success = agentManager.updateTaskPriority(data?.taskId, data?.priority)
-        return { success }
+    transport.on(agentUpdatePriorityEvent, async (payload): Promise<{ success: boolean }> => {
+      if (!payload?.taskId || typeof payload.priority !== 'number') {
+        return { success: false }
       }
-    )
+      const success = agentManager.updateTaskPriority(payload.taskId, payload.priority)
+      return { success }
+    })
   )
 
   // ============================================================================
@@ -124,20 +123,16 @@ export function registerAgentChannels(): () => void {
 
   // List all tools
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:tools:list', async (): Promise<AgentTool[]> => {
+    transport.on(AgentsEvents.api.tools.list, async (): Promise<AgentTool[]> => {
       return agentManager.getTools()
     })
   )
 
   // Get specific tool
   cleanups.push(
-    channel.regChannel(
-      ChannelType.MAIN,
-      'agents:tools:get',
-      async ({ data }): Promise<AgentTool | null> => {
-        return agentManager.getTool(data?.toolId)
-      }
-    )
+    transport.on(AgentsEvents.api.tools.get, async (payload): Promise<AgentTool | null> => {
+      return agentManager.getTool(payload?.toolId)
+    })
   )
 
   // ============================================================================
@@ -146,7 +141,7 @@ export function registerAgentChannels(): () => void {
 
   // Get agent system stats
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:stats', async () => {
+    transport.on(AgentsEvents.api.stats, async () => {
       return agentManager.getStats()
     })
   )
@@ -157,56 +152,79 @@ export function registerAgentChannels(): () => void {
 
   // Search agents in market
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:search', async ({ data }) => {
-      return agentMarketService.searchAgents(data || {})
+    transport.on(AgentsEvents.market.search, async (payload) => {
+      const options = (payload && typeof payload === 'object' ? payload : {}) as AgentSearchOptions
+      return agentMarketService.searchAgents(options)
     })
   )
 
   // Get agent details
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:get', async ({ data }) => {
-      return agentMarketService.getAgentDetails(data?.agentId)
+    transport.on(AgentsEvents.market.get, async (payload) => {
+      const agentId = (payload as { agentId?: string } | null | undefined)?.agentId
+      if (!agentId) {
+        return null
+      }
+      return agentMarketService.getAgentDetails(agentId)
     })
   )
 
   // Get featured agents
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:featured', async () => {
+    transport.on(AgentsEvents.market.featured, async () => {
       return agentMarketService.getFeaturedAgents()
     })
   )
 
   // Get installed agents
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:installed', async () => {
+    transport.on(AgentsEvents.market.installed, async () => {
       return agentMarketService.getInstalledAgents()
     })
   )
 
   // Get categories
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:categories', async () => {
+    transport.on(AgentsEvents.market.categories, async () => {
       return agentMarketService.getCategories()
     })
   )
 
   // Install agent
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:install', async ({ data }) => {
-      return agentMarketService.installAgent(data)
+    transport.on(AgentsEvents.market.install, async (payload) => {
+      const options = payload as AgentInstallOptions | null | undefined
+      if (!options?.agentId) {
+        return {
+          success: false,
+          agentId: '',
+          version: 'unknown',
+          error: 'agentId is required'
+        }
+      }
+      return agentMarketService.installAgent(options)
     })
   )
 
   // Uninstall agent
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:uninstall', async ({ data }) => {
-      return agentMarketService.uninstallAgent(data?.agentId)
+    transport.on(AgentsEvents.market.uninstall, async (payload) => {
+      const agentId = (payload as { agentId?: string } | null | undefined)?.agentId
+      if (!agentId) {
+        return {
+          success: false,
+          agentId: '',
+          version: 'unknown',
+          error: 'agentId is required'
+        }
+      }
+      return agentMarketService.uninstallAgent(agentId)
     })
   )
 
   // Check for updates
   cleanups.push(
-    channel.regChannel(ChannelType.MAIN, 'agents:market:check-updates', async () => {
+    transport.on(AgentsEvents.market.checkUpdates, async () => {
       return agentMarketService.checkUpdates()
     })
   )
@@ -216,15 +234,15 @@ export function registerAgentChannels(): () => void {
   // ============================================================================
 
   // Forward agent events to renderer
-  const eventHandler = (eventName: string) => (data: unknown) => {
-    channel.sendMain(`agents:${eventName}`, data)
+  const eventHandler = (event: typeof agentTaskStartedEvent) => (data: unknown) => {
+    transport.broadcast(event, data)
   }
 
-  agentManager.on('task:started', eventHandler('task-started'))
-  agentManager.on('task:progress', eventHandler('task-progress'))
-  agentManager.on('task:completed', eventHandler('task-completed'))
-  agentManager.on('task:failed', eventHandler('task-failed'))
-  agentManager.on('task:cancelled', eventHandler('task-cancelled'))
+  agentManager.on('task:started', eventHandler(agentTaskStartedEvent))
+  agentManager.on('task:progress', eventHandler(agentTaskProgressEvent))
+  agentManager.on('task:completed', eventHandler(agentTaskCompletedEvent))
+  agentManager.on('task:failed', eventHandler(agentTaskFailedEvent))
+  agentManager.on('task:cancelled', eventHandler(agentTaskCancelledEvent))
 
   logInfo('Registered agent IPC channels')
 

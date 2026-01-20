@@ -1,8 +1,11 @@
 import type { AiCapabilityRoutingConfig, AiSDKPersistedConfig } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { ai } from './intelligence-sdk'
+
+const storageUpdateEvent = defineRawEvent<any, void>('storage:update')
 
 const SUPPORTED_PROVIDER_TYPES = new Set([
   'openai',
@@ -111,7 +114,10 @@ export function setupConfigUpdateListener(): void {
     return
   }
 
-  channel.regChannel(ChannelType.MAIN, 'storage:update', ({ data }) => {
+  const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+  const transport = getTuffTransportMain(channel as any, keyManager as any)
+
+  transport.on(storageUpdateEvent, (data) => {
     if (
       data &&
       typeof data === 'object' &&

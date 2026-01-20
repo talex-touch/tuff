@@ -7,10 +7,11 @@ import { readdir, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { desc, sql } from 'drizzle-orm'
 import { app } from 'electron'
-import { genTouchChannel } from '../../core/channel-core'
+import { genTouchApp } from '../../core'
 import { config, scanProgress } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { appendWorkflowDebugLog } from '../../utils/workflow-debug'
@@ -21,6 +22,15 @@ import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
 
 const dashboardLog = createLogger('TuffDashboard')
+
+const tuffDashboardEvent = defineRawEvent<
+  TuffDashboardOptions | undefined,
+  {
+    ok: boolean
+    snapshot?: unknown
+    error?: string
+  }
+>('tuff:dashboard')
 
 interface TuffDashboardOptions {
   limit?: number
@@ -40,14 +50,17 @@ export class TuffDashboardModule extends BaseModule {
   }
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
-    const channel = genTouchChannel()
+    const channel = genTouchApp().channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel as any, keyManager as any)
 
-    channel.regChannel(ChannelType.MAIN, 'tuff:dashboard', async ({ reply, data, sync }) => {
-      const requestId = typeof sync?.id === 'string' ? sync.id : null
+    transport.on(tuffDashboardEvent, async (options) => {
+      const requestId = null
       const requestStartedAt = performance.now()
       try {
-        const options: TuffDashboardOptions = (data ?? {}) as TuffDashboardOptions
-        const limit = typeof options.limit === 'number' && options.limit > 0 ? options.limit : 50
+        const payload: TuffDashboardOptions = (options ?? {}) as TuffDashboardOptions
+        const limit = typeof payload.limit === 'number' && payload.limit > 0 ? payload.limit : 50
         appendWorkflowDebugLog({
           hid: 'H1',
           loc: 'tuff-dashboard.handler',
@@ -55,16 +68,16 @@ export class TuffDashboardModule extends BaseModule {
           data: { requestId, limit }
         })
         const snapshot = await this.buildSnapshot(limit, requestId)
-        reply(DataCode.SUCCESS, {
+        return {
           ok: true,
           snapshot
-        })
+        }
       } catch (error) {
         dashboardLog.error('Failed to build snapshot', { error })
-        reply(DataCode.ERROR, {
+        return {
           ok: false,
           error: error instanceof Error ? error.message : String(error)
-        })
+        }
       } finally {
         appendWorkflowDebugLog({
           hid: 'H1',
