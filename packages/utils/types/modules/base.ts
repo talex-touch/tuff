@@ -1,3 +1,5 @@
+import type { Buffer } from 'node:buffer'
+
 /**
  * Unique key for a module.
  * @public

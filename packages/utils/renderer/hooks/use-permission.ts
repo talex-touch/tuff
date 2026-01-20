@@ -8,8 +8,8 @@ import type {
   PluginPermissionStatus,
 } from '../../permission/types'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { PermissionEvents } from '../../transport/events'
 import { useTuffTransport } from '../../transport'
+import { PermissionEvents } from '../../transport/events'
 
 /**
  * Hook for managing plugin permissions

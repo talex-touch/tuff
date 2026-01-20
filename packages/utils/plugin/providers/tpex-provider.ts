@@ -5,6 +5,8 @@ import type {
   PluginProvider,
   PluginProviderContext,
 } from './types'
+import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import { NEXUS_BASE_URL } from '../../env'
 import { PluginProviderType } from './types'
 
@@ -149,7 +151,7 @@ export class TpexProvider implements PluginProvider {
       const fileName = `tpex-${Date.now()}.tpex`
       filePath = `${tempDir}/${fileName}`
 
-      if (typeof globalThis.process !== 'undefined') {
+      if (typeof process !== 'undefined') {
         const fs = await import('node:fs/promises')
         await fs.writeFile(filePath, Buffer.from(arrayBuffer))
       }
@@ -215,7 +217,7 @@ export class TpexProvider implements PluginProvider {
     const fileName = `${slug}-${targetVersion.version}.tpex`
     const filePath = `${tempDir}/${fileName}`
 
-    if (typeof globalThis.process !== 'undefined') {
+    if (typeof process !== 'undefined') {
       const fs = await import('node:fs/promises')
       await fs.writeFile(filePath, Buffer.from(arrayBuffer))
     }

@@ -5,6 +5,8 @@ import type {
   PluginProvider,
   PluginProviderContext,
 } from './types'
+import { Buffer } from 'node:buffer'
+import process from 'node:process'
 import { PluginProviderType } from './types'
 
 const NPM_REGISTRY = 'https://registry.npmjs.org'
@@ -135,7 +137,7 @@ export class NpmProvider implements PluginProvider {
     const fileName = `${safePackageName}-${packageInfo.version}.tgz`
     const filePath = `${tempDir}/${fileName}`
 
-    if (typeof globalThis.process !== 'undefined') {
+    if (typeof process !== 'undefined') {
       const fs = await import('node:fs/promises')
       await fs.writeFile(filePath, Buffer.from(arrayBuffer))
     }

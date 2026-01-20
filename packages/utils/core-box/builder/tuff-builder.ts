@@ -578,7 +578,6 @@ class TuffSearchResultBuilder {
   }
 
   public setSortStats(stats: any[]): this {
-    // @ts-ignore
     this.result.sort_stats = stats
     return this
   }

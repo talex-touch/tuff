@@ -212,7 +212,8 @@ export function useClipboard() {
      * ```
      */
     onDidChange(callback: (item: PluginClipboardItem) => void): () => void {
-      return channel.regChannel('core-box:clipboard-change', ({ data }: { data: unknown }) => {
+      return channel.regChannel('core-box:clipboard-change', (event) => {
+        const data = event?.data
         const item = (data && typeof data === 'object' && 'item' in data ? (data as { item: PluginClipboardItem }).item : data) as PluginClipboardItem
         callback(normalizeItem(item) ?? item)
       })

@@ -9,9 +9,9 @@ import type {
   DownloadGetLogsResponse,
   DownloadGetNotificationConfigResponse,
   DownloadGetStatsResponse,
-  DownloadGetTaskStatusResponse,
   DownloadGetTasksByStatusRequest,
   DownloadGetTasksResponse,
+  DownloadGetTaskStatusResponse,
   DownloadGetTempStatsResponse,
   DownloadMigrationNeededResponse,
   DownloadMigrationRetryResponse,
@@ -49,7 +49,7 @@ export interface DownloadSdk {
   updateConfig: (payload: DownloadUpdateConfigRequest) => Promise<DownloadOpResponse>
   getNotificationConfig: () => Promise<DownloadGetNotificationConfigResponse>
   updateNotificationConfig: (
-    payload: DownloadUpdateNotificationConfigRequest
+    payload: DownloadUpdateNotificationConfigRequest,
   ) => Promise<DownloadOpResponse>
 
   getHistory: (payload?: DownloadGetHistoryRequest) => Promise<DownloadGetHistoryResponse>

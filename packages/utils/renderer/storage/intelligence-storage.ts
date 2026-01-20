@@ -1,4 +1,5 @@
 import type { AISDKGlobalConfig, AISDKStorageData, IntelligenceProviderConfig } from '../../types/intelligence'
+import { getLogger } from '../../common/logger'
 import { StorageList } from '../../common/storage/constants'
 import {
 
@@ -22,6 +23,7 @@ const defaultIntelligenceData: AISDKStorageData = {
 }
 
 const INTELLIGENCE_STORAGE_KEY = `storage:${StorageList.IntelligenceConfig}`
+const intelligenceStorageLog = getLogger('intelligence-storage')
 
 class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
   constructor() {
@@ -142,12 +144,12 @@ export const aisdkStorage = intelligenceStorage
 export const intelligenceSettings = intelligenceStorage
 
 export async function migrateIntelligenceSettings(): Promise<void> {
-  console.log('[Intelligence Storage] Starting migration check...')
+  intelligenceStorageLog.info('Starting migration check...')
   const currentData = intelligenceStorage.data
 
   // Version 2: Force update capabilities to include all new ones
   if (!currentData.version || currentData.version < 2) {
-    console.log('[Intelligence Storage] Migrating settings to version 2')
+    intelligenceStorageLog.info('Migrating settings to version 2')
 
     const migratedProviders = currentData.providers.map(provider => ({
       ...provider,
@@ -171,7 +173,7 @@ export async function migrateIntelligenceSettings(): Promise<void> {
     }
 
     // Force update to latest DEFAULT_CAPABILITIES (version 2)
-    console.log('[Intelligence Storage] Updating capabilities to latest defaults')
+    intelligenceStorageLog.info('Updating capabilities to latest defaults')
 
     intelligenceStorage.applyData({
       providers: migratedProviders,
@@ -182,14 +184,14 @@ export async function migrateIntelligenceSettings(): Promise<void> {
 
     await intelligenceStorage.saveToRemote({ force: true })
 
-    console.log('[Intelligence Storage] Migration to v2 complete, capabilities count:', Object.keys(DEFAULT_CAPABILITIES).length)
+    intelligenceStorageLog.info(`Migration to v2 complete, capabilities count: ${Object.keys(DEFAULT_CAPABILITIES).length}`)
   }
   else {
-    console.log('[Intelligence Storage] No migration needed, current version:', currentData.version)
+    intelligenceStorageLog.info(`No migration needed, current version: ${currentData.version}`)
   }
 
-  console.log('[Intelligence Storage] Final providers count:', intelligenceStorage.data.providers.length)
-  console.log('[Intelligence Storage] Final capabilities count:', Object.keys(intelligenceStorage.data.capabilities).length)
+  intelligenceStorageLog.info(`Final providers count: ${intelligenceStorage.data.providers.length}`)
+  intelligenceStorageLog.info(`Final capabilities count: ${Object.keys(intelligenceStorage.data.capabilities).length}`)
 }
 
 /**
@@ -198,7 +200,7 @@ export async function migrateIntelligenceSettings(): Promise<void> {
 export const migrateAISDKSettings = migrateIntelligenceSettings
 
 export async function resetIntelligenceConfig(): Promise<void> {
-  console.log('[Intelligence Storage] Resetting to default configuration')
+  intelligenceStorageLog.info('Resetting to default configuration')
 
   intelligenceStorage.applyData({
     providers: [...DEFAULT_PROVIDERS],
@@ -209,7 +211,7 @@ export async function resetIntelligenceConfig(): Promise<void> {
 
   await intelligenceStorage.saveToRemote({ force: true })
 
-  console.log('[Intelligence Storage] Reset complete')
+  intelligenceStorageLog.info('Reset complete')
 }
 
 /**

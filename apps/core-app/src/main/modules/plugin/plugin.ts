@@ -1,7 +1,12 @@
 import type { ITuffIcon, TuffQuery } from '@talex-touch/utils'
-import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
+import type {
+  ITouchChannel,
+  ITouchClientChannel,
+  StandardChannelData
+} from '@talex-touch/utils/channel'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
+import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import type {
   IFeatureLifeCycle,
   IPlatform,
@@ -16,7 +21,6 @@ import type {
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { TouchWindow } from '../../core/touch-window'
 import path from 'node:path'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import {
   createBoxSDK,
@@ -26,11 +30,15 @@ import {
   createMetaSDK,
   PluginStatus
 } from '@talex-touch/utils/plugin'
+import { ChannelType } from '@talex-touch/utils/channel'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
+import { DataCode } from '@talex-touch/utils/channel'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
+import { genTouchApp } from '../../core'
 import { genTouchChannel } from '../../core/channel-core'
 import {
   PluginLogAppendEvent,
@@ -242,12 +250,6 @@ export class TouchPlugin implements ITouchPlugin {
       })
       return
     }
-
-    const channel = genTouchChannel()
-    channel?.broadcast(ChannelType.MAIN, 'plugin-status-updated', {
-      plugin: this.name,
-      status: this._status
-    })
   }
 
   addFeature(feature: IPluginFeature): boolean {
@@ -388,32 +390,15 @@ export class TouchPlugin implements ITouchPlugin {
       `[Plugin ${this.name}] CoreBox window available for clearing: ${coreBoxAvailable}`
     )
 
-    if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-      const channel = genTouchChannel()
+    const boxItemManager = getBoxItemManager()
+    boxItemManager.clear(this.name)
 
-      const payload = {
-        pluginName: this.name,
-        timestamp: this._searchTimestamp
-      }
-
-      pluginSystemLog.debug(`[Plugin ${this.name}] Sending core-box:clear-items`, {
-        meta: { timestamp: this._searchTimestamp }
-      })
-
-      channel
-        .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:clear-items', payload)
-        .catch((error) => {
-          pluginSystemLog.error(
-            `[Plugin ${this.name}] Failed to clear search results from CoreBox`,
-            { error: toError(error) }
-          )
-        })
-
-      pluginSystemLog.debug(`[Plugin ${this.name}] Successfully sent clear command to CoreBox`)
-    } else {
+    if (!coreBoxWindow || coreBoxDestroyed) {
       pluginSystemLog.warn(
         `[Plugin ${this.name}] CoreBox window not available for clearing search results - window exists: ${coreBoxAvailable}, destroyed: ${coreBoxDestroyed}`
       )
+    } else {
+      pluginSystemLog.debug(`[Plugin ${this.name}] Cleared search results via BoxItemManager`)
     }
   }
 
@@ -617,8 +602,11 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this.status = PluginStatus.ENABLED
-    this._uniqueChannelKey =
-      this.transport?.keyManager.requestKey(this.name) ?? genTouchChannel().requestKey(this.name)
+    const channel = genTouchApp().channel as any
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    this._uniqueChannelKey = transport.keyManager.requestKey(this.name)
 
     const now = Date.now()
     this._runtimeStats.startedAt = now
@@ -626,13 +614,9 @@ export class TouchPlugin implements ITouchPlugin {
     this._runtimeStats.lastActiveAt = now
 
     this.pluginLifecycle?.onInit?.()
-    if (this.transport) {
-      this.transport
-        .sendToPlugin(this.name, PluginEvents.lifecycleSignal.enabled, this.toJSONObject())
-        .catch(() => {})
-    } else {
-      genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:enabled', this.toJSONObject())
-    }
+    transport
+      .sendToPlugin(this.name, PluginEvents.lifecycleSignal.enabled, this.toJSONObject())
+      .catch(() => {})
 
     pluginSystemLog.debug(
       `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`
@@ -660,13 +644,13 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING
     this.logger.debug('Disabling plugin')
 
-    if (this.transport) {
-      this.transport
-        .sendToPlugin(this.name, PluginEvents.lifecycleSignal.disabled, this.toJSONObject())
-        .catch(() => {})
-    } else {
-      genTouchChannel().broadcastPlugin(this.name, 'plugin:lifecycle:disabled', this.toJSONObject())
-    }
+    const channel = genTouchApp().channel as any
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    transport
+      .sendToPlugin(this.name, PluginEvents.lifecycleSignal.disabled, this.toJSONObject())
+      .catch(() => {})
 
     this._windows.forEach((win, id) => {
       try {
@@ -708,11 +692,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     if (this._uniqueChannelKey) {
-      if (this.transport) {
-        this.transport.keyManager.revokeKey(this._uniqueChannelKey)
-      } else {
-        genTouchChannel().revokeKey(this._uniqueChannelKey)
-      }
+      transport.keyManager.revokeKey(this._uniqueChannelKey)
     }
 
     this._runtimeStats.startedAt = 0
@@ -740,7 +720,12 @@ export class TouchPlugin implements ITouchPlugin {
 
   getFeatureUtil() {
     const pluginName = this.name
-    const appChannel = genTouchChannel()
+    const appInstance = genTouchApp()
+    const channel = appInstance.channel as ITouchChannel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    const mainWindowId = appInstance.window.window.id
 
     const http = axios
     const storage = {
@@ -777,19 +762,43 @@ export class TouchPlugin implements ITouchPlugin {
     }
     const clipboardUtil = createClipboardManager(clipboard)
 
-    const channelBridge: IPluginChannelBridge = {
-      sendToMain: (eventName, payload) => appChannel.sendMain(eventName, payload),
-      sendToRenderer: (eventName, payload) => appChannel.sendPlugin(pluginName, eventName, payload),
-      onMain: (eventName, handler) => appChannel.regChannel(ChannelType.MAIN, eventName, handler),
-      onRenderer: (eventName, handler) =>
-        appChannel.regChannel(ChannelType.PLUGIN, eventName, (event) => {
-          if (event.plugin && event.plugin !== pluginName) {
-            return
-          }
+    const onTransport = (
+      eventName: string,
+      shouldHandle: (context: { plugin?: { name?: string } } | undefined) => boolean,
+      handler: (event: StandardChannelData) => unknown
+    ): (() => void) => {
+      return transport.on(defineRawEvent(eventName), async (payload, context) => {
+        if (!shouldHandle(context)) {
+          return
+        }
 
-          handler(event)
-        }),
-      raw: appChannel
+        let replied = false
+        let replyData: unknown
+        const event: StandardChannelData = {
+          code: DataCode.SUCCESS,
+          data: payload,
+          plugin: context?.plugin?.name,
+          reply: (_code, data) => {
+            replied = true
+            replyData = data
+          }
+        }
+
+        const result = await handler(event)
+        return replied ? replyData : result
+      })
+    }
+
+    const channelBridge: IPluginChannelBridge = {
+      sendToMain: (eventName, payload) =>
+        transport.sendToWindow(mainWindowId, defineRawEvent(eventName), payload),
+      sendToRenderer: (eventName, payload) =>
+        transport.sendToPlugin(pluginName, defineRawEvent(eventName), payload),
+      onMain: (eventName, handler) =>
+        onTransport(eventName, (context) => !context?.plugin, handler),
+      onRenderer: (eventName, handler) =>
+        onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler),
+      raw: channel
     }
 
     type BoxChannelHandler = (data: StandardChannelData) => unknown
@@ -986,46 +995,13 @@ export class TouchPlugin implements ITouchPlugin {
           })
         )
 
-        this._searchItems = [...processedItems]
+        const enrichedItems = processedItems.map((item) => this.enrichItemWithSource(item))
+        this._searchItems = [...enrichedItems]
         this._searchTimestamp = Date.now()
-
-        const coreBoxWindow = getCoreBoxWindow()
-        const coreBoxAvailable = !!coreBoxWindow
-        const coreBoxDestroyed = coreBoxWindow?.window.isDestroyed()
-        pluginSystemLog.debug(`[Plugin ${this.name}] CoreBox window available: ${coreBoxAvailable}`)
-
-        if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-          const channel = appChannel
-
-          const payload = {
-            pluginName: this.name,
-            items: this._searchItems,
-            timestamp: this._searchTimestamp,
-            query: this._lastSearchQuery,
-            total: processedItems.length
-          }
-
-          pluginSystemLog.debug(`[Plugin ${this.name}] Sending core-box:push-items`, {
-            meta: { total: processedItems.length }
-          })
-
-          channel
-            .sendTo(coreBoxWindow.window, ChannelType.MAIN, 'core-box:push-items', payload)
-            .catch((error) => {
-              pluginSystemLog.error(
-                `[Plugin ${this.name}] Failed to push search results to CoreBox`,
-                { error: toError(error) }
-              )
-            })
-
-          pluginSystemLog.debug(
-            `[Plugin ${this.name}] Successfully sent ${processedItems.length} search results to CoreBox`
-          )
-        } else {
-          pluginSystemLog.warn(
-            `[Plugin ${this.name}] CoreBox window not available for pushing search results - window exists: ${coreBoxAvailable}, destroyed: ${coreBoxDestroyed}`
-          )
-        }
+        boxItemManager.batchUpsert(enrichedItems)
+        pluginSystemLog.debug(
+          `[Plugin ${this.name}] Successfully pushed ${enrichedItems.length} search results via BoxItemManager`
+        )
       },
 
       /**
@@ -1217,6 +1193,11 @@ export class TouchPlugin implements ITouchPlugin {
       getPlatforms: () => {
         return this.platforms
       }
+    }
+
+    const resolvePluginManager = async () => {
+      const { pluginModule } = await import('./plugin-module')
+      return pluginModule.pluginManager
     }
 
     const pluginsAPI = {

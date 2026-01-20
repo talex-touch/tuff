@@ -1,5 +1,5 @@
-import type { IntelligenceInvokeOptions, IntelligenceInvokeResult, IntelligenceProviderConfig } from '../types/intelligence'
 import type { ITuffTransport } from '../transport/types'
+import type { IntelligenceInvokeOptions, IntelligenceInvokeResult, IntelligenceProviderConfig } from '../types/intelligence'
 import { defineRawEvent } from '../transport/event/builder'
 
 export interface IntelligenceClientChannel {
@@ -75,10 +75,10 @@ function createTransportAdapter(transport: ITuffTransport): IntelligenceClientCh
 
 export function createIntelligenceClient(
   channel?: IntelligenceChannelLike,
-  resolvers?: IntelligenceChannelResolver[]
+  resolvers?: IntelligenceChannelResolver[],
 ): IntelligenceClient {
-  let resolvedChannel: IntelligenceClientChannel | ITuffTransport | null | undefined =
-    channel ?? resolveIntelligenceChannel(resolvers)
+  let resolvedChannel: IntelligenceClientChannel | ITuffTransport | null | undefined
+    = channel ?? resolveIntelligenceChannel(resolvers)
   if (resolvedChannel && isTuffTransport(resolvedChannel)) {
     resolvedChannel = createTransportAdapter(resolvedChannel)
   }

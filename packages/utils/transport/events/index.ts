@@ -78,6 +78,12 @@ import type {
   TrackEventPayload,
 } from './types/app'
 
+import type { AppIndexSettings } from './types/app-index'
+
+// ============================================================================
+// App Events
+// ============================================================================
+
 import type {
   BoxItem,
   BoxItemBatchDeleteResponse,
@@ -92,7 +98,7 @@ import type {
 } from './types/box-item'
 
 // ============================================================================
-// App Events
+// CoreBox Events
 // ============================================================================
 
 import type {
@@ -107,7 +113,7 @@ import type {
 } from './types/clipboard'
 
 // ============================================================================
-// CoreBox Events
+// Storage Events
 // ============================================================================
 
 import type {
@@ -146,8 +152,10 @@ import type {
 } from './types/core-box'
 
 // ============================================================================
-// Storage Events
+// Plugin Events
 // ============================================================================
+
+import type { DeviceIdleSettings } from './types/device-idle'
 
 import type {
   DivisionBoxCloseRequest,
@@ -177,7 +185,7 @@ import type {
 } from './types/division-box'
 
 // ============================================================================
-// Plugin Events
+// BoxItem Events
 // ============================================================================
 
 import type {
@@ -208,11 +216,6 @@ import type {
   DownloadUpdateNotificationConfigRequest,
   DownloadUpdatePriorityRequest,
 } from './types/download'
-
-// ============================================================================
-// BoxItem Events
-// ============================================================================
-
 import type {
   FileIndexBatteryStatus,
   FileIndexProgress,
@@ -221,11 +224,6 @@ import type {
   FileIndexStats,
   FileIndexStatus,
 } from './types/file-index'
-
-// ============================================================================
-// Market Events
-// ============================================================================
-
 import type {
   FlowAcknowledgeRequest,
   FlowAcknowledgeResponse,
@@ -253,7 +251,7 @@ import type {
 } from './types/flow'
 
 // ============================================================================
-// Permission Events
+// Market Events
 // ============================================================================
 
 import type {
@@ -266,6 +264,31 @@ import type {
   MarketSearchResponse,
   MarketUpdatesAvailablePayload,
 } from './types/market'
+
+// ============================================================================
+// Permission Events
+// ============================================================================
+
+import type {
+  NotificationActionPayload,
+  NotificationDismissPayload,
+  NotificationDismissRequest,
+  NotificationInboxArchiveRequest,
+  NotificationInboxClearRequest,
+  NotificationInboxClearResponse,
+  NotificationInboxDeleteRequest,
+  NotificationInboxDeleteResponse,
+  NotificationInboxEntry,
+  NotificationInboxListRequest,
+  NotificationInboxListResponse,
+  NotificationInboxMarkReadRequest,
+  NotificationInboxUpdatedPayload,
+  NotificationPushPayload,
+  NotificationRequest,
+  NotificationResult,
+  NotificationUpdatePayload,
+  NotificationUpdateRequest,
+} from './types/notification'
 
 // ============================================================================
 // Agents Events
@@ -645,6 +668,48 @@ export const AppEvents = {
       .define<void, AsyncIterable<FileIndexProgress>>({
         stream: { enabled: true },
       }),
+  },
+
+  /**
+   * Device idle policy events.
+   */
+  deviceIdle: {
+    /**
+     * Get device idle settings.
+     */
+    getSettings: defineEvent('app')
+      .module('device-idle')
+      .event('settings.get')
+      .define<void, DeviceIdleSettings>(),
+
+    /**
+     * Update device idle settings.
+     */
+    updateSettings: defineEvent('app')
+      .module('device-idle')
+      .event('settings.update')
+      .define<Partial<DeviceIdleSettings>, DeviceIdleSettings>(),
+  },
+
+  /**
+   * App index scheduling events.
+   */
+  appIndex: {
+    /**
+     * Get app index settings.
+     */
+    getSettings: defineEvent('app')
+      .module('app-index')
+      .event('settings.get')
+      .define<void, AppIndexSettings>(),
+
+    /**
+     * Update app index settings.
+     */
+    updateSettings: defineEvent('app')
+      .module('app-index')
+      .event('settings.update')
+      .define<Partial<AppIndexSettings>, AppIndexSettings>(),
   },
 
   /**
@@ -1921,6 +1986,88 @@ export const MarketEvents = {
   },
 } as const
 
+// ============================================================================
+// Notification Events
+// ============================================================================
+
+export const NotificationEvents = {
+  api: {
+    notify: defineEvent('notification')
+      .module('api')
+      .event('notify')
+      .define<NotificationRequest, NotificationResult>(),
+
+    update: defineEvent('notification')
+      .module('api')
+      .event('update')
+      .define<NotificationUpdateRequest, NotificationResult>(),
+
+    dismiss: defineEvent('notification')
+      .module('api')
+      .event('dismiss')
+      .define<NotificationDismissRequest, NotificationResult>(),
+
+    action: defineEvent('notification')
+      .module('api')
+      .event('action')
+      .define<NotificationActionPayload, void>(),
+  },
+
+  inbox: {
+    list: defineEvent('notification')
+      .module('inbox')
+      .event('list')
+      .define<NotificationInboxListRequest, NotificationInboxListResponse>(),
+
+    markRead: defineEvent('notification')
+      .module('inbox')
+      .event('mark-read')
+      .define<NotificationInboxMarkReadRequest, NotificationInboxEntry | null>(),
+
+    archive: defineEvent('notification')
+      .module('inbox')
+      .event('archive')
+      .define<NotificationInboxArchiveRequest, NotificationInboxEntry | null>(),
+
+    delete: defineEvent('notification')
+      .module('inbox')
+      .event('delete')
+      .define<NotificationInboxDeleteRequest, NotificationInboxDeleteResponse>(),
+
+    clear: defineEvent('notification')
+      .module('inbox')
+      .event('clear')
+      .define<NotificationInboxClearRequest, NotificationInboxClearResponse>(),
+  },
+
+  push: {
+    notify: defineEvent('notification')
+      .module('push')
+      .event('notify')
+      .define<NotificationPushPayload, void>(),
+
+    update: defineEvent('notification')
+      .module('push')
+      .event('update')
+      .define<NotificationUpdatePayload, void>(),
+
+    dismiss: defineEvent('notification')
+      .module('push')
+      .event('dismiss')
+      .define<NotificationDismissPayload, void>(),
+
+    action: defineEvent('notification')
+      .module('push')
+      .event('action')
+      .define<NotificationActionPayload, void>(),
+
+    inboxUpdated: defineEvent('notification')
+      .module('push')
+      .event('inbox-updated')
+      .define<NotificationInboxUpdatedPayload, void>(),
+  },
+} as const
+
 export const PermissionEvents = {
   api: {
     getPlugin: defineRawEvent<PermissionGetPluginRequest, PermissionGetPluginResponse>('permission:get-plugin'),
@@ -2267,6 +2414,7 @@ export const TuffEvents = {
   storage: StorageEvents,
   plugin: PluginEvents,
   market: MarketEvents,
+  notification: NotificationEvents,
   permission: PermissionEvents,
   platform: PlatformEvents,
   agents: AgentsEvents,
