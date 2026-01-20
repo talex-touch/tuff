@@ -9,6 +9,7 @@ import type {
 } from '../../transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
 import { reactive, toRaw, watch } from 'vue'
+import { isElectronRenderer } from '../../env'
 import { StorageEvents } from '../../transport/events'
 
 /**
@@ -188,10 +189,12 @@ export class TouchStorage<T extends object> {
     options?: TouchStorageOptions,
   ) {
     if (!channel && !transport) {
-      throw new Error(
-        `TouchStorage: Cannot create storage "${qName}" before channel is initialized. `
-        + 'Please call initStorageChannel() or initStorageTransport() first.',
-      )
+      if (isElectronRenderer()) {
+        throw new Error(
+          `TouchStorage: Cannot create storage "${qName}" before channel is initialized. `
+          + 'Please call initStorageChannel() or initStorageTransport() first.',
+        )
+      }
     }
 
     if (storages.has(qName)) {
@@ -441,7 +444,10 @@ export class TouchStorage<T extends object> {
    */
   saveToRemote = useDebounceFn(async (options?: { force?: boolean }): Promise<void> => {
     if (!channel && !transport) {
-      throw new Error('TouchStorage: channel not initialized')
+      if (isElectronRenderer()) {
+        throw new Error('TouchStorage: channel not initialized')
+      }
+      return
     }
 
     if (this.#assigning && !options?.force) {

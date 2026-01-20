@@ -1,3 +1,4 @@
+import { getLogger } from '../../../common/logger'
 import { ensureRendererChannel } from '../channel'
 import { BridgeEventForCoreBox } from '../enum/bridge-event'
 
@@ -36,18 +37,20 @@ const CACHE_MAX_SIZE: Record<BridgeEvent, number> = {
   [BridgeEventForCoreBox.CORE_BOX_KEY_EVENT]: 10,
 }
 
+const bridgeLog = getLogger('plugin-sdk')
+
 function invokeHook<T>(hook: BridgeHook<T>, data: T, fromCache: boolean, timestamp: number): void {
   try {
     hook({ data, meta: { timestamp, fromCache } })
   }
   catch (e) {
-    console.error('[TouchSDK] Bridge hook error:', e)
+    bridgeLog.error('[TouchSDK] Bridge hook error', { error: e })
   }
 }
 
 function registerEarlyListener(type: BridgeEvent): void {
-  if (__channelRegistered.has(type)) 
-return
+  if (__channelRegistered.has(type))
+    return
 
   try {
     const channel = ensureRendererChannel()
@@ -59,13 +62,13 @@ return
         hooks.forEach(h => invokeHook(h, data, false, timestamp))
       }
       else {
-        if (!__eventCache.has(type)) 
-__eventCache.set(type, [])
+        if (!__eventCache.has(type))
+          __eventCache.set(type, [])
         const cache = __eventCache.get(type)!
         const maxSize = CACHE_MAX_SIZE[type] ?? 1
         cache.push({ data, timestamp })
         while (cache.length > maxSize) cache.shift()
-        console.debug(`[TouchSDK] ${type} cached, size: ${cache.length}`)
+        bridgeLog.debug(`[TouchSDK] ${type} cached, size: ${cache.length}`)
       }
     })
     __channelRegistered.add(type)

@@ -3,8 +3,19 @@ export enum StorageList {
   SHORTCUT_SETTING = 'shortcut-setting.ini',
   OPENERS = 'openers.json',
   FILE_INDEX_SETTINGS = 'file-index-settings.json',
+  APP_INDEX_SETTINGS = 'app-index-settings.json',
+  DEVICE_IDLE_SETTINGS = 'device-idle-settings.json',
   IntelligenceConfig = 'aisdk-config',
   MARKET_SOURCES = 'market-sources.json',
+  THEME_STYLE = 'theme-style.ini',
+  SEARCH_ENGINE_LOGS_ENABLED = 'search-engine-logs-enabled',
+  EVERYTHING_SETTINGS = 'everything-settings.json',
+  FLOW_CONSENT = 'flow-consent.json',
+  SENTRY_CONFIG = 'sentry-config.json',
+  NOTIFICATION_CENTER = 'notification-center.json',
+  STARTUP_ANALYTICS = 'startup-analytics.json',
+  STARTUP_ANALYTICS_REPORT_QUEUE = 'startup-analytics-report-queue.json',
+  TELEMETRY_CLIENT = 'telemetry-client.json',
 }
 
 /**

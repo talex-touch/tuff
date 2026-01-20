@@ -5,7 +5,10 @@
  * 提供插件SDK的通用功能，包括通信、快捷键等
  */
 
+import { getLogger } from '../../common/logger'
 import { genChannel } from '../channel'
+
+const sdkLog = getLogger('plugin-sdk')
 
 /**
  * Register a shortcut
@@ -13,11 +16,11 @@ import { genChannel } from '../channel'
  * @param func - The trigger function
  * @returns Whether the shortcut is registered successfully
  */
-export function regShortcut(key: string, func: Function): boolean {
+export function regShortcut(key: string, func: () => void): boolean {
   const channel = genChannel()
 
   const res = channel.sendSync('shortcon:reg', { key })
-  if (res instanceof String)
+  if (typeof res === 'string' || Object.prototype.toString.call(res) === '[object String]')
     throw new Error(String(res))
   if (res === false)
     return false
@@ -46,7 +49,7 @@ export async function communicateWithPlugin(
     })
   }
   catch (error) {
-    console.error(`[Plugin SDK] Failed to communicate`, error)
+    sdkLog.error('Failed to communicate', { error })
     throw error
   }
 }
@@ -64,7 +67,7 @@ export async function sendMessage(message: string, data: any = {}): Promise<any>
     return await channel.send(`plugin:${message}`, data)
   }
   catch (error) {
-    console.error(`[Plugin SDK] Failed to send message: ${message}`, error)
+    sdkLog.error(`Failed to send message: ${message}`, { error })
     throw error
   }
 }

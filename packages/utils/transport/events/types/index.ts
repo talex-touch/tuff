@@ -9,6 +9,9 @@ export * from './agents'
 // App domain types
 export * from './app'
 
+// App index domain types
+export * from './app-index'
+
 // BoxItem domain types
 export * from './box-item'
 
@@ -17,6 +20,9 @@ export * from './clipboard'
 
 // CoreBox domain types
 export * from './core-box'
+
+// Device idle domain types
+export * from './device-idle'
 
 // DivisionBox domain types
 export * from './division-box'
@@ -35,6 +41,9 @@ export * from './market'
 
 // MetaOverlay domain types
 export * from './meta-overlay'
+
+// Notification domain types
+export * from './notification'
 
 // Permission domain types
 export * from './permission'

@@ -165,7 +165,7 @@ function editDistanceWithPath(
   const n = s2.length
 
   // DP table
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array.from({ length: n + 1 }, () => 0))
 
   // Initialize
   for (let i = 0; i <= m; i++) dp[i][0] = i

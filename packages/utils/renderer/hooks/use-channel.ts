@@ -37,8 +37,8 @@ declare global {
     $touchChannel?: TouchChannel
   }
 
-  var touchChannel: TouchChannel | undefined
-  var $touchChannel: TouchChannel | undefined
+  let touchChannel: TouchChannel | undefined
+  let $touchChannel: TouchChannel | undefined
 }
 
 /**

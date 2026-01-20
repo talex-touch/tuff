@@ -21,9 +21,7 @@ export function toggleWinVisible(id: number, visible?: boolean): boolean {
   return res.visible
 }
 
-export function setWindowProperty(id: number, property: {
-
-}): boolean {
+export function setWindowProperty(id: number, property: WindowProperties): boolean {
   const res = genChannel().sendSync('window:property', { id, property })
   if (res.error)
     throw new Error(res.error)

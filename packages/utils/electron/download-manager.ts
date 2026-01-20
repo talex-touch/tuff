@@ -1,6 +1,9 @@
 import path from 'node:path'
 import { net } from 'electron'
 import fse from 'fs-extra'
+import { getLogger } from '../common/logger'
+
+const downloadLog = getLogger('download-manager')
 
 interface DownloadItem {
   url: string
@@ -52,16 +55,16 @@ export class DownloadManager {
     const item = this.downloadQueue.shift()!
 
     try {
-      console.log(`[DownloadManager] Starting to download ${item.filename} from ${item.url}`)
+      downloadLog.info(`Starting to download ${item.filename} from ${item.url}`)
       const filePath = await this.downloadFile(item.url, item.filename)
-      console.log(`[DownloadManager] Download ${item.filename} completed`)
+      downloadLog.info(`Download ${item.filename} completed`)
 
       if (item.apply) {
         item.apply(filePath)
       }
     }
     catch (error) {
-      console.error(`[DownloadManager] Download ${item.filename} failed:`, error)
+      downloadLog.error(`Download ${item.filename} failed`, { error })
     }
 
     this.processQueue()
@@ -78,10 +81,10 @@ export class DownloadManager {
       const request = net.request(url)
       const filePath = this.basePath ? path.join(this.basePath, filename) : filename
 
-      console.log(`[DownloadManager] File download request sent for ${filename}.`)
+      downloadLog.info(`File download request sent for ${filename}.`)
 
       request.addListener('error', (error) => {
-        console.error(`[DownloadManager] Download request error for ${filename}:`, error)
+        downloadLog.error(`Download request error for ${filename}`, { error })
         reject(error)
       })
 
@@ -89,12 +92,12 @@ export class DownloadManager {
         fse.createFileSync(filePath)
 
         response.addListener('data', (chunk: any) => {
-          console.log(`[DownloadManager] Downloading ${filename}...`)
+          downloadLog.debug(`Downloading ${filename}...`)
           fse.appendFile(filePath, chunk, 'utf8')
         })
 
         response.addListener('end', () => {
-          console.log(`[DownloadManager] Download ${filename} finished.`)
+          downloadLog.info(`Download ${filename} finished.`)
           resolve(filePath)
         })
       })

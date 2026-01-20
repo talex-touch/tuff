@@ -126,9 +126,9 @@ export interface CoreBoxUIModeExitedPayload {
 export { TuffInputType } from '../../../core-box/tuff/tuff-dsl'
 
 export type {
-  TuffQuery,
-  TuffQueryInput as TuffInput,
   IProviderActivate,
+  TuffQueryInput as TuffInput,
+  TuffQuery,
 }
 
 export interface CoreBoxSearchUpdatePayload {

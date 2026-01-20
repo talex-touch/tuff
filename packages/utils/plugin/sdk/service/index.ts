@@ -1,7 +1,9 @@
 import type { IService } from '../../../service'
 import { genChannel } from '../../channel'
 
-export function regService(service: IService, handler: Function): boolean {
+type ServiceHandler = (data: any) => unknown
+
+export function regService(service: IService, handler: ServiceHandler): boolean {
   const res = !!genChannel().sendSync('service:reg', { service: service.name })
 
   if (res)
@@ -14,8 +16,7 @@ export function unRegService(service: IService): boolean {
   return !!genChannel().sendSync('service:unreg', { service: service.name })
 }
 
-export function onHandleService(service: IService, handler: Function) {
-  // @ts-ignore
+export function onHandleService(service: IService, handler: ServiceHandler) {
   genChannel().regChannel('service:handle', ({ data: _data }) => {
     const { data } = _data
 

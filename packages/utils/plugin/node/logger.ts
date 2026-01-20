@@ -1,5 +1,7 @@
 import type { IPluginLogger, LogDataType, LogItem, LogLevelString } from '../log/types'
 import type { PluginLoggerManager } from './logger-manager'
+import process from 'node:process'
+import { inspect } from 'node:util'
 import chalk from 'chalk'
 
 /**
@@ -94,17 +96,10 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
     }
     this.manager.append(log)
 
-    if (resolvedLevel === 'DEBUG') {
-      console.debug(
-        `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`,
-        ...data,
-      )
-    }
-    else {
-      console.log(
-        `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`,
-        ...data,
-      )
-    }
+    const baseMessage = `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`
+    const extra = data.length
+      ? ` ${data.map(item => (typeof item === 'string' ? item : inspect(item))).join(' ')}`
+      : ''
+    process.stdout.write(`${baseMessage}${extra}\n`)
   }
 }

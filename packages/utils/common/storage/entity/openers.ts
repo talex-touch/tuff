@@ -26,6 +26,7 @@ export interface OpenerInfo {
 }
 
 export type OpenersMap = Record<string, OpenerInfo>
+export type OpenersConfig = OpenersMap
 
 const _openersOriginData: OpenersMap = {}
 

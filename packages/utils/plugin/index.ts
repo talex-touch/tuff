@@ -172,10 +172,12 @@ export interface ITouchPlugin extends IPluginBaseInfo {
 
 export interface IFeatureCommand {
   type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
-  value: string | string[] | RegExp | Function
+  value: string | string[] | RegExp | FeatureCommandMatcher
   /** Optional trigger callback - not serialized over IPC */
   onTrigger?: () => void
 }
+
+export type FeatureCommandMatcher = (queryText: string) => boolean
 
 export interface IPluginFeature {
   id: string

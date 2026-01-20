@@ -11,9 +11,7 @@ export function levenshteinDistance(s1: string, s2: string): number {
   const n = s2.length
 
   // Create a 2D array (m+1)x(n+1) to store distances
-  const dp: number[][] = new Array(m + 1)
-    .fill(0)
-    .map(() => new Array(n + 1).fill(0))
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array.from({ length: n + 1 }, () => 0))
 
   // Initialize the DP table
   for (let i = 0; i <= m; i++) {

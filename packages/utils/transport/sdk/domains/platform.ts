@@ -7,7 +7,7 @@ import { PlatformEvents } from '../../events'
 
 export interface PlatformSdk {
   listCapabilities: (
-    payload?: PlatformCapabilityListRequest
+    payload?: PlatformCapabilityListRequest,
   ) => Promise<PlatformCapabilityListResponse>
 }
 
