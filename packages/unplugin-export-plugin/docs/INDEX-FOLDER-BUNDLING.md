@@ -85,6 +85,20 @@ dist/build/
 
 ---
 
+## 入口优先级（确定性规则）
+
+1. 若存在 `manifest.build.index` 配置（即使为空对象），视为显式启用 index/ 打包
+   - `entry` 存在时以其为准
+   - 未提供 `entry` 时自动探测 `index/` 下 `main.ts/js` 或 `index.ts/js`
+2. 若未配置 `manifest.build.index` 且根目录存在 `index.js`，默认使用根 `index.js`
+3. 若根目录无 `index.js` 且存在 `index/` 入口文件，则打包 `index/` 输出 `index.js`
+4. 若两者都不存在，则不会生成 `index.js`（插件运行将不完整）
+
+## CLI 对应关系
+
+- `tuff build` / `tuff builder` 会在打包阶段处理 `index/` → `index.js`
+- 当前无单独的 `build:index` 命令
+
 ## 实现设计
 
 ### 检测逻辑

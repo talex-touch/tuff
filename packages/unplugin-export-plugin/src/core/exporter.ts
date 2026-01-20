@@ -35,6 +35,54 @@ interface IndexBuildConfig {
   sourcemap?: boolean
 }
 
+type IndexConfigOverride = Partial<IndexBuildConfig>
+
+function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverride | null {
+  if (!source || typeof source !== 'object')
+    return null
+
+  const config = source as Record<string, unknown>
+  const result: IndexConfigOverride = {}
+
+  if ('entry' in config) {
+    if (typeof config.entry !== 'string')
+      throw new Error(`${label}.entry must be a string`)
+    result.entry = config.entry
+  }
+
+  if ('format' in config) {
+    if (config.format !== 'cjs' && config.format !== 'esm')
+      throw new Error(`${label}.format must be 'cjs' or 'esm'`)
+    result.format = config.format
+  }
+
+  if ('target' in config) {
+    if (typeof config.target !== 'string')
+      throw new Error(`${label}.target must be a string`)
+    result.target = config.target
+  }
+
+  if ('external' in config) {
+    if (!Array.isArray(config.external) || config.external.some(item => typeof item !== 'string'))
+      throw new Error(`${label}.external must be a string array`)
+    result.external = config.external as string[]
+  }
+
+  if ('minify' in config) {
+    if (typeof config.minify !== 'boolean')
+      throw new Error(`${label}.minify must be a boolean`)
+    result.minify = config.minify
+  }
+
+  if ('sourcemap' in config) {
+    if (typeof config.sourcemap !== 'boolean')
+      throw new Error(`${label}.sourcemap must be a boolean`)
+    result.sourcemap = config.sourcemap
+  }
+
+  return result
+}
+
 /**
  * Resolve options with defaults
  */
@@ -174,9 +222,7 @@ function checkPluginSize(tpexPath: string, maxSizeMB: number, chalk: any): void 
 /**
  * Detect index/ folder and find entry point
  */
-async function detectIndexFolder(indexDir: string, opts: ReturnType<typeof resolveOptions>): Promise<IndexBuildConfig | null> {
-  const indexDirPath = path.resolve(opts.root, indexDir)
-
+function findIndexEntry(indexDirPath: string): string | null {
   if (!fs.existsSync(indexDirPath)) {
     return null
   }
@@ -185,18 +231,57 @@ async function detectIndexFolder(indexDir: string, opts: ReturnType<typeof resol
   for (const file of entryFiles) {
     const entryPath = path.join(indexDirPath, file)
     if (fs.existsSync(entryPath)) {
-      return {
-        entry: entryPath,
-        format: 'cjs',
-        target: 'node18',
-        external: opts.external,
-        minify: opts.minify,
-        sourcemap: opts.sourcemap,
-      }
+      return entryPath
     }
   }
 
   return null
+}
+
+function resolveIndexBundleConfig(
+  opts: ReturnType<typeof resolveOptions>,
+  manifestIndexConfig: IndexConfigOverride | null,
+): IndexBuildConfig | null {
+  const rootIndexPath = path.resolve(opts.root, 'index.js')
+  const indexDirPath = path.resolve(opts.root, opts.indexDir)
+
+  if (manifestIndexConfig) {
+    const entryPath = manifestIndexConfig.entry
+      ? path.resolve(opts.root, manifestIndexConfig.entry)
+      : findIndexEntry(indexDirPath)
+
+    if (!entryPath || !fs.existsSync(entryPath)) {
+      const displayPath = manifestIndexConfig.entry || `${opts.indexDir}/(main|index).[jt]s`
+      throw new Error(`manifest.build.index.entry not found: ${displayPath}`)
+    }
+
+    return {
+      entry: entryPath,
+      format: manifestIndexConfig.format ?? 'cjs',
+      target: manifestIndexConfig.target ?? 'node18',
+      external: manifestIndexConfig.external ?? opts.external,
+      minify: manifestIndexConfig.minify ?? opts.minify,
+      sourcemap: manifestIndexConfig.sourcemap ?? opts.sourcemap,
+    }
+  }
+
+  if (fs.existsSync(rootIndexPath)) {
+    return null
+  }
+
+  const entryPath = findIndexEntry(indexDirPath)
+  if (!entryPath) {
+    return null
+  }
+
+  return {
+    entry: entryPath,
+    format: 'cjs',
+    target: 'node18',
+    external: opts.external,
+    minify: opts.minify,
+    sourcemap: opts.sourcemap,
+  }
 }
 
 /**
@@ -342,12 +427,17 @@ export async function build(userOptions?: Options) {
     }
   }
 
-  // 2.2.2 Handle index.js: either bundle from index/ folder or copy existing file
-  const indexConfig = await detectIndexFolder(opts.indexDir, opts)
+  // 2.2.2 Handle index.js: deterministic precedence with optional manifest override
+  const manifestPath = path.resolve(opts.root, opts.manifest)
+  const manifestData: IManifest | null = fs.existsSync(manifestPath)
+    ? JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    : null
+  const manifestIndexConfig = normalizeIndexConfig(manifestData?.build?.index, 'manifest.build.index')
+  const indexConfig = resolveIndexBundleConfig(opts, manifestIndexConfig)
+
   if (indexConfig) {
-    // Read manifest early for bundling
-    const manifestPath = path.resolve(opts.root, opts.manifest)
-    const manifestData = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    if (!manifestData)
+      throw new Error('manifest.json not found for index/ bundling')
 
     const bundleSuccess = await bundleIndexFolder(indexConfig, buildDir, manifestData, chalk)
     if (!bundleSuccess) {
@@ -355,7 +445,7 @@ export async function build(userOptions?: Options) {
     }
   }
   else {
-    // Fallback: copy existing index.js
+    // Fallback: copy existing index.js (root index.js has higher precedence by default)
     const indexSource = path.resolve(opts.root, 'index.js')
     const indexDest = path.join(buildDir, 'index.js')
     if (fs.existsSync(indexSource)) {
@@ -403,6 +493,14 @@ interface IManifest {
   }
   build?: {
     files: string[]
+    index?: {
+      entry?: string
+      format?: 'cjs' | 'esm'
+      target?: string
+      external?: string[]
+      minify?: boolean
+      sourcemap?: boolean
+    }
     secret: {
       pos: string
       addon: string[]

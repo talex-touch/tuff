@@ -6,6 +6,9 @@
 
 现在希望把 Prelude 从“单文件脚本”升级成“一个小项目”：允许在插件根目录新增 `index/` 目录，里面用 TS/JS 分文件组织逻辑，最终在打包时 **整体编译输出为单个 `index.js`**，供主应用作为插件 `manifest.json -> main` 入口加载。
 
+> 2026-01-20 现状补充: 已确定入口优先级（默认 root `index.js` 优先，`manifest.build.index` 显式启用 index/），
+> 打包落盘由 `tuff build`/`tuff builder` 负责；暂不提供独立 `build:index` 命令。
+
 ## 核心原则（必须遵守）
 
 1) **最终只解析为 `index.js`**
@@ -30,7 +33,7 @@
 - 插件构建：构建产物 `dist/build/index.js` 一定存在（来自根 `index.js` 或由 `index/` 编译生成）
 - 插件运行：主应用只认识 `manifest.json.main = index.js`，无需感知 `index/`
 
-## 需要补齐的点（这次仅落文档，不改实现）
+## 仍需补齐的点（待实现）
 
 ### 1) dev：要有 HMR 体感（至少等价体验）
 
