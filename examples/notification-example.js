@@ -3,7 +3,9 @@
  * 展示如何使用通知功能
  */
 
-const sdk = window.$touchSDK
+import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
+
+const sdk = useTouchSDK()
 
 // 通知操作示例
 async function notificationExamples() {

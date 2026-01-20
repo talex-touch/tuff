@@ -1,4 +1,5 @@
 import { hasWindow } from '@talex-touch/utils/env'
+import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
 
 /**
  * 完整通信示例
@@ -6,7 +7,7 @@ import { hasWindow } from '@talex-touch/utils/env'
  */
 
 // 获取SDK实例
-const sdk = window.$touchSDK
+const sdk = useTouchSDK()
 
 // 1. 插件A发送消息给插件B
 async function pluginAtoPluginB() {

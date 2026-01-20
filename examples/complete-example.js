@@ -3,7 +3,9 @@
  * 展示一个完整的插件如何使用SDK
  */
 
-const sdk = window.$touchSDK
+import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
+
+const sdk = useTouchSDK()
 
 // 插件配置
 const PLUGIN_CONFIG = {

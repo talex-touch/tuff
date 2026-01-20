@@ -1,4 +1,5 @@
 import { hasWindow } from '@talex-touch/utils/env'
+import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
 
 /**
  * Storage onDidChange 示例
@@ -7,7 +8,7 @@ import { hasWindow } from '@talex-touch/utils/env'
  */
 
 // 获取SDK实例
-const sdk = window.$touchSDK
+const sdk = useTouchSDK()
 
 // 示例1: 监听特定配置文件的变化
 function setupConfigListener() {

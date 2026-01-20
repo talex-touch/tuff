@@ -3,8 +3,10 @@
  * 展示如何使用 communicateWithPlugin 方法与其他插件通信
  */
 
+import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
+
 // 获取SDK实例
-const sdk = window.$touchSDK
+const sdk = useTouchSDK()
 
 // 发送消息到插件的示例
 async function communicateWithPlugin() {
