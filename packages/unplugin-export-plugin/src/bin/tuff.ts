@@ -38,9 +38,9 @@ function printHelp() {
   console.log('Commands:')
   console.log('  create      Create a new Tuff plugin from template')
   console.log('  build       Run Vite build and package .tpex output')
-  console.log('  builder     Build and package the current project into .tpex')
+  console.log('  builder     Package existing build output into .tpex')
   console.log('  dev         Start Vite dev server for plugin development')
-  console.log('  publish     Publish a release to Tuff Nexus')
+  console.log('  publish     Publish plugin package to Tuff Nexus')
   console.log('  login       Authenticate with Tuff Nexus')
   console.log('  logout      Clear authentication')
   console.log('  help        Show this help message')
@@ -62,9 +62,9 @@ function printAbout() {
   console.log('Tools:')
   console.log('  - create:  Create new plugins from templates')
   console.log('  - build:   Run Vite build and package .tpex output')
-  console.log('  - builder: Package plugins into .tpex format')
+  console.log('  - builder: Package existing build output into .tpex')
   console.log('  - dev:     Start a Vite dev server for plugin development')
-  console.log('  - publish: Publish app releases to Nexus server')
+  console.log('  - publish: Publish plugin packages to Nexus server')
 }
 
 function printBuildHelp() {

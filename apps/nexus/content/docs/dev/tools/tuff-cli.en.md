@@ -19,41 +19,58 @@ npx tuff <command>
 
 ## Commands
 
+**`tuff create [name]`**
+
+Create a new plugin via interactive prompts (type, language, UI framework, template).
+
+**`tuff build`**
+
+Run Vite build and then package `.tpex` output.
+
+```bash
+tuff build --watch --dev --output dist
+```
+
+**Options:**
+- `--watch` - Watch files and repackage after build
+- `--dev` - Development mode (no minify, sourcemap enabled)
+- `--output <dir>` - Output directory (default: `dist`)
+
 **`tuff builder`**
 
-Build your plugin project into a distributable `.tpex` package.
+Package existing build output into `.tpex` (no Vite build).
 
 ```bash
 tuff builder
 ```
 
+**`tuff dev`**
+
+Start the Vite dev server for plugin development.
+
+```bash
+tuff dev --host --port 5173 --open
+```
+
 **Options:**
-- Scans your project for plugin assets
-- Generates manifest and bundles resources
-- Outputs a `.tpex` file ready for distribution
+- `--host [host]` - Bind host (omit value to listen on all)
+- `--port <port>` - Dev server port
+- `--open` - Open browser on start
 
 **`tuff publish`**
 
-Publish your plugin to the Tuff Nexus server.
+Publish the latest `.tpex` package to Tuff Nexus.
 
 ```bash
-tuff publish --tag v1.0.0 --channel RELEASE
+tuff publish --tag 1.0.0 --channel RELEASE
 ```
 
 **Options:**
-- `--tag, -t` - Version tag for the release (e.g., v1.0.0)
-- `--channel, -c` - Release channel: `RELEASE`, `BETA`, or `SNAPSHOT` (default: `SNAPSHOT`)
-- `--notes, -n` - Release notes (Markdown supported)
-- `--dry-run` - Preview without actually publishing
-- `--api-url` - Custom API endpoint
-
-**Example:**
-```bash
-tuff publish \
-  --tag v1.2.0 \
-  --channel RELEASE \
-  --notes "### New Features\n- Added dark mode support\n- Performance improvements"
-```
+- `--tag` - Version tag (default: package.json version)
+- `--channel` - `RELEASE`, `BETA`, or `SNAPSHOT`
+- `--notes` - Changelog/notes (Markdown)
+- `--dry-run` - Preview without publishing
+- `--api-url` - Custom publish API URL
 
 **`tuff login`**
 
@@ -73,6 +90,14 @@ Remove saved authentication credentials.
 tuff logout
 ```
 
+**`tuff help`** / **`tuff about`**
+
+Show help or tool information.
+
+**`tuff`**
+
+Run without arguments to enter interactive mode.
+
 ## Vite Plugin Integration
 
 You can also use the unplugin as a Vite plugin for automatic plugin building:
@@ -91,12 +116,18 @@ export default defineConfig({
 })
 ```
 
+## Configuration
+
+Optional `tuff.config.{ts,js,mjs,cjs}` can define defaults for build/dev/publish.
+Precedence: CLI flags > tuff.config > manifest > defaults.
+
 ## Publishing Workflow
 
 1. **Build your plugin:**
    ```bash
-   pnpm build
+   tuff build
    ```
+   (or `vite build && tuff builder`)
 
 2. **Login to Nexus:**
    ```bash
@@ -105,23 +136,10 @@ export default defineConfig({
 
 3. **Publish:**
    ```bash
-   tuff publish --tag v1.0.0 --channel RELEASE
+   tuff publish --tag 1.0.0 --channel RELEASE
    ```
 
 The CLI will:
-- Scan the `dist/` directory for release assets
-- Calculate SHA256 checksums
-- Create the release on Nexus
-- Link assets to the release
-- Publish the release
-
-## Asset Detection
-
-The CLI automatically detects assets with these extensions:
-- `.dmg` - macOS disk images
-- `.exe` - Windows executables
-- `.AppImage` - Linux AppImage
-- `.deb` - Debian packages
-- `.rpm` - RPM packages
-- `.zip` - ZIP archives
-- `.tar.gz` - Gzipped tarballs
+- Scan `dist/build` (and `dist`) for `.tpex` packages
+- Validate manifest/package versions
+- Upload the latest `.tpex` to the publish API

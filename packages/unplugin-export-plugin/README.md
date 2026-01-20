@@ -3,8 +3,9 @@
 > 📦 **TuffCLI**: 本包现已集成到 TuffCLI 工具链中，通过 `tuff` 命令进行插件的构建、发布和管理。
 >
 > ```bash
-> tuff build    # 构建插件
-> tuff publish  # 发布插件
+> tuff dev      # 启动开发服务器
+> tuff build    # 构建并打包插件
+> tuff publish  # 发布插件包
 > ```
 
 [![NPM version](https://img.shields.io/npm/v/@talex-touch/unplugin-export-plugin?color=a1b858&label=)](https://www.npmjs.com/package/unplugin-starter)
@@ -46,7 +47,7 @@ For more about it, see the source code.
 
 ### Build Plugin Package
 
-`vite build` or `vite-ssg build` only generate regular Vite artifacts. You need to run the provided CLI to pack them into `.tpex`:
+`tuff build` 会执行 Vite 构建并打包 `.tpex`。如果你已经手动完成了 Vite 构建，也可以使用 `tuff builder` 仅执行打包：
 
 ```bash
 vite build && tuff builder
@@ -71,6 +72,8 @@ Extra commands:
 ```bash
 tuff help   # show command list
 tuff about  # tool info
+ tuff login  # save auth token
+ tuff logout # clear auth token
 ```
 
 Your result can refer to this
