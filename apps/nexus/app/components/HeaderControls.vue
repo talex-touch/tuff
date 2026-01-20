@@ -16,25 +16,22 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { locale } = useI18n()
 
- 
-const searchButtonLabel = computed(() => locale.value === 'zh' ? '搜索文档' : 'Search docs')
- 
-const searchButtonAriaLabel = computed(() => locale.value === 'zh' ? '打开文档搜索' : 'Open docs search')
+const _searchButtonLabel = computed(() => locale.value === 'zh' ? '搜索文档' : 'Search docs')
+
+const _searchButtonAriaLabel = computed(() => locale.value === 'zh' ? '打开文档搜索' : 'Open docs search')
 
 const isSearchOpen = ref(false)
 const searchButtonRef = ref<HTMLElement | null>(null)
 const searchPanelRef = ref<HTMLElement | null>(null)
 let stopClickOutside: (() => void) | null = null
 
- 
-function toggleSearch() {
+function _toggleSearch() {
   if (!props.showSearchButton)
     return
   isSearchOpen.value = !isSearchOpen.value
 }
 
- 
-function onSearchPanelClick(event: MouseEvent) {
+function _onSearchPanelClick(event: MouseEvent) {
   const target = event.target as HTMLElement | null
   if (target?.closest('a'))
     isSearchOpen.value = false

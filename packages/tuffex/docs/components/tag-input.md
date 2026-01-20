@@ -1,0 +1,54 @@
+# TagInput 标签输入
+
+用于快速录入标签，支持分隔符与回车确认。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const tags = ref(['Design', 'Docs'])
+</script>
+
+## 基础用法
+
+<div class="group" style="max-width: 360px;">
+  <TxTagInput v-model="tags" placeholder="输入标签后回车" />
+</div>
+
+:::: details Show Code
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const tags = ref(['Design', 'Docs'])
+</script>
+
+<template>
+  <TxTagInput v-model="tags" placeholder="输入标签后回车" />
+</template>
+```
+::::
+
+## API
+
+### TxTagInput Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|------|------|
+| `modelValue` | `string[]` | `[]` | 标签列表 |
+| `placeholder` | `string` | `'Add tag'` | 占位文本 |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `max` | `number` | `20` | 最大数量 |
+| `allowDuplicates` | `boolean` | `false` | 允许重复 |
+| `separators` | `string[]` | `[',']` | 分隔符 |
+| `confirmOnBlur` | `boolean` | `true` | 失焦确认 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(tags)` | 变更 |
+| `change` | `(tags)` | 变更 |
+| `add` | `(tags)` | 新增 |
+| `remove` | `(tag)` | 移除 |
+| `focus` | `(event)` | 聚焦 |
+| `blur` | `(event)` | 失焦 |

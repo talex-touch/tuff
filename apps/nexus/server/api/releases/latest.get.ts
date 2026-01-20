@@ -1,5 +1,6 @@
 import type { AssetPlatform, ReleaseChannel } from '../../utils/releasesStore'
 import { getQuery } from 'h3'
+import { attachSignatureUrls } from '../../utils/releaseSignature'
 import { getLatestRelease } from '../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {
@@ -18,6 +19,6 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    release,
+    release: attachSignatureUrls(release),
   }
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ClerkLoaded, ClerkLoading } from '@clerk/nuxt/components'
 import { useI18n } from '#imports'
+import { ClerkLoaded, ClerkLoading } from '@clerk/nuxt/components'
 import { computed, onMounted, watch, watchEffect } from 'vue'
 import { appName } from '~/constants'
 
@@ -108,11 +108,11 @@ watchEffect(() => {
 
   // 仅当访问旧的语言前缀路径（如 /en/*、/zh/*）时进行兼容处理。
   // 对于仅包含语言前缀的路径（/en、/en/、/zh、/zh/），避免被自动重定向到首页。
-  if (/^\/(en|zh)\/?$/i.test(route.path))
+  if (/^\/(?:en|zh)\/?$/i.test(route.path))
     return
 
   // 移除语言前缀 /en 或 /zh
-  const trimmed = route.path.replace(/^\/(en|zh)(?=\/|$)/i, '')
+  const trimmed = route.path.replace(/^\/(?:en|zh)(?=\/|$)/i, '')
 
   // 只在路径实际不同且 trimmed 非空时才重定向
   // 避免 /en 或 /zh 被错误重定向到首页

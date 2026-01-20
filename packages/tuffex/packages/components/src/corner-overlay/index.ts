@@ -1,6 +1,6 @@
+import type { CornerOverlayPlacement, CornerOverlayProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxCornerOverlay from './src/TxCornerOverlay.vue'
-import type { CornerOverlayPlacement, CornerOverlayProps } from './src/types'
 
 export type { CornerOverlayPlacement, CornerOverlayProps }
 

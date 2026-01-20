@@ -1,5 +1,5 @@
-import { computed } from 'vue'
 import type { DashboardPluginResponse } from '~/types/dashboard-plugin'
+import { computed } from 'vue'
 
 interface DashboardUpdate {
   id: string

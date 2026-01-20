@@ -1,6 +1,6 @@
+import type { OutlineBorderProps, OutlineBorderVariant, OutlineClipMode, OutlineClipShape, OutlineShape } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxOutlineBorder from './src/TxOutlineBorder.vue'
-import type { OutlineBorderProps, OutlineBorderVariant, OutlineClipMode, OutlineClipShape, OutlineShape } from './src/types'
 
 export type { OutlineBorderProps, OutlineBorderVariant, OutlineClipMode, OutlineClipShape, OutlineShape }
 

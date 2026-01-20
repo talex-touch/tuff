@@ -8,6 +8,8 @@ declare global {
     IMAGES?: R2Bucket
     PACKAGES?: R2Bucket
     PLUGIN_PACKAGES?: R2Bucket
+    RELEASE_SIGNATURE_PUBLIC_KEY?: string
+    UPDATE_SIGNATURE_PUBLIC_KEY?: string
   }
 }
 

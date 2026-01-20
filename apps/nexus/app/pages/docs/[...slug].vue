@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { TxButton, TxLoadingState } from '@talex-touch/tuffex'
-import { Toaster, toast } from 'vue-sonner'
 import { defineComponent, h, render } from 'vue'
+import { toast, Toaster } from 'vue-sonner'
 
 definePageMeta({
   layout: 'docs',
@@ -57,6 +57,10 @@ const docPath = computed(() => {
 const localizedPath = computed(() => {
   return `${docPath.value}.${locale.value}`
 })
+const baseDocPath = computed(() => docPath.value.replace(/\/index$/, ''))
+const localizedIndexPath = computed(() => `${baseDocPath.value}/index.${locale.value}`)
+const indexPath = computed(() => `${baseDocPath.value}/index`)
+const shouldTryIndex = computed(() => !docPath.value.endsWith('/index'))
 
 const requestKey = computed(() => `doc:${docPath.value}:${locale.value}`)
 
@@ -74,7 +78,20 @@ const { data: doc, status } = await useAsyncData(
     if (localizedDoc)
       return localizedDoc
 
-    return await queryCollection('docs').path(docPath.value).first()
+    if (shouldTryIndex.value) {
+      const localizedIndexDoc = await queryCollection('docs').path(localizedIndexPath.value).first()
+      if (localizedIndexDoc)
+        return localizedIndexDoc
+    }
+
+    const baseDoc = await queryCollection('docs').path(docPath.value).first()
+    if (baseDoc)
+      return baseDoc
+
+    if (shouldTryIndex.value)
+      return await queryCollection('docs').path(indexPath.value).first()
+
+    return null
   },
   { watch: [docPath, locale] },
 )
@@ -287,7 +304,7 @@ function resolveCodeLanguage(codeEl: HTMLElement | null, preEl: HTMLElement | nu
     return attrLang.trim()
 
   const className = codeEl?.className ?? preEl?.className ?? ''
-  const match = className.match(/(?:language|lang)-([a-z0-9_-]+)/i)
+  const match = className.match(/(?:language|lang)-([\w-]+)/i)
   return match?.[1] ?? ''
 }
 
@@ -341,11 +358,11 @@ const CodeHeader = defineComponent({
       h(
         TxButton,
         {
-          size: 'sm',
-          variant: 'ghost',
-          class: 'docs-code-copy',
+          'size': 'sm',
+          'variant': 'ghost',
+          'class': 'docs-code-copy',
           'aria-label': copyLabels.value.copy,
-          onClick: handleCopy,
+          'onClick': handleCopy,
         },
         () => copyLabels.value.copy,
       ),
@@ -482,7 +499,7 @@ watch(
           class="docs-surface px-8 py-10 space-y-10"
         >
           <ContentRenderer
-            :value="doc"
+            :value="doc ?? {}"
             class="docs-prose markdown-body max-w-none prose prose-neutral dark:prose-invert"
           />
           <div
@@ -645,7 +662,7 @@ watch(
 :deep(.docs-prose h1) {
   font-size: 2.25rem;
   font-weight: 700;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   letter-spacing: -0.02em;
   color: var(--docs-accent-strong);
 }
@@ -653,17 +670,17 @@ watch(
 :deep(.docs-prose h2) {
   font-size: 1.75rem;
   font-weight: 600;
-  margin-top: 2.6rem;
-  margin-bottom: 1.1rem;
+  margin-top: 2rem;
+  margin-bottom: 0.8rem;
   letter-spacing: -0.01em;
-  padding-bottom: 0.45rem;
+  padding-bottom: 0.25rem;
 }
 
 :deep(.docs-prose h3) {
   font-size: 1.25rem;
   font-weight: 600;
-  margin-top: 2rem;
-  margin-bottom: 0.85rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.6rem;
   color: rgba(15, 23, 42, 0.9);
 }
 
@@ -676,8 +693,8 @@ watch(
 :deep(.docs-prose ul),
 :deep(.docs-prose ol),
 :deep(.docs-prose li) {
-  line-height: 1.8;
-  margin-bottom: 1.15rem;
+  line-height: 1.7;
+  margin-bottom: 0.9rem;
   color: var(--docs-ink);
 }
 
@@ -712,8 +729,8 @@ watch(
 
 :deep(.docs-prose pre) {
   position: relative;
-  margin: 1.4rem 0;
-  padding: 2.4rem 1rem 1rem;
+  margin: 1.2rem 0;
+  padding: 2.2rem 1rem 1rem;
   border-radius: 8px;
   background: var(--docs-code-bg) !important;
   border: 1px solid var(--docs-code-border);
@@ -770,9 +787,9 @@ watch(
 }
 
 :deep(.docs-prose blockquote) {
-  border-left: none;
-  padding-left: 0.4rem;
-  margin: 1.4rem 0;
+  border-left: 3px solid var(--docs-accent);
+  padding-left: 1rem;
+  margin: 1.2rem 0;
   font-style: italic;
   color: var(--docs-muted);
 }
@@ -800,6 +817,7 @@ watch(
   background-image: linear-gradient(90deg, transparent, var(--docs-hr-color), transparent);
   background-size: 200% 100%;
   animation: docs-hr-shimmer 6s ease-in-out infinite;
+  opacity: 0.6;
 }
 
 :deep(.docs-prose table) {
@@ -812,7 +830,7 @@ watch(
 
 :deep(.docs-prose table th),
 :deep(.docs-prose table td) {
-  padding: 0.65rem 0.8rem;
+  padding: 0.5rem 0.8rem;
   border: none;
   text-align: left;
   color: var(--docs-ink);

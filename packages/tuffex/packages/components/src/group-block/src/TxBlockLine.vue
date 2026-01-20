@@ -4,14 +4,6 @@
  *
  * A simple line item component for displaying title and description.
  * Supports link-style appearance for navigation items.
- *
- * @example
- * ```vue
- * <TxBlockLine title="Version" description="1.0.0" />
- * <TxBlockLine title="View Details" link @click="handleClick" />
- * ```
- *
- * @component
  */
 import type { BlockLineEmits, BlockLineProps } from './types'
 
@@ -27,10 +19,6 @@ const props = withDefaults(defineProps<BlockLineProps>(), {
 
 const emit = defineEmits<BlockLineEmits>()
 
-/**
- * Handles click events on the block line.
- * @param event - The mouse event
- */
 function handleClick(event: MouseEvent): void {
   if (!props.link)
     return
@@ -96,36 +84,35 @@ function handleClick(event: MouseEvent): void {
     gap: 6px;
   }
 
-}
+  &.link,
+  &--link {
+    cursor: pointer;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    --fake-color: var(--tx-fill-color, #f0f2f5);
+    --fake-opacity: 0.4;
 
-.tx-block-line--link,
-.TBlockLine-Container.link {
-  cursor: pointer;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  --fake-color: var(--tx-fill-color, #f0f2f5);
-  --fake-opacity: 0.4;
+    .tx-block-line__title {
+      width: auto;
+      min-width: 120px;
+      opacity: 0.7;
+      color: var(--tx-text-color-primary, #303133);
+    }
 
-  .tx-block-line__title {
-    width: auto;
-    min-width: 120px;
-    opacity: 0.7;
-    color: var(--tx-text-color-primary, #303133);
-  }
+    .tx-block-line__link-slot {
+      color: var(--tx-color-primary, #409eff);
+      text-decoration-color: var(--tx-color-primary, #409eff);
+    }
 
-  .tx-block-line__link-slot {
-    color: var(--tx-color-primary, #409eff);
-    text-decoration-color: var(--tx-color-primary, #409eff);
-  }
+    &:focus-visible {
+      outline: 2px solid var(--tx-color-primary);
+      outline-offset: -2px;
+    }
 
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary);
-    outline-offset: -2px;
-  }
-
-  &:hover {
-    text-decoration: underline;
-    --fake-inner-opacity: 0.75;
+    &:hover {
+      text-decoration: underline;
+      --fake-inner-opacity: 0.75;
+    }
   }
 }
 </style>

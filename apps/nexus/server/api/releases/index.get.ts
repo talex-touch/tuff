@@ -1,5 +1,6 @@
 import type { ReleaseChannel, ReleaseStatus } from '../../utils/releasesStore'
 import { getQuery } from 'h3'
+import { attachSignatureUrls } from '../../utils/releaseSignature'
 import { listReleases } from '../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {
@@ -18,6 +19,6 @@ export default defineEventHandler(async (event) => {
   })
 
   return {
-    releases,
+    releases: releases.map(release => attachSignatureUrls(release)),
   }
 })

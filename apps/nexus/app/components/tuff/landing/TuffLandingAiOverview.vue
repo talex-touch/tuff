@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import Icon from '~/components/icon/Icon.vue'
 
 const { t } = useI18n()
 
@@ -30,7 +29,6 @@ const aiOverview = computed(() => ({
   })),
 }))
 
-const hero = computed(() => aiOverview.value.hero)
 const highlights = computed(() => aiOverview.value.highlights ?? [])
 const carouselSlides = computed(() => {
   if (highlights.value.length > 0) {
@@ -58,20 +56,6 @@ watch(
   },
   { immediate: true },
 )
-
-function goToPrev() {
-  const total = carouselSlides.value.length
-  if (!total)
-    return
-  activeSlide.value = (activeSlide.value - 1 + total) % total
-}
-
-function goToNext() {
-  const total = carouselSlides.value.length
-  if (!total)
-    return
-  activeSlide.value = (activeSlide.value + 1) % total
-}
 
 function goToSlide(index: number) {
   const total = carouselSlides.value.length
@@ -129,7 +113,7 @@ function goToSlide(index: number) {
                 :style="{ transform: `translateX(-${activeSlide * 100}%)` }"
               >
                 <div
-                  v-for="(slide, index) in carouselSlides"
+                  v-for="slide in carouselSlides"
                   :key="slide.id"
                   class="h-full w-full flex-shrink-0 px-2"
                 >

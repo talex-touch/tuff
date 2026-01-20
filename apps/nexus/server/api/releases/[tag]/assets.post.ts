@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
   const platform = formData.get('platform') as AssetPlatform
   const arch = formData.get('arch') as AssetArch
   const file = formData.get('file')
+  const signatureFile = formData.get('signature')
 
   if (!platform || !arch)
     throw createError({ statusCode: 400, statusMessage: 'Platform and arch are required.' })
@@ -42,6 +43,18 @@ export default defineEventHandler(async (event) => {
 
   await uploadReleaseAsset(event, fileKey, buffer, file.type)
 
+  let signatureKey: string | null = null
+  if (isFile(signatureFile) && signatureFile.size > 0) {
+    const signatureBuffer = Buffer.from(await signatureFile.arrayBuffer())
+    signatureKey = `${fileKey}.sig`
+    await uploadReleaseAsset(
+      event,
+      signatureKey,
+      signatureBuffer,
+      signatureFile.type || 'application/octet-stream',
+    )
+  }
+
   const asset = await createReleaseAsset(event, {
     releaseId: release.id,
     platform,
@@ -55,8 +68,12 @@ export default defineEventHandler(async (event) => {
     contentType: file.type || 'application/octet-stream',
   })
 
+  const signatureUrl = signatureKey
+    ? `/api/releases/${tag}/signature/${platform}/${arch}`
+    : null
+
   return {
-    asset,
+    asset: { ...asset, signatureUrl },
     message: 'Asset uploaded successfully.',
   }
 })

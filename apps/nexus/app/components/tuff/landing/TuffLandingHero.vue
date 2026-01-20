@@ -27,11 +27,6 @@ const props = defineProps<{
 const { t } = useI18n()
 const heroSectionRef = ref<HTMLElement | null>(null)
 
-let heroScrollContext: GsapContext | undefined
-let autoScrollTriggered = false
-let autoScrollTween: GsapTween | null = null
-let heroScrollPluginsRegistered = false
-
 const {
   beginSequence,
   resetSequence,

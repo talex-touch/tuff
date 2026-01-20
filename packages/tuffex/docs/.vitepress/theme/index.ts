@@ -15,6 +15,7 @@ import {
   TxAutoSizer,
   TxAvatar,
   TxAvatarGroup,
+  TxBlankSlate,
   TxBlockLine,
   TxBlockSlot,
   TxBlockSwitch,
@@ -32,19 +33,13 @@ import {
   TxContainer,
   TxContextMenu,
   TxContextMenuItem,
+  TxCornerOverlay,
   TxDatePicker,
   TxDrawer,
   TxDropdownItem,
   TxDropdownMenu,
-  TxEmptyState,
-  TxBlankSlate,
-  TxLoadingState,
-  TxNoSelection,
-  TxNoData,
-  TxSearchEmpty,
-  TxOfflineState,
-  TxPermissionState,
   TxEmpty,
+  TxEmptyState,
   TxFlex,
   TxFusion,
   TxGlassSurface,
@@ -61,9 +56,14 @@ import {
   TxLayoutSkeleton,
   TxListItemSkeleton,
   TxLoadingOverlay,
+  TxLoadingState,
   TxMarkdownView,
   TxNavBar,
+  TxNoData,
+  TxNoSelection,
+  TxOfflineState,
   TxOutlineBorder,
+  TxPermissionState,
   TxPicker,
   TxPopover,
   TxPopperDialog,
@@ -72,6 +72,7 @@ import {
   TxRadioGroup,
   TxRow,
   TxScroll,
+  TxSearchEmpty,
   TxSearchInput,
   TxSearchSelect,
   TxSegmentedSlider,
@@ -100,7 +101,6 @@ import {
   TxTransitionSmoothSize,
   TxTreeSelect,
   TxTypingIndicator,
-  TxCornerOverlay,
 } from '../../../packages/components/src'
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
@@ -126,7 +126,6 @@ import ScrollChainingDemo from './components/demos/ScrollChainingDemo.vue'
 import ScrollHorizontalDemo from './components/demos/ScrollHorizontalDemo.vue'
 import ScrollNativeDemo from './components/demos/ScrollNativeDemo.vue'
 import ScrollPullDownUpDemo from './components/demos/ScrollPullDownUpDemo.vue'
-import IconPreview from './components/IconPreview.vue'
 import 'virtual:uno.css'
 import './style/index.scss'
 import '../../../packages/components/style/index.scss'

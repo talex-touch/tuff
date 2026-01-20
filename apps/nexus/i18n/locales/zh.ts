@@ -1,7 +1,8 @@
 export default {
   nav: {
     home: '首页',
-    docs: '文档',
+    docs: '开发',
+    tutorial: '教程',
     api: 'API',
     marketplace: '插件市场',
     about: '关于',
@@ -11,7 +12,7 @@ export default {
     dashboard: '控制台',
     pricing: '订阅方案',
     market: '市场',
-    doc: '文档',
+    doc: '开发',
     developer: '开发者',
     download: '更新',
     blog: '博客',
@@ -1019,6 +1020,16 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
   },
   docsSidebar: {
     error: '导航加载失败，请稍后再试。',
+    extensions: '扩展',
+    components: '组件',
+    categories: {
+      basic: '基础',
+      form: '表单',
+      feedback: '反馈',
+      layout: '布局',
+      data: '数据',
+      misc: '其他',
+    },
   },
   license: {
     title: 'Tuff 服务条款',

@@ -5,7 +5,7 @@ description: Modern Vue3 component library with beautiful animations
 
 # TuffEx
 
-TuffEx (Chinese name: Ta Fu, 塔芙) is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
+TuffEx (Chinese name: Ta Fu) is a modern Vue3 component library focused on tactile experience and smooth animations. It's part of the Tuff ecosystem and provides beautiful, interactive UI components.
 
 > **Migration in Progress** - TuffEx is migrating components from Tuff core app. Tech stack upgraded to Vue 3.5 / Vite 6 / TypeScript 5.8.
 

@@ -21,6 +21,7 @@ function handleScroll() {
 
 const links = computed(() => [
   { to: '/market', label: t('nav.market') },
+  { to: '/docs/guide/start', label: t('nav.tutorial') },
   { to: '/docs', label: t('nav.doc') },
   // { to: '/#developer', label: t('nav.developer') },
   { to: '/updates', label: t('nav.download') },

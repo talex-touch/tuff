@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MarkdownViewProps } from './types'
 import { marked } from 'marked'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxMarkdownView',
@@ -9,6 +9,7 @@ defineOptions({
 
 const props = withDefaults(defineProps<MarkdownViewProps>(), {
   sanitize: true,
+  theme: 'auto',
 })
 
 marked.setOptions({
@@ -17,6 +18,8 @@ marked.setOptions({
 })
 
 const sanitizer = ref<null | ((html: string) => string)>(null)
+const autoTheme = ref<'light' | 'dark'>('light')
+let themeObserver: MutationObserver | null = null
 
 onMounted(async () => {
   if (!props.sanitize)
@@ -32,6 +35,72 @@ onMounted(async () => {
   }
 })
 
+function resolveAutoTheme(): 'light' | 'dark' {
+  if (typeof document === 'undefined')
+    return 'light'
+
+  const root = document.documentElement
+  const body = document.body
+  const dataTheme = root.getAttribute('data-theme') || body?.getAttribute('data-theme')
+
+  if (dataTheme === 'dark')
+    return 'dark'
+  if (dataTheme === 'light')
+    return 'light'
+  if (root.classList.contains('dark') || body?.classList.contains('dark'))
+    return 'dark'
+  if (root.classList.contains('light') || body?.classList.contains('light'))
+    return 'light'
+
+  return 'light'
+}
+
+function syncAutoTheme(): void {
+  autoTheme.value = resolveAutoTheme()
+}
+
+function setupThemeObserver(): void {
+  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined')
+    return
+
+  const root = document.documentElement
+  themeObserver?.disconnect()
+  themeObserver = new MutationObserver(() => {
+    syncAutoTheme()
+  })
+  themeObserver.observe(root, {
+    attributes: true,
+    attributeFilter: ['class', 'data-theme'],
+  })
+}
+
+onMounted(() => {
+  if (props.theme !== 'auto')
+    return
+
+  syncAutoTheme()
+  setupThemeObserver()
+})
+
+watch(
+  () => props.theme,
+  (next) => {
+    if (next === 'auto') {
+      syncAutoTheme()
+      setupThemeObserver()
+      return
+    }
+
+    themeObserver?.disconnect()
+    themeObserver = null
+  },
+)
+
+onBeforeUnmount(() => {
+  themeObserver?.disconnect()
+  themeObserver = null
+})
+
 const rawHtml = computed(() => {
   return marked.parse(props.content ?? '') as string
 })
@@ -41,68 +110,20 @@ const safeHtml = computed(() => {
     return rawHtml.value
   return sanitizer.value ? sanitizer.value(rawHtml.value) : rawHtml.value
 })
+
+const resolvedTheme = computed<'light' | 'dark'>(() => {
+  const theme = props.theme ?? 'auto'
+  const normalized = theme === 'auto' ? autoTheme.value : theme
+  return normalized === 'dark' ? 'dark' : 'light'
+})
 </script>
 
 <template>
-  <div class="tx-markdown-view" v-html="safeHtml" />
+  <div class="tx-markdown-view" :class="resolvedTheme" :data-theme="resolvedTheme">
+    <div class="markdown-body" v-html="safeHtml" />
+  </div>
 </template>
 
-<style scoped lang="scss">
-.tx-markdown-view {
-  color: var(--tx-text-color-primary, #111827);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.tx-markdown-view :deep(p) {
-  margin: 0.5em 0;
-}
-
-.tx-markdown-view :deep(a) {
-  color: var(--tx-color-primary, #409eff);
-  text-decoration: none;
-}
-
-.tx-markdown-view :deep(a:hover) {
-  text-decoration: underline;
-}
-
-.tx-markdown-view :deep(pre) {
-  padding: 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 70%, transparent);
-  overflow: auto;
-}
-
-.tx-markdown-view :deep(code) {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  font-size: 12px;
-}
-
-.tx-markdown-view :deep(:not(pre) > code) {
-  padding: 2px 6px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 85%, transparent);
-}
-
-.tx-markdown-view :deep(blockquote) {
-  margin: 0.75em 0;
-  padding: 8px 12px;
-  border-left: 3px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 65%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent);
-}
-
-.tx-markdown-view :deep(ul),
-.tx-markdown-view :deep(ol) {
-  padding-left: 1.25em;
-  margin: 0.5em 0;
-}
-
-.tx-markdown-view :deep(h1),
-.tx-markdown-view :deep(h2),
-.tx-markdown-view :deep(h3) {
-  margin: 0.8em 0 0.4em;
-  line-height: 1.25;
-}
+<style lang="scss">
+@import './github-markdown.css';
 </style>

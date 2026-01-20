@@ -22,6 +22,7 @@ export interface ReleaseAsset {
   sourceType: AssetSourceType
   fileKey: string | null
   downloadUrl: string
+  signatureUrl?: string | null
   size: number
   sha256: string | null
   contentType: string

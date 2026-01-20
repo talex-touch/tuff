@@ -17,5 +17,5 @@ const slots = useSlots()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="blank-slate" v-slots="slots" />
+  <TxEmptyState v-slots="slots" v-bind="props" variant="blank-slate" />
 </template>

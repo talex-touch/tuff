@@ -22,8 +22,8 @@ const props = withDefaults(defineProps<EmptyStateProps>(), {
 const emit = defineEmits<EmptyStateEmits>()
 const slots = useSlots()
 
-const variantDefaults: Record<EmptyStateVariant, { title: string; description: string; icon?: string }> = {
-  empty: {
+const variantDefaults: Record<EmptyStateVariant, { title: string, description: string, icon?: string }> = {
+  'empty': {
     title: 'Nothing here',
     description: 'There is nothing to show yet.',
     icon: 'i-carbon-incomplete',
@@ -48,27 +48,32 @@ const variantDefaults: Record<EmptyStateVariant, { title: string; description: s
     description: 'Try a different keyword or filter.',
     icon: 'i-carbon-search',
   },
-  loading: {
+  'loading': {
     title: 'Loading',
     description: 'Please wait a moment.',
     icon: '',
   },
-  offline: {
+  'offline': {
     title: 'You are offline',
     description: 'Check your connection and retry.',
     icon: 'i-carbon-cloud-offline',
   },
-  permission: {
+  'permission': {
     title: 'Access denied',
     description: 'You do not have permission to view this content.',
     icon: 'i-carbon-locked',
   },
-  error: {
+  'error': {
     title: 'Something went wrong',
     description: 'Please try again later.',
     icon: 'i-carbon-warning',
   },
-  custom: {
+  'guide': {
+    title: 'Start here',
+    description: 'Follow the steps to get started.',
+    icon: 'i-carbon-direction-straight-right',
+  },
+  'custom': {
     title: '',
     description: '',
     icon: '',
@@ -99,6 +104,7 @@ const illustrationVariants = new Set<EmptyStateVariant>([
   'search-empty',
   'no-data',
   'no-selection',
+  'guide',
 ])
 const hasIconSlot = computed(() => !!slots.icon)
 const hasIconProp = computed(() => {
@@ -145,6 +151,8 @@ function getActionSize(action?: EmptyStateAction) {
       <slot name="icon">
         <TxSpinner v-if="showSpinner" :size="resolvedIconSize" />
         <span v-else-if="useIllustration" class="tx-empty-state__illustration" :data-variant="illustrationVariant">
+
+          <!-- Loading State (Skeleton Shimmer) -->
           <div v-if="illustrationVariant === 'loading'" class="tx-empty-state__loading">
             <div class="tx-empty-state__loading-row">
               <div class="tx-empty-state__skeleton-block tx-empty-state__loading-avatar" />
@@ -161,61 +169,113 @@ function getActionSize(action?: EmptyStateAction) {
               </div>
             </div>
           </div>
+
+          <!-- No Selection (Cursor Click Guide) -->
           <svg v-else-if="illustrationVariant === 'no-selection'" viewBox="0 0 64 64" aria-hidden="true">
-            <rect class="tx-empty-state__selection-panel" x="14" y="16" width="36" height="28" rx="7" />
-            <rect class="tx-empty-state__selection-header" x="18" y="20" width="14" height="3" rx="1.5" />
-            <rect class="tx-empty-state__selection-item tx-empty-state__selection-item--active" x="18" y="24" width="28" height="8" rx="4" />
-            <circle class="tx-empty-state__selection-dot" cx="22" cy="28" r="2.2" />
-            <rect class="tx-empty-state__selection-line" x="26" y="27" width="12" height="2" rx="1" />
-            <rect class="tx-empty-state__selection-item" x="18" y="36" width="28" height="8" rx="4" />
-            <circle class="tx-empty-state__selection-dot" cx="22" cy="40" r="2.2" />
-            <rect class="tx-empty-state__selection-line" x="26" y="39" width="10" height="2" rx="1" />
-            <circle class="tx-empty-state__selection-ripple" cx="32" cy="28" r="4" />
-            <path class="tx-empty-state__selection-cursor" d="M38 40l-2-12 10 6-6 2 4 6-3 2-4-6Z" />
+            <!-- Background List Items -->
+            <rect class="tx-empty-state__selection-bg-item" x="12" y="8" width="32" height="4" rx="2" />
+
+            <!-- Target Item (Active) -->
+            <g class="tx-empty-state__selection-target">
+              <rect class="tx-empty-state__selection-item-bg" x="12" y="18" width="40" height="12" rx="4" />
+              <circle class="tx-empty-state__selection-item-icon" cx="20" cy="24" r="3" />
+              <rect class="tx-empty-state__selection-item-text" x="26" y="22" width="20" height="4" rx="2" />
+            </g>
+
+            <!-- Third Item -->
+            <g opacity="0.6">
+              <rect class="tx-empty-state__selection-item-bg-muted" x="12" y="36" width="40" height="12" rx="4" />
+              <circle class="tx-empty-state__selection-item-icon" cx="20" cy="42" r="3" />
+              <rect class="tx-empty-state__selection-item-text" x="26" y="40" width="16" height="4" rx="2" />
+            </g>
+
+            <!-- Cursor -->
+            <path class="tx-empty-state__selection-cursor" d="M38 42l-2.9-12.7 10.3 5.4-6.3 1.9 4.3 6.4-3.2 2.1-4.2-6.4Z" />
           </svg>
+
+          <!-- Search Empty (Magnifying Glass) -->
           <svg v-else-if="illustrationVariant === 'search-empty'" viewBox="0 0 64 64" aria-hidden="true">
-            <g class="tx-empty-state__search-graphic">
-              <circle class="tx-empty-state__search-ring" cx="26" cy="28" r="12" />
-              <line class="tx-empty-state__search-handle" x1="36" y1="38" x2="50" y2="52" />
+            <g class="tx-empty-state__search-group">
+              <circle class="tx-empty-state__search-glass-bg" cx="28" cy="28" r="14" />
+              <circle class="tx-empty-state__search-glass-border" cx="28" cy="28" r="14" />
+              <line class="tx-empty-state__search-handle" x1="38" y1="38" x2="52" y2="52" />
             </g>
             <g class="tx-empty-state__search-bubble">
-              <circle class="tx-empty-state__search-bubble-bg" cx="40" cy="16" r="6" />
-              <path class="tx-empty-state__search-question" d="M38 15c0-2 4-2 4 0 0 1.5-2 2-2 3" />
-              <circle class="tx-empty-state__search-dot" cx="40" cy="21" r="1.4" />
+              <rect x="30" y="8" width="14" height="18" rx="4" class="tx-empty-state__search-bubble-bg" />
+              <text x="37" y="21" font-size="14" font-weight="bold" text-anchor="middle" class="tx-empty-state__search-question">?</text>
             </g>
           </svg>
+
+          <!-- No Data (Flatline) -->
           <svg v-else-if="illustrationVariant === 'no-data'" viewBox="0 0 64 64" aria-hidden="true">
-            <line class="tx-empty-state__chart-axis" x1="12" y1="52" x2="52" y2="52" />
-            <line class="tx-empty-state__chart-axis" x1="12" y1="16" x2="12" y2="52" />
-            <path class="tx-empty-state__chart-line" d="M12 44 Q 22 44 32 44 T 52 44" />
-            <path class="tx-empty-state__chart-cross" d="M36 34l6 6m0-6l-6 6" />
+            <line class="tx-empty-state__chart-axis" x1="8" y1="56" x2="56" y2="56" />
+            <line class="tx-empty-state__chart-axis" x1="8" y1="16" x2="8" y2="56" />
+            <!-- Flatline Animation -->
+            <path class="tx-empty-state__chart-line" d="M8 48 Q 20 48 32 48 T 56 48" />
+            <!-- Cross marks -->
+            <g transform="translate(38, 38)" class="tx-empty-state__chart-marks">
+              <path d="M-3 -3 L3 3 M3 -3 L-3 3" stroke-width="2" stroke-linecap="round" />
+            </g>
+            <g transform="translate(26, 26)" class="tx-empty-state__chart-marks">
+              <path d="M-2 -2 L2 2 M2 -2 L-2 2" stroke-width="2" stroke-linecap="round" />
+            </g>
           </svg>
+
+          <!-- Offline State (Disconnect) -->
           <svg v-else-if="illustrationVariant === 'offline'" viewBox="0 0 64 64" aria-hidden="true">
-            <path class="tx-empty-state__offline-wave tx-empty-state__offline-wave--1" d="M20 36c7-7 17-7 24 0" />
-            <path class="tx-empty-state__offline-wave tx-empty-state__offline-wave--2" d="M14 30c10-10 26-10 36 0" />
-            <path class="tx-empty-state__offline-wave tx-empty-state__offline-wave--3" d="M26 42c4-4 8-4 12 0" />
-            <circle class="tx-empty-state__offline-dot" cx="32" cy="46" r="3" />
-            <line class="tx-empty-state__offline-slash" x1="18" y1="48" x2="46" y2="20" />
+            <g class="tx-empty-state__offline-cloud">
+              <path class="tx-empty-state__offline-wave tx-empty-state__offline-wave--1" d="M20 36c7-7 17-7 24 0" />
+              <path class="tx-empty-state__offline-wave tx-empty-state__offline-wave--2" d="M14 30c10-10 26-10 36 0" />
+              <path class="tx-empty-state__offline-wave tx-empty-state__offline-wave--3" d="M26 42c4-4 8-4 12 0" />
+              <circle class="tx-empty-state__offline-dot" cx="32" cy="48" r="2.5" />
+            </g>
+            <line class="tx-empty-state__offline-slash" x1="16" y1="52" x2="48" y2="16" />
           </svg>
+
+          <!-- Permission (Locked) -->
           <svg v-else-if="illustrationVariant === 'permission'" viewBox="0 0 64 64" aria-hidden="true">
             <g class="tx-empty-state__lock">
-              <path class="tx-empty-state__lock-shackle" d="M24 30v-4a8 8 0 0 1 16 0v4" />
-              <rect class="tx-empty-state__lock-body" x="22" y="30" width="20" height="16" rx="4" />
-              <circle class="tx-empty-state__lock-keyhole" cx="32" cy="38" r="2" />
+              <path class="tx-empty-state__lock-shackle" d="M24 28v-6a8 8 0 0 1 16 0v6" />
+              <rect class="tx-empty-state__lock-body" x="20" y="28" width="24" height="18" rx="4" />
+              <circle class="tx-empty-state__lock-keyhole" cx="32" cy="37" r="2.5" />
+              <rect class="tx-empty-state__lock-keyhole-line" x="31" y="38" width="2" height="4" />
             </g>
           </svg>
+
+          <!-- Blank Slate (New File) -->
           <svg v-else-if="illustrationVariant === 'blank-slate'" viewBox="0 0 64 64" aria-hidden="true">
-            <rect class="tx-empty-state__sheet" x="18" y="12" width="28" height="38" rx="6" />
-            <polygon class="tx-empty-state__sheet-corner" points="38,12 46,12 46,20" />
-            <circle class="tx-empty-state__sheet-plus" cx="46" cy="20" r="6" />
-            <path class="tx-empty-state__sheet-plus-icon" d="M46 16v8m-4-4h8" />
+            <!-- Document with fold -->
+            <path class="tx-empty-state__sheet" d="M18 10h18l12 12v30a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4z" />
+            <path class="tx-empty-state__sheet-corner" d="M36 10v8a4 4 0 0 0 4 4h8" />
+            <!-- Floating Plus -->
+            <circle class="tx-empty-state__sheet-plus-bg" cx="48" cy="48" r="10" />
+            <path class="tx-empty-state__sheet-plus-icon" d="M48 43v10m-5-5h10" />
           </svg>
+
+          <!-- Empty Box (Open/Close) -->
           <svg v-else-if="illustrationVariant === 'empty'" viewBox="0 0 64 64" aria-hidden="true">
-            <rect class="tx-empty-state__box-body" x="18" y="30" width="28" height="16" rx="4" />
-            <rect class="tx-empty-state__box-lid" x="18" y="24" width="28" height="8" rx="3" />
-            <rect class="tx-empty-state__box-lid-line" x="18" y="30" width="28" height="2" rx="1" />
-            <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--1" cx="24" cy="22" r="2" />
-            <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--2" cx="40" cy="20" r="1.6" />
+            <g transform="translate(0, 4)">
+              <rect class="tx-empty-state__box-body" x="18" y="30" width="28" height="16" rx="2" />
+              <!-- Lid Back -->
+              <path class="tx-empty-state__box-lid-back" d="M18 30h28v-8h-28z" />
+              <!-- Lid Front (Animated) -->
+              <g class="tx-empty-state__box-lid-wrapper">
+                <rect class="tx-empty-state__box-lid" x="18" y="22" width="28" height="8" rx="1" />
+              </g>
+              <!-- Dust -->
+              <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--1" cx="14" cy="46" r="2" />
+              <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--2" cx="10" cy="42" r="1.5" />
+            </g>
+          </svg>
+
+          <!-- Guide State (Directional) -->
+          <svg v-else-if="illustrationVariant === 'guide'" viewBox="0 0 64 64" aria-hidden="true">
+            <g class="tx-empty-state__guide-wrapper">
+              <circle class="tx-empty-state__guide-circle" cx="32" cy="20" r="10" />
+              <path class="tx-empty-state__guide-arrow" d="M32 26V14M27 19l5-5 5 5" />
+            </g>
+            <rect class="tx-empty-state__guide-bar" x="20" y="40" width="24" height="4" rx="2" />
+            <rect class="tx-empty-state__guide-progress" x="20" y="40" width="12" height="4" rx="2" />
           </svg>
         </span>
         <TxIcon v-else-if="iconSource" :icon="iconSource" :size="resolvedIconSize" />
@@ -319,7 +379,7 @@ function getActionSize(action?: EmptyStateAction) {
   --tx-empty-state-padding: 26px;
   --tx-empty-state-title-size: 18px;
   --tx-empty-state-desc-size: 14px;
-  --tx-empty-state-illus-size: 78px;
+  --tx-empty-state-illus-size: 80px;
 }
 
 .tx-empty-state--card {
@@ -340,18 +400,7 @@ function getActionSize(action?: EmptyStateAction) {
   align-items: center;
   justify-content: center;
   color: var(--tx-text-color-secondary, #909399);
-}
-
-.tx-empty-state__illustration[data-variant='search-empty'],
-.tx-empty-state__illustration[data-variant='no-data'],
-.tx-empty-state__illustration[data-variant='no-selection'],
-.tx-empty-state__illustration[data-variant='empty'],
-.tx-empty-state__illustration[data-variant='blank-slate'] {
-  animation: tx-empty-state-float-soft 3.4s ease-in-out infinite;
-}
-
-.tx-empty-state__illustration[data-variant='loading'] {
-  align-items: stretch;
+  position: relative;
 }
 
 .tx-empty-state__illustration svg {
@@ -359,41 +408,19 @@ function getActionSize(action?: EmptyStateAction) {
   height: 100%;
   stroke: currentColor;
   fill: none;
-  stroke-width: 2.5;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  overflow: visible;
 }
 
-.tx-empty-state__offline-dot {
-  fill: currentColor;
-}
-
-.tx-empty-state__offline-slash {
-  stroke-width: 3;
-  opacity: 0.8;
-  stroke-dasharray: 60;
-  stroke-dashoffset: 60;
-  animation: tx-empty-state-slash 2.6s ease-in-out infinite;
-}
-
-.tx-empty-state__offline-wave {
-  opacity: 0.35;
-  animation: tx-empty-state-wave 1.8s ease-in-out infinite;
-}
-
-.tx-empty-state__offline-wave--2 {
-  animation-delay: 0.4s;
-}
-
-.tx-empty-state__offline-wave--3 {
-  animation-delay: 0.7s;
-}
-
+/* --- Loading State --- */
 .tx-empty-state__loading {
   width: 100%;
   height: 100%;
   display: grid;
   gap: 10px;
+  align-content: center;
 }
 
 .tx-empty-state__loading-row {
@@ -407,230 +434,361 @@ function getActionSize(action?: EmptyStateAction) {
 }
 
 .tx-empty-state__loading-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .tx-empty-state__loading-lines {
   flex: 1;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
 .tx-empty-state__loading-line {
   height: 6px;
-  border-radius: 999px;
+  border-radius: 4px;
 }
 
 .tx-empty-state__loading-line--wide {
-  width: 100%;
+  width: 80%;
 }
 
 .tx-empty-state__loading-line--short {
-  width: 70%;
+  width: 50%;
 }
 
 .tx-empty-state__skeleton-block {
   position: relative;
   overflow: hidden;
-  background: color-mix(in srgb, currentColor 16%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
 }
 
 .tx-empty-state__skeleton-block::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
   transform: translateX(-100%);
-  animation: tx-empty-state-shimmer 1.6s ease-in-out infinite;
+  animation: tx-empty-state-shimmer 1.5s infinite;
 }
 
-.tx-empty-state__search-graphic {
-  animation: tx-empty-state-search-pan 3.2s ease-in-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
+@keyframes tx-empty-state-shimmer {
+  100% { transform: translateX(100%); }
 }
 
-.tx-empty-state__search-bubble {
-  animation: tx-empty-state-question 3.2s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.tx-empty-state__search-bubble-bg {
-  fill: color-mix(in srgb, currentColor 12%, transparent);
-  stroke: currentColor;
-  stroke-width: 2;
-}
-
-.tx-empty-state__search-question {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.tx-empty-state__search-dot {
-  fill: currentColor;
+/* --- No Selection --- */
+.tx-empty-state__selection-bg-item {
+  fill: color-mix(in srgb, currentColor 8%, transparent);
   stroke: none;
 }
 
-.tx-empty-state__chart-axis {
-  opacity: 0.35;
-}
-
-.tx-empty-state__chart-line {
-  stroke: currentColor;
-  stroke-width: 2.2;
-  stroke-dasharray: 80;
-  stroke-dashoffset: 80;
-  animation: tx-empty-state-flatline 3s ease-out infinite;
-}
-
-.tx-empty-state__chart-cross {
-  opacity: 0.55;
-}
-
-.tx-empty-state__selection-panel {
-  fill: var(--tx-fill-color-blank, #fff);
-  stroke: color-mix(in srgb, currentColor 30%, transparent);
-  stroke-width: 2;
-  opacity: 0.85;
-}
-
-.tx-empty-state__selection-header {
-  fill: color-mix(in srgb, currentColor 22%, transparent);
-  opacity: 0.7;
-}
-
-.tx-empty-state__selection-item {
-  fill: color-mix(in srgb, currentColor 16%, transparent);
+.tx-empty-state__selection-item-bg {
+  fill: color-mix(in srgb, currentColor 5%, transparent);
   stroke: none;
-  opacity: 0.8;
 }
 
-.tx-empty-state__selection-item--active {
+.tx-empty-state__selection-item-bg-muted {
+  fill: color-mix(in srgb, currentColor 5%, transparent);
+  stroke: none;
+}
+
+.tx-empty-state__selection-item-icon {
+  fill: color-mix(in srgb, currentColor 20%, transparent);
+  stroke: none;
+}
+
+.tx-empty-state__selection-item-text {
+  fill: color-mix(in srgb, currentColor 15%, transparent);
+  stroke: none;
+}
+
+.tx-empty-state__selection-target {
   animation: tx-empty-state-item-highlight 3s ease-in-out infinite;
-  transform-box: fill-box;
   transform-origin: center;
-}
-
-.tx-empty-state__selection-dot,
-.tx-empty-state__selection-line {
-  fill: color-mix(in srgb, currentColor 45%, transparent);
-  opacity: 0.6;
+  transform-box: fill-box;
 }
 
 .tx-empty-state__selection-cursor {
-  fill: color-mix(in srgb, var(--tx-text-color-primary, #1f2937) 85%, transparent);
+  fill: var(--tx-text-color-primary, #1e293b);
   stroke: var(--tx-bg-color, #fff);
-  stroke-width: 2.5;
+  stroke-width: 1.5;
   animation: tx-empty-state-cursor-move 3s ease-in-out infinite;
   transform-origin: center;
   transform-box: fill-box;
 }
 
-.tx-empty-state__selection-ripple {
-  fill: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
-  stroke: var(--tx-color-primary, #409eff);
-  stroke-width: 2;
-  opacity: 0;
-  animation: tx-empty-state-ripple 3s ease-out infinite;
-  transform-origin: center;
+@keyframes tx-empty-state-cursor-move {
+  0% { transform: translate(15px, 15px); opacity: 0; }
+  10% { opacity: 1; }
+  30% { transform: translate(0, 0); }
+  40% { transform: scale(0.9); }
+  50% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { transform: translate(15px, 15px); opacity: 0; }
+}
+
+@keyframes tx-empty-state-item-highlight {
+  0%, 30% { transform: scale(1); opacity: 0.8; }
+  40% { transform: scale(0.98); opacity: 1; }
+  50% { transform: scale(1); opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+/* --- Search Empty --- */
+.tx-empty-state__search-group {
+  animation: tx-empty-state-search-pan 3s ease-in-out infinite;
+  transform-origin: bottom center;
   transform-box: fill-box;
 }
 
+.tx-empty-state__search-glass-bg {
+  fill: transparent;
+  stroke: none;
+}
+
+.tx-empty-state__search-glass-border {
+  stroke: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.tx-empty-state__search-handle {
+  stroke: color-mix(in srgb, currentColor 60%, transparent);
+  stroke-width: 3;
+}
+
+.tx-empty-state__search-bubble {
+  animation: tx-empty-state-question-pop 3s ease-in-out infinite;
+  transform-origin: bottom center;
+  transform-box: fill-box;
+}
+
+.tx-empty-state__search-bubble-bg {
+  fill: var(--tx-text-color-primary, #333);
+  stroke: none;
+}
+
+.tx-empty-state__search-question {
+  fill: #fff;
+  stroke: none;
+}
+
+@keyframes tx-empty-state-search-pan {
+  0% { transform: translateX(-4px) rotate(0deg); }
+  50% { transform: translateX(4px) rotate(8deg); }
+  100% { transform: translateX(-4px) rotate(0deg); }
+}
+
+@keyframes tx-empty-state-question-pop {
+  0%, 60% { opacity: 0; transform: scale(0) translate(-50%, -10px); }
+  70% { opacity: 1; transform: scale(1.1) translate(-50%, -10px); }
+  80% { transform: scale(1) translate(-50%, -10px); }
+  100% { opacity: 1; transform: scale(1) translate(-50%, -10px); }
+}
+
+/* --- No Data --- */
+.tx-empty-state__chart-axis {
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.tx-empty-state__chart-line {
+  stroke: currentColor;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  fill: none;
+  animation: tx-empty-state-flatline 3s ease-out infinite;
+}
+
+.tx-empty-state__chart-marks path {
+  stroke: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+@keyframes tx-empty-state-flatline {
+  0% { stroke-dashoffset: 100; }
+  50% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* --- Offline --- */
+.tx-empty-state__offline-cloud {
+  animation: tx-empty-state-float-cloud 3s ease-in-out infinite;
+}
+
+.tx-empty-state__offline-dot {
+   fill: currentColor;
+   stroke: none;
+}
+
+.tx-empty-state__offline-wave {
+  opacity: 0.35;
+}
+
+.tx-empty-state__offline-slash {
+  stroke: var(--tx-color-danger, #ef4444);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: tx-empty-state-slash-draw 3s ease-in-out infinite alternate;
+}
+
+@keyframes tx-empty-state-float-cloud {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes tx-empty-state-slash-draw {
+  0% { stroke-dashoffset: 60; opacity: 0; }
+  20% { opacity: 1; }
+  50% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+/* --- Permission --- */
 .tx-empty-state__lock {
-  animation: tx-empty-state-lock-shake 2.4s ease-in-out infinite;
+  animation: tx-empty-state-lock-shake 2s ease-in-out infinite;
   transform-origin: top center;
   transform-box: fill-box;
 }
 
 .tx-empty-state__lock-body {
-  fill: color-mix(in srgb, currentColor 16%, transparent);
-  stroke: currentColor;
-  stroke-width: 2.5;
+  fill: var(--tx-color-danger-light, #fef2f2);
+  stroke: var(--tx-color-danger, #ef4444);
 }
 
 .tx-empty-state__lock-shackle {
-  stroke: currentColor;
-  stroke-width: 3;
-  fill: none;
+  stroke: var(--tx-color-danger, #ef4444);
 }
 
 .tx-empty-state__lock-keyhole {
-  fill: currentColor;
+  fill: var(--tx-color-danger, #ef4444);
   stroke: none;
 }
 
+.tx-empty-state__lock-keyhole-line {
+  fill: var(--tx-color-danger, #ef4444);
+  stroke: none;
+}
+
+@keyframes tx-empty-state-lock-shake {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-8deg); }
+  40% { transform: rotate(8deg); }
+  60% { transform: rotate(-4deg); }
+  80% { transform: rotate(4deg); }
+}
+
+/* --- Blank Slate --- */
 .tx-empty-state__sheet {
-  fill: var(--tx-fill-color-blank, #fff);
-  stroke: color-mix(in srgb, currentColor 35%, transparent);
-  stroke-width: 2;
+  fill: #fff;
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  animation: tx-empty-state-paper-fold 3s ease-in-out infinite;
 }
 
 .tx-empty-state__sheet-corner {
-  fill: color-mix(in srgb, currentColor 12%, transparent);
-  stroke: color-mix(in srgb, currentColor 35%, transparent);
-  stroke-width: 2;
+  fill: color-mix(in srgb, currentColor 10%, transparent);
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
 }
 
-.tx-empty-state__sheet-plus {
-  fill: var(--tx-color-primary, #409eff);
-  animation: tx-empty-state-plus 2.4s ease-in-out infinite;
+.tx-empty-state__sheet-plus-bg {
+  fill: var(--tx-color-primary, #3b82f6);
+  stroke: none;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1));
+  animation: tx-empty-state-bounce 2s infinite;
   transform-origin: center;
   transform-box: fill-box;
 }
 
 .tx-empty-state__sheet-plus-icon {
   stroke: #fff;
-  stroke-width: 2.4;
-}
-
-.tx-empty-state__box-body {
-  fill: color-mix(in srgb, currentColor 14%, transparent);
-  stroke: color-mix(in srgb, currentColor 45%, transparent);
-  stroke-width: 2;
-}
-
-.tx-empty-state__box-lid {
-  fill: color-mix(in srgb, currentColor 18%, transparent);
-  stroke: color-mix(in srgb, currentColor 45%, transparent);
-  stroke-width: 2;
-  animation: tx-empty-state-box-lid 3.2s ease-in-out infinite;
-  transform-origin: center 100%;
+  stroke-width: 2.5;
+  animation: tx-empty-state-bounce 2s infinite;
+  transform-origin: center;
   transform-box: fill-box;
 }
 
-.tx-empty-state__box-lid-line {
-  fill: color-mix(in srgb, currentColor 30%, transparent);
-  opacity: 0.5;
+@keyframes tx-empty-state-paper-fold {
+  0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  50% { clip-path: polygon(0 0, 75% 0, 100% 25%, 100% 100%, 0 100%); }
+  100% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+}
+
+@keyframes tx-empty-state-bounce {
+  0%, 100% { transform: translateY(-15%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+  50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); }
+}
+
+/* --- Empty Box --- */
+.tx-empty-state__box-body {
+  fill: color-mix(in srgb, currentColor 15%, transparent);
+  stroke: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.tx-empty-state__box-lid-back {
+  fill: color-mix(in srgb, currentColor 25%, transparent);
+  stroke: color-mix(in srgb, currentColor 40%, transparent);
+  transform-origin: bottom center;
+  animation: tx-empty-state-box-lid 3s ease-in-out infinite;
+  transform-box: fill-box;
+}
+
+.tx-empty-state__box-lid {
+  fill: transparent;
+  stroke: color-mix(in srgb, currentColor 40%, transparent);
+  opacity: 0.3;
 }
 
 .tx-empty-state__box-dust {
   fill: color-mix(in srgb, currentColor 40%, transparent);
   opacity: 0;
-  animation: tx-empty-state-dust 2.6s linear infinite;
+  stroke: none;
+  animation: tx-empty-state-dust-float 2s linear infinite;
 }
 
 .tx-empty-state__box-dust--2 {
-  animation-delay: 0.6s;
+  animation-delay: 0.5s;
 }
 
-.tx-empty-state--variant-permission .tx-empty-state__illustration {
-  color: var(--tx-color-danger, #f56c6c);
+@keyframes tx-empty-state-box-lid {
+  0%, 100% { transform: rotateX(0deg); }
+  50% { transform: rotateX(-40deg); }
 }
 
-.tx-empty-state--variant-permission .tx-empty-state__title {
-  color: var(--tx-color-danger, #f56c6c);
+@keyframes tx-empty-state-dust-float {
+  0% { transform: translate(0, 0) scale(0); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translate(10px, -10px) scale(1.5); opacity: 0; }
 }
 
-.tx-empty-state--variant-permission .tx-empty-state__description {
-  color: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 70%, var(--tx-text-color-secondary, #909399));
+/* --- Guide --- */
+.tx-empty-state__guide-circle {
+  fill: var(--tx-color-primary-light-9, #ecf5ff);
+  stroke: var(--tx-color-primary, #409eff);
+  stroke-width: 0;
 }
 
+.tx-empty-state__guide-arrow {
+  stroke: var(--tx-color-primary, #409eff);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  animation: tx-empty-state-bounce 2s infinite;
+}
+
+.tx-empty-state__guide-bar {
+  fill: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.tx-empty-state__guide-progress {
+  fill: var(--tx-color-primary-light-5, #b3d8ff);
+  animation: tx-empty-state-shimmer 2s infinite;
+}
+
+/* --- General --- */
 .tx-empty-state__content {
   display: flex;
   flex-direction: column;
@@ -666,209 +824,5 @@ function getActionSize(action?: EmptyStateAction) {
 
 .tx-empty-state--align-end .tx-empty-state__actions {
   justify-content: flex-end;
-}
-
-@keyframes tx-empty-state-wave {
-  0%,
-  100% {
-    opacity: 0.2;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
-
-@keyframes tx-empty-state-float-soft {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
-}
-
-@keyframes tx-empty-state-shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
-}
-
-@keyframes tx-empty-state-flatline {
-  0% {
-    stroke-dashoffset: 80;
-    opacity: 0.4;
-  }
-  40% {
-    opacity: 0.9;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 0.9;
-  }
-}
-
-@keyframes tx-empty-state-slash {
-  0% {
-    stroke-dashoffset: 60;
-    opacity: 0;
-  }
-  25% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 1;
-  }
-}
-
-@keyframes tx-empty-state-search-pan {
-  0% {
-    transform: translateX(-6px) rotate(-6deg);
-  }
-  50% {
-    transform: translateX(6px) rotate(6deg);
-  }
-  100% {
-    transform: translateX(-6px) rotate(-6deg);
-  }
-}
-
-@keyframes tx-empty-state-question {
-  0%,
-  60% {
-    opacity: 0;
-    transform: scale(0) translate(-50%, -60%);
-  }
-  70% {
-    opacity: 1;
-    transform: scale(1.1) translate(-50%, -60%);
-  }
-  80% {
-    transform: scale(1) translate(-50%, -60%);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translate(-50%, -60%);
-  }
-}
-
-@keyframes tx-empty-state-cursor-move {
-  0% {
-    transform: translate(10px, 10px) scale(0.9);
-    opacity: 0;
-  }
-  12% {
-    opacity: 1;
-  }
-  32% {
-    transform: translate(0, 0) scale(1);
-  }
-  42% {
-    transform: translate(0, 0) scale(0.92);
-  }
-  52% {
-    transform: translate(0, 0) scale(1);
-  }
-  85% {
-    opacity: 1;
-  }
-  100% {
-    transform: translate(10px, 10px) scale(0.9);
-    opacity: 0;
-  }
-}
-
-@keyframes tx-empty-state-item-highlight {
-  0%,
-  30% {
-    fill: color-mix(in srgb, currentColor 16%, transparent);
-    transform: scale(1);
-  }
-  45% {
-    transform: scale(0.98);
-  }
-  55% {
-    fill: color-mix(in srgb, currentColor 28%, transparent);
-    transform: scale(1);
-  }
-  90% {
-    fill: color-mix(in srgb, currentColor 20%, transparent);
-  }
-}
-
-@keyframes tx-empty-state-ripple {
-  0% {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  40% {
-    opacity: 0.45;
-    transform: scale(1);
-  }
-  70% {
-    opacity: 0;
-    transform: scale(1.3);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.3);
-  }
-}
-
-@keyframes tx-empty-state-lock-shake {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-  20% {
-    transform: rotate(-8deg);
-  }
-  40% {
-    transform: rotate(8deg);
-  }
-  60% {
-    transform: rotate(-4deg);
-  }
-  80% {
-    transform: rotate(4deg);
-  }
-}
-
-@keyframes tx-empty-state-plus {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
-  }
-  50% {
-    transform: translateY(-4px) scale(1.08);
-  }
-}
-
-@keyframes tx-empty-state-box-lid {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-  50% {
-    transform: rotate(-18deg);
-  }
-}
-
-@keyframes tx-empty-state-dust {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0) scale(0.6);
-  }
-  40% {
-    opacity: 0.7;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(10px, -12px) scale(1.2);
-  }
 }
 </style>

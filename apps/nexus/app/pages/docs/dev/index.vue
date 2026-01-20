@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const localePath = useLocalePath()
 const route = useRoute()
-const target = computed(() => localePath({ path: '/docs/dev/quickstart' }))
+const target = computed(() => localePath({ path: '/docs/dev/getting-started/quickstart' }))
 
 if (import.meta.server) {
   await navigateTo(target.value, { redirectCode: 302 })

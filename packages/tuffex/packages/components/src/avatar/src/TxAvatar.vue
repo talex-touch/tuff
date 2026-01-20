@@ -9,6 +9,7 @@ defineOptions({
 
 const props = withDefaults(defineProps<Props>(), {
   size: 'medium',
+  shape: 'circle',
   clickable: false,
 })
 
@@ -64,6 +65,7 @@ function handleClick() {
   <div
     class="tx-avatar" :class="[
       `tx-avatar--${size}`,
+      `tx-avatar--${shape}`,
       { 'tx-avatar--clickable': clickable },
     ]"
     :style="customStyle"
@@ -96,12 +98,23 @@ function handleClick() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
   font-weight: 500;
   overflow: hidden;
   user-select: none;
   background: var(--tx-avatar-bg, #f3f4f6);
   color: var(--tx-avatar-text, #374151);
+}
+
+.tx-avatar--circle {
+  border-radius: 50%;
+}
+
+.tx-avatar--square {
+  border-radius: 8px;
+}
+
+.tx-avatar--rounded {
+  border-radius: 12px;
 }
 
 .tx-avatar--small {
