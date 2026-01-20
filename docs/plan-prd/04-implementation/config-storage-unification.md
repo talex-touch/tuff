@@ -97,9 +97,26 @@
 - Owner sign-off：TBD（状态：pending）
 
 ## 4. 存储抽象与版本策略（草案）
-- StorageAdapter：`get/set/delete/list` + `version` 字段。
-- SQLiteAdapter：事务写入 + 版本递增 + 读缓存。
-- JsonAdapter：序列化载荷 + 同步冲突交给上层 resolver。
+### 4.1 接口草案
+- `get(key) -> { data, version }`
+- `set(key, data, clientVersion?) -> { success, version, conflict? }`
+- `delete(key) -> { success }`
+- `list(prefix?) -> Array<{ key, version }>`
+- `subscribe(key, handler) -> disposer`
+
+### 4.2 版本策略
+- 每个 key 维护单调递增 `version`。
+- SQLite：版本随写入事务递增并持久化。
+- JSON：版本来源于存储模块缓存版本；同步回流时强制对齐。
+
+### 4.3 JSON ↔ SQLite 行为映射
+| 操作 | SQLiteAdapter | JsonAdapter |
+| --- | --- | --- |
+| get | 读表 + 读缓存 | 读文件 + 缓存 |
+| set | 事务写入 + 版本递增 | 写入 JSON 载荷 + 更新缓存版本 |
+| delete | 删除行 | 写空对象或删除文件 |
+| list | key 前缀扫描 | 文件名枚举 |
+| subscribe | 监听表变更 | 监听文件变更 |
 
 ## 5. 迁移与回滚（草案）
 - Read fallback：SQLite miss -> JSON -> default。
@@ -110,7 +127,7 @@
 - [x] 盘点现有配置项（CFG-010）
 - [x] 分类矩阵与目标存储策略（CFG-020）
 - [x] Source-of-truth 决策与冲突规则（CFG-030）
-- [ ] 存储抽象设计（CFG-040）
+- [x] 存储抽象设计（CFG-040）
 - [ ] 迁移与回滚方案（CFG-050）
 - [ ] 权限中心 PRD/TODO 对齐（CFG-060）
 - [ ] 统一进展文档（CFG-070）
