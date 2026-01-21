@@ -4,6 +4,7 @@
  */
 
 import type { TuffEvent } from './event/types'
+import type { TransportPortUpgradeRequest, TransportPortUpgradeResponse } from './events/types/transport'
 
 // Electron types - import from electron package if available
 // This allows the package to work in both Electron and non-Electron contexts
@@ -29,6 +30,30 @@ export interface SendOptions {
    * @defaultValue 10000
    */
   timeout?: number
+
+  /**
+   * Optional cache control for transport responses.
+   * Only used when explicitly enabled.
+   */
+  cache?: boolean | {
+    /**
+     * Custom cache key override.
+     */
+    key?: string
+
+    /**
+     * Cache mode.
+     * - prefer: return cached value when available, otherwise fetch
+     * - only: return cached value or throw if missing
+     * @defaultValue prefer
+     */
+    mode?: 'prefer' | 'only'
+
+    /**
+     * Cache time-to-live in milliseconds.
+     */
+    ttlMs?: number
+  }
 
   /**
    * Target window ID for main process.
@@ -102,6 +127,24 @@ export interface StreamOptions<TChunk> {
    * Callback invoked when the stream ends.
    */
   onEnd?: () => void
+
+  /**
+   * Optional port upgrade settings for stream transport.
+   * Set to false to disable MessagePort and use channel fallback.
+   */
+  port?: TransportPortOpenOptions | false
+}
+
+export interface TransportPortHandle {
+  portId: string
+  channel: string
+  port: MessagePort
+  close: (reason?: string) => Promise<void>
+}
+
+export interface TransportPortOpenOptions extends TransportPortUpgradeRequest {
+  force?: boolean
+  timeoutMs?: number
 }
 
 /**
@@ -356,6 +399,18 @@ export interface ITuffTransport {
     payload?: void,
     options?: SendOptions,
   ) => Promise<TRes>)
+
+  /**
+   * Requests a MessagePort upgrade for a given channel.
+   * Returns a response indicating whether the upgrade was accepted.
+   */
+  upgrade: (options: TransportPortUpgradeRequest) => Promise<TransportPortUpgradeResponse>
+
+  /**
+   * Opens (or reuses) a MessagePort transport channel.
+   * Returns null when MessagePort is not available.
+   */
+  openPort: (options: TransportPortOpenOptions) => Promise<TransportPortHandle | null>
 
   /**
    * Initiates a stream request.
