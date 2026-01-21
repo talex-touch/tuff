@@ -385,6 +385,32 @@ export class TuffRendererTransport implements ITuffTransport {
     )
   }
 
+  private formatPortErrorMessage(error?: unknown): string | null {
+    if (!error)
+      return null
+    const raw = error instanceof Error ? error.message : String(error)
+    if (!raw)
+      return null
+    const normalized = raw.replace(/\s+/g, ' ').trim()
+    if (!normalized)
+      return null
+    return normalized.length > 200 ? `${normalized.slice(0, 200)}...` : normalized
+  }
+
+  private logPortIssue(channel: string, reason: string, error?: unknown): void {
+    const channelName = channel.trim() || 'unknown'
+    const detail = this.formatPortErrorMessage(error)
+    const suffix = detail ? `: ${detail}` : ''
+    console.warn(`[TuffTransport] Port issue for "${channelName}": ${reason}${suffix}`)
+  }
+
+  private logPortFallback(channel: string, reason: string, error?: unknown): void {
+    const channelName = channel.trim() || 'unknown'
+    const detail = this.formatPortErrorMessage(error)
+    const suffix = detail ? `: ${detail}` : ''
+    console.warn(`[TuffTransport] Port fallback for "${channelName}": ${reason}${suffix}`)
+  }
+
   private ensurePortListener(): boolean {
     if (this.portListenerCleanup) {
       return true
@@ -413,7 +439,7 @@ export class TuffRendererTransport implements ITuffTransport {
     const channel = payload?.channel
     const port = event?.ports?.[0] as MessagePort | undefined
     if (!portId || !channel || !port) {
-      console.warn('[TuffTransport] Port confirm payload missing port or channel.')
+      this.logPortIssue(channel ?? 'unknown', 'confirm_payload_invalid')
       return
     }
 
@@ -474,11 +500,14 @@ export class TuffRendererTransport implements ITuffTransport {
     const portId = payload.portId
     const channel = payload.channel
 
+    let closing = false
+
     const handle: TransportPortHandle = {
       portId,
       channel,
       port,
       close: async (reason?: string) => {
+        closing = true
         this.evictPortHandle(portId, channel)
         try {
           port.close()
@@ -498,9 +527,14 @@ export class TuffRendererTransport implements ITuffTransport {
 
     const onClose = () => {
       this.evictPortHandle(portId, channel)
+      if (!closing) {
+        this.logPortFallback(channel, 'port_closed')
+      }
     }
 
     const onMessageError = () => {
+      this.logPortFallback(channel, 'message_error')
+      this.evictPortHandle(portId, channel)
       void this.send(TransportEvents.port.error, {
         channel,
         portId,
@@ -583,48 +617,58 @@ export class TuffRendererTransport implements ITuffTransport {
   async openPort(options: TransportPortOpenOptions): Promise<TransportPortHandle | null> {
     const channel = options?.channel?.trim()
     if (!channel) {
-      console.warn('[TuffTransport] Port upgrade requires a channel name.')
+      this.logPortIssue('unknown', 'missing_channel')
       return null
     }
 
-    const useCache = options.force !== true
-    if (useCache) {
-      const cached = this.portCache.get(channel)
-      if (cached) {
-        return cached
+    try {
+      const useCache = options.force !== true
+      if (useCache) {
+        const cached = this.portCache.get(channel)
+        if (cached) {
+          return cached
+        }
       }
-    }
 
-    if (!this.ensurePortListener()) {
-      console.warn('[TuffTransport] ipcRenderer not available for port upgrade.')
-      return null
-    }
-
-    const response = await this.upgrade({
-      channel,
-      scope: options.scope,
-      windowId: options.windowId,
-      plugin: options.plugin,
-      permissions: options.permissions,
-    })
-
-    if (!response.accepted || !response.portId) {
-      if (response.error) {
-        console.warn('[TuffTransport] Port upgrade rejected:', response.error)
+      if (!this.ensurePortListener()) {
+        this.logPortIssue(channel, 'ipc_unavailable')
+        return null
       }
+
+      const response = await this.upgrade({
+        channel,
+        scope: options.scope,
+        windowId: options.windowId,
+        plugin: options.plugin,
+        permissions: options.permissions,
+      })
+
+      if (!response.accepted || !response.portId) {
+        if (response.error) {
+          const reason = response.error.code ? `upgrade_rejected:${response.error.code}` : 'upgrade_rejected'
+          this.logPortIssue(channel, reason, response.error.message)
+        }
+        else {
+          this.logPortIssue(channel, 'upgrade_rejected')
+        }
+        return null
+      }
+
+      const timeoutMs = typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+        ? Math.max(0, options.timeoutMs)
+        : PORT_CONFIRM_TIMEOUT_MS
+      const record = await this.waitForPortConfirm(response.portId, channel, timeoutMs)
+      if (!record) {
+        this.logPortIssue(channel, 'confirm_timeout')
+        return null
+      }
+
+      return this.buildPortHandle(record, useCache)
+    }
+    catch (error) {
+      this.logPortIssue(channel, 'open_failed', error)
       return null
     }
-
-    const timeoutMs = typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
-      ? Math.max(0, options.timeoutMs)
-      : PORT_CONFIRM_TIMEOUT_MS
-    const record = await this.waitForPortConfirm(response.portId, channel, timeoutMs)
-    if (!record) {
-      console.warn(`[TuffTransport] Port confirm timed out for "${channel}".`)
-      return null
-    }
-
-    return this.buildPortHandle(record, useCache)
   }
 
   private async flushEntry<TRes>(eventName: string, entry: BatchEntry<TRes>): Promise<void> {
@@ -688,12 +732,11 @@ export class TuffRendererTransport implements ITuffTransport {
       try {
         portHandle = await this.openPort(portOptions)
         if (!portHandle) {
-          console.warn(`[TuffTransport] Port unavailable for stream "${eventName}", falling back to channel.`)
+          this.logPortFallback(eventName, 'port_unavailable')
         }
       }
       catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.warn(`[TuffTransport] Failed to open port for stream "${eventName}": ${errorMessage}`)
+        this.logPortFallback(eventName, 'open_failed', error)
       }
     }
 
@@ -703,7 +746,8 @@ export class TuffRendererTransport implements ITuffTransport {
       if (portActive) {
         portActive = false
       }
-      console.warn(`[TuffTransport] Port fallback for "${eventName}": ${reason}`)
+      this.logPortFallback(eventName, reason)
+      void portHandle.close(reason)
     }
 
     if (portHandle) {
