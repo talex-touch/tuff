@@ -45,6 +45,15 @@
 - Even though `coreBoxModule` loads after `storageModule`, its import occurs before `app.whenReady()`,
   so its transitive imports (including `searchLogger`) can run before `storageModule.onInit()`.
 
+## Reference Patterns for Config Subscription
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts` subscribes in service init with a `try/catch`,
+  after module setup (`setupIPCChannels`), which is invoked during normal startup.
+- `apps/core-app/src/main/service/device-idle-service.ts` subscribes lazily in `setupSettingsWatcher()` and
+  guards with `try/catch` to avoid crashing when storage is not ready.
+- `apps/core-app/src/main/index.ts` subscribes to `StorageList.APP_SETTING` only after the loop hits
+  `storageModule`, ensuring storage is ready before reading or subscribing.
+- Common rule: subscribe only after storage initialization (module init / post-storage load) and guard failures.
+
 ## Observed Failure
 - Error: `StorageModule not ready: filePath not set`.
 - Timing: occurs before `StorageModule.onInit()` completes.
