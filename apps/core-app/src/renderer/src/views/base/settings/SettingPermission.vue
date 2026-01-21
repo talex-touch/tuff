@@ -395,7 +395,12 @@ onMounted(() => {
                   <InfoFilled />
                 </ElIcon>
                 <span class="plugin-name">{{ plugin.name }}</span>
-                <ElTag v-if="!plugin.enforcePermissions" type="warning" size="small" effect="plain">
+                <ElTag
+                  v-if="!plugin.enforcePermissions && !plugin.warning"
+                  type="warning"
+                  size="small"
+                  effect="plain"
+                >
                   旧版 SDK
                 </ElTag>
                 <ElTag v-if="plugin.missingRequired.length > 0" type="danger" size="small">
@@ -414,7 +419,7 @@ onMounted(() => {
             <!-- Warning -->
             <div v-if="plugin.warning && !plugin.enforcePermissions" class="legacy-warning">
               <ElIcon><InfoFilled /></ElIcon>
-              <span>此插件使用旧版 SDK，权限校验已跳过。建议插件开发者升级 SDK。</span>
+              <span>{{ plugin.warning }}</span>
             </div>
 
             <!-- Actions -->
