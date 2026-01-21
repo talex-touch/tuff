@@ -74,6 +74,14 @@ Impact:
 - Logging may remain disabled until `init()` runs, which aligns with storage readiness.
 - No change to external call sites beyond adding `init()`/`destroy()` hook points.
 
+## Dependencies and Cleanup
+- `SearchLogger` is used by `SearchEngineCore`, `SearchGather`, and provider implementations, and is imported
+  by `CoreBoxManager` for phase logging; it should not trigger storage access during module import.
+- `SearchLogger` depends on `StorageModule` only for reading/applying config and subscribing to updates.
+- Initialization should happen after `StorageModule` is ready; the recommended hook is `CoreBoxModule.onInit`.
+- Cleanup should call `searchLogger.destroy()` in `CoreBoxModule.onDestroy` to unsubscribe from settings updates.
+- `init()`/`destroy()` should be idempotent to avoid duplicate subscriptions during hot reload or restart.
+
 ## Observed Failure
 - Error: `StorageModule not ready: filePath not set`.
 - Timing: occurs before `StorageModule.onInit()` completes.
