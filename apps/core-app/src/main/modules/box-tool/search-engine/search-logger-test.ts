@@ -58,12 +58,13 @@ export function testSearchLogger(): void {
   console.log('✅ Enhanced Search Engine Logger test completed!')
 }
 
-export function testSearchLoggerLifecycle(): void {
+export async function testSearchLoggerLifecycle(): Promise<void> {
   // Manual validation helper:
   // - Call after StorageModule is ready.
   // - Ensure init/destroy do not throw and do not duplicate subscriptions.
   try {
     const logger = searchLogger
+    await logger.init()
     logger.isEnabled()
     logger.destroy()
   } catch (error) {

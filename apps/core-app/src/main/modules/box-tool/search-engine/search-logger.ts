@@ -14,18 +14,28 @@ export class SearchLogger {
   private searchStartTime: number = 0
   private searchSteps: Array<{ step: string; timestamp: number; duration?: number }> = []
   private unsubscribe?: () => void
+  private initialized = false
 
   private constructor() {
-    void this.loadSettings()
-    this.setupSettingsWatcher()
     // Register with LoggerManager for centralized control
     loggerManager.getLogger('search-engine', { enabled: this.enabled, color: 'cyan' })
+  }
+
+  /**
+   * Initialize settings and subscribe after storage is ready.
+   */
+  async init(): Promise<void> {
+    if (this.initialized) return
+    this.initialized = true
+    await this.loadSettings()
+    this.setupSettingsWatcher()
   }
 
   /**
    * Setup watcher for settings changes using subscription
    */
   private setupSettingsWatcher(): void {
+    if (this.unsubscribe) return
     // Subscribe to app settings changes instead of polling
     try {
       // Subscribe to configuration changes
@@ -68,6 +78,7 @@ export class SearchLogger {
       this.unsubscribe()
       this.unsubscribe = undefined
     }
+    this.initialized = false
   }
 
   /**
