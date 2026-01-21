@@ -58,5 +58,18 @@ export function testSearchLogger(): void {
   console.log('✅ Enhanced Search Engine Logger test completed!')
 }
 
+export function testSearchLoggerLifecycle(): void {
+  // Manual validation helper:
+  // - Call after StorageModule is ready.
+  // - Ensure init/destroy do not throw and do not duplicate subscriptions.
+  try {
+    const logger = searchLogger
+    logger.isEnabled()
+    logger.destroy()
+  } catch (error) {
+    console.error('[SearchLoggerTest] lifecycle validation failed', error)
+  }
+}
+
 // Export for potential use in development
 export { testSearchLogger as default }
