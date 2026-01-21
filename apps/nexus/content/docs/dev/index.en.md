@@ -11,6 +11,7 @@
 ## Deep Dive
 - **[API Reference](./api/)** — typed interfaces for storage, channels, and UI.
 - **[Extensions](./extensions/)** — advanced patterns for complex integrations.
+- **[Examples](./reference/examples.en.md)** — entry point backed by `examples/`.
 - **[Code Snippets](./reference/snippets.en.md)** — copy-paste examples for common tasks.
 
 ## Runtime Behavior
