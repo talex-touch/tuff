@@ -12,7 +12,7 @@ export interface CommandPaletteItem {
 
 export interface CommandPaletteProps {
   modelValue: boolean
-  commands: CommandPaletteItem[]
+  commands?: CommandPaletteItem[]
   placeholder?: string
   emptyText?: string
   maxHeight?: number
