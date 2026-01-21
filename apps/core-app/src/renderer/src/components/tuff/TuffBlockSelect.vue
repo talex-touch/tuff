@@ -15,8 +15,8 @@ const props = withDefaults(
     disabled?: boolean
   }>(),
   {
-    disabled: false,
-  },
+    disabled: false
+  }
 )
 
 const emits = defineEmits<{
@@ -46,7 +46,11 @@ function handleChange(val: string | number, evt?: Event) {
     </template>
     <template #default>
       <div class="flex items-center justify-end w-full">
-        <TSelect v-model="value" :class="disabled ? 'pointer-events-none opacity-70' : ''" @change="handleChange">
+        <TSelect
+          v-model="value.value"
+          :class="disabled ? 'pointer-events-none opacity-70' : ''"
+          @change="handleChange"
+        >
           <slot />
         </TSelect>
       </div>

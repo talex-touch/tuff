@@ -9,8 +9,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "lint": "eslint --cache \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
-    "lint:fix": "eslint --cache --fix \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
+    "lint": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" --filter \"./plugins/*\" exec node ../../node_modules/eslint/bin/eslint.js --cache --no-warn-ignored \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
+    "lint:fix": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" --filter \"./plugins/*\" exec node ../../node_modules/eslint/bin/eslint.js --cache --fix --no-warn-ignored \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\"",
     "lint:staged": "lint-staged",
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",

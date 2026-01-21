@@ -20,8 +20,8 @@ const props = withDefaults(
     description: '',
     disabled: false,
     placeholder: '',
-    clearable: false,
-  },
+    clearable: false
+  }
 )
 
 const emits = defineEmits<{
@@ -35,8 +35,7 @@ const primitiveValue = computed(() => value.value as string | number)
 const focused = ref(false)
 
 const hasContent = computed(() => {
-  if (value.value === null || value.value === undefined)
-    return false
+  if (value.value === null || value.value === undefined) return false
   return String(value.value).trim().length > 0
 })
 
@@ -81,7 +80,7 @@ function updateValue(val: string | number) {
         :disabled="disabled"
       >
         <FlatInput
-          v-model="value"
+          v-model="value.value"
           :placeholder="placeholder"
           :non-win="true"
           @focusin="handleFocus"

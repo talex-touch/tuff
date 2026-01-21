@@ -113,17 +113,17 @@ function handleHelp(): void {
       <el-scrollbar>
         <div class="AppConfigure-Content-Inner">
           <t-group-block :name="t('appConfigure.action')" icon="auction">
-            <t-block-slot :title="t('appConfigure.launch')" icon="external-link">
+            <t-block-slot :title="t('appConfigure.launch')" description="" icon="external-link">
               <TxButton variant="flat" @click="handleLaunch">
                 {{ t('appConfigure.launchBtn') }}
               </TxButton>
             </t-block-slot>
-            <t-block-slot :title="t('appConfigure.openInExplorer')" icon="folder-2">
+            <t-block-slot :title="t('appConfigure.openInExplorer')" description="" icon="folder-2">
               <TxButton variant="flat" @click="handleOpenExplorer">
                 {{ t('appConfigure.openBtn') }}
               </TxButton>
             </t-block-slot>
-            <t-block-slot icon="delete-bin-2">
+            <t-block-slot :title="t('appConfigure.uninstall')" description="" icon="delete-bin-2">
               <template #label>
                 <h3>
                   {{ t('appConfigure.uninstall') }}
@@ -136,6 +136,7 @@ function handleHelp(): void {
             </t-block-slot>
             <t-block-switch
               guidance
+              :model-value="false"
               :title="t('appConfigure.help')"
               :description="t('appConfigure.helpDesc')"
               icon="search-2"
