@@ -156,6 +156,36 @@ const controller = await transport.stream(
 controller.cancel()
 ```
 
+**MessagePort Upgrade & Fallback**
+
+- `stream/on` auto-upgrades to MessagePort on allowlisted channels; falls back to channel if unavailable.
+- Runtime switch: `TALEX_TRANSPORT_PORT_CHANNELS` (comma-separated event names), empty disables. Default:
+  `ClipboardEvents.change`, `AppEvents.fileIndex.progress`, `CoreBoxEvents.search.update`,
+  `CoreBoxEvents.search.end`, `CoreBoxEvents.search.noResults`.
+- Manual control: set `options.port = false` to force channel, or configure `options.port.timeoutMs` /
+  `options.port.scope`.
+
+```ts
+// Custom port timeout
+const controller = await transport.stream(
+  AppEvents.fileIndex.progress,
+  undefined,
+  {
+    onData: (data) => console.log(data),
+    port: { timeoutMs: 800 }
+  }
+)
+```
+
+```ts
+// Advanced: explicitly open a port (use only when needed)
+const handle = await transport.openPort({
+  channel: CoreBoxEvents.search.update.toEventName(),
+  scope: 'window'
+})
+handle?.port.postMessage({ type: 'data', payload: { hello: 'world' } })
+```
+
 **transport.on(event, handler)**
 
 Register an event handler for incoming messages.

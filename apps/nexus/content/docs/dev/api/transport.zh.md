@@ -156,6 +156,35 @@ const controller = await transport.stream(
 controller.cancel()
 ```
 
+**MessagePort 升级与回退**
+
+- `stream/on` 在允许的通道上会自动升级 MessagePort；不可用时回退到 channel。
+- 运行时开关：`TALEX_TRANSPORT_PORT_CHANNELS`（逗号分隔事件名），置空可禁用。默认包含：
+  `ClipboardEvents.change`、`AppEvents.fileIndex.progress`、`CoreBoxEvents.search.update`、
+  `CoreBoxEvents.search.end`、`CoreBoxEvents.search.noResults`。
+- 手动控制：`options.port = false` 强制走 channel；或配置 `options.port.timeoutMs`/`options.port.scope`。
+
+```ts
+// 自定义端口超时
+const controller = await transport.stream(
+  AppEvents.fileIndex.progress,
+  undefined,
+  {
+    onData: (data) => console.log(data),
+    port: { timeoutMs: 800 }
+  }
+)
+```
+
+```ts
+// 高级用法：主动升级端口（仅在需要时使用）
+const handle = await transport.openPort({
+  channel: CoreBoxEvents.search.update.toEventName(),
+  scope: 'window'
+})
+handle?.port.postMessage({ type: 'data', payload: { hello: 'world' } })
+```
+
 **transport.on(event, handler)**
 
 注册事件处理器接收消息。
