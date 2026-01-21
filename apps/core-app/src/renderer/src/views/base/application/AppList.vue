@@ -18,7 +18,7 @@ enum EOrderWay {
   SORT_DESC = 0, // default
   DIC = 1,
   D_DIC = 2,
-  FREQ = 3,
+  FREQ = 3
 }
 
 const _list = ref<any[]>([])
@@ -34,7 +34,7 @@ watch(
 
     emits('select', null, -1)
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 function handleOrderWay() {
@@ -53,27 +53,6 @@ function handleOrderWay() {
   if (orderWay.value === EOrderWay.D_DIC) {
     _list.value = _list.value!.sort((a, b) => b.name.localeCompare(a.name))
   }
-
-  // The sorting logic is now handled by the backend (main process).
-  // The frequency-based sorting (appAmo) is deprecated.
-  // _list.value = _list.value!.sort((a, b) => {
-  //   const aI = 0 // appAmo[a.name]
-  //   const bI = 0 // appAmo[b.name]
-  //
-  //   if (aI === undefined && bI === undefined) {
-  //     return 0
-  //   }
-  //
-  //   if (aI === undefined) {
-  //     return 1
-  //   }
-  //
-  //   if (bI === undefined) {
-  //     return -1
-  //   }
-  //
-  //   return bI - aI
-  // })
 }
 
 function handleOrderChange() {
@@ -89,7 +68,7 @@ watch(
   (val) => {
     emits('search', val)
     // _list.value = props.list.filter(item => item.name.includes(val))
-  },
+  }
 )
 
 function highlightText(text: string, matched: Array<any>) {
@@ -101,8 +80,7 @@ function highlightText(text: string, matched: Array<any>) {
   for (let i = 0; i < text.length; i++) {
     if (i >= startIndex && i <= endIndex) {
       result += `<span class="matched">${text[i]}</span>`
-    }
-    else {
+    } else {
       result += text[i]
     }
   }
