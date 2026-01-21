@@ -13,16 +13,6 @@ widgetProcessorRegistry.register(new WidgetTsxProcessor())
 widgetProcessorRegistry.register(new WidgetScriptProcessor())
 
 /**
- * Legacy interface for backward compatibility
- * 向后兼容的遗留接口
- * @deprecated Use the processor-based compile function instead
- */
-interface LegacyCompiledWidget {
-  code: string
-  styles: string
-}
-
-/**
  * Compile widget source using the processor registry
  * 使用处理器注册表编译 widget 源码
  * @param source - Widget source information
@@ -55,35 +45,6 @@ export async function compileWidgetSource(
   }
 
   return await processor.compile(source, context)
-}
-
-/**
- * Legacy compile function for backward compatibility
- * 向后兼容的编译函数
- * @deprecated This function is kept for backward compatibility only.
- * Use compileWidgetSource with WidgetCompilationContext instead.
- */
-export async function compileWidgetSourceLegacy(
-  source: WidgetSource,
-  plugin: ITouchPlugin,
-  feature: IPluginFeature
-): Promise<LegacyCompiledWidget | null> {
-  const context: WidgetCompilationContext = {
-    plugin,
-    feature
-  }
-
-  const result = await compileWidgetSource(source, context)
-
-  if (!result) {
-    return null
-  }
-
-  // Convert to legacy format (without dependencies)
-  return {
-    code: result.code,
-    styles: result.styles
-  }
 }
 
 export type { CompiledWidget }
