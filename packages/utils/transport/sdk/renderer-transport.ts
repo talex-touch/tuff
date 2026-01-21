@@ -26,6 +26,14 @@ type CacheEntry = {
   expiresAt?: number
 }
 
+type PortEventSubscription = {
+  refCount: number
+  handle: TransportPortHandle | null
+  cleanup: (() => void) | null
+  opening: Promise<TransportPortHandle | null> | null
+  closing: boolean
+}
+
 type CacheConfig = {
   key?: string
   mode: 'prefer' | 'only'
@@ -108,6 +116,7 @@ function resolveIpcRenderer(): IpcRendererLike | null {
 import { assertTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
 import { STREAM_SUFFIXES } from './constants'
+import { isPortChannelEnabled } from './port-policy'
 
 interface BatchEntry<TRes> {
   key: string
@@ -140,6 +149,7 @@ export class TuffRendererTransport implements ITuffTransport {
   private streamControllers = new Map<string, StreamController>()
   private batchQueues = new Map<string, BatchQueue<any>>()
   private portCache = new Map<string, TransportPortHandle>()
+  private portEventSubscriptions = new Map<string, PortEventSubscription>()
   private portHandlesById = new Map<string, TransportPortHandle>()
   private pendingPortConfirms = new Map<string, { resolve: (record: PortConfirmRecord) => void, timeout?: ReturnType<typeof setTimeout> }>()
   private queuedPortConfirms = new Map<string, PortConfirmRecord>()
@@ -595,6 +605,143 @@ export class TuffRendererTransport implements ITuffTransport {
     return null
   }
 
+  private normalizePortEventMessage<TReq>(raw: unknown, channel: string): TReq | null {
+    if (!raw || typeof raw !== 'object') {
+      return null
+    }
+
+    const record = raw as TransportPortEnvelope<TReq> & { payload?: TReq }
+    if (record.channel && record.channel !== channel) {
+      return null
+    }
+
+    if (record.type && record.type !== 'data') {
+      if (record.type === 'error' && record.error?.message) {
+        this.logPortFallback(channel, 'message_error', record.error.message)
+      }
+      return null
+    }
+
+    if (record.payload !== undefined) {
+      return record.payload as TReq
+    }
+
+    return null
+  }
+
+  private dropPortEventSubscription(channel: string): void {
+    const subscription = this.portEventSubscriptions.get(channel)
+    if (!subscription) return
+    subscription.cleanup?.()
+    subscription.cleanup = null
+    subscription.handle = null
+    subscription.opening = null
+    subscription.closing = true
+    this.portEventSubscriptions.delete(channel)
+  }
+
+  private ensurePortEventSubscription(channel: string): void {
+    if (!isPortChannelEnabled(channel)) {
+      return
+    }
+    const existing = this.portEventSubscriptions.get(channel)
+    if (existing) {
+      existing.refCount += 1
+      return
+    }
+
+    const subscription: PortEventSubscription = {
+      refCount: 1,
+      handle: null,
+      cleanup: null,
+      opening: null,
+      closing: false,
+    }
+
+    this.portEventSubscriptions.set(channel, subscription)
+
+    subscription.opening = this.openPort({ channel })
+      .then((handle) => {
+        if (!handle) {
+          this.logPortFallback(channel, 'port_unavailable')
+          this.dropPortEventSubscription(channel)
+          return null
+        }
+
+        if (subscription.closing) {
+          void handle.close('subscription_closed')
+          this.dropPortEventSubscription(channel)
+          return null
+        }
+
+        subscription.handle = handle
+        const port = handle.port
+
+        const messageHandler = (event: MessageEvent) => {
+          const payload = this.normalizePortEventMessage<any>(event?.data, channel)
+          if (payload === null) return
+          const handlers = this.handlers.get(channel)
+          if (!handlers || handlers.size === 0) return
+          handlers.forEach((handler) => {
+            Promise.resolve(handler(payload)).catch((error) => {
+              const errorMessage = error instanceof Error ? error.message : String(error)
+              console.error(`[TuffTransport] Handler error for \"${channel}\":`, errorMessage)
+            })
+          })
+        }
+
+        const closeHandler = () => {
+          this.logPortFallback(channel, 'port_closed')
+          this.dropPortEventSubscription(channel)
+        }
+
+        const errorHandler = () => {
+          this.logPortFallback(channel, 'message_error')
+          this.dropPortEventSubscription(channel)
+        }
+
+        if (typeof port.addEventListener === 'function') {
+          port.addEventListener('message', messageHandler)
+          port.addEventListener('messageerror', errorHandler)
+          port.addEventListener('close', closeHandler)
+          port.start?.()
+          subscription.cleanup = () => {
+            port.removeEventListener('message', messageHandler)
+            port.removeEventListener('messageerror', errorHandler)
+            port.removeEventListener('close', closeHandler)
+          }
+        }
+        else {
+          port.onmessage = messageHandler as any
+          subscription.cleanup = () => {
+            port.onmessage = null
+          }
+        }
+
+        return handle
+      })
+      .catch((error) => {
+        this.logPortFallback(channel, 'open_failed', error)
+        this.dropPortEventSubscription(channel)
+        return null
+      })
+  }
+
+  private releasePortEventSubscription(channel: string): void {
+    const subscription = this.portEventSubscriptions.get(channel)
+    if (!subscription) return
+    subscription.refCount -= 1
+    if (subscription.refCount > 0) return
+
+    subscription.closing = true
+    subscription.cleanup?.()
+    subscription.cleanup = null
+    if (subscription.handle) {
+      void subscription.handle.close('no_handlers')
+    }
+    this.portEventSubscriptions.delete(channel)
+  }
+
   async upgrade(options: TransportPortUpgradeRequest): Promise<TransportPortUpgradeResponse> {
     const channel = options?.channel?.trim()
     if (!channel) {
@@ -717,7 +864,7 @@ export class TuffRendererTransport implements ITuffTransport {
       this.streamControllers.delete(streamId)
     }
 
-    const portOptions = options.port === false
+    const portOptions = options.port === false || !isPortChannelEnabled(eventName)
       ? null
       : {
           channel: eventName,
@@ -921,8 +1068,12 @@ export class TuffRendererTransport implements ITuffTransport {
 
     const eventName = event.toEventName()
     const handlerSet = this.handlers.get(eventName) || new Set()
+    const isFirstHandler = handlerSet.size === 0
     handlerSet.add(handler)
     this.handlers.set(eventName, handlerSet)
+    if (isFirstHandler) {
+      this.ensurePortEventSubscription(eventName)
+    }
 
     // Register with channel
     const cleanup = this.channel.regChannel(eventName, async (data: TReq) => {
@@ -941,6 +1092,7 @@ export class TuffRendererTransport implements ITuffTransport {
       handlerSet.delete(handler)
       if (handlerSet.size === 0) {
         this.handlers.delete(eventName)
+        this.releasePortEventSubscription(eventName)
       }
       cleanup()
     }
@@ -974,6 +1126,15 @@ export class TuffRendererTransport implements ITuffTransport {
       this.portListenerCleanup()
       this.portListenerCleanup = null
     }
+
+    for (const subscription of this.portEventSubscriptions.values()) {
+      subscription.cleanup?.()
+      subscription.cleanup = null
+      if (subscription.handle) {
+        void subscription.handle.close('transport_destroy').catch(() => {})
+      }
+    }
+    this.portEventSubscriptions.clear()
 
     for (const handle of this.portHandlesById.values()) {
       void handle.close('transport_destroy').catch(() => {})
