@@ -62,10 +62,6 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     // Register native share targets
     this.registerNativeShareTargets()
 
-    // Deprecated (breaking change): plugin integration is now handled via TuffTransport handlers.
-    // Keep the call to avoid unused warnings; method is a no-op.
-    this.setupPluginIntegration()
-
     // Register global shortcuts
     this.registerShortcuts()
 
@@ -319,11 +315,6 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     )
     console.log('[FlowBusModule] Triggered flow transfer shortcut')
   }
-
-  /**
-   * Sets up integration with plugin system
-   */
-  private setupPluginIntegration(): void {}
 
   /**
    * Cleans up the Flow Bus module
