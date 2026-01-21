@@ -31,7 +31,6 @@ import { getMainConfig, storageModule, subscribeMainConfig } from './modules/sto
 import { permissionCheckerModule } from './modules/system/permission-checker'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
 import { terminalModule } from './modules/terminal/terminal.manager'
-// import { trayHolderModule } from './modules/tray-holder'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
 // import PermissionCenter from './modules/permission-center'
