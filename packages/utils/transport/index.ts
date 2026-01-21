@@ -135,4 +135,6 @@ export type {
 
   StreamMessageType,
   StreamOptions,
+  TransportPortHandle,
+  TransportPortOpenOptions,
 } from './types'

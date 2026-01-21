@@ -1,6 +1,60 @@
 import type { TuffEvent } from '../event/types'
-import type { ITuffTransport, SendOptions, StreamController, StreamOptions } from '../types'
+import type {
+  ITuffTransport,
+  SendOptions,
+  StreamController,
+  StreamOptions,
+  TransportPortHandle,
+  TransportPortOpenOptions,
+} from '../types'
+import type { TransportPortUpgradeRequest, TransportPortUpgradeResponse } from '../events'
 import { assertTuffEvent } from '../event/builder'
+import { TransportEvents } from '../events'
+
+type CacheEntry = {
+  value: unknown
+  expiresAt?: number
+}
+
+type CacheConfig = {
+  key?: string
+  mode: 'prefer' | 'only'
+  ttlMs?: number
+}
+
+function normalizeCacheOptions(options?: SendOptions): CacheConfig | null {
+  if (!options?.cache) {
+    return null
+  }
+
+  if (options.cache === true) {
+    return { mode: 'prefer' }
+  }
+
+  const mode = options.cache.mode ?? 'prefer'
+  return {
+    key: options.cache.key,
+    mode,
+    ttlMs: options.cache.ttlMs,
+  }
+}
+
+function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string): string {
+  if (overrideKey) {
+    return overrideKey
+  }
+
+  if (payload === undefined) {
+    return `${eventName}:__void__`
+  }
+
+  try {
+    return `${eventName}:${JSON.stringify(payload)}`
+  }
+  catch {
+    return `${eventName}:${Object.prototype.toString.call(payload)}`
+  }
+}
 
 interface PluginChannelLike {
   send?: (eventName: string, payload?: any) => Promise<any>
@@ -20,16 +74,33 @@ function unwrapPayload<T>(raw: unknown): T {
 }
 
 export class TuffPluginTransport implements ITuffTransport {
+  private cache = new Map<string, CacheEntry>()
+
   constructor(private readonly channel: PluginChannelLike) {}
 
   async send<TReq, TRes>(
     event: TuffEvent<TReq, TRes> | TuffEvent<void, TRes>,
     payload?: TReq | void,
-    _options?: SendOptions,
+    options?: SendOptions,
   ): Promise<TRes> {
     assertTuffEvent(event as any, 'TuffPluginTransport.send')
 
     const eventName = (event as any).toEventName() as string
+    const cacheConfig = normalizeCacheOptions(options)
+    const cacheKey = cacheConfig ? buildCacheKey(eventName, payload, cacheConfig.key) : ''
+    if (cacheConfig) {
+      const entry = this.cache.get(cacheKey)
+      if (entry) {
+        if (entry.expiresAt === undefined || entry.expiresAt > Date.now()) {
+          return entry.value as TRes
+        }
+        this.cache.delete(cacheKey)
+      }
+      if (cacheConfig.mode === 'only') {
+        throw new Error(`[TuffTransport] Cache miss for \"${eventName}\"`)
+      }
+    }
+
     const sender = typeof this.channel.sendToMain === 'function'
       ? this.channel.sendToMain.bind(this.channel)
       : this.channel.send
@@ -39,7 +110,23 @@ export class TuffPluginTransport implements ITuffTransport {
     }
 
     const shouldPassPayload = payload !== undefined
-    return sender(eventName, shouldPassPayload ? payload : undefined)
+    const result = await sender(eventName, shouldPassPayload ? payload : undefined)
+    if (cacheConfig) {
+      const expiresAt = typeof cacheConfig.ttlMs === 'number' && Number.isFinite(cacheConfig.ttlMs)
+        ? Date.now() + Math.max(0, cacheConfig.ttlMs)
+        : undefined
+      this.cache.set(cacheKey, { value: result, expiresAt })
+    }
+    return result as TRes
+  }
+
+  async upgrade(options: TransportPortUpgradeRequest): Promise<TransportPortUpgradeResponse> {
+    return await this.send(TransportEvents.port.upgrade, options)
+  }
+
+  async openPort(_options: TransportPortOpenOptions): Promise<TransportPortHandle | null> {
+    console.warn('[TuffTransport] MessagePort is not supported in plugin transport yet.')
+    return null
   }
 
   stream<TReq, TChunk>(
