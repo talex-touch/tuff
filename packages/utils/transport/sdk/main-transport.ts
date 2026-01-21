@@ -3,7 +3,10 @@
  * @module @talex-touch/utils/transport/sdk/main-transport
  */
 
+import { randomUUID } from 'node:crypto'
 import type { ITouchChannel } from '../../channel'
+import { ipcMain, MessageChannelMain } from 'electron'
+import type { IpcMainInvokeEvent, MessagePortMain, WebContents } from 'electron'
 import type { TuffEvent } from '../event/types'
 import type {
   HandlerContext,
@@ -13,7 +16,303 @@ import type {
 } from '../types'
 import { ChannelType, DataCode } from '../../channel'
 import { assertTuffEvent } from '../event/builder'
+import type { TransportPortConfirmPayload, TransportPortScope, TransportPortUpgradeResponse } from '../events'
+import { TransportEvents } from '../events'
+
+type InvokeHandler<TReq, TRes> = (
+  payload: TReq,
+  event: IpcMainInvokeEvent,
+) => TRes | Promise<TRes>
+
+const invokeHandlers = new Map<string, Set<InvokeHandler<any, any>>>()
+const invokeDisposers = new Map<string, () => void>()
+
+function registerInvokeHandler<TReq, TRes>(
+  eventName: string,
+  handler: InvokeHandler<TReq, TRes>,
+): () => void {
+  let handlers = invokeHandlers.get(eventName)
+  if (!handlers) {
+    handlers = new Set()
+    invokeHandlers.set(eventName, handlers)
+
+    ipcMain.handle(eventName, async (event, payload) => {
+      const active = invokeHandlers.get(eventName)
+      if (!active || active.size === 0) {
+        return undefined
+      }
+
+      let result: unknown
+      for (const fn of active) {
+        result = await fn(payload as TReq, event)
+      }
+      return result as TRes
+    })
+
+    invokeDisposers.set(eventName, () => ipcMain.removeHandler(eventName))
+  }
+
+  handlers.add(handler)
+
+  return () => {
+    const current = invokeHandlers.get(eventName)
+    if (!current) {
+      return
+    }
+    current.delete(handler)
+    if (current.size === 0) {
+      invokeHandlers.delete(eventName)
+      invokeDisposers.get(eventName)?.()
+      invokeDisposers.delete(eventName)
+    }
+  }
+}
 import { STREAM_SUFFIXES } from './constants'
+
+type PortRecord = {
+  port: MessagePortMain
+  sender: WebContents
+  channel: string
+  scope: TransportPortScope
+  windowId?: number
+  plugin?: string
+  permissions?: string[]
+  confirmed: boolean
+  createdAt: number
+  confirmTimeout?: NodeJS.Timeout
+}
+
+const PORT_CONFIRM_TIMEOUT_MS = 10000
+const portRegistry = new Map<string, PortRecord>()
+const portsBySenderId = new Map<number, Set<string>>()
+const senderCleanupRegistered = new WeakSet<WebContents>()
+let portHandlersRegistered = false
+
+function registerPortHandlers(transport: TuffMainTransport): void {
+  if (portHandlersRegistered) {
+    return
+  }
+  portHandlersRegistered = true
+
+  const buildError = (code: string, message: string) => ({ code, message })
+
+  const removePort = (portId: string, reason?: string) => {
+    const record = portRegistry.get(portId)
+    if (!record) return
+
+    if (record.confirmTimeout) {
+      clearTimeout(record.confirmTimeout)
+    }
+    try {
+      record.port.close()
+    } catch {}
+
+    portRegistry.delete(portId)
+    const senderPorts = portsBySenderId.get(record.sender.id)
+    if (senderPorts) {
+      senderPorts.delete(portId)
+      if (senderPorts.size === 0) {
+        portsBySenderId.delete(record.sender.id)
+      }
+    }
+
+    if (reason) {
+      console.warn(`[TuffTransport] Port ${portId} closed: ${reason}`)
+    }
+  }
+
+  const ensureSenderCleanup = (sender: WebContents) => {
+    if (senderCleanupRegistered.has(sender)) return
+    senderCleanupRegistered.add(sender)
+    sender.once('destroyed', () => {
+      const portIds = portsBySenderId.get(sender.id)
+      if (!portIds) return
+      for (const portId of portIds) {
+        removePort(portId, 'sender_destroyed')
+      }
+      portsBySenderId.delete(sender.id)
+    })
+  }
+
+  const resolveScope = (scope?: TransportPortScope): TransportPortScope | null => {
+    if (!scope) return 'window'
+    if (scope === 'app' || scope === 'window' || scope === 'plugin') return scope
+    return null
+  }
+
+  transport.on(TransportEvents.port.upgrade, async (payload, context) => {
+    const sender = context.sender as WebContents | undefined
+    if (!sender || typeof sender.postMessage !== 'function') {
+      return {
+        accepted: false,
+        channel: payload?.channel ?? '',
+        error: buildError('sender_unavailable', 'Sender webContents is unavailable'),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    if (!MessageChannelMain) {
+      return {
+        accepted: false,
+        channel: payload?.channel ?? '',
+        error: buildError('not_supported', 'MessageChannelMain is not available'),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    const channel = payload?.channel?.trim()
+    if (!channel) {
+      return {
+        accepted: false,
+        channel: '',
+        error: buildError('invalid_request', 'Channel is required'),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    const scope = resolveScope(payload?.scope)
+    if (!scope) {
+      return {
+        accepted: false,
+        channel,
+        error: buildError('invalid_scope', 'Scope is invalid'),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    const windowId = payload?.windowId ?? sender.id
+    if (scope === 'window' && windowId !== sender.id) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError('window_mismatch', 'Window id does not match sender'),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    const plugin = payload?.plugin ?? context.plugin?.name
+    if (scope === 'plugin' && !plugin) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError('plugin_required', 'Plugin name is required for plugin scope'),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    if (context.plugin?.name && plugin && plugin !== context.plugin.name) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError('plugin_mismatch', 'Plugin name does not match sender'),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    const { port1, port2 } = new MessageChannelMain()
+    const portId = randomUUID()
+    const record: PortRecord = {
+      port: port2,
+      sender,
+      channel,
+      scope,
+      windowId,
+      plugin: plugin || undefined,
+      permissions: payload?.permissions,
+      confirmed: false,
+      createdAt: Date.now(),
+    }
+
+    portRegistry.set(portId, record)
+    const senderPorts = portsBySenderId.get(sender.id) ?? new Set<string>()
+    senderPorts.add(portId)
+    portsBySenderId.set(sender.id, senderPorts)
+    ensureSenderCleanup(sender)
+
+    port2.on('close', () => {
+      removePort(portId, 'port_closed')
+    })
+    port2.start()
+
+    const confirmPayload: TransportPortConfirmPayload = {
+      channel,
+      portId,
+      scope,
+      permissions: payload?.permissions,
+    }
+
+    try {
+      sender.postMessage(TransportEvents.port.confirm.toEventName(), confirmPayload, [port1])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      removePort(portId, `postMessage_failed:${message}`)
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError('post_message_failed', message),
+      } satisfies TransportPortUpgradeResponse
+    }
+
+    record.confirmTimeout = setTimeout(() => {
+      if (!record.confirmed) {
+        removePort(portId, 'confirm_timeout')
+      }
+    }, PORT_CONFIRM_TIMEOUT_MS)
+
+    return {
+      accepted: true,
+      channel,
+      scope,
+      permissions: payload?.permissions,
+      portId,
+    } satisfies TransportPortUpgradeResponse
+  })
+
+  transport.on(TransportEvents.port.confirm, (payload, context) => {
+    const portId = payload?.portId
+    if (!portId) return
+    const record = portRegistry.get(portId)
+    if (!record) return
+    if (context.sender && record.sender.id !== (context.sender as WebContents).id) {
+      return
+    }
+    record.confirmed = true
+    if (record.confirmTimeout) {
+      clearTimeout(record.confirmTimeout)
+      record.confirmTimeout = undefined
+    }
+  })
+
+  transport.on(TransportEvents.port.close, (payload, context) => {
+    const sender = context.sender as WebContents | undefined
+    const portId = payload?.portId
+    if (portId) {
+      if (!sender || portRegistry.get(portId)?.sender.id === sender.id) {
+        removePort(portId, payload?.reason ?? 'closed')
+      }
+      return
+    }
+
+    if (!sender) return
+    const portIds = portsBySenderId.get(sender.id)
+    if (!portIds) return
+    for (const id of portIds) {
+      const record = portRegistry.get(id)
+      if (!record) continue
+      if (payload?.channel && record.channel !== payload.channel) continue
+      removePort(id, payload?.reason ?? 'closed')
+    }
+  })
+
+  transport.on(TransportEvents.port.error, (payload, context) => {
+    const portId = payload?.portId
+    if (payload?.error) {
+      console.warn('[TuffTransport] Port error:', payload.error)
+    }
+    if (!portId) return
+    const sender = context.sender as WebContents | undefined
+    if (!sender || portRegistry.get(portId)?.sender.id === sender.id) {
+      removePort(portId, 'error')
+    }
+  })
+}
 
 /**
  * Main process transport implementation.
@@ -23,7 +322,9 @@ export class TuffMainTransport implements ITuffTransportMain {
   constructor(
     private channel: ITouchChannel,
     public readonly keyManager: PluginKeyManager,
-  ) {}
+  ) {
+    registerPortHandlers(this)
+  }
 
   /**
    * Registers an event handler.
@@ -36,8 +337,18 @@ export class TuffMainTransport implements ITuffTransportMain {
 
     const eventName = event.toEventName()
 
+    const baseHandler = async (payload: TReq, context: HandlerContext) => {
+      try {
+        return await handler(payload, context)
+      }
+      catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error(`[TuffTransport] Handler error for \"${eventName}\":`, errorMessage)
+        throw error
+      }
+    }
+
     const channelHandler = async (data: any) => {
-      // Extract context from channel data
       const context: HandlerContext = {
         sender: data.header?.event?.sender as any,
         eventName,
@@ -50,22 +361,25 @@ export class TuffMainTransport implements ITuffTransportMain {
           : undefined,
       }
 
-      try {
-        return await handler(data.data as TReq, context)
+      return baseHandler(data.data as TReq, context)
+    }
+
+    const invokeHandler: InvokeHandler<TReq, TRes> = (payload, event) => {
+      const context: HandlerContext = {
+        sender: event.sender as any,
+        eventName,
       }
-      catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(`[TuffTransport] Handler error for "${eventName}":`, errorMessage)
-        throw error
-      }
+      return baseHandler(payload, context)
     }
 
     const unregisterMain = this.channel.regChannel(ChannelType.MAIN, eventName, channelHandler)
     const unregisterPlugin = this.channel.regChannel(ChannelType.PLUGIN, eventName, channelHandler)
+    const unregisterInvoke = registerInvokeHandler(eventName, invokeHandler)
 
     return () => {
       unregisterMain()
       unregisterPlugin()
+      unregisterInvoke()
     }
   }
 
