@@ -5,7 +5,7 @@ import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
-import { getLatestClipboardSync, useClipboardChannel } from './useClipboardChannel'
+import { getLatestClipboard, useClipboardChannel } from './useClipboardChannel'
 
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
@@ -122,10 +122,18 @@ export function useClipboard(
       autoFillImage(data, timestamp)
   }
 
-  function handlePaste(options?: { overrideDismissed?: boolean; triggerSearch?: boolean }): void {
+  async function resolveLatestClipboard(): Promise<IClipboardItem | null> {
+    const latest = await getLatestClipboard()
+    return latest ?? clipboardOptions.last
+  }
+
+  async function handlePasteAsync(options?: {
+    overrideDismissed?: boolean
+    triggerSearch?: boolean
+  }): Promise<void> {
     const overrideDismissed = options?.overrideDismissed ?? false
     const triggerSearch = options?.triggerSearch ?? false
-    const clipboard = getLatestClipboardSync()
+    const clipboard = await resolveLatestClipboard()
 
     if (!clipboard?.timestamp) {
       clearClipboard()
@@ -165,6 +173,10 @@ export function useClipboard(
     } else if (triggerSearch && clipboardOptions.last) {
       onPasteCallback?.()
     }
+  }
+
+  function handlePaste(options?: { overrideDismissed?: boolean; triggerSearch?: boolean }): void {
+    void handlePasteAsync(options)
   }
 
   async function applyToActiveApp(item?: IClipboardItem): Promise<boolean> {

@@ -35,32 +35,13 @@ function convertClipboardItem(item: ClipboardItem | null): IClipboardItem | null
 }
 
 /**
- * Clipboard metadata update (for backward compatibility)
- * @deprecated Metadata updates are now handled via the change stream
- */
-export interface ClipboardMetaUpdate {
-  clipboardId: number
-  entries: Record<string, unknown>
-}
-
-/**
  * Clipboard transport handlers
  */
 export interface ClipboardTransportHandlers {
   onNewItem?: (item: IClipboardItem) => void
-  onMetaUpdate?: (update: ClipboardMetaUpdate) => void
 }
 
 export type ClipboardChannelHandlers = ClipboardTransportHandlers
-
-/**
- * Clipboard channel event names (for backward compatibility)
- * @deprecated Use TuffTransport ClipboardEvents instead
- */
-export const CLIPBOARD_CHANNELS = {
-  NEW_ITEM: 'clipboard:new-item',
-  META_UPDATE: 'clipboard:meta-update'
-} as const
 
 /**
  * Subscribe to clipboard changes using TuffTransport
@@ -97,19 +78,6 @@ export function useClipboardChannel(handlers?: ClipboardChannelHandlers): () => 
 export async function getLatestClipboard(): Promise<IClipboardItem | null> {
   const item = await getLatestClipboardItem()
   return convertClipboardItem(item)
-}
-
-/**
- * Get the latest clipboard item synchronously
- * @deprecated This method is not supported with TuffTransport. Use getLatestClipboard() instead.
- */
-export function getLatestClipboardSync(): IClipboardItem | null {
-  // TuffTransport doesn't support synchronous operations
-  // Return null and log a warning
-  console.warn(
-    '[useClipboardChannel] getLatestClipboardSync() is deprecated. Use getLatestClipboard() instead.'
-  )
-  return null
 }
 
 /**
