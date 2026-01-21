@@ -43,6 +43,31 @@ created_at: 2026-01-21T13:22:17+0800
 | 4 | DivisionBox 交互 | `examples/division-box/` | 常见 UI/Flow 交互与工作流场景 |
 | 5 | 工具包与通用能力 | `examples/util-pkg/` | 复用性高的工具能力与基础包 |
 
+## 现有示例盘点与缺口（NEXEX-020）
+
+### examples/ 一级条目映射
+| 条目 | 类型 | 内容/用途 | 与 snippets 对应 | 状态 | 备注 |
+| --- | --- | --- | --- | --- | --- |
+| `basic-usage.js` | file | SDK sendMessage 基础 | 无 | 重复 | 与 `message-system-example.js`、`complete-example.js` 内容重叠 |
+| `communicate-example.js` | file | communicateWithPlugin 插件通信 | Channel wrapper（部分） | 重复 | 与 `complete-communication-example.js` 主题相同 |
+| `complete-communication-example.js` | file | 插件间完整通信流程 | Channel wrapper（部分） | 重复 | 与 `communicate-example.js` 重叠 |
+| `complete-example.js` | file | 完整插件初始化/配置示例 | 无 | 重复 | 与 `basic-usage.js` 重叠，可保留为综合示例 |
+| `division-box/` | dir | DivisionBox 交互示例集合 | 无 | 可保留 | README 未覆盖 `flow-usage-example.ts`/`manifest-example.json` |
+| `index.js` | file | 简化 SDK 封装 Demo | 无 | 需明确 | 更像 SDK 封装样例，需说明用途 |
+| `message-system-example.js` | file | 消息系统 sendMessage 示例 | 无 | 重复 | 与 `basic-usage.js` 重叠 |
+| `notification-example.js` | file | 通知展示示例 | 无 | 可保留 | 使用 `notification:show` |
+| `plugin-index-example.js` | file | IFeatureLifeCycle index.js 示例 | 无 | 需更新 | 需校验 API 是否仍为 IFeatureLifeCycle |
+| `plugin-receiver-example.js` | file | 插件接收消息示例 | Channel wrapper（部分） | 重复 | 与通信示例重叠 |
+| `tuff-builder.example.ts.bak` | file | 备份示例 | 无 | 过时 | `.bak` 文件不应作为示例入口 |
+| `util-pkg/` | dir | 工具包示例目录 | 无 | 需更新 | 缺少 README/索引入口 |
+
+### 缺口清单（snippets → examples）
+- CoreBox 指令：`examples/` 无对应示例
+- Workflow 节点：`examples/` 无对应示例
+- Channel wrapper：仅通信示例，缺少 wrapper 形式示例
+- Storage 迁移：`examples/` 无对应示例
+- Widget 主题监听：`examples/` 无对应示例
+
 ⚠️ 风险与注意事项
 - Nuxt Content 生产构建可能无法直接读取 `examples/` 代码文件，需确认可行的同步/复制策略。
 - 示例跨中英文文档时会产生重复维护成本，需明确是否必须双语。
