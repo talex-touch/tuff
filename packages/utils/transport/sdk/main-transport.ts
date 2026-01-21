@@ -16,7 +16,7 @@ import type {
 } from '../types'
 import { ChannelType, DataCode } from '../../channel'
 import { assertTuffEvent } from '../event/builder'
-import type { TransportPortConfirmPayload, TransportPortScope, TransportPortUpgradeResponse } from '../events'
+import type { TransportPortConfirmPayload, TransportPortScope, TransportPortUpgradeResponse, TransportPortEnvelope  } from '../events'
 import { TransportEvents } from '../events'
 
 type InvokeHandler<TReq, TRes> = (
@@ -68,6 +68,7 @@ function registerInvokeHandler<TReq, TRes>(
   }
 }
 import { STREAM_SUFFIXES } from './constants'
+import { isPortChannelEnabled } from './port-policy'
 
 type PortRecord = {
   port: MessagePortMain
@@ -87,6 +88,47 @@ const portRegistry = new Map<string, PortRecord>()
 const portsBySenderId = new Map<number, Set<string>>()
 const senderCleanupRegistered = new WeakSet<WebContents>()
 let portHandlersRegistered = false
+
+type PortLookup = {
+  portId: string
+  record: PortRecord
+}
+
+const resolvePortRecord = (
+  channel: string,
+  sender: WebContents,
+  scope?: TransportPortScope,
+): PortLookup | null => {
+  const portIds = portsBySenderId.get(sender.id)
+  if (!portIds) return null
+
+  for (const portId of portIds) {
+    const record = portRegistry.get(portId)
+    if (!record || !record.confirmed) continue
+    if (record.channel !== channel) continue
+    if (scope && record.scope !== scope) continue
+    if (record.scope === 'window' && record.windowId !== undefined && record.windowId !== sender.id) {
+      continue
+    }
+    return { portId, record }
+  }
+  return null
+}
+
+const postPortMessage = (
+  lookup: PortLookup,
+  message: TransportPortEnvelope,
+): boolean => {
+  try {
+    lookup.record.port.postMessage(message)
+    return true
+  }
+  catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.warn(`[TuffTransport] Port send failed for \"${message.channel}\": ${errorMessage}`)
+    return false
+  }
+}
 
 function registerPortHandlers(transport: TuffMainTransport): void {
   if (portHandlersRegistered) {
@@ -396,6 +438,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     assertTuffEvent(event, 'TuffMainTransport.onStream')
 
     const eventName = event.toEventName()
+    const portEnabled = isPortChannelEnabled(eventName)
     const startEventName = `${eventName}${STREAM_SUFFIXES.START}`
     const cancelEventName = `${eventName}${STREAM_SUFFIXES.CANCEL}`
 
@@ -411,6 +454,17 @@ export class TuffMainTransport implements ITuffTransportMain {
       }
 
       streams.set(streamId, { cancelled: false })
+
+      const portLookup = portEnabled
+        ? resolvePortRecord(eventName, sender as WebContents, 'window')
+        : null
+
+      const sendPortStreamMessage = (message: TransportPortEnvelope): boolean => {
+        if (!portLookup) return false
+        const record = portRegistry.get(portLookup.portId)
+        if (!record || !record.confirmed) return false
+        return postPortMessage({ portId: portLookup.portId, record }, message)
+      }
 
       const sendToSender = (name: string, payload: any) => {
         try {
@@ -434,20 +488,48 @@ export class TuffMainTransport implements ITuffTransportMain {
         emit: (chunk: TChunk) => {
           if (streams.get(streamId)?.cancelled)
             return
-          sendToSender(`${eventName}${STREAM_SUFFIXES.DATA}:${streamId}`, { chunk })
+          const portSent = sendPortStreamMessage({
+            channel: eventName,
+            portId: portLookup?.portId,
+            streamId,
+            type: 'data',
+            payload: { chunk },
+          })
+          if (!portSent) {
+            sendToSender(`${eventName}${STREAM_SUFFIXES.DATA}:${streamId}`, { chunk })
+          }
         },
         error: (err: Error) => {
           if (streams.get(streamId)?.cancelled)
             return
-          sendToSender(`${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`, {
-            error: err instanceof Error ? err.message : String(err),
+          const errorMessage = err instanceof Error ? err.message : String(err)
+          const portSent = sendPortStreamMessage({
+            channel: eventName,
+            portId: portLookup?.portId,
+            streamId,
+            type: 'error',
+            payload: { error: errorMessage },
+            error: { code: 'stream_error', message: errorMessage },
           })
+          if (!portSent) {
+            sendToSender(`${eventName}${STREAM_SUFFIXES.ERROR}:${streamId}`, {
+              error: errorMessage,
+            })
+          }
           cleanup()
         },
         end: () => {
           if (streams.get(streamId)?.cancelled)
             return
-          sendToSender(`${eventName}${STREAM_SUFFIXES.END}:${streamId}`, {})
+          const portSent = sendPortStreamMessage({
+            channel: eventName,
+            portId: portLookup?.portId,
+            streamId,
+            type: 'close',
+          })
+          if (!portSent) {
+            sendToSender(`${eventName}${STREAM_SUFFIXES.END}:${streamId}`, {})
+          }
           cleanup()
         },
         isCancelled: () => {
@@ -507,6 +589,20 @@ export class TuffMainTransport implements ITuffTransportMain {
     if (!win) {
       throw new Error(`[TuffTransport] Cannot find BrowserWindow for id=${windowId}`)
     }
+    if (isPortChannelEnabled(eventName)) {
+      const portLookup = resolvePortRecord(eventName, win.webContents, 'window')
+      if (portLookup) {
+        const portSent = postPortMessage(portLookup, {
+          channel: eventName,
+          portId: portLookup.portId,
+          type: 'data',
+          payload,
+        })
+        if (portSent) {
+          return undefined as TRes
+        }
+      }
+    }
     return this.channel.sendTo(win, ChannelType.MAIN, eventName, payload)
   }
 
@@ -532,6 +628,21 @@ export class TuffMainTransport implements ITuffTransportMain {
         '[TuffTransport] Cannot find BrowserWindow for WebContents. '
         + 'Make sure the WebContents belongs to an existing BrowserWindow.',
       )
+    }
+
+    if (isPortChannelEnabled(eventName)) {
+      const portLookup = resolvePortRecord(eventName, targetWindow.webContents, 'window')
+      if (portLookup) {
+        const portSent = postPortMessage(portLookup, {
+          channel: eventName,
+          portId: portLookup.portId,
+          type: 'data',
+          payload,
+        })
+        if (portSent) {
+          return undefined as TRes
+        }
+      }
     }
 
     return this.channel.sendTo(targetWindow, ChannelType.MAIN, eventName, payload)
