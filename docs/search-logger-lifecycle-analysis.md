@@ -14,6 +14,37 @@
 6. `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts:32` calls `subscribeMainConfig(...)`.
 7. `apps/core-app/src/main/modules/storage/index.ts:803` `useMainStorage()` throws because `storageModule.filePath` is not set.
 
+## Module Load Order (Electron Ready)
+- `modulesToLoad` is defined in `apps/core-app/src/main/index.ts` and executed in a loop via `moduleManager.loadModule`.
+- Load order (from the source list):
+  1. databaseModule
+  2. storageModule
+  3. fileProtocolModule
+  4. shortcutModule
+  5. extensionLoaderModule
+  6. commonChannelModule
+  7. analyticsModule
+  8. permissionCheckerModule
+  9. permissionModule
+  10. notificationModule
+  11. sentryModule
+  12. buildVerificationModule
+  13. updateServiceModule
+  14. intelligenceModule
+  15. pluginModule
+  16. pluginLogModule
+  17. flowBusModule
+  18. coreBoxModule
+  19. trayManagerModule
+  20. addonOpenerModule
+  21. clipboardModule
+  22. tuffDashboardModule
+  23. FileSystemWatcher
+  24. terminalModule
+  25. downloadCenterModule
+- Even though `coreBoxModule` loads after `storageModule`, its import occurs before `app.whenReady()`,
+  so its transitive imports (including `searchLogger`) can run before `storageModule.onInit()`.
+
 ## Observed Failure
 - Error: `StorageModule not ready: filePath not set`.
 - Timing: occurs before `StorageModule.onInit()` completes.
