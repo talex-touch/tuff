@@ -68,6 +68,12 @@ created_at: 2026-01-21T13:22:17+0800
 - Storage 迁移：`examples/` 无对应示例
 - Widget 主题监听：`examples/` 无对应示例
 
+## 单一来源方案（NEXEX-040）
+- 选择：手工引用（不引入同步脚本）。
+- 唯一来源：仓库 `examples/` 目录及其 README。
+- Nexus 文档仅提供入口链接，避免复制示例代码（`apps/nexus/content/docs/dev/reference/examples.*.md`）。
+- 维护方式：更新 `examples/` 后同步更新索引与链接说明。
+
 ⚠️ 风险与注意事项
 - Nuxt Content 生产构建可能无法直接读取 `examples/` 代码文件，需确认可行的同步/复制策略。
 - 示例跨中英文文档时会产生重复维护成本，需明确是否必须双语。
