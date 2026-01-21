@@ -30,7 +30,7 @@ import {
   PluginStatus
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { DataCode } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
@@ -771,7 +771,7 @@ export class TouchPlugin implements ITouchPlugin {
         }
 
         const pluginContextName = context?.plugin?.name
-        const headerType = pluginContextName ? ChannelType.PLUGIN : ChannelType.MAIN
+        const headerType = pluginContextName ? 'plugin' : 'main'
         let replied = false
         let replyData: unknown
         const event: StandardChannelData = {
@@ -942,6 +942,12 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     // 向后兼容：保留旧的 searchManager
+    const warnDeprecatedSearch = (method: string, replacement: string) => {
+      pluginSystemLog.warn(
+        `[Plugin ${this.name}] search.${method} is deprecated. Use ${replacement} instead.`
+      )
+    }
+
     const searchManager = {
       /**
        * @deprecated 使用 boxItems.pushItems() 替代
@@ -949,65 +955,10 @@ export class TouchPlugin implements ITouchPlugin {
        * @param items - Array of search items to display
        */
       pushItems: async (items: TuffItem[]) => {
-        pluginSystemLog.debug(`[Plugin ${this.name}] pushItems() called with ${items.length} items`)
-        pluginSystemLog.debug(
-          `[Plugin ${this.name}] Items to push: ${items.map((item) => item.id).join(', ')}`
-        )
-
-        // 使用 TuffIconImpl 解析 items 中的 icon 相对路径为绝对路径
-        // 对于 dev 模式插件，icon 会被转换为 dev server URL
-        const processedItems = await Promise.all(
-          items.map(async (item) => {
-            const processedItem = { ...item }
-
-            // 处理 item.icon
-            if (processedItem.icon && processedItem.icon.type === 'file') {
-              const icon = new TuffIconImpl(
-                this.pluginPath,
-                processedItem.icon.type,
-                processedItem.icon.value,
-                this.dev
-              )
-              await icon.init()
-              processedItem.icon = {
-                type: icon.type,
-                value: icon.value,
-                status: icon.status
-              }
-            }
-
-            // 处理 render.basic.icon
-            if (
-              processedItem.render?.basic?.icon &&
-              typeof processedItem.render.basic.icon === 'object' &&
-              processedItem.render.basic.icon.type === 'file'
-            ) {
-              const basicIcon = processedItem.render.basic.icon
-              const icon = new TuffIconImpl(
-                this.pluginPath,
-                basicIcon.type,
-                basicIcon.value,
-                this.dev
-              )
-              await icon.init()
-              processedItem.render.basic.icon = {
-                type: icon.type,
-                value: icon.value,
-                status: icon.status
-              }
-            }
-
-            return processedItem
-          })
-        )
-
-        const enrichedItems = processedItems.map((item) => this.enrichItemWithSource(item))
-        this._searchItems = [...enrichedItems]
+        warnDeprecatedSearch('pushItems', 'boxItems.pushItems() / plugin.feature.pushItems()')
+        await boxItems.pushItems(items)
+        this._searchItems = [...items]
         this._searchTimestamp = Date.now()
-        boxItemManager.batchUpsert(enrichedItems)
-        pluginSystemLog.debug(
-          `[Plugin ${this.name}] Successfully pushed ${enrichedItems.length} search results via BoxItemManager`
-        )
       },
 
       /**
@@ -1015,6 +966,9 @@ export class TouchPlugin implements ITouchPlugin {
        * Clears search items from the CoreBox window
        */
       clearItems: () => {
+        warnDeprecatedSearch('clearItems', 'boxItems.clear() / plugin.feature.clearItems()')
+        this._searchItems = []
+        this._searchTimestamp = Date.now()
         boxItems.clear()
       },
 
@@ -1022,6 +976,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @deprecated 使用 boxItems.getItems() 替代
        */
       getItems: (): TuffItem[] => {
+        warnDeprecatedSearch('getItems', 'boxItems.getItems() / plugin.feature.getItems()')
         return boxItems.getItems()
       },
 
@@ -1329,19 +1284,22 @@ export class TouchPlugin implements ITouchPlugin {
       boxItems,
       // 废弃的 API - 直接抛出错误
       clearItems: () => {
-        throw new Error(
+        pluginSystemLog.warn(
           '[Plugin API] clearItems() is deprecated. Use plugin.feature.clearItems() instead.'
         )
+        boxItems.clear()
       },
-      pushItems: () => {
-        throw new Error(
+      pushItems: async (items: TuffItem[]) => {
+        pluginSystemLog.warn(
           '[Plugin API] pushItems() is deprecated. Use plugin.feature.pushItems() instead.'
         )
+        await boxItems.pushItems(items)
       },
-      getItems: () => {
-        throw new Error(
+      getItems: (): TuffItem[] => {
+        pluginSystemLog.warn(
           '[Plugin API] getItems() is deprecated. Use plugin.feature.getItems() instead.'
         )
+        return boxItems.getItems()
       },
       search: searchManager,
       features: featuresManager,
