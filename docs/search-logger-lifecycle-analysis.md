@@ -54,6 +54,26 @@
   `storageModule`, ensuring storage is ready before reading or subscribing.
 - Common rule: subscribe only after storage initialization (module init / post-storage load) and guard failures.
 
+## Recommended Fix Strategy
+Option comparison:
+- Explicit `init()` + `destroy()` on `SearchLogger`: move storage access out of constructor and call `init()`
+  from a module lifecycle hook (e.g., `CoreBoxModule.onInit`). Keep singleton export to avoid API churn.
+- Convert `SearchLogger` into a `BaseModule`: strong lifecycle control, but requires larger refactor and
+  new wiring in `modulesToLoad`.
+- Lazy retry inside `SearchLogger` when storage is not ready: minimal code change but introduces hidden
+  timing and repeated polling/retry logic.
+
+Recommendation (minimal change, compatible):
+- Keep `SearchLogger` as singleton but add `init()` that calls `loadSettings()` and `setupSettingsWatcher()`.
+- Remove storage-dependent work from constructor to avoid import-time side effects.
+- Invoke `searchLogger.init()` in `CoreBoxModule.onInit` (after `StorageModule` is loaded).
+- Keep `destroy()` called from `CoreBoxModule.onDestroy` for unsubscribe.
+
+Impact:
+- Public API remains `searchLogger` with same logging methods.
+- Logging may remain disabled until `init()` runs, which aligns with storage readiness.
+- No change to external call sites beyond adding `init()`/`destroy()` hook points.
+
 ## Observed Failure
 - Error: `StorageModule not ready: filePath not set`.
 - Timing: occurs before `StorageModule.onInit()` completes.
