@@ -1,4 +1,3 @@
-import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetSource } from './widget-loader'
 import type { CompiledWidget, WidgetCompilationContext } from './widget-processor'
 import path from 'node:path'

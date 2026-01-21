@@ -1,7 +1,32 @@
 import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { ITuffTransport, TuffEvent } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+
+const legacyCloseEvent = defineRawEvent<void, void>('close')
+const legacyHideEvent = defineRawEvent<void, void>('hide')
+const legacyMinimizeEvent = defineRawEvent<void, void>('minimize')
+const legacyDevToolsEvent = defineRawEvent<void, void>('dev-tools')
+const legacyCwdEvent = defineRawEvent<void, string>('common:cwd')
+const legacyPackageEvent = defineRawEvent<void, any>('get-package')
+const legacyOsEvent = defineRawEvent<void, any>('get-os')
+const legacyFolderOpenEvent = defineRawEvent<FolderOpenOptions, void>('folder:open')
+const legacyExecuteCmdEvent = defineRawEvent<ExecuteCommandOptions, void>('execute:cmd')
+const legacyAppOpenEvent = defineRawEvent<AppOpenOptions, void>('app:open')
+const legacyOpenExternalEvent = defineRawEvent<ExternalUrlOptions, void>('open-external')
+const legacyTempFileCreateEvent = defineRawEvent<TempFileCreateOptions, TempFileCreateResult>(
+  'temp-file:create',
+)
+const legacyTempFileDeleteEvent = defineRawEvent<TempFileDeleteOptions, TempFileDeleteResult>(
+  'temp-file:delete',
+)
+const legacyPluginFolderEvent = defineRawEvent<string, void>('plugin:explorer')
+const legacyPluginDevToolsEvent = defineRawEvent<string, void>('plugin:open-devtools')
+const legacyPluginReloadEvent = defineRawEvent<{ name: string }, void>('reload-plugin')
+const legacyModuleFolderEvent = defineRawEvent<{ name?: string }, void>('module:folder')
 
 export interface TouchSDKOptions {
-  channel: ITouchClientChannel
+  transport?: ITuffTransport
+  channel?: ITouchClientChannel
 }
 
 export interface FolderOpenOptions {
@@ -46,78 +71,96 @@ export interface TempFileDeleteResult {
 }
 
 export class TouchSDK {
-  private channel: ITouchClientChannel
+  private transport: ITuffTransport | null
+  private channel: ITouchClientChannel | null
 
   constructor(options: TouchSDKOptions) {
-    this.channel = options.channel
+    this.transport = options.transport ?? null
+    this.channel = options.channel ?? null
+  }
+
+  private async sendEvent<TReq, TRes>(event: TuffEvent<TReq, TRes>, payload?: TReq): Promise<TRes> {
+    if (this.transport) {
+      const shouldPassPayload = payload !== undefined
+      if (shouldPassPayload) {
+        return this.transport.send(event, payload)
+      }
+      return this.transport.send(event as TuffEvent<void, TRes>)
+    }
+
+    if (this.channel) {
+      return this.channel.send(event.toEventName(), payload as any) as Promise<TRes>
+    }
+
+    throw new Error('[TouchSDK] Transport or channel not initialized.')
   }
 
   /**
    * System Operations
    */
   async closeApp(): Promise<void> {
-    return this.channel.send('close')
+    return this.sendEvent(legacyCloseEvent)
   }
 
   async hideApp(): Promise<void> {
-    return this.channel.send('hide')
+    return this.sendEvent(legacyHideEvent)
   }
 
   async minimizeApp(): Promise<void> {
-    return this.channel.send('minimize')
+    return this.sendEvent(legacyMinimizeEvent)
   }
 
   async openDevTools(): Promise<void> {
-    return this.channel.send('dev-tools')
+    return this.sendEvent(legacyDevToolsEvent)
   }
 
   async getCurrentWorkingDirectory(): Promise<string> {
-    return this.channel.send('common:cwd')
+    return this.sendEvent(legacyCwdEvent)
   }
 
   async getPackageInfo(): Promise<any> {
-    return this.channel.send('get-package')
+    return this.sendEvent(legacyPackageEvent)
   }
 
   async getOSInfo(): Promise<any> {
-    return this.channel.send('get-os')
+    return this.sendEvent(legacyOsEvent)
   }
 
   /**
    * File & Folder Operations
    */
   async openFolder(options: FolderOpenOptions): Promise<void> {
-    return this.channel.send('folder:open', options)
+    return this.sendEvent(legacyFolderOpenEvent, options)
   }
 
   async executeCommand(options: ExecuteCommandOptions): Promise<void> {
-    return this.channel.send('execute:cmd', options)
+    return this.sendEvent(legacyExecuteCmdEvent, options)
   }
 
   async openApp(options: AppOpenOptions): Promise<void> {
-    return this.channel.send('app:open', options)
+    return this.sendEvent(legacyAppOpenEvent, options)
   }
 
   async openExternalUrl(options: ExternalUrlOptions): Promise<void> {
-    return this.channel.send('open-external', options)
+    return this.sendEvent(legacyOpenExternalEvent, options)
   }
 
   /**
    * Temp file operations
    */
   async createTempFile(options: TempFileCreateOptions): Promise<TempFileCreateResult> {
-    return this.channel.send('temp-file:create', options)
+    return this.sendEvent(legacyTempFileCreateEvent, options)
   }
 
   async deleteTempFile(options: TempFileDeleteOptions): Promise<TempFileDeleteResult> {
-    return this.channel.send('temp-file:delete', options)
+    return this.sendEvent(legacyTempFileDeleteEvent, options)
   }
 
   /**
    * Plugin Operations
    */
   async openPluginFolder(pluginName: string): Promise<void> {
-    return this.channel.send('plugin:explorer', pluginName)
+    return this.sendEvent(legacyPluginFolderEvent, pluginName)
   }
 
   /**
@@ -126,7 +169,7 @@ export class TouchSDK {
    * @returns Promise that resolves when DevTools is opened
    */
   async openPluginDevTools(pluginName: string): Promise<void> {
-    return this.channel.send('plugin:open-devtools', pluginName)
+    return this.sendEvent(legacyPluginDevToolsEvent, pluginName)
   }
 
   /**
@@ -135,27 +178,36 @@ export class TouchSDK {
    * @returns Promise that resolves when the reload operation completes
    */
   async reloadPlugin(pluginName: string): Promise<void> {
-    return this.channel.send('reload-plugin', { name: pluginName })
+    return this.sendEvent(legacyPluginReloadEvent, { name: pluginName })
   }
 
   /**
    * Module Operations
    */
   async openModuleFolder(moduleName?: string): Promise<void> {
-    return this.channel.send('module:folder', { name: moduleName })
+    return this.sendEvent(legacyModuleFolderEvent, { name: moduleName })
   }
 
   /**
    * Event Registration
    */
   onChannelEvent(eventName: string, callback: (data: any) => void): () => void {
-    return this.channel.regChannel(eventName, callback)
+    if (this.transport) {
+      return this.transport.on(defineRawEvent<any, any>(eventName), callback)
+    }
+    if (this.channel) {
+      return this.channel.regChannel(eventName, callback)
+    }
+    throw new Error('[TouchSDK] Transport or channel not initialized.')
   }
 
   /**
    * Raw channel access for advanced usage
    */
   get rawChannel(): ITouchClientChannel {
+    if (!this.channel) {
+      throw new Error('[TouchSDK] Channel not initialized.')
+    }
     return this.channel
   }
 }

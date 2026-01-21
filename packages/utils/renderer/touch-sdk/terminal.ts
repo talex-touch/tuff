@@ -1,4 +1,15 @@
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { ITuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+
+const terminalCreateEvent = defineRawEvent<{ command: string; args?: string[] }, { id: string }>(
+  'terminal:create',
+)
+const terminalWriteEvent = defineRawEvent<{ id: string; data: string }, void>('terminal:write')
+const terminalKillEvent = defineRawEvent<{ id: string }, void>('terminal:kill')
+const terminalDataEvent = defineRawEvent<{ id: string; data: string }, void>('terminal:data')
+const terminalExitEvent = defineRawEvent<{ id: string; exitCode: number | null }, void>(
+  'terminal:exit',
+)
 
 type DataCallback = (data: string) => void
 type ExitCallback = (exitCode: number | null) => void
@@ -7,10 +18,10 @@ export class Terminal {
   private id: string | null = null
   private onDataCallback: DataCallback | null = null
   private onExitCallback: ExitCallback | null = null
-  private channel: ITouchClientChannel
+  private transport: ITuffTransport
 
-  constructor(channel: ITouchClientChannel) {
-    this.channel = channel
+  constructor(transport: ITuffTransport) {
+    this.transport = transport
   }
 
   /**
@@ -26,19 +37,19 @@ export class Terminal {
     // However, for simplicity in this refactor, we'll assume exec is called for a new, independent command.
     // A more robust implementation might track multiple concurrent processes.
 
-    const { id } = await this.channel.send('terminal:create', { command, args })
+    const { id } = await this.transport.send(terminalCreateEvent, { command, args })
     this.id = id
 
     // Re-register listeners for the new process ID
-    this.channel.regChannel('terminal:data', (channelData) => {
-      if (this.id === channelData.data.id && this.onDataCallback) {
-        this.onDataCallback(channelData.data.data)
+    this.transport.on(terminalDataEvent, (payload) => {
+      if (this.id === payload.id && this.onDataCallback) {
+        this.onDataCallback(payload.data)
       }
     })
 
-    this.channel.regChannel('terminal:exit', (channelData) => {
-      if (this.id === channelData.data.id && this.onExitCallback) {
-        this.onExitCallback(channelData.data.exitCode)
+    this.transport.on(terminalExitEvent, (payload) => {
+      if (this.id === payload.id && this.onExitCallback) {
+        this.onExitCallback(payload.exitCode)
         this.id = null
       }
     })
@@ -53,7 +64,7 @@ export class Terminal {
    */
   public write(data: string): void {
     if (this.id) {
-      this.channel.send('terminal:write', { id: this.id, data })
+      void this.transport.send(terminalWriteEvent, { id: this.id, data })
     }
   }
 
@@ -62,7 +73,7 @@ export class Terminal {
    */
   public kill(): void {
     if (this.id) {
-      this.channel.send('terminal:kill', { id: this.id })
+      void this.transport.send(terminalKillEvent, { id: this.id })
       this.id = null
     }
   }

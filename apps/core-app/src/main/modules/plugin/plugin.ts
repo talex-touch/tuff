@@ -30,7 +30,7 @@ import {
   PluginStatus
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
-import { DataCode } from '@talex-touch/utils/channel'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
@@ -771,7 +771,7 @@ export class TouchPlugin implements ITouchPlugin {
         }
 
         const pluginContextName = context?.plugin?.name
-        const headerType = pluginContextName ? 'plugin' : 'main'
+        const headerType = pluginContextName ? ChannelType.PLUGIN : ChannelType.MAIN
         let replied = false
         let replyData: unknown
         const event: StandardChannelData = {
