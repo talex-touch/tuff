@@ -2,32 +2,35 @@ import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-// Import after mocking
-import { NotificationService } from '../../../../apps/core-app/src/main/modules/download/notification-service'
-
-// Mock Electron BEFORE importing the service
-class MockNotification {
-  static isSupported() {
-    return true
-  }
-
-  constructor(public options: any) {}
-  show() {}
-  on(_event: string, _callback: (...args: any[]) => void) {}
-}
 
 vi.mock('electron', () => ({
-  Notification: MockNotification,
+  app: {
+    getLocale: () => 'en-US',
+  },
+  Notification: class {
+    static isSupported() {
+      return true
+    }
+
+    constructor(public options: any) {}
+    show() {}
+    on(_event: string, _callback: (...args: any[]) => void) {}
+  },
   shell: {
-    openPath: vi.fn().mockResolvedValue(undefined),
-    showItemInFolder: vi.fn(),
+    openPath: async () => undefined,
+    showItemInFolder: () => {},
   },
 }))
 
 describe('notificationService', () => {
+  let NotificationService: typeof import('../../../../apps/core-app/src/main/modules/download/notification-service').NotificationService
   let notificationService: NotificationService
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    if (!NotificationService) {
+      const module = await import('../../../../apps/core-app/src/main/modules/download/notification-service')
+      NotificationService = module.NotificationService
+    }
     notificationService = new NotificationService()
   })
 

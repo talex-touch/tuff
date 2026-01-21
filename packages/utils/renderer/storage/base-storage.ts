@@ -23,13 +23,6 @@ export interface IStorageChannel extends ITouchClientChannel {
    * @param payload Event payload
    */
   send: (event: string, payload: unknown) => Promise<unknown>
-
-  /**
-   * Synchronous send interface
-   * @param event Event name
-   * @param payload Event payload
-   */
-  sendSync: (event: string, payload: unknown) => unknown
 }
 
 export type StorageInitMode = 'auto' | 'sync' | 'async'
@@ -52,7 +45,6 @@ let transport: ITuffTransport | null = null
  *
  * initStorageChannel({
  *   send: ipcRenderer.invoke.bind(ipcRenderer),
- *   sendSync: ipcRenderer.sendSync.bind(ipcRenderer),
  * });
  * ```
  */
@@ -143,7 +135,6 @@ export type SaveResult = StorageSaveResult
  */
 export class TouchStorage<T extends object> {
   readonly #qualifiedName: string
-  #initMode: StorageInitMode
   #autoSave = false
   #autoSaveStopHandle?: WatchHandle
   #assigning = false
@@ -196,13 +187,13 @@ export class TouchStorage<T extends object> {
         )
       }
     }
+    void options
 
     if (storages.has(qName)) {
       throw new Error(`Storage "${qName}" already exists`)
     }
 
     this.#qualifiedName = qName
-    this.#initMode = options?.initMode ?? 'auto'
     this.originalData = initData
     this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>
     this.#lastSyncedSnapshot = cloneValue(initData) as T
@@ -228,38 +219,7 @@ export class TouchStorage<T extends object> {
 
     this.#channelInitialized = true
 
-    const shouldSync = this.#initMode === 'sync'
-      || (this.#initMode === 'auto' && !transport)
-
-    if (shouldSync) {
-      // Try to get versioned data synchronously first, fallback to async load.
-      const versionedResult = this.#getVersionedSync()
-      if (versionedResult) {
-        this.#currentVersion = versionedResult.version
-        this.#isRemoteUpdate = true
-        this.assignData(versionedResult.data as Partial<T>, true, true)
-        this.#isRemoteUpdate = false
-        this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
-        this.#hydrated = true
-      }
-      else {
-        const result = this.#getSync()
-        if (result) {
-          this.#currentVersion = Math.max(this.#currentVersion, 1)
-          this.#isRemoteUpdate = true
-          this.assignData(result as Partial<T>, true, true)
-          this.#isRemoteUpdate = false
-          this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
-          this.#hydrated = true
-        }
-        else {
-          void this.#loadFromRemoteWithVersion()
-        }
-      }
-    }
-    else {
-      void this.#loadFromRemoteWithVersion()
-    }
+    void this.#loadFromRemoteWithVersion()
 
     this.#registerUpdateListener()
 
@@ -267,21 +227,6 @@ export class TouchStorage<T extends object> {
     if (this.#autoSave && !this.#autoSaveStopHandle) {
       this.#startAutoSaveWatcher()
     }
-  }
-
-  #getVersionedSync(): StorageGetVersionedResponse | null {
-    if (!channel) {
-      return null
-    }
-    return channel.sendSync('storage:get-versioned', this.#qualifiedName) as StorageGetVersionedResponse | null
-  }
-
-  #getSync(): Partial<T> | null {
-    if (!channel) {
-      return null
-    }
-    const result = channel.sendSync('storage:get', this.#qualifiedName)
-    return result ? (result as Partial<T>) : null
   }
 
   async #getVersionedAsync(): Promise<StorageGetVersionedResponse | null> {
@@ -729,17 +674,12 @@ export class TouchStorage<T extends object> {
    * This bypasses debouncing and saves immediately
    */
   saveSync(): void {
-    if (!channel)
+    if (!channel && !transport)
       return
     if (this.#isRemoteUpdate)
       return
 
-    channel.sendSync('storage:save-sync', {
-      key: this.#qualifiedName,
-      value: toRaw(this.data),
-      clear: false,
-      version: this.#currentVersion,
-    })
+    void this.saveToRemote({ force: true })
   }
 
   /**
