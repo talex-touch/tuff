@@ -261,6 +261,50 @@ await transport.flush()
 transport.destroy()
 ```
 
+### 2.7 transport.upgrade
+
+请求 MessagePort 升级（多数情况下由 SDK 内部使用）。
+
+```typescript
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+
+const res = await transport.upgrade({
+  channel: CoreBoxEvents.search.query.toEventName(),
+  scope: 'window', // 'window' | 'plugin' | 'app'
+})
+
+if (!res.accepted) {
+  console.warn(res.error?.message)
+}
+```
+
+### 2.8 transport.openPort
+
+打开或复用端口，失败返回 `null`，调用方应回退到普通 channel 逻辑。
+
+```typescript
+import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+
+const handle = await transport.openPort({
+  channel: ClipboardEvents.change.toEventName(),
+  scope: 'window',
+})
+
+if (handle) {
+  handle.port.postMessage({
+    channel: handle.channel,
+    type: 'data',
+    payload: { ...payload }
+  })
+  await handle.close('manual')
+}
+```
+
+#### Port allowlist 与回退
+
+- `TALEX_TRANSPORT_PORT_CHANNELS` 使用逗号列表控制允许升级的通道；为空字符串表示禁用。
+- SDK 会在端口不可用/被禁用时自动回退到 channel 并记录日志。
+
 ---
 
 ## 3. Main Process SDK API
@@ -362,6 +406,8 @@ import { usePluginTransport } from '@talex-touch/utils/transport'
 
 const transport = usePluginTransport()
 ```
+
+> 插件环境中 `openPort` 默认使用 `scope: 'plugin'` 并绑定插件名；端口不可用时自动回退。
 
 ### 4.2 扩展属性
 
