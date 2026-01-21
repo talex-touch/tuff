@@ -10,6 +10,7 @@ import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
 import { getMainConfig } from '../../storage'
 import SearchEngineCore from '../search-engine/search-core'
+import { searchLogger } from '../search-engine/search-logger'
 import { coreBoxManager } from './manager'
 import { windowManager } from './window'
 
@@ -38,6 +39,7 @@ export class CoreBoxModule extends BaseModule {
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     await $app.moduleManager.loadModule(SearchEngineCore)
+    await searchLogger.init()
 
     const channel = (ctx.app as any).channel as any
     this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
@@ -135,6 +137,7 @@ export class CoreBoxModule extends BaseModule {
     this.transportDisposers = []
     this.transport = null
 
+    searchLogger.destroy()
     coreBoxManager.destroy()
   }
 
