@@ -13,7 +13,7 @@ export interface TreeNode {
 export type TreeValue = TreeKey | TreeKey[]
 
 export interface TreeProps {
-  nodes: TreeNode[]
+  nodes?: TreeNode[]
   modelValue?: TreeValue
   multiple?: boolean
   selectable?: boolean
