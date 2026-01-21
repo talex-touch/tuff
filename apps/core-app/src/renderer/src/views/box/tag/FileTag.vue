@@ -2,7 +2,6 @@
 import path from 'path-browserify'
 
 const props = defineProps<{
-  buffer?: Uint8Array // deprecated, use iconPath
   iconPath?: string
   paths: string[]
 }>()
@@ -16,17 +15,6 @@ const image = computed(() => {
   // Fallback to first path
   if (props.paths && props.paths.length > 0) {
     return `tfile://${props.paths[0]}`
-  }
-
-  // Legacy buffer support (deprecated)
-  if (props.buffer) {
-    const bytes: any = props.buffer.buffer
-    let storeData = ''
-    const len = bytes.byteLength
-    for (let i = 0; i < len; i++) {
-      storeData += String.fromCharCode(bytes[i])
-    }
-    return `data:image/png;base64,${window.btoa(storeData)}`
   }
 
   return ''
@@ -43,7 +31,7 @@ const fileLength = computed(() => props?.paths.length || 0)
 
 <template>
   <div class="FileTag">
-    <img :src="image" alt="">
+    <img :src="image" alt="" />
     <span class="name">{{ firstFileName }}</span>
     <span v-if="fileLength - 1" class="badge" v-text="fileLength" />
   </div>
