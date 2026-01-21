@@ -8,7 +8,7 @@ import { useDocumentVisibility } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
-import { getLatestClipboardSync } from './useClipboardChannel'
+import { getLatestClipboard } from './useClipboardChannel'
 
 interface UseVisibilityOptions {
   boxOptions: IBoxOptions
@@ -44,7 +44,7 @@ export function useVisibility(options: UseVisibilityOptions) {
     if (lastVisibleState === visible) return
     lastVisibleState = visible
     if (visible) {
-      onShow()
+      void onShow()
     } else {
       onHide()
     }
@@ -86,13 +86,13 @@ export function useVisibility(options: UseVisibilityOptions) {
     }
   }
 
-  function isClipboardFreshForAutoPaste(): boolean {
+  async function isClipboardFreshForAutoPaste(): Promise<boolean> {
     if (!appSetting.tools.autoPaste.enable) return false
 
     const limit = appSetting.tools.autoPaste.time
     if (limit === -1) return false
 
-    const clipboard = getLatestClipboardSync()
+    const clipboard = (await getLatestClipboard()) ?? clipboardOptions.last
     if (!clipboard?.timestamp) return false
 
     const copiedTime = new Date(clipboard.timestamp).getTime()
@@ -101,10 +101,10 @@ export function useVisibility(options: UseVisibilityOptions) {
     return clipboardAge <= effectiveLimit
   }
 
-  function onShow(): void {
+  async function onShow(): Promise<void> {
     checkAutoClear()
 
-    if (wasTriggeredByShortcut.value && isClipboardFreshForAutoPaste()) {
+    if (wasTriggeredByShortcut.value && (await isClipboardFreshForAutoPaste())) {
       handlePaste({ triggerSearch: true })
       handleAutoFill()
     }

@@ -2,12 +2,7 @@ export type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 export { useActionPanel } from './useActionPanel'
 export { useChannel } from './useChannel'
 export { useClipboard } from './useClipboard'
-export {
-  CLIPBOARD_CHANNELS,
-  type ClipboardChannelHandlers,
-  type ClipboardMetaUpdate,
-  useClipboardChannel
-} from './useClipboardChannel'
+export { type ClipboardChannelHandlers, useClipboardChannel } from './useClipboardChannel'
 export {
   type ClipboardStateReturn,
   useClipboardState,
