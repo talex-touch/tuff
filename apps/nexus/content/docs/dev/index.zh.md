@@ -11,6 +11,7 @@
 ## 深入学习
 - **[API 参考](./api/)** — 存储、通道和 UI 的类型化接口。
 - **[扩展开发](./extensions/)** — 复杂集成的高级模式。
+- **[示例与常用代码](./reference/examples.zh.md)** — 以 `examples/` 为源的示例入口。
 - **[代码片段](./reference/snippets.zh.md)** — 常见任务的复制粘贴示例。
 
 ## 运行时行为
