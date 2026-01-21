@@ -15,6 +15,12 @@ import CascaderBasicDemoSource from '../.vitepress/theme/components/demos/Cascad
   </template>
 </DemoBlock>
 
+## 注意事项
+
+- 单选模式 `modelValue` 为路径数组，多选模式为路径数组列表。
+- `expandTrigger` 可控制点击/悬停展开（`hover` 模式下点击非叶子节点不会展开）。
+- 异步 `load` 仅在节点未提供 `children` 且未标记 `leaf` 时触发。
+
 ## API
 
 ### TxCascader Props
@@ -30,9 +36,10 @@ import CascaderBasicDemoSource from '../.vitepress/theme/components/demos/Cascad
 | `clearable` | `boolean` | `true` | 是否可清空 |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | 浮层位置 |
 | `dropdownOffset` | `number` | `6` | 浮层偏移 |
-| `dropdownWidth` | `number` | `0` | 浮层宽度（0 表示跟随触发器） |
+| `dropdownWidth` | `number` | `360` | 浮层宽度 |
 | `dropdownMaxWidth` | `number` | `520` | 浮层最大宽度 |
 | `dropdownMaxHeight` | `number` | `340` | 浮层最大高度 |
+| `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | 展开触发方式 |
 | `load` | `(node, level) => Promise<CascaderNode[]>` | - | 异步加载子节点（仅对未提供 children 的节点生效） |
 
 ### CascaderNode

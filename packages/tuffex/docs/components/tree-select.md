@@ -15,6 +15,11 @@ import TreeSelectBasicDemoSource from '../.vitepress/theme/components/demos/Tree
   </template>
 </DemoBlock>
 
+## 注意事项
+
+- `multiple` 为 true 时，`modelValue` 需要为数组；清空会回传空数组。
+- `multiple` 为 false 时，清空会回传 `undefined`。
+
 ## API
 
 ### TxTreeSelect Props
@@ -52,6 +57,12 @@ import TreeSelectBasicDemoSource from '../.vitepress/theme/components/demos/Tree
 | `change` | `(v)` | 值变化 |
 | `open` | - | 打开浮层 |
 | `close` | - | 关闭浮层 |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `node` | 自定义节点内容（slot props: `node`, `level`, `expanded`, `selected`） |
 
 ### Expose
 

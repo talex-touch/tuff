@@ -28,6 +28,11 @@ import SearchSelectRemoteDemoSource from '../.vitepress/theme/components/demos/S
   </template>
 </DemoBlock>
 
+## 注意事项
+
+- 本地模式会基于 `options` 的 `label` 进行过滤，输入为空时显示全部。
+- 远程模式需要在 `search` 事件中自行更新 `options`，组件不会缓存结果。
+
 ## API
 
 ### Props
