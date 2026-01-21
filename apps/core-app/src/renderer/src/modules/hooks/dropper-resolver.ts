@@ -19,8 +19,8 @@ export function clearBufferedFile(name: string): void {
 }
 
 async function handlePluginDrop(file: File): Promise<boolean> {
-  if (file.name.endsWith('.touch-plugin')) {
-    await blowMention('Fatal Error', 'Sorry, the plugin is deprecated, we only support .tpex now.')
+  if (!file.name.endsWith('.tpex')) {
+    await blowMention('Install Error', 'Only .tpex plugin packages are supported.')
     return true
   }
 
