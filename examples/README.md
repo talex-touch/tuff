@@ -41,3 +41,9 @@
 
 ### Deprecated
 - [tuff-builder.example.ts.bak](./tuff-builder.example.ts.bak) - 备份文件，不作为示例入口
+
+## 维护流程
+1. 更新或新增示例文件（优先 `.ts`）。
+2. 同步维护本 README 索引。
+3. 如涉及 Nexus 文档入口，更新 `apps/nexus/content/docs/dev/reference/examples.*.md`。
+4. 文档验证：`pnpm -C "apps/nexus" run build`。
