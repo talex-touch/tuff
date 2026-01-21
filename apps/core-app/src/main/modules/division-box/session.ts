@@ -13,7 +13,7 @@ import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
 import path from 'node:path'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { DataCode } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { app, WebContentsView } from 'electron'
@@ -432,7 +432,6 @@ export class DivisionBoxSession {
   const uniqueKey = "${uniqueKey}";
   window['$tuffInitialData'] = window['$tuffInitialData'] || {};
   const { ipcRenderer } = require('electron');
-  const ChannelType = ${JSON.stringify(ChannelType)};
   const DataCode = ${JSON.stringify(DataCode)};
   const CHANNEL_DEFAULT_TIMEOUT = 60000;
 
@@ -450,7 +449,7 @@ export class DivisionBoxSession {
       const { uniqueKey: thisKey } = arg.header;
       if (thisKey && thisKey !== uniqueKey) return null;
       return {
-        header: { status: arg.header.status || 'request', type: ChannelType.MAIN, _originData: arg },
+        header: { status: arg.header.status || 'request', type: 'main', _originData: arg },
         sync: arg.sync, code: arg.code, data: arg.data, plugin: arg.plugin, name: arg.name
       };
     }
@@ -495,7 +494,7 @@ export class DivisionBoxSession {
     send(eventName, arg) {
       const uniqueId = Date.now() + '#' + eventName + '@' + Math.random().toString(12);
       const data = { code: DataCode.SUCCESS, data: arg, sync: { timeStamp: Date.now(), timeout: CHANNEL_DEFAULT_TIMEOUT, id: uniqueId },
-        name: eventName, header: { uniqueKey, status: 'request', type: ChannelType.PLUGIN }
+        name: eventName, header: { uniqueKey, status: 'request', type: 'plugin' }
       };
       return new Promise((resolve, reject) => {
         ipcRenderer.send('@plugin-process-message', data);
@@ -680,13 +679,6 @@ export class DivisionBoxSession {
    */
   isDevToolsOpen(): boolean {
     return this.uiView?.webContents.isDevToolsOpened() ?? false
-  }
-
-  /**
-   * @deprecated Use getUIView() instead
-   */
-  getWebContentsView(): WebContentsView | null {
-    return this.uiView
   }
 
   /**
