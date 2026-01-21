@@ -1,5 +1,5 @@
 <script lang="ts" name="TTag" setup>
-const { type, size, pill } = withDefaults(
+const props = withDefaults(
   defineProps<{
     type?: 'default' | 'success' | 'danger' | 'warning' | 'info'
     size?: 'sm' | 'md'
@@ -8,13 +8,16 @@ const { type, size, pill } = withDefaults(
   {
     type: 'default',
     size: 'md',
-    pill: false,
-  },
+    pill: false
+  }
 )
 </script>
 
 <template>
-  <span class="TTag" :class="[`type-${type}`, `tuff-tag-size-${size}`, { pill }]">
+  <span
+    class="TTag"
+    :class="[`type-${props.type}`, `tuff-tag-size-${props.size}`, { pill: props.pill }]"
+  >
     <slot />
   </span>
 </template>

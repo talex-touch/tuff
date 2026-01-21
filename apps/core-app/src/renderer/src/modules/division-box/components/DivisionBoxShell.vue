@@ -43,7 +43,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Refs
 const shellRef = ref<HTMLElement>()
-const contentRef = ref<HTMLElement>()
 const isVisible = ref(true)
 const isLoading = ref(false)
 const currentState = ref<string>('prepare')
@@ -227,7 +226,7 @@ onUnmounted(() => {
       />
 
       <!-- Content 区域 (WebContentsView 容器) -->
-      <div ref="contentRef" class="division-box-content">
+      <div class="division-box-content">
         <!-- Loading indicator -->
         <Transition name="fade">
           <div v-if="showLoadingIndicator" class="state-indicator loading-indicator">

@@ -248,24 +248,24 @@ watch(isLoggedIn, (loggedIn) => {
     class="FlatUserInfo"
     @click="openProfileDialog"
   >
-    <template v-if="isLoggedIn && currentUser?.name">
+    <template v-if="isLoggedIn && currentUser.value?.name">
       <div class="user-avatar">
         <img
-          v-if="currentUser.avatar"
-          :src="currentUser.avatar"
-          :alt="currentUser.name"
+          v-if="currentUser.value?.avatar"
+          :src="currentUser.value.avatar"
+          :alt="currentUser.value.name"
           class="avatar-image"
         />
         <div v-else class="avatar-placeholder">
-          {{ currentUser.name.charAt(0).toUpperCase() }}
+          {{ currentUser.value.name.charAt(0).toUpperCase() }}
         </div>
       </div>
       <div class="user-info">
         <p class="user-name">
-          {{ currentUser.name }}
+          {{ currentUser.value.name }}
         </p>
         <span class="user-email">
-          {{ currentUser.email }}
+          {{ currentUser.value.email }}
         </span>
       </div>
       <span class="open-external-icon i-carbon-launch" />
@@ -276,8 +276,8 @@ watch(isLoggedIn, (loggedIn) => {
       <div class="UserProfile-Header">
         <div class="UserProfile-Avatar">
           <img
-            v-if="currentUser?.avatar"
-            :src="currentUser.avatar"
+            v-if="currentUser.value?.avatar"
+            :src="currentUser.value.avatar"
             :alt="displayName"
             class="avatar-image"
           />

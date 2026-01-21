@@ -4,7 +4,7 @@ import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { computed, ref, useAttrs } from 'vue'
 
 defineOptions({
-  inheritAttrs: false,
+  inheritAttrs: false
 })
 
 const props = withDefaults(
@@ -25,8 +25,8 @@ const props = withDefaults(
     textarea: false,
     rows: 3,
     disabled: false,
-    readonly: false,
-  },
+    readonly: false
+  }
 )
 
 const emits = defineEmits<{
@@ -46,15 +46,13 @@ const inputAttrs = computed(() => {
 })
 
 function handleKeydown(event: KeyboardEvent) {
-  if (props.type !== 'password')
-    return
+  if (props.type !== 'password') return
   const keyCode = event.keyCode || event.which
   const shiftKey = event.shiftKey || keyCode === 16
 
   if (!event.getModifierState) {
-    showCapsLock.value
-      = ((keyCode >= 65 && keyCode <= 90) && !shiftKey)
-        || ((keyCode >= 97 && keyCode <= 122) && shiftKey)
+    showCapsLock.value =
+      (keyCode >= 65 && keyCode <= 90 && !shiftKey) || (keyCode >= 97 && keyCode <= 122 && shiftKey)
     return
   }
   showCapsLock.value = event.getModifierState('CapsLock')
@@ -70,7 +68,7 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
     </span>
     <textarea
       v-if="textarea"
-      v-model="value"
+      v-model="value.value"
       :placeholder="placeholder"
       :rows="rows"
       :disabled="disabled"
@@ -83,7 +81,7 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
     />
     <input
       v-else
-      v-model="value"
+      v-model="value.value"
       :type="inputType"
       :placeholder="placeholder"
       :disabled="disabled"
@@ -93,7 +91,7 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
       @keydown="handleKeydown"
       @blur="emits('blur', $event)"
       @focus="emits('focus', $event)"
-    >
+    />
     <span v-if="suffixIcon" class="icon suffix">
       <i :class="suffixIcon" />
     </span>

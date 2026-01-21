@@ -4,22 +4,21 @@ import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false,
-  },
+    default: false
+  }
 })
 
 const emits = defineEmits(['update:modelValue'])
 
 const value = useModelWrapper(props, emits, 'modelValue')
+
+function toggle() {
+  value.value = !value.value
+}
 </script>
 
 <template>
-  <div
-    :class="{ select: value }"
-    class="TCheckBox-Container"
-    role="checkbox"
-    @click="value = !value"
-  >
+  <div :class="{ select: value }" class="TCheckBox-Container" role="checkbox" @click="toggle">
     <span class="TCheckBox-Inner">
       <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <polyline

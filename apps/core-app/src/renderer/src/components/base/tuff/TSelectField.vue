@@ -52,7 +52,7 @@ function clearValue() {
 <template>
   <div class="TSelectField" :class="{ disabled }">
     <select
-      :value="value === null || value === undefined ? '' : String(value)"
+      :value="value.value === null || value.value === undefined ? '' : String(value.value)"
       :disabled="disabled"
       class="select-element"
       @change="handleChange"
@@ -65,7 +65,7 @@ function clearValue() {
       </option>
     </select>
     <TxButton
-      v-if="clearable && value !== null && value !== undefined && value !== ''"
+      v-if="clearable && value.value !== null && value.value !== undefined && value.value !== ''"
       variant="bare"
       native-type="button"
       class="clear-btn"

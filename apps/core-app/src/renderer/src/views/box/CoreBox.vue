@@ -211,9 +211,6 @@ const effectiveProviders = computed<IProviderActivate[]>(() => {
   return activeActivationsList.value
 })
 
-// DivisionBox header ref
-const divisionBoxHeaderRef = ref()
-
 const { cleanup: cleanupVisibility } = useVisibility({
   boxOptions,
   searchVal,
@@ -454,7 +451,6 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
     <!-- DivisionBox Mode Header -->
     <template v-if="isDivisionBox">
       <DivisionBoxHeader
-        ref="divisionBoxHeaderRef"
         v-model:search-val="searchVal"
         :box-options="boxOptions"
         :show-input="showInput"

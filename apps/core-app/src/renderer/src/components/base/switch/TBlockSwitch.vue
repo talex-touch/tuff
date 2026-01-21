@@ -92,7 +92,7 @@ watch(
       <TSwitch v-model="value" />
     </div>
     <div v-else class="TBlockSwitch-Guidance">
-      <RemixIcon name="arrow-right-s" style="line" />
+      <RemixIcon name="arrow-right-s" :style="'line'" />
     </div>
   </div>
 </template>

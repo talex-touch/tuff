@@ -69,8 +69,8 @@ function openDeviceManagement() {
     <!-- Logged in state -->
     <TuffBlockSlot
       v-if="isLoggedIn"
-      :title="currentUser?.name || '用户'"
-      :description="currentUser?.email || '已登录'"
+      :title="currentUser.value?.name || '用户'"
+      :description="currentUser.value?.email || '已登录'"
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
       @click="openUserProfile"

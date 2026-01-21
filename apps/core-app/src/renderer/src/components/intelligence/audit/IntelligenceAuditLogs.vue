@@ -88,7 +88,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
       </div>
     </div>
 
-    <div v-if="isLoading && logs.length === 0" class="loading">
+    <div v-if="isLoading.value && logs.length === 0" class="loading">
       <i class="i-carbon-circle-dash animate-spin" />
       {{ t('common.loading') }}
     </div>
@@ -161,7 +161,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
       </div>
 
       <div v-if="hasMore" class="load-more">
-        <TxButton variant="flat" :loading="isLoading" @click="loadLogs(true)">
+        <TxButton variant="flat" :loading="isLoading.value" @click="loadLogs(true)">
           <i class="i-carbon-add" />
           {{ t('common.loadMore') }}
         </TxButton>
