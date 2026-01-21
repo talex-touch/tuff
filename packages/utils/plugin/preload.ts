@@ -37,6 +37,11 @@ export function initTuff(window: Window) {
   if (!window.$transport && window.$channel) {
     window.$transport = createPluginTuffTransport(window.$channel)
   }
+  if (window.$transport) {
+    window.addEventListener?.('beforeunload', () => {
+      window.$transport?.destroy()
+    }, { once: true })
+  }
 
   window.$crash = function (message, extraData) {
     if (window.$transport) {
