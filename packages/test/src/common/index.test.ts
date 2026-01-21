@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { anyStr2Num, num2anyStr } from '@talex-touch/utils/common'
-import { genFileTree } from '@talex-touch/utils/help/tree-generator'
 import { describe, expect, it } from 'vitest'
+import { genFileTree } from '../../../help/tree-generator'
 
 describe('#Common', () => {
   it('serial str-num test', () => {
