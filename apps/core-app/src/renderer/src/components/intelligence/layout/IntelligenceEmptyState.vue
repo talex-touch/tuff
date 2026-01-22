@@ -34,7 +34,9 @@ const { t } = useI18n()
 }
 
 .icon-wrapper {
-  animation: float 3s ease-in-out infinite, scaleIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  animation:
+    float 3s ease-in-out infinite,
+    scaleIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
@@ -105,7 +107,8 @@ const { t } = useI18n()
 }
 
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {

@@ -25,7 +25,12 @@ interface Emits {
 const visible = ref(props.modelValue)
 const loading = ref(false)
 const logs = ref<string>('')
-const errorStats = ref<any>(null)
+type DownloadErrorStats = {
+  total: number
+  byType?: Record<string, number>
+}
+
+const errorStats = ref<DownloadErrorStats | null>(null)
 const logLimit = ref(100)
 
 watch(
@@ -73,7 +78,11 @@ async function loadErrorStats() {
   try {
     const result = await transport.send(DownloadEvents.logs.getErrorStats)
     if (result.success) {
-      errorStats.value = result.stats
+      const stats =
+        result.stats && typeof result.stats === 'object'
+          ? (result.stats as DownloadErrorStats)
+          : null
+      errorStats.value = stats
     }
   } catch (error: unknown) {
     console.error('Failed to load error stats:', error)

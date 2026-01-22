@@ -37,7 +37,7 @@ const ALLOWED_PACKAGES = [
 ]
 
 // Pre-loaded module cache using ES imports
-const preloadedModuleCache: Record<string, any> = {
+const preloadedModuleCache: Record<string, unknown> = {
   vue: Vue,
   '@talex-touch/utils': TalexUtils,
   '@talex-touch/utils/plugin': TalexUtilsPlugin,
@@ -55,7 +55,7 @@ const preloadedModuleCache: Record<string, any> = {
  * @returns Safe require function
  * @throws Error if any declared dependency is not available
  */
-function createSandboxRequire(allowedDependencies: string[]): (id: string) => any {
+function createSandboxRequire(allowedDependencies: string[]): (id: string) => unknown {
   // Validate that all declared dependencies are available before creating the sandbox
   const unavailableDeps = allowedDependencies.filter((dep) => {
     if (!ALLOWED_PACKAGES.includes(dep)) {
@@ -94,7 +94,7 @@ function createSandboxRequire(allowedDependencies: string[]): (id: string) => an
  * @returns Vue component
  */
 function evaluateWidgetComponent(code: string, dependencies: string[] = []): Component {
-  const module: { exports: any } = { exports: {} }
+  const module: { exports: unknown } = { exports: {} }
   const customRequire = createSandboxRequire(dependencies)
 
   try {
@@ -105,13 +105,18 @@ function evaluateWidgetComponent(code: string, dependencies: string[] = []): Com
     throw error
   }
 
-  const exported = module.exports.default || module.exports
+  const moduleExports = module.exports
+  const defaultExport =
+    moduleExports && typeof moduleExports === 'object' && 'default' in moduleExports
+      ? (moduleExports as { default?: unknown }).default
+      : undefined
+  const exported = defaultExport ?? moduleExports
 
   if (!exported) {
     throw new Error('Widget component did not export a value')
   }
 
-  return exported
+  return exported as Component
 }
 
 function injectStyles(widgetId: string, styles: string): void {

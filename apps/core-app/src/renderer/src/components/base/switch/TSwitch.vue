@@ -1,7 +1,16 @@
 <script name="TSwitch" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 
-const props = defineProps(['modelValue', 'disabled'])
+const props = defineProps({
+  modelValue: {
+    type: Boolean,
+    required: true
+  },
+  disabled: {
+    type: Boolean,
+    default: false
+  }
+})
 const emits = defineEmits(['update:modelValue', 'change'])
 
 const model = useModelWrapper(props, emits)

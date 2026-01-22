@@ -1,19 +1,26 @@
 import { nextTick } from 'vue'
+import type { I18n } from 'vue-i18n'
 import { createI18n } from 'vue-i18n'
 import enUS from './en-US.json'
 import zhCN from './zh-CN.json'
+
+type MessageMap = Record<string, unknown>
+type LocaleKey = string
+export type I18nInstance = I18n<MessageMap, MessageMap, MessageMap, LocaleKey, false>
 
 /**
  * Setup i18n instance with provided options
  * @param options - i18n options with default locale
  * @returns i18n instance
  */
-export async function setupI18n(options: { locale: string } = { locale: 'en-US' }): Promise<any> {
+export async function setupI18n(
+  options: { locale: string } = { locale: 'en-US' }
+): Promise<I18nInstance> {
   const i18n = createI18n({
     legacy: false,
     locale: options.locale,
-    messages: {},
-  })
+    messages: {}
+  }) as I18nInstance
 
   await loadLocaleMessages(i18n, options.locale)
 
@@ -26,13 +33,8 @@ export async function setupI18n(options: { locale: string } = { locale: 'en-US' 
  * @param i18n - i18n instance
  * @param locale - locale string
  */
-export function setI18nLanguage(i18n: any, locale: string): void {
-  if (i18n.mode === 'legacy') {
-    i18n.global.locale = locale
-  }
-  else {
-    i18n.global.locale.value = locale
-  }
+export function setI18nLanguage(i18n: I18nInstance, locale: string): void {
+  i18n.global.locale.value = locale
 
   /**
    * NOTE:
@@ -44,9 +46,9 @@ export function setI18nLanguage(i18n: any, locale: string): void {
   document.querySelector('html')!.setAttribute('lang', locale)
 }
 
-const localeMessages: Record<string, any> = {
+const localeMessages: Record<string, MessageMap> = {
   'zh-CN': zhCN,
-  'en-US': enUS,
+  'en-US': enUS
 }
 
 /**
@@ -55,16 +57,15 @@ const localeMessages: Record<string, any> = {
  * @param locale - locale string
  * @returns Promise that resolves when messages are loaded
  */
-export async function loadLocaleMessages(i18n: any, locale: string): Promise<void> {
-  let messages: any
+export async function loadLocaleMessages(i18n: I18nInstance, locale: string): Promise<void> {
+  let messages: MessageMap
 
   try {
     messages = localeMessages[locale]
     if (!messages) {
       throw new Error(`Locale "${locale}" not found`)
     }
-  }
-  catch (error) {
+  } catch (error) {
     console.error(`[loadLocaleMessages] Failed to load locale "${locale}":`, error)
     try {
       const fallbackLocale = locale === 'zh-CN' ? 'en-US' : 'zh-CN'
@@ -73,38 +74,23 @@ export async function loadLocaleMessages(i18n: any, locale: string): Promise<voi
         throw new Error(`Fallback locale "${fallbackLocale}" not found`)
       }
       console.warn(`[loadLocaleMessages] Fallback to "${fallbackLocale}"`)
-    }
-    catch (fallbackError) {
+    } catch (fallbackError) {
       console.error(`[loadLocaleMessages] Fallback locale also failed:`, fallbackError)
       throw error
     }
   }
 
-  if (typeof i18n.global.setLocaleMessage === 'function') {
-    i18n.global.setLocaleMessage(locale, messages)
-  }
-  else if (i18n.global.messages) {
-    // Handle both reactive and non-reactive messages
-    if (typeof i18n.global.messages.value === 'object') {
-      i18n.global.messages.value[locale] = messages
-    }
-    else if (typeof i18n.global.messages === 'object') {
-      i18n.global.messages[locale] = messages
-    }
-    else {
-      // Fallback: directly set messages
-      ;(i18n.global as any).messages = { [locale]: messages }
-    }
-  }
-  else {
-    // Direct fallback
-    ;(i18n.global as any).messages = { [locale]: messages }
+  const globalMessages = i18n.global as unknown as {
+    setLocaleMessage?: (locale: string, messages: MessageMap) => void
+    messages?: Record<string, MessageMap>
   }
 
-  // Ensure messages are loaded
-  if (!i18n.global.messages || (!i18n.global.messages.value?.[locale] && !(i18n.global.messages as any)[locale])) {
-    console.warn(`[loadLocaleMessages] Failed to set messages for locale "${locale}", attempting fallback`)
-    ;(i18n.global as any).messages = { [locale]: messages }
+  if (typeof globalMessages.setLocaleMessage === 'function') {
+    globalMessages.setLocaleMessage(locale, messages)
+  } else if (globalMessages.messages && typeof globalMessages.messages === 'object') {
+    globalMessages.messages[locale] = messages
+  } else {
+    globalMessages.messages = { [locale]: messages }
   }
 
   return nextTick()

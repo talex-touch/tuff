@@ -1,8 +1,8 @@
 /**
  * Clipboard hook types
  *
- * Note: Uses IClipboardItem from main process clipboard module
- * to maintain consistency across renderer and main process.
+ * Note: Mirrors main process clipboard item shape, with renderer-only
+ * html type to support rich text preview flows.
  */
 
 /**
@@ -10,7 +10,7 @@
  */
 export interface IClipboardItem {
   id?: number
-  type: 'text' | 'image' | 'files'
+  type: 'text' | 'image' | 'files' | 'html'
   content: string
   thumbnail?: string | null
   rawContent?: string | null

@@ -109,12 +109,13 @@ const manifestSummary = computed(() => {
   const id = pickString('id') || pickString('pluginId')
   const author = pickString('author')
   const main = pickString('main')
-  const category = pickString('category') || (plugin.value as any)?.category || ''
+  const pluginExtras = plugin.value as { category?: string; features?: unknown[] }
+  const category = pickString('category') || pluginExtras.category || ''
 
   const rawFeatures = manifestData.value?.features
   const featureCount = Array.isArray(rawFeatures)
     ? rawFeatures.length
-    : ((plugin.value as any)?.features?.length ?? 0)
+    : (pluginExtras.features?.length ?? 0)
 
   const rawPermissions = manifestData.value?.permissions
   let required: string[] = []

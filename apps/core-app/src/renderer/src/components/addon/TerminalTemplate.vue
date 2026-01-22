@@ -7,8 +7,8 @@ withDefaults(
     title?: string
   }>(),
   {
-    title: 'terminal.title',
-  },
+    title: 'terminal.title'
+  }
 )
 
 const { t } = useI18n()

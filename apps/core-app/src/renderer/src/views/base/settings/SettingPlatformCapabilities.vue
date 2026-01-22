@@ -82,8 +82,9 @@ async function loadCapabilities() {
     const result = await platformSdk.listCapabilities()
     capabilities.value = Array.isArray(result) ? result : []
     lastUpdated.value = new Date()
-  } catch (error: any) {
-    if (error?.message?.includes('timed out')) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('timed out')) {
       console.debug('[SettingPlatformCapabilities] Load timed out, module may be initializing')
       return
     }

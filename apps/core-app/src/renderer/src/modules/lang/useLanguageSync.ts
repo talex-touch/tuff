@@ -20,7 +20,7 @@ export function setupLanguageSync() {
   watch(
     currentLanguage,
     (newLang) => {
-      void transport.send(AppEvents.i18n.setLocale, { locale: newLang as any }).catch(() => {})
+      void transport.send(AppEvents.i18n.setLocale, { locale: newLang }).catch(() => {})
     },
     { immediate: true }
   )

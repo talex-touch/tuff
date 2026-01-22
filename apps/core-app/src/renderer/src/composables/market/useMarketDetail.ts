@@ -16,12 +16,14 @@ export function useMarketDetail(
   t: (key: string) => string,
   versionStatus?: ComputedRef<PluginVersionStatus>
 ) {
-  const formatTimestamp = (timestamp: any): string => {
+  const formatTimestamp = (timestamp: string | number | Date | null | undefined): string => {
     if (!timestamp) return ''
     const date =
-      typeof timestamp === 'number'
-        ? new Date(timestamp)
-        : new Date(Number(timestamp) || Date.parse(timestamp))
+      timestamp instanceof Date
+        ? timestamp
+        : typeof timestamp === 'number'
+          ? new Date(timestamp)
+          : new Date(Number(timestamp) || Date.parse(timestamp))
     try {
       return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
     } catch {

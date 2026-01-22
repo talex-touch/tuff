@@ -1,14 +1,26 @@
 <script name="AppConfigure" setup lang="ts">
+import type { ITuffIcon } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 
+export interface AppConfigureData {
+  icon?: string | ITuffIcon
+  name?: string
+  desc?: string
+  names?: string
+  type?: string
+  value?: string
+  keyWords?: string
+  [key: string]: unknown
+}
+
 const props = defineProps<{
-  data: any
+  data: AppConfigureData
 }>()
 
 const emits = defineEmits<{
-  (e: 'execute', val: any): void
+  (e: 'execute', val: AppConfigureData): void
 }>()
 
 // import cprocess from "child_process";
@@ -20,6 +32,14 @@ const { t } = useI18n()
 const appSdk = useAppSdk()
 
 const info = ref()
+const displayIcon = computed(() => {
+  const icon = props.data.icon
+  if (typeof icon === 'string') return icon
+  if (icon && typeof icon === 'object' && 'value' in icon) {
+    return icon.value as string
+  }
+  return ''
+})
 
 watchEffect(() => {
   // $ignore: [props.data]
@@ -98,7 +118,7 @@ function handleHelp(): void {
   <div class="AppConfigure">
     <div class="AppConfigure-Head">
       <div class="AppConfigure-Head-Left">
-        <img :src="data.icon" alt="Application Logo" />
+        <img v-if="displayIcon" :src="displayIcon" alt="Application Logo" />
       </div>
       <div class="AppConfigure-Head-Right">
         <div class="AppConfigure-Head-Right-Top">
@@ -112,7 +132,7 @@ function handleHelp(): void {
     <div class="AppConfigure-Content">
       <el-scrollbar>
         <div class="AppConfigure-Content-Inner">
-          <t-group-block :name="t('appConfigure.action')" icon="auction">
+          <t-group-block :name="t('appConfigure.action')" description="" icon="auction">
             <t-block-slot :title="t('appConfigure.launch')" description="" icon="external-link">
               <TxButton variant="flat" @click="handleLaunch">
                 {{ t('appConfigure.launchBtn') }}
@@ -144,7 +164,7 @@ function handleHelp(): void {
             />
           </t-group-block>
 
-          <t-group-block :name="t('appConfigure.stats')" icon="dashboard-horizontal">
+          <t-group-block :name="t('appConfigure.stats')" description="" icon="dashboard-horizontal">
             <t-block-line :title="t('appConfigure.name')">
               <template #description>
                 {{ data.names }}
@@ -159,7 +179,7 @@ function handleHelp(): void {
             </t-block-line>
           </t-group-block>
 
-          <t-group-block v-if="info" :name="t('appConfigure.spec')" icon="apps">
+          <t-group-block v-if="info" :name="t('appConfigure.spec')" description="" icon="apps">
             <t-block-line :title="t('appConfigure.version')">
               <template #description> 1 </template>
             </t-block-line>

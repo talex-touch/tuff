@@ -8,8 +8,8 @@ const props = withDefaults(
     visible: boolean
   }>(),
   {
-    title: 'Drawer',
-  },
+    title: 'Drawer'
+  }
 )
 
 const emits = defineEmits(['update:visible', 'close'])

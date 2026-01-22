@@ -24,7 +24,7 @@ interface IntelligencePayload {
 
 const props = defineProps<{
   item: TuffItem
-  payload?: Record<string, any>
+  payload?: Record<string, unknown>
 }>()
 
 const { t } = useI18n()
@@ -32,12 +32,12 @@ const transport = useTuffTransport()
 
 const aiData = computed<IntelligencePayload>(() => {
   if (props.payload) {
-    return props.payload as IntelligencePayload
+    return props.payload as unknown as IntelligencePayload
   }
 
   const custom = props.item.render?.custom
   if (custom?.data) {
-    return custom.data as IntelligencePayload
+    return custom.data as unknown as IntelligencePayload
   }
 
   return {
@@ -148,6 +148,7 @@ function copyAnswer(): void {
       </TxButton>
     </header>
 
+    <!-- eslint-disable-next-line vue/no-v-html -->
     <div v-if="hasAnswer" class="CoreIntelligence__answer" v-html="answerHtml" />
     <div v-else-if="isPending" class="CoreIntelligence__placeholder">
       {{ t('coreBox.intelligence.thinking') }}

@@ -2,14 +2,14 @@
 defineProps({
   name: {
     type: String,
-    required: true,
+    required: true
   },
   style: {
     type: String,
     validator(value: string) {
       return ['line', 'fill', ''].includes(value)
-    },
-  },
+    }
+  }
 })
 </script>
 

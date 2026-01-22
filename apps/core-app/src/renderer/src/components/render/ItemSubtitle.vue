@@ -24,15 +24,18 @@ function formatBytes(bytes, decimals = 2) {
   return `${Number.parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`
 }
 
-const fileInfo = computed(() => {
+type FileInfo = { path: string; size?: number; modified_at?: string | number }
+
+const fileInfo = computed<FileInfo | null>(() => {
   if (sourceType.value !== 'file' && props.item.kind !== 'file') {
     return null
   }
-  const meta = props.item.meta as any
-  const file = meta?.file
-  if (!file) return null
-
-  return file
+  const meta = props.item.meta as Record<string, unknown> | undefined
+  const file = meta?.file as Partial<FileInfo> | undefined
+  if (!file?.path) {
+    return null
+  }
+  return file as FileInfo
 })
 
 const FILE_TYPE_META: Record<string, { icon: string; key: string }> = {
@@ -65,8 +68,11 @@ const fileTypeMeta = computed(() => {
 })
 
 const recommendationBadge = computed(() => {
-  const meta = props.item.meta as any
-  return meta?.recommendation?.badge
+  const meta = props.item.meta as Record<string, unknown> | undefined
+  const recommendation = meta?.recommendation as
+    | { badge?: { variant?: string; icon?: string; text?: string } }
+    | undefined
+  return recommendation?.badge
 })
 
 const badgeStyle = computed(() => {

@@ -129,8 +129,15 @@ async function loadSettings(): Promise<void> {
 
 async function refreshStatus(): Promise<void> {
   try {
-    const status = await getUpdateStatus()
-    lastCheck.value = (status as any).lastCheck ?? null
+    const status = (await getUpdateStatus()) as { lastCheck?: string | number | null }
+    if (typeof status.lastCheck === 'number') {
+      lastCheck.value = status.lastCheck
+    } else if (typeof status.lastCheck === 'string') {
+      const parsed = Number.parseInt(status.lastCheck, 10)
+      lastCheck.value = Number.isNaN(parsed) ? null : parsed
+    } else {
+      lastCheck.value = null
+    }
   } catch (error) {
     console.warn('[SettingUpdate] Failed to refresh status:', error)
   }
@@ -255,7 +262,7 @@ async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
     return
   }
   try {
-    const release = cachedRelease.value?.release as any
+    const release = cachedRelease.value?.release
     const destination = await appSdk.getPath('downloads')
     if (!destination) {
       toast.error(t('settings.settingUpdate.assets.messages.downloadFailed'))

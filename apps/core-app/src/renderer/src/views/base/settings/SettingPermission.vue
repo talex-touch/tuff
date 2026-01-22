@@ -6,6 +6,7 @@
 -->
 <script setup lang="ts" name="SettingPermission">
 import type { PermissionAuditLog } from '@talex-touch/utils'
+import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { Check, Clock, Delete, InfoFilled, Refresh, Search, Warning } from '@element-plus/icons-vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PermissionEvents, PluginEvents } from '@talex-touch/utils/transport/events'
@@ -119,7 +120,7 @@ async function loadData() {
   loading.value = true
   try {
     // Get all plugins
-    const pluginList = await transport.send(PluginEvents.api.list, {})
+    const pluginList = (await transport.send(PluginEvents.api.list, {})) as ITouchPlugin[]
 
     // Get all permissions
     const perms = await transport.send(PermissionEvents.api.getAll)
@@ -127,7 +128,7 @@ async function loadData() {
 
     // Build plugin permission info
     plugins.value = await Promise.all(
-      pluginList.map(async (plugin: any) => {
+      pluginList.map(async (plugin: ITouchPlugin) => {
         const status = await transport.send(PermissionEvents.api.getStatus, {
           pluginId: plugin.name,
           sdkapi: plugin.sdkapi,

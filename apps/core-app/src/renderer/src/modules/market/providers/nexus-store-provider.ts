@@ -60,9 +60,10 @@ export class NexusStoreProvider extends BaseMarketProvider {
         headers: { Accept: 'application/json' }
       })
       console.log('[NexusStoreProvider] Response status:', response.status)
-    } catch (err: any) {
-      console.error('[NexusStoreProvider] Request failed:', manifestUrl, err?.message || err)
-      throw new TypeError(`MARKET_NEXUS_REQUEST_FAILED: ${err?.message || 'Unknown error'}`)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      console.error('[NexusStoreProvider] Request failed:', manifestUrl, message)
+      throw new TypeError(`MARKET_NEXUS_REQUEST_FAILED: ${message}`)
     }
 
     // Handle both formats: Nexus API { plugins: [...] } and legacy array format
@@ -153,6 +154,7 @@ export class NexusStoreProvider extends BaseMarketProvider {
     // Handle Nexus API format (latestVersion.packageUrl) or legacy format (path)
     let downloadUrl: string
     let version: string = entry.version
+    const metadata = entry.metadata ?? {}
 
     if (entry.latestVersion?.packageUrl) {
       // Nexus API format
@@ -177,7 +179,6 @@ export class NexusStoreProvider extends BaseMarketProvider {
         ? entry.readmeUrl
         : new URL(entry.readmeUrl.replace(/^\//, ''), baseUrl).toString()
     } else {
-      const metadata = entry.metadata ?? {}
       const readmePath = typeof metadata.readme_path === 'string' ? metadata.readme_path : undefined
       if (readmePath && readmePath.trim().length > 0) {
         readmeUrl = new URL(readmePath.replace(/^\//, ''), baseUrl).toString()
@@ -187,23 +188,19 @@ export class NexusStoreProvider extends BaseMarketProvider {
     // Handle icon - always construct full URL at source
     let icon: string | undefined
     let iconUrl: string | undefined
-    const rawIconUrl = entry.iconUrl || (entry.metadata as any)?.icon_url
+    const rawIconUrl =
+      entry.iconUrl || (typeof metadata.icon_url === 'string' ? metadata.icon_url : undefined)
     if (rawIconUrl && typeof rawIconUrl === 'string') {
       iconUrl = rawIconUrl.startsWith('http')
         ? rawIconUrl
         : new URL(rawIconUrl.replace(/^\//, ''), baseUrl).toString()
     } else {
-      const metadata = entry.metadata ?? {}
-      if (
-        typeof (metadata as any).icon_class === 'string' &&
-        (metadata as any).icon_class.trim().length > 0
-      ) {
-        icon = (metadata as any).icon_class.trim()
-      } else if (
-        typeof (metadata as any).icon === 'string' &&
-        (metadata as any).icon.trim().length > 0
-      ) {
-        const trimmed = (metadata as any).icon.trim()
+      const iconClass = typeof metadata.icon_class === 'string' ? metadata.icon_class.trim() : ''
+      const iconValue = typeof metadata.icon === 'string' ? metadata.icon.trim() : ''
+      if (iconClass.length > 0) {
+        icon = iconClass
+      } else if (iconValue.length > 0) {
+        const trimmed = iconValue
         icon = trimmed.startsWith('i-') ? trimmed : `i-${trimmed}`
       }
     }
@@ -216,8 +213,6 @@ export class NexusStoreProvider extends BaseMarketProvider {
 
     // Use description or summary
     const description = entry.description || entry.summary
-
-    const metadata = entry.metadata ?? {}
 
     return {
       id: entry.slug || entry.id,

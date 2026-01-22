@@ -11,7 +11,7 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: AISDKGlobalConfig]
-  'change': []
+  change: []
 }>()
 
 const instance = getCurrentInstance()
@@ -26,27 +26,27 @@ watch(
   () => props.modelValue.enableAudit,
   (newValue) => {
     localEnableAudit.value = newValue
-  },
+  }
 )
 
 watch(
   () => props.modelValue.enableCache,
   (newValue) => {
     localEnableCache.value = newValue
-  },
+  }
 )
 
 watch(
   () => props.modelValue.cacheExpiration,
   (newValue) => {
     localCacheExpiration.value = newValue || 3600
-  },
+  }
 )
 
 function handleAuditChange() {
   const updated: AISDKGlobalConfig = {
     ...props.modelValue,
-    enableAudit: localEnableAudit.value,
+    enableAudit: localEnableAudit.value
   }
   emits('update:modelValue', updated)
   emits('change')
@@ -55,14 +55,13 @@ function handleAuditChange() {
 function handleCacheChange() {
   const updated: AISDKGlobalConfig = {
     ...props.modelValue,
-    enableCache: localEnableCache.value,
+    enableCache: localEnableCache.value
   }
 
   // If disabling cache, remove cacheExpiration
   if (!localEnableCache.value) {
     delete updated.cacheExpiration
-  }
-  else {
+  } else {
     // If enabling cache, set default expiration if not set
     updated.cacheExpiration = localCacheExpiration.value
   }
@@ -74,7 +73,7 @@ function handleCacheChange() {
 function handleCacheExpirationChange() {
   const updated: AISDKGlobalConfig = {
     ...props.modelValue,
-    cacheExpiration: localCacheExpiration.value,
+    cacheExpiration: localCacheExpiration.value
   }
   emits('update:modelValue', updated)
   emits('change')

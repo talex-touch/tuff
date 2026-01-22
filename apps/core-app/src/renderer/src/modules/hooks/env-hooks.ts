@@ -4,16 +4,18 @@ import { ref } from 'vue'
 interface PackageJson {
   name: string
   version: string
+  devDependencies?: Record<string, string>
   // Add other properties as needed
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface OSInfo {
   platform: string
   arch: string
   release: string
+  version?: string
   // Add other properties as needed
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface CPUUsage {
@@ -34,7 +36,7 @@ interface NodeProcess {
   platform: string
   arch: string
   // Add other process properties as needed
-  [key: string]: any
+  [key: string]: unknown
 }
 
 declare global {

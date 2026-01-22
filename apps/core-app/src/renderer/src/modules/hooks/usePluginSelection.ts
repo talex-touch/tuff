@@ -61,8 +61,7 @@ export function usePluginSelection(): UsePluginSelectionReturn {
    * - Selected plugin name doesn't exist in the map
    */
   const curSelect = computed<ITouchPlugin | null>(() => {
-    if (!select.value)
-      return null
+    if (!select.value) return null
     return pluginMap.value.get(select.value) ?? null
   })
 
@@ -76,15 +75,14 @@ export function usePluginSelection(): UsePluginSelectionReturn {
   watch(
     () => pluginMap.value,
     (newMap, oldMap) => {
-      if (!select.value || !oldMap)
-        return
+      if (!select.value || !oldMap) return
 
       if (oldMap.has(select.value) && !newMap.has(select.value)) {
         lastUnloadedPlugin.value = select.value
         select.value = undefined
       }
     },
-    { deep: true },
+    { deep: true }
   )
 
   /**
@@ -96,14 +94,13 @@ export function usePluginSelection(): UsePluginSelectionReturn {
   watch(
     () => pluginMap.value.size,
     () => {
-      if (!lastUnloadedPlugin.value)
-        return
+      if (!lastUnloadedPlugin.value) return
 
       if (pluginMap.value.has(lastUnloadedPlugin.value) && !select.value) {
         select.value = lastUnloadedPlugin.value
         lastUnloadedPlugin.value = null
       }
-    },
+    }
   )
 
   /**
@@ -117,7 +114,7 @@ export function usePluginSelection(): UsePluginSelectionReturn {
       if (newSelect && newSelect !== lastUnloadedPlugin.value && lastUnloadedPlugin.value) {
         lastUnloadedPlugin.value = null
       }
-    },
+    }
   )
 
   /**
@@ -128,8 +125,7 @@ export function usePluginSelection(): UsePluginSelectionReturn {
    * @returns Promise that resolves when selection is complete
    */
   async function selectPlugin(name: string): Promise<void> {
-    if (name === select.value || loading.value)
-      return
+    if (name === select.value || loading.value) return
 
     loading.value = true
     select.value = name
@@ -143,6 +139,6 @@ export function usePluginSelection(): UsePluginSelectionReturn {
     select,
     curSelect,
     loading,
-    selectPlugin,
+    selectPlugin
   }
 }

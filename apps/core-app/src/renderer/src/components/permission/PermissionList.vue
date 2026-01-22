@@ -18,6 +18,7 @@ import {
   Warning
 } from '@element-plus/icons-vue'
 import { ElEmpty, ElIcon, ElSwitch, ElTag, ElTooltip } from 'element-plus'
+import type { Component } from 'vue'
 import { computed } from 'vue'
 
 interface PermissionItem {
@@ -69,7 +70,7 @@ const categoryNames: Record<string, string> = {
   window: '窗口'
 }
 
-const categoryIcons: Record<string, any> = {
+const categoryIcons: Record<string, Component> = {
   fs: Document,
   clipboard: DocumentCopy,
   network: Connection,

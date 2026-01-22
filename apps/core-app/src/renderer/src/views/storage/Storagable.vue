@@ -62,6 +62,23 @@ interface StorageUsageReport {
   caches: CacheUsage[]
 }
 
+interface StorageUsageRequest {
+  include: {
+    modules?: boolean
+    plugins?: boolean
+    database?: boolean
+    databaseTables?: boolean
+    caches?: boolean
+    includeOther?: boolean
+  }
+}
+
+interface StorageCleanupResult {
+  success: boolean
+  removedCount?: number
+  removedBytes?: number
+}
+
 interface DatabaseCategoryGroup {
   category: string
   label: string
@@ -158,7 +175,10 @@ async function runCleanup(action: CleanupAction): Promise<void> {
       type: action.confirm.type ?? 'warning'
     })
     cleaningKey.value = action.key
-    const result = await sendRaw<typeof action.payload, any>(action.channel, action.payload ?? {})
+    const result = await sendRaw<CleanupAction['payload'], StorageCleanupResult>(
+      action.channel,
+      action.payload ?? {}
+    )
     if (!result || typeof result !== 'object' || !('success' in result)) {
       ElMessage.error('清理失败：返回数据异常')
       return
@@ -499,7 +519,7 @@ async function loadSummary(): Promise<void> {
   summaryLoading.value = true
   errorMessage.value = null
   try {
-    const res = await sendRaw<any, StorageUsageReport>('system:get-storage-usage', {
+    const res = await sendRaw<StorageUsageRequest, StorageUsageReport>('system:get-storage-usage', {
       include: {
         modules: true,
         plugins: false,
@@ -521,7 +541,7 @@ async function loadPlugins(): Promise<void> {
   if (pluginsLoading.value) return
   pluginsLoading.value = true
   try {
-    const res = await sendRaw<any, StorageUsageReport>('system:get-storage-usage', {
+    const res = await sendRaw<StorageUsageRequest, StorageUsageReport>('system:get-storage-usage', {
       include: {
         modules: false,
         plugins: true,
@@ -548,7 +568,7 @@ async function loadDatabaseTables(): Promise<void> {
   if (dbTablesLoading.value) return
   dbTablesLoading.value = true
   try {
-    const res = await sendRaw<any, StorageUsageReport>('system:get-storage-usage', {
+    const res = await sendRaw<StorageUsageRequest, StorageUsageReport>('system:get-storage-usage', {
       include: {
         modules: false,
         plugins: false,

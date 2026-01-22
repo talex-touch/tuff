@@ -15,7 +15,12 @@
  */
 
 import { nextTick } from 'vue'
-import { createRouter, createWebHashHistory } from 'vue-router'
+import {
+  createRouter,
+  createWebHashHistory,
+  type RouteLocationNormalizedLoaded,
+  type RouteRecordRaw
+} from 'vue-router'
 import { appSetting } from '~/modules/channel/storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 
@@ -23,13 +28,13 @@ const ROUTE_NAVIGATE_WARN_MS = 200
 const ROUTE_RENDER_WARN_MS = 350
 const ROUTE_COMPONENT_LOAD_WARN_MS = 150
 
-function resolveRoutePattern(route: any): string {
+function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
   const last = Array.isArray(route?.matched) ? route.matched[route.matched.length - 1] : null
   const pattern = typeof last?.path === 'string' ? last.path : null
   return pattern || route?.path || route?.fullPath || 'unknown'
 }
 
-function withRouteComponentPerf(label: string, loader: () => Promise<any>): () => Promise<any> {
+function withRouteComponentPerf<T>(label: string, loader: () => Promise<T>): () => Promise<T> {
   return async () => {
     const startedAt = performance.now()
     const stack = new Error().stack
@@ -51,7 +56,7 @@ function withRouteComponentPerf(label: string, loader: () => Promise<any>): () =
   }
 }
 
-const routes: any = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: '/setting'

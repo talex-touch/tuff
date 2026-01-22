@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 const props = defineProps<{
-  data: any // clipboard data
+  data: { content?: string | string[]; thumbnail?: string | null } // clipboard data
 }>()
 
 // Parse images - content can be single data URL or array

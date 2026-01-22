@@ -30,8 +30,21 @@ const { startupInfo } = useStartupInfo()
 const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
 const dev = ref(false)
-const performanceSummary = ref<any>(null)
+interface PerformanceSummary {
+  mainProcessTime: number
+  rendererTime: number
+  moduleCount?: number
+  rating?: 'excellent' | 'good' | 'fair' | 'poor'
+}
+
+const performanceSummary = ref<PerformanceSummary | null>(null)
 const showPerformanceDetails = ref(false)
+const runtimeVersions = computed(() => {
+  const info = processInfo.value as
+    | { versions?: { electron?: string; v8?: string; chrome?: string; node?: string } }
+    | undefined
+  return info?.versions
+})
 
 const developerMode = computed({
   get: () => Boolean(appSetting?.dev?.developerMode),
@@ -47,7 +60,9 @@ onMounted(async () => {
 
   // Load performance summary
   try {
-    const analyticsSummary = defineRawEvent<void, any>('analytics:get-summary')
+    const analyticsSummary = defineRawEvent<void, PerformanceSummary | null>(
+      'analytics:get-summary'
+    )
     const summary = await transport.send(analyticsSummary)
     performanceSummary.value = summary
   } catch (error) {
@@ -250,11 +265,8 @@ async function openAppFolder() {
         </template>
       </TuffBlockLine>
     </template>
-    <TuffBlockLine
-      :title="t('settingAbout.electron')"
-      :description="processInfo.versions?.electron"
-    />
-    <TuffBlockLine :title="t('settingAbout.v8')" :description="processInfo.versions?.v8" />
+    <TuffBlockLine :title="t('settingAbout.electron')" :description="runtimeVersions?.electron" />
+    <TuffBlockLine :title="t('settingAbout.v8')" :description="runtimeVersions?.v8" />
     <TuffBlockLine :title="t('settingAbout.os')">
       <template #description>
         <span flex gap-0 items-center>

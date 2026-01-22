@@ -6,12 +6,12 @@ import FlatInput from '~/components/base/input/FlatInput.vue'
 const props = defineProps({
   icon: {
     type: String,
-    default: 'search',
+    default: 'search'
   },
   fetch: {
     type: Function,
-    require: true,
-  },
+    require: true
+  }
 })
 
 const _res = ref([])
@@ -25,15 +25,14 @@ watch(
   () => {
     nextTick(blur)
   },
-  { deep: true, immediate: true },
+  { deep: true, immediate: true }
 )
 
 watch(
   () => res.value,
   async () => {
     const el = completionWrapper.value
-    if (!el)
-      return
+    if (!el) return
 
     for (const item of [...el.children].reverse()) {
       setTimeout(async () => {
@@ -61,26 +60,23 @@ watch(
     await sleep(600)
 
     _res.value = res.value
-  },
+  }
 )
 
 function blur() {
-  if (!value.value)
-    value.value = ''
+  if (!value.value) value.value = ''
   res.value = props.fetch(value.value)
 
-  if (res.value.length > 8)
-    res.value = res.value.slice(0, 8)
+  if (res.value.length > 8) res.value = res.value.slice(0, 8)
 
   nextTick(async () => {
-    if (!completionInput.value || !completionWrapper.value)
-      return
+    if (!completionInput.value || !completionWrapper.value) return
 
     const floating = await computePosition(completionInput.value, completionWrapper.value)
 
     Object.assign(completionWrapper.value.style, {
       top: `${floating.y}px`,
-      left: `${floating.x}px`,
+      left: `${floating.x}px`
     })
   })
 }

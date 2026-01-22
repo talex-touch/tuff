@@ -7,7 +7,7 @@ import { ref } from 'vue'
  */
 interface Props {
   /** Warning message to display */
-  warningMessage: string
+  warningMessage?: string
   /** Callback when user clicks continue */
   onContinue?: () => void
   /** Callback when user clicks don't show again */

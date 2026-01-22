@@ -9,8 +9,7 @@ const gridContainer = ref<HTMLElement | null>(null)
  * @param {MouseEvent} event - The mouse move event.
  */
 function handleMove(event: MouseEvent) {
-  if (!gridContainer.value)
-    return
+  if (!gridContainer.value) return
 
   const { pageX: mouseX, pageY: mouseY } = event
   const elements = gridContainer.value.querySelectorAll('.element')
@@ -34,8 +33,7 @@ function handleMove(event: MouseEvent) {
  * Reset the hover effect when the mouse leaves the container.
  */
 function cancelColor() {
-  if (!gridContainer.value)
-    return
+  if (!gridContainer.value) return
   gridContainer.value.querySelectorAll('.element').forEach((element) => {
     ;(element as HTMLElement).style.setProperty('--op', '0')
   })

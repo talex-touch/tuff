@@ -14,8 +14,12 @@ let resizeHandler: (() => void) | null = null
 const appVersion = computed(() => packageJson.value?.version || '')
 const versionLabel = computed(() => (appVersion.value ? `v${appVersion.value}` : ''))
 
-const chromeVersion = computed(() => processInfo.value?.versions?.chrome || '')
-const nodeVersion = computed(() => processInfo.value?.versions?.node || '')
+const runtimeVersions = computed(() => {
+  const info = processInfo.value as { versions?: { chrome?: string; node?: string } } | undefined
+  return info?.versions
+})
+const chromeVersion = computed(() => runtimeVersions.value?.chrome || '')
+const nodeVersion = computed(() => runtimeVersions.value?.node || '')
 const vueVersion = computed(() => packageJson.value?.devDependencies?.vue || '')
 const footerTagStyle = {
   color: 'rgba(226, 232, 240, 0.7)',

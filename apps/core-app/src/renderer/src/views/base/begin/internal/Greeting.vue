@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Component } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 import HelloData from '~/assets/lotties/hello.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
@@ -6,7 +7,7 @@ import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 // import AccountDo from './AccountDo.vue'
 import SetupPermissions from './SetupPermissions.vue'
 
-type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
+type StepFunction = (call: { comp: Component; rect?: { width: number; height: number } }) => void
 
 const step: StepFunction = inject('step')!
 

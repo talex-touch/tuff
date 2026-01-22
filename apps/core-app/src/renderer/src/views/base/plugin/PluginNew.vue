@@ -5,8 +5,10 @@ import { TxButton } from '@talex-touch/tuffex'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { tryUseChannel } from '@talex-touch/utils/renderer/hooks/use-channel'
 import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
+import type { ITuffTransport } from '@talex-touch/utils/transport'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import type { PluginInstallSourceResponse } from '@talex-touch/utils/transport/events/types/plugin'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
 
@@ -30,7 +32,7 @@ const activeTab = ref<'install' | 'create'>('install')
 const { t } = useI18n()
 const installManager = useInstallManager()
 const transport = useTuffTransport()
-const pluginCreateEvent = defineRawEvent<any, void>('plugin:new')
+const pluginCreateEvent = defineRawEvent<Record<string, unknown>, void>('plugin:new')
 
 const installState = reactive({
   source: '',
@@ -170,7 +172,7 @@ watch(
 onMounted(() => {
   const channel = tryUseChannel()
   if (channel) {
-    EnvDetector.init(channel as any)
+    EnvDetector.init(channel as unknown as ITuffTransport)
   }
   envCheck()
 })
@@ -258,10 +260,11 @@ async function installPluginFromSource(): Promise<void> {
   installState.official = false
 
   try {
+    const manifestName = (installState.manifest as IManifest | undefined)?.name
     const payload: PluginInstallSourceRequest = {
       source: trimmedSource,
       clientMetadata: {
-        pluginName: (installState.manifest as any)?.name || trimmedSource,
+        pluginName: manifestName || trimmedSource,
         source: trimmedSource
       }
     }
@@ -274,7 +277,10 @@ async function installPluginFromSource(): Promise<void> {
       payload.metadata = metadata
     }
 
-    const result: any = await transport.send(PluginEvents.install.source, payload)
+    const result = (await transport.send(
+      PluginEvents.install.source,
+      payload
+    )) as PluginInstallSourceResponse
 
     if (result?.status === 'success') {
       installState.status = 'success'
@@ -287,10 +293,10 @@ async function installPluginFromSource(): Promise<void> {
       installState.status = 'error'
       installState.message = result?.message || '插件安装失败，请检查来源是否可用。'
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[PluginNew] Failed to install plugin:', error)
     installState.status = 'error'
-    installState.message = error?.message || '插件安装遇到异常，请稍后重试。'
+    installState.message = error instanceof Error ? error.message : '插件安装遇到异常，请稍后重试。'
   } finally {
     installState.installing = false
   }
@@ -338,7 +344,12 @@ async function envCheck(): Promise<void> {
 /**
  * Handle plugin creation action
  */
-async function createAction(ctx: any): Promise<void> {
+type ActionContext = {
+  checkForm: () => boolean
+  setLoading: (loading: boolean) => void
+}
+
+async function createAction(ctx: ActionContext): Promise<void> {
   const { checkForm, setLoading } = ctx
 
   const result = checkForm()

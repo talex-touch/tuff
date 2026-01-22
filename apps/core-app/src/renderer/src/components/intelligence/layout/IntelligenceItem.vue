@@ -2,7 +2,7 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import type {
   TuffItemBadge,
-  TuffItemStatusDot,
+  TuffItemStatusDot
 } from '~/components/tuff/template/TuffItemTemplate.vue'
 import { useI18n } from 'vue-i18n'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
@@ -13,7 +13,7 @@ enum IntelligenceProviderType {
   DEEPSEEK = 'deepseek',
   SILICONFLOW = 'siliconflow',
   LOCAL = 'local',
-  CUSTOM = 'custom',
+  CUSTOM = 'custom'
 }
 
 interface IntelligenceProviderConfig {
@@ -47,13 +47,12 @@ watch(
   () => props.provider.enabled,
   (newValue) => {
     localEnabled.value = newValue
-  },
+  }
 )
 
 // Check if provider has configuration errors
 const hasConfigError = computed(() => {
-  if (!props.provider.enabled)
-    return false
+  if (!props.provider.enabled) return false
 
   // Check for missing API key (except for local models)
   if (props.provider.type !== IntelligenceProviderType.LOCAL && !props.provider.apiKey) {
@@ -77,13 +76,13 @@ const hasConfigError = computed(() => {
 const errorBadge = computed<TuffItemBadge>(() => ({
   text: t('intelligence.item.configError'),
   status: 'danger',
-  icon: 'i-ri-error-warning-line',
+  icon: 'i-ri-error-warning-line'
 }))
 
 // Status dot configuration
 const statusDot = computed<TuffItemStatusDot>(() => ({
   class: localEnabled.value ? 'is-active' : 'is-inactive',
-  label: localEnabled.value ? t('intelligence.status.enabled') : t('intelligence.status.disabled'),
+  label: localEnabled.value ? t('intelligence.status.enabled') : t('intelligence.status.disabled')
 }))
 
 function getProviderIcon(type: string): ITuffIcon {
@@ -93,7 +92,7 @@ function getProviderIcon(type: string): ITuffIcon {
     [IntelligenceProviderType.DEEPSEEK]: 'i-carbon-search-advanced',
     [IntelligenceProviderType.SILICONFLOW]: 'i-carbon-ibm-watson-machine-learning',
     [IntelligenceProviderType.LOCAL]: 'i-carbon-bare-metal-server',
-    [IntelligenceProviderType.CUSTOM]: 'i-carbon-settings',
+    [IntelligenceProviderType.CUSTOM]: 'i-carbon-settings'
   }
 
   const iconClass = iconMap[type] || 'i-carbon-ibm-watson-machine-learning'
@@ -101,7 +100,7 @@ function getProviderIcon(type: string): ITuffIcon {
   return {
     type: 'class',
     value: iconClass,
-    status: 'normal' as const,
+    status: 'normal' as const
   }
 }
 

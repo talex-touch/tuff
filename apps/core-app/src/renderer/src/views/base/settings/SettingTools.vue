@@ -5,16 +5,17 @@
   Allows users to configure shortcuts, auto-paste, auto-clear, and auto-hide features.
 -->
 <script setup lang="ts" name="SettingTools">
-import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
-import { onMounted, ref } from 'vue'
+import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
+
 // Import UI components
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
-
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
@@ -25,11 +26,20 @@ import { appSetting } from '~/modules/channel/storage'
 
 const { t } = useI18n()
 
+const isMac = process.platform === 'darwin'
+
 // Reactive reference for shortcut key binding
-const shortcuts = ref<Shortcut[] | null>(null)
+const shortcuts = ref<ShortcutWithStatus[] | null>(null)
+const systemShortcuts = computed(() =>
+  (shortcuts.value || []).filter((shortcut) => isSystemShortcut(shortcut))
+)
+
+async function refreshShortcuts(): Promise<void> {
+  shortcuts.value = await shortconApi.getAll()
+}
 
 onMounted(async () => {
-  shortcuts.value = await shortconApi.getAll()
+  await refreshShortcuts()
 })
 
 async function updateShortcut(id: string, newAccelerator: string): Promise<void> {
@@ -46,6 +56,7 @@ async function updateShortcut(id: string, newAccelerator: string): Promise<void>
   if (!success && target && previousValue) {
     target.accelerator = previousValue
   }
+  await refreshShortcuts()
 }
 
 function getShortcutLabel(id: string): string {
@@ -53,6 +64,40 @@ function getShortcutLabel(id: string): string {
   const key = `settingTools.shortcutLabels.${normalized}`
   const translated = t(key)
   return translated === key ? id : translated
+}
+
+function isSystemShortcut(shortcut: ShortcutWithStatus): boolean {
+  if (shortcut.type === ShortcutType.MAIN) {
+    return true
+  }
+  return shortcut.meta?.author === 'system'
+}
+
+function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
+  const status = shortcut.status
+  if (!status || status.state === 'active') {
+    return null
+  }
+  if (status.state === 'conflict') {
+    return status.reason === 'conflict-system'
+      ? t('settingTools.shortcutStatus.conflictSystem')
+      : t('settingTools.shortcutStatus.conflictPlugin')
+  }
+  if (status.reason === 'invalid') {
+    return t('settingTools.shortcutStatus.invalid')
+  }
+  return t('settingTools.shortcutStatus.unavailable')
+}
+
+function getSpotlightHint(shortcut: ShortcutWithStatus): string | null {
+  if (!isMac) return null
+  const status = shortcut.status
+  if (!status || status.state !== 'unavailable') return null
+  if (status.reason !== 'register-failed' && status.reason !== 'register-error') return null
+  if (shortcut.accelerator.includes('Command') && shortcut.accelerator.includes('Space')) {
+    return t('settingTools.shortcutStatus.spotlightHint')
+  }
+  return null
 }
 </script>
 
@@ -95,9 +140,9 @@ function getShortcutLabel(id: string): string {
     />
 
     <!-- Shortcut key configuration slot -->
-    <template v-if="shortcuts">
+    <template v-if="systemShortcuts.length">
       <TuffBlockSlot
-        v-for="shortcut in shortcuts"
+        v-for="shortcut in systemShortcuts"
         :key="shortcut.id"
         :title="getShortcutLabel(shortcut.id)"
         :description="t('settingTools.shortcutDesc', { shortcut: getShortcutLabel(shortcut.id) })"
@@ -108,6 +153,12 @@ function getShortcutLabel(id: string): string {
           :model-value="shortcut.accelerator"
           @update:model-value="(newValue) => updateShortcut(shortcut.id, String(newValue))"
         />
+        <div v-if="getShortcutStatusText(shortcut)" class="ShortcutStatus">
+          {{ getShortcutStatusText(shortcut) }}
+        </div>
+        <div v-if="getSpotlightHint(shortcut)" class="ShortcutStatusHint">
+          {{ getSpotlightHint(shortcut) }}
+        </div>
       </TuffBlockSlot>
     </template>
 
@@ -240,5 +291,17 @@ function getShortcutLabel(id: string): string {
 .TuffBlockInput::placeholder {
   color: var(--el-text-color-placeholder);
   opacity: 0.7;
+}
+
+.ShortcutStatus {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-color-danger);
+}
+
+.ShortcutStatusHint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>

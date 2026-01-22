@@ -62,7 +62,7 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
     onSpace,
     onEscape,
     element,
-    enabled,
+    enabled
   } = options
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -73,11 +73,7 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
 
     // Don't interfere with input fields
     const target = event.target as HTMLElement
-    if (
-      target.tagName === 'INPUT'
-      || target.tagName === 'TEXTAREA'
-      || target.isContentEditable
-    ) {
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
       return
     }
 
@@ -122,6 +118,6 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions = {}) {
   })
 
   return {
-    handleKeyDown,
+    handleKeyDown
   }
 }

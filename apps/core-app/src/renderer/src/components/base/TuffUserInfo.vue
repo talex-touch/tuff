@@ -125,7 +125,8 @@ async function loadDeviceSummary() {
       return
     }
   }
-  const user = (clerk as any)?.user
+  const user = (clerk as { user?: { sessions?: unknown[]; getSessions?: () => Promise<unknown> } })
+    ?.user
   if (!user) {
     return
   }

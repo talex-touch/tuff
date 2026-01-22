@@ -7,7 +7,7 @@ const props = withDefaults(
   defineProps<{
     label?: string
   }>(),
-  {},
+  {}
 )
 
 const { t } = useI18n()

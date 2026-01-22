@@ -30,7 +30,7 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   'update:modelValue': [value: IntelligenceProviderConfig]
-  'change': []
+  change: []
 }>()
 
 const { t } = useI18n()
@@ -44,14 +44,14 @@ watch(
   () => props.modelValue.priority,
   (newValue) => {
     localPriority.value = newValue || 2
-  },
+  }
 )
 
 watch(
   () => props.modelValue.timeout,
   (newValue) => {
     localTimeout.value = newValue || 30000
-  },
+  }
 )
 
 function validateTimeout(value: number): boolean {
@@ -68,7 +68,7 @@ function validateTimeout(value: number): boolean {
 function handlePriorityChange() {
   const updated = {
     ...props.modelValue,
-    priority: localPriority.value,
+    priority: localPriority.value
   }
   emits('update:modelValue', updated)
   emits('change')
@@ -78,12 +78,11 @@ function handleTimeoutBlur() {
   if (validateTimeout(localTimeout.value)) {
     const updated = {
       ...props.modelValue,
-      timeout: localTimeout.value,
+      timeout: localTimeout.value
     }
     emits('update:modelValue', updated)
     emits('change')
-  }
-  else {
+  } else {
     // Reset to previous valid value
     localTimeout.value = props.modelValue.timeout || 30000
   }
@@ -133,10 +132,10 @@ function handleTimeoutBlur() {
       :disabled="disabled"
       @blur="handleTimeoutBlur"
     >
-      <template #control="{ modelValue, update, focus, blur }">
+      <template #control="{ modelValue: slotValue, update, focus, blur }">
         <div class="flex items-center gap-2">
           <input
-            :value="modelValue"
+            :value="slotValue"
             type="number"
             min="1000"
             max="300000"
@@ -145,8 +144,11 @@ function handleTimeoutBlur() {
             class="tuff-input flex-1"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="blur(); handleTimeoutBlur()"
-          >
+            @blur="
+              blur()
+              handleTimeoutBlur()
+            "
+          />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
             {{ t('intelligence.config.advanced.timeoutUnit') }}
           </span>

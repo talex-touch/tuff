@@ -2,6 +2,7 @@
 import type { DownloadTask } from '@talex-touch/utils'
 import { ref, watch } from 'vue'
 import { VueDraggable as draggable } from 'vue-draggable-plus'
+import type { DraggableEvent } from 'vue-draggable-plus'
 import { useI18n } from 'vue-i18n'
 import TaskCard from './TaskCard.vue'
 
@@ -12,16 +13,16 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  draggable: false,
+  draggable: false
 })
 
 const emit = defineEmits<{
-  'pause': [taskId: string]
-  'resume': [taskId: string]
-  'cancel': [taskId: string]
-  'retry': [taskId: string]
-  'remove': [taskId: string]
-  'delete': [taskId: string]
+  pause: [taskId: string]
+  resume: [taskId: string]
+  cancel: [taskId: string]
+  retry: [taskId: string]
+  remove: [taskId: string]
+  delete: [taskId: string]
   'open-file': [taskId: string]
   'show-in-folder': [taskId: string]
   'show-details': [taskId: string]
@@ -32,13 +33,18 @@ useI18n()
 
 const taskList = ref<DownloadTask[]>([...props.tasks])
 
-watch(() => props.tasks, (newTasks) => {
-  taskList.value = [...newTasks]
-}, { deep: true })
+watch(
+  () => props.tasks,
+  (newTasks) => {
+    taskList.value = [...newTasks]
+  },
+  { deep: true }
+)
 
-function handleDragEnd(event: any) {
-  const { oldIndex, newIndex } = event
-  if (oldIndex !== newIndex && taskList.value[newIndex]) {
+function handleDragEnd(event: DraggableEvent<DownloadTask>) {
+  const oldIndex = event.oldIndex ?? -1
+  const newIndex = event.newIndex ?? -1
+  if (oldIndex >= 0 && newIndex >= 0 && oldIndex !== newIndex && taskList.value[newIndex]) {
     const task = taskList.value[newIndex]
     // Calculate new priority based on position
     const newPriority = calculatePriority(newIndex, taskList.value.length)

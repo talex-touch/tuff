@@ -16,8 +16,8 @@ const props = withDefaults(
     color: 'var(--el-color-primary)',
     background: '',
     border: '',
-    size: 'sm',
-  },
+    size: 'sm'
+  }
 )
 
 const safeLabel = computed(() => {
@@ -29,21 +29,19 @@ const safeColor = computed(() => {
 })
 
 const resolvedBackground = computed(() => {
-  if (props.background)
-    return props.background
+  if (props.background) return props.background
   return `color-mix(in srgb, ${safeColor.value} 12%, transparent)`
 })
 
 const resolvedBorder = computed(() => {
-  if (props.border)
-    return props.border
+  if (props.border) return props.border
   return `color-mix(in srgb, ${safeColor.value} 32%, transparent)`
 })
 
 const styleVars = computed(() => ({
   '--tuff-tag-color': safeColor.value,
   '--tuff-tag-bg': resolvedBackground.value,
-  '--tuff-tag-border': resolvedBorder.value,
+  '--tuff-tag-border': resolvedBorder.value
 }))
 </script>
 

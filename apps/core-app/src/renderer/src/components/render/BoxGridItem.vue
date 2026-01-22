@@ -34,9 +34,15 @@ const displayIcon = computed(() => {
   return defaultIcon
 })
 
-const isPinned = computed(() => (props.item.meta as any)?.pinned?.isPinned)
+const isPinned = computed(() => props.item.meta?.pinned?.isPinned)
 const title = computed(() => props.render.basic?.title || '')
-const recommendation = computed(() => (props.item.meta as any)?.recommendation)
+const recommendationBadge = computed(() => {
+  const meta = props.item.meta as Record<string, unknown> | undefined
+  const recommendation = meta?.recommendation as
+    | { badge?: { variant?: string; text?: string } }
+    | undefined
+  return recommendation?.badge
+})
 </script>
 
 <template>
@@ -56,11 +62,11 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
     </div>
     <span class="BoxGridItem-Title">{{ title }}</span>
     <span
-      v-if="recommendation?.badge"
+      v-if="recommendationBadge"
       class="BoxGridItem-Badge"
-      :class="`badge-${recommendation.badge.variant}`"
+      :class="`badge-${recommendationBadge.variant}`"
     >
-      {{ recommendation.badge.text }}
+      {{ recommendationBadge.text }}
     </span>
     <span v-if="quickKey" class="BoxGridItem-QuickKey">{{ quickKey }}</span>
   </div>

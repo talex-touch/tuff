@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { DownloadHistory } from '@talex-touch/utils'
-import {
-  Clock,
-  Delete,
-  Search,
-} from '@element-plus/icons-vue'
+import { Clock, Delete, Search } from '@element-plus/icons-vue'
 import { DownloadModule } from '@talex-touch/utils'
 import { ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
@@ -15,13 +11,7 @@ import HistoryCard from './HistoryCard.vue'
 
 const { t } = useI18n()
 
-const {
-  getHistory,
-  clearHistory,
-  clearHistoryItem,
-  openFile,
-  showInFolder,
-} = useDownloadCenter()
+const { getHistory, clearHistory, clearHistoryItem, openFile, showInFolder } = useDownloadCenter()
 
 const historyList = ref<DownloadHistory[]>([])
 const loading = ref(false)
@@ -37,12 +27,10 @@ async function loadHistory() {
     loading.value = true
     const history = await getHistory()
     historyList.value = history
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.load_history_failed')}: ${message}`)
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 }
@@ -54,15 +42,15 @@ const filteredHistory = computed(() => {
   // 搜索过滤
   const query = searchQuery.value.toLowerCase().trim()
   if (query) {
-    result = result.filter(item =>
-      item.filename.toLowerCase().includes(query)
-      || item.url.toLowerCase().includes(query),
+    result = result.filter(
+      (item) =>
+        item.filename.toLowerCase().includes(query) || item.url.toLowerCase().includes(query)
     )
   }
 
   // 模块过滤
   if (filterModule.value) {
-    result = result.filter(item => item.module === filterModule.value)
+    result = result.filter((item) => item.module === filterModule.value)
   }
 
   // 排序
@@ -115,14 +103,12 @@ function handlePageChange(page: number) {
 
 async function handleOpenFile(historyId: string) {
   try {
-    const item = historyList.value.find(h => h.id === historyId)
-    if (!item)
-      return
+    const item = historyList.value.find((h) => h.id === historyId)
+    if (!item) return
 
     await openFile(item.taskId)
     toast.success(t('download.file_opened'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.open_file_failed')}: ${message}`)
   }
@@ -130,13 +116,11 @@ async function handleOpenFile(historyId: string) {
 
 async function handleShowInFolder(historyId: string) {
   try {
-    const item = historyList.value.find(h => h.id === historyId)
-    if (!item)
-      return
+    const item = historyList.value.find((h) => h.id === historyId)
+    if (!item) return
 
     await showInFolder(item.taskId)
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.show_folder_failed')}: ${message}`)
   }
@@ -150,23 +134,21 @@ async function handleClearHistoryItem(historyId: string) {
       {
         confirmButtonText: t('common.confirm'),
         cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      },
+        type: 'warning'
+      }
     )
 
     await clearHistoryItem(historyId)
 
     // 从列表中移除
-    const index = historyList.value.findIndex(h => h.id === historyId)
+    const index = historyList.value.findIndex((h) => h.id === historyId)
     if (index !== -1) {
       historyList.value.splice(index, 1)
     }
 
     toast.success(t('download.history_item_cleared'))
-  }
-  catch (err: unknown) {
-    if (err === 'cancel')
-      return
+  } catch (err: unknown) {
+    if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.clear_history_item_failed')}: ${message}`)
   }
@@ -181,17 +163,15 @@ async function handleClearAllHistory() {
         confirmButtonText: t('common.confirm'),
         cancelButtonText: t('common.cancel'),
         type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      },
+        confirmButtonClass: 'el-button--danger'
+      }
     )
 
     await clearHistory()
     historyList.value = []
     toast.success(t('download.all_history_cleared'))
-  }
-  catch (err: unknown) {
-    if (err === 'cancel')
-      return
+  } catch (err: unknown) {
+    if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.clear_all_history_failed')}: ${message}`)
   }
@@ -214,11 +194,7 @@ onMounted(() => {
         <span class="history-count">{{ filteredHistory.length }} {{ $t('download.items') }}</span>
       </div>
       <div class="header-right">
-        <el-button
-          v-if="historyList.length > 0"
-          type="danger"
-          @click="handleClearAllHistory"
-        >
+        <el-button v-if="historyList.length > 0" type="danger" @click="handleClearAllHistory">
           <el-icon><Delete /></el-icon>
           {{ $t('download.clear_all_history') }}
         </el-button>
@@ -245,15 +221,17 @@ onMounted(() => {
       >
         <el-option :label="$t('download.all_modules')" value="" />
         <el-option :label="$t('download.module_app_update')" :value="DownloadModule.APP_UPDATE" />
-        <el-option :label="$t('download.module_plugin_install')" :value="DownloadModule.PLUGIN_INSTALL" />
-        <el-option :label="$t('download.module_resource_download')" :value="DownloadModule.RESOURCE_DOWNLOAD" />
+        <el-option
+          :label="$t('download.module_plugin_install')"
+          :value="DownloadModule.PLUGIN_INSTALL"
+        />
+        <el-option
+          :label="$t('download.module_resource_download')"
+          :value="DownloadModule.RESOURCE_DOWNLOAD"
+        />
         <el-option :label="$t('download.module_user_manual')" :value="DownloadModule.USER_MANUAL" />
       </el-select>
-      <el-select
-        v-model="sortBy"
-        :placeholder="$t('download.sort_by')"
-        style="width: 180px"
-      >
+      <el-select v-model="sortBy" :placeholder="$t('download.sort_by')" style="width: 180px">
         <el-option :label="$t('download.sort_by_time_desc')" value="time_desc" />
         <el-option :label="$t('download.sort_by_time_asc')" value="time_asc" />
         <el-option :label="$t('download.sort_by_size_desc')" value="size_desc" />

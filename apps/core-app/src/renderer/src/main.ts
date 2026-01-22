@@ -10,6 +10,7 @@ import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-
 import VWave from 'v-wave'
 import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
+import type { I18nInstance } from '~/modules/lang'
 import { setupI18n } from '~/modules/lang'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 
@@ -31,7 +32,7 @@ import 'uno.css'
 
 import 'virtual:unocss-devtools'
 
-setRuntimeEnv(import.meta.env as any)
+setRuntimeEnv(import.meta.env as Record<string, string | undefined>)
 
 const transport = useTuffTransport()
 
@@ -63,14 +64,14 @@ async function bootstrap() {
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
     setupI18n({ locale: initialLanguage })
   )
-  ;(window as any).$i18n = i18n
+  window.$i18n = i18n
 
   const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
 
   await runBootStep('Registering plugins and global modules', 0.05, () => {
     registerCorePlugins(app, i18n)
     // Expose router to window for MetaOverlay access
-    ;(window as any).__VUE_ROUTER__ = router
+    window.__VUE_ROUTER__ = router
   })
 
   await runBootStep('Initializing plugin store', 0.05, () => maybeInitializePluginStore())
@@ -111,7 +112,7 @@ function resolveInitialLanguage() {
 /**
  * Register shared renderer plugins and global modules.
  */
-function registerCorePlugins(app: ReturnType<typeof createApp>, i18n: any) {
+function registerCorePlugins(app: ReturnType<typeof createApp>, i18n: I18nInstance) {
   app
     .use(router)
     .use(ElementPlus)

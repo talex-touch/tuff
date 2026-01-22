@@ -56,7 +56,7 @@ const props = withDefaults(defineProps<TuffItemTemplateProps>(), {
   clickable: true,
   hasError: false,
   size: 'md',
-  ariaLabel: '',
+  ariaLabel: ''
 })
 
 const emit = defineEmits<{
@@ -64,8 +64,7 @@ const emit = defineEmits<{
 }>()
 
 function handleClick(event: MouseEvent | KeyboardEvent) {
-  if (props.disabled || !props.clickable)
-    return
+  if (props.disabled || !props.clickable) return
   emit('click', event)
 }
 </script>
@@ -78,7 +77,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
       'is-disabled': disabled,
       'is-clickable': clickable,
       'has-error': hasError,
-      [`size-${size}`]: true,
+      [`size-${size}`]: true
     }"
     role="button"
     :tabindex="disabled ? -1 : 0"

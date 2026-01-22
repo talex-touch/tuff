@@ -33,7 +33,12 @@ const { followSystem, selectedLanguage, supportedLanguages } = useLanguageSettin
       default-icon="i-carbon-language"
       active-icon="i-carbon-language"
     >
-      <TSelectItem v-for="lang in supportedLanguages" :key="lang.key" :model-value="selectedLanguage" :value="lang.key">
+      <TSelectItem
+        v-for="lang in supportedLanguages"
+        :key="lang.key"
+        :model-value="selectedLanguage"
+        :value="lang.key"
+      >
         {{ lang.name }}
       </TSelectItem>
     </TuffBlockSelect>

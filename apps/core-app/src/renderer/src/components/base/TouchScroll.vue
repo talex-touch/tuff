@@ -21,7 +21,23 @@ const emit = defineEmits<{
 }>()
 
 const attrs = useAttrs()
-const scrollRef = ref<InstanceType<typeof TuffTouchScroll> | null>(null)
+type ScrollInfo = {
+  scrollTop: number
+  scrollLeft: number
+  scrollHeight: number
+  scrollWidth: number
+  clientHeight: number
+  clientWidth: number
+}
+
+type ScrollInstance = InstanceType<typeof TuffTouchScroll> & {
+  nativeScrollRef?: unknown
+  scrollTo?: (x: number, y: number, time?: number) => void
+  getScrollInfo?: () => ScrollInfo
+  refresh?: () => void
+}
+
+const scrollRef = ref<ScrollInstance | null>(null)
 
 const useNative = computed(() => {
   return props.native
@@ -32,7 +48,7 @@ const isMacLike =
   (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
 
 const resolvedBScrollOptions = computed(() => {
-  const raw = (attrs as any)?.options
+  const raw = (attrs as { options?: unknown }).options
   const options = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 
   if (!isMacLike) return options
@@ -43,14 +59,14 @@ const resolvedBScrollOptions = computed(() => {
 })
 
 defineExpose({
-  nativeScrollRef: computed(() => (scrollRef.value as any)?.nativeScrollRef ?? null),
+  nativeScrollRef: computed(() => scrollRef.value?.nativeScrollRef ?? null),
   elScrollRef: undefined,
   scrollTo(x: number, y: number, time?: number) {
-    ;(scrollRef.value as any)?.scrollTo?.(x, y, time)
+    scrollRef.value?.scrollTo?.(x, y, time)
   },
   getScrollInfo() {
     return (
-      (scrollRef.value as any)?.getScrollInfo?.() ?? {
+      scrollRef.value?.getScrollInfo?.() ?? {
         scrollTop: 0,
         scrollLeft: 0,
         scrollHeight: 0,
@@ -61,7 +77,7 @@ defineExpose({
     )
   },
   refresh() {
-    ;(scrollRef.value as any)?.refresh?.()
+    scrollRef.value?.refresh?.()
   }
 })
 </script>

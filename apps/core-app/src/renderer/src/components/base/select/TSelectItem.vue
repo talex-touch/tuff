@@ -23,12 +23,12 @@ const isActive = ref(false)
  * @param event - MouseEvent triggered on document
  */
 function handleDocumentClick(event: MouseEvent): void {
-  if (!isActive.value)
-    return
+  if (!isActive.value) return
 
   // Use composedPath (standard), fallback to legacy .path if needed
-  const path = (event.composedPath?.() || (event as any).path) as HTMLElement[]
-  isActive.value = path.some(node => node?.className?.includes('TSelectItem-Container'))
+  const fallbackPath = (event as { path?: EventTarget[] }).path
+  const path = (event.composedPath?.() || fallbackPath || []) as HTMLElement[]
+  isActive.value = path.some((node) => node?.className?.includes('TSelectItem-Container'))
 }
 
 /**

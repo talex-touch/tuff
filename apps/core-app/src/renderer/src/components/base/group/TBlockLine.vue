@@ -1,6 +1,6 @@
 <script lang="ts">
 export default {
-  name: 'TBlockLine',
+  name: 'TBlockLine'
 }
 </script>
 
@@ -8,16 +8,16 @@ export default {
 defineProps({
   title: {
     type: String,
-    default: '',
+    default: ''
   },
   description: {
     type: String,
-    default: '',
+    default: ''
   },
   link: {
     type: Boolean,
-    default: false,
-  },
+    default: false
+  }
 })
 </script>
 

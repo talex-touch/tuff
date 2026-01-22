@@ -4,7 +4,7 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { nextTick } from 'vue'
 
 interface UseFocusOptions {
-  boxInputRef: Ref<any>
+  boxInputRef: Ref<{ focus?: () => void } | null>
 }
 
 /**

@@ -1,6 +1,6 @@
 <script>
 export default {
-  name: 'TTabItemGroup',
+  name: 'TTabItemGroup'
 }
 </script>
 

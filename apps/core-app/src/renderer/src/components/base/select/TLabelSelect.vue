@@ -14,21 +14,19 @@ const value = useModelWrapper(props, emits)
 
 function fixPointer(el: HTMLElement) {
   const target = el.parentElement!.querySelector(
-    `.TLabelSelectItem[data-type="label-select-item"][data-value="${value.value}"]`,
+    `.TLabelSelectItem[data-type="label-select-item"][data-value="${value.value}"]`
   )
-  if (!target)
-    return
+  if (!target) return
 
   Object.assign(el.style, {
     top: `0px`,
     left: `0px`,
     width: `100%`,
-    height: `100%`,
+    height: `100%`
   })
 
   setTimeout(() => {
-    if (!pointer.value || !target)
-      return
+    if (!pointer.value || !target) return
 
     const pointerRect = pointer.value.getBoundingClientRect()
     const rect = target.getBoundingClientRect()
@@ -37,7 +35,7 @@ function fixPointer(el: HTMLElement) {
       top: `${rect.top - pointerRect.top}px`,
       left: `${rect.left - pointerRect.left}px`,
       width: `${rect.width}px`,
-      height: `${rect.height}px`,
+      height: `${rect.height}px`
     })
   }, 200)
 }
@@ -46,20 +44,19 @@ watch(
   () => value.value,
   () => {
     nextTick(() => {
-      if (!pointer.value)
-        return
+      if (!pointer.value) return
 
       fixPointer(pointer.value)
     })
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 provide(
   'refresh',
   useDebounceFn((_value: string) => {
     value.value = _value
-  }, 200),
+  }, 200)
 )
 </script>
 

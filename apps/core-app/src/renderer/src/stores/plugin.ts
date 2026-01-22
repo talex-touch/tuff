@@ -93,8 +93,10 @@ export const usePluginStore = defineStore('plugin', () => {
         updatePluginReadme(event.name, event.readme)
         break
 
-      default:
-        console.warn('[PluginStore] Unknown state event type:', (event as any).type)
+      default: {
+        const unknownEvent = event as { type?: string }
+        console.warn('[PluginStore] Unknown state event type:', unknownEvent.type ?? 'unknown')
+      }
     }
   }
 

@@ -1,5 +1,5 @@
 <script lang="ts" name="TPopperDialog" setup>
-import type { Component } from 'vue'
+import type { Component, VNodeChild } from 'vue'
 import { sleep } from '@talex-touch/utils/common'
 import { defineComponent, onMounted, provide, ref } from 'vue'
 import TouchScroll from '../TouchScroll.vue'
@@ -9,7 +9,7 @@ interface Props {
   title?: string
   message?: string
   comp?: Component
-  render?: () => any
+  render?: () => VNodeChild
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -64,6 +64,7 @@ provide('destroy', destroy)
           no-padding
           class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px box-border"
         >
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <span
             class="w-full block text-center my-1rem leading-1.25rem"
             style="position: relative; height: 100%"

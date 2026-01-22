@@ -1,9 +1,10 @@
 <script setup name="FormTemplate" lang="ts">
+import type { VNode } from 'vue'
 import { provide, ref } from 'vue'
 import LoadingIcon from '../../icon/LoadingIcon.vue'
 
 interface FormField {
-  vnode: any
+  vnode: VNode
   func: () => { access: boolean }
 }
 
@@ -18,16 +19,16 @@ withDefaults(defineProps<FormTemplateProps>(), {
   title: 'FormTemplate',
   description: 'This is a form template.',
   routerBack: false,
-  contentStyle: 'height: calc(100% - 10rem)',
+  contentStyle: 'height: calc(100% - 10rem)'
 })
 
 const loading = ref(false)
 const formFields: FormField[] = []
 
-provide('regFormFiled', (vnode: any, func: () => { access: boolean }) => {
+provide('regFormFiled', (vnode: VNode, func: () => { access: boolean }) => {
   formFields.push({
     vnode,
-    func,
+    func
   })
 })
 

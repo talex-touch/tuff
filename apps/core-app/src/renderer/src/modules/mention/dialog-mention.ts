@@ -1,3 +1,4 @@
+import type { ITuffIcon } from '@talex-touch/utils'
 import type { AppContext, Component } from 'vue'
 import { createVNode, getCurrentInstance, render } from 'vue'
 import TBlowDialog from '~/components/base/dialog/TBlowDialog.vue'
@@ -10,7 +11,7 @@ import { useDialogManager } from './dialog-manager'
 /**
  * Type definition for dialog button click handler
  */
-type DialogButtonClickHandler = (...args: any[]) => any
+type DialogButtonClickHandler = (...args: unknown[]) => unknown
 
 /**
  * Interface for dialog button configuration
@@ -59,7 +60,7 @@ export function captureAppContext(): void {
 
   if (!instance) {
     throw new Error(
-      '[captureAppContext] Must be called within a Vue component context (setup or lifecycle hooks)',
+      '[captureAppContext] Must be called within a Vue component context (setup or lifecycle hooks)'
     )
   }
 
@@ -111,8 +112,8 @@ function renderComponent(
   props: Record<string, unknown>,
   container: HTMLElement,
   dialogId: string,
-  allowInCoreBox = true,
-): { cleanup: () => void, id: string } {
+  allowInCoreBox = true
+): { cleanup: () => void; id: string } {
   const vnode = createVNode(component, props)
 
   // 尝试获取当前组件实例的上下文（如果在 Vue 组件中调用）
@@ -121,8 +122,8 @@ function renderComponent(
 
   if (!appContext) {
     throw new Error(
-      '[renderComponent] No app context available. '
-      + 'Please call captureAppContext() in a Vue component setup before using dialog functions outside of Vue context.',
+      '[renderComponent] No app context available. ' +
+        'Please call captureAppContext() in a Vue component setup before using dialog functions outside of Vue context.'
     )
   }
 
@@ -143,7 +144,7 @@ function renderComponent(
     props,
     container,
     cleanup,
-    allowInCoreBox,
+    allowInCoreBox
   })
 
   return { cleanup, id: dialogId }
@@ -160,7 +161,7 @@ function renderComponent(
 export async function forTouchTip(
   title: string,
   message: string,
-  buttons: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }],
+  buttons: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }]
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const root = document.createElement('div')
@@ -183,11 +184,11 @@ export async function forTouchTip(
           cleanup()
           document.body.removeChild(root)
           resolve()
-        },
+        }
       },
       root,
       dialogId,
-      true,
+      true
     )
   })
 }
@@ -204,8 +205,8 @@ export async function forTouchTip(
 export async function forDialogMention(
   title: string,
   message: string,
-  icon: any = null,
-  btns: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }],
+  icon: ITuffIcon | string | null = null,
+  btns: DialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true }]
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const root = document.createElement('div')
@@ -231,11 +232,11 @@ export async function forDialogMention(
           cleanup()
           document.body.removeChild(root)
           resolve()
-        },
+        }
       },
       root,
       dialogId,
-      true,
+      true
     )
   })
 }
@@ -250,7 +251,7 @@ export async function forDialogMention(
 export async function forApplyMention(
   title: string,
   message: string,
-  btns: BottomDialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true, time: 0 }],
+  btns: BottomDialogBtn[] = [{ content: 'Sure', type: 'info', onClick: async () => true, time: 0 }]
 ): Promise<void> {
   const root = document.createElement('div')
   const dialogId = generateDialogId('bottom-dialog')
@@ -271,11 +272,11 @@ export async function forApplyMention(
         dialogManager.unregister(id)
         cleanup()
         document.body.removeChild(root)
-      },
+      }
     },
     root,
     dialogId,
-    true,
+    true
   )
 }
 
@@ -288,7 +289,7 @@ export async function forApplyMention(
  */
 export async function blowMention(
   title: string,
-  message: string | Component | DialogButtonClickHandler,
+  message: string | Component | DialogButtonClickHandler
 ): Promise<string> {
   return new Promise((resolve) => {
     const root = document.createElement('div')
@@ -297,8 +298,8 @@ export async function blowMention(
 
     root.id = dialogId
 
-    const propName
-      = message instanceof String || typeof message === 'string'
+    const propName =
+      message instanceof String || typeof message === 'string'
         ? 'message'
         : typeof message === 'function'
           ? 'render'
@@ -316,11 +317,11 @@ export async function blowMention(
           dialogManager.unregister(id)
           cleanup()
           document.body.removeChild(root)
-        },
+        }
       },
       root,
       dialogId,
-      true,
+      true
     )
   })
 }
@@ -333,7 +334,7 @@ export async function blowMention(
  */
 export async function popperMention(
   title: string,
-  message: string | Component | DialogButtonClickHandler,
+  message: string | Component | DialogButtonClickHandler
 ): Promise<void> {
   const root = document.createElement('div')
   const dialogId = generateDialogId('popper-dialog')
@@ -341,8 +342,8 @@ export async function popperMention(
 
   root.id = dialogId
 
-  const propName
-    = message instanceof String || typeof message === 'string'
+  const propName =
+    message instanceof String || typeof message === 'string'
       ? 'message'
       : typeof message === 'function'
         ? 'render'
@@ -359,10 +360,10 @@ export async function popperMention(
         dialogManager.unregister(id)
         cleanup()
         document.body.removeChild(root)
-      },
+      }
     },
     root,
     dialogId,
-    true,
+    true
   )
 }

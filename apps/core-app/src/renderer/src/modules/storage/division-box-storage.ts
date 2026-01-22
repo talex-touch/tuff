@@ -10,7 +10,7 @@ const DIVISION_BOX_SINGLETON_KEY = `storage:${DIVISION_BOX_STORAGE_KEY}`
 
 const defaultPreferences: DivisionBoxPreferences = {
   version: 1,
-  pinnedSessionIds: [],
+  pinnedSessionIds: []
 }
 
 class DivisionBoxStorage extends TouchStorage<DivisionBoxPreferences> {
@@ -30,5 +30,5 @@ class DivisionBoxStorage extends TouchStorage<DivisionBoxPreferences> {
 
 export const divisionBoxStorage = createStorageProxy(
   DIVISION_BOX_SINGLETON_KEY,
-  () => new DivisionBoxStorage(),
+  () => new DivisionBoxStorage()
 )

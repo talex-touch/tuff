@@ -13,6 +13,9 @@ import { DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
 import ProgressBar from './DownloadProgressBar.vue'
 
+const translate = (key: string): string | undefined =>
+  (window as Window & { $t?: (key: string) => string }).$t?.(key)
+
 interface DownloadProgress {
   percentage: number
   speed: number
@@ -52,12 +55,12 @@ const visible = computed({
 
 const dialogTitle = computed(() => {
   if (isDownloadComplete.value) {
-    return `🎉 ${(window as any).$t?.('update.update_ready')}` || 'Update Ready'
+    return `🎉 ${translate('update.update_ready') || 'Update Ready'}`
   }
   if (isDownloading.value) {
-    return `⏬ ${(window as any).$t?.('update.downloading_update')}` || 'Downloading Update'
+    return `⏬ ${translate('update.downloading_update') || 'Downloading Update'}`
   }
-  return `🎉 ${(window as any).$t?.('update.new_version_available')}` || 'New Version Available'
+  return `🎉 ${translate('update.new_version_available') || 'New Version Available'}`
 })
 
 const isDownloading = computed(() => {
@@ -229,6 +232,7 @@ function handleCancelDownload() {
           <el-icon><Document /></el-icon>
           {{ $t('update.release_notes') }}
         </h3>
+        <!-- eslint-disable-next-line vue/no-v-html -->
         <div class="release-notes-content" v-html="renderedMarkdown" />
       </div>
 

@@ -23,16 +23,13 @@ const canPreview = computed(() => {
 
 const fileSizeDescription = computed(() => {
   const fileSize = props.item.meta?.file?.size
-  if (!fileSize)
-    return ''
+  if (!fileSize) return ''
 
   if (fileSize < 1024) {
     return `${fileSize} B`
-  }
-  else if (fileSize < 1024 * 1024) {
+  } else if (fileSize < 1024 * 1024) {
     return `${(fileSize / 1024).toFixed(1)} KB`
-  }
-  else {
+  } else {
     return `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
   }
 })
@@ -47,8 +44,7 @@ onMounted(async () => {
     const fileSize = props.item.meta?.file?.size
     if (fileSize === 0) {
       error.value = t('textPreview.error.emptyFile')
-    }
-    else {
+    } else {
       error.value = t('textPreview.error.fileTooLarge', { size: fileSizeDescription.value })
     }
     return
@@ -61,12 +57,10 @@ onMounted(async () => {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     textContent.value = await response.text()
-  }
-  catch (err) {
+  } catch (err) {
     error.value = err instanceof Error ? err.message : t('textPreview.error.loadFailed')
     console.error('TextPreview error:', err)
-  }
-  finally {
+  } finally {
     loading.value = false
   }
 })
@@ -79,9 +73,7 @@ onMounted(async () => {
       <span>{{ t('textPreview.loading') }}</span>
     </div>
     <div v-else-if="error" class="error">
-      <div class="error-icon">
-        ⚠️
-      </div>
+      <div class="error-icon">⚠️</div>
       <div class="error-message">
         {{ error }}
       </div>

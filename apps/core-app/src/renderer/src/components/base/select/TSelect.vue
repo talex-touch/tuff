@@ -2,7 +2,7 @@
 import { computePosition } from '@floating-ui/vue'
 import { extractFromSlots } from '@talex-touch/utils/renderer/slots'
 import { onClickOutside } from '@vueuse/core'
-import { defineComponent, h, nextTick, Teleport } from 'vue'
+import { defineComponent, h, nextTick, Teleport, type VNode } from 'vue'
 
 const qualifiedName = 'TSelectItem'
 
@@ -25,6 +25,7 @@ export default defineComponent({
       required: true
     }
   },
+  emits: ['update:modelValue', 'change'],
   data() {
     return {
       activeIndex: 0,
@@ -68,12 +69,19 @@ export default defineComponent({
       isQualifiedVNode(vnode)
     ) as unknown[]
 
-    const slots = rawSlots.map((vnode, index) => ({
-      vnode: vnode as any,
-      index,
-      value: (vnode as any).props?.value !== undefined ? (vnode as any).props.value : index,
-      disabled: Object.prototype.hasOwnProperty.call((vnode as any).props ?? {}, 'disabled')
-    }))
+    const slots = rawSlots.map((vnode, index) => {
+      const typedVNode = vnode as VNode & {
+        props?: { value?: string | number; name?: string; disabled?: boolean }
+      }
+      const props = typedVNode.props ?? {}
+      const value = props.value !== undefined ? props.value : index
+      return {
+        vnode: typedVNode,
+        index,
+        value,
+        disabled: Object.prototype.hasOwnProperty.call(props, 'disabled')
+      }
+    })
 
     const matchedIndex = slots.findIndex((slot) => slot.value === this.modelValue)
     this.activeIndex = matchedIndex > -1 ? matchedIndex : 0
@@ -85,7 +93,7 @@ export default defineComponent({
         const wrapper = h(
           'div',
           { class: 'TSelect-Wrapper' },
-          slots.map((slot) => slot.vnode as any)
+          slots.map((slot) => slot.vnode)
         )
 
         nextTick(() => {

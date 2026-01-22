@@ -41,15 +41,11 @@ export async function fetchMarketCatalog(options: FetchOptions): Promise<MarketC
           plugins,
           meta: buildMeta(definition, true, undefined, plugins.length)
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : undefined
         return {
           plugins: [],
-          meta: buildMeta(
-            definition,
-            false,
-            typeof error?.message === 'string' ? error.message : 'MARKET_PROVIDER_FAILED',
-            0
-          )
+          meta: buildMeta(definition, false, message || 'MARKET_PROVIDER_FAILED', 0)
         }
       }
     })
@@ -70,12 +66,14 @@ export async function fetchMarketCatalog(options: FetchOptions): Promise<MarketC
       stats.push(meta)
     } else {
       // A rejected promise indicates unexpected failure
+      const reason =
+        result.reason instanceof Error ? result.reason.message : 'MARKET_PROVIDER_FAILED'
       stats.push({
         providerId: 'unknown',
         providerName: 'Unknown',
         providerType: 'nexusStore',
         success: false,
-        error: result.reason?.message ?? 'MARKET_PROVIDER_FAILED',
+        error: reason,
         fetchedAt: Date.now(),
         itemCount: 0
       })

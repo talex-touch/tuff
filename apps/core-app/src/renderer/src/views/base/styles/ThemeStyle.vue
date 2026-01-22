@@ -12,7 +12,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/channel/storage'
-import { themeStyle, triggerThemeTransition } from '~/modules/storage/app-storage'
+import { themeStyle, triggerThemeTransition, type ThemeMode } from '~/modules/storage/app-storage'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
 
@@ -21,7 +21,9 @@ import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
-const openFileEvent = defineRawEvent<any, { filePaths?: string[] }>('dialog:open-file')
+type OpenFileRequest = Record<string, unknown>
+
+const openFileEvent = defineRawEvent<OpenFileRequest, { filePaths?: string[] }>('dialog:open-file')
 
 const styleValue = ref(0)
 type RouteTransitionStyle = 'slide' | 'fade' | 'zoom'
@@ -100,9 +102,9 @@ watchEffect(() => {
  */
 function handleThemeChange(value: string | number, event?: Event): void {
   if (event instanceof MouseEvent) {
-    triggerThemeTransition([event.x, event.y], value as any)
+    triggerThemeTransition([event.x, event.y], value as ThemeMode)
   } else {
-    triggerThemeTransition([0, 0], value as any)
+    triggerThemeTransition([0, 0], value as ThemeMode)
   }
 }
 

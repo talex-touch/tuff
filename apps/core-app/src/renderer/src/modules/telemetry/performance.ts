@@ -81,7 +81,7 @@ function startLongTaskObserver(): void {
       }
     })
 
-    observer.observe({ entryTypes: ['longtask'] as any })
+    observer.observe({ entryTypes: ['longtask'] })
   } catch {
     // LongTask API may be unavailable; ignore.
   }

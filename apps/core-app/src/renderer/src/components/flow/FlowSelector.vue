@@ -17,7 +17,7 @@ import TuffIcon from '~/components/base/TuffIcon.vue'
 interface Props {
   visible: boolean
   sessionId?: string
-  payload?: FlowPayload
+  payload?: FlowPayload | null
 }
 
 const props = defineProps<Props>()

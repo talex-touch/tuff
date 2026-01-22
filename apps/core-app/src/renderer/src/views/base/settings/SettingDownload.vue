@@ -70,9 +70,10 @@ async function loadConfig() {
     if (response.success && response.config) {
       downloadConfig.value = response.config
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : ''
     // Ignore timeout errors during startup - module may not be ready yet
-    if (error?.message?.includes('timed out')) {
+    if (message.includes('timed out')) {
       console.debug('[SettingDownload] Config load timed out, module may be initializing')
       return
     }

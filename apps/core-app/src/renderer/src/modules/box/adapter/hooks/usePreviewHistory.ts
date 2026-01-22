@@ -12,7 +12,7 @@ export interface CalculationHistoryEntry {
     expression?: string
     payload?: { title?: string; primaryValue?: string }
     abilityId?: string
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 

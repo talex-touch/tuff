@@ -161,6 +161,7 @@ provide('destroy', destroy)
           {{ title }}
         </p>
         <div class="TBlowDialog-Content">
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <span style="position: relative; height: 100%" v-html="message" />
         </div>
         <div

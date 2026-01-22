@@ -6,38 +6,37 @@ import RemixIcon from '~/components/icon/RemixIcon.vue'
 const props = defineProps({
   title: {
     type: String,
-    required: true,
+    required: true
   },
   description: {
     type: String,
-    required: true,
+    required: true
   },
   modelValue: {
     type: [String, Number],
-    required: true,
+    required: true
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   icon: {
     type: String,
-    required: true,
+    required: true
   },
   iconChange: {
-    type: String,
-  },
+    type: String
+  }
 })
 const emits = defineEmits(['update:modelValue', 'change'])
 
 const value = useModelWrapper(props, emits)
 const iconStyle = computed(() =>
-  props.iconChange === null ? (value.value ? 'fill' : 'line') : props.iconChange,
+  props.iconChange === null ? (value.value ? 'fill' : 'line') : props.iconChange
 )
 
 function handleChange(val, e) {
-  if (props.disabled)
-    return
+  if (props.disabled) return
 
   emits('change', val, e)
 }

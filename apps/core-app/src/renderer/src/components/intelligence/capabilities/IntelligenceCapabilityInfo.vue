@@ -35,7 +35,7 @@ const emits = defineEmits<{
       providerId?: string
       model?: string
       promptTemplate?: string
-      promptVariables?: Record<string, any>
+      promptVariables?: Record<string, unknown>
       userInput?: string
     }
   ]
@@ -249,7 +249,7 @@ function handleTest(options?: {
   providerId?: string
   model?: string
   promptTemplate?: string
-  promptVariables?: Record<string, any>
+  promptVariables?: Record<string, unknown>
   userInput?: string
 }): void {
   if (props.isTesting) return

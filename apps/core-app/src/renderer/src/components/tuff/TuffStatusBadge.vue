@@ -16,21 +16,20 @@ const props = withDefaults(
     icon: '',
     status: undefined,
     statusKey: '',
-    size: 'md',
-  },
+    size: 'md'
+  }
 )
 
-const toneMap: Record<StatusTone, { color: string, icon: string }> = {
+const toneMap: Record<StatusTone, { color: string; icon: string }> = {
   success: { color: 'var(--el-color-success)', icon: 'i-carbon-checkmark-filled' },
   warning: { color: 'var(--el-color-warning)', icon: 'i-carbon-warning' },
   danger: { color: 'var(--el-color-error)', icon: 'i-carbon-close-outline' },
   info: { color: 'var(--el-color-primary)', icon: 'i-carbon-information' },
-  muted: { color: 'var(--el-text-color-secondary)', icon: 'i-carbon-minimize' },
+  muted: { color: 'var(--el-text-color-secondary)', icon: 'i-carbon-minimize' }
 }
 
 const resolvedTone = computed<StatusTone>(() => {
-  if (props.status)
-    return props.status
+  if (props.status) return props.status
   switch (props.statusKey) {
     case 'granted':
       return 'success'
@@ -52,7 +51,7 @@ const styleVars = computed(() => {
   return {
     '--tuff-status-color': color,
     '--tuff-status-bg': `color-mix(in srgb, ${color} 12%, transparent)`,
-    '--tuff-status-border': `color-mix(in srgb, ${color} 32%, transparent)`,
+    '--tuff-status-border': `color-mix(in srgb, ${color} 32%, transparent)`
   }
 })
 
@@ -77,8 +76,7 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
   font-weight: 600;
   color: var(--tuff-status-color, var(--el-text-color-primary));
   background: var(--tuff-status-bg, color-mix(in srgb, currentColor 12%, transparent));
-  border: 1px solid
-    var(--tuff-status-border, color-mix(in srgb, currentColor 32%, transparent));
+  border: 1px solid var(--tuff-status-border, color-mix(in srgb, currentColor 32%, transparent));
   transition: background-color 0.25s ease;
 
   i {

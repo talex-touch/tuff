@@ -175,7 +175,12 @@ const error = ref<string | null>(null)
 const snapshot = ref<TuffDashboardSnapshot | null>(null)
 const activeTab = ref('system')
 const transport = useTuffTransport()
-const dashboardEvent = defineRawEvent<{ limit: number }, any>('tuff:dashboard')
+type DashboardResponse = {
+  ok: boolean
+  snapshot?: TuffDashboardSnapshot
+  error?: string
+}
+const dashboardEvent = defineRawEvent<{ limit: number }, DashboardResponse>('tuff:dashboard')
 
 // File indexing progress
 const indexingProgress = ref<{
@@ -219,13 +224,14 @@ const verboseWarningDismissed = ref(false)
 const verboseLogsEnabled = computed({
   get: () => appSetting?.diagnostics?.verboseLogs === true,
   set: (value: boolean) => {
+    const globalFlags = globalThis as { __TALEX_VERBOSE_LOGS__?: boolean }
     if (!appSetting.diagnostics) {
       appSetting.diagnostics = { verboseLogs: value }
-      ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
+      globalFlags.__TALEX_VERBOSE_LOGS__ = value
       return
     }
     appSetting.diagnostics.verboseLogs = value
-    ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
+    globalFlags.__TALEX_VERBOSE_LOGS__ = value
   }
 })
 
@@ -332,7 +338,7 @@ async function load(): Promise<void> {
     if (!response?.ok) {
       throw new Error(response?.error || 'Unknown dashboard error')
     }
-    snapshot.value = response.snapshot as TuffDashboardSnapshot
+    snapshot.value = response.snapshot ?? null
 
     const renderStartedAt = performance.now()
     await nextTick()
@@ -523,7 +529,8 @@ watch(limit, () => {
 watch(
   verboseLogsEnabled,
   (value) => {
-    ;(globalThis as any).__TALEX_VERBOSE_LOGS__ = value
+    const globalFlags = globalThis as { __TALEX_VERBOSE_LOGS__?: boolean }
+    globalFlags.__TALEX_VERBOSE_LOGS__ = value
   },
   { immediate: true }
 )

@@ -24,7 +24,7 @@ export interface DialogConfig extends DialogLifecycleCallbacks {
   /** 要渲染的 Vue 组件 */
   component: Component
   /** 传递给组件的属性 */
-  props: Record<string, any>
+  props: Record<string, unknown>
   /** DOM 容器元素 */
   container: HTMLElement
   /** 清理函数，用于卸载和移除对话框 */

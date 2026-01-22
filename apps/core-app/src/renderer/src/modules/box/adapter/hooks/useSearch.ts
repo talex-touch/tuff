@@ -29,6 +29,19 @@ interface SearchEndData {
   sources?: TuffSearchResult['sources']
 }
 
+type BoxData = {
+  feature?: TuffItem
+  pushedItemIds?: Set<string>
+  plugin?: string
+}
+
+function ensureBoxData(boxOptions: IBoxOptions): BoxData {
+  if (!boxOptions.data || typeof boxOptions.data !== 'object') {
+    boxOptions.data = {}
+  }
+  return boxOptions.data as BoxData
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
 }
@@ -557,7 +570,7 @@ export function useSearch(
     }
 
     if (isPluginFeature) {
-      boxOptions.data.feature = itemToExecute
+      ensureBoxData(boxOptions).feature = itemToExecute
       boxOptions.mode = BoxMode.FEATURE
 
       const interaction = (itemToExecute.meta as { interaction?: unknown } | null | undefined)
@@ -681,8 +694,9 @@ export function useSearch(
 
     if (boxOptions.mode !== BoxMode.INPUT) {
       if (boxOptions.mode === BoxMode.FEATURE) {
-        if (boxOptions.data?.pushedItemIds && boxOptions.data.pushedItemIds.size > 0) {
-          const pushedIds = boxOptions.data.pushedItemIds
+        const boxData = boxOptions.data as BoxData | undefined
+        if (boxData?.pushedItemIds && boxData.pushedItemIds.size > 0) {
+          const pushedIds = boxData.pushedItemIds
 
           searchResults.value = searchResults.value.filter((item: TuffItem) => {
             return (
@@ -692,14 +706,14 @@ export function useSearch(
           })
         }
 
-        if (boxOptions.data?.plugin) {
+        if (boxData?.plugin) {
           transport
             .send(triggerFeatureExitEvent, {
-              plugin: boxOptions.data.plugin
+              plugin: boxData.plugin
             })
             .catch(() => {})
         }
-        boxOptions.data.feature = undefined
+        ensureBoxData(boxOptions).feature = undefined
       }
 
       boxOptions.mode = searchVal.value.startsWith('/') ? BoxMode.COMMAND : BoxMode.INPUT

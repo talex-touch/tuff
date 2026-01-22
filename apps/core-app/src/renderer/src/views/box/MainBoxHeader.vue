@@ -1,6 +1,7 @@
 <script setup lang="ts" name="MainBoxHeader">
-import type { ITuffIcon } from '@talex-touch/utils'
+import type { IProviderActivate, ITuffIcon } from '@talex-touch/utils'
 import type { IBoxOptions } from '../../modules/box/adapter'
+import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { computed, ref } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { appSetting } from '~/modules/channel/storage'
@@ -11,8 +12,8 @@ import TagSection from './tag/TagSection.vue'
 interface Props {
   searchVal: string
   boxOptions: IBoxOptions
-  clipboardOptions: any
-  activeActivations: any[]
+  clipboardOptions: IClipboardOptions
+  activeActivations: IProviderActivate[]
   isUIMode: boolean
   completionDisplay: string
 }
@@ -66,6 +67,7 @@ function handlePaste(): void {
       :disabled="isUIMode"
     >
       <template #completion>
+        <!-- eslint-disable-next-line vue/no-v-html -->
         <div class="text-sm truncate" v-html="completionDisplay" />
       </template>
     </BoxInput>

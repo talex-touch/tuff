@@ -9,19 +9,19 @@
    *
    * @type {Array}
    */
-  let _recordedSequence: Array<any> = []
+  let _recordedSequence: string[][] = []
   /**
    * a callback to invoke after recording a sequence
    *
    * @type {Function|null}
    */
-  let _recordedSequenceCallback: any = null
+  let _recordedSequenceCallback: ((sequence: string[]) => void) | null = null
   /**
    * a list of all of the keys currently held down
    *
    * @type {Array}
    */
-  let _currentRecordedKeys: any = []
+  let _currentRecordedKeys: string[] = []
   /**
    * temporary state where we remember if we've already captured a
    * character key in the current combo
@@ -34,7 +34,7 @@
    *
    * @type {null|number}
    */
-  let _recordTimer: any = null
+  let _recordTimer: ReturnType<typeof setTimeout> | undefined
   /**
    * the original handleKey method to override when Mousetrap.record() is
    * called
@@ -51,7 +51,7 @@
    * @param {Event} e
    * @returns void
    */
-  function _handleKey(character: string, modifiers: Array<any>, e: Event) {
+  function _handleKey(character: string, modifiers: string[], e: Event) {
     // @ts-ignore - Mousetrap context binding requires 'this'
     const self = this
 
@@ -73,8 +73,7 @@
 
       // once a key is released, all keys that were held down at the time
       // count as a keypress
-    }
-    else if (e.type == 'keyup' && _currentRecordedKeys.length > 0) {
+    } else if (e.type == 'keyup' && _currentRecordedKeys.length > 0) {
       _recordCurrentCombo()
     }
   }
@@ -124,16 +123,13 @@
    * @param {Array} sequence
    * @returns void
    */
-  function _normalizeSequence(sequence: Array<any>) {
-    let i
-
-    for (i = 0; i < sequence.length; ++i) {
-      sequence[i].sort((x: string, y: string) => {
+  function _normalizeSequence(sequence: string[][]): string[] {
+    return sequence.map((combo) => {
+      const normalized = [...combo].sort((x: string, y: string) => {
         // modifier keys always come first, in alphabetical order
         if (x.length > 1 && y.length === 1) {
           return -1
-        }
-        else if (x.length === 1 && y.length > 1) {
+        } else if (x.length === 1 && y.length > 1) {
           return 1
         }
 
@@ -141,9 +137,8 @@
         // so no need for equality check)
         return x > y ? 1 : -1
       })
-
-      sequence[i] = sequence[i].join('+')
-    }
+      return normalized.join('+')
+    })
   }
 
   /**
@@ -154,8 +149,8 @@
    */
   function _finishRecording() {
     if (_recordedSequenceCallback) {
-      _normalizeSequence(_recordedSequence)
-      _recordedSequenceCallback(_recordedSequence)
+      const normalized = _normalizeSequence(_recordedSequence)
+      _recordedSequenceCallback(normalized)
     }
 
     // reset all recorded state

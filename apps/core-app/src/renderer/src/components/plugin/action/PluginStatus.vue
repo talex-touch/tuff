@@ -21,7 +21,7 @@ const mapper = [
   'LOADED',
   'LOAD_FAILED',
   'DEV_DISCONNECTED',
-  'DEV_RECONNECTING',
+  'DEV_RECONNECTING'
 ]
 
 const func = ref(() => {})
@@ -29,8 +29,7 @@ const status = computed(() => props.plugin.status)
 
 function refresh(): void {
   const el = dom.value
-  if (!el)
-    return
+  if (!el) return
 
   el.classList.remove(
     'DISABLED',
@@ -45,7 +44,7 @@ function refresh(): void {
     'LOAD_FAILED',
 
     'DEV_DISCONNECTED',
-    'DEV_RECONNECTING',
+    'DEV_RECONNECTING'
   )
   el.classList.add(mapper[status.value])
 
@@ -57,38 +56,31 @@ function refresh(): void {
     func.value = async () => {
       await pluginSDK.enable(props.plugin.name)
     }
-  }
-  else if (status.value === PluginStatus.DISABLING) {
+  } else if (status.value === PluginStatus.DISABLING) {
     el.innerHTML = ``
-  }
-  else if (status.value === PluginStatus.CRASHED) {
+  } else if (status.value === PluginStatus.CRASHED) {
     el.innerHTML = t('plugin.status.crashed')
 
     func.value = async () => {
       await pluginSDK.enable(props.plugin.name)
     }
-  }
-  else if (status.value === PluginStatus.ENABLED) {
+  } else if (status.value === PluginStatus.ENABLED) {
     el.innerHTML = t('plugin.status.enabled')
 
     func.value = async () => {
       await pluginSDK.disable(props.plugin.name)
     }
-  }
-  else if (status.value === PluginStatus.ACTIVE) {
+  } else if (status.value === PluginStatus.ACTIVE) {
     el.innerHTML = ``
-  }
-  else if (status.value === PluginStatus.LOADING) {
+  } else if (status.value === PluginStatus.LOADING) {
     el.innerHTML = ``
-  }
-  else if (status.value === PluginStatus.LOADED) {
+  } else if (status.value === PluginStatus.LOADED) {
     el.innerHTML = t('plugin.status.loaded')
 
     func.value = async () => {
       await pluginSDK.enable(props.plugin.name)
     }
-  }
-  else if (status.value === PluginStatus.LOAD_FAILED) {
+  } else if (status.value === PluginStatus.LOAD_FAILED) {
     el.innerHTML = t('plugin.status.loadFailed')
 
     func.value = async () => {
@@ -96,21 +88,18 @@ function refresh(): void {
         console.log(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
         await pluginSDK.reload(props.plugin.name)
         console.log(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
-      }
-      catch (error) {
+      } catch (error) {
         console.error(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)
         el.innerHTML = `${t('plugin.status.loadFailed')}`
       }
     }
-  }
-  else if (status.value === PluginStatus.DEV_DISCONNECTED) {
+  } else if (status.value === PluginStatus.DEV_DISCONNECTED) {
     el.innerHTML = t('plugin.status.devDisconnected')
 
     func.value = async () => {
       await pluginSDK.reconnectDevServer(props.plugin.name)
     }
-  }
-  else if (status.value === PluginStatus.DEV_RECONNECTING) {
+  } else if (status.value === PluginStatus.DEV_RECONNECTING) {
     el.innerHTML = t('plugin.status.devReconnecting')
     func.value = () => {}
   }
@@ -124,7 +113,7 @@ onMounted(() => {
       ...props,
       get $el() {
         return dom.value
-      },
+      }
     }
 
     const func = refresh.bind(ctx)

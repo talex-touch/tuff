@@ -8,7 +8,7 @@ const routeLabel = computed(() => route?.name ?? route?.path ?? '')
 
 <template>
   <div class="FlatLayout-Icon">
-    <img src="../../../assets/logo.svg" alt="logo">
+    <img src="../../../assets/logo.svg" alt="logo" />
     <div class="FlatLayout-Nav">
       <slot name="nav" />
     </div>

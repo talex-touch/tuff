@@ -7,7 +7,7 @@ const props = withDefaults(
   defineProps<{
     label?: string
   }>(),
-  {},
+  {}
 )
 
 const { t } = useI18n()
@@ -19,10 +19,5 @@ const text = computed(() => {
 </script>
 
 <template>
-  <TuffBlockTag
-    :label="text"
-    icon="i-simple-icons-apple"
-    color="#0a84ff"
-    size="sm"
-  />
+  <TuffBlockTag :label="text" icon="i-simple-icons-apple" color="#0a84ff" size="sm" />
 </template>

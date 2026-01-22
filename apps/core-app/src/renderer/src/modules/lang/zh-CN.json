@@ -123,6 +123,13 @@
       "flow_detach_to_divisionbox": "分离到独立窗口",
       "flow_transfer_to_plugin": "转移到插件"
     },
+    "shortcutStatus": {
+      "conflictSystem": "与系统快捷键冲突",
+      "conflictPlugin": "与插件快捷键冲突",
+      "unavailable": "快捷键注册失败，可能被系统占用",
+      "invalid": "快捷键无效",
+      "spotlightHint": "可在系统设置中关闭 Spotlight 快捷键以释放该组合键"
+    },
     "autoPaste": "自动粘贴",
     "autoPasteDesc": "在搜索栏中粘贴您复制的内容。",
     "disabled": "禁用",
@@ -143,6 +150,14 @@
     "recommendationShowReasonDesc": "在推荐项目旁显示推荐原因。",
     "recommendationMaxItems": "推荐数量",
     "recommendationMaxItemsDesc": "搜索栏中显示的最大推荐项目数量。"
+  },
+  "permission": {
+    "system": {
+      "shortcut": {
+        "name": "全局快捷键",
+        "desc": "注册系统级全局快捷键"
+      }
+    }
   },
   "settingUser": {
     "groupTitle": "账户",
@@ -416,6 +431,107 @@
       "storage": "存储",
       "logs": "日志",
       "details": "详情"
+    },
+    "permissions": {
+      "loading": "加载权限信息...",
+      "empty": "此插件未声明任何权限",
+      "statusTitle": "权限状态",
+      "statusGranted": "所有必需权限已授予",
+      "statusMissing": "缺少 {count} 个必需权限",
+      "required": "必需权限",
+      "optional": "可选权限",
+      "granted": "已授予",
+      "requiredTag": "必需",
+      "actionsTitle": "权限操作",
+      "actionsDesc": "刷新或批量管理权限",
+      "actions": {
+        "refresh": "刷新",
+        "grantAll": "授予全部",
+        "revokeAll": "撤销全部"
+      },
+      "legacyTitle": "SDK 版本警告",
+      "legacyWarning": "此插件使用旧版 SDK，权限校验已跳过",
+      "legacyHint": "升级到 sdkapi >= {version} 以启用权限校验",
+      "recommendationsTitle": "建议",
+      "risk": {
+        "low": "低",
+        "medium": "中",
+        "high": "高"
+      },
+      "categoryDesc": "{count} 个权限",
+      "categories": {
+        "fs": "文件系统",
+        "clipboard": "剪贴板",
+        "network": "网络",
+        "system": "系统",
+        "ai": "AI 能力",
+        "storage": "存储",
+        "window": "窗口"
+      },
+      "shortcuts": {
+        "title": "快捷键",
+        "desc": "插件注册的全局快捷键",
+        "loading": "加载快捷键信息...",
+        "empty": "此插件未注册快捷键",
+        "status": {
+          "conflictSystem": "与系统快捷键冲突",
+          "conflictPlugin": "与其他插件快捷键冲突",
+          "unavailable": "注册失败，可能被系统占用",
+          "invalid": "快捷键无效"
+        },
+        "warning": {
+          "permissionMissing": "未授予快捷键权限",
+          "legacySdk": "SDK 版本过低，未启用权限校验",
+          "missingDescription": "缺少快捷键说明"
+        }
+      },
+      "registry": {
+        "fs": {
+          "read": { "name": "读取文件", "desc": "读取用户文件系统中的文件" },
+          "write": { "name": "写入文件", "desc": "创建、修改或删除用户文件" },
+          "execute": { "name": "执行文件", "desc": "运行可执行文件或脚本" }
+        },
+        "clipboard": {
+          "read": { "name": "读取剪贴板", "desc": "访问剪贴板中的内容" },
+          "write": { "name": "写入剪贴板", "desc": "将内容复制到剪贴板" }
+        },
+        "network": {
+          "local": { "name": "本地网络", "desc": "访问本地网络资源" },
+          "internet": { "name": "互联网访问", "desc": "发送和接收互联网请求" },
+          "download": { "name": "下载文件", "desc": "从互联网下载文件到本地" }
+        },
+        "system": {
+          "shell": { "name": "执行命令", "desc": "运行系统命令或脚本" },
+          "notification": { "name": "系统通知", "desc": "发送系统通知" },
+          "tray": { "name": "托盘交互", "desc": "访问系统托盘功能" },
+          "shortcut": { "name": "全局快捷键", "desc": "注册系统级全局快捷键" }
+        },
+        "ai": {
+          "basic": { "name": "基础 AI", "desc": "使用基础 AI 能力" },
+          "advanced": { "name": "高级 AI", "desc": "使用高级 AI 模型" },
+          "agents": { "name": "智能体", "desc": "调用智能体系统" }
+        },
+        "storage": {
+          "plugin": { "name": "插件存储", "desc": "使用插件私有存储空间" },
+          "shared": { "name": "共享存储", "desc": "访问跨插件共享存储" }
+        },
+        "window": {
+          "create": { "name": "创建窗口", "desc": "创建新窗口或视图" },
+          "capture": { "name": "屏幕截图", "desc": "捕获屏幕内容" }
+        }
+      },
+      "startup": {
+        "title": "权限请求",
+        "requestMessage": "插件「{name}」请求以下权限：",
+        "permissionItem": "• {name}",
+        "permissionItemWithReason": "• {name}：{reason}",
+        "timeout": "⏱ 如无操作，将在 {seconds} 秒后自动拒绝",
+        "actions": {
+          "deny": "拒绝",
+          "session": "仅本次允许",
+          "always": "始终允许"
+        }
+      }
     },
     "storage": {
       "title": "存储文件",

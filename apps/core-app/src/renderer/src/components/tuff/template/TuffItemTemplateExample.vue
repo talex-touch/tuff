@@ -5,28 +5,34 @@ import TuffItemTemplate from './TuffItemTemplate.vue'
 const selectedId = ref('item-1')
 
 const listItems = [
-  { id: 'item-1', name: 'OpenAI', type: 'openai', icon: { type: 'class' as const, value: 'i-simple-icons-openai' }, enabled: true },
+  {
+    id: 'item-1',
+    name: 'OpenAI',
+    type: 'openai',
+    icon: { type: 'class' as const, value: 'i-simple-icons-openai' },
+    enabled: true
+  },
   {
     id: 'item-2',
     name: 'Anthropic',
     type: 'anthropic',
     icon: { type: 'class' as const, value: 'i-simple-icons-anthropic' },
-    enabled: true,
+    enabled: true
   },
   {
     id: 'item-3',
     name: 'DeepSeek',
     type: 'deepseek',
     icon: { type: 'class' as const, value: 'i-carbon-search-advanced' },
-    enabled: false,
+    enabled: false
   },
   {
     id: 'item-4',
     name: 'Local Model',
     type: 'local',
     icon: { type: 'class' as const, value: 'i-carbon-bare-metal-server' },
-    enabled: true,
-  },
+    enabled: true
+  }
 ]
 
 function handleClick(type: string) {
@@ -133,17 +139,13 @@ function handleClick(type: string) {
       <TuffItemTemplate :icon="{ type: 'class', value: 'i-carbon-user' }">
         <template #title>
           <span style="color: var(--el-color-primary)">Custom Title</span>
-          <el-tag size="small" type="success">
-            Pro
-          </el-tag>
+          <el-tag size="small" type="success"> Pro </el-tag>
         </template>
         <template #subtitle>
           <span>Custom subtitle with <strong>formatting</strong></span>
         </template>
         <template #trailing>
-          <el-button size="small" type="primary" text>
-            Action
-          </el-button>
+          <el-button size="small" type="primary" text> Action </el-button>
         </template>
       </TuffItemTemplate>
     </section>

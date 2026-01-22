@@ -6,7 +6,7 @@ export enum BoxMode {
   COMMAND = 'command',
   IMAGE = 'image',
   FILE = 'file',
-  FEATURE = 'feature',
+  FEATURE = 'feature'
 }
 
 export type SearchItem = TuffItem
@@ -23,7 +23,7 @@ export interface IBoxOptions {
     iconPath?: string
     paths: string[]
   }
-  data: any
+  data: unknown
   /** 当前布局配置 */
   layout?: TuffContainerLayout
 }

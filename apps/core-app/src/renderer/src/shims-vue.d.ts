@@ -6,7 +6,7 @@ declare module '*.vue' {
 }
 
 declare module 'talex-touch:information' {
-  export const packageJson: { name: string, version: string, [key: string]: any }
-  const information: Record<string, any>
+  export const packageJson: { name: string; version: string; [key: string]: unknown }
+  const information: Record<string, unknown>
   export default information
 }

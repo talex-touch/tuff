@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 defineOptions({
-  name: 'LayoutSkeleton',
+  name: 'LayoutSkeleton'
 })
 </script>
 
@@ -16,11 +16,7 @@ defineOptions({
       <div class="LayoutSkeleton-Main">
         <!-- Sidebar skeleton -->
         <div class="LayoutSkeleton-Sidebar">
-          <div
-            v-for="i in 6"
-            :key="i"
-            class="skeleton-sidebar-item"
-          >
+          <div v-for="i in 6" :key="i" class="skeleton-sidebar-item">
             <div class="skeleton-circle" />
             <div class="skeleton-line skeleton-sidebar-text" />
           </div>
@@ -28,11 +24,7 @@ defineOptions({
 
         <!-- Content skeleton -->
         <div class="LayoutSkeleton-Content">
-          <div
-            v-for="i in 8"
-            :key="i"
-            class="skeleton-content-line"
-          >
+          <div v-for="i in 8" :key="i" class="skeleton-content-line">
             <div class="skeleton-line" :style="{ width: `${Math.random() * 40 + 40}%` }" />
           </div>
         </div>

@@ -37,13 +37,13 @@ const providerSummary = computed(() => {
 watch(
   () => props.enabledBindings,
   (list) => {
-    selectedProviderIds.value = list.map(binding => binding.providerId)
+    selectedProviderIds.value = list.map((binding) => binding.providerId)
   },
-  { immediate: true, deep: true },
+  { immediate: true, deep: true }
 )
 
 function handleSelectionChange(values: string[]): void {
-  const oldIds = props.enabledBindings.map(b => b.providerId)
+  const oldIds = props.enabledBindings.map((b) => b.providerId)
   const oldSet = new Set(oldIds)
   const newSet = new Set(values)
 
@@ -55,7 +55,7 @@ function handleSelectionChange(values: string[]): void {
     if (newSet.has(binding.providerId)) {
       newBindings.push({
         ...binding,
-        enabled: true,
+        enabled: true
       })
     }
   })
@@ -64,26 +64,25 @@ function handleSelectionChange(values: string[]): void {
   values.forEach((providerId) => {
     if (!oldSet.has(providerId)) {
       // 从 disabledBindings 或 allProviders 中查找
-      const disabledProvider = props.disabledBindings.find(p => p.providerId === providerId)
+      const disabledProvider = props.disabledBindings.find((p) => p.providerId === providerId)
       if (disabledProvider) {
         newBindings.push({
           providerId: disabledProvider.providerId,
           provider: disabledProvider.provider,
           enabled: true,
           priority: newBindings.length + 1,
-          models: disabledProvider.models || [],
+          models: disabledProvider.models || []
         })
-      }
-      else {
+      } else {
         // 如果在 disabledBindings 中找不到，从 allProviders 中查找
-        const provider = allProviders.value.find(p => p.providerId === providerId)
+        const provider = allProviders.value.find((p) => p.providerId === providerId)
         if (provider) {
           newBindings.push({
             providerId: provider.providerId,
             provider: provider.provider,
             enabled: true,
             priority: newBindings.length + 1,
-            models: provider.models || [],
+            models: provider.models || []
           })
         }
       }
@@ -93,23 +92,20 @@ function handleSelectionChange(values: string[]): void {
   emits('reorder', newBindings)
 
   // 如果有新选中的，自动聚焦到第一个新选中的
-  const newlyAdded = values.find(id => !oldSet.has(id))
+  const newlyAdded = values.find((id) => !oldSet.has(id))
   if (newlyAdded) {
     emits('select', newlyAdded)
   }
 }
 
 function handleRemoveProvider(providerId: string): void {
-  const newValues = selectedProviderIds.value.filter(id => id !== providerId)
+  const newValues = selectedProviderIds.value.filter((id) => id !== providerId)
   handleSelectionChange(newValues)
 }
 </script>
 
 <template>
-  <TuffBlockSlot
-    :title="providerSummary"
-    default-icon="i-carbon-api-1"
-  >
+  <TuffBlockSlot :title="providerSummary" default-icon="i-carbon-api-1">
     <el-select
       v-model="selectedProviderIds"
       multiple
@@ -127,8 +123,12 @@ function handleRemoveProvider(providerId: string): void {
         :value="provider.providerId"
       >
         <div class="provider-option">
-          <span class="provider-option__name">{{ provider.provider?.name || provider.providerId }}</span>
-          <span class="provider-option__type">{{ provider.provider?.type || provider.providerId }}</span>
+          <span class="provider-option__name">{{
+            provider.provider?.name || provider.providerId
+          }}</span>
+          <span class="provider-option__type">{{
+            provider.provider?.type || provider.providerId
+          }}</span>
         </div>
       </el-option>
     </el-select>
@@ -143,7 +143,7 @@ function handleRemoveProvider(providerId: string): void {
         v-for="binding in enabledBindings"
         :key="binding.providerId"
         closable
-        :type="(focusedProviderId === binding.providerId ? 'primary' : undefined) as any"
+        :type="focusedProviderId === binding.providerId ? 'primary' : undefined"
         @close="handleRemoveProvider(binding.providerId)"
         @click="$emit('select', binding.providerId)"
       >

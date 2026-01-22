@@ -7,6 +7,7 @@
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PermissionEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface PermissionGrant {
   pluginId: string
@@ -36,30 +37,21 @@ interface PluginPermissionStatus {
   warning?: string
 }
 
-// Permission name/desc translations (inline for simplicity)
-const permissionTranslations: Record<string, { name: string; desc: string }> = {
-  'fs.read': { name: '读取文件', desc: '读取用户文件系统中的文件' },
-  'fs.write': { name: '写入文件', desc: '创建、修改或删除用户文件' },
-  'fs.execute': { name: '执行文件', desc: '运行可执行文件或脚本' },
-  'clipboard.read': { name: '读取剪贴板', desc: '访问剪贴板中的内容' },
-  'clipboard.write': { name: '写入剪贴板', desc: '将内容复制到剪贴板' },
-  'network.local': { name: '本地网络', desc: '访问本地网络资源' },
-  'network.internet': { name: '互联网访问', desc: '发送和接收互联网请求' },
-  'network.download': { name: '下载文件', desc: '从互联网下载文件到本地' },
-  'system.shell': { name: '执行命令', desc: '运行系统命令或脚本' },
-  'system.notification': { name: '系统通知', desc: '发送系统通知' },
-  'system.tray': { name: '托盘交互', desc: '访问系统托盘功能' },
-  'ai.basic': { name: '基础 AI', desc: '使用基础 AI 能力' },
-  'ai.advanced': { name: '高级 AI', desc: '使用高级 AI 模型' },
-  'ai.agents': { name: '智能体', desc: '调用智能体系统' },
-  'storage.plugin': { name: '插件存储', desc: '使用插件私有存储空间' },
-  'storage.shared': { name: '共享存储', desc: '访问跨插件共享存储' },
-  'window.create': { name: '创建窗口', desc: '创建新窗口或视图' },
-  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' }
-}
-
 export function usePluginPermission(pluginId: string) {
   const transport = useTuffTransport()
+  const { t } = useI18n()
+
+  const getPermissionName = (permissionId: string) => {
+    const key = `plugin.permissions.registry.${permissionId}.name`
+    const translated = t(key)
+    return translated === key ? permissionId : translated
+  }
+
+  const getPermissionDesc = (permissionId: string) => {
+    const key = `plugin.permissions.registry.${permissionId}.desc`
+    const translated = t(key)
+    return translated === key ? '' : translated
+  }
 
   const permissions = ref<PermissionGrant[]>([])
   const registry = ref<PermissionDefinition[]>([])
@@ -151,11 +143,10 @@ export function usePluginPermission(pluginId: string) {
   // Get permission info
   function getPermissionInfo(permissionId: string) {
     const def = registry.value.find((p) => p.id === permissionId)
-    const trans = permissionTranslations[permissionId]
     return {
       id: permissionId,
-      name: trans?.name || permissionId,
-      desc: trans?.desc || '',
+      name: getPermissionName(permissionId),
+      desc: getPermissionDesc(permissionId),
       category: def?.category || permissionId.split('.')[0],
       risk: def?.risk || 'medium'
     }

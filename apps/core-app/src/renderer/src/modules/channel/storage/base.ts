@@ -11,7 +11,7 @@ const transport = useTuffTransport()
 const channel = tryUseChannel()
 
 function hasStorageChannel(value: typeof channel): boolean {
-  return !!value && typeof value.sendSync === 'function' && typeof value.unRegChannel === 'function'
+  return !!value && typeof value.send === 'function' && typeof value.unRegChannel === 'function'
 }
 
 if (hasStorageChannel(channel)) {

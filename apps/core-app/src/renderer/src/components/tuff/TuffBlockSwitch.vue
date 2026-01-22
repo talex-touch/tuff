@@ -1,6 +1,7 @@
 <script lang="ts" name="TuffBlockSwitch" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import type { WritableComputedRef } from 'vue'
 import { computed } from 'vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -29,7 +30,7 @@ const emits = defineEmits<{
   (e: 'click', event: MouseEvent): void
 }>()
 
-const value = useModelWrapper(props, emits)
+const value = useModelWrapper(props, emits) as unknown as WritableComputedRef<boolean>
 const isActive = computed(() => !!value.value)
 
 function handleChange(val: boolean) {

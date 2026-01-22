@@ -126,10 +126,10 @@ function emitUpdate() {
       @update:model-value="(val) => (localRequestsPerMinute = val !== '' ? Number(val) : undefined)"
       @blur="handleRequestsPerMinuteBlur"
     >
-      <template #control="{ modelValue, update, focus, blur }">
+      <template #control="{ modelValue: slotValue, update, focus, blur }">
         <div class="flex items-center gap-2">
           <input
-            :value="modelValue ?? ''"
+            :value="slotValue ?? ''"
             type="number"
             min="0"
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
@@ -167,10 +167,10 @@ function emitUpdate() {
       @update:model-value="(val) => (localTokensPerMinute = val !== '' ? Number(val) : undefined)"
       @blur="handleTokensPerMinuteBlur"
     >
-      <template #control="{ modelValue, update, focus, blur }">
+      <template #control="{ modelValue: slotValue, update, focus, blur }">
         <div class="flex items-center gap-2">
           <input
-            :value="modelValue ?? ''"
+            :value="slotValue ?? ''"
             type="number"
             min="0"
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"

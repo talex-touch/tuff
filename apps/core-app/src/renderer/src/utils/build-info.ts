@@ -17,7 +17,7 @@ export interface BuildInfo {
  * 获取构建信息
  */
 export function getBuildInfo(): BuildInfo {
-  return information as BuildInfo
+  return information as unknown as BuildInfo
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
+import type { ElMessageBoxOptions } from 'element-plus'
 import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
@@ -697,7 +698,7 @@ function setupAuthCallbackListener(): void {
     window.addEventListener('dev-auth-token', devTokenHandler as EventListener)
 
     // Also expose a global helper for easier dev usage
-    ;(window as any).__devAuthToken = (token: string) => {
+    window.__devAuthToken = (token: string) => {
       console.log('[useAuth] Dev mode: __devAuthToken called')
       handleExternalAuthCallback(token)
     }
@@ -805,7 +806,7 @@ async function showLoginResumePrompt(): Promise<{
     const handleRetry = () => finish({ action: 'retry' })
     const handleCancel = () => finish({ action: 'cancel' })
 
-    ElMessageBox({
+    const options: ElMessageBoxOptions = {
       title: '登录确认',
       message: h('div', { style: 'display: flex; flex-direction: column; gap: 12px;' }, [
         h('p', { style: 'margin: 0;' }, '检测到你已返回应用，但未拿到登录信息。是否已完成登录？'),
@@ -840,7 +841,8 @@ async function showLoginResumePrompt(): Promise<{
         }
         done()
       }
-    } as any).catch(() => {
+    }
+    ElMessageBox(options).catch(() => {
       if (!resolved) {
         resolved = true
         resolve({ action: 'cancel' })

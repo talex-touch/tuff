@@ -2,6 +2,7 @@
 import type {
   AppIndexSettings,
   DeviceIdleSettings,
+  FileIndexStatus,
   FileIndexBatteryStatus
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex'
@@ -25,7 +26,7 @@ const { getIndexStatus, getIndexStats, getBatteryLevel, handleRebuild, onProgres
 const { t, te } = useI18n()
 const transport = useTuffTransport()
 
-const indexStatus = ref<any>(null)
+const indexStatus = ref<FileIndexStatus | null>(null)
 const isRebuilding = ref(false)
 const lastChecked = ref<Date | null>(null)
 const estimatedTimeRemaining = ref<number | null>(null)
@@ -413,10 +414,10 @@ async function triggerRebuild() {
       await checkStatus()
       isRebuilding.value = false
     }, 2000)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[SettingFileIndex] Rebuild failed:', error)
     isRebuilding.value = false
-    const errorMsg = error?.message || String(error)
+    const errorMsg = error instanceof Error ? error.message : String(error)
     ElMessage.error(
       t('settings.settingFileIndex.alertRebuildFailed', {
         error: errorMsg
@@ -468,7 +469,7 @@ async function triggerRebuild() {
       active-icon="i-carbon-warning-alt"
     >
       <div class="error-text">
-        {{ indexStatus.error }}
+        {{ indexStatus?.error }}
       </div>
     </TuffBlockSlot>
 

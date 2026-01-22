@@ -81,7 +81,11 @@ const { t } = useI18n()
   align-items: center;
   justify-content: center;
   border-radius: 0.75rem;
-  background: linear-gradient(135deg, var(--el-color-primary-light-8) 0%, var(--el-color-primary-light-9) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--el-color-primary-light-8) 0%,
+    var(--el-color-primary-light-9) 100%
+  );
   color: var(--el-color-primary);
 }
 

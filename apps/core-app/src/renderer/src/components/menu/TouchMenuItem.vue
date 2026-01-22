@@ -5,32 +5,30 @@ import { useRoute, useRouter } from 'vue-router'
 const props = defineProps({
   icon: {
     type: String,
-    required: true,
+    required: true
   },
   name: {
     type: String,
-    required: true,
+    required: true
   },
   route: {
     type: String,
-    required: true,
+    required: true
   },
   disabled: {
     type: Boolean,
-    default: false,
+    default: false
   },
   doActive: {
     type: Function,
     default: (route, $route) => {
-      if (!$route)
-        return false
+      if (!$route) return false
       // 精确匹配路由路径
-      if ($route.path === route)
-        return true
+      if ($route.path === route) return true
       // 检查是否匹配路由记录
-      return $route.matched.some(record => record.path === route)
-    },
-  },
+      return $route.matched.some((record) => record.path === route)
+    }
+  }
 })
 const emit = defineEmits(['active'])
 
@@ -39,24 +37,23 @@ const route = useRoute()
 const router = useRouter()
 const active = computed(() => props.doActive(props.route, route))
 
-const changePointer = inject('changePointer')
+const changePointer = inject<(el: HTMLElement) => void>('changePointer')
 
 let removeGuard
 
 onMounted(() => {
   removeGuard = router.afterEach((to, _from) => {
-    if (!to.path.startsWith(props.route))
-      return
+    if (!to.path.startsWith(props.route)) return
 
     if (changePointer && dom.value) {
-      ;(changePointer as any)(dom.value)
+      changePointer(dom.value)
     }
   })
 
   if (dom.value) {
     dom.value.$fixPointer = () => {
       if (changePointer && dom.value) {
-        ;(changePointer as any)(dom.value)
+        changePointer(dom.value)
       }
     }
   }
@@ -69,14 +66,12 @@ onUnmounted(() => {
 })
 
 function handleClick($event) {
-  if (props.disabled)
-    return
+  if (props.disabled) return
 
-  if (props.route)
-    router.push(props.route)
+  if (props.route) router.push(props.route)
 
   if (changePointer && dom.value) {
-    ;(changePointer as any)(dom.value)
+    changePointer(dom.value)
   }
   emit('active', $event)
 }

@@ -1,7 +1,13 @@
-import type { DownloadRequest, DownloadTask } from '@talex-touch/utils'
+import type {
+  DownloadConfig,
+  DownloadHistory,
+  DownloadRequest,
+  DownloadTask
+} from '@talex-touch/utils'
 import { DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { appSetting } from '~/modules/channel/storage'
 
 /**
  * Download center composable for managing download tasks
@@ -13,10 +19,10 @@ export function useDownloadCenter() {
   const error = ref<string | null>(null)
   const downloadSdk = useDownloadSdk()
   const transportDisposers: Array<() => void> = []
-  const isDev = import.meta.env.DEV
+  const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
 
   const shouldHideTask = (task: DownloadTask): boolean => {
-    return !isDev && Boolean(task.metadata?.hidden)
+    return !developerMode.value && Boolean(task.metadata?.hidden)
   }
 
   const filterVisibleTasks = (tasks: DownloadTask[]): DownloadTask[] => {
@@ -117,9 +123,10 @@ export function useDownloadCenter() {
       } else {
         throw new Error(response.error || 'Failed to get tasks')
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Ignore timeout errors during startup - module may not be ready yet
-      if (err?.message?.includes('timed out')) {
+      const errMessage = err instanceof Error ? err.message : ''
+      if (errMessage.includes('timed out')) {
         console.debug('[DownloadCenter] Tasks fetch timed out, module may be initializing')
         return []
       }
@@ -153,9 +160,9 @@ export function useDownloadCenter() {
    * @param config - Configuration object to update
    * @returns Promise that resolves when config is updated
    */
-  const updateConfig = async (config: any): Promise<void> => {
+  const updateConfig = async (config: DownloadConfig): Promise<void> => {
     try {
-      const response = await downloadSdk.updateConfig({ config } as any)
+      const response = await downloadSdk.updateConfig({ config })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to update config')
@@ -352,7 +359,7 @@ export function useDownloadCenter() {
    * @param limit - Maximum number of history items to retrieve
    * @returns Promise that resolves to array of history items
    */
-  const getHistory = async (limit?: number): Promise<any[]> => {
+  const getHistory = async (limit?: number): Promise<DownloadHistory[]> => {
     try {
       const response = await downloadSdk.getHistory(limit ? { limit } : undefined)
 
@@ -577,6 +584,13 @@ export function useDownloadCenter() {
     setupEventListeners()
     await getAllTasks()
   })
+
+  watch(
+    () => developerMode.value,
+    () => {
+      void getAllTasks()
+    }
+  )
 
   /**
    * Cleanup download center
