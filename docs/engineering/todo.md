@@ -28,6 +28,35 @@
 - 样式影响范围确认：`TvTabs` 为适配 `TouchScroll` 加的 `:deep(.tx-scroll__content)` 是否会带来副作用（如有则进一步局部化）
   - `apps/core-app/src/renderer/src/components/tabs/vertical/TvTabs.vue`
 
+---
+
+## Plan 目录对照（2026-01）
+
+> 来源：`plan/` 目录。此处记录与实际落地的差距与后续待办。
+
+### 已落地
+- [x] 内部下载任务隐藏与通知抑制（`plan/2026-01-21_13-25-11-download-internal-visibility.md`）
+- [x] TouchSDK/Window 示例迁移到 hooks（`plan/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md`）
+- [x] App Indexing 启动补漏 + 周期全量对比（`plan/planprd-app-indexing.md`）
+- [x] Tuffex 组件 3/4/5/7/8（实现/测试/文档）（`plan/2026-01-20_21-16-53-tuffex-components-34578.md`）
+- [x] Config Storage 上下文整理与策略文档（`plan/2026-01-20_18-55-03-context-requirements.md`、`plan/2026-01-20_18-47-35-config-storage-sqlite-json-sync.md`）
+
+### 部分完成
+- [ ] SearchLogger 延迟初始化已修复，测试与验证补齐（`plan/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md`）
+- [ ] Nexus Examples 入口已落地，但“单一来源”策略未统一（`plan/2026-01-21_13-22-14-nexus-examples-section.md`）
+- [ ] Transport MessagePort 支持已在 SDK 落地，业务高频通道迁移待推进（`plan/2026-01-21_03-01-57-transport-message-port.md`）
+
+### 待实现
+- [ ] Config Storage SQLite/JSON 统一落地（ConfigRepository + 迁移/回滚/双写策略）（`plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md`）
+- [ ] TuffTransport 全量迁移与 async 任务模型，清理 sendSync（`plan/2026-01-21_01-29-05-transport-migration-async.md`）
+- [ ] CLI 补齐 `tuff validate` 与 manifest 校验（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
+- [ ] Perf Log 优化项：core-box:query 同步改造、/setting 路由拆分、tfile 路径兼容（`plan/2026-01-19_11-10-40-perf-log-analysis.md`）
+- [ ] Nexus 首页内容整改与占位移除（`plan/2026-01-21_13-25-00-nexus-homepage-revamp.md`）
+- [ ] Release Pipeline：OIDC + RSA + notes/assets 同步（`plan/planprd-release-pipeline.md`）
+
+### 需人工确认
+- [ ] Stash 弹出恢复处理（`plan/2026-01-20_21-17-14-stash-pop-recovery.md`）
+
 ## 备注
 
 - `npm run typecheck:web` 当前仓库存在既有类型错误（与本次 UI/滚动改动无关），暂时无法作为本次变更的回归信号。

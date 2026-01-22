@@ -55,13 +55,13 @@ async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult
 
 #### 任务清单
 
-**FileProvider:**
+**FileProvider（文件提供者）：**
 - [x] `onLoad()` 添加 Windows 平台检测，跳过 `_initialize()`
 - [x] `onLoad()` 跳过 `ensureFileSystemWatchers()` 文件监听
 - [x] `onSearch()` Windows 上直接返回空结果
 - [x] 保留 channel 注册（openers、indexing）以避免其他模块报错
 
-**AppProvider:**
+**AppProvider（应用提供者）：**
 - [x] `_subscribeToFSEvents()` Windows 上跳过事件订阅
 - [x] `_registerWatchPaths()` Windows 上跳过目录监视
 

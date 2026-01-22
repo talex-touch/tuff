@@ -1,4 +1,5 @@
 import { series, dest, src, parallel } from 'gulp'
+import type { TaskFunction } from 'gulp'
 import gulpSass from 'gulp-sass'
 import autoPrefixer from 'gulp-autoprefixer'
 import sassLang from 'sass'
@@ -38,7 +39,7 @@ export const buildStyleEntry = async () => {
   await writeFile(resolve(distPath, 'style.css'), '@import "./es/components.css";\n')
 }
 
-export default series(
+const build: TaskFunction = series(
   async () => removeDist(),
   parallel(
     async () => buildStyle(),
@@ -46,3 +47,5 @@ export default series(
   ),
   async () => buildStyleEntry(),
 )
+
+export default build

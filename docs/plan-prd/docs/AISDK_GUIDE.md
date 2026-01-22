@@ -184,7 +184,7 @@ await ai.text.summarize({
 })
 ```
 
-#### Embedding
+#### Embedding（向量）
 
 ```typescript
 // 生成向量
@@ -355,12 +355,12 @@ strategyManager.register(new MyStrategy())
 
 ## 故障排除
 
-### 1. "No enabled providers available"
+### 1. "No enabled providers available"（无可用的已启用提供商）
 
 - 确保至少有一个提供商已启用
 - 检查提供商是否支持您调用的能力
 
-### 2. "API key is required but not configured"
+### 2. "API key is required but not configured"（需要 API Key 但未配置）
 
 - 在设置页面配置提供商的 API Key
 

@@ -1,5 +1,5 @@
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
 import fs from 'fs-extra'
 import { describe, expect, it } from 'vitest'
 import { build } from '../core/exporter'

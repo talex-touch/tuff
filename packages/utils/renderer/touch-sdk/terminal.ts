@@ -1,13 +1,13 @@
 import type { ITuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
-const terminalCreateEvent = defineRawEvent<{ command: string; args?: string[] }, { id: string }>(
+const terminalCreateEvent = defineRawEvent<{ command: string, args?: string[] }, { id: string }>(
   'terminal:create',
 )
-const terminalWriteEvent = defineRawEvent<{ id: string; data: string }, void>('terminal:write')
+const terminalWriteEvent = defineRawEvent<{ id: string, data: string }, void>('terminal:write')
 const terminalKillEvent = defineRawEvent<{ id: string }, void>('terminal:kill')
-const terminalDataEvent = defineRawEvent<{ id: string; data: string }, void>('terminal:data')
-const terminalExitEvent = defineRawEvent<{ id: string; exitCode: number | null }, void>(
+const terminalDataEvent = defineRawEvent<{ id: string, data: string }, void>('terminal:data')
+const terminalExitEvent = defineRawEvent<{ id: string, exitCode: number | null }, void>(
   'terminal:exit',
 )
 

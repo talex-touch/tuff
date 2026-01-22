@@ -1,11 +1,11 @@
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { ITuffTransport } from '@talex-touch/utils/transport'
 import { Terminal } from './terminal'
 
 export class EnvDetector {
-  private static channel: ITouchClientChannel
+  private static transport: ITuffTransport
 
-  public static init(channel: ITouchClientChannel) {
-    this.channel = channel
+  public static init(transport: ITuffTransport) {
+    this.transport = transport
   }
 
   private static async checkCommand(
@@ -13,11 +13,11 @@ export class EnvDetector {
     versionArgs: string = '--version',
     versionRegex: RegExp = /(\d+\.\d+\.\d+)/,
   ): Promise<string | false> {
-    if (!this.channel) {
-      throw new Error('EnvDetector not initialized. Call EnvDetector.init(channel) first.')
+    if (!this.transport) {
+      throw new Error('EnvDetector not initialized. Call EnvDetector.init(transport) first.')
     }
     return new Promise((resolve) => {
-      const terminal = new Terminal(this.channel)
+      const terminal = new Terminal(this.transport)
       let output = ''
       let resolved = false
 
@@ -68,11 +68,11 @@ export class EnvDetector {
   }
 
   static async getDegit(): Promise<boolean> {
-    if (!this.channel) {
-      throw new Error('EnvDetector not initialized. Call EnvDetector.init(channel) first.')
+    if (!this.transport) {
+      throw new Error('EnvDetector not initialized. Call EnvDetector.init(transport) first.')
     }
     return new Promise((resolve) => {
-      const terminal = new Terminal(this.channel)
+      const terminal = new Terminal(this.transport)
       let receivedOutput = false
       let resolved = false
 

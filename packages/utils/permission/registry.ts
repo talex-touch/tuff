@@ -36,6 +36,14 @@ export const PERMISSIONS: PermissionDefinition[] = [
     descKey: 'permission.fs.execute.desc',
     icon: 'Terminal',
   },
+  {
+    id: 'fs.tfile',
+    category: PermissionCategory.FILESYSTEM,
+    risk: PermissionRiskLevel.MEDIUM,
+    nameKey: 'permission.fs.tfile.name',
+    descKey: 'permission.fs.tfile.desc',
+    icon: 'FileText',
+  },
 
   // Clipboard permissions
   {
@@ -237,6 +245,7 @@ export const PermissionIds = {
   FS_READ: 'fs.read',
   FS_WRITE: 'fs.write',
   FS_EXECUTE: 'fs.execute',
+  FS_TFILE: 'fs.tfile',
 
   // Clipboard
   CLIPBOARD_READ: 'clipboard.read',

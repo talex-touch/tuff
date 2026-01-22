@@ -533,7 +533,7 @@ function validateChannel(channel: string): asserts channel is PluginChannel {
  */
 function validateSemanticVersion(version: string): boolean {
   // Standard semver pattern: major.minor.patch with optional pre-release and build metadata
-  const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*)?(?:\+(?:[0-9a-z-]+(?:\.[0-9a-z-]+)*))?$/i
+  const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-z-][0-9a-z-]*))*)?(?:\+[0-9a-z-]+(?:\.[0-9a-z-]+)*)?$/i
   return semverPattern.test(version)
 }
 

@@ -3,6 +3,9 @@ import { ref } from 'vue'
 
 const value = ref('')
 const last = ref('')
+function onSearch(next: string) {
+  last.value = next
+}
 </script>
 
 <template>
@@ -10,7 +13,7 @@ const last = ref('')
     <TxSearchInput
       v-model="value"
       placeholder="Search anything"
-      @search="(v) => (last = v)"
+      @search="onSearch"
     />
 
     <div style="color: var(--tx-text-color-secondary); font-size: 12px;">

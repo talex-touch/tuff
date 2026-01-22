@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
+import type { PublishConfig } from '../types'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import fs from 'fs-extra'
 import { parsePublishArgs } from '../cli/args'
-import type { PublishConfig } from '../types'
 import { resolvePublishConfig } from './config'
 
 interface PackageInfo {

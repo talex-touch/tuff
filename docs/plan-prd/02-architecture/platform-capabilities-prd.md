@@ -54,7 +54,7 @@
 
 ## 5. 技术方案概述
 
-### 5.1 Platform Core Service
+### 5.1 平台核心服务（Platform Core Service）
 
 - 在主进程实现 `PlatformCoreService`，维护能力注册表(`CapabilityRegistry`)与授权策略。
 - 能力定义遵循接口：

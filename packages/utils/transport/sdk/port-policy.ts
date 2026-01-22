@@ -14,7 +14,7 @@ const DEFAULT_PORT_CHANNELS = new Set<string>([
 let cachedRaw: string | undefined
 let cachedAllowlist: ReadonlySet<string> | null = null
 
-const parsePortChannels = (raw: string): ReadonlySet<string> => {
+function parsePortChannels(raw: string): ReadonlySet<string> {
   const trimmed = raw.trim()
   if (!trimmed) {
     return new Set()

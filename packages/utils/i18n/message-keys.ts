@@ -79,6 +79,8 @@ export const PermissionKeys = {
   FS_WRITE_DESC: 'permission.fs.write.desc',
   FS_EXECUTE_NAME: 'permission.fs.execute.name',
   FS_EXECUTE_DESC: 'permission.fs.execute.desc',
+  FS_TFILE_NAME: 'permission.fs.tfile.name',
+  FS_TFILE_DESC: 'permission.fs.tfile.desc',
 
   // Clipboard permissions
   CLIPBOARD_READ_NAME: 'permission.clipboard.read.name',

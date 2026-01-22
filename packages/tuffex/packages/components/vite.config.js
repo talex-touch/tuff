@@ -1,6 +1,17 @@
+import { readFileSync } from 'node:fs'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
+
+const pkg = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf-8')
+)
+const externalDeps = Array.from(
+  new Set([
+    ...Object.keys(pkg.dependencies ?? {}),
+    ...Object.keys(pkg.peerDependencies ?? {})
+  ])
+)
 
 export default defineConfig({
   build: {
@@ -9,7 +20,7 @@ export default defineConfig({
     emptyOutDir: false,
     minify: false,
     rollupOptions: {
-      external: ['vue', '@number-flow/vue'],
+      external: externalDeps,
       input: ['./src/index.ts'],
       output: [
         {

@@ -41,7 +41,7 @@ interface ITuffTransportPort {
 - 支持模块级隔离与统计。
 
 ## 协议封装（建议）
-### Message Envelope
+### 消息封装
 ```ts
 type TuffTransportMessage = {
   port: string
@@ -68,15 +68,15 @@ type TuffTransportMessage = {
 - chunk 发送遵循 backpressure（队列限流）。
 
 ## Port Adapter 设计
-### Electron IPC Adapter
+### Electron IPC 适配器
 - `ElectronIpcPort`：使用 `ipcMain/ipcRenderer` 发送与监听。
 - 负责序列化与反序列化（含 chunk 组装）。
 
-### MessagePort Adapter
+### MessagePort 适配器
 - 未来可接入 `MessagePort` 或 `worker_threads`。
 - 复用同一协议，不改上层。
 
-### Plugin Adapter
+### 插件适配器
 - `PluginPort`：保留 keyManager 安全握手，嵌入 header。
 
 ## 迁移路径（不破坏现有 API）

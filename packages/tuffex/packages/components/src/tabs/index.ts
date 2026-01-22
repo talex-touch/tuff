@@ -1,3 +1,4 @@
+import type { Plugin } from 'vue'
 import type { TabHeaderProps, TabItemGroupProps, TabItemProps, TabsEmits, TabsProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxTabHeader from './src/TxTabHeader.vue'
@@ -7,7 +8,7 @@ import TxTabs from './src/TxTabs.vue'
 
 const Tabs = withInstall(TxTabs)
 const TabItem = withInstall(TxTabItem)
-const TabHeader = withInstall(TxTabHeader)
+const TabHeader: typeof TxTabHeader & Plugin = withInstall(TxTabHeader)
 const TabItemGroup = withInstall(TxTabItemGroup)
 
 export {

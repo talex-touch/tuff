@@ -197,7 +197,7 @@ export interface AuditLogEntry {
 }
 ```
 
-### 4.3 PermissionRegistry
+### 4.3 PermissionRegistry（权限注册表）
 
 ```typescript
 // permission-registry.ts
@@ -212,7 +212,7 @@ class PermissionRegistry {
 }
 ```
 
-### 4.4 PermissionStore
+### 4.4 PermissionStore（权限存储）
 
 ```typescript
 // permission-store.ts

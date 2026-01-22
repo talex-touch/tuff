@@ -64,7 +64,7 @@
 - `TouchPlugin` 在 `internal` 路径里可以直接调用 `setCustomRender('vue', 'core-intelligence-answer', payload)`，不走动态编译。
 - 可以在 `internal` 插件注册阶段硬编码 `widgetId`（如 `core-widgets::intelligence-answer`），同时在 renderer 启动流程中 `registerCustomRenderer`。
 
-## TODO
+## 待办
 
 ### 已完成 ✅
 1. ✅ 确定 internal 和非 internal 的判定逻辑

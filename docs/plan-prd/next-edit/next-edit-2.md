@@ -1,4 +1,4 @@
-# Next Edit 2
+# 下一次编辑 2
 
 ## 现象与问题
 - Nexus 页面报错：`useI18n is not defined`（截图指向 `apps/nexus/app/app.vue`）。

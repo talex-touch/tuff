@@ -1,5 +1,6 @@
 import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+import { Notification } from 'electron'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -95,6 +96,33 @@ describe('notificationService', () => {
       }).not.toThrow()
     })
 
+    it('should suppress hidden task notifications', () => {
+      const showSpy = vi.spyOn(Notification.prototype, 'show')
+      const task: DownloadTask = {
+        id: 'test-task-hidden',
+        url: 'https://example.com/file.zip',
+        destination: '/downloads',
+        filename: 'hidden-file.zip',
+        priority: DownloadPriority.NORMAL,
+        module: DownloadModule.USER_MANUAL,
+        status: DownloadStatus.COMPLETED,
+        progress: {
+          totalSize: 1024,
+          downloadedSize: 1024,
+          speed: 0,
+          percentage: 100,
+        },
+        chunks: [],
+        metadata: { hidden: true },
+        createdAt: new Date(Date.now() - 60000),
+        updatedAt: new Date(),
+      }
+
+      notificationService.showDownloadCompleteNotification(task)
+      expect(showSpy).not.toHaveBeenCalled()
+      showSpy.mockRestore()
+    })
+
     it('should not show notification when disabled', () => {
       notificationService.updateConfig({ downloadComplete: false })
 
@@ -183,6 +211,34 @@ describe('notificationService', () => {
       expect(() => {
         notificationService.showDownloadFailedNotification(task)
       }).not.toThrow()
+    })
+
+    it('should suppress hidden task failure notifications', () => {
+      const showSpy = vi.spyOn(Notification.prototype, 'show')
+      const task: DownloadTask = {
+        id: 'test-task-hidden-fail',
+        url: 'https://example.com/file.zip',
+        destination: '/downloads',
+        filename: 'hidden-fail.zip',
+        priority: DownloadPriority.NORMAL,
+        module: DownloadModule.USER_MANUAL,
+        status: DownloadStatus.FAILED,
+        progress: {
+          totalSize: 1024,
+          downloadedSize: 512,
+          speed: 0,
+          percentage: 50,
+        },
+        chunks: [],
+        metadata: { hidden: true },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        error: 'Network timeout',
+      }
+
+      notificationService.showDownloadFailedNotification(task)
+      expect(showSpy).not.toHaveBeenCalled()
+      showSpy.mockRestore()
     })
   })
 

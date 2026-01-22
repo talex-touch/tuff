@@ -1,5 +1,8 @@
+import type { TxSearchSelectOption } from '../src/types'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+
+import TxSearchSelect from '../src/TxSearchSelect.vue'
 
 vi.mock('@floating-ui/vue', () => ({
   autoUpdate: () => () => {},
@@ -9,8 +12,6 @@ vi.mock('@floating-ui/vue', () => ({
   size: () => ({}),
   useFloating: () => ({ floatingStyles: {}, update: () => {} }),
 }))
-
-import TxSearchSelect from '../src/TxSearchSelect.vue'
 
 describe('txSearchSelect', () => {
   const options = [
@@ -31,7 +32,7 @@ describe('txSearchSelect', () => {
     const alpha = items.find(item => item.text().includes('Alpha'))
     await alpha?.trigger('click')
 
-    const emitted = wrapper.emitted('select')
+    const emitted = wrapper.emitted('select') as Array<[TxSearchSelectOption]> | undefined
     expect(emitted?.[0][0].value).toBe('a')
   })
 

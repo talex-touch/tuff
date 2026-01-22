@@ -102,18 +102,6 @@ import type {
 // ============================================================================
 
 import type {
-  TransportPortClosePayload,
-  TransportPortConfirmPayload,
-  TransportPortErrorPayload,
-  TransportPortUpgradeRequest,
-  TransportPortUpgradeResponse,
-} from './types/transport'
-
-// ============================================================================
-// CoreBox Events
-// ============================================================================
-
-import type {
   ClipboardApplyRequest,
   ClipboardChangePayload,
   ClipboardDeleteRequest,
@@ -125,7 +113,7 @@ import type {
 } from './types/clipboard'
 
 // ============================================================================
-// Storage Events
+// CoreBox Events
 // ============================================================================
 
 import type {
@@ -164,10 +152,14 @@ import type {
 } from './types/core-box'
 
 // ============================================================================
-// Plugin Events
+// Storage Events
 // ============================================================================
 
 import type { DeviceIdleSettings } from './types/device-idle'
+
+// ============================================================================
+// Plugin Events
+// ============================================================================
 
 import type {
   DivisionBoxCloseRequest,
@@ -195,10 +187,6 @@ import type {
   DivisionBoxUpdateStateRequest,
   DivisionBoxUpdateStateResponse,
 } from './types/division-box'
-
-// ============================================================================
-// BoxItem Events
-// ============================================================================
 
 import type {
   DownloadAddTaskRequest,
@@ -228,6 +216,11 @@ import type {
   DownloadUpdateNotificationConfigRequest,
   DownloadUpdatePriorityRequest,
 } from './types/download'
+
+// ============================================================================
+// BoxItem Events
+// ============================================================================
+
 import type {
   FileIndexBatteryStatus,
   FileIndexProgress,
@@ -261,11 +254,6 @@ import type {
   FlowSetPluginHandlerRequest,
   FlowUnregisterTargetsRequest,
 } from './types/flow'
-
-// ============================================================================
-// Market Events
-// ============================================================================
-
 import type {
   MarketCheckUpdatesResponse,
   MarketGetPluginRequest,
@@ -278,7 +266,7 @@ import type {
 } from './types/market'
 
 // ============================================================================
-// Permission Events
+// Market Events
 // ============================================================================
 
 import type {
@@ -303,7 +291,7 @@ import type {
 } from './types/notification'
 
 // ============================================================================
-// Agents Events
+// Permission Events
 // ============================================================================
 
 import type {
@@ -328,7 +316,7 @@ import type {
 } from './types/permission'
 
 // ============================================================================
-// Platform Events
+// Agents Events
 // ============================================================================
 
 import type {
@@ -337,7 +325,7 @@ import type {
 } from './types/platform'
 
 // ============================================================================
-// Tray Events
+// Platform Events
 // ============================================================================
 
 import type {
@@ -407,7 +395,7 @@ import type {
 } from './types/plugin'
 
 // ============================================================================
-// Sentry Events
+// Tray Events
 // ============================================================================
 
 import type {
@@ -418,6 +406,10 @@ import type {
   SentryRecordPerformanceResponse,
   SentryUpdateUserRequest,
 } from './types/sentry'
+
+// ============================================================================
+// Sentry Events
+// ============================================================================
 
 import type {
   PluginStorageDeleteRequest,
@@ -431,6 +423,14 @@ import type {
   StorageSetRequest,
   StorageUpdateNotification,
 } from './types/storage'
+
+import type {
+  TransportPortClosePayload,
+  TransportPortConfirmPayload,
+  TransportPortErrorPayload,
+  TransportPortUpgradeRequest,
+  TransportPortUpgradeResponse,
+} from './types/transport'
 
 import type {
   TrayAutostartGetResponse,

@@ -1,18 +1,18 @@
-# CoreBox Clipboard → TuffTransport Migration
+# CoreBox 剪贴板 → TuffTransport 迁移
 
-> **Version**: 2.0.0 | **Since**: v0.9.0 | **Status**: Draft
+> **版本**: 2.0.0 | **起始版本**: v0.9.0 | **状态**: 草稿
 
-## 1. Problem Analysis
+## 1. 问题分析
 
-### 1.1 Root Causes of UI Lag
+### 1.1 UI 卡顿根因
 
-| Issue | Location | Impact |
+| 问题 | 位置 | 影响 |
 |-------|----------|--------|
-| Sync IPC blocking | `clipboard.readImage().toDataURL()` | Main thread blocked |
-| No batching | Channel `send/sendSync` | 8+ IPC calls per search |
-| Sync broadcast | `windowManager.forwardInputChange()` | UI frame drops |
+| 同步 IPC 阻塞 | `clipboard.readImage().toDataURL()` | 主线程阻塞 |
+| 无批处理 | Channel `send/sendSync` | 每次搜索 8+ 次 IPC |
+| 同步广播 | `windowManager.forwardInputChange()` | UI 掉帧 |
 
-### 1.2 Affected Modules
+### 1.2 受影响模块
 
 ```
 clipboard.ts          → Polling + sync broadcast
@@ -24,7 +24,7 @@ search-core.ts        → No streaming results
 
 ---
 
-## 2. Target Architecture
+## 2. 目标架构
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -37,20 +37,20 @@ search-core.ts        → No streaming results
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Performance Targets
+### 性能目标
 
-| Metric | Before | After |
+| 指标 | 优化前 | 优化后 |
 |--------|--------|-------|
-| First result latency | ~150ms | <50ms |
-| Clipboard sync | ~100ms | <30ms |
-| IPC calls/search | ~8 | ~2 |
+| 首个结果延迟 | ~150ms | <50ms |
+| 剪贴板同步 | ~100ms | <30ms |
+| 每次搜索 IPC 次数 | ~8 | ~2 |
 | UI FPS | ~45 | 60 |
 
 ---
 
-## 3. Technical Implementation
+## 3. 技术实现
 
-### 3.1 Event Types
+### 3.1 事件类型
 
 `packages/utils/transport/events/types/clipboard.ts`:
 
@@ -116,7 +116,7 @@ export interface ClipboardApplyRequest {
 }
 ```
 
-### 3.2 Event Definitions
+### 3.2 事件定义
 
 `packages/utils/transport/events/index.ts`:
 
@@ -195,7 +195,7 @@ export const ClipboardEvents = {
 } as const
 ```
 
-### 3.3 Main Process Handler
+### 3.3 主进程 Handler
 
 `apps/core-app/src/main/modules/clipboard/transport-handler.ts`:
 
@@ -244,7 +244,7 @@ export class ClipboardTransportHandler {
 }
 ```
 
-### 3.4 Clipboard Module Refactor
+### 3.4 剪贴板模块重构
 
 `apps/core-app/src/main/modules/clipboard.ts` (additions):
 
@@ -285,7 +285,7 @@ export class ClipboardModule extends BaseModule {
 }
 ```
 
-### 3.5 Search Streaming Handler
+### 3.5 搜索流式处理
 
 `apps/core-app/src/main/modules/box-tool/core-box/transport/search-handler.ts`:
 
@@ -322,7 +322,7 @@ export class SearchTransportHandler {
 }
 ```
 
-### 3.6 Renderer Composables
+### 3.6 渲染进程 Composables
 
 `apps/core-app/src/renderer/modules/hooks/useTuffClipboard.ts`:
 
@@ -424,25 +424,25 @@ export function useTuffSearch() {
 
 ---
 
-## 4. API Changes
+## 4. API 变更
 
-### 4.1 New APIs
+### 4.1 新增 API
 
-| API | Type | Description | Since |
+| API | 类型 | 说明 | 起始版本 |
 |-----|------|-------------|-------|
-| `ClipboardEvents.change` | Stream | Subscribe to clipboard changes | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `ClipboardEvents.getHistory` | Batch | Query history with pagination | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `ClipboardEvents.getLatest` | Request | Get latest clipboard item | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `ClipboardEvents.apply` | Request | Apply item to active app | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `ClipboardEvents.delete` | Request | Delete history item | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `ClipboardEvents.setFavorite` | Request | Toggle favorite | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `ClipboardModule.subscribe()` | Method | Subscribe to changes | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `useTuffClipboard()` | Composable | Renderer clipboard hook | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
-| `useTuffSearch()` | Composable | Renderer search hook | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `ClipboardEvents.change` | Stream | 订阅剪贴板变更 | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `ClipboardEvents.getHistory` | Batch | 分页查询历史记录 | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `ClipboardEvents.getLatest` | Request | 获取最新剪贴板项 | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `ClipboardEvents.apply` | Request | 应用剪贴板项到活跃应用 | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `ClipboardEvents.delete` | Request | 删除历史项 | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `ClipboardEvents.setFavorite` | Request | 切换收藏状态 | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `ClipboardModule.subscribe()` | Method | 订阅变更 | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `useTuffClipboard()` | Composable | 渲染进程剪贴板 hook | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
+| `useTuffSearch()` | Composable | 渲染进程搜索 hook | ![v0.9.0](https://img.shields.io/badge/since-v0.9.0-blue) |
 
-### 4.2 Deprecated APIs
+### 4.2 废弃 API
 
-| API | Replacement | Deprecated | Remove |
+| API | 替代方案 | 废弃版本 | 移除版本 |
 |-----|-------------|------------|--------|
 | `clipboard:get-latest` | `ClipboardEvents.getLatest` | ![v0.9.0](https://img.shields.io/badge/deprecated-v0.9.0-orange) | v1.0.0 |
 | `clipboard:get-history` | `ClipboardEvents.getHistory` | ![v0.9.0](https://img.shields.io/badge/deprecated-v0.9.0-orange) | v1.0.0 |
@@ -450,52 +450,52 @@ export function useTuffSearch() {
 | `core-box:query` | `CoreBoxEvents.search.query` | ![v0.9.0](https://img.shields.io/badge/deprecated-v0.9.0-orange) | v1.0.0 |
 | `core-box:clipboard-change` | `ClipboardEvents.change` | ![v0.9.0](https://img.shields.io/badge/deprecated-v0.9.0-orange) | v1.0.0 |
 
-### 4.3 Breaking Changes (v1.0.0)
+### 4.3 破坏性变更（v1.0.0）
 
-| Change | Migration |
+| 变更 | 迁移方式 |
 |--------|-----------|
-| Remove legacy channel handlers | Use TuffTransport events |
-| Remove sync clipboard broadcast | Subscribe via `ClipboardEvents.change` |
-| Search returns stream | Use `onData` callback instead of single response |
+| 移除 legacy 通道处理 | 使用 TuffTransport events |
+| 移除同步剪贴板广播 | 通过 `ClipboardEvents.change` 订阅 |
+| 搜索返回流式结果 | 使用 `onData` 回调替代单次响应 |
 
 ---
 
-## 5. Migration Phases
+## 5. 迁移阶段
 
-| Phase | Task | Duration |
+| 阶段 | 任务 | 耗时 |
 |-------|------|----------|
-| 1 | Define `ClipboardEvents` types | 1 day |
-| 2 | Implement `ClipboardTransportHandler` | 2 days |
-| 3 | Search streaming handler | 2 days |
-| 4 | Input batching optimization | 1 day |
-| 5 | Compatibility layer + testing | 2 days |
+| 1 | 定义 `ClipboardEvents` 类型 | 1 天 |
+| 2 | 实现 `ClipboardTransportHandler` | 2 天 |
+| 3 | 搜索流式处理 | 2 天 |
+| 4 | 输入批处理优化 | 1 天 |
+| 5 | 兼容层 + 测试 | 2 天 |
 
 ---
 
-## 6. Files Changed
+## 6. 变更文件
 
-### New Files
+### 新增文件
 
-| Path | Description |
+| Path | 说明 |
 |------|-------------|
-| `packages/utils/transport/events/types/clipboard.ts` | Clipboard event types |
-| `apps/core-app/src/main/modules/clipboard/transport-handler.ts` | Main process handler |
-| `apps/core-app/src/main/modules/box-tool/core-box/transport/search-handler.ts` | Search handler |
-| `apps/core-app/src/renderer/modules/hooks/useTuffClipboard.ts` | Renderer composable |
-| `apps/core-app/src/renderer/modules/hooks/useTuffSearch.ts` | Search composable |
+| `packages/utils/transport/events/types/clipboard.ts` | 剪贴板事件类型 |
+| `apps/core-app/src/main/modules/clipboard/transport-handler.ts` | 主进程 handler |
+| `apps/core-app/src/main/modules/box-tool/core-box/transport/search-handler.ts` | 搜索 handler |
+| `apps/core-app/src/renderer/modules/hooks/useTuffClipboard.ts` | 渲染进程 composable |
+| `apps/core-app/src/renderer/modules/hooks/useTuffSearch.ts` | 搜索 composable |
 
-### Modified Files
+### 修改文件
 
-| Path | Changes |
+| Path | 变更 |
 |------|---------|
-| `packages/utils/transport/events/index.ts` | Add `ClipboardEvents` |
-| `apps/core-app/src/main/modules/clipboard.ts` | Add `subscribe()`, async processing |
-| `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` | Migrate to TuffTransport |
-| `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` | Add `searchStream()` |
+| `packages/utils/transport/events/index.ts` | 新增 `ClipboardEvents` |
+| `apps/core-app/src/main/modules/clipboard.ts` | 新增 `subscribe()`，异步处理 |
+| `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` | 迁移到 TuffTransport |
+| `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` | 新增 `searchStream()` |
 
 ---
 
-## 7. Rollback Strategy
+## 7. 回滚策略
 
 ```typescript
 const TUFF_TRANSPORT_FLAGS = {
@@ -512,12 +512,12 @@ if (TUFF_TRANSPORT_FLAGS.clipboard) {
 
 ---
 
-## 8. Testing Checklist
+## 8. 测试清单
 
-- [ ] Clipboard change stream receives updates
-- [ ] History pagination works correctly
-- [ ] Search streaming returns incremental results
-- [ ] Stream cancellation releases resources
-- [ ] Batch requests merge within window
-- [ ] Legacy API compatibility layer works
-- [ ] Performance targets met
+- [ ] 剪贴板变更流可收到更新
+- [ ] 历史分页正确
+- [ ] 搜索流式返回增量结果
+- [ ] 流取消能释放资源
+- [ ] 批处理请求在窗口期内合并
+- [ ] 旧 API 兼容层可用
+- [ ] 性能指标达标

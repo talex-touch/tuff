@@ -14,7 +14,7 @@ DivisionBox 是一个基于 Electron WebContentsView 的交互式容器系统,�
 
 ---
 
-## DivisionBoxManager API
+## DivisionBoxManager API（管理器）
 
 `DivisionBoxManager` 是主进程中管理所有 DivisionBox 会话的单例类。
 
@@ -121,7 +121,7 @@ manager.handleMemoryPressure()
 
 ---
 
-## DivisionBoxSession API
+## DivisionBoxSession API（会话）
 
 `DivisionBoxSession` 管理单个 DivisionBox 实例的生命周期、状态和资源。
 
@@ -266,7 +266,7 @@ await session.destroy()
 
 ---
 
-## Plugin SDK API
+## Plugin SDK API（插件 SDK）
 
 插件通过 SDK 接口与 DivisionBox 系统交互。
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /* eslint-disable no-console */
+import type { RollupWatcher } from 'rollup'
 import type { Locale } from '../cli/i18n'
 import type { SelectOption } from '../cli/prompts'
 import type { BuildConfig, DevConfig } from '../types'
 import { createRequire } from 'node:module'
 import process from 'node:process'
-import type { RollupWatcher } from 'rollup'
-import { build as viteBuild, createServer } from 'vite'
+import { createServer, build as viteBuild } from 'vite'
 import { parseBuildArgs, parseDevArgs } from '../cli/args'
 import { runCreate } from '../cli/commands'
 import {

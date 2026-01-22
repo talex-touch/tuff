@@ -20,7 +20,7 @@ Use this SDK when you need progress-aware downloads in the renderer without mana
 
 - The SDK only wraps event calls and subscriptions.
 - The main process holds the task state and broadcasts updates.
-- In production, you can hide tasks using `metadata.hidden`.
+- Use `metadata.hidden` to mark internal tasks (hidden by default and notifications suppressed); only visible in Developer Mode.
 
 ## Usage
 
@@ -53,7 +53,7 @@ if (!res.success) {
 A: Use `onTaskProgress` to listen to push events.
 
 **Q: How do I hide download tasks?**  
-A: Set `metadata.hidden: true`. Production will suppress UI and notifications.
+A: Set `metadata.hidden: true`. The task is hidden and notifications are suppressed; only visible in Developer Mode.
 
 ## Best Practices
 

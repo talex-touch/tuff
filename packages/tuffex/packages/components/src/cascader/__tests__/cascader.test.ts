@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { defineComponent, nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { defineComponent, nextTick } from 'vue'
 import TxCascader from '../src/TxCascader.vue'
 
 const PopoverStub = defineComponent({

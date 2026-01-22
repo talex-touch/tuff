@@ -20,7 +20,7 @@ Download SDK 提供统一的下载任务管理能力，适用于应用更新、�
 
 - SDK 仅封装事件调用与订阅逻辑。
 - 任务真实状态由主进程维护并广播。
-- 生产环境可通过 `metadata.hidden` 控制隐藏任务展示。
+- 可通过 `metadata.hidden` 标记内部任务（默认隐藏且不触发通知），仅在开发者模式下可见。
 
 ## 如何使用
 
@@ -53,7 +53,7 @@ if (!res.success) {
 A: 使用 `onTaskProgress` 监听推送事件即可。
 
 **Q: 下载任务如何隐藏？**  
-A: 传入 `metadata.hidden: true`，生产环境将不展示任务与通知。
+A: 传入 `metadata.hidden: true`，任务默认不展示且不触发通知；仅在开发者模式下可见。
 
 ## 最佳实践
 
