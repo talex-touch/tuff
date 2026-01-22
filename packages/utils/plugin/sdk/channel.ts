@@ -1,40 +1,34 @@
 import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
-import type { IPluginRendererChannel, PluginChannelHandler } from './types'
-import { hasWindow } from '@talex-touch/utils/env'
 import type { ITuffTransport } from '@talex-touch/utils/transport'
+import type { IPluginRendererChannel, PluginChannelHandler } from './types'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { hasWindow } from '@talex-touch/utils/env'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genChannel } from '../channel'
 
 const ensureClientChannel = (): ITouchClientChannel => genChannel()
-const resolvePluginName = (): string | undefined => {
+function resolvePluginName(): string | undefined {
   if (!hasWindow()) {
     return undefined
   }
 
   return (window as { $plugin?: { name?: string } } | undefined)?.$plugin?.name
 }
-const buildStandardChannelEvent = (
-  eventName: string,
-  payload: unknown,
-  pluginName: string | undefined,
-  reply: (code: DataCode, data: unknown) => void,
-): StandardChannelData => ({
-  name: eventName,
-  header: {
-    status: 'request',
-    type: ChannelType.PLUGIN,
+function buildStandardChannelEvent(eventName: string, payload: unknown, pluginName: string | undefined, reply: (code: DataCode, data: unknown) => void): StandardChannelData {
+  return {
+    name: eventName,
+    header: {
+      status: 'request',
+      type: ChannelType.PLUGIN,
+      plugin: pluginName,
+    },
+    code: DataCode.SUCCESS,
+    data: payload,
     plugin: pluginName,
-  },
-  code: DataCode.SUCCESS,
-  data: payload,
-  plugin: pluginName,
-  reply,
-})
-const createTransportClientChannel = (
-  transport: ITuffTransport,
-  fallback: ITouchClientChannel | null,
-): ITouchClientChannel => {
+    reply,
+  }
+}
+function createTransportClientChannel(transport: ITuffTransport, fallback: ITouchClientChannel | null): ITouchClientChannel {
   const handlerMap = new Map<string, Map<(data: StandardChannelData) => any, () => void>>()
 
   return {
@@ -83,10 +77,10 @@ const createTransportClientChannel = (
         return fallback.sendSync(eventName, arg)
       }
       throw new Error(`[Plugin SDK] sendSync is not supported without legacy channel: ${eventName}`)
-    }
+    },
   }
 }
-const resolveRendererTransport = (): ITuffTransport | null => {
+function resolveRendererTransport(): ITuffTransport | null {
   const globalWindow = hasWindow() ? window : undefined
   return globalWindow?.$transport ?? null
 }

@@ -1,7 +1,7 @@
+import type { BuildConfig, DevConfig, PublishConfig, TuffConfig } from '../types'
 import path from 'node:path'
 import fs from 'fs-extra'
 import { loadConfigFromFile } from 'vite'
-import type { BuildConfig, DevConfig, PublishConfig, TuffConfig } from '../types'
 
 const CONFIG_FILES = [
   'tuff.config.ts',

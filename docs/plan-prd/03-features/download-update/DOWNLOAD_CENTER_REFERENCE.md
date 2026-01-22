@@ -92,7 +92,7 @@ ignoreVersion(version: string): void
 
 ## 数据类型
 
-### DownloadRequest
+### DownloadRequest（下载请求）
 ```typescript
 interface DownloadRequest {
   url: string
@@ -104,7 +104,7 @@ interface DownloadRequest {
 }
 ```
 
-### DownloadTask
+### DownloadTask（下载任务）
 ```typescript
 interface DownloadTask {
   id: string
@@ -126,7 +126,7 @@ interface DownloadTask {
 
 ## 配置选项
 
-### DownloadConfig
+### DownloadConfig（下载配置）
 ```typescript
 interface DownloadConfig {
   concurrency: {

@@ -6,11 +6,12 @@ defineOptions({
 })
 
 const props = defineProps<TabHeaderProps>()
+const slotProps = props as TabHeaderProps
 </script>
 
 <template>
   <div class="tx-tab-header fake-background">
-    <slot :props="props" />
+    <slot :props="slotProps" />
   </div>
 </template>
 

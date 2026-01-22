@@ -3,9 +3,9 @@ import { useChannel } from '../channel'
 
 type ServiceHandler = (data: any) => unknown
 
-export function regService(service: IService, handler: ServiceHandler): boolean {
+export async function regService(service: IService, handler: ServiceHandler): Promise<boolean> {
   const channel = useChannel('[Plugin SDK] Service registration requires renderer channel.')
-  const res = !!channel.sendSync('service:reg', { service: service.name })
+  const res = !!(await channel.send('service:reg', { service: service.name }))
 
   if (res)
     onHandleService(service, handler)
@@ -13,9 +13,9 @@ export function regService(service: IService, handler: ServiceHandler): boolean 
   return res
 }
 
-export function unRegService(service: IService): boolean {
+export async function unRegService(service: IService): Promise<boolean> {
   const channel = useChannel('[Plugin SDK] Service unregistration requires renderer channel.')
-  return !!channel.sendSync('service:unreg', { service: service.name })
+  return !!(await channel.send('service:unreg', { service: service.name }))
 }
 
 export function onHandleService(service: IService, handler: ServiceHandler) {

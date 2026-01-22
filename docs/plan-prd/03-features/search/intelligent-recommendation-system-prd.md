@@ -239,7 +239,7 @@ class ContextCollector {
 
 ---
 
-## 6. UI/UX
+## 6. 界面与体验（UI/UX）
 
 ### 6.1 展示形式
 ```
@@ -361,7 +361,7 @@ class ContextCollector {
 - 无上下文感知
 - 推荐项较少(3-5个)
 
-### Alfred Workflows
+### Alfred 工作流
 - 通过 Workflow 实现推荐逻辑
 - 依赖用户配置
 - 缺乏自动学习

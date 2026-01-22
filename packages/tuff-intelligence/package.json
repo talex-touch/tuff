@@ -1,9 +1,16 @@
 {
   "name": "@talex-touch/tuff-intelligence",
+  "type": "module",
   "version": "0.0.1",
   "description": "LangGraph-powered intelligence orchestration for Tuff (providers, prompts, quotas, audit)",
-  "type": "module",
   "license": "MIT",
+  "keywords": [
+    "langgraph",
+    "ai",
+    "orchestration",
+    "tuff",
+    "intelligence"
+  ],
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,6 +18,9 @@
     "dist",
     "src"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -24,20 +34,10 @@
     "@talex-touch/utils": "workspace:*"
   },
   "devDependencies": {
-    "tsup": "^8.1.2",
-    "typescript": "^5.8.3",
+    "eslint": "^9.31.0",
     "rimraf": "^5.0.10",
-    "eslint": "^9.31.0"
-  },
-  "keywords": [
-    "langgraph",
-    "ai",
-    "orchestration",
-    "tuff",
-    "intelligence"
-  ],
-  "engines": {
-    "node": ">=18"
+    "tsup": "^8.1.2",
+    "typescript": "^5.8.3"
   },
   "publishConfig": {
     "access": "public"

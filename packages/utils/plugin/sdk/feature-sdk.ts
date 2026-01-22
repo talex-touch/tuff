@@ -7,8 +7,8 @@
  */
 
 import type { TuffItem } from '../../core-box/tuff'
-import { ensureRendererChannel } from './channel'
 import { useBoxItems } from './box-items'
+import { ensureRendererChannel } from './channel'
 
 /**
  * Input change event handler

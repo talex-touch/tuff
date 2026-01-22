@@ -16,14 +16,14 @@
 - 通信：使用 TuffTransport 事件或内部消息通道（后续统一到 TuffTransport）
 
 ## 任务拆分
-### FileProvider
+### FileProvider（文件提供者）
 - 扫盘与元数据采集 -> Worker
 - reconciliation diff 计算 -> Worker
 - DB 写入与索引提交 -> 主进程分批执行
 - 内容索引/全文索引 -> 低优先级 Worker 队列
 - 图标提取 -> 独立 Worker，懒加载 + 缓存
 
-### AppScanner/AppProvider
+### AppScanner/AppProvider（应用扫描/提供）
 - mdls 扫描/解析 -> 子进程（并发限制）
 - dev 模式首次扫描 -> idle 触发，避免与文件索引撞车
 
@@ -78,15 +78,15 @@
 ### 通用字段
 - `taskId`、`kind`、`payload`、`meta`、`progress`
 
-### FileScanWorker
+### FileScanWorker（文件扫描 Worker）
 - request: `{ paths, excludePaths, batchSize }`
 - response: `{ batch: ScannedFileInfo[], done, scannedCount }`
 
-### FileReconcileWorker
+### FileReconcileWorker（文件对账 Worker）
 - request: `{ diskFiles, dbFilesSnapshot, paths }`
 - response: `{ add, update, remove }`
 
-### IconWorker
+### IconWorker（图标 Worker）
 - request: `{ path }`
 - response: `{ path, iconPath | iconBuffer, cached }`
 

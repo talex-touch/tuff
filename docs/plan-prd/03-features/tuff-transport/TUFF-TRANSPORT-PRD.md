@@ -1,24 +1,24 @@
-# TuffTransport Communication System Design Document
+# TuffTransport 通信系统设计文档
 
-## Implementation Status
+## 实现状态
 
-✅ **Implemented:**
-- Event Builder (`defineEvent()`) with full TSDoc
-- Type definitions for all domains (App, CoreBox, Storage, Plugin, BoxItem)
-- Predefined events (`AppEvents`, `CoreBoxEvents`, `StorageEvents`, `PluginEvents`, `BoxItemEvents`)
-- Error types and factory functions
-- Plugin security context types (compatible with existing key mechanism)
-- Legacy API marked with `@deprecated` TSDoc
-- `useTuffTransport()` / `getTuffTransportMain()` (SDK functions)
+✅ **已实现：**
+- Event Builder（`defineEvent()`）完整 TSDoc
+- 覆盖所有领域的类型定义（App、CoreBox、Storage、Plugin、BoxItem）
+- 预定义事件（`AppEvents`、`CoreBoxEvents`、`StorageEvents`、`PluginEvents`、`BoxItemEvents`）
+- 错误类型与工厂函数
+- 插件安全上下文类型（兼容现有 key 机制）
+- Legacy API 已标注 `@deprecated` TSDoc
+- `useTuffTransport()` / `getTuffTransportMain()`（SDK 方法）
 
-⏳ **Pending Implementation:**
-- BatchManager (SDK implementation)
-- StreamServer/StreamClient (MessagePort)
-- Compatibility layer
+⏳ **待实现：**
+- BatchManager（SDK 实现）
+- StreamServer/StreamClient（MessagePort）
+- 兼容层
 
-## 1. Overview
+## 1. 概述
 
-TuffTransport is the next-generation IPC communication system, replacing the existing Channel system with type-safe, high-performance, and extensible capabilities.
+TuffTransport 是下一代 IPC 通信系统，用于替代现有 Channel 系统，提供类型安全、高性能与可扩展能力。
 
 ### 1.1 核心特性
 
@@ -775,7 +775,7 @@ interface BatchResponse {
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 StreamServer (Main Process)
+### 4.2 StreamServer（主进程）
 
 ```typescript
 // packages/utils/transport/stream/server.ts
@@ -895,7 +895,7 @@ export class StreamServer {
 }
 ```
 
-### 4.3 StreamClient (Renderer)
+### 4.3 StreamClient（渲染进程）
 
 ```typescript
 // packages/utils/transport/stream/client.ts
@@ -1010,7 +1010,7 @@ export class StreamClient {
 
 ## 5. 统一 SDK: useTuffTransport
 
-### 5.1 Renderer SDK
+### 5.1 渲染进程 SDK
 
 ```typescript
 // packages/utils/transport/sdk/use-transport.ts
@@ -1182,7 +1182,7 @@ export function useTuffTransport(): TuffTransport {
 }
 ```
 
-### 5.2 Main Process SDK
+### 5.2 主进程 SDK
 
 ```typescript
 // packages/utils/transport/sdk/main-transport.ts
@@ -1316,7 +1316,7 @@ export function getTuffTransportMain(): TuffTransportMain {
 }
 ```
 
-### 5.3 Plugin SDK
+### 5.3 插件 SDK
 
 ```typescript
 // packages/utils/transport/sdk/plugin-transport.ts
@@ -1578,7 +1578,7 @@ const data = await transport.send(MyPluginEvents.data.fetch, { id: '123' })
 
 ---
 
-## 8. Directory Structure
+## 8. 目录结构
 
 ```
 packages/utils/transport/

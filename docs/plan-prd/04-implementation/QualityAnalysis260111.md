@@ -87,7 +87,7 @@
 
 ## 5. 建议继续迁移的重点区域
 
-### 5.1 Renderer / UI
+### 5.1 渲染端 / UI
 
 - `apps/core-app/src/renderer/src/components/base/input/FlatKeyInput.vue`（剩余平台判断/设备能力可继续抽象）
 - `packages/tuffex/packages/components/*`
@@ -97,7 +97,7 @@
 - `packages/utils/plugin/sdk/flow.ts`
 - `packages/utils/plugin/channel.ts`（剩余 window 判断）
 
-### 5.3 SSR / Nexus
+### 5.3 服务端渲染（SSR）/ Nexus
 
 - `apps/nexus/app/composables/*`
 - `apps/nexus/app/components/*`

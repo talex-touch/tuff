@@ -1,4 +1,4 @@
-# Telemetry & Error Reporting System PRD
+# 遥测与错误上报系统 PRD
 
 ## 文档概述
 
@@ -57,10 +57,10 @@ TimeoutError: Promise timed out after 3000 ms
 
 ### 2.2 设计原则
 
-- **Privacy First**：默认匿名，用户主动选择分享
-- **Offline First**：断网时本地缓存，恢复后批量上报
-- **Minimal Footprint**：不影响主进程性能
-- **Dual Channel**：Sentry (实时告警) + Nexus (聚合分析)
+- **隐私优先（Privacy First）**：默认匿名，用户主动选择分享
+- **离线优先（Offline First）**：断网时本地缓存，恢复后批量上报
+- **轻量不扰动（Minimal Footprint）**：不影响主进程性能
+- **双通道（Dual Channel）**：Sentry（实时告警）+ Nexus（聚合分析）
 
 ---
 

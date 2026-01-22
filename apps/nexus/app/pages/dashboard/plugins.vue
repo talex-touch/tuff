@@ -707,7 +707,6 @@ async function submitPluginForm() {
 
 async function deletePluginItem(plugin: DashboardPlugin) {
   if (import.meta.client) {
-     
     const confirmed = window.confirm(t('dashboard.sections.plugins.confirmDelete', { name: plugin.name }))
     if (!confirmed)
       return
@@ -789,7 +788,6 @@ async function submitVersionForm(data: VersionFormData) {
 
 async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
   if (import.meta.client) {
-     
     const confirmed = window.confirm(t('dashboard.sections.plugins.confirmDeleteVersion', { version: version.version }))
     if (!confirmed)
       return

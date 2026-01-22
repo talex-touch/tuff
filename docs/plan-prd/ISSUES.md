@@ -1,25 +1,25 @@
-# Project Issues & Cleanup Candidates
+# 项目问题与清理候选
 
-## Scope
-- Focus: i18n cleanup (core-app renderer i18n + utils $i18n message system).
-- Method: string-literal scan of `apps/core-app/src/renderer` code for Vue i18n key usage, plus symbol scan for `*Keys` usage in `packages/utils/i18n/message-keys.ts`.
-- Notes:
-  - The unused lists are **candidates**: dynamic key usage (e.g., computed keys) will not be detected.
-  - Doc-only means key appears only in `.md` files, not in renderer code.
+## 范围
+- 关注点：i18n 清理（core-app renderer i18n + utils $i18n 消息体系）。
+- 方法：对 `apps/core-app/src/renderer` 中的 Vue i18n key 做字符串字面量扫描，同时对 `packages/utils/i18n/message-keys.ts` 中 `*Keys` 使用做符号扫描。
+- 说明：
+  - 未使用列表为**候选**：动态 key（如计算属性）无法被检出。
+  - 仅文档引用表示 key 只出现在 `.md`，未在渲染进程代码中使用。
 
-## Summary
-- Core app renderer i18n keys: 1525 total, 1096 used, 19 doc-only, 410 unused candidates.
-- Utils $i18n message keys:
-  - Used groups: `DevServerKeys`, `FlowTransferKeys`.
-  - Unused groups: `PluginKeys`, `WidgetKeys`, `SystemKeys`, `PermissionKeys`.
-- Unused i18n file: `apps/core-app/src/renderer/src/locales/*/download-migration.json` (no references).
+## 概要
+- Core app 渲染进程 i18n keys：总计 1525，已用 1096，文档-only 19，未用候选 410。
+- utils $i18n 消息 keys：
+  - 已用分组：`DevServerKeys`, `FlowTransferKeys`。
+  - 未用分组：`PluginKeys`, `WidgetKeys`, `SystemKeys`, `PermissionKeys`。
+- 未使用的 i18n 文件：`apps/core-app/src/renderer/src/locales/*/download-migration.json`（无引用）。
 
-## Issues
+## 问题
 
-### i18n-unused: Core app renderer i18n keys (candidates)
-- Scope: `apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
-- Evidence: keys not found as string-literals in renderer code.
-- Candidates (unused in code):
+### i18n-unused：Core app 渲染进程 i18n keys（候选）
+- 范围：`apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- 证据：渲染进程代码中未发现这些 key 的字符串字面量引用。
+- 候选（代码未引用）：
   - account.enter
   - account.next
   - account.remoteFail
@@ -431,7 +431,7 @@
   - update.version_info
   - update.view_release_notes
 
-- Doc-only (only referenced in `.md`):
+- 仅文档引用（只出现在 `.md`）：
   - downloadErrors.cancelled
   - downloadErrors.checksum_error
   - downloadErrors.disk_space_error
@@ -452,10 +452,10 @@
   - timeUnits.justNow
   - timeUnits.minutesAgo
 
-### i18n-unused: message-keys groups unused in runtime
-- Scope: `packages/utils/i18n/message-keys.ts`
-- Evidence: `DevServerKeys` and `FlowTransferKeys` are referenced in runtime code; others are not.
-- Unused groups (no `*Keys.` references found in code):
+### i18n-unused：运行时未使用的 message-keys 分组
+- 范围：`packages/utils/i18n/message-keys.ts`
+- 证据：`DevServerKeys` 与 `FlowTransferKeys` 在运行时代码中被引用，其余分组未引用。
+- 未使用分组（代码中未发现 `*Keys.` 引用）：
   - PluginKeys (8 keys)
   - WidgetKeys (4 keys)
   - SystemKeys (4 keys)
@@ -543,12 +543,12 @@
 - permission.enforcementDisabled
 - permission.legacyPluginWarning
 
-### i18n-unused: unreferenced locale files
+### i18n-unused：未引用的 locale 文件
 - `apps/core-app/src/renderer/src/locales/zh-CN/download-migration.json`
 - `apps/core-app/src/renderer/src/locales/en/download-migration.json`
-- Evidence: no references to `download-migration` in the codebase.
+- 证据：代码库中没有 `download-migration` 相关引用。
 
-### i18n-duplicate: download.status key overwritten
-- Scope: `apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
-- Evidence: `download.status` defined both as a string and as an object; later definition overwrites the earlier one.
-- Recommendation: split into `download.statusLabel` + `download.statusMap` (or similar) to avoid silent override.
+### i18n-duplicate：download.status key 被覆盖
+- 范围：`apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- 证据：`download.status` 同时定义为字符串与对象，后者覆盖前者。
+- 建议：拆分为 `download.statusLabel` + `download.statusMap`（或类似命名）以避免静默覆盖。

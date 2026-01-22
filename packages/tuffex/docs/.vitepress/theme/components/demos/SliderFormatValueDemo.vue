@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 
 const value = ref(30)
+const formatValue = (next: number) => `${next}%`
 </script>
 
 <template>
@@ -11,7 +12,7 @@ const value = ref(30)
       :min="0"
       :max="100"
       show-value
-      :format-value="(v) => `${v}%`"
+      :format-value="formatValue"
     />
   </div>
 </template>

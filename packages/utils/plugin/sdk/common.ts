@@ -16,16 +16,21 @@ const sdkLog = getLogger('plugin-sdk')
  * @param func - The trigger function
  * @returns Whether the shortcut is registered successfully
  */
-export function regShortcut(key: string, func: () => void): boolean {
+export async function regShortcut(key: string, func: () => void): Promise<boolean> {
   const channel = useChannel('[Plugin SDK] Shortcut registration requires renderer channel.')
 
-  const res = channel.sendSync('shortcon:reg', { key })
+  const res = await channel.send('shortcon:reg', { key })
   if (typeof res === 'string' || Object.prototype.toString.call(res) === '[object String]')
     throw new Error(String(res))
   if (res === false)
     return false
 
-  channel.regChannel('shortcon:trigger', ({ data }) => key === data.key && func())
+  channel.regChannel('shortcon:trigger', ({ data }) => {
+    const payload = data as { key?: string, id?: string } | undefined
+    const triggerKey = payload?.key ?? payload?.id
+    if (triggerKey === key)
+      func()
+  })
 
   return true
 }

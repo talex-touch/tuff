@@ -107,11 +107,11 @@ dist/build/
 // exporter.ts
 async function detectIndexFolder(): Promise<IndexConfig | null> {
   const indexDir = path.resolve('index')
-  
+
   if (!fs.existsSync(indexDir)) {
     return null
   }
-  
+
   // 查找入口文件
   const entryFiles = ['main.ts', 'main.js', 'index.ts', 'index.js']
   for (const file of entryFiles) {
@@ -122,7 +122,7 @@ async function detectIndexFolder(): Promise<IndexConfig | null> {
       }
     }
   }
-  
+
   return null
 }
 ```
@@ -143,20 +143,20 @@ async function bundleIndexFolder(config: IndexBuildConfig): Promise<void> {
     external: config.external || ['electron'],
     minify: config.minify ?? true,
     sourcemap: config.sourcemap ?? false,
-    
+
     // 插件 API 注入
     define: {
-      '__PLUGIN_NAME__': JSON.stringify(manifest.name),
-      '__PLUGIN_VERSION__': JSON.stringify(manifest.version),
+      __PLUGIN_NAME__: JSON.stringify(manifest.name),
+      __PLUGIN_VERSION__: JSON.stringify(manifest.version),
     },
-    
+
     // 解析别名
     alias: {
       '@': path.resolve('index'),
       '~': path.resolve('index'),
     },
   })
-  
+
   if (result.errors.length > 0) {
     throw new Error('Index folder bundling failed')
   }
@@ -170,14 +170,14 @@ async function bundleIndexFolder(config: IndexBuildConfig): Promise<void> {
 ```typescript
 async function resolveIndexDependencies(): Promise<string[]> {
   const pkgPath = path.resolve('index/package.json')
-  
+
   if (!fs.existsSync(pkgPath)) {
     return []
   }
-  
+
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
   const deps = Object.keys(pkg.dependencies || {})
-  
+
   // 检查是否需要打包或标记为 external
   return deps
 }
@@ -193,16 +193,16 @@ async function resolveIndexDependencies(): Promise<string[]> {
 // index.ts (unplugin)
 configureServer(server: ViteDevServer) {
   const indexDir = path.resolve('index')
-  
+
   if (fs.existsSync(indexDir)) {
     // 监听 index 目录变化
     server.watcher.add(indexDir)
-    
+
     server.watcher.on('change', async (file) => {
       if (file.startsWith(indexDir)) {
         // 重新打包 index 文件夹
         await rebuildIndex()
-        
+
         // 通知客户端热更新
         server.ws.send('tuff:index-update', {
           timestamp: Date.now()
@@ -296,7 +296,7 @@ const debouncedSearch = debounce((query: string) => {
 
 ```typescript
 // index/services/api.ts
-import { helper } from '@/utils/helper'  // → index/utils/helper.ts
+import { helper } from '@/utils/helper' // → index/utils/helper.ts
 ```
 
 ---

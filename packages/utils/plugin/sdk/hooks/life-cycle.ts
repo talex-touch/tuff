@@ -14,7 +14,7 @@ export enum LifecycleHooks {
 }
 
 type LifecycleHook = (data: unknown) => void
-type HookContext = { data: unknown, reply: (result: boolean) => void }
+interface HookContext { data: unknown, reply: (result: boolean) => void }
 type HookProcessor = (context: HookContext) => void
 
 export function injectHook(
@@ -62,9 +62,11 @@ export function injectHook(
   return wrappedHook
 }
 
-export const createHook = <T extends LifecycleHook = (data: any) => void>(type: LifecycleHooks) => (
-  hook: T,
-) => injectHook(type, hook)
+export function createHook<T extends LifecycleHook = (data: any) => void>(type: LifecycleHooks) {
+  return (
+    hook: T,
+  ) => injectHook(type, hook)
+}
 
 /**
  * The plugin is enabled

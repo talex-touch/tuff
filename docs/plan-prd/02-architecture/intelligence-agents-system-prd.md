@@ -1,10 +1,10 @@
-# Intelligence Agents 系统设计文档 (v1.2)
+# 智能代理（Intelligence Agents）系统设计文档 (v1.2)
 
 > 更新: 2025-12-10 - 详细实现规划
 
 ## 概述
 
-Intelligence Agents 是 Talex Touch 的智能自动化功能模块，基于现有 IntelligenceSDK 扩展，提供可编程的智能智能体服务。
+智能代理（Intelligence Agents）是 Talex Touch 的智能自动化功能模块，基于现有 IntelligenceSDK 扩展，提供可编程的智能智能体服务。
 
 ---
 
@@ -93,7 +93,7 @@ export enum AgentStatus {
 
 ## 2. 核心组件
 
-### 2.1 AgentManager
+### 2.1 AgentManager（智能体管理器）
 ```typescript
 export class AgentManager {
   private registry: AgentRegistry
@@ -119,7 +119,7 @@ export class AgentManager {
 }
 ```
 
-### 2.2 AgentScheduler
+### 2.2 AgentScheduler（任务调度器）
 ```typescript
 export class AgentScheduler {
   private taskQueue: PriorityQueue<AgentTask>
@@ -137,7 +137,7 @@ export class AgentScheduler {
 }
 ```
 
-### 2.3 ToolRegistry
+### 2.3 ToolRegistry（工具注册表）
 ```typescript
 export class ToolRegistry {
   private tools: Map<string, AgentTool>

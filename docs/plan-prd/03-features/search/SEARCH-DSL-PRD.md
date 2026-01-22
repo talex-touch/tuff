@@ -1,4 +1,4 @@
-# Search DSL Enhancement PRD
+# 搜索 DSL 增强 PRD
 
 ## 概述
 
@@ -8,15 +8,15 @@
 
 ---
 
-## Feature 1: DSL Item Pinning
+## 功能 1：DSL 项目置顶
 
-### Problem Statement
-When a search query highly matches a specific item (e.g., URL detection), users may want that item to appear at the top of all results, regardless of other scoring factors.
+### 问题陈述
+当搜索查询与某个特定项目高度匹配（例如 URL 检测）时，用户可能希望该项目不受其他评分因素影响，始终排在结果最前。
 
-### Solution
-Add a `pinned` field to TuffItem that forces the item to the top of search results.
+### 方案
+在 TuffItem 上新增 `pinned` 字段，用于强制将该项目置顶。
 
-### API Design
+### API 设计
 
 ```typescript
 interface TuffItem {
@@ -49,7 +49,7 @@ class TuffItemBuilder {
 }
 ```
 
-### Sorting Implementation
+### 排序实现
 
 ```typescript
 // In tuff-sorter.ts
@@ -70,9 +70,9 @@ function sortItems(items: TuffItem[]): TuffItem[] {
 }
 ```
 
-### UI Animation
+### UI 动画
 
-When a pinned item appears, animate it sliding to the top:
+当置顶项目出现时，增加向上滑入的动画：
 
 ```scss
 .BoxItem.is-pinned {
@@ -91,43 +91,43 @@ When a pinned item appears, animate it sliding to the top:
 }
 ```
 
-### Usage Guidelines
+### 使用规范
 
-> ⚠️ **Use with caution**: Pinning items disrupts the natural search order and may confuse users. Only use when:
-> - The match is extremely high confidence (e.g., exact URL match)
-> - The action is time-sensitive or critical
-> - The user explicitly requested this behavior
+> ⚠️ **谨慎使用**：置顶会打破自然排序，可能让用户困惑。仅在以下情况使用：
+> - 匹配置信度极高（例如 URL 精确匹配）
+> - 行为具有强时效性或关键性
+> - 用户明确请求该行为
 
-### Example Use Cases
+### 示例用例
 
-1. **URL Detection**: When clipboard contains a URL and user searches for browser actions
-2. **File Path Match**: When search matches an exact file path
-3. **Command Prefix**: When search starts with a known command prefix
+1. **URL 检测**：剪贴板包含 URL，用户搜索浏览器动作
+2. **文件路径匹配**：搜索命中精确文件路径
+3. **命令前缀**：搜索以已知命令前缀开头
 
 ---
 
-## Feature 2: Provider Filter Syntax (@xxx)
+## 功能 2：Provider 过滤语法（@xxx）
 
-### Problem Statement
-Users want to quickly filter search results to a specific plugin or provider without scrolling through all results.
+### 问题陈述
+用户希望快速将搜索结果限定到某个插件或 provider，无需在全部结果中滚动筛选。
 
-### Solution
-Support `@provider` syntax in the search query to lock search to a specific provider.
+### 方案
+在搜索查询中支持 `@provider` 语法，将搜索锁定到指定 provider。
 
-### Syntax
+### 语法
 
 ```
 @<provider-id> <query>
 ```
 
-Examples:
-- `@file document.pdf` - Search only in file provider
-- `@touch-translation hello` - Search only in translation plugin
-- `@app chrome` - Search only in applications
+示例：
+- `@file document.pdf` - 仅在文件 provider 中搜索
+- `@touch-translation hello` - 仅在翻译插件中搜索
+- `@app chrome` - 仅在应用中搜索
 
-### Implementation
+### 实现
 
-#### Query Parsing
+#### 查询解析
 
 ```typescript
 interface ParsedQuery {
@@ -151,7 +151,7 @@ function parseSearchQuery(input: string): ParsedQuery {
 }
 ```
 
-#### Provider Matching
+#### Provider 匹配
 
 ```typescript
 function matchProvider(providerId: string, filter: string): boolean {
@@ -178,7 +178,7 @@ function matchProvider(providerId: string, filter: string): boolean {
 }
 ```
 
-#### Search Engine Integration
+#### 搜索引擎集成
 
 ```typescript
 // In search-core.ts
@@ -202,9 +202,9 @@ async function search(query: TuffQuery): Promise<TuffSearchResult> {
 }
 ```
 
-### UI Feedback
+### UI 反馈
 
-When filter is active, show a badge in the input:
+当过滤器生效时，在输入框中展示徽标：
 
 ```vue
 <template>
@@ -219,9 +219,9 @@ When filter is active, show a badge in the input:
 </template>
 ```
 
-### Autocomplete
+### 自动补全
 
-Show available providers when user types `@`:
+当用户输入 `@` 时展示可用的 providers：
 
 ```typescript
 const providerSuggestions = computed(() => {
@@ -238,9 +238,9 @@ const providerSuggestions = computed(() => {
 })
 ```
 
-### Built-in Aliases
+### 内置别名
 
-| Alias | Matches |
+| 别名 | 匹配 |
 |-------|---------|
 | `@file` | file-provider, file-index |
 | `@app` | app-provider, applications |
@@ -249,9 +249,9 @@ const providerSuggestions = computed(() => {
 | `@calc` | calculator |
 | `@web` | web-search |
 
-### Plugin Registration
+### 插件注册
 
-Plugins can register custom aliases:
+插件可注册自定义别名：
 
 ```typescript
 // In manifest.json
@@ -265,39 +265,39 @@ Plugins can register custom aliases:
 
 ---
 
-## Implementation Priority
+## 实施优先级
 
-1. **Phase 1**: Provider Filter Syntax (@xxx)
-   - Query parsing
-   - Basic provider filtering
-   - UI feedback
+1. **阶段 1**：Provider 过滤语法（@xxx）
+   - 查询解析
+   - 基础 provider 过滤
+   - UI 反馈
 
-2. **Phase 2**: DSL Item Pinning
-   - TuffItem pinned field
-   - Sorting implementation
-   - Animation
+2. **阶段 2**：DSL 项目置顶
+   - TuffItem pinned 字段
+   - 排序实现
+   - 动画
 
-3. **Phase 3**: Enhancements
-   - Provider autocomplete
-   - Custom aliases
-   - Plugin alias registration
+3. **阶段 3**：增强项
+   - Provider 自动补全
+   - 自定义别名
+   - 插件别名注册
 
 ---
 
-## Documentation
+## 文档补充
 
-Add to user documentation:
+用户文档需补充：
 
-### Search Syntax
+### 搜索语法
 
-| Syntax | Description | Example |
+| 语法 | 说明 | 示例 |
 |--------|-------------|---------|
-| `@provider query` | Filter to specific provider | `@file report.pdf` |
-| `@app name` | Search applications only | `@app chrome` |
-| `@plugin query` | Search plugin features only | `@plugin translate` |
+| `@provider query` | 过滤到指定 provider | `@file report.pdf` |
+| `@app name` | 仅搜索应用 | `@app chrome` |
+| `@plugin query` | 仅搜索插件能力 | `@plugin translate` |
 
 ---
 
-## Changelog
+## 变更记录
 
-- **v2.5.0**: Initial DSL search enhancement PRD
+- **v2.5.0**：DSL 搜索增强 PRD 初版

@@ -5,7 +5,7 @@ import { isPortChannelEnabled, resolvePortChannelAllowlist } from '../../transpo
 const ENV_KEY = 'TALEX_TRANSPORT_PORT_CHANNELS'
 const ORIGINAL_ENV = process.env[ENV_KEY]
 
-const restoreEnv = (): void => {
+function restoreEnv(): void {
   if (ORIGINAL_ENV === undefined) {
     delete process.env[ENV_KEY]
     return

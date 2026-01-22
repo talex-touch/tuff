@@ -3,20 +3,20 @@
 ## 1. 实现顺序
 
 ```
-Phase 1: 核心类型和 Event Builder (Week 1)
+阶段 1：核心类型和 Event Builder（第 1 周）
     ↓
-Phase 2: BatchManager 实现 (Week 2)
+阶段 2：BatchManager 实现（第 2 周）
     ↓
-Phase 3: MessagePort Stream 实现 (Week 3)
+阶段 3：MessagePort Stream 实现（第 3 周）
     ↓
-Phase 4: SDK 封装 (Week 4)
+阶段 4：SDK 封装（第 4 周）
     ↓
-Phase 5: 兼容层和迁移 (Week 5-6)
+阶段 5：兼容层和迁移（第 5-6 周）
 ```
 
 ---
 
-## 2. Phase 1: 核心类型和 Event Builder
+## 2. 阶段 1：核心类型和 Event Builder
 
 ### 2.1 目录结构
 
@@ -929,11 +929,11 @@ describe('TuffEventBuilder', () => {
 
 ## 4. 下一步
 
-完成 Phase 1 后，继续实现：
+完成阶段 1 后，继续实现：
 
-1. **Phase 2**: BatchManager - 批量请求合并
-2. **Phase 3**: StreamServer/StreamClient - MessagePort 流式传输
-3. **Phase 4**: SDK 封装 - useTuffTransport 等
-4. **Phase 5**: 兼容层 - 旧 Channel API 适配
+1. **阶段 2**：BatchManager - 批量请求合并
+2. **阶段 3**：StreamServer/StreamClient - MessagePort 流式传输
+3. **阶段 4**：SDK 封装 - useTuffTransport 等
+4. **阶段 5**：兼容层 - 旧 Channel API 适配
 
 是否开始实现代码？

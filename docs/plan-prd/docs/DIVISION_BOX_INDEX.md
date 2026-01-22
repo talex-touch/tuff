@@ -2,7 +2,7 @@
 
 欢迎使用 DivisionBox 系统!本文档索引帮助你快速找到所需的文档和资源。
 
-## Scope
+## 范围
 
 本轮文档仅覆盖 **DivisionBox 基础能力**（打开/关闭/状态同步/keepAlive）。
  

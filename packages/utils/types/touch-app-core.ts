@@ -1,7 +1,6 @@
 import type { BrowserWindowConstructorOptions, OpenDevToolsOptions } from 'electron'
 import type { IBaseModule, IBaseModuleManager } from './modules'
 
- 
 export namespace TalexTouch {
   export interface TouchApp {
     app: Electron.App

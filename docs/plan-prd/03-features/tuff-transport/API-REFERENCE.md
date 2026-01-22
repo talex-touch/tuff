@@ -1,4 +1,4 @@
-# TuffTransport API Reference
+# TuffTransport API 参考
 
 ## 快速开始
 
@@ -15,7 +15,7 @@ await transport.send(CoreBoxEvents.search.query, { text: 'hello' })
 
 ---
 
-## 1. Event Builder API
+## 1. 事件构建器 API
 
 ### 1.1 defineEvent
 
@@ -115,7 +115,7 @@ interface TuffEvent<TRequest, TResponse, TNamespace, TModule, TAction> {
 
 ---
 
-## 2. Renderer SDK API
+## 2. 渲染进程 SDK API
 
 ### 2.1 useTuffTransport
 
@@ -307,7 +307,7 @@ if (handle) {
 
 ---
 
-## 3. Main Process SDK API
+## 3. 主进程 SDK API
 
 ### 3.1 getTuffTransportMain
 
@@ -395,7 +395,7 @@ transport.onStream(CoreBoxEvents.search.stream, async (query, ctx) => {
 
 ---
 
-## 4. Plugin SDK API
+## 4. 插件 SDK API
 
 ### 4.1 usePluginTransport
 

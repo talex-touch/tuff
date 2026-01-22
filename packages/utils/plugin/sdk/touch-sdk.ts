@@ -1,5 +1,5 @@
-import { hasWindow } from '../../env'
 import type { ITouchSDK } from './index'
+import { hasWindow } from '../../env'
 
 const DEFAULT_TOUCH_SDK_ERROR
   = '[TouchSDK] Touch SDK not available. Make sure this is called in a plugin context.'

@@ -45,7 +45,7 @@
 - Provider 返回 `installInstruction`（tarball URL / git repo / zip URL），交给 `useMarketInstall` 直接复用。
 - 确保 Official Provider 兼容原逻辑（GitHub raw manifest +文件下载）。
 
-### 4.5 Source Editor UI
+### 4.5 源编辑器 UI
 - Editor 读取 Registry definitions → 渲染列表（拖拽排序、enable switch、编辑按钮、删除）。
 - “Add Source” 选择三种类型之一：
   - `repository`：展示 platform selector（GitHub/Gitee/GitLab）、owner/repo 模板、access token。

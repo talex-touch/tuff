@@ -22,8 +22,22 @@
 - 执行互斥：`appTaskGate` 用于串行化 app 相关任务（参考 `_runMdlsUpdateScan`）。
 
 ## 方案设计
+### 0) DeviceIdleService（全局闲置调度）
+- 目标：统一“空闲 + 充电/电量”判断，为扫描类任务提供统一执行窗口。
+- 数据源：
+  - `powerMonitor.getSystemIdleTime()`（系统空闲时长）
+  - `powerMonitor.isOnBatteryPower()` + 电量读取（已有电量广播/文件索引逻辑）
+  - 用户活动跟踪（复用现有 `BackgroundTaskService` 体系）
+- 输出：
+  - `isIdle`、`idleMs`、`batteryLevel`、`charging`
+  - `nextEligibleAt`（建议执行时间）
+- 接入：
+  - App 补漏、全量对比、File Index 等统一走 DeviceIdleService 决策。
+  - 保留原有模块独立策略作为 fallback。
+
 ### 1) 启动补漏（Startup Backfill）
 - 触发时机：`TalexEvents.ALL_MODULES_LOADED` 之后异步执行。
+- 调度策略：轻量任务优先执行；若电量过低或设备繁忙，则交由 `DeviceIdleService` 延后执行。
 - 执行逻辑：
   1. 扫描系统 app 列表（复用 `appScanner.getApps()`）。
   2. 拉取 DB 中现有 app（`dbUtils.getFilesByType('app')`）。
@@ -36,11 +50,13 @@
   - 需要保证 icon/bundleId 这些 extensions 完整写入（满足“前者要 assets”）。
 
 ### 2) 周期全量对比（Periodic Full Sync）
-- 使用 `PollingService` 注册周期任务，参考 `_scheduleMdlsUpdateScan`。
+- 通过 `DeviceIdleService` 触发执行窗口，空闲 + 充电优先。
+- 使用 `PollingService` 做兜底调度，参考 `_scheduleMdlsUpdateScan`。
 - 任务内容：复用现有 `_initialize` 或拆分成 `fullSync()`：
   - 新增/更新/删除 + grace 保护逻辑保持不变。
   - 搜索索引同步保持现有行为。
 - 建议频率：默认 24h，首次触发延迟 10-30min（避免与启动峰值冲突）。
+- 超时兜底：若长期未进入可执行窗口，达到 `forceAfterHours` 仍触发一次（低优先级）。
 
 ### 3) 任务互斥与调度
 - 通过 `appTaskGate` 或内部 flag 确保补漏与全量对比不并发。
@@ -56,10 +72,14 @@
 - 持久化字段：
   - lastBackfillAt
   - lastFullSyncAt
-- 配置建议（可后续落到 config）：
+- 配置建议（可对用户开放）：
   - backfillRetryMax
   - backfillRetryBaseMs
   - fullSyncIntervalHours
+  - idleThresholdMs
+  - minBatteryPercent
+  - allowWhenCharging
+  - forceAfterHours
 
 ## 日志与观测
 - 记录扫描数、补漏新增数、耗时、失败原因。
@@ -69,6 +89,7 @@
 - 数据库锁竞争：串行化执行，避免与其他 provider 同时写入。
 - 全量对比频率过高：默认 24h，后续可配置。
 - 补漏多次失败：退避 + 次日重试，避免频繁扫描。
+- 空闲检测不可用：降级为固定周期执行。
 
 ## 验收标准
 - 启动后 1-3s 内补漏任务启动，不阻塞 provider onLoad。

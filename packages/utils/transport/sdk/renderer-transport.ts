@@ -5,6 +5,12 @@
 
 import type { TuffEvent } from '../event/types'
 import type {
+  TransportPortConfirmPayload,
+  TransportPortEnvelope,
+  TransportPortUpgradeRequest,
+  TransportPortUpgradeResponse,
+} from '../events'
+import type {
   ITuffTransport,
   SendOptions,
   StreamController,
@@ -13,20 +19,18 @@ import type {
   TransportPortHandle,
   TransportPortOpenOptions,
 } from '../types'
-import type {
-  TransportPortConfirmPayload,
-  TransportPortEnvelope,
-  TransportPortUpgradeRequest,
-  TransportPortUpgradeResponse,
-} from '../events'
 import { useChannel } from '../../renderer/hooks/use-channel'
+import { assertTuffEvent } from '../event/builder'
+import { TransportEvents } from '../events'
+import { STREAM_SUFFIXES } from './constants'
+import { isPortChannelEnabled } from './port-policy'
 
-type CacheEntry = {
+interface CacheEntry {
   value: unknown
   expiresAt?: number
 }
 
-type PortEventSubscription = {
+interface PortEventSubscription {
   refCount: number
   handle: TransportPortHandle | null
   cleanup: (() => void) | null
@@ -34,7 +38,7 @@ type PortEventSubscription = {
   closing: boolean
 }
 
-type CacheConfig = {
+interface CacheConfig {
   key?: string
   mode: 'prefer' | 'only'
   ttlMs?: number
@@ -87,12 +91,12 @@ function resolveInvokeSender(): ((eventName: string, payload?: unknown) => Promi
 
   return invoke.bind(electron.ipcRenderer)
 }
-type IpcRendererLike = {
+interface IpcRendererLike {
   on?: (channel: string, listener: (event: any, ...args: any[]) => void) => void
   removeListener?: (channel: string, listener: (event: any, ...args: any[]) => void) => void
 }
 
-type PortConfirmRecord = {
+interface PortConfirmRecord {
   port: MessagePort
   payload: TransportPortConfirmPayload
 }
@@ -113,10 +117,6 @@ function resolveIpcRenderer(): IpcRendererLike | null {
 
   return ipcRenderer as IpcRendererLike
 }
-import { assertTuffEvent } from '../event/builder'
-import { TransportEvents } from '../events'
-import { STREAM_SUFFIXES } from './constants'
-import { isPortChannelEnabled } from './port-policy'
 
 interface BatchEntry<TRes> {
   key: string
@@ -457,7 +457,8 @@ export class TuffRendererTransport implements ITuffTransport {
       this.abandonedPorts.delete(portId)
       try {
         port.close()
-      } catch {}
+      }
+      catch {}
       void this.send(TransportEvents.port.close, { channel, portId, reason: 'confirm_timeout' }).catch(() => {})
       return
     }
@@ -493,7 +494,7 @@ export class TuffRendererTransport implements ITuffTransport {
       return null
     }
 
-    return await new Promise(resolve => {
+    return await new Promise((resolve) => {
       const timeout = setTimeout(() => {
         this.pendingPortConfirms.delete(portId)
         this.abandonedPorts.add(portId)
@@ -521,7 +522,8 @@ export class TuffRendererTransport implements ITuffTransport {
         this.evictPortHandle(portId, channel)
         try {
           port.close()
-        } catch {}
+        }
+        catch {}
         await this.send(TransportEvents.port.close, {
           channel,
           portId,
@@ -631,7 +633,8 @@ export class TuffRendererTransport implements ITuffTransport {
 
   private dropPortEventSubscription(channel: string): void {
     const subscription = this.portEventSubscriptions.get(channel)
-    if (!subscription) return
+    if (!subscription)
+      return
     subscription.cleanup?.()
     subscription.cleanup = null
     subscription.handle = null
@@ -679,9 +682,11 @@ export class TuffRendererTransport implements ITuffTransport {
 
         const messageHandler = (event: MessageEvent) => {
           const payload = this.normalizePortEventMessage<any>(event?.data, channel)
-          if (payload === null) return
+          if (payload === null)
+            return
           const handlers = this.handlers.get(channel)
-          if (!handlers || handlers.size === 0) return
+          if (!handlers || handlers.size === 0)
+            return
           handlers.forEach((handler) => {
             Promise.resolve(handler(payload)).catch((error) => {
               const errorMessage = error instanceof Error ? error.message : String(error)
@@ -729,9 +734,11 @@ export class TuffRendererTransport implements ITuffTransport {
 
   private releasePortEventSubscription(channel: string): void {
     const subscription = this.portEventSubscriptions.get(channel)
-    if (!subscription) return
+    if (!subscription)
+      return
     subscription.refCount -= 1
-    if (subscription.refCount > 0) return
+    if (subscription.refCount > 0)
+      return
 
     subscription.closing = true
     subscription.cleanup?.()

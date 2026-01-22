@@ -1,5 +1,11 @@
 import type { TuffEvent } from '../event/types'
 import type {
+  TransportPortConfirmPayload,
+  TransportPortEnvelope,
+  TransportPortUpgradeRequest,
+  TransportPortUpgradeResponse,
+} from '../events'
+import type {
   ITuffTransport,
   SendOptions,
   StreamController,
@@ -7,22 +13,16 @@ import type {
   TransportPortHandle,
   TransportPortOpenOptions,
 } from '../types'
-import type {
-  TransportPortConfirmPayload,
-  TransportPortEnvelope,
-  TransportPortUpgradeRequest,
-  TransportPortUpgradeResponse,
-} from '../events'
 import { assertTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
 import { isPortChannelEnabled } from './port-policy'
 
-type IpcRendererLike = {
+interface IpcRendererLike {
   on?: (channel: string, listener: (event: any, ...args: any[]) => void) => void
   removeListener?: (channel: string, listener: (event: any, ...args: any[]) => void) => void
 }
 
-type PortConfirmRecord = {
+interface PortConfirmRecord {
   port: MessagePort
   payload: TransportPortConfirmPayload
 }
@@ -64,12 +64,12 @@ function resolvePluginName(): string | undefined {
   return typeof name === 'string' && name.trim().length > 0 ? name.trim() : undefined
 }
 
-type CacheEntry = {
+interface CacheEntry {
   value: unknown
   expiresAt?: number
 }
 
-type PortEventSubscription = {
+interface PortEventSubscription {
   refCount: number
   handle: TransportPortHandle | null
   cleanup: (() => void) | null
@@ -77,7 +77,7 @@ type PortEventSubscription = {
   closing: boolean
 }
 
-type CacheConfig = {
+interface CacheConfig {
   key?: string
   mode: 'prefer' | 'only'
   ttlMs?: number
@@ -143,6 +143,7 @@ export class TuffPluginTransport implements ITuffTransport {
     string,
     { resolve: (record: PortConfirmRecord) => void, timeout?: NodeJS.Timeout }
   >()
+
   private queuedPortConfirms = new Map<string, PortConfirmRecord>()
   private abandonedPorts = new Set<string>()
   private portListenerCleanup: (() => void) | null = null
@@ -247,7 +248,8 @@ export class TuffPluginTransport implements ITuffTransport {
       this.abandonedPorts.delete(portId)
       try {
         port.close()
-      } catch {}
+      }
+      catch {}
       void this.send(TransportEvents.port.close, { channel, portId, reason: 'confirm_timeout' }).catch(() => {})
       return
     }
@@ -317,7 +319,8 @@ export class TuffPluginTransport implements ITuffTransport {
         this.evictPortHandle(portId, channel)
         try {
           port.close()
-        } catch {}
+        }
+        catch {}
         await this.send(TransportEvents.port.close, {
           channel,
           portId,
@@ -385,7 +388,8 @@ export class TuffPluginTransport implements ITuffTransport {
 
   private dropPortEventSubscription(channel: string): void {
     const subscription = this.portEventSubscriptions.get(channel)
-    if (!subscription) return
+    if (!subscription)
+      return
     subscription.cleanup?.()
     subscription.cleanup = null
     subscription.handle = null
@@ -433,9 +437,11 @@ export class TuffPluginTransport implements ITuffTransport {
 
         const messageHandler = (event: MessageEvent) => {
           const payload = this.normalizePortEventMessage<any>(event?.data, channel)
-          if (payload === null) return
+          if (payload === null)
+            return
           const handlers = this.handlers.get(channel)
-          if (!handlers || handlers.size === 0) return
+          if (!handlers || handlers.size === 0)
+            return
           handlers.forEach((handler) => {
             Promise.resolve(handler(payload)).catch((error) => {
               const errorMessage = error instanceof Error ? error.message : String(error)
@@ -483,9 +489,11 @@ export class TuffPluginTransport implements ITuffTransport {
 
   private releasePortEventSubscription(channel: string): void {
     const subscription = this.portEventSubscriptions.get(channel)
-    if (!subscription) return
+    if (!subscription)
+      return
     subscription.refCount -= 1
-    if (subscription.refCount > 0) return
+    if (subscription.refCount > 0)
+      return
 
     subscription.closing = true
     subscription.cleanup?.()
@@ -595,7 +603,7 @@ export class TuffPluginTransport implements ITuffTransport {
       cleanupChannel = this.channel.regChannel(eventName, raw => handler(unwrapPayload<TReq>(raw)))
     }
     else {
-      throw new Error('[TuffPluginTransport] Channel on function not available')
+      throw new TypeError('[TuffPluginTransport] Channel on function not available')
     }
 
     return () => {

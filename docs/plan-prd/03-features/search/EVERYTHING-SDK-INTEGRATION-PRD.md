@@ -1,29 +1,29 @@
-# Everything SDK Integration PRD
+# Everything SDK 集成 PRD
 
-## Overview
+## 概述
 
-Integrate [Everything SDK](https://www.voidtools.com/support/everything/sdk/) to provide instant file search on Windows. Everything is the fastest file search tool on Windows, using NTFS indexing for sub-millisecond search results.
+集成 [Everything SDK](https://www.voidtools.com/support/everything/sdk/) 为 Windows 提供即时文件搜索。Everything 是 Windows 上最快的文件搜索工具，基于 NTFS 索引可实现亚毫秒级查询。
 
-## Background
+## 背景
 
-### Current Windows File Search Issues
+### Windows 文件搜索现状问题
 
-1. **Slow Search**: Native Windows Search API is slow compared to macOS Spotlight
-2. **Incomplete Index**: Windows Search Index may not cover all drives
-3. **Resource Heavy**: Windows indexing consumes significant resources
-4. **Limited Syntax**: No advanced search syntax like macOS mdfind
+1. **搜索慢**：原生 Windows Search API 相比 macOS Spotlight 明显更慢  
+2. **索引不完整**：Windows 搜索索引可能无法覆盖所有磁盘  
+3. **资源占用高**：Windows 索引过程消耗大量资源  
+4. **语法受限**：缺少 macOS `mdfind` 这类高级搜索语法
 
-### Everything SDK Benefits
+### Everything SDK 优势
 
-- **Instant Results**: Sub-millisecond search across entire filesystem
-- **Low Resource**: Minimal memory footprint (~50MB for millions of files)
-- **Advanced Syntax**: Regex, wildcards, path filters, file type filters
-- **Real-time Updates**: NTFS journal monitoring for instant updates
-- **IPC Protocol**: Efficient communication via Windows messages or named pipes
+- **瞬时返回**：全盘检索亚毫秒级结果
+- **低资源**：内存占用极小（百万文件约 ~50MB）
+- **高级语法**：Regex、通配符、路径过滤、文件类型过滤
+- **实时更新**：基于 NTFS 日志实时同步
+- **IPC 协议**：通过 Windows 消息或命名管道高效通信
 
-## Technical Architecture
+## 技术架构
 
-### 1. Everything SDK Binding
+### 1. Everything SDK 绑定
 
 ```
 apps/core-app/src/main/modules/box-tool/addon/files/everything/
@@ -34,9 +34,9 @@ apps/core-app/src/main/modules/box-tool/addon/files/everything/
 └── index.ts                   # Module exports
 ```
 
-### 2. Native Binding Options
+### 2. 原生绑定方案
 
-#### Option A: Node.js FFI (ffi-napi)
+#### 方案 A：Node.js FFI（ffi-napi）
 
 ```typescript
 // everything-native.ts
@@ -61,9 +61,9 @@ const Everything = ffi.Library('Everything64.dll', {
 export { Everything }
 ```
 
-#### Option B: Native N-API Addon (Recommended)
+#### 方案 B：原生 N-API 插件（推荐）
 
-Build a C++ N-API addon for better performance and type safety:
+构建 C++ N-API 插件以获得更好的性能与类型安全：
 
 ```cpp
 // everything_addon.cpp
@@ -235,7 +235,7 @@ export class EverythingClient {
 export const everythingClient = new EverythingClient()
 ```
 
-### 4. Everything Provider for SearchEngine
+### 4. SearchEngine 的 Everything Provider
 
 ```typescript
 // everything-provider.ts
@@ -311,57 +311,57 @@ export class EverythingProvider implements SearchProvider {
 }
 ```
 
-## Implementation Plan
+## 实施计划
 
-### Phase 1: Core Integration (3-4 days)
+### 阶段 1：核心集成（3-4 天）
 
-- [ ] **Day 1-2**: Native binding
-  - [ ] Evaluate ffi-napi vs N-API addon
-  - [ ] Implement basic search function
-  - [ ] Handle DLL loading and errors
+- [ ] **第 1-2 天**：原生绑定
+  - [ ] 评估 ffi-napi vs N-API 插件
+  - [ ] 实现基础搜索函数
+  - [ ] 处理 DLL 加载与错误
 
-- [ ] **Day 3-4**: Client wrapper
-  - [ ] EverythingClient class
-  - [ ] Search options support
-  - [ ] Error handling and fallback
+- [ ] **第 3-4 天**：客户端封装
+  - [ ] EverythingClient 类
+  - [ ] 搜索选项支持
+  - [ ] 错误处理与 fallback
 
-### Phase 2: Provider Integration (2 days)
+### 阶段 2：Provider 集成（2 天）
 
-- [ ] **Day 5**: EverythingProvider
-  - [ ] Implement SearchProvider interface
-  - [ ] Result conversion to BoxItem
-  - [ ] Priority and scoring
+- [ ] **第 5 天**：EverythingProvider
+  - [ ] 实现 SearchProvider 接口
+  - [ ] 结果转换为 BoxItem
+  - [ ] 权重与评分策略
 
-- [ ] **Day 6**: SearchEngine integration
-  - [ ] Register provider on Windows
-  - [ ] Fallback to native search
-  - [ ] Performance optimization
+- [ ] **第 6 天**：SearchEngine 集成
+  - [ ] Windows 上注册 provider
+  - [ ] 无 Everything 时回退到原生搜索
+  - [ ] 性能优化
 
-### Phase 3: Advanced Features (2-3 days)
+### 阶段 3：增强特性（2-3 天）
 
-- [ ] **Day 7**: Advanced search
-  - [ ] Regex support
-  - [ ] Path filters
-  - [ ] File type filters
+- [ ] **第 7 天**：高级搜索
+  - [ ] Regex 支持
+  - [ ] 路径过滤
+  - [ ] 文件类型过滤
 
-- [ ] **Day 8-9**: UX enhancements
-  - [ ] Everything status indicator
-  - [ ] Settings UI for configuration
-  - [ ] Installation guide
+- [ ] **第 8-9 天**：体验优化
+  - [ ] Everything 状态指示
+  - [ ] 设置 UI 用于配置
+  - [ ] 安装引导
 
-## Dependencies
+## 依赖
 
-### Required
+### 必需
 
-- **Everything**: Must be installed and running
-- **Everything SDK**: Download from voidtools.com
+- **Everything**：必须已安装并运行
+- **Everything SDK**：从 voidtools.com 下载
 
-### Optional
+### 可选
 
-- **ffi-napi**: For FFI-based binding
-- **node-gyp**: For N-API addon compilation
+- **ffi-napi**：用于 FFI 绑定
+- **node-gyp**：用于 N-API 插件编译
 
-## Configuration
+## 配置
 
 ```typescript
 interface EverythingConfig {
@@ -380,9 +380,9 @@ interface EverythingConfig {
 }
 ```
 
-## Error Handling
+## 错误处理
 
-### Everything Not Installed
+### Everything 未安装
 
 ```typescript
 if (!everythingClient.isAvailable()) {
@@ -393,7 +393,7 @@ if (!everythingClient.isAvailable()) {
 }
 ```
 
-### Everything Service Not Running
+### Everything 服务未运行
 
 ```typescript
 try {
@@ -408,52 +408,52 @@ try {
 }
 ```
 
-## Performance Expectations
+## 性能预期
 
-| Metric | Target | Everything Typical |
+| 指标 | 目标 | Everything 典型值 |
 |--------|--------|-------------------|
-| Search latency | < 100ms | 1-10ms |
-| Results per second | 1000+ | 50000+ |
-| Memory usage | < 100MB | ~50MB |
-| Index update delay | < 1s | ~0.1s (NTFS) |
+| 搜索延迟 | < 100ms | 1-10ms |
+| 每秒结果数 | 1000+ | 50000+ |
+| 内存占用 | < 100MB | ~50MB |
+| 索引更新延迟 | < 1s | ~0.1s（NTFS） |
 
-## Security Considerations
+## 安全考虑
 
-1. **DLL Loading**: Verify Everything64.dll signature
-2. **Path Traversal**: Sanitize paths in results
-3. **Privilege Escalation**: Don't expose admin-only files
-4. **Resource Limits**: Limit max results to prevent DoS
+1. **DLL 加载**：校验 Everything64.dll 签名  
+2. **路径遍历**：结果路径需净化  
+3. **权限提升**：避免暴露管理员级文件  
+4. **资源限制**：限制最大返回数避免 DoS  
 
-## Testing Strategy
+## 测试策略
 
-### Unit Tests
+### 单元测试
 
-- Search query parsing
-- Result conversion
-- Error handling
+- 搜索查询解析
+- 结果转换
+- 错误处理
 
-### Integration Tests
+### 集成测试
 
-- Everything service communication
-- Provider registration
-- Fallback behavior
+- Everything 服务通信
+- Provider 注册
+- 回退行为
 
-### Performance Tests
+### 性能测试
 
-- Large result sets (10000+ items)
-- Concurrent searches
-- Memory usage under load
+- 大结果集（10000+ 项）
+- 并发搜索
+- 负载下内存占用
 
-## Acceptance Criteria
+## 验收标准
 
-- [ ] Everything SDK loads successfully on Windows
-- [ ] Search returns results in < 100ms
-- [ ] Graceful fallback when Everything unavailable
-- [ ] Results correctly displayed in CoreBox
-- [ ] File open/reveal actions work correctly
+- [ ] Everything SDK 在 Windows 上成功加载
+- [ ] 搜索结果 < 100ms 返回
+- [ ] Everything 不可用时平滑回退
+- [ ] 结果在 CoreBox 正确展示
+- [ ] 文件打开/定位动作可用
 
 ---
 
-**Document Version**: 1.0
-**Created**: 2025-12-11
-**Author**: Talex Touch Team
+**文档版本**：1.0  
+**创建时间**：2025-12-11  
+**作者**：Talex Touch Team

@@ -220,7 +220,7 @@ export interface TuffIcon {
   /**
    * Icon type.
    */
-  type: 'url' | 'file' | 'emoji' | 'svg' | 'component'
+  type: 'url' | 'file' | 'emoji' | 'svg' | 'component' | 'class' | 'builtin'
 
   /**
    * Icon value (URL, path, emoji, etc.).

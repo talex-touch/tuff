@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
 import { describe, expect, it } from 'vitest'
+import { defineComponent } from 'vue'
 import TxTreeSelect from '../src/TxTreeSelect.vue'
 
 const PopoverStub = defineComponent({

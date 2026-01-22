@@ -3,21 +3,25 @@
  * @module @talex-touch/utils/transport/sdk/main-transport
  */
 
-import { randomUUID } from 'node:crypto'
-import type { ITouchChannel } from '../../channel'
-import { ipcMain, MessageChannelMain } from 'electron'
 import type { IpcMainInvokeEvent, MessagePortMain, WebContents } from 'electron'
+import type { ITouchChannel } from '../../channel'
 import type { TuffEvent } from '../event/types'
+import type { TransportPortConfirmPayload, TransportPortEnvelope, TransportPortScope, TransportPortUpgradeResponse } from '../events'
 import type {
   HandlerContext,
   ITuffTransportMain,
   PluginKeyManager,
   StreamContext,
 } from '../types'
+import { randomUUID } from 'node:crypto'
+import * as electron from 'electron'
 import { ChannelType, DataCode } from '../../channel'
 import { assertTuffEvent } from '../event/builder'
-import type { TransportPortConfirmPayload, TransportPortScope, TransportPortUpgradeResponse, TransportPortEnvelope  } from '../events'
 import { TransportEvents } from '../events'
+import { STREAM_SUFFIXES } from './constants'
+import { isPortChannelEnabled } from './port-policy'
+
+const { ipcMain, MessageChannelMain } = electron
 
 type InvokeHandler<TReq, TRes> = (
   payload: TReq,
@@ -67,10 +71,8 @@ function registerInvokeHandler<TReq, TRes>(
     }
   }
 }
-import { STREAM_SUFFIXES } from './constants'
-import { isPortChannelEnabled } from './port-policy'
 
-type PortRecord = {
+interface PortRecord {
   port: MessagePortMain
   sender: WebContents
   channel: string
@@ -89,24 +91,24 @@ const portsBySenderId = new Map<number, Set<string>>()
 const senderCleanupRegistered = new WeakSet<WebContents>()
 let portHandlersRegistered = false
 
-type PortLookup = {
+interface PortLookup {
   portId: string
   record: PortRecord
 }
 
-const resolvePortRecord = (
-  channel: string,
-  sender: WebContents,
-  scope?: TransportPortScope,
-): PortLookup | null => {
+function resolvePortRecord(channel: string, sender: WebContents, scope?: TransportPortScope): PortLookup | null {
   const portIds = portsBySenderId.get(sender.id)
-  if (!portIds) return null
+  if (!portIds)
+    return null
 
   for (const portId of portIds) {
     const record = portRegistry.get(portId)
-    if (!record || !record.confirmed) continue
-    if (record.channel !== channel) continue
-    if (scope && record.scope !== scope) continue
+    if (!record || !record.confirmed)
+      continue
+    if (record.channel !== channel)
+      continue
+    if (scope && record.scope !== scope)
+      continue
     if (record.scope === 'window' && record.windowId !== undefined && record.windowId !== sender.id) {
       continue
     }
@@ -115,10 +117,7 @@ const resolvePortRecord = (
   return null
 }
 
-const postPortMessage = (
-  lookup: PortLookup,
-  message: TransportPortEnvelope,
-): boolean => {
+function postPortMessage(lookup: PortLookup, message: TransportPortEnvelope): boolean {
   try {
     lookup.record.port.postMessage(message)
     return true
@@ -140,14 +139,16 @@ function registerPortHandlers(transport: TuffMainTransport): void {
 
   const removePort = (portId: string, reason?: string) => {
     const record = portRegistry.get(portId)
-    if (!record) return
+    if (!record)
+      return
 
     if (record.confirmTimeout) {
       clearTimeout(record.confirmTimeout)
     }
     try {
       record.port.close()
-    } catch {}
+    }
+    catch {}
 
     portRegistry.delete(portId)
     const senderPorts = portsBySenderId.get(record.sender.id)
@@ -164,11 +165,13 @@ function registerPortHandlers(transport: TuffMainTransport): void {
   }
 
   const ensureSenderCleanup = (sender: WebContents) => {
-    if (senderCleanupRegistered.has(sender)) return
+    if (senderCleanupRegistered.has(sender))
+      return
     senderCleanupRegistered.add(sender)
     sender.once('destroyed', () => {
       const portIds = portsBySenderId.get(sender.id)
-      if (!portIds) return
+      if (!portIds)
+        return
       for (const portId of portIds) {
         removePort(portId, 'sender_destroyed')
       }
@@ -177,8 +180,10 @@ function registerPortHandlers(transport: TuffMainTransport): void {
   }
 
   const resolveScope = (scope?: TransportPortScope): TransportPortScope | null => {
-    if (!scope) return 'window'
-    if (scope === 'app' || scope === 'window' || scope === 'plugin') return scope
+    if (!scope)
+      return 'window'
+    if (scope === 'app' || scope === 'window' || scope === 'plugin')
+      return scope
     return null
   }
 
@@ -281,7 +286,8 @@ function registerPortHandlers(transport: TuffMainTransport): void {
 
     try {
       sender.postMessage(TransportEvents.port.confirm.toEventName(), confirmPayload, [port1])
-    } catch (error) {
+    }
+    catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       removePort(portId, `postMessage_failed:${message}`)
       return {
@@ -309,9 +315,11 @@ function registerPortHandlers(transport: TuffMainTransport): void {
 
   transport.on(TransportEvents.port.confirm, (payload, context) => {
     const portId = payload?.portId
-    if (!portId) return
+    if (!portId)
+      return
     const record = portRegistry.get(portId)
-    if (!record) return
+    if (!record)
+      return
     if (context.sender && record.sender.id !== (context.sender as WebContents).id) {
       return
     }
@@ -332,13 +340,17 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       return
     }
 
-    if (!sender) return
+    if (!sender)
+      return
     const portIds = portsBySenderId.get(sender.id)
-    if (!portIds) return
+    if (!portIds)
+      return
     for (const id of portIds) {
       const record = portRegistry.get(id)
-      if (!record) continue
-      if (payload?.channel && record.channel !== payload.channel) continue
+      if (!record)
+        continue
+      if (payload?.channel && record.channel !== payload.channel)
+        continue
       removePort(id, payload?.reason ?? 'closed')
     }
   })
@@ -348,7 +360,8 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     if (payload?.error) {
       console.warn('[TuffTransport] Port error:', payload.error)
     }
-    if (!portId) return
+    if (!portId)
+      return
     const sender = context.sender as WebContents | undefined
     if (!sender || portRegistry.get(portId)?.sender.id === sender.id) {
       removePort(portId, 'error')
@@ -460,9 +473,11 @@ export class TuffMainTransport implements ITuffTransportMain {
         : null
 
       const sendPortStreamMessage = (message: TransportPortEnvelope): boolean => {
-        if (!portLookup) return false
+        if (!portLookup)
+          return false
         const record = portRegistry.get(portLookup.portId)
-        if (!record || !record.confirmed) return false
+        if (!record || !record.confirmed)
+          return false
         return postPortMessage({ portId: portLookup.portId, record }, message)
       }
 
