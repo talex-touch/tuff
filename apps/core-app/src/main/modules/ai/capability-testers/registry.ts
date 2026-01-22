@@ -1,5 +1,9 @@
 import type { BaseCapabilityTester } from './base-tester'
-import { IntentDetectTester, KeywordsExtractTester, SentimentAnalyzeTester } from './analysis-tester'
+import {
+  IntentDetectTester,
+  KeywordsExtractTester,
+  SentimentAnalyzeTester
+} from './analysis-tester'
 import { ChatCapabilityTester } from './chat-tester'
 import { CodeGenerateTester, CodeReviewTester } from './code-tester'
 import { EmbeddingCapabilityTester } from './embedding-tester'

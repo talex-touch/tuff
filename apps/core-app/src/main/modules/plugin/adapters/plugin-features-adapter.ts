@@ -15,10 +15,10 @@ import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
 import { TuffFactory, TuffInputType } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { matchFeature } from '@talex-touch/utils/search'
+import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { genTouchApp } from '../../../core'
 import searchEngineCore from '../../box-tool/search-engine/search-core'
 
@@ -27,6 +27,9 @@ import { PluginViewLoader } from '../view/plugin-view-loader'
 import { buildFeatureSearchTokens } from './feature-search-tokens'
 
 const pluginFeaturesLog = getLogger('plugin-system')
+
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
 
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   if (!command.type) {
@@ -107,8 +110,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     const hasContent = query.text || (query.inputs && query.inputs.length > 0)
 
-    const channel = genTouchApp().channel as any
-    const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    const channel = genTouchApp().channel
+    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+    const transport = getTuffTransportMain(channel, keyManager)
     void transport
       .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
         query
@@ -315,7 +319,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     return plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
   }
 
-  private createTuffItem(
+  public createTuffItem(
     plugin: ITouchPlugin,
     feature: IPluginFeature,
     matchResult?: MatchRange[]

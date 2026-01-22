@@ -6,6 +6,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import type { PluginOption } from 'vite'
 import Unocss from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
@@ -19,10 +20,34 @@ const __dirname = path.dirname(__filename)
 const workspaceRoot = path.resolve(__dirname, '..', '..')
 const basePath = path.join(__dirname, 'src')
 const rendererPath = path.join(basePath, 'renderer', 'src')
-
+const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
+const tuffexComponentSrc = path.join(tuffexRoot, 'packages', 'components', 'src')
+const tuffexStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
 // Disable sourcemap in production/release builds to reduce package size
 const isProduction = process.env.BUILD_TYPE === 'release' || process.env.NODE_ENV === 'production'
 const enableSourcemap = !isProduction
+const tuffexAliases = isProduction
+  ? []
+  : [
+      { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
+      { find: /^@talex-touch\/tuffex$/, replacement: tuffexComponentSrc }
+    ]
+const tuffexDevPlugins: PluginOption[] = isProduction
+  ? []
+  : [
+      {
+        name: 'tuffex-fs-id-normalize',
+        enforce: 'pre',
+        resolveId(source) {
+          if (!source.startsWith('/@fs/')) return
+          if (!source.includes('/packages/tuffex/')) return
+          const queryIndex = source.indexOf('?')
+          const pathPart = queryIndex === -1 ? source : source.slice(0, queryIndex)
+          const suffix = queryIndex === -1 ? '' : source.slice(queryIndex)
+          return `${pathPart.slice('/@fs/'.length)}${suffix}`
+        }
+      }
+    ]
 
 export default defineConfig({
   main: {
@@ -105,7 +130,8 @@ export default defineConfig({
         {
           find: /^assets\//,
           replacement: `${path.join(rendererPath, 'assets')}/`
-        }
+        },
+        ...tuffexAliases
       ]
     },
     server: {
@@ -133,6 +159,7 @@ export default defineConfig({
       }
     },
     plugins: [
+      ...tuffexDevPlugins,
       generatorInformation(),
       vue(),
       Unocss(),

@@ -152,7 +152,7 @@ export class StateSyncManager {
     context: {
       operationName: string
       sessionId?: string
-      meta?: Record<string, any>
+      meta?: Record<string, unknown>
     }
   ): Promise<SyncResult> {
     let lastError: Error | undefined

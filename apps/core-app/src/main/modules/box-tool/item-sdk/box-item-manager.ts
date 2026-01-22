@@ -11,7 +11,11 @@ import type {
   BoxItemUpdateEvent,
   BoxItemUpsertEvent
 } from './types'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import {
+  getTuffTransportMain,
+  type HandlerContext,
+  type TuffEvent
+} from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../../core'
 import { getCoreBoxWindow } from '../core-box'
@@ -43,8 +47,10 @@ export class BoxItemManager {
       enableLogging: options.enableLogging ?? false,
       maxItems: options.maxItems ?? 10000
     }
-    const channel = genTouchApp().channel as any
-    this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    const channel = genTouchApp().channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    this.transport = getTuffTransportMain(channel, keyManager)
 
     this.registerTransportHandlers()
     this.log('BoxItemManager initialized')
@@ -295,7 +301,7 @@ export class BoxItemManager {
   // ==================== 内部方法 ====================
 
   private registerTransportHandlers(): void {
-    const allowRenderer = (context: any): boolean => !context?.plugin
+    const allowRenderer = (context: HandlerContext): boolean => !context?.plugin
 
     this.transport.on(BOX_ITEM_EVENTS.CREATE, (payload, context) => {
       if (!allowRenderer(context)) {
@@ -385,22 +391,28 @@ export class BoxItemManager {
    * @param source - 源对象
    * @returns 合并后的对象
    */
-  private deepMerge<T>(target: T, source: Partial<T>): T {
-    const result = { ...target }
+  private deepMerge<T extends object>(target: T, source: Partial<T>): T {
+    const result = { ...target } as T
+    const sourceRecord = source as Record<string, unknown>
+    const resultRecord = result as Record<string, unknown>
 
-    Object.keys(source).forEach((key) => {
-      const sourceValue = source[key as keyof T]
-      const targetValue = result[key as keyof T]
+    Object.keys(sourceRecord).forEach((key) => {
+      const sourceValue = sourceRecord[key]
+      const targetValue = resultRecord[key]
 
-      if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
+      const isObject = (value: unknown): value is Record<string, unknown> =>
+        Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+      if (isObject(sourceValue)) {
         // 递归合并对象
-        result[key as keyof T] = this.deepMerge(
-          targetValue || ({} as any),
-          sourceValue as any
-        ) as any
+        const nextTarget = isObject(targetValue) ? targetValue : {}
+        resultRecord[key] = this.deepMerge(
+          nextTarget as Record<string, unknown>,
+          sourceValue as Record<string, unknown>
+        ) as unknown
       } else {
         // 直接赋值（包括数组、基本类型、null、undefined）
-        result[key as keyof T] = sourceValue as any
+        resultRecord[key] = sourceValue
       }
     })
 
@@ -412,17 +424,14 @@ export class BoxItemManager {
    * @param channel - channel 名称
    * @param data - 事件数据
    */
-  private emitToRenderer<T = any>(
-    event: (typeof BOX_ITEM_EVENTS)[keyof typeof BOX_ITEM_EVENTS],
-    data: T
-  ): void {
+  private emitToRenderer<TReq, TRes = void>(event: TuffEvent<TReq, TRes>, data: TReq): void {
     const coreBoxWindow = this.getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.isDestroyed()) {
       this.logWarn('CoreBox window not available, cannot emit event')
       return
     }
 
-    this.transport.sendToWindow(coreBoxWindow.id, event as any, data).catch((error) => {
+    this.transport.sendToWindow(coreBoxWindow.id, event, data).catch((error) => {
       this.logWarn(`Failed to send ${event.toEventName()} event:`, error)
     })
   }
@@ -439,7 +448,7 @@ export class BoxItemManager {
   /**
    * 记录日志
    */
-  private log(...args: any[]): void {
+  private log(...args: unknown[]): void {
     if (this.options.enableLogging) {
       console.log('[BoxItemManager]', ...args)
     }
@@ -448,7 +457,7 @@ export class BoxItemManager {
   /**
    * 记录警告日志
    */
-  private logWarn(...args: any[]): void {
+  private logWarn(...args: unknown[]): void {
     if (this.options.enableLogging) {
       console.warn('[BoxItemManager]', ...args)
     }

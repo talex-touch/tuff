@@ -5,8 +5,8 @@ import { BasePreviewAbility } from '../preview-ability'
 
 interface ParsedColor {
   hex: string
-  rgb: { r: number, g: number, b: number, a?: number }
-  hsl: { h: number, s: number, l: number, a?: number }
+  rgb: { r: number; g: number; b: number; a?: number }
+  hsl: { h: number; s: number; l: number; a?: number }
   format: string
 }
 
@@ -22,7 +22,7 @@ const NAMED_COLORS: Record<string, string> = {
   magenta: '#ff00ff',
   gray: '#808080',
   grey: '#808080',
-  yellow: '#ffff00',
+  yellow: '#ffff00'
 }
 
 function clamp01(value: number): number {
@@ -38,12 +38,12 @@ function rgbToHex(r: number, g: number, b: number, a?: number): string {
   return typeof a === 'number' ? `${base}${toHex(Math.round(clamp01(a) * 255))}` : base
 }
 
-function hexToRgb(hex: string): { r: number, g: number, b: number, a?: number } | null {
+function hexToRgb(hex: string): { r: number; g: number; b: number; a?: number } | null {
   let normalized = hex.replace('#', '').trim()
   if (normalized.length === 3 || normalized.length === 4) {
     normalized = normalized
       .split('')
-      .map(ch => ch + ch)
+      .map((ch) => ch + ch)
       .join('')
   }
 
@@ -58,7 +58,12 @@ function hexToRgb(hex: string): { r: number, g: number, b: number, a?: number } 
   return { r, g, b, a }
 }
 
-function rgbToHsl(r: number, g: number, b: number, a?: number): { h: number, s: number, l: number, a?: number } {
+function rgbToHsl(
+  r: number,
+  g: number,
+  b: number,
+  a?: number
+): { h: number; s: number; l: number; a?: number } {
   const rNorm = r / 255
   const gNorm = g / 255
   const bNorm = b / 255
@@ -88,18 +93,22 @@ function rgbToHsl(r: number, g: number, b: number, a?: number): { h: number, s: 
     h *= 60
   }
 
-  if (h < 0)
-    h += 360
+  if (h < 0) h += 360
 
   return {
     h: Math.round(h),
     s: Math.round(s * 100),
     l: Math.round(l * 100),
-    a,
+    a
   }
 }
 
-function hslToRgb(h: number, s: number, l: number, a?: number): { r: number, g: number, b: number, a?: number } {
+function hslToRgb(
+  h: number,
+  s: number,
+  l: number,
+  a?: number
+): { r: number; g: number; b: number; a?: number } {
   const sNorm = s / 100
   const lNorm = l / 100
   const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm
@@ -113,24 +122,19 @@ function hslToRgb(h: number, s: number, l: number, a?: number): { r: number, g: 
   if (h < 60) {
     r = c
     g = x
-  }
-  else if (h < 120) {
+  } else if (h < 120) {
     r = x
     g = c
-  }
-  else if (h < 180) {
+  } else if (h < 180) {
     g = c
     b = x
-  }
-  else if (h < 240) {
+  } else if (h < 240) {
     g = x
     b = c
-  }
-  else if (h < 300) {
+  } else if (h < 300) {
     r = x
     b = c
-  }
-  else {
+  } else {
     r = c
     b = x
   }
@@ -139,7 +143,7 @@ function hslToRgb(h: number, s: number, l: number, a?: number): { r: number, g: 
     r: Math.round((r + m) * 255),
     g: Math.round((g + m) * 255),
     b: Math.round((b + m) * 255),
-    a,
+    a
   }
 }
 
@@ -148,25 +152,23 @@ function parseColor(input: string): ParsedColor | null {
 
   if (NAMED_COLORS[value]) {
     const rgb = hexToRgb(NAMED_COLORS[value])
-    if (!rgb)
-      return null
+    if (!rgb) return null
     return {
       hex: NAMED_COLORS[value],
       rgb,
       hsl: rgbToHsl(rgb.r, rgb.g, rgb.b, rgb.a),
-      format: 'named',
+      format: 'named'
     }
   }
 
   if (value.startsWith('#')) {
     const rgb = hexToRgb(value)
-    if (!rgb)
-      return null
+    if (!rgb) return null
     return {
       hex: rgbToHex(rgb.r, rgb.g, rgb.b, rgb.a),
       rgb,
       hsl: rgbToHsl(rgb.r, rgb.g, rgb.b, rgb.a),
-      format: 'hex',
+      format: 'hex'
     }
   }
 
@@ -174,17 +176,16 @@ function parseColor(input: string): ParsedColor | null {
   if (rgbMatch) {
     const [r, g, b, a] = rgbMatch[1]
       .split(',')
-      .map(part => part.trim())
+      .map((part) => part.trim())
       .map((part, index) => (index === 3 ? Number.parseFloat(part) : Number.parseInt(part, 10)))
-    if ([r, g, b].some(num => Number.isNaN(num)))
-      return null
+    if ([r, g, b].some((num) => Number.isNaN(num))) return null
 
     const color = { r, g, b, a: typeof a === 'number' && !Number.isNaN(a) ? clamp01(a) : undefined }
     return {
       hex: rgbToHex(color.r, color.g, color.b, color.a),
       rgb: color,
       hsl: rgbToHsl(color.r, color.g, color.b, color.a),
-      format: 'rgb',
+      format: 'rgb'
     }
   }
 
@@ -192,16 +193,20 @@ function parseColor(input: string): ParsedColor | null {
   if (hslMatch) {
     const [h, s, l, a] = hslMatch[1]
       .split(',')
-      .map(part => part.replace('%', '').trim())
+      .map((part) => part.replace('%', '').trim())
       .map((part, index) => (index === 3 ? Number.parseFloat(part) : Number.parseFloat(part)))
-    if ([h, s, l].some(num => Number.isNaN(num)))
-      return null
-    const rgb = hslToRgb(h, s, l, typeof a === 'number' && !Number.isNaN(a) ? clamp01(a) : undefined)
+    if ([h, s, l].some((num) => Number.isNaN(num))) return null
+    const rgb = hslToRgb(
+      h,
+      s,
+      l,
+      typeof a === 'number' && !Number.isNaN(a) ? clamp01(a) : undefined
+    )
     return {
       hex: rgbToHex(rgb.r, rgb.g, rgb.b, rgb.a),
       rgb,
       hsl: { h: Math.round(h), s: Math.round(s), l: Math.round(l), a },
-      format: 'hsl',
+      format: 'hsl'
     }
   }
 
@@ -213,8 +218,7 @@ export class ColorPreviewAbility extends BasePreviewAbility {
   readonly priority = 20
 
   override canHandle(query: { text?: string }): boolean {
-    if (!query.text)
-      return false
+    if (!query.text) return false
     return parseColor(query.text) !== null
   }
 
@@ -222,8 +226,7 @@ export class ColorPreviewAbility extends BasePreviewAbility {
     const startedAt = performance.now()
     const original = this.getNormalizedQuery(context.query)
     const parsed = parseColor(original)
-    if (!parsed)
-      return null
+    if (!parsed) return null
     this.throwIfAborted(context.signal)
 
     const payload: PreviewCardPayload = {
@@ -242,30 +245,30 @@ export class ColorPreviewAbility extends BasePreviewAbility {
           label: 'HSL',
           value: `hsl(${parsed.hsl.h}, ${parsed.hsl.s}%, ${parsed.hsl.l}%${
             typeof parsed.hsl.a === 'number' ? `, ${parsed.hsl.a.toFixed(2)}` : ''
-          })`,
+          })`
         },
         {
           label: 'RGB',
-          value: `${parsed.rgb.r}, ${parsed.rgb.g}, ${parsed.rgb.b}`,
-        },
+          value: `${parsed.rgb.r}, ${parsed.rgb.g}, ${parsed.rgb.b}`
+        }
       ],
       sections: [
         {
           title: '生成建议',
           rows: [
             { label: '亮度', value: `${parsed.hsl.l}%` },
-            { label: '饱和度', value: `${parsed.hsl.s}%` },
-          ],
-        },
+            { label: '饱和度', value: `${parsed.hsl.s}%` }
+          ]
+        }
       ],
-      accentColor: parsed.hex,
+      accentColor: parsed.hex
     }
 
     return {
       abilityId: this.id,
       confidence: 0.85,
       payload,
-      durationMs: performance.now() - startedAt,
+      durationMs: performance.now() - startedAt
     }
   }
 }

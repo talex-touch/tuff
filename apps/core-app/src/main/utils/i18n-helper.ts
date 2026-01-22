@@ -4,11 +4,11 @@
  */
 
 import { app } from 'electron'
-import { createLogger } from './logger'
 import enUS from '../../renderer/src/modules/lang/en-US.json'
 import zhCN from '../../renderer/src/modules/lang/zh-CN.json'
+import { createLogger } from './logger'
 
-type TranslationMessages = Record<string, any>
+type TranslationMessages = Record<string, unknown>
 type TranslationKey = string
 
 /**
@@ -74,13 +74,13 @@ export function getLocale(): Locale {
 /**
  * Get nested value from object by path
  */
-function getNestedValue(obj: any, path: string): any {
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
   const keys = path.split('.')
-  let value = obj
+  let value: unknown = obj
 
   for (const key of keys) {
     if (value && typeof value === 'object' && key in value) {
-      value = value[key]
+      value = (value as Record<string, unknown>)[key]
     } else {
       return undefined
     }

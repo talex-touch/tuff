@@ -12,6 +12,7 @@ import type {
   SetInputVisibilityRequest
 } from '@talex-touch/utils/transport/events/types'
 import type {
+  MetaAction,
   MetaActionExecuteRequest,
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
@@ -33,6 +34,8 @@ import { metaOverlayManager } from './meta-overlay'
 import { getCoreBoxWindow, windowManager } from './window'
 
 const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const coreBoxHideInputEvent = defineRawEvent<void, { hidden: boolean }>('core-box:hide-input')
 const coreBoxShowInputEvent = defineRawEvent<void, { shown: boolean }>('core-box:show-input')
 const coreBoxAllowInputEvent = defineRawEvent<void, { enabled: boolean }>('core-box:allow-input')
@@ -72,8 +75,8 @@ export class IpcManager {
 
   private ensureTransport(): ITuffTransportMain {
     if (!this.transport) {
-      const channel = this.touchApp.channel as any
-      this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const channel = this.touchApp.channel
+      this.transport = getTuffTransportMain(channel, resolveKeyManager(channel))
     }
     return this.transport
   }
@@ -284,7 +287,7 @@ export class IpcManager {
 
           searchEngineCore.deactivateProvider(id)
           const activeProviders = (searchEngineCore.getActivationState() ?? [])
-            .map((activation: any) => {
+            .map((activation) => {
               if (activation?.id === 'plugin-features' && activation?.meta?.pluginName) {
                 return `${activation.id}:${activation.meta.pluginName}`
               }
@@ -319,7 +322,7 @@ export class IpcManager {
           const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
             id: p.id,
             name: p.name ?? p.id,
-            icon: p.icon as any
+            icon: p.icon
           }))
 
           const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
@@ -332,7 +335,7 @@ export class IpcManager {
               return {
                 id: plugin.name,
                 name: plugin.name,
-                icon: plugin.icon as any
+                icon: plugin.icon
               }
             })
             .filter((p): p is ProviderDetail => p !== null)
@@ -473,7 +476,7 @@ export class IpcManager {
 
     this.transportDisposers.push(
       transport.on(MetaOverlayEvents.action.register, (payload) => {
-        const { pluginId, action } = payload as { pluginId: string; action: any }
+        const { pluginId, action } = payload as { pluginId: string; action: MetaAction }
         metaOverlayManager.registerPluginAction(pluginId, action)
       })
     )

@@ -84,14 +84,11 @@ export async function performMarketHttpRequest<T = unknown>(
       data: response.data,
       url: response.config.url ?? options.url
     }
-  } catch (error: any) {
-    if (error?.message?.startsWith?.('MARKET_HTTP_')) {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.startsWith('MARKET_HTTP_')) {
       throw error
     }
-    throw new Error(
-      typeof error?.message === 'string' && error.message.length > 0
-        ? error.message
-        : 'MARKET_HTTP_REQUEST_FAILED'
-    )
+    const message = error instanceof Error ? error.message : ''
+    throw new Error(message.length > 0 ? message : 'MARKET_HTTP_REQUEST_FAILED')
   }
 }

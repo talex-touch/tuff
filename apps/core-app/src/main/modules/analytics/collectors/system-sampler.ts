@@ -25,45 +25,50 @@ export class SystemSampler {
   constructor(
     private handler: SampleHandler,
     private intervalMs = 5_000,
-    private now: () => number = () => Date.now(),
+    private now: () => number = () => Date.now()
   ) {}
 
   start(): void {
-    if (this.isRunning)
-      return
+    if (this.isRunning) return
     this.isRunning = true
     this.collect()
-    this.pollingService.register(
-      this.taskId,
-      () => this.collect(),
-      { interval: this.intervalMs, unit: 'milliseconds' },
-    )
+    this.pollingService.register(this.taskId, () => this.collect(), {
+      interval: this.intervalMs,
+      unit: 'milliseconds'
+    })
     this.pollingService.start()
   }
 
   stop(): void {
-    if (!this.isRunning)
-      return
+    if (!this.isRunning) return
     this.pollingService.unregister(this.taskId)
     this.isRunning = false
   }
 
   private collect(): void {
     const memoryUsage = process.memoryUsage()
-    const systemMemory = typeof (process as any).getSystemMemoryInfo === 'function'
-      ? (process as any).getSystemMemoryInfo()
-      : null
+    const processMetrics = process as NodeJS.Process & {
+      getSystemMemoryInfo?: () => { total: number; free?: number; available?: number }
+      getCPUUsage?: () => { percentCPUUsage: number }
+    }
+    const systemMemory =
+      typeof processMetrics.getSystemMemoryInfo === 'function'
+        ? processMetrics.getSystemMemoryInfo()
+        : null
 
-    const totalMemoryBytes = systemMemory
-      ? systemMemory.total * 1024
-      : os.totalmem()
+    const totalMemoryBytes = systemMemory ? systemMemory.total * 1024 : os.totalmem()
+    const availableMemory =
+      systemMemory && 'available' in systemMemory
+        ? (systemMemory as { available?: number }).available
+        : undefined
     const freeMemoryBytes = systemMemory
-      ? (systemMemory.free ?? systemMemory.available ?? 0) * 1024
+      ? (systemMemory.free ?? availableMemory ?? 0) * 1024
       : os.freemem()
 
-    const cpuUsage = typeof (process as any).getCPUUsage === 'function'
-      ? (process as any).getCPUUsage().percentCPUUsage
-      : 0
+    const cpuUsage =
+      typeof processMetrics.getCPUUsage === 'function'
+        ? processMetrics.getCPUUsage().percentCPUUsage
+        : 0
 
     const sample: SystemSample = {
       cpuUsage: Number.isFinite(cpuUsage) ? cpuUsage : 0,
@@ -71,7 +76,7 @@ export class SystemSampler {
       memoryTotal: totalMemoryBytes,
       heapUsed: memoryUsage.heapUsed,
       heapTotal: memoryUsage.heapTotal,
-      timestamp: this.now(),
+      timestamp: this.now()
     }
 
     this.handler(sample)

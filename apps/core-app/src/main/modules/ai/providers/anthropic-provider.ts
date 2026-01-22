@@ -10,6 +10,18 @@ import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com/v1'
 
+type AnthropicContentItem = {
+  text?: string
+}
+
+type AnthropicUsage = {
+  input_tokens?: number
+  output_tokens?: number
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 export class AnthropicProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.ANTHROPIC
 
@@ -58,8 +70,8 @@ export class AnthropicProvider extends IntelligenceProvider {
     }
 
     const data = await this.parseJsonResponse<{
-      content?: any[]
-      usage?: any
+      content?: AnthropicContentItem[]
+      usage?: AnthropicUsage
       model?: string
     }>(response, { endpoint: '/messages' })
     const latency = Date.now() - startTime
@@ -225,8 +237,8 @@ export class AnthropicProvider extends IntelligenceProvider {
     }
 
     const data = await this.parseJsonResponse<{
-      content?: any[]
-      usage?: any
+      content?: AnthropicContentItem[]
+      usage?: AnthropicUsage
       model?: string
     }>(response, { endpoint: '/messages (vision)' })
     const latency = Date.now() - startTime
@@ -239,15 +251,24 @@ export class AnthropicProvider extends IntelligenceProvider {
 
     const rawContent = data.content?.[0]?.text || ''
     const parsed = this.safeParseJson(rawContent)
+    const parsedRecord = isRecord(parsed) ? parsed : null
+    const text = typeof parsedRecord?.text === 'string' ? parsedRecord.text : rawContent
+    const confidence =
+      typeof parsedRecord?.confidence === 'number' ? parsedRecord.confidence : undefined
+    const language = typeof parsedRecord?.language === 'string' ? parsedRecord.language : undefined
+    const keywords = Array.isArray(parsedRecord?.keywords)
+      ? parsedRecord.keywords.filter((item): item is string => typeof item === 'string')
+      : []
+    const blocks = Array.isArray(parsedRecord?.blocks) ? parsedRecord.blocks : undefined
 
-    const ocrResult: import('@talex-touch/utils').AiVisionOcrResult = parsed
+    const ocrResult: import('@talex-touch/utils').AiVisionOcrResult = parsedRecord
       ? {
-          text: parsed.text ?? rawContent,
-          confidence: parsed.confidence,
-          language: parsed.language,
-          keywords: parsed.keywords ?? [],
-          blocks: parsed.blocks,
-          raw: parsed
+          text,
+          confidence,
+          language,
+          keywords,
+          blocks,
+          raw: parsedRecord
         }
       : {
           text: rawContent,
@@ -285,7 +306,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     throw new Error('[AnthropicProvider] Invalid vision image source')
   }
 
-  protected override safeParseJson(text: string): any {
+  protected override safeParseJson(text: string): unknown {
     try {
       return JSON.parse(text)
     } catch {

@@ -1,4 +1,8 @@
-import type { IntelligenceProviderConfig } from '@talex-touch/utils'
+import type {
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceProviderConfig
+} from '@talex-touch/utils'
 import { IntelligenceProviderType } from '@talex-touch/utils'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -25,10 +29,45 @@ const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)
 const logInfo = (...args: unknown[]) => intelligenceServiceLog.info(formatLogArgs(args))
 const logError = (...args: unknown[]) => intelligenceServiceLog.error(formatLogArgs(args))
 
-const intelligenceInvokeEvent = defineRawEvent<any, any>('intelligence:invoke')
-const intelligenceTestProviderEvent = defineRawEvent<any, any>('intelligence:test-provider')
-const intelligenceTestCapabilityEvent = defineRawEvent<any, any>('intelligence:test-capability')
-const intelligenceFetchModelsEvent = defineRawEvent<any, any>('intelligence:fetch-models')
+type ApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
+
+const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+const ok = <T>(result?: T): ApiResponse<T> => ({ ok: true, result })
+const fail = (error: unknown): ApiResponse<never> => ({ ok: false, error: toErrorMessage(error) })
+
+type IntelligenceInvokePayload = {
+  capabilityId: string
+  payload: unknown
+  options?: IntelligenceInvokeOptions
+}
+
+type IntelligenceTestProviderPayload = { provider: IntelligenceProviderConfig }
+
+type IntelligenceTestCapabilityPayload = {
+  capabilityId: string
+  providerId?: string
+  userInput?: string
+} & Record<string, unknown>
+
+type IntelligenceFetchModelsPayload = { provider: IntelligenceProviderConfig }
+
+const intelligenceInvokeEvent = defineRawEvent<
+  IntelligenceInvokePayload,
+  ApiResponse<IntelligenceInvokeResult<unknown>>
+>('intelligence:invoke')
+const intelligenceTestProviderEvent = defineRawEvent<
+  IntelligenceTestProviderPayload,
+  ApiResponse<unknown>
+>('intelligence:test-provider')
+const intelligenceTestCapabilityEvent = defineRawEvent<
+  IntelligenceTestCapabilityPayload,
+  ApiResponse<unknown>
+>('intelligence:test-capability')
+const intelligenceFetchModelsEvent = defineRawEvent<
+  IntelligenceFetchModelsPayload,
+  ApiResponse<{ success: boolean; models?: string[]; message?: string }>
+>('intelligence:fetch-models')
 const intelligenceReloadConfigEvent = defineRawEvent<void, { ok: boolean; error?: string }>(
   'intelligence:reload-config'
 )
@@ -44,7 +83,7 @@ export function initAiSdkService(): void {
     throw new Error('[AISDK] Touch channel not ready')
   }
   const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-  const transport = getTuffTransportMain(channel as any, keyManager as any)
+  const transport = getTuffTransportMain(channel, keyManager)
   initialized = true
 
   const manager = new IntelligenceProviderManager()
@@ -71,17 +110,13 @@ export function initAiSdkService(): void {
   // Load initial config
   ensureAiConfigLoaded()
 
-  transport.on(intelligenceInvokeEvent, async (data) => {
+  transport.on(intelligenceInvokeEvent, async (data, _context) => {
     try {
-      if (!data || typeof data !== 'object' || typeof (data as any).capabilityId !== 'string') {
+      if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
         throw new Error('Invalid invoke payload')
       }
 
-      const { capabilityId, payload, options } = data as {
-        capabilityId: string
-        payload: unknown
-        options?: any
-      }
+      const { capabilityId, payload, options } = data
 
       ensureAiConfigLoaded()
       logInfo(`Invoking capability ${capabilityId}`)
@@ -89,53 +124,39 @@ export function initAiSdkService(): void {
       logInfo(
         `Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`
       )
-      return { ok: true, result }
+      return ok(result)
     } catch (error) {
       logError('Invoke failed:', error)
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      return fail(error)
     }
   })
 
-  transport.on(intelligenceTestProviderEvent, async (data) => {
+  transport.on(intelligenceTestProviderEvent, async (data, _context) => {
     try {
-      if (!data || typeof data !== 'object' || !(data as any).provider) {
+      if (!data || typeof data !== 'object' || !data.provider) {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data as { provider: IntelligenceProviderConfig }
+      const { provider } = data
       ensureAiConfigLoaded()
       // logInfo(`Testing provider ${provider.id}`) // Remove to reduce noise
       const result = await ai.testProvider(provider)
       logInfo(`Provider ${provider.id} test success`)
 
-      return {
-        ok: true,
-        result
-      }
+      return ok(result)
     } catch (error) {
       logError('Provider test failed:', error)
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      return fail(error)
     }
   })
 
-  transport.on(intelligenceTestCapabilityEvent, async (data) => {
+  transport.on(intelligenceTestCapabilityEvent, async (data, _context) => {
     try {
       if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
         throw new Error('Invalid capability test payload')
       }
 
-      const { capabilityId, providerId, userInput, ...rest } = data as {
-        capabilityId: string
-        providerId?: string
-        userInput?: string
-        [key: string]: any
-      }
+      const { capabilityId, providerId, userInput, ...rest } = data
 
       const capability = aiCapabilityRegistry.get(capabilityId)
       if (!capability) {
@@ -169,42 +190,30 @@ export function initAiSdkService(): void {
         `Capability ${capabilityId} test success via provider ${result.provider} (${result.model})`
       )
 
-      return {
-        ok: true,
-        result: formattedResult
-      }
+      return ok(formattedResult)
     } catch (error) {
       logError('Capability test failed:', error)
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      return fail(error)
     }
   })
 
-  transport.on(intelligenceFetchModelsEvent, async (data) => {
+  transport.on(intelligenceFetchModelsEvent, async (data, _context) => {
     try {
-      if (!data || typeof data !== 'object' || !(data as any).provider) {
+      if (!data || typeof data !== 'object' || !data.provider) {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data as { provider: IntelligenceProviderConfig }
+      const { provider } = data
       ensureAiConfigLoaded()
       logInfo(`Fetching models for provider ${provider.id}`)
       const models = await fetchProviderModels(provider)
-      return {
-        ok: true,
-        result: {
-          success: true,
-          models
-        }
-      }
+      return ok({
+        success: true,
+        models
+      })
     } catch (error) {
       logError('Fetch models failed:', error)
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
+      return fail(error)
     }
   })
 

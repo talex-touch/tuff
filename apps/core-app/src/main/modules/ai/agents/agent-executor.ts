@@ -16,8 +16,8 @@ import type {
 import type { AgentExecutionContext, AgentImpl } from './agent-registry'
 import type { AgentContextManager } from './memory'
 import type { ToolRegistry } from './tool-registry'
-import { agentRegistry } from './agent-registry'
 import { createLogger } from '../../../utils/logger'
+import { agentRegistry } from './agent-registry'
 
 const agentExecutorLog = createLogger('Intelligence').child('AgentExecutor')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')

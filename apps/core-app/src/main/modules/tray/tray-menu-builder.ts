@@ -10,6 +10,9 @@ import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+
 /**
  * TrayMenuBuilder - Tray menu builder
  *
@@ -112,13 +115,11 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          const channel = $app.channel as any
-          const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
-          tx.sendTo(
-            mainWindow.webContents,
-            AppEvents.window.openDownloadCenter,
-            undefined as any
-          ).catch(() => {})
+          const channel = $app.channel
+          const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
+          tx.sendTo(mainWindow.webContents, AppEvents.window.openDownloadCenter, undefined).catch(
+            () => {}
+          )
         }
       }
     ]
@@ -136,11 +137,11 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          const channel = $app.channel as any
-          const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+          const channel = $app.channel
+          const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
           tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
             path: '/details'
-          } as any).catch(() => {})
+          }).catch(() => {})
         }
       },
       {
@@ -154,11 +155,11 @@ export class TrayMenuBuilder {
         click: () => {
           const mainWindow = $app.window.window
           mainWindow.show()
-          const channel = $app.channel as any
-          const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+          const channel = $app.channel
+          const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
           tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
             path: '/setting'
-          } as any).catch(() => {})
+          }).catch(() => {})
         }
       }
     ]

@@ -5,11 +5,11 @@
  * Handles initialization, IPC registration, and plugin integration.
  */
 
-import type { MaybePromise } from '@talex-touch/utils'
+import type { MaybePromise, NativeShareOptions } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { FlowBusIPC } from './ipc'
-import { FlowEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { FlowEvents, getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport'
 import { genTouchApp } from '../../core'
 import { BaseModule } from '../abstract-base-module'
 import { coreBoxManager } from '../box-tool/core-box/manager'
@@ -69,9 +69,11 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   }
 
   private registerTransportHandlers(channel: ITouchChannel): void {
-    const tx = getTuffTransportMain(channel as any, (channel as any)?.keyManager ?? channel)
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const tx = getTuffTransportMain(channel, keyManager)
 
-    const enforce = (context: any, apiName: string, sdkapi?: number) => {
+    const enforce = (context: HandlerContext, apiName: string, sdkapi?: number) => {
       const pluginId = context?.plugin?.name
       if (!pluginId) {
         return
@@ -84,7 +86,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     }
 
     this.transportDisposers.push(
-      tx.on(FlowEvents.registerTargets, async (payload: any, context: any) => {
+      tx.on(FlowEvents.registerTargets, async (payload, context) => {
         enforce(context, 'flow:plugin:register-targets', payload?._sdkapi)
         const { pluginId, targets, pluginName, pluginIcon, isEnabled } = payload || {}
         if (targets?.length) {
@@ -99,7 +101,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     )
 
     this.transportDisposers.push(
-      tx.on(FlowEvents.unregisterTargets, async (payload: any, context: any) => {
+      tx.on(FlowEvents.unregisterTargets, async (payload, context) => {
         enforce(context, 'flow:plugin:unregister-targets', payload?._sdkapi)
         flowTargetRegistry.unregisterPluginTargets(payload.pluginId)
         return { success: true }
@@ -107,7 +109,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     )
 
     this.transportDisposers.push(
-      tx.on(FlowEvents.setPluginEnabled, async (payload: any, context: any) => {
+      tx.on(FlowEvents.setPluginEnabled, async (payload, context) => {
         enforce(context, 'flow:plugin:set-plugin-enabled', payload?._sdkapi)
         flowTargetRegistry.setPluginEnabled(payload.pluginId, payload.enabled)
         return { success: true }
@@ -115,7 +117,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     )
 
     this.transportDisposers.push(
-      tx.on(FlowEvents.setPluginHandler, async (payload: any, context: any) => {
+      tx.on(FlowEvents.setPluginHandler, async (payload, context) => {
         enforce(context, 'flow:plugin:set-plugin-handler', payload?._sdkapi)
         flowTargetRegistry.setPluginFlowHandler(payload.pluginId, payload.hasHandler)
 
@@ -146,11 +148,11 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     )
 
     this.transportDisposers.push(
-      tx.on(FlowEvents.nativeShare, async (payload: any, context: any) => {
+      tx.on(FlowEvents.nativeShare, async (payload, context) => {
         enforce(context, 'flow:native:share', payload?._sdkapi)
         const options = nativeShareService.payloadToShareOptions(payload.payload)
         if (payload.target) {
-          options.target = payload.target as any
+          options.target = payload.target as NativeShareOptions['target']
         }
         return await nativeShareService.share(options)
       })
@@ -193,14 +195,12 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
         return
       }
 
-      const tx = getTuffTransportMain(
-        genTouchApp().channel as any,
-        (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel
-      )
+      const channel = genTouchApp().channel
+      const keyManager =
+        (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+      const tx = getTuffTransportMain(channel, keyManager)
 
-      tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined as any).catch(
-        () => {}
-      )
+      tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined).catch(() => {})
     })
 
     // Command+Shift+D: Transfer current item to another plugin
@@ -305,14 +305,12 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       return
     }
 
-    const tx = getTuffTransportMain(
-      genTouchApp().channel as any,
-      (genTouchApp().channel as any)?.keyManager ?? genTouchApp().channel
-    )
+    const channel = genTouchApp().channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const tx = getTuffTransportMain(channel, keyManager)
 
-    tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined as any).catch(
-      () => {}
-    )
+    tx.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined).catch(() => {})
     console.log('[FlowBusModule] Triggered flow transfer shortcut')
   }
 

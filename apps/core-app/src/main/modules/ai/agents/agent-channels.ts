@@ -4,11 +4,17 @@
  * Handles communication between renderer and main process for agents.
  */
 
-import type { AgentDescriptor, AgentResult, AgentTask, AgentTool } from '@talex-touch/utils'
-import { AgentsEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import type {
+  AgentDescriptor,
+  AgentResult,
+  AgentTask,
+  AgentTool,
+  TaskProgress
+} from '@talex-touch/utils'
+import type { AgentInstallOptions, AgentSearchOptions } from '../../../service/agent-market.service'
+import { AgentsEvents, getTuffTransportMain, type TuffEvent } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../../core'
-import type { AgentInstallOptions, AgentSearchOptions } from '../../../service/agent-market.service'
 import { agentMarketService } from '../../../service/agent-market.service'
 import { createLogger } from '../../../utils/logger'
 import { agentManager } from './agent-manager'
@@ -21,11 +27,20 @@ const agentUpdatePriorityEvent = defineRawEvent<
   { taskId?: string; priority?: number },
   { success: boolean }
 >('agents:update-priority')
-const agentTaskStartedEvent = defineRawEvent<any, void>('agents:task-started')
-const agentTaskProgressEvent = defineRawEvent<any, void>('agents:task-progress')
-const agentTaskCompletedEvent = defineRawEvent<any, void>('agents:task-completed')
-const agentTaskFailedEvent = defineRawEvent<any, void>('agents:task-failed')
-const agentTaskCancelledEvent = defineRawEvent<any, void>('agents:task-cancelled')
+type AgentTaskStartedPayload = { taskId: string; agentId: string }
+type AgentTaskCompletedPayload = { taskId: string; result: AgentResult }
+type AgentTaskFailedPayload = { taskId: string; error?: string }
+type AgentTaskCancelledPayload = { taskId: string }
+
+const agentTaskStartedEvent = defineRawEvent<AgentTaskStartedPayload, void>('agents:task-started')
+const agentTaskProgressEvent = defineRawEvent<TaskProgress, void>('agents:task-progress')
+const agentTaskCompletedEvent = defineRawEvent<AgentTaskCompletedPayload, void>(
+  'agents:task-completed'
+)
+const agentTaskFailedEvent = defineRawEvent<AgentTaskFailedPayload, void>('agents:task-failed')
+const agentTaskCancelledEvent = defineRawEvent<AgentTaskCancelledPayload, void>(
+  'agents:task-cancelled'
+)
 
 /**
  * Register all agent IPC channels
@@ -33,7 +48,7 @@ const agentTaskCancelledEvent = defineRawEvent<any, void>('agents:task-cancelled
 export function registerAgentChannels(): () => void {
   const channel = genTouchApp().channel
   const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-  const transport = getTuffTransportMain(channel as any, keyManager as any)
+  const transport = getTuffTransportMain(channel, keyManager)
   const cleanups: Array<() => void> = []
 
   // ============================================================================
@@ -234,9 +249,11 @@ export function registerAgentChannels(): () => void {
   // ============================================================================
 
   // Forward agent events to renderer
-  const eventHandler = (event: typeof agentTaskStartedEvent) => (data: unknown) => {
-    transport.broadcast(event, data)
-  }
+  const eventHandler =
+    <TReq>(event: TuffEvent<TReq, void>) =>
+    (data: TReq) => {
+      transport.broadcast(event, data)
+    }
 
   agentManager.on('task:started', eventHandler(agentTaskStartedEvent))
   agentManager.on('task:progress', eventHandler(agentTaskProgressEvent))

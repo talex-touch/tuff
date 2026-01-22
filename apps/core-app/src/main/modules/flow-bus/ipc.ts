@@ -5,7 +5,7 @@
  */
 
 import type { ITouchChannel } from '@talex-touch/utils/channel'
-import { FlowEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { FlowEvents, getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport'
 import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
@@ -43,12 +43,12 @@ export class FlowBusIPC {
   }
 
   private registerTransportHandlers(): void {
-    const channel = this.channel as any
-    const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    const channel = this.channel as ITouchChannel & { keyManager?: unknown }
+    const transport = getTuffTransportMain(channel, channel.keyManager ?? channel)
 
     this.transport = transport
 
-    const enforce = (context: any, eventName: string, sdkapi?: number) => {
+    const enforce = (context: HandlerContext, eventName: string, sdkapi?: number) => {
       const pluginId = context?.plugin?.name
       if (!pluginId) {
         return
@@ -60,21 +60,28 @@ export class FlowBusIPC {
       perm.enforcePermission(pluginId, eventName, sdkapi)
     }
 
+    const toErrorMessage = (error: unknown) =>
+      error instanceof Error ? error.message : 'Unknown error'
+
     this.transportDisposers.push(
-      transport.on(FlowEvents.dispatch, async (payload: any, context: any) => {
+      transport.on(FlowEvents.dispatch, async (payload, context) => {
         enforce(context, 'flow:bus:dispatch', payload?._sdkapi)
+        const senderId = payload.senderId ?? context?.plugin?.name
+        if (!senderId) {
+          return { success: false, error: { message: 'senderId is required' } }
+        }
         return await flowBus
-          .dispatch(payload.senderId, payload.payload, payload.options)
+          .dispatch(senderId, payload.payload, payload.options)
           .then((result) => ({ success: result.state !== 'FAILED', data: result }))
-          .catch((error: any) => ({
+          .catch((error) => ({
             success: false,
-            error: { message: error instanceof Error ? error.message : 'Unknown error' }
+            error: { message: toErrorMessage(error) }
           }))
       })
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.getTargets, async (payload: any, context: any) => {
+      transport.on(FlowEvents.getTargets, async (payload, context) => {
         enforce(context, 'flow:bus:get-targets', payload?._sdkapi)
         const targets = flowBus.getAvailableTargets(payload?.payloadType)
         return { success: true, data: targets }
@@ -82,7 +89,7 @@ export class FlowBusIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.cancel, async (payload: any, context: any) => {
+      transport.on(FlowEvents.cancel, async (payload, context) => {
         enforce(context, 'flow:bus:cancel', payload?._sdkapi)
         const success = flowBus.cancel(payload.sessionId)
         return { success, data: { cancelled: success } }
@@ -90,7 +97,7 @@ export class FlowBusIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.acknowledge, async (payload: any, context: any) => {
+      transport.on(FlowEvents.acknowledge, async (payload, context) => {
         enforce(context, 'flow:bus:acknowledge', payload?._sdkapi)
         const success = flowBus.acknowledge(payload.sessionId, payload.ackPayload)
         return { success, data: { acknowledged: success } }
@@ -98,7 +105,7 @@ export class FlowBusIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.reportError, async (payload: any, context: any) => {
+      transport.on(FlowEvents.reportError, async (payload, context) => {
         enforce(context, 'flow:bus:report-error', payload?._sdkapi)
         const success = flowBus.reportError(payload.sessionId, payload.message || 'Unknown error')
         return { success, data: { reported: success } }
@@ -106,9 +113,9 @@ export class FlowBusIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.selectTarget, async (payload: any, context: any) => {
+      transport.on(FlowEvents.selectTarget, async (payload, context) => {
         enforce(context, 'flow:bus:select-target', payload?._sdkapi)
-        const { sessionId, targetId } = payload as { sessionId: string; targetId: string | null }
+        const { sessionId, targetId } = payload
 
         if (!sessionId) {
           return {
@@ -126,7 +133,7 @@ export class FlowBusIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.checkConsent, async (payload: any) => {
+      transport.on(FlowEvents.checkConsent, async (payload) => {
         const { senderId, targetId } = payload || {}
         if (!senderId || !targetId) {
           return { success: false, error: { message: 'senderId and targetId are required' } }
@@ -141,7 +148,7 @@ export class FlowBusIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(FlowEvents.grantConsent, async (payload: any, context: any) => {
+      transport.on(FlowEvents.grantConsent, async (payload, context) => {
         if (context?.plugin?.name) {
           return {
             success: false,

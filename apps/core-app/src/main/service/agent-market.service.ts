@@ -4,7 +4,7 @@
  * Provides APIs for browsing, searching and managing agents from external sources.
  */
 
-import type { AgentDescriptor } from '@talex-touch/utils'
+import type { AgentCapability, AgentDescriptor } from '@talex-touch/utils'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('AgentMarket')
@@ -18,7 +18,14 @@ export interface MarketAgentInfo {
   description: string
   version: string
   author: string
-  category: 'productivity' | 'file-management' | 'data-processing' | 'search' | 'automation' | 'development' | 'custom'
+  category:
+    | 'productivity'
+    | 'file-management'
+    | 'data-processing'
+    | 'search'
+    | 'automation'
+    | 'development'
+    | 'custom'
   capabilities: string[]
   tags: string[]
   downloads: number
@@ -96,7 +103,7 @@ const BUILTIN_AGENTS: MarketAgentInfo[] = [
     isInstalled: true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    icon: 'i-carbon-folder',
+    icon: 'i-carbon-folder'
   },
   {
     id: 'builtin.search-agent',
@@ -114,7 +121,7 @@ const BUILTIN_AGENTS: MarketAgentInfo[] = [
     isInstalled: true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    icon: 'i-carbon-search',
+    icon: 'i-carbon-search'
   },
   {
     id: 'builtin.data-agent',
@@ -132,8 +139,8 @@ const BUILTIN_AGENTS: MarketAgentInfo[] = [
     isInstalled: true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    icon: 'i-carbon-data-base',
-  },
+    icon: 'i-carbon-data-base'
+  }
 ]
 
 // Featured/recommended agents for the market
@@ -154,7 +161,7 @@ const FEATURED_AGENTS: MarketAgentInfo[] = [
     isInstalled: false,
     createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
     updatedAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
-    icon: 'i-carbon-flow',
+    icon: 'i-carbon-flow'
   },
   {
     id: 'community.code-agent',
@@ -172,7 +179,7 @@ const FEATURED_AGENTS: MarketAgentInfo[] = [
     isInstalled: false,
     createdAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
     updatedAt: Date.now() - 14 * 24 * 60 * 60 * 1000,
-    icon: 'i-carbon-code',
+    icon: 'i-carbon-code'
   },
   {
     id: 'community.translator-agent',
@@ -190,8 +197,8 @@ const FEATURED_AGENTS: MarketAgentInfo[] = [
     isInstalled: false,
     createdAt: Date.now() - 60 * 24 * 60 * 60 * 1000,
     updatedAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
-    icon: 'i-carbon-translate',
-  },
+    icon: 'i-carbon-translate'
+  }
 ]
 
 /**
@@ -201,7 +208,7 @@ class AgentMarketService {
   private installedAgentIds: Set<string> = new Set([
     'builtin.file-agent',
     'builtin.search-agent',
-    'builtin.data-agent',
+    'builtin.data-agent'
   ])
 
   /**
@@ -216,7 +223,7 @@ class AgentMarketService {
       sortBy = 'downloads',
       sortOrder = 'desc',
       limit = 20,
-      offset = 0,
+      offset = 0
     } = options
 
     log.debug(`Searching agents: ${JSON.stringify(options)}`)
@@ -225,36 +232,35 @@ class AgentMarketService {
     let agents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
 
     // Update installed status
-    agents = agents.map(a => ({
+    agents = agents.map((a) => ({
       ...a,
-      isInstalled: this.installedAgentIds.has(a.id),
+      isInstalled: this.installedAgentIds.has(a.id)
     }))
 
     // Filter by keyword
     if (keyword) {
       const lowerKeyword = keyword.toLowerCase()
-      agents = agents.filter(a =>
-        a.name.toLowerCase().includes(lowerKeyword)
-        || a.description.toLowerCase().includes(lowerKeyword)
-        || a.tags.some(t => t.toLowerCase().includes(lowerKeyword)),
+      agents = agents.filter(
+        (a) =>
+          a.name.toLowerCase().includes(lowerKeyword) ||
+          a.description.toLowerCase().includes(lowerKeyword) ||
+          a.tags.some((t) => t.toLowerCase().includes(lowerKeyword))
       )
     }
 
     // Filter by category
     if (category) {
-      agents = agents.filter(a => a.category === category)
+      agents = agents.filter((a) => a.category === category)
     }
 
     // Filter by source
     if (source) {
-      agents = agents.filter(a => a.source === source)
+      agents = agents.filter((a) => a.source === source)
     }
 
     // Filter by tags
     if (tags && tags.length > 0) {
-      agents = agents.filter(a =>
-        tags.some(t => a.tags.includes(t)),
-      )
+      agents = agents.filter((a) => tags.some((t) => a.tags.includes(t)))
     }
 
     // Sort
@@ -283,7 +289,7 @@ class AgentMarketService {
     return {
       agents: paginated,
       total,
-      hasMore: offset + limit < total,
+      hasMore: offset + limit < total
     }
   }
 
@@ -292,12 +298,12 @@ class AgentMarketService {
    */
   async getAgentDetails(agentId: string): Promise<MarketAgentInfo | null> {
     const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
-    const agent = allAgents.find(a => a.id === agentId)
+    const agent = allAgents.find((a) => a.id === agentId)
 
     if (agent) {
       return {
         ...agent,
-        isInstalled: this.installedAgentIds.has(agent.id),
+        isInstalled: this.installedAgentIds.has(agent.id)
       }
     }
 
@@ -308,9 +314,9 @@ class AgentMarketService {
    * Get featured/recommended agents
    */
   async getFeaturedAgents(): Promise<MarketAgentInfo[]> {
-    return FEATURED_AGENTS.map(a => ({
+    return FEATURED_AGENTS.map((a) => ({
       ...a,
-      isInstalled: this.installedAgentIds.has(a.id),
+      isInstalled: this.installedAgentIds.has(a.id)
     }))
   }
 
@@ -320,14 +326,14 @@ class AgentMarketService {
   async getInstalledAgents(): Promise<MarketAgentInfo[]> {
     const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
     return allAgents
-      .filter(a => this.installedAgentIds.has(a.id))
-      .map(a => ({ ...a, isInstalled: true }))
+      .filter((a) => this.installedAgentIds.has(a.id))
+      .map((a) => ({ ...a, isInstalled: true }))
   }
 
   /**
    * Get available categories
    */
-  getCategories(): { id: string, name: string, count: number }[] {
+  getCategories(): { id: string; name: string; count: number }[] {
     const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
     const categoryMap = new Map<string, number>()
 
@@ -337,19 +343,19 @@ class AgentMarketService {
     }
 
     const categoryNames: Record<string, string> = {
-      'productivity': '生产力',
+      productivity: '生产力',
       'file-management': '文件管理',
       'data-processing': '数据处理',
-      'search': '搜索',
-      'automation': '自动化',
-      'development': '开发',
-      'custom': '自定义',
+      search: '搜索',
+      automation: '自动化',
+      development: '开发',
+      custom: '自定义'
     }
 
     return Array.from(categoryMap.entries()).map(([id, count]) => ({
       id,
       name: categoryNames[id] || id,
-      count,
+      count
     }))
   }
 
@@ -368,7 +374,7 @@ class AgentMarketService {
         success: false,
         agentId,
         version: version || 'unknown',
-        error: `Agent ${agentId} not found`,
+        error: `Agent ${agentId} not found`
       }
     }
 
@@ -378,7 +384,7 @@ class AgentMarketService {
         success: false,
         agentId,
         version: agent.version,
-        error: 'Agent already installed',
+        error: 'Agent already installed'
       }
     }
 
@@ -390,7 +396,7 @@ class AgentMarketService {
       success: true,
       agentId,
       version: agent.version,
-      message: `Agent ${agent.name} installed successfully`,
+      message: `Agent ${agent.name} installed successfully`
     }
   }
 
@@ -406,7 +412,7 @@ class AgentMarketService {
         success: false,
         agentId,
         version: 'unknown',
-        error: 'Cannot uninstall builtin agents',
+        error: 'Cannot uninstall builtin agents'
       }
     }
 
@@ -415,7 +421,7 @@ class AgentMarketService {
         success: false,
         agentId,
         version: 'unknown',
-        error: 'Agent not installed',
+        error: 'Agent not installed'
       }
     }
 
@@ -426,7 +432,7 @@ class AgentMarketService {
       success: true,
       agentId,
       version: 'unknown',
-      message: 'Agent uninstalled successfully',
+      message: 'Agent uninstalled successfully'
     }
   }
 
@@ -442,6 +448,14 @@ class AgentMarketService {
    * Convert MarketAgentInfo to AgentDescriptor format
    */
   toDescriptor(agent: MarketAgentInfo): AgentDescriptor {
+    const resolveCapabilityType = (capabilityId: string): AgentCapability['type'] => {
+      const lowered = capabilityId.toLowerCase()
+      if (lowered.includes('workflow')) return 'workflow'
+      if (lowered.includes('chat')) return 'chat'
+      if (lowered.includes('search') || lowered.includes('query')) return 'query'
+      return 'action'
+    }
+
     return {
       id: agent.id,
       name: agent.name,
@@ -449,14 +463,14 @@ class AgentMarketService {
       version: agent.version,
       category: agent.category as AgentDescriptor['category'],
       enabled: agent.isInstalled,
-      capabilities: agent.capabilities.map(c => ({
+      capabilities: agent.capabilities.map((c) => ({
         id: c,
-        type: c as any,
+        type: resolveCapabilityType(c),
         name: c,
-        description: '',
+        description: ''
       })),
       tools: [],
-      config: {},
+      config: {}
     }
   }
 }

@@ -9,6 +9,9 @@ import * as path from 'node:path'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { DownloadErrorType, ErrorSeverity } from './error-types'
 
+const isErrorWithCode = (error: unknown): error is { code?: string } =>
+  typeof error === 'object' && error !== null && 'code' in error
+
 // 日志级别
 export enum LogLevel {
   DEBUG = 'debug',
@@ -23,7 +26,7 @@ export interface LogEntry {
   timestamp: number
   message: string
   error?: DownloadError
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**
@@ -78,7 +81,7 @@ export class ErrorLogger {
   /**
    * 记录错误
    */
-  async logError(error: DownloadError, metadata?: Record<string, any>): Promise<void> {
+  async logError(error: DownloadError, metadata?: Record<string, unknown>): Promise<void> {
     const entry: LogEntry = {
       level: this.mapSeverityToLogLevel(error.severity),
       timestamp: Date.now(),
@@ -98,7 +101,7 @@ export class ErrorLogger {
   /**
    * 记录信息
    */
-  async logInfo(message: string, metadata?: Record<string, any>): Promise<void> {
+  async logInfo(message: string, metadata?: Record<string, unknown>): Promise<void> {
     const entry: LogEntry = {
       level: LogLevel.INFO,
       timestamp: Date.now(),
@@ -112,7 +115,7 @@ export class ErrorLogger {
   /**
    * 记录警告
    */
-  async logWarn(message: string, metadata?: Record<string, any>): Promise<void> {
+  async logWarn(message: string, metadata?: Record<string, unknown>): Promise<void> {
     const entry: LogEntry = {
       level: LogLevel.WARN,
       timestamp: Date.now(),
@@ -126,7 +129,7 @@ export class ErrorLogger {
   /**
    * 记录调试信息
    */
-  async logDebug(message: string, metadata?: Record<string, any>): Promise<void> {
+  async logDebug(message: string, metadata?: Record<string, unknown>): Promise<void> {
     const entry: LogEntry = {
       level: LogLevel.DEBUG,
       timestamp: Date.now(),
@@ -212,8 +215,8 @@ export class ErrorLogger {
         // 清理旧日志文件
         await this.cleanupOldLogs()
       }
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if (!isErrorWithCode(error) || error.code !== 'ENOENT') {
         console.error('Failed to rotate log file:', error)
       }
     }
@@ -262,8 +265,8 @@ export class ErrorLogger {
       }
 
       return content
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
         return ''
       }
       throw error
@@ -315,8 +318,8 @@ export class ErrorLogger {
       }
 
       return stats
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      if (isErrorWithCode(error) && error.code === 'ENOENT') {
         return {
           total: 0,
           byType: {} as Record<DownloadErrorType, number>,
@@ -333,8 +336,8 @@ export class ErrorLogger {
   async clearLogs(): Promise<void> {
     try {
       await fs.unlink(this.logFilePath)
-    } catch (error: any) {
-      if (error.code !== 'ENOENT') {
+    } catch (error: unknown) {
+      if (!isErrorWithCode(error) || error.code !== 'ENOENT') {
         throw error
       }
     }

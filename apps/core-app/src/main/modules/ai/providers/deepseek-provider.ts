@@ -11,6 +11,18 @@ import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1'
 
+type DeepSeekChatChoice = {
+  message?: {
+    content?: string
+  }
+}
+
+type DeepSeekUsage = {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}
+
 export class DeepSeekProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.DEEPSEEK
 
@@ -63,8 +75,8 @@ export class DeepSeekProvider extends IntelligenceProvider {
     }
 
     const data = await this.parseJsonResponse<{
-      choices: any[]
-      usage?: any
+      choices: DeepSeekChatChoice[]
+      usage?: DeepSeekUsage
       model?: string
     }>(response, { endpoint: '/chat/completions' })
     const latency = Date.now() - startTime

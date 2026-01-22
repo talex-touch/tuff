@@ -39,10 +39,10 @@ export interface OfficialPluginResponse {
   lastModified?: string
 }
 
-const OFFICIAL_REPO_MANIFEST_URL
-  = 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json'
-const OFFICIAL_REPO_BASE_URL
-  = 'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/'
+const OFFICIAL_REPO_MANIFEST_URL =
+  'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/plugins.json'
+const OFFICIAL_REPO_BASE_URL =
+  'https://raw.githubusercontent.com/talex-touch/tuff-official-plugins/main/'
 const CACHE_TTL_MS = 1000 * 60 * 30 // 30 minutes
 
 let cached: OfficialPluginEntry[] | null = null
@@ -71,7 +71,7 @@ function toOfficialEntry(entry: OfficialPluginManifestEntry): OfficialPluginEntr
     ...entry,
     downloadUrl,
     readmeUrl,
-    official: true,
+    official: true
   }
 }
 
@@ -80,7 +80,7 @@ interface FetchOptions {
 }
 
 export async function getOfficialPlugins(
-  options: FetchOptions = {},
+  options: FetchOptions = {}
 ): Promise<OfficialPluginResponse> {
   const { force = false } = options
   const now = Date.now()
@@ -91,19 +91,17 @@ export async function getOfficialPlugins(
       fetchedAt: cachedAt,
       fromCache: true,
       etag: cachedEtag,
-      lastModified: cachedLastModified,
+      lastModified: cachedLastModified
     }
   }
 
   const headers: Record<string, string> = {
-    Accept: 'application/json',
+    Accept: 'application/json'
   }
 
   if (!force && cached) {
-    if (cachedEtag)
-      headers['If-None-Match'] = cachedEtag
-    if (cachedLastModified)
-      headers['If-Modified-Since'] = cachedLastModified
+    if (cachedEtag) headers['If-None-Match'] = cachedEtag
+    if (cachedLastModified) headers['If-Modified-Since'] = cachedLastModified
   }
 
   try {
@@ -111,7 +109,7 @@ export async function getOfficialPlugins(
       headers,
       timeout: 15_000,
       proxy: false,
-      validateStatus: status => (status >= 200 && status < 300) || status === 304,
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 304
     })
 
     if (response.status === 304 && cached) {
@@ -121,7 +119,7 @@ export async function getOfficialPlugins(
         fetchedAt: cachedAt,
         fromCache: true,
         etag: cachedEtag,
-        lastModified: cachedLastModified,
+        lastModified: cachedLastModified
       }
     }
 
@@ -143,10 +141,9 @@ export async function getOfficialPlugins(
       fetchedAt: cachedAt,
       fromCache: false,
       etag: cachedEtag,
-      lastModified: cachedLastModified,
+      lastModified: cachedLastModified
     }
-  }
-  catch (error: any) {
+  } catch (error: unknown) {
     console.error(logLabel, 'Failed to fetch official plugins:', error)
 
     if (cached) {
@@ -156,7 +153,7 @@ export async function getOfficialPlugins(
         fetchedAt: cachedAt,
         fromCache: true,
         etag: cachedEtag,
-        lastModified: cachedLastModified,
+        lastModified: cachedLastModified
       }
     }
 

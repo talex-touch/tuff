@@ -1,26 +1,26 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
 import type {
-  StorageSaveRequest,
-  StorageSaveResult,
   StorageGetRequest,
   StorageGetVersionedResponse,
+  StorageSaveRequest,
+  StorageSaveResult,
   StorageUpdateNotification
 } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { MainStorageKey, MainStorageSchema } from './main-storage-registry'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { eq } from 'drizzle-orm'
 import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
+import { eq } from 'drizzle-orm'
 import { BrowserWindow } from 'electron'
 import fse from 'fs-extra'
-import { appTaskGate } from '../../service/app-task-gate'
 import { config as configSchema } from '../../db/schema'
+import { appTaskGate } from '../../service/app-task-gate'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
@@ -56,6 +56,8 @@ let pluginConfigPath: string
 
 // Debounced broadcast mechanism to batch updates
 const pendingBroadcasts = new Map<string, NodeJS.Timeout>()
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 let storageUpdateEmitter: ((name: string, version: number) => void) | null = null
 
 const SQLITE_PILOT_CONFIGS = new Set<string>([StorageList.SEARCH_ENGINE_LOGS_ENABLED])
@@ -75,9 +77,9 @@ function broadcastUpdate(name: string, version: number, sourceWebContentsId?: nu
 
   // Debounce broadcasts to reduce IPC overhead
   const timer = setTimeout(() => {
-    const channel = $app.channel as any
+    const channel = ($app as { channel?: unknown } | null | undefined)?.channel
     if (channel) {
-      const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
       const windows = BrowserWindow.getAllWindows()
       for (const win of windows) {
         if (sourceWebContentsId && win.webContents.id === sourceWebContentsId) {
@@ -147,8 +149,10 @@ export class StorageModule extends BaseModule {
     this.pollingService.start()
     this.lruManager.startCleanup()
 
-    const channel = ((app as any)?.channel ?? ($app as any)?.channel) as any
-    this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
+    const channel =
+      (app as { channel?: unknown } | null | undefined)?.channel ??
+      ($app as { channel?: unknown } | null | undefined)?.channel
+    this.transport = getTuffTransportMain(channel, resolveKeyManager(channel))
     this.registerTransportHandlers()
 
     storageUpdateEmitter = (name, version) => {

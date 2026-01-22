@@ -1,4 +1,6 @@
 import type { DownloadRequest, GitHubRelease, UpdateCheckResult } from '@talex-touch/utils'
+import type { DownloadCenterModule } from '../download/download-center'
+import type { NotificationService } from '../download/notification-service'
 import * as crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
@@ -6,8 +8,8 @@ import { AppPreviewChannel, DownloadModule, DownloadPriority } from '@talex-touc
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import axios from 'axios'
 import { app, shell } from 'electron'
-import { getAppVersionSafe } from '../../utils/version-util'
 import { SignatureVerifier } from '../../utils/release-signature'
+import { getAppVersionSafe } from '../../utils/version-util'
 
 /**
  * Version information interface
@@ -41,6 +43,8 @@ interface ReleaseAsset {
   platform: string
   arch: string
   checksum?: string
+  browser_download_url?: string
+  sha256?: string
   signatureUrl?: string
   signatureKeyUrl?: string
 }
@@ -73,8 +77,8 @@ interface ReleaseAsset {
 export class UpdateSystem {
   private config: UpdateSystemConfig
   private currentVersion: VersionInfo
-  private downloadCenterModule: any
-  private notificationService: any
+  private downloadCenterModule: DownloadCenterModule
+  private notificationService: NotificationService
   private readonly pollingService = PollingService.getInstance()
   private readonly signatureVerifier = new SignatureVerifier()
 
@@ -90,7 +94,7 @@ export class UpdateSystem {
    * @param downloadCenterModule - DownloadCenter module instance for download management
    * @param config - Optional configuration overrides
    */
-  constructor(downloadCenterModule: any, config?: Partial<UpdateSystemConfig>) {
+  constructor(downloadCenterModule: DownloadCenterModule, config?: Partial<UpdateSystemConfig>) {
     this.downloadCenterModule = downloadCenterModule
     this.notificationService = downloadCenterModule.getNotificationService()
     this.currentVersion = this.parseVersion(getAppVersionSafe())
@@ -497,7 +501,7 @@ export class UpdateSystem {
   /**
    * Find appropriate asset for current platform
    */
-  private findAssetForPlatform(assets: any[]): ReleaseAsset | null {
+  private findAssetForPlatform(assets: ReleaseAsset[]): ReleaseAsset | null {
     const platform = process.platform
     const arch = process.arch
 

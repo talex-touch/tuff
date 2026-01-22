@@ -102,7 +102,7 @@ export class FlowSessionManager {
   updateState(
     sessionId: string,
     newState: FlowSessionState,
-    data?: { ackPayload?: any; error?: FlowError }
+    data?: { ackPayload?: unknown; error?: FlowError }
   ): boolean {
     const session = this.sessions.get(sessionId)
     if (!session) {
@@ -139,7 +139,7 @@ export class FlowSessionManager {
   /**
    * Sets session acknowledgment
    */
-  acknowledge(sessionId: string, ackPayload?: any): boolean {
+  acknowledge(sessionId: string, ackPayload?: unknown): boolean {
     return this.updateState(sessionId, 'ACKED', { ackPayload })
   }
 

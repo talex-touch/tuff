@@ -54,6 +54,7 @@ interface AgentJobPayload {
     language: string
     tesseditPagesegMode?: number
     config?: Record<string, string | number | boolean>
+    prompt?: string
   }
 }
 
@@ -84,10 +85,15 @@ const MAX_OCR_TEXT_CHARS = 200_000
 const MAX_EMBEDDING_INPUT_CHARS = 8000
 
 // 重试延迟配置(秒)
-const RETRY_DELAYS = {
+const RETRY_DELAYS: Record<string, number> = {
   'No enabled providers available': 3600, // 1小时
   'Provider factory missing': 300, // 5分钟
   default: 60 // 默认1分钟
+}
+const getRetryDelaySeconds = (lastError: string | null | undefined): number => {
+  if (!lastError) return RETRY_DELAYS.default
+  const delay = RETRY_DELAYS[lastError]
+  return typeof delay === 'number' ? delay : RETRY_DELAYS.default
 }
 
 function dataUrlToHash(dataUrl: string): string {
@@ -178,7 +184,7 @@ class OcrService {
     const channel = genTouchApp().channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = getTuffTransportMain(channel, keyManager)
 
     transport.on(ocrDashboardEvent, async (payload) => {
       try {
@@ -294,7 +300,7 @@ class OcrService {
     }
 
     const enrichedJobs = jobs.map((job) => {
-      let parsedMeta: Record<string, any> | null = null
+      let parsedMeta: Record<string, unknown> | null = null
       if (job.meta) {
         try {
           parsedMeta = JSON.parse(job.meta)
@@ -697,7 +703,7 @@ class OcrService {
                   ? job.startedAt * 1000
                   : new Date(job.startedAt).getTime()
 
-              const delaySeconds = (RETRY_DELAYS as any)[job.lastError] || RETRY_DELAYS.default
+              const delaySeconds = getRetryDelaySeconds(job.lastError)
               const delayMs = delaySeconds * 1000
               const timeSinceStart = now - startedAtMs
 
@@ -708,7 +714,7 @@ class OcrService {
           }
 
           // 根据错误类型确定延迟时间
-          const delaySeconds = (RETRY_DELAYS as any)[job.lastError] || RETRY_DELAYS.default
+          const delaySeconds = getRetryDelaySeconds(job.lastError)
           const delayMs = delaySeconds * 1000
           const timeSinceLastAttempt = now - lastAttempt
 
@@ -858,12 +864,8 @@ class OcrService {
     if (payload.options?.config && typeof payload.options.config.prompt === 'string') {
       return payload.options.config.prompt
     }
-    if (
-      payload.options &&
-      'prompt' in payload.options &&
-      typeof (payload.options as any).prompt === 'string'
-    ) {
-      return String((payload.options as any).prompt)
+    if (typeof payload.options?.prompt === 'string') {
+      return payload.options.prompt
     }
     if (capabilityPrompt) {
       return capabilityPrompt
@@ -905,7 +907,8 @@ class OcrService {
 
     const blocks = Array.isArray(result.blocks)
       ? result.blocks.slice(0, MAX_OCR_BLOCKS).map((block) => {
-          const raw = typeof block === 'object' && block ? (block as any) : null
+          const raw =
+            typeof block === 'object' && block ? (block as unknown as Record<string, unknown>) : {}
           const text = typeof raw?.text === 'string' ? raw.text : ''
           return {
             ...raw,
@@ -1152,8 +1155,10 @@ class OcrService {
     // Notify attached plugin UI view if any
     const activePlugin = windowManager.getAttachedPlugin()
     if (activePlugin?._uniqueChannelKey) {
-      const channel = genTouchApp().channel as any
-      const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const channel = genTouchApp().channel
+      const keyManager =
+        (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+      const transport = getTuffTransportMain(channel, keyManager)
       void transport
         .sendToPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent, {
           clipboardId,

@@ -1,4 +1,5 @@
 import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
 import type {
   ClipboardApplyRequest,
@@ -25,9 +26,8 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
-import { and, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 import { clipboard, nativeImage } from 'electron'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import { genTouchApp } from '../core'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { appTaskGate } from '../service/app-task-gate'
@@ -1564,7 +1564,7 @@ export class ClipboardModule extends BaseModule {
     const channel = genTouchApp().channel as ITouchChannel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel as any, keyManager as any)
+    this.transport = getTuffTransportMain(channel, keyManager)
 
     const writePayload = async (payload: ClipboardWritePayload): Promise<void> => {
       const { text, html, image, files } = payload ?? {}
@@ -1622,14 +1622,14 @@ export class ClipboardModule extends BaseModule {
 
         const offset = (page - 1) * limit
 
-        let whereClause: any
-        if (request?.type === 'favorite') {
-          whereClause = eq(clipboardHistory.isFavorite, true)
-        } else if (request?.type === 'text') {
-          whereClause = eq(clipboardHistory.type, 'text')
-        } else if (request?.type === 'image') {
-          whereClause = eq(clipboardHistory.type, 'image')
-        }
+        const whereClause =
+          request?.type === 'favorite'
+            ? eq(clipboardHistory.isFavorite, true)
+            : request?.type === 'text'
+              ? eq(clipboardHistory.type, 'text')
+              : request?.type === 'image'
+                ? eq(clipboardHistory.type, 'image')
+                : undefined
 
         const rows = await this.db
           .select()
@@ -1664,12 +1664,13 @@ export class ClipboardModule extends BaseModule {
 
         if (!row) return
 
+        const item = row as unknown as IClipboardItem
         if (request.autoPaste === false) {
-          this.writeItemToClipboard(row as unknown as IClipboardItem, { item: row as any })
+          this.writeItemToClipboard(item, { item })
           return
         }
 
-        await this.applyToActiveApp({ item: row as any })
+        await this.applyToActiveApp({ item })
       })
     )
 
@@ -1776,18 +1777,18 @@ export class ClipboardModule extends BaseModule {
             : PAGE_SIZE
           const offset = (page - 1) * pageSize
 
-          const conditions: ReturnType<typeof and>[] = []
+          const conditions: SQL<unknown>[] = []
 
           if (keyword && typeof keyword === 'string' && keyword.trim().length > 0) {
-            conditions.push(sql`${clipboardHistory.content} LIKE ${`%${keyword.trim()}%`}` as any)
+            conditions.push(sql`${clipboardHistory.content} LIKE ${`%${keyword.trim()}%`}`)
           }
 
           if (startTime && typeof startTime === 'number') {
-            conditions.push(sql`${clipboardHistory.timestamp} >= ${new Date(startTime)}` as any)
+            conditions.push(sql`${clipboardHistory.timestamp} >= ${new Date(startTime)}`)
           }
 
           if (endTime && typeof endTime === 'number') {
-            conditions.push(sql`${clipboardHistory.timestamp} <= ${new Date(endTime)}` as any)
+            conditions.push(sql`${clipboardHistory.timestamp} <= ${new Date(endTime)}`)
           }
 
           if (itemType && ['text', 'image', 'files'].includes(itemType)) {

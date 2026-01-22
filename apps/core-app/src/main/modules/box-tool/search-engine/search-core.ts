@@ -51,6 +51,8 @@ import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
 
 const searchEngineLog = getLogger('search-engine')
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
 const coreBoxGetRecommendationsEvent = defineRawEvent<
   { limit?: number; forceRefresh?: boolean },
   { items: TuffItem[]; duration: number; fromCache: boolean; error?: string }
@@ -208,8 +210,9 @@ export class SearchEngineCore
       throw new Error('[SearchEngineCore] TouchApp not initialized')
     }
     if (!this.transport) {
-      const channel = this.touchApp.channel as any
-      this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const channel = this.touchApp.channel
+      const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+      this.transport = getTuffTransportMain(channel, keyManager)
     }
     return this.transport
   }
@@ -1003,9 +1006,10 @@ export class SearchEngineCore
 
       let injectedCount = 0
       for (const item of items) {
-        const meta = item.meta as any
-        const sourceId = meta?._originalSourceId ?? item.source.id
-        const itemId = meta?._originalItemId ?? item.id
+        const meta = item.meta as Record<string, unknown> | undefined
+        const sourceId =
+          typeof meta?._originalSourceId === 'string' ? meta._originalSourceId : item.source.id
+        const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : item.id
         const key = `${sourceId}:${itemId}`
         const isPinned = pinnedSet.has(key)
 
@@ -1014,8 +1018,12 @@ export class SearchEngineCore
           item.meta.pinned = { isPinned: true, pinnedAt: Date.now() }
           injectedCount++
         } else {
-          if (meta?.pinned?.isPinned) {
-            meta.pinned = undefined
+          const pinnedMeta = meta?.pinned
+          if (pinnedMeta && typeof pinnedMeta === 'object') {
+            const pinned = pinnedMeta as { isPinned?: boolean }
+            if (pinned.isPinned) {
+              pinned.isPinned = false
+            }
           }
         }
       }

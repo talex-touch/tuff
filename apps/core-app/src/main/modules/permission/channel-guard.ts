@@ -10,7 +10,7 @@ export interface ProtectedChannelOptions {
   allowLegacy?: boolean
 }
 
-export type ProtectedHandler<TReq = any, TRes = any> = (
+export type ProtectedHandler<TReq = unknown, TRes = unknown> = (
   payload: TReq,
   context: HandlerContext
 ) => TRes | Promise<TRes>
@@ -18,7 +18,7 @@ export type ProtectedHandler<TReq = any, TRes = any> = (
 /**
  * Wrap a transport handler with permission checks.
  */
-export function withPermission<TReq = any, TRes = any>(
+export function withPermission<TReq = unknown, TRes = unknown>(
   options: ProtectedChannelOptions,
   callback: ProtectedHandler<TReq, TRes>
 ): ProtectedHandler<TReq, TRes> {
@@ -34,7 +34,10 @@ export function withPermission<TReq = any, TRes = any>(
 
     // Get plugin info from transport context
     const pluginId = context.plugin?.name
-    const sdkapi = (payload as any)?._sdkapi
+    const sdkapi =
+      payload && typeof payload === 'object' && '_sdkapi' in payload
+        ? (payload as { _sdkapi?: number })._sdkapi
+        : undefined
 
     // If not from a plugin, allow
     if (!pluginId) {
@@ -46,11 +49,16 @@ export function withPermission<TReq = any, TRes = any>(
 
     if (!result.allowed) {
       const message = errorMessage || result.reason || `Permission '${permissionId}' denied`
-      const error = new Error(message)
-      ;(error as any).code = 'PERMISSION_DENIED'
-      ;(error as any).permissionId = permissionId
-      ;(error as any).pluginId = pluginId
-      ;(error as any).showRequest = result.showRequest
+      const error = new Error(message) as Error & {
+        code?: string
+        permissionId?: string
+        pluginId?: string
+        showRequest?: boolean
+      }
+      error.code = 'PERMISSION_DENIED'
+      error.permissionId = permissionId
+      error.pluginId = pluginId
+      error.showRequest = result.showRequest
       throw error
     }
 
@@ -62,10 +70,13 @@ export function withPermission<TReq = any, TRes = any>(
  * Helper for registering protected transport handlers.
  */
 export function createProtectedRegister(transport: {
-  on: <TReq = any, TRes = any>(event: any, handler: ProtectedHandler<TReq, TRes>) => () => void
+  on: <TReq = unknown, TRes = unknown>(
+    event: unknown,
+    handler: ProtectedHandler<TReq, TRes>
+  ) => () => void
 }) {
-  return <TReq = any, TRes = any>(
-    event: any,
+  return <TReq = unknown, TRes = unknown>(
+    event: unknown,
     options: ProtectedChannelOptions,
     callback: ProtectedHandler<TReq, TRes>
   ): (() => void) => {
@@ -73,15 +84,18 @@ export function createProtectedRegister(transport: {
   }
 }
 
-export interface ProtectedChannelDefinition<TReq = any, TRes = any> {
-  event: any
+export interface ProtectedChannelDefinition<TReq = unknown, TRes = unknown> {
+  event: unknown
   options: ProtectedChannelOptions
   callback: ProtectedHandler<TReq, TRes>
 }
 
 export function registerProtectedChannels(
   transport: {
-    on: <TReq = any, TRes = any>(event: any, handler: ProtectedHandler<TReq, TRes>) => () => void
+    on: <TReq = unknown, TRes = unknown>(
+      event: unknown,
+      handler: ProtectedHandler<TReq, TRes>
+    ) => () => void
   },
   definitions: ProtectedChannelDefinition[]
 ): (() => void)[] {

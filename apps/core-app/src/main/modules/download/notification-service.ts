@@ -1,7 +1,7 @@
 import type { DownloadTask } from '@talex-touch/utils'
 import path from 'node:path'
 import { DownloadModule } from '@talex-touch/utils'
-import { app, Notification, shell } from 'electron'
+import { Notification, shell } from 'electron'
 import { formatDuration, formatFileSize, t } from '../../utils/i18n-helper'
 
 /**
@@ -219,7 +219,7 @@ export class NotificationService {
   }
 
   private shouldSuppressNotifications(task: DownloadTask): boolean {
-    return app.isPackaged && Boolean(task.metadata?.hidden)
+    return Boolean(task.metadata?.hidden)
   }
 
   /**

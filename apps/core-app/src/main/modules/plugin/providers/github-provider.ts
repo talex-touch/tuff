@@ -1,9 +1,11 @@
-import type { PluginInstallRequest, PluginInstallResult, PluginProvider, PluginProviderContext } from '@talex-touch/utils/plugin/providers'
-import path from 'node:path'
-import {
-
-  PluginProviderType,
+import type {
+  PluginInstallRequest,
+  PluginInstallResult,
+  PluginProvider,
+  PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
+import path from 'node:path'
+import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile, ensureRiskAccepted } from './utils'
 
@@ -30,37 +32,32 @@ function parseGithubSource(source: string): ParsedGithubSource | undefined {
     return { owner, repo, ref: refPart }
   }
 
-  if (!trimmed.startsWith('http'))
-    return undefined
+  if (!trimmed.startsWith('http')) return undefined
 
   let url: URL
   try {
     url = new URL(trimmed)
-  }
-  catch (error) {
+  } catch {
     return undefined
   }
 
   if (RAW_HOSTS.has(url.hostname)) {
     const segments = url.pathname.split('/').filter(Boolean)
-    if (segments.length < 4)
-      return undefined
+    if (segments.length < 4) return undefined
     const [owner, repo, ref, ...pathSegments] = segments
     return {
       owner,
       repo,
       ref,
       directUrl: url.toString(),
-      assetPath: pathSegments.join('/'),
+      assetPath: pathSegments.join('/')
     }
   }
 
-  if (!GITHUB_HOSTS.has(url.hostname))
-    return undefined
+  if (!GITHUB_HOSTS.has(url.hostname)) return undefined
 
   const segments = url.pathname.split('/').filter(Boolean)
-  if (segments.length < 2)
-    return undefined
+  if (segments.length < 2) return undefined
 
   const [owner, repo, type, ...rest] = segments
   if (!type) {
@@ -74,7 +71,7 @@ function parseGithubSource(source: string): ParsedGithubSource | undefined {
       repo,
       ref: tag,
       assetPath: assetSegments.join('/'),
-      directUrl: url.toString(),
+      directUrl: url.toString()
     }
   }
 
@@ -84,7 +81,7 @@ function parseGithubSource(source: string): ParsedGithubSource | undefined {
       owner,
       repo,
       ref,
-      assetPath: assetSegments.join('/'),
+      assetPath: assetSegments.join('/')
     }
   }
 
@@ -95,7 +92,7 @@ function parseGithubSource(source: string): ParsedGithubSource | undefined {
       repo,
       ref,
       assetPath: assetSegments.join('/'),
-      directUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${assetSegments.join('/')}`,
+      directUrl: `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${assetSegments.join('/')}`
     }
   }
 
@@ -111,7 +108,7 @@ function parseGithubSource(source: string): ParsedGithubSource | undefined {
   return { owner, repo }
 }
 
-function resolveDownloadUrl(parsed: ParsedGithubSource): { url: string, extension: string } {
+function resolveDownloadUrl(parsed: ParsedGithubSource): { url: string; extension: string } {
   if (parsed.directUrl) {
     return { url: parsed.directUrl, extension: path.extname(parsed.directUrl) || '.tar' }
   }
@@ -138,17 +135,17 @@ export class GithubPluginProvider implements PluginProvider {
 
   async install(
     request: PluginInstallRequest,
-    context?: PluginProviderContext,
+    context?: PluginProviderContext
   ): Promise<PluginInstallResult> {
     this.log.info('准备从 GitHub 安装插件', {
-      meta: { source: request.source },
+      meta: { source: request.source }
     })
 
     try {
       const parsed = parseGithubSource(request.source)
       if (!parsed) {
         this.log.error('GitHub 来源解析失败', {
-          meta: { source: request.source },
+          meta: { source: request.source }
         })
         throw new Error('无法解析的 GitHub 插件来源')
       }
@@ -156,7 +153,7 @@ export class GithubPluginProvider implements PluginProvider {
       const isOfficial = OFFICIAL_GITHUB_OWNERS.includes(parsed.owner)
       if (!isOfficial) {
         this.log.warn('检测到非官方 GitHub 仓库，执行风险确认', {
-          meta: { owner: parsed.owner, repo: parsed.repo },
+          meta: { owner: parsed.owner, repo: parsed.repo }
         })
         await ensureRiskAccepted(
           this.type,
@@ -164,13 +161,13 @@ export class GithubPluginProvider implements PluginProvider {
           context,
           'needs_confirmation',
           '即将下载来自自定义 GitHub 仓库的插件，存在潜在风险。',
-          { owner: parsed.owner, repo: parsed.repo },
+          { owner: parsed.owner, repo: parsed.repo }
         )
       }
 
       const { url, extension } = resolveDownloadUrl(parsed)
       this.log.debug('解析 GitHub 下载地址', {
-        meta: { url, extension },
+        meta: { url, extension }
       })
       const filePath = await downloadToTempFile(url, extension, context?.downloadOptions)
 
@@ -179,8 +176,8 @@ export class GithubPluginProvider implements PluginProvider {
           filePath,
           owner: parsed.owner,
           repo: parsed.repo,
-          ref: parsed.ref ?? 'default',
-        },
+          ref: parsed.ref ?? 'default'
+        }
       })
 
       return {
@@ -192,14 +189,13 @@ export class GithubPluginProvider implements PluginProvider {
           repo: parsed.repo,
           ref: parsed.ref,
           assetPath: parsed.assetPath,
-          downloadUrl: url,
-        },
+          downloadUrl: url
+        }
       }
-    }
-    catch (error) {
+    } catch (error) {
       this.log.error('GitHub 插件安装流程失败', {
         meta: { source: request.source },
-        error,
+        error
       })
       throw error
     }

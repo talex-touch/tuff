@@ -26,6 +26,8 @@ import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from './window'
 
 const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const metaOverlayActionExecutedEvent = defineRawEvent<
   {
     actionId: string
@@ -234,8 +236,8 @@ export class MetaOverlayManager {
           return
         }
 
-        const channel = genTouchApp().channel as any
-        const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+        const channel = genTouchApp().channel
+        const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
 
         tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.show, {
           item: request.item,
@@ -279,12 +281,10 @@ export class MetaOverlayManager {
     this.isVisible = false
 
     if (!this.metaView.webContents.isDestroyed()) {
-      const channel = genTouchApp().channel as any
-      const tx = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const channel = genTouchApp().channel
+      const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
 
-      tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined as any).catch(
-        () => {}
-      )
+      tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
     }
 
     // Return focus to parent window
@@ -395,8 +395,8 @@ export class MetaOverlayManager {
     // Handle based on action type
     if (handler === 'plugin' && pluginId) {
       // Plugin action - notify the plugin
-      const channel = touchApp.channel as any
-      const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const channel = touchApp.channel
+      const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
       void transport
         .sendToPlugin(pluginId, metaOverlayActionExecutedEvent, {
           actionId,
@@ -413,8 +413,8 @@ export class MetaOverlayManager {
       // Item action - broadcast to renderer to handle
       const coreBoxWindow = getCoreBoxWindow()
       if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-        const channel = touchApp.channel as any
-        const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+        const channel = touchApp.channel
+        const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
         void transport
           .sendTo(coreBoxWindow.window.webContents, metaOverlayItemActionEvent, {
             actionId,
@@ -445,8 +445,8 @@ export class MetaOverlayManager {
       return
     }
 
-    const channel = touchApp.channel as any
-    const transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    const channel = touchApp.channel
+    const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
 
     switch (actionId) {
       case 'toggle-pin': {
@@ -467,7 +467,7 @@ export class MetaOverlayManager {
         break
       }
       case 'reveal-in-finder': {
-        const filePath = (item.meta as any)?.app?.path || (item.meta as any)?.file?.path
+        const filePath = item.meta?.app?.path ?? item.meta?.file?.path
         if (filePath) {
           void transport.sendTo(coreBoxWindow.window.webContents, shellShowItemInFolderEvent, {
             path: filePath

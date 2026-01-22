@@ -1,7 +1,7 @@
 import type {
   AnalyticsRangeRequest,
   AnalyticsSnapshot,
-  AnalyticsWindowType,
+  AnalyticsWindowType
 } from '@talex-touch/utils/analytics'
 
 export const DEFAULT_RETENTION_MS: Record<AnalyticsWindowType, number> = {
@@ -9,7 +9,7 @@ export const DEFAULT_RETENTION_MS: Record<AnalyticsWindowType, number> = {
   '5m': 60 * 60_000,
   '15m': 6 * 60 * 60_000,
   '1h': 24 * 60 * 60_000,
-  '24h': 7 * 24 * 60 * 60_000,
+  '24h': 7 * 24 * 60 * 60_000
 }
 
 /**
@@ -20,7 +20,7 @@ export class MemoryStore {
 
   constructor(
     private retentionMs: Record<AnalyticsWindowType, number> = DEFAULT_RETENTION_MS,
-    private now: () => number = () => Date.now(),
+    private now: () => number = () => Date.now()
   ) {}
 
   /**
@@ -31,7 +31,7 @@ export class MemoryStore {
     list.unshift(snapshot)
 
     const cutoff = this.now() - (this.retentionMs[snapshot.windowType] ?? 0)
-    const pruned = list.filter(item => item.timestamp >= cutoff)
+    const pruned = list.filter((item) => item.timestamp >= cutoff)
 
     this.snapshots.set(snapshot.windowType, pruned)
   }
@@ -41,7 +41,7 @@ export class MemoryStore {
    */
   latest(windowType: AnalyticsWindowType): AnalyticsSnapshot | null {
     const list = this.snapshots.get(windowType)
-    return (list && list.length > 0) ? list[0] : null
+    return list && list.length > 0 ? list[0] : null
   }
 
   /**
@@ -49,7 +49,7 @@ export class MemoryStore {
    */
   range(request: AnalyticsRangeRequest): AnalyticsSnapshot[] {
     const list = this.snapshots.get(request.windowType) || []
-    return list.filter(item => item.timestamp >= request.from && item.timestamp <= request.to)
+    return list.filter((item) => item.timestamp >= request.from && item.timestamp <= request.to)
   }
 
   /**

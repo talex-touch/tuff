@@ -2,6 +2,15 @@ import type { TuffItem, TuffQuery, TuffRender } from '@talex-touch/utils'
 import type { DbUtils } from '../../../../db/utils'
 import type { ScoredItem } from './recommendation-engine'
 
+type AppRow = Awaited<ReturnType<DbUtils['getFilesByPaths']>>[number]
+type AppWithExtensions = AppRow & { extensions: Record<string, string | null> }
+
+const getMetaString = (item: TuffItem, key: string): string | undefined => {
+  const meta = item.meta as Record<string, unknown> | undefined
+  const value = meta?.[key]
+  return typeof value === 'string' ? value : undefined
+}
+
 /** Rebuilds TuffItems from ScoredItems by querying DB and applying provider logic */
 export class ItemRebuilder {
   constructor(private dbUtils: DbUtils) {}
@@ -79,7 +88,7 @@ export class ItemRebuilder {
     }
   }
 
-  private async fetchExtensionsForApps(apps: any[]): Promise<any[]> {
+  private async fetchExtensionsForApps(apps: AppRow[]): Promise<AppWithExtensions[]> {
     const fileIds = apps.map((app) => app.id)
     const extensions = await this.dbUtils.getFileExtensionsByFileIds(fileIds)
 
@@ -144,10 +153,9 @@ export class ItemRebuilder {
         if (!feature) continue
 
         // 使用 PluginFeaturesAdapter 的逻辑创建 TuffItem
-        const { default: adapter } = await import(
-          '../../../plugin/adapters/plugin-features-adapter'
-        )
-        const tuffItem = (adapter as any).createTuffItem(plugin, feature)
+        const { default: adapter } =
+          await import('../../../plugin/adapters/plugin-features-adapter')
+        const tuffItem = adapter.createTuffItem(plugin, feature)
         rebuiltItems.push(tuffItem)
       }
 
@@ -342,7 +350,7 @@ export class ItemRebuilder {
   ): ScoredItem | undefined {
     const itemId = item.id
     const sourceId = item.source.id
-    const originalItemId = (item.meta as any)?._originalItemId
+    const originalItemId = getMetaString(item, '_originalItemId')
 
     // Direct match with original ID (highest priority)
     if (originalItemId) {
@@ -375,7 +383,7 @@ export class ItemRebuilder {
 
     return items
       .map((item) => {
-        const originalItemId = (item.meta as any)?._originalItemId
+        const originalItemId = getMetaString(item, '_originalItemId')
         const scored =
           (originalItemId && scoreMap.get(`${item.source.id}:${originalItemId}`)) ||
           scoreMap.get(item.id) ||
@@ -383,7 +391,9 @@ export class ItemRebuilder {
           this.findScoredByPartialMatch(item, scoredItems)
         if (!scored) return null
 
-        const meta: any = item.meta || {}
+        const meta: Record<string, unknown> = {
+          ...(item.meta as Record<string, unknown> | undefined)
+        }
         meta.recommendation = {
           score: scored.score,
           source: scored.source,
@@ -394,7 +404,7 @@ export class ItemRebuilder {
         // Store original itemId for deduplication in recommendation-engine
         meta._originalItemId = scored.itemId
         meta._originalSourceId = scored.sourceId
-        item.meta = meta
+        item.meta = meta as TuffItem['meta']
 
         return item
       })

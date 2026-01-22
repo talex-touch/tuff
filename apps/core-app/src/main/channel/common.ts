@@ -7,6 +7,7 @@ import type {
   StartupResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { Locale } from '../utils/i18n-helper'
+import type { StorageUsageIncludeOptions } from '../utils/storage-usage'
 import { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -18,7 +19,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
-import { BrowserWindow, powerMonitor, shell } from 'electron'
+import { BrowserWindow, powerMonitor, shell, type OpenDevToolsOptions } from 'electron'
 import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
@@ -50,6 +51,17 @@ import {
   cleanupUpdates,
   cleanupUsage
 } from '../service/storage-maintenance'
+import type {
+  CleanupAnalyticsOptions,
+  CleanupClipboardOptions,
+  CleanupDownloadsOptions,
+  CleanupFileIndexOptions,
+  CleanupIntelligenceOptions,
+  CleanupLogsOptions,
+  CleanupOcrOptions,
+  CleanupTempOptions,
+  CleanupUsageOptions
+} from '../service/storage-maintenance'
 import { tempFileService } from '../service/temp-file.service'
 import { TalexTouch } from '../types'
 import { checkPlatformCompatibility } from '../utils/common-util'
@@ -57,7 +69,7 @@ import { setLocale } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
-import { getStorageUsageReport, type StorageUsageIncludeOptions } from '../utils/storage-usage'
+import { getStorageUsageReport } from '../utils/storage-usage'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
@@ -96,21 +108,27 @@ const legacySystemGetStorageUsageEvent = defineRawEvent<{ include?: string[] }, 
   'system:get-storage-usage'
 )
 const legacyTempFileCreateEvent = defineRawEvent<
-  any,
+  unknown,
   { url: string; sizeBytes: number; createdAt: number }
 >('temp-file:create')
-const legacyTempFileDeleteEvent = defineRawEvent<any, { success: boolean }>('temp-file:delete')
-const legacyStorageCleanupClipboardEvent = defineRawEvent<any, unknown>('storage:cleanup:clipboard')
-const legacyStorageCleanupFileIndexEvent = defineRawEvent<any, unknown>(
+const legacyTempFileDeleteEvent = defineRawEvent<unknown, { success: boolean }>('temp-file:delete')
+const legacyStorageCleanupClipboardEvent = defineRawEvent<unknown, unknown>(
+  'storage:cleanup:clipboard'
+)
+const legacyStorageCleanupFileIndexEvent = defineRawEvent<unknown, unknown>(
   'storage:cleanup:file-index'
 )
-const legacyStorageCleanupLogsEvent = defineRawEvent<any, unknown>('storage:cleanup:logs')
-const legacyStorageCleanupTempEvent = defineRawEvent<any, unknown>('storage:cleanup:temp')
-const legacyStorageCleanupAnalyticsEvent = defineRawEvent<any, unknown>('storage:cleanup:analytics')
-const legacyStorageCleanupUsageEvent = defineRawEvent<any, unknown>('storage:cleanup:usage')
-const legacyStorageCleanupOcrEvent = defineRawEvent<any, unknown>('storage:cleanup:ocr')
-const legacyStorageCleanupDownloadsEvent = defineRawEvent<any, unknown>('storage:cleanup:downloads')
-const legacyStorageCleanupIntelligenceEvent = defineRawEvent<any, unknown>(
+const legacyStorageCleanupLogsEvent = defineRawEvent<unknown, unknown>('storage:cleanup:logs')
+const legacyStorageCleanupTempEvent = defineRawEvent<unknown, unknown>('storage:cleanup:temp')
+const legacyStorageCleanupAnalyticsEvent = defineRawEvent<unknown, unknown>(
+  'storage:cleanup:analytics'
+)
+const legacyStorageCleanupUsageEvent = defineRawEvent<unknown, unknown>('storage:cleanup:usage')
+const legacyStorageCleanupOcrEvent = defineRawEvent<unknown, unknown>('storage:cleanup:ocr')
+const legacyStorageCleanupDownloadsEvent = defineRawEvent<unknown, unknown>(
+  'storage:cleanup:downloads'
+)
+const legacyStorageCleanupIntelligenceEvent = defineRawEvent<unknown, unknown>(
   'storage:cleanup:intelligence'
 )
 const legacyStorageCleanupConfigEvent = defineRawEvent<void, unknown>('storage:cleanup:config')
@@ -170,6 +188,7 @@ interface OSInformation {
 interface KeyManagerHolder {
   keyManager?: unknown
 }
+type AppPathName = Parameters<Electron.App['getPath']>[0]
 interface RendererPerfReport {
   kind: string
   at: number
@@ -432,26 +451,27 @@ export class CommonChannelModule extends BaseModule {
 
     this.transportDisposers.push(
       transport.on(legacyTempFileCreateEvent, async (payload, context) => {
+        const tempPayload = isRecord(payload) ? payload : {}
         const pluginName = context.plugin?.name
 
         if (pluginName) {
           const segment = safeNamespaceSegment(pluginName)
           const namespace = `plugins/${segment}`
           const retentionMs =
-            typeof payload?.retentionMs === 'number' &&
-            Number.isFinite(payload.retentionMs) &&
-            payload.retentionMs > 0
-              ? Number(payload.retentionMs)
+            typeof tempPayload.retentionMs === 'number' &&
+            Number.isFinite(tempPayload.retentionMs) &&
+            tempPayload.retentionMs > 0
+              ? Number(tempPayload.retentionMs)
               : PLUGIN_TEMP_RETENTION_MS
 
           ensureTempNamespace(namespace, retentionMs)
 
           const res = await tempFileService.createFile({
             namespace,
-            ext: typeof payload?.ext === 'string' ? payload.ext : undefined,
-            text: typeof payload?.text === 'string' ? payload.text : undefined,
-            base64: typeof payload?.base64 === 'string' ? payload.base64 : undefined,
-            prefix: typeof payload?.prefix === 'string' ? payload.prefix : segment
+            ext: typeof tempPayload.ext === 'string' ? tempPayload.ext : undefined,
+            text: typeof tempPayload.text === 'string' ? tempPayload.text : undefined,
+            base64: typeof tempPayload.base64 === 'string' ? tempPayload.base64 : undefined,
+            prefix: typeof tempPayload.prefix === 'string' ? tempPayload.prefix : segment
           })
 
           return {
@@ -461,22 +481,22 @@ export class CommonChannelModule extends BaseModule {
           }
         }
 
-        const namespace = typeof payload?.namespace === 'string' ? payload.namespace : 'misc'
+        const namespace = typeof tempPayload.namespace === 'string' ? tempPayload.namespace : 'misc'
         const retentionMs =
-          typeof payload?.retentionMs === 'number' &&
-          Number.isFinite(payload.retentionMs) &&
-          payload.retentionMs > 0
-            ? Number(payload.retentionMs)
+          typeof tempPayload.retentionMs === 'number' &&
+          Number.isFinite(tempPayload.retentionMs) &&
+          tempPayload.retentionMs > 0
+            ? Number(tempPayload.retentionMs)
             : 24 * 60 * 60 * 1000
 
         ensureTempNamespace(namespace, retentionMs)
 
         const res = await tempFileService.createFile({
           namespace,
-          ext: typeof payload?.ext === 'string' ? payload.ext : undefined,
-          text: typeof payload?.text === 'string' ? payload.text : undefined,
-          base64: typeof payload?.base64 === 'string' ? payload.base64 : undefined,
-          prefix: typeof payload?.prefix === 'string' ? payload.prefix : 'temp'
+          ext: typeof tempPayload.ext === 'string' ? tempPayload.ext : undefined,
+          text: typeof tempPayload.text === 'string' ? tempPayload.text : undefined,
+          base64: typeof tempPayload.base64 === 'string' ? tempPayload.base64 : undefined,
+          prefix: typeof tempPayload.prefix === 'string' ? tempPayload.prefix : 'temp'
         })
 
         return {
@@ -486,16 +506,17 @@ export class CommonChannelModule extends BaseModule {
         }
       }),
       transport.on(legacyTempFileDeleteEvent, async (payload, context) => {
+        const tempPayload = isRecord(payload) ? payload : {}
         const pluginName = context.plugin?.name
         if (pluginName) {
           const segment = safeNamespaceSegment(pluginName)
           const pluginDir = tempFileService.resolveNamespaceDir(`plugins/${segment}`)
 
           const target =
-            typeof payload?.url === 'string'
-              ? payload.url
-              : typeof payload?.path === 'string'
-                ? payload.path
+            typeof tempPayload.url === 'string'
+              ? tempPayload.url
+              : typeof tempPayload.path === 'string'
+                ? tempPayload.path
                 : ''
           const filePath = resolveTfilePath(target)
           if (!filePath) return { success: false }
@@ -511,10 +532,10 @@ export class CommonChannelModule extends BaseModule {
         }
 
         const target =
-          typeof payload?.url === 'string'
-            ? payload.url
-            : typeof payload?.path === 'string'
-              ? payload.path
+          typeof tempPayload.url === 'string'
+            ? tempPayload.url
+            : typeof tempPayload.path === 'string'
+              ? tempPayload.path
               : ''
         const filePath = resolveTfilePath(target)
         const success = filePath ? await tempFileService.deleteFile(filePath) : false
@@ -524,10 +545,12 @@ export class CommonChannelModule extends BaseModule {
 
     this.transportDisposers.push(
       transport.on(legacySystemGetStorageUsageEvent, async (payload) => {
+        const usagePayload = isRecord(payload) ? payload : {}
         const storageStats = storageModule.getCacheStats()
         const clipboardStats = clipboardModule.getCacheStats()
-        const include = payload?.include
-          ? payload.include.reduce<StorageUsageIncludeOptions>((acc, key) => {
+        const includeList = Array.isArray(usagePayload.include) ? usagePayload.include : undefined
+        const include = includeList
+          ? includeList.reduce<StorageUsageIncludeOptions>((acc, key) => {
               if (
                 key === 'modules' ||
                 key === 'plugins' ||
@@ -552,31 +575,40 @@ export class CommonChannelModule extends BaseModule {
         })
       }),
       transport.on(legacyStorageCleanupClipboardEvent, async (payload) => {
-        return await cleanupClipboard(payload)
+        const options = isRecord(payload) ? (payload as CleanupClipboardOptions) : undefined
+        return await cleanupClipboard(options)
       }),
       transport.on(legacyStorageCleanupFileIndexEvent, async (payload) => {
-        return await cleanupFileIndex(payload)
+        const options = isRecord(payload) ? (payload as CleanupFileIndexOptions) : undefined
+        return await cleanupFileIndex(options)
       }),
       transport.on(legacyStorageCleanupLogsEvent, async (payload) => {
-        return await cleanupLogs(payload)
+        const options = isRecord(payload) ? (payload as CleanupLogsOptions) : undefined
+        return await cleanupLogs(options)
       }),
       transport.on(legacyStorageCleanupTempEvent, async (payload) => {
-        return await cleanupTemp(payload)
+        const options = isRecord(payload) ? (payload as CleanupTempOptions) : undefined
+        return await cleanupTemp(options)
       }),
       transport.on(legacyStorageCleanupAnalyticsEvent, async (payload) => {
-        return await cleanupAnalytics(payload)
+        const options = isRecord(payload) ? (payload as CleanupAnalyticsOptions) : undefined
+        return await cleanupAnalytics(options)
       }),
       transport.on(legacyStorageCleanupUsageEvent, async (payload) => {
-        return await cleanupUsage(payload)
+        const options = isRecord(payload) ? (payload as CleanupUsageOptions) : undefined
+        return await cleanupUsage(options)
       }),
       transport.on(legacyStorageCleanupOcrEvent, async (payload) => {
-        return await cleanupOcr(payload)
+        const options = isRecord(payload) ? (payload as CleanupOcrOptions) : undefined
+        return await cleanupOcr(options)
       }),
       transport.on(legacyStorageCleanupDownloadsEvent, async (payload) => {
-        return await cleanupDownloads(payload)
+        const options = isRecord(payload) ? (payload as CleanupDownloadsOptions) : undefined
+        return await cleanupDownloads(options)
       }),
       transport.on(legacyStorageCleanupIntelligenceEvent, async (payload) => {
-        return await cleanupIntelligence(payload)
+        const options = isRecord(payload) ? (payload as CleanupIntelligenceOptions) : undefined
+        return await cleanupIntelligence(options)
       }),
       transport.on(legacyStorageCleanupConfigEvent, async () => {
         return await cleanupConfig()
@@ -594,7 +626,7 @@ export class CommonChannelModule extends BaseModule {
           return null
         }
         try {
-          return touchApp.app.getPath(name as any)
+          return touchApp.app.getPath(name as AppPathName)
         } catch (error) {
           log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
           return null
@@ -669,7 +701,10 @@ export class CommonChannelModule extends BaseModule {
         return false
       }),
       transport.on(legacyFilesIndexProgressEvent, async (payload) => {
-        const paths = Array.isArray((payload as any)?.paths) ? (payload as any).paths : undefined
+        const payloadPaths = (payload as { paths?: unknown })?.paths
+        const paths = Array.isArray(payloadPaths)
+          ? payloadPaths.filter((item): item is string => typeof item === 'string')
+          : undefined
         return fileProvider.getIndexingProgress(paths)
       })
     )
@@ -853,8 +888,9 @@ export class CommonChannelModule extends BaseModule {
       this.transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
       this.transport.on(AppEvents.window.focus, () => touchApp.window.window.focus()),
       this.transport.on(AppEvents.debug.openDevTools, (payload) => {
-        const options = payload && typeof payload === 'object' ? payload : undefined
-        touchApp.window.openDevTools(options as any)
+        const options =
+          payload && typeof payload === 'object' ? (payload as OpenDevToolsOptions) : undefined
+        touchApp.window.openDevTools(options)
       }),
       this.transport.on(AppEvents.system.getCwd, () => process.cwd()),
       this.transport.on(AppEvents.system.getOS, () => getOSInformation()),
@@ -865,7 +901,7 @@ export class CommonChannelModule extends BaseModule {
           return null
         }
         try {
-          return electronApp.getPath(name as any)
+          return electronApp.getPath(name as AppPathName)
         } catch (error) {
           log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
           return null

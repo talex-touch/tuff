@@ -52,20 +52,16 @@ export class ConcurrencyAdjuster {
     if (speed > 10 * 1024 * 1024) {
       // > 10MB/s
       multiplier = 1.5
-    }
-    else if (speed > 5 * 1024 * 1024) {
+    } else if (speed > 5 * 1024 * 1024) {
       // > 5MB/s
       multiplier = 1.3
-    }
-    else if (speed > 2 * 1024 * 1024) {
+    } else if (speed > 2 * 1024 * 1024) {
       // > 2MB/s
       multiplier = 1.1
-    }
-    else if (speed < 1 * 1024 * 1024) {
+    } else if (speed < 1 * 1024 * 1024) {
       // < 1MB/s
       multiplier = 0.7
-    }
-    else if (speed < 512 * 1024) {
+    } else if (speed < 512 * 1024) {
       // < 512KB/s
       multiplier = 0.5
     }
@@ -80,14 +76,11 @@ export class ConcurrencyAdjuster {
 
     if (stability > 0.8) {
       multiplier = 1.2 // 网络稳定，可以增加并发
-    }
-    else if (stability > 0.6) {
+    } else if (stability > 0.6) {
       multiplier = 1.0 // 网络一般，保持默认
-    }
-    else if (stability > 0.4) {
+    } else if (stability > 0.4) {
       multiplier = 0.8 // 网络不稳定，减少并发
-    }
-    else {
+    } else {
       multiplier = 0.6 // 网络很不稳定，大幅减少并发
     }
 
@@ -151,17 +144,13 @@ export class ConcurrencyAdjuster {
 
     if (networkStatus.speed > 10 * 1024 * 1024 && networkStatus.stability > 0.8) {
       optimal = 6 // 高速稳定网络
-    }
-    else if (networkStatus.speed > 5 * 1024 * 1024 && networkStatus.stability > 0.6) {
+    } else if (networkStatus.speed > 5 * 1024 * 1024 && networkStatus.stability > 0.6) {
       optimal = 4 // 中高速网络
-    }
-    else if (networkStatus.speed > 2 * 1024 * 1024 && networkStatus.stability > 0.4) {
+    } else if (networkStatus.speed > 2 * 1024 * 1024 && networkStatus.stability > 0.4) {
       optimal = 3 // 中等网络
-    }
-    else if (networkStatus.speed > 1024 * 1024 && networkStatus.stability > 0.3) {
+    } else if (networkStatus.speed > 1024 * 1024 && networkStatus.stability > 0.3) {
       optimal = 2 // 较慢网络
-    }
-    else {
+    } else {
       optimal = 1 // 慢网络或不稳定网络
     }
 
@@ -189,18 +178,16 @@ export class ConcurrencyAdjuster {
     let reason = ''
     if (difference > 1) {
       reason = 'Network conditions improved, can increase concurrency'
-    }
-    else if (difference < -1) {
+    } else if (difference < -1) {
       reason = 'Network conditions degraded, should decrease concurrency'
-    }
-    else {
+    } else {
       reason = 'Current concurrency is optimal'
     }
 
     return {
       shouldAdjust: Math.abs(difference) > 1,
       recommendedConcurrency: recommended,
-      reason,
+      reason
     }
   }
 
@@ -252,7 +239,7 @@ export class ConcurrencyAdjuster {
       adjustmentCount: this.adjustmentHistory.length,
       autoAdjustEnabled: this.config.concurrency.autoAdjust,
       networkAwareEnabled: this.config.concurrency.networkAware,
-      priorityBasedEnabled: this.config.concurrency.priorityBased,
+      priorityBasedEnabled: this.config.concurrency.priorityBased
     }
   }
 

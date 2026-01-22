@@ -18,14 +18,14 @@ export const downloadTasksSchema = sqliteTable(
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
     completedAt: integer('completed_at'),
-    error: text('error'),
+    error: text('error')
   },
-  table => ({
+  (table) => ({
     statusIdx: index('idx_tasks_status').on(table.status),
     createdAtIdx: index('idx_tasks_created').on(table.createdAt),
     priorityIdx: index('idx_tasks_priority').on(table.priority),
-    statusPriorityIdx: index('idx_tasks_status_priority').on(table.status, table.priority),
-  }),
+    statusPriorityIdx: index('idx_tasks_status_priority').on(table.status, table.priority)
+  })
 )
 
 export const downloadChunksSchema = sqliteTable(
@@ -43,12 +43,12 @@ export const downloadChunksSchema = sqliteTable(
     status: text('status').notNull(),
     filePath: text('file_path').notNull(),
     createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
   },
-  table => ({
+  (table) => ({
     taskIdIdx: index('idx_chunks_task').on(table.taskId),
-    taskIdIndexIdx: index('idx_chunks_task_index').on(table.taskId, table.index),
-  }),
+    taskIdIndexIdx: index('idx_chunks_task_index').on(table.taskId, table.index)
+  })
 )
 
 export const downloadHistorySchema = sqliteTable(
@@ -65,23 +65,23 @@ export const downloadHistorySchema = sqliteTable(
     duration: integer('duration'), // seconds
     averageSpeed: integer('average_speed'), // bytes/s
     createdAt: integer('created_at').notNull(),
-    completedAt: integer('completed_at'),
+    completedAt: integer('completed_at')
   },
-  table => ({
+  (table) => ({
     createdAtIdx: index('idx_history_created').on(table.createdAt),
-    completedAtIdx: index('idx_history_completed').on(table.completedAt),
-  }),
+    completedAtIdx: index('idx_history_completed').on(table.completedAt)
+  })
 )
 
 export const downloadTasksRelations = relations(downloadTasksSchema, ({ many }) => ({
-  chunks: many(downloadChunksSchema),
+  chunks: many(downloadChunksSchema)
 }))
 
 export const downloadChunksRelations = relations(downloadChunksSchema, ({ one }) => ({
   task: one(downloadTasksSchema, {
     fields: [downloadChunksSchema.taskId],
-    references: [downloadTasksSchema.id],
-  }),
+    references: [downloadTasksSchema.id]
+  })
 }))
 
 export type DownloadTask = typeof downloadTasksSchema.$inferSelect

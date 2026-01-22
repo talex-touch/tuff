@@ -1,9 +1,9 @@
 import type { ModuleLoadMetric } from './modules/analytics'
 import type { LogLevel } from './utils/logger'
 
+import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import process from 'node:process'
 import { app, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'

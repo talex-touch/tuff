@@ -11,11 +11,22 @@ import process from 'node:process'
 import { getCapabilityPrompt } from '../intelligence-config'
 import { BaseCapabilityTester } from './base-tester'
 
+function isVisionSource(value: unknown): value is IntelligenceVisionOcrPayload['source'] {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    typeof (value as { type?: unknown }).type === 'string'
+  )
+}
+
 export class VisionCapabilityTester extends BaseCapabilityTester {
   readonly capabilityType = 'vision'
 
   async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceVisionOcrPayload> {
-    const source = input.source ?? (await this.loadSampleImageSource('ocr'))
+    const source = isVisionSource(input.source)
+      ? input.source
+      : await this.loadSampleImageSource('ocr')
 
     return {
       source,

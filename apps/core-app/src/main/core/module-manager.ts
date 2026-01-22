@@ -5,7 +5,6 @@ import type {
   ModuleCtor,
   ModuleDestroyContext,
   ModuleDirectory,
-  ModuleFileConfig,
   ModuleInitContext,
   ModuleKey,
   ModuleRegistrant,
@@ -13,10 +12,10 @@ import type {
   ModuleStopContext,
   ResolvedModuleFileConfig
 } from '@talex-touch/utils/types/modules'
+import type { Buffer } from 'node:buffer'
 import type { ITouchChannel } from 'packages/utils/channel'
 import type { ITouchEventBus } from 'packages/utils/eventbus'
 import type { TalexEvents } from './eventbus/touch-event'
-import type { Buffer } from 'node:buffer'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { moduleLog } from '../utils/logger'
@@ -117,7 +116,7 @@ class FSModuleDirectory implements ModuleDirectory {
   async writeFile(relativePath: string, data: string | Uint8Array): Promise<void> {
     const abs = this.join(relativePath)
     await fs.mkdir(path.dirname(abs), { recursive: true })
-    await fs.writeFile(abs, data as any)
+    await fs.writeFile(abs, data)
   }
 
   /**
@@ -267,10 +266,11 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     }
 
     // If it's a constructor, extract the key
-    const key = (ctorOrKey as any).key as ModuleKey | undefined
+    const ctor = ctorOrKey as ModuleCtor<T, TalexEvents> & { name?: string }
+    const key = ctor.key
     if (!key) {
       throw new Error(
-        `[ModuleManager] Could not resolve key for ${(ctorOrKey as any).name}. Did you forget to define "static key: ModuleKey"?`
+        `[ModuleManager] Could not resolve key for ${ctor.name ?? 'unknown'}. Did you forget to define "static key: ModuleKey"?`
       )
     }
     return this.modules.get(key) as T | undefined
@@ -453,7 +453,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    *          `dirName` and `dirPath` might not be present.
    */
   private resolveFileConfig(module: TalexTouch.IModule<TalexEvents>): ResolvedModuleFileConfig {
-    const input: ModuleFileConfig | undefined = (module as any).file
+    const input = module.file
     const createDefault = true
 
     const create = input?.create ?? createDefault
@@ -516,7 +516,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     module: TalexTouch.IModule<TalexEvents>,
     file: ResolvedModuleFileConfig
   ): string | undefined {
-    const legacy = (module as any).filePath as string | undefined
+    const legacy = module.filePath
     if (legacy)
       return path.isAbsolute(legacy) ? legacy : path.join(file.dirPath ?? this.modulesRoot, legacy)
 
@@ -537,11 +537,15 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    * @returns A base context object containing properties shared by all module lifecycle contexts.
    */
   private makeBaseContext(moduleKey: ModuleKey, directory?: ModuleDirectory) {
+    const appConfig = this.app as TalexTouch.TouchApp & {
+      config?: { get?: <T = unknown>(key: string) => T }
+    }
+
     return {
       app: this.app,
       manager: this as unknown as TalexTouch.IModuleManager<TalexEvents>,
       moduleKey,
-      config: <T = unknown>(key: string) => (this.app as any)?.config?.get?.(key) as T,
+      config: <T = unknown>(key: string) => appConfig.config?.get?.(key) as T,
       events: this.eventBus
         ? {
             on: this.eventBus.on.bind(this.eventBus),

@@ -25,7 +25,7 @@ export class ReportQueueStore {
         createdAt: dbSchema.analyticsReportQueue.createdAt,
         retryCount: dbSchema.analyticsReportQueue.retryCount,
         lastAttemptAt: dbSchema.analyticsReportQueue.lastAttemptAt,
-        lastError: dbSchema.analyticsReportQueue.lastError,
+        lastError: dbSchema.analyticsReportQueue.lastError
       })
       .from(dbSchema.analyticsReportQueue)
       .orderBy(asc(dbSchema.analyticsReportQueue.createdAt))
@@ -34,23 +34,27 @@ export class ReportQueueStore {
       ? await query.where(gte(dbSchema.analyticsReportQueue.createdAt, cutoff))
       : await query
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       id: row.id,
       endpoint: row.endpoint,
       payload: safeParsePayload(row.payload),
       createdAt: row.createdAt,
       retryCount: row.retryCount,
       lastAttemptAt: row.lastAttemptAt ?? undefined,
-      lastError: row.lastError ?? null,
+      lastError: row.lastError ?? null
     }))
   }
 
-  async insert(entry: { endpoint: string, payload: Record<string, unknown>, createdAt: number }): Promise<void> {
+  async insert(entry: {
+    endpoint: string
+    payload: Record<string, unknown>
+    createdAt: number
+  }): Promise<void> {
     await this.db.insert(dbSchema.analyticsReportQueue).values({
       endpoint: entry.endpoint,
       payload: JSON.stringify(entry.payload),
       createdAt: entry.createdAt,
-      retryCount: 0,
+      retryCount: 0
     })
   }
 
@@ -60,13 +64,15 @@ export class ReportQueueStore {
       .set({
         retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
         lastAttemptAt: Date.now(),
-        lastError: error ?? null,
+        lastError: error ?? null
       })
       .where(eq(dbSchema.analyticsReportQueue.id, id))
   }
 
   async remove(id: number): Promise<void> {
-    await this.db.delete(dbSchema.analyticsReportQueue).where(eq(dbSchema.analyticsReportQueue.id, id))
+    await this.db
+      .delete(dbSchema.analyticsReportQueue)
+      .where(eq(dbSchema.analyticsReportQueue.id, id))
   }
 
   async prune(cutoff: number): Promise<void> {
@@ -79,10 +85,8 @@ export class ReportQueueStore {
 function safeParsePayload(raw: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object')
-      return parsed as Record<string, unknown>
-  }
-  catch {
+    if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>
+  } catch {
     // ignore parse errors
   }
   return {}

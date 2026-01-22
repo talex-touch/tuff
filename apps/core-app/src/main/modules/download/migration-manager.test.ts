@@ -6,7 +6,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createClient } from '@libsql/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { MigrationManager } from './migration-manager'
+import { MigrationManager, type MigrationProgress } from './migration-manager'
 import { allMigrations, MigrationRunner } from './migrations'
 
 const TEST_DB_PATH = path.join(__dirname, 'test-migration.db')
@@ -54,7 +54,7 @@ describe('migrationManager', () => {
   it('should emit progress events during migration', async () => {
     await createOldDatabase()
 
-    const progressEvents: any[] = []
+    const progressEvents: MigrationProgress[] = []
     migrationManager.on('progress', (progress) => {
       progressEvents.push(progress)
     })
@@ -136,7 +136,7 @@ describe('migrationRunner', () => {
   })
 
   it('should emit progress events', async () => {
-    const progressEvents: any[] = []
+    const progressEvents: MigrationProgress[] = []
     migrationRunner.on('progress', (progress) => {
       progressEvents.push(progress)
     })
@@ -155,8 +155,7 @@ async function cleanupTestFiles() {
   for (const file of files) {
     try {
       await fs.unlink(file)
-    }
-    catch {
+    } catch {
       // Ignore if file doesn't exist
     }
   }
@@ -181,8 +180,7 @@ async function createOldDatabase() {
         error TEXT
       )
     `)
-  }
-  finally {
+  } finally {
     client.close()
   }
 }
@@ -201,8 +199,8 @@ async function insertOldTestData() {
         'completed',
         1000000,
         1000000,
-        Date.now(),
-      ],
+        Date.now()
+      ]
     })
 
     await client.execute({
@@ -215,11 +213,10 @@ async function insertOldTestData() {
         'pending',
         2000000,
         500000,
-        Date.now(),
-      ],
+        Date.now()
+      ]
     })
-  }
-  finally {
+  } finally {
     client.close()
   }
 }

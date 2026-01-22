@@ -6,8 +6,7 @@ class PermissionCenter implements IPermissionCenter {
   addPermission(pluginScope: string, permission: Permission): void {
     const index = this.getPerIndex(pluginScope, permission)
 
-    if (index !== -1)
-      throw new Error('Permission already exists')
+    if (index !== -1) throw new Error('Permission already exists')
     if (!this.perMap.has(pluginScope)) {
       this.perMap.set(pluginScope, [])
     }
@@ -20,8 +19,7 @@ class PermissionCenter implements IPermissionCenter {
   delPermission(pluginScope: string, permission: Permission): void {
     const index = this.getPerIndex(pluginScope, permission)
 
-    if (index === -1)
-      throw new Error('Permission not exists')
+    if (index === -1) throw new Error('Permission not exists')
 
     const perArr = this.getPerFile(pluginScope)
 
@@ -31,11 +29,11 @@ class PermissionCenter implements IPermissionCenter {
   }
 
   hasPermission(pluginScope: string, permission: Permission): boolean {
-    return this.getPerFile(pluginScope).some(per => per.id === permission.id)
+    return this.getPerFile(pluginScope).some((per) => per.id === permission.id)
   }
 
   getPermission(pluginScope: string, permission: symbol): Permission {
-    return this.getPerFile(pluginScope).find(per => per.id === permission)!
+    return this.getPerFile(pluginScope).find((per) => per.id === permission)!
   }
 
   rootPath: string
@@ -47,7 +45,7 @@ class PermissionCenter implements IPermissionCenter {
   }
 
   getPerIndex(pluginScope: string, permission: Permission) {
-    return this.getPerFile(pluginScope).findIndex(per => per.id === permission.id)
+    return this.getPerFile(pluginScope).findIndex((per) => per.id === permission.id)
   }
 
   getPerFile(pluginScope: string): Array<Permission> {
@@ -68,7 +66,7 @@ class PermissionCenter implements IPermissionCenter {
           fse.mkdirSync(this.rootPath, { recursive: true })
         }
         fse.writeJSONSync(this.getPerPath(pluginScope), JSON.stringify(perArr))
-      }),
+      })
     )
 
     await Promise.all(promises)
@@ -89,12 +87,11 @@ export default {
   name: Symbol('PermissionCenter'),
   filePath: 'permissions',
   init() {
-    const that: any = this
-    const perPath = that.modulePath!
+    const perPath = (this as { modulePath?: string }).modulePath!
 
     genPermissionCenter(perPath)
   },
   destroy() {
     permissionCenter.save()
-  },
+  }
 }

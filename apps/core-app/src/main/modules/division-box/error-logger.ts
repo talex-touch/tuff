@@ -7,6 +7,7 @@
 
 import type { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
 import { createLogger } from '../../utils/logger'
+import type { Primitive } from '../../utils/logger'
 
 /**
  * Error log entry structure
@@ -28,7 +29,7 @@ export interface ErrorLogEntry {
   stack?: string
 
   /** Additional metadata */
-  meta?: Record<string, any>
+  meta?: Record<string, unknown>
 }
 
 /**
@@ -53,7 +54,7 @@ export class ErrorLogger {
    * @param error - The error to log
    * @param meta - Additional metadata to include in the log
    */
-  logError(error: DivisionBoxError, meta?: Record<string, any>): void {
+  logError(error: DivisionBoxError, meta?: Record<string, unknown>): void {
     const entry: ErrorLogEntry = {
       code: error.code,
       message: error.message,
@@ -73,7 +74,7 @@ export class ErrorLogger {
       meta: {
         code: error.code,
         sessionId: error.sessionId || 'N/A',
-        ...(meta || {})
+        ...(normalizeMeta(meta) || {})
       },
       error: error.stack ? error : undefined
     })
@@ -93,7 +94,7 @@ export class ErrorLogger {
     message: string,
     sessionId?: string,
     originalError?: Error,
-    meta?: Record<string, any>
+    meta?: Record<string, unknown>
   ): void {
     const entry: ErrorLogEntry = {
       code,
@@ -126,8 +127,8 @@ export class ErrorLogger {
    * @param message - Warning message
    * @param meta - Additional metadata
    */
-  logWarning(message: string, meta?: Record<string, any>): void {
-    this.logger.warn(message, { meta })
+  logWarning(message: string, meta?: Record<string, unknown>): void {
+    this.logger.warn(message, { meta: normalizeMeta(meta) })
   }
 
   /**
@@ -136,8 +137,8 @@ export class ErrorLogger {
    * @param message - Info message
    * @param meta - Additional metadata
    */
-  logInfo(message: string, meta?: Record<string, any>): void {
-    this.logger.info(message, { meta })
+  logInfo(message: string, meta?: Record<string, unknown>): void {
+    this.logger.info(message, { meta: normalizeMeta(meta) })
   }
 
   /**
@@ -146,8 +147,8 @@ export class ErrorLogger {
    * @param message - Debug message
    * @param meta - Additional metadata
    */
-  logDebug(message: string, meta?: Record<string, any>): void {
-    this.logger.debug(message, { meta })
+  logDebug(message: string, meta?: Record<string, unknown>): void {
+    this.logger.debug(message, { meta: normalizeMeta(meta) })
   }
 
   /**
@@ -251,6 +252,25 @@ export class ErrorLogger {
 
     return stats
   }
+}
+
+function normalizeMeta(meta?: Record<string, unknown>): Record<string, Primitive> | undefined {
+  if (!meta) return undefined
+  const normalized: Record<string, Primitive> = {}
+  for (const [key, value] of Object.entries(meta)) {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      normalized[key] = value
+    } else {
+      normalized[key] = JSON.stringify(value)
+    }
+  }
+  return normalized
 }
 
 /**

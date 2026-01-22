@@ -16,7 +16,7 @@ import { databaseModule } from '../database'
 export interface IntelligenceAuditLogEntry extends IntelligenceAuditLog {
   userId?: string
   estimatedCost?: number
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 /**
@@ -196,7 +196,10 @@ export class IntelligenceAuditLogger {
   /**
    * Update usage statistics based on audit logs
    */
-  private async updateUsageStats(db: any, logs: IntelligenceAuditLogEntry[]): Promise<void> {
+  private async updateUsageStats(
+    db: Pick<LibSQLDatabase<typeof schema>, 'select' | 'insert' | 'update'>,
+    logs: IntelligenceAuditLogEntry[]
+  ): Promise<void> {
     // Group logs by caller and period
     const stats = new Map<string, IntelligenceUsageSummary>()
 
@@ -216,6 +219,9 @@ export class IntelligenceAuditLogger {
     // Upsert stats to database
     for (const [key, stat] of stats) {
       const [caller, periodType, period] = key.split(':')
+      if (periodType !== 'day' && periodType !== 'month') {
+        continue
+      }
       const fullPeriod = `${periodType}:${period}`
 
       try {
@@ -269,7 +275,7 @@ export class IntelligenceAuditLogger {
             callerId: caller,
             callerType: callerTypeValue,
             period: fullPeriod,
-            periodType: periodType as any,
+            periodType,
             requestCount: stat.requestCount,
             successCount: stat.successCount,
             failureCount: stat.failureCount,

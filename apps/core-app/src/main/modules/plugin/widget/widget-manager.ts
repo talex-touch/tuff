@@ -1,11 +1,11 @@
+import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
 import type { FSWatcher } from 'chokidar'
 import type { WidgetCompilationContext } from './widget-processor'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
+import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import chokidar from 'chokidar'
 import { genTouchApp } from '../../../core'
 import { compileWidgetSource } from './widget-compiler'
@@ -22,16 +22,18 @@ const pluginWidgetUnregisterEvent = defineRawEvent<{ widgetId: string }, void>(
   'plugin:widget:unregister'
 )
 
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
+
 export class WidgetManager {
   private readonly cache = new Map<string, WidgetRegistrationPayload>()
   private readonly watchers = new Map<string, FSWatcher>()
 
   private get transport() {
     const app = genTouchApp()
-    const channel = app.channel as ITouchChannel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    return getTuffTransportMain(channel as any, keyManager as any)
+    const channel: ITouchChannel = app.channel
+    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+    return getTuffTransportMain(channel, keyManager)
   }
 
   private get mainWindowId(): number {

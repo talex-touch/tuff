@@ -29,7 +29,7 @@ export const defaultRetryConfig: RetryConfig = {
   initialDelay: 5000, // 5秒
   maxDelay: 60000, // 60秒
   backoffMultiplier: 2,
-  jitter: true,
+  jitter: true
 }
 
 /**
@@ -55,7 +55,7 @@ export class RetryStrategy {
       filename: string
       module: string
     },
-    onRetry?: (attempt: number, error: DownloadErrorClass, delay: number) => void,
+    onRetry?: (attempt: number, error: DownloadErrorClass, delay: number) => void
   ): Promise<RetryResult<T>> {
     let lastError: DownloadErrorClass | undefined
     let attempts = 0
@@ -68,29 +68,28 @@ export class RetryStrategy {
 
         // 成功
         if (attempt > 0 && this.errorLogger) {
-          await this.errorLogger.logInfo(
-            `Operation succeeded after ${attempt} retries`,
-            { taskId: context.taskId, attempts: attempt },
-          )
+          await this.errorLogger.logInfo(`Operation succeeded after ${attempt} retries`, {
+            taskId: context.taskId,
+            attempts: attempt
+          })
         }
 
         return {
           success: true,
           result,
-          attempts,
+          attempts
         }
-      }
-      catch (error) {
+      } catch (error) {
         // 转换为 DownloadErrorClass
-        const downloadError
-          = error instanceof DownloadErrorClass
+        const downloadError =
+          error instanceof DownloadErrorClass
             ? error
             : DownloadErrorClass.fromError(error as Error, {
                 taskId: context.taskId,
                 url: context.url,
                 filename: context.filename,
                 module: context.module,
-                timestamp: Date.now(),
+                timestamp: Date.now()
               })
 
         lastError = downloadError
@@ -99,7 +98,7 @@ export class RetryStrategy {
         if (this.errorLogger) {
           await this.errorLogger.logError(downloadError.toErrorObject(), {
             attempt,
-            maxRetries: this.config.maxRetries,
+            maxRetries: this.config.maxRetries
           })
         }
 
@@ -125,7 +124,7 @@ export class RetryStrategy {
     return {
       success: false,
       error: lastError,
-      attempts,
+      attempts
     }
   }
 
@@ -158,7 +157,7 @@ export class RetryStrategy {
     // 指数退避
     let delay = Math.min(
       this.config.initialDelay * this.config.backoffMultiplier ** attempt,
-      this.config.maxDelay,
+      this.config.maxDelay
     )
 
     // 添加随机抖动（避免雷鸣群效应）
@@ -174,7 +173,7 @@ export class RetryStrategy {
    * 睡眠函数
    */
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   /**
@@ -204,14 +203,12 @@ export function createRetryableDownload<T>(
     filename: string
     module: string
   },
-  onRetry?: (attempt: number, error: DownloadErrorClass, delay: number) => void,
+  onRetry?: (attempt: number, error: DownloadErrorClass, delay: number) => void
 ): Promise<T> {
-  return retryStrategy
-    .executeWithRetry(downloadFn, context, onRetry)
-    .then((result) => {
-      if (result.success && result.result !== undefined) {
-        return result.result
-      }
-      throw result.error || new Error('Download failed')
-    })
+  return retryStrategy.executeWithRetry(downloadFn, context, onRetry).then((result) => {
+    if (result.success && result.result !== undefined) {
+      return result.result
+    }
+    throw result.error || new Error('Download failed')
+  })
 }

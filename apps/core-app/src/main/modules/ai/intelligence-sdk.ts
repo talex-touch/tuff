@@ -61,9 +61,9 @@ import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
 
 const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
-const logInfo = (...args: any[]) => stdout.write(`${format(INTELLIGENCE_TAG, ...args)}\n`)
-const logWarn = (...args: any[]) => console.warn(INTELLIGENCE_TAG, ...args)
-const logError = (...args: any[]) => console.error(INTELLIGENCE_TAG, ...args)
+const logInfo = (...args: unknown[]) => stdout.write(`${format(INTELLIGENCE_TAG, ...args)}\n`)
+const logWarn = (...args: unknown[]) => console.warn(INTELLIGENCE_TAG, ...args)
+const logError = (...args: unknown[]) => console.error(INTELLIGENCE_TAG, ...args)
 
 const MAX_EMBEDDING_TOTAL_CHARS = 32_000
 const EMBEDDING_CHUNK_CHARS = 2_000
@@ -134,7 +134,7 @@ function extractMustacheVariables(template: string): string[] {
 
 async function renderPromptTemplate(
   template: string,
-  variables?: Record<string, any>
+  variables?: Record<string, unknown>
 ): Promise<string> {
   const inputVariables = extractMustacheVariables(template)
   if (inputVariables.length === 0) {
@@ -144,7 +144,7 @@ async function renderPromptTemplate(
   const prompt = new PromptTemplate({
     template,
     inputVariables,
-    templateFormat: 'mustache' as any
+    templateFormat: 'mustache'
   })
 
   return await prompt.format(variables ?? {})
@@ -174,7 +174,10 @@ export class AiSDK {
     capabilities: {}
   }
 
-  private cache = new Map<string, { result: any; timestamp: number }>()
+  private cache = new Map<
+    string,
+    { result: IntelligenceInvokeResult<unknown>; timestamp: number }
+  >()
 
   constructor(config?: Partial<IntelligenceSDKConfig>) {
     if (config) {
@@ -221,9 +224,9 @@ export class AiSDK {
     logInfo('Configuration updated')
   }
 
-  async invoke<T = any>(
+  async invoke<T = unknown>(
     capabilityId: string,
-    payload: any,
+    payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<T>> {
     const capability = aiCapabilityRegistry.get(capabilityId)
@@ -279,7 +282,7 @@ export class AiSDK {
 
     const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
     if (this.config.enableCache && !runtimeOptions.stream) {
-      const cached = this.getFromCache(cacheKey)
+      const cached = this.getFromCache<T>(cacheKey)
       if (cached) {
         logInfo(`Returning cached result for ${capabilityId}`)
         return cached
@@ -410,7 +413,7 @@ export class AiSDK {
 
     const promptTemplate =
       (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
-    const promptVariables = options.metadata?.promptVariables as Record<string, any> | undefined
+    const promptVariables = options.metadata?.promptVariables as Record<string, unknown> | undefined
     const applyPromptTemplate = (messages: IntelligenceMessage[], template?: string) => {
       if (!template) return messages
       const systemMsg: IntelligenceMessage = { role: 'system', content: template }
@@ -448,7 +451,12 @@ export class AiSDK {
           break
         case 'embedding':
           result = (await invokeEmbeddingWithGovernance(
-            provider as any
+            provider as {
+              embedding: (
+                p: IntelligenceEmbeddingPayload,
+                o: IntelligenceInvokeOptions
+              ) => Promise<IntelligenceInvokeResult<number[]>>
+            }
           )) as IntelligenceInvokeResult<T>
           break
         case 'translate':
@@ -665,7 +673,12 @@ export class AiSDK {
                 break
               case 'embedding':
                 result = (await invokeEmbeddingWithGovernance(
-                  fallbackProvider as any
+                  fallbackProvider as {
+                    embedding: (
+                      p: IntelligenceEmbeddingPayload,
+                      o: IntelligenceInvokeOptions
+                    ) => Promise<IntelligenceInvokeResult<number[]>>
+                  }
                 )) as IntelligenceInvokeResult<T>
                 break
               case 'translate':
@@ -698,7 +711,7 @@ export class AiSDK {
 
   async *invokeStream(
     capabilityId: string,
-    payload: any,
+    payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): AsyncGenerator<IntelligenceStreamChunk> {
     const capability = aiCapabilityRegistry.get(capabilityId)
@@ -776,13 +789,13 @@ export class AiSDK {
 
   private getCacheKey(
     capabilityId: string,
-    payload: any,
+    payload: unknown,
     options: IntelligenceInvokeOptions
   ): string {
     return `${capabilityId}:${JSON.stringify(payload)}:${JSON.stringify(options)}`
   }
 
-  private getFromCache(key: string): any | null {
+  private getFromCache<T>(key: string): IntelligenceInvokeResult<T> | null {
     const cached = this.cache.get(key)
     if (!cached) return null
 
@@ -792,10 +805,10 @@ export class AiSDK {
       return null
     }
 
-    return cached.result
+    return cached.result as IntelligenceInvokeResult<T>
   }
 
-  private setToCache(key: string, result: any): void {
+  private setToCache(key: string, result: IntelligenceInvokeResult<unknown>): void {
     this.cache.set(key, {
       result,
       timestamp: Date.now()

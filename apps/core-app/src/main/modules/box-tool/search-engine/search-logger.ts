@@ -1,7 +1,14 @@
+import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils'
 import { loggerManager } from '@talex-touch/utils/common/logger'
 import chalk from 'chalk'
-import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../../storage'
+import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
+import {
+  getMainConfig,
+  isMainStorageReady,
+  saveMainConfig,
+  subscribeMainConfig
+} from '../../storage'
 
 /**
  * Search Engine Logger
@@ -15,10 +22,12 @@ export class SearchLogger {
   private searchSteps: Array<{ step: string; timestamp: number; duration?: number }> = []
   private unsubscribe?: () => void
   private initialized = false
+  private storageReadyHooked = false
 
   private constructor() {
     // Register with LoggerManager for centralized control
     loggerManager.getLogger('search-engine', { enabled: this.enabled, color: 'cyan' })
+    this.setupStorageReadyHook()
   }
 
   /**
@@ -26,6 +35,10 @@ export class SearchLogger {
    */
   async init(): Promise<void> {
     if (this.initialized) return
+    if (!isMainStorageReady()) {
+      this.setupStorageReadyHook()
+      return
+    }
     this.initialized = true
     await this.loadSettings()
     this.setupSettingsWatcher()
@@ -41,7 +54,7 @@ export class SearchLogger {
       // Subscribe to configuration changes
       this.unsubscribe = subscribeMainConfig(StorageList.APP_SETTING, (data) => {
         try {
-          const settings = data as any
+          const settings = data as AppSetting
           const newEnabled = settings.searchEngine?.logsEnabled === true
 
           if (newEnabled !== this.enabled) {
@@ -60,6 +73,20 @@ export class SearchLogger {
       // Fallback to disabled state
       this.enabled = false
     }
+  }
+
+  private setupStorageReadyHook(): void {
+    if (this.storageReadyHooked) return
+    this.storageReadyHooked = true
+
+    if (isMainStorageReady()) {
+      void this.init()
+      return
+    }
+
+    touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, () => {
+      void this.init()
+    })
   }
 
   static getInstance(): SearchLogger {
@@ -87,7 +114,7 @@ export class SearchLogger {
   private async loadSettings(): Promise<void> {
     try {
       // Try to get from app settings first
-      const appSettingsData = getMainConfig(StorageList.APP_SETTING) as any
+      const appSettingsData = getMainConfig(StorageList.APP_SETTING) as AppSetting
       const enabledFromAppSettings = appSettingsData?.searchEngine?.logsEnabled
       if (typeof enabledFromAppSettings === 'boolean') {
         this.enabled = enabledFromAppSettings
@@ -110,13 +137,16 @@ export class SearchLogger {
     this.enabled = enabled
     try {
       // Update app settings
-      const appSettingsData = getMainConfig(StorageList.APP_SETTING) as any
+      const appSettingsData = getMainConfig(StorageList.APP_SETTING) as AppSetting
       const parsed =
-        typeof appSettingsData === 'object' && appSettingsData ? { ...appSettingsData } : {}
+        typeof appSettingsData === 'object' && appSettingsData
+          ? { ...appSettingsData }
+          : ({} as AppSetting)
       if (!parsed.searchEngine) {
-        parsed.searchEngine = {}
+        parsed.searchEngine = { logsEnabled: enabled }
+      } else {
+        parsed.searchEngine.logsEnabled = enabled
       }
-      parsed.searchEngine.logsEnabled = enabled
       saveMainConfig(StorageList.APP_SETTING, parsed)
       console.log(`[SearchLogger] Search engine logging ${enabled ? 'enabled' : 'disabled'}`)
     } catch (error) {

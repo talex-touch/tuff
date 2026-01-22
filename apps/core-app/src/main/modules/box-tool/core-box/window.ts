@@ -9,7 +9,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { DataCode } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
@@ -106,6 +106,13 @@ export class WindowManager {
       this._touchApp = genTouchApp()
     }
     return this._touchApp
+  }
+
+  private getTransport(): ReturnType<typeof getTuffTransportMain> {
+    const channel = this.touchApp.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    return getTuffTransportMain(channel, keyManager)
   }
 
   public static getInstance(): WindowManager {
@@ -223,10 +230,7 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.on('dom-ready', () => {
-      const transport = getTuffTransportMain(
-        this.touchApp.channel as any,
-        (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
-      )
+      const transport = this.getTransport()
       void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
         id: window.window.webContents.id,
         show: window.window.isVisible()
@@ -250,10 +254,7 @@ export class WindowManager {
 
     window.window.webContents.on('did-finish-load', () => {
       if (wasVisibleBeforeReload) {
-        const transport = getTuffTransportMain(
-          this.touchApp.channel as any,
-          (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
-        )
+        const transport = this.getTransport()
         void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
           id: window.window.webContents.id,
           show: true
@@ -559,10 +560,7 @@ export class WindowManager {
       window.window.showInactive()
     }
 
-    const transport = getTuffTransportMain(
-      this.touchApp.channel as any,
-      (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
-    )
+    const transport = this.getTransport()
     void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
       id: window.window.webContents.id,
       show: true
@@ -589,10 +587,7 @@ export class WindowManager {
     if (!window) return
 
     this.stopBoundsAnimation()
-    const transport = getTuffTransportMain(
-      this.touchApp.channel as any,
-      (this.touchApp.channel as any)?.keyManager ?? this.touchApp.channel
-    )
+    const transport = this.getTransport()
     void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
       id: window.window.webContents.id,
       show: false
@@ -961,10 +956,7 @@ export class WindowManager {
       return
     }
 
-    const channel = this.touchApp.channel as unknown
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = this.getTransport()
 
     coreBoxWindowLog.debug(`AttachUIView - loading ${url}`)
 
@@ -1067,7 +1059,6 @@ export class WindowManager {
   // Inject initial data synchronously so it's available immediately
   window['$tuffInitialData'] = ${JSON.stringify({ theme: initialThemeData })};
   const { ipcRenderer } = require('electron')
-  const ChannelType = ${JSON.stringify(ChannelType)};
   const DataCode = ${JSON.stringify(DataCode)};
   const CHANNEL_DEFAULT_TIMEOUT = 60000;
 
@@ -1096,7 +1087,7 @@ export class WindowManager {
           return {
             header: {
               status: header.status || 'request',
-              type: ChannelType.MAIN,
+              type: 'main',
               _originData: arg,
               event: e || undefined
             },
@@ -1237,7 +1228,7 @@ export class WindowManager {
         header: {
           uniqueKey,
           status: 'request',
-          type: ChannelType.PLUGIN
+          type: 'plugin'
         }
       };
       const instance = this
@@ -1283,7 +1274,7 @@ export class WindowManager {
         header: {
           uniqueKey,
           status: 'request',
-          type: ChannelType.PLUGIN
+          type: 'plugin'
         }
       };
       try {
@@ -1598,10 +1589,7 @@ export class WindowManager {
     if (!this.attachedPlugin) {
       return
     }
-    const channel = this.touchApp.channel as unknown
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = this.getTransport()
     const event = defineRawEvent<unknown, unknown>(eventName)
     void transport.sendToPlugin(this.attachedPlugin.name, event, data as unknown).catch(() => {})
   }

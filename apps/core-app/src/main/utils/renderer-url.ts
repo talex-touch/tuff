@@ -1,6 +1,6 @@
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import { app } from 'electron'
 
 /**

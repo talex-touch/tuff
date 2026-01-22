@@ -155,7 +155,7 @@ export class NetworkMonitor {
         this.addToHistory(this.speedHistory, speed)
         this.networkAvailable = true
         return speed
-      } catch (error) {
+      } catch {
         continue
       }
     }
@@ -206,7 +206,7 @@ export class NetworkMonitor {
         this.addToHistory(this.latencyHistory, latency)
         this.networkAvailable = true
         return latency
-      } catch (error) {
+      } catch {
         continue
       }
     }

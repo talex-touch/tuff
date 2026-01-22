@@ -6,7 +6,7 @@ import type {
   AnalyticsWindowType,
   CoreMetrics,
   FeatureStats,
-  PluginStats,
+  PluginStats
 } from '@talex-touch/utils/analytics'
 import type { SystemSample } from '../collectors/system-sampler'
 import type { DbStore } from '../storage/db-store'
@@ -17,8 +17,7 @@ import { MemoryStore } from '../storage/memory-store'
 import { TimeWindowCollector } from './time-window-collector'
 
 function buildCsv(snapshots: AnalyticsSnapshot[]): string {
-  if (!snapshots.length)
-    return 'windowType,timestamp,metrics\n'
+  if (!snapshots.length) return 'windowType,timestamp,metrics\n'
   const header = 'windowType,timestamp,metrics\n'
   const rows = snapshots.map((snapshot) => {
     return `${snapshot.windowType},${snapshot.timestamp},${JSON.stringify(snapshot.metrics)}`
@@ -58,21 +57,20 @@ export class AnalyticsCore {
   }
 
   hydrateStartupMetrics(startup: StartupMetrics | null): void {
-    if (!startup)
-      return
+    if (!startup) return
 
     const modules: CoreMetrics['modules'] = {}
     for (const detail of startup.mainProcess.moduleDetails) {
       modules[detail.name] = {
         operationCount: 1,
         avgDuration: detail.loadTime,
-        errorCount: 0,
+        errorCount: 0
       }
     }
 
     this.currentMetrics = {
       ...this.currentMetrics,
-      modules,
+      modules
     }
 
     void this.recordAndPersist(this.currentMetrics, '1m')
@@ -86,8 +84,8 @@ export class AnalyticsCore {
         memoryUsed: sample.memoryUsed,
         memoryTotal: sample.memoryTotal,
         heapUsed: sample.heapUsed,
-        heapTotal: sample.heapTotal,
-      },
+        heapTotal: sample.heapTotal
+      }
     }
 
     return this.recordAndPersist(this.currentMetrics, '1m')
@@ -97,26 +95,34 @@ export class AnalyticsCore {
     this.ipcTracer.track(durationMs, success)
     this.currentMetrics = {
       ...this.currentMetrics,
-      ipc: this.ipcTracer.snapshot(),
+      ipc: this.ipcTracer.snapshot()
     }
 
     return this.recordAndPersist(this.currentMetrics, '1m')
   }
 
-  trackPluginEvent(pluginName: string, featureId?: string, _metadata?: Record<string, unknown>): AnalyticsSnapshot[] {
+  trackPluginEvent(
+    pluginName: string,
+    featureId?: string,
+    _metadata?: Record<string, unknown>
+  ): AnalyticsSnapshot[] {
     this.pluginTracer.trackEvent(pluginName, featureId)
     this.currentMetrics = {
       ...this.currentMetrics,
-      plugins: this.pluginTracer.snapshot(),
+      plugins: this.pluginTracer.snapshot()
     }
     return this.recordAndPersist(this.currentMetrics, '1m')
   }
 
-  trackPluginDuration(pluginName: string, featureId: string | undefined, durationMs: number): AnalyticsSnapshot[] {
+  trackPluginDuration(
+    pluginName: string,
+    featureId: string | undefined,
+    durationMs: number
+  ): AnalyticsSnapshot[] {
     this.pluginTracer.trackDuration(pluginName, featureId, durationMs)
     this.currentMetrics = {
       ...this.currentMetrics,
-      plugins: this.pluginTracer.snapshot(),
+      plugins: this.pluginTracer.snapshot()
     }
     return this.recordAndPersist(this.currentMetrics, '1m')
   }
@@ -139,7 +145,10 @@ export class AnalyticsCore {
     void this.recordAndPersist(this.currentMetrics, '1m')
   }
 
-  recordSearchMetrics(totalDurationMs: number, providerTimings: Record<string, number>): AnalyticsSnapshot[] {
+  recordSearchMetrics(
+    totalDurationMs: number,
+    providerTimings: Record<string, number>
+  ): AnalyticsSnapshot[] {
     this.searchCount += 1
     this.totalSearchDuration += totalDurationMs
     const avgDuration = this.searchCount > 0 ? this.totalSearchDuration / this.searchCount : 0
@@ -149,8 +158,8 @@ export class AnalyticsCore {
       search: {
         totalSearches: this.searchCount,
         avgDuration,
-        providerTimings,
-      },
+        providerTimings
+      }
     }
 
     return this.recordAndPersist(this.currentMetrics, '1m')
@@ -170,20 +179,18 @@ export class AnalyticsCore {
 
   getSnapshot(windowType: AnalyticsWindowType): AnalyticsSnapshot {
     const latest = this.store.latest(windowType)
-    if (latest)
-      return latest
+    if (latest) return latest
 
     return {
       windowType,
       timestamp: Date.now(),
-      metrics: this.currentMetrics,
+      metrics: this.currentMetrics
     }
   }
 
   async getRange(request: AnalyticsRangeRequest): Promise<AnalyticsSnapshot[]> {
     const fromMemory = this.store.range(request)
-    if (!this.dbStore)
-      return fromMemory
+    if (!this.dbStore) return fromMemory
 
     const fromDb = await this.dbStore.getRange(request)
     const merged = new Map<string, AnalyticsSnapshot>()
@@ -197,15 +204,13 @@ export class AnalyticsCore {
     const snapshots = await this.getRange(payload)
     const format = payload.format ?? 'json'
 
-    const content = format === 'csv'
-      ? buildCsv(snapshots)
-      : JSON.stringify(snapshots, null, 2)
+    const content = format === 'csv' ? buildCsv(snapshots) : JSON.stringify(snapshots, null, 2)
 
     return {
       format,
       content,
       payload,
-      exportedAt: Date.now(),
+      exportedAt: Date.now()
     }
   }
 
@@ -217,7 +222,10 @@ export class AnalyticsCore {
     return this.reportingEnabled
   }
 
-  private recordAndPersist(metrics: CoreMetrics, baseWindow: AnalyticsWindowType): AnalyticsSnapshot[] {
+  private recordAndPersist(
+    metrics: CoreMetrics,
+    baseWindow: AnalyticsWindowType
+  ): AnalyticsSnapshot[] {
     const snapshots = this.collector.record(metrics, baseWindow)
     if (this.dbStore) {
       void this.dbStore.saveSnapshots(snapshots)

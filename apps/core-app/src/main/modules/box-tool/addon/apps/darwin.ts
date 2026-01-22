@@ -1,8 +1,8 @@
 import { exec } from 'node:child_process'
-import process from 'node:process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { promisify } from 'node:util'
 import { createRetrier } from '@talex-touch/utils'
 import { reportAppScanError } from './app-error-reporter'
@@ -223,7 +223,11 @@ async function getAppInfoUnstable(appPath: string): Promise<{
 const getAppInfoRetrier = createRetrier({
   maxRetries: 2, // Total of 3 attempts
   timeoutMs: 5000, // 5-second timeout for each attempt
-  shouldRetry: (error: any) => error.code === 'ENOENT' // Only retry if Info.plist is not found
+  shouldRetry: (error: unknown) =>
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === 'ENOENT' // Only retry if Info.plist is not found
 })
 
 // Wrap the unstable function with the retry logic

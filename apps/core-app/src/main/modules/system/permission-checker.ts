@@ -31,6 +31,8 @@ const systemPermissionRequestEvent = defineRawEvent<PermissionType, boolean>(
 const systemPermissionOpenSettingsEvent = defineRawEvent<void, boolean>(
   'system:permission:open-settings'
 )
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 
 interface PermissionCheckResult {
   status: PermissionStatus
@@ -89,7 +91,9 @@ export class PermissionChecker {
       // macOS 10.14+
       if (systemPreferences.getMediaAccessStatus) {
         try {
-          const status = systemPreferences.getMediaAccessStatus('notifications' as any)
+          const status = systemPreferences.getMediaAccessStatus(
+            'notifications' as Parameters<typeof systemPreferences.getMediaAccessStatus>[0]
+          )
           return {
             status:
               status === 'granted'
@@ -100,7 +104,7 @@ export class PermissionChecker {
             canRequest: status !== 'denied',
             message: `Notification permission: ${status}`
           }
-        } catch (error) {
+        } catch {
           // Fallback for older macOS versions
           return {
             status: PermissionStatus.GRANTED,
@@ -190,14 +194,19 @@ export class PermissionChecker {
         canRequest: false,
         message: `File access to ${testPath} is granted`
       }
-    } catch (error: any) {
-      if (error.code === 'EACCES' || error.code === 'EPERM') {
+    } catch (error: unknown) {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? (error as { code?: string }).code
+          : undefined
+      const message = error instanceof Error ? error.message : String(error)
+      if (code === 'EACCES' || code === 'EPERM') {
         return {
           status: PermissionStatus.DENIED,
           canRequest: true,
           message: `File access to ${testPath} is denied. ${process.platform === 'win32' ? 'May require administrator privileges.' : 'May require file access permissions.'}`
         }
-      } else if (error.code === 'ENOENT') {
+      } else if (code === 'ENOENT') {
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
@@ -207,7 +216,7 @@ export class PermissionChecker {
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
-          message: `Unable to check file access: ${error.message}`
+          message: `Unable to check file access: ${message}`
         }
       }
     }
@@ -348,9 +357,8 @@ export class PermissionCheckerModule extends BaseModule {
       return
     }
 
-    const keyManager =
-      ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
-    const transport = getTuffTransportMain($app.channel as any, keyManager as any)
+    const keyManager = resolveKeyManager($app.channel)
+    const transport = getTuffTransportMain($app.channel, keyManager)
 
     // Check permission status
     transport.on(systemPermissionCheckEvent, (permissionType) => {

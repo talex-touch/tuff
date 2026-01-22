@@ -151,9 +151,9 @@ export class AppReadyEvent implements ITouchEvent<TalexEvents> {
   /**
    * Ready state & Launch info
    */
-  launchInfo: Record<string, any> | NotificationResponse
+  launchInfo: Record<string, unknown> | NotificationResponse
 
-  constructor(event: Event, launchInfo: Record<string, any> | NotificationResponse) {
+  constructor(event: Event, launchInfo: Record<string, unknown> | NotificationResponse) {
     this.event = event
     this.launchInfo = launchInfo
   }
@@ -185,9 +185,9 @@ export class AppSecondaryLaunch implements ITouchEvent<TalexEvents> {
   /**
    * A JSON object of additional data passed from the second instance.
    */
-  data: any
+  data: Record<string, unknown>
 
-  constructor(event: Event, argv: string[], cwd: string, data: any) {
+  constructor(event: Event, argv: string[], cwd: string, data: Record<string, unknown>) {
     this.event = event
     this.argv = argv
     this.cwd = cwd
@@ -351,9 +351,9 @@ export class PluginStorageUpdatedEvent implements ITouchEvent<TalexEvents> {
 
 export class ClipboardChangeEvent implements ITouchEvent<TalexEvents> {
   name: TalexEvents = TalexEvents.CLIPBOARD_CHANGE
-  payload: any
+  payload: unknown
 
-  constructor(payload: any) {
+  constructor(payload: unknown) {
     this.payload = payload
   }
 }

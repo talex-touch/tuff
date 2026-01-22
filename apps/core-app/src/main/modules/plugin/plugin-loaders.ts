@@ -114,7 +114,7 @@ abstract class BasePluginLoader {
         : undefined
 
     // SDK version compatibility check (with graceful fallback)
-    const resolvedSdkapi = resolveSdkApiVersion((pluginInfo as any)?.sdkapi)
+    const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)
     this.touchPlugin.sdkapi = resolvedSdkapi
     const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
     if (sdkCompat.warning) {

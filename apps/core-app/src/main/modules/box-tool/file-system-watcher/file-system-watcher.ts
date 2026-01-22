@@ -165,10 +165,11 @@ export class FileSystemWatcherModule extends BaseModule {
       .on('ready', () => {
         console.debug(`[FileSystemWatcher] Watcher with depth ${depth} is ready.`)
       })
-      .on('error', (error: any) => {
+      .on('error', (error: unknown) => {
         console.error(`[FileSystemWatcher] Watcher error with depth ${depth}:`, error)
         // If error is permission-related, try to handle it
-        if (error.code === 'EPERM' || error.code === 'EACCES') {
+        const errorCode = (error as { code?: string }).code
+        if (errorCode === 'EPERM' || errorCode === 'EACCES') {
           console.warn(
             `[FileSystemWatcher] Permission error for watcher ${depth}, will retry pending paths`
           )
@@ -260,13 +261,15 @@ export class FileSystemWatcherModule extends BaseModule {
     // Permission granted or available, add to watcher
     try {
       await this.addPathInternal(p, depth)
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If still fails (e.g., operation not permitted), add to pending
-      if (error.code === 'EPERM' || error.code === 'EACCES') {
+      const errorCode = (error as { code?: string }).code
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorCode === 'EPERM' || errorCode === 'EACCES') {
         this.pendingPaths.set(p, { path: p, depth })
         console.warn(
           `[FileSystemWatcher] Permission denied for ${p}, added to pending queue:`,
-          error.message
+          errorMessage
         )
       } else {
         throw error

@@ -1,27 +1,25 @@
-import type { AiInvokeResult } from '@talex-touch/utils'
+import type { AiInvokeResult, IntelligenceChatPayload } from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 
-export class ChatCapabilityTester extends BaseCapabilityTester {
+export class ChatCapabilityTester extends BaseCapabilityTester<IntelligenceChatPayload, string> {
   readonly capabilityType = 'chat'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceChatPayload> {
     const userMessage = input.userInput || '请用一句话介绍你自己。'
 
     return {
       messages: [
         {
           role: 'user' as const,
-          content: userMessage,
-        },
-      ],
+          content: userMessage
+        }
+      ]
     }
   }
 
   formatTestResult(result: AiInvokeResult<string>) {
-    const preview = result.result.length > 200
-      ? `${result.result.slice(0, 200)}...`
-      : result.result
+    const preview = result.result.length > 200 ? `${result.result.slice(0, 200)}...` : result.result
 
     return {
       success: true,
@@ -29,7 +27,7 @@ export class ChatCapabilityTester extends BaseCapabilityTester {
       textPreview: preview,
       provider: result.provider,
       model: result.model,
-      latency: result.latency,
+      latency: result.latency
     }
   }
 

@@ -5,7 +5,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { ai } from './intelligence-sdk'
 
-const storageUpdateEvent = defineRawEvent<any, void>('storage:update')
+const storageUpdateEvent = defineRawEvent<{ name: string; version: number }, void>('storage:update')
 
 const SUPPORTED_PROVIDER_TYPES = new Set([
   'openai',
@@ -115,7 +115,7 @@ export function setupConfigUpdateListener(): void {
   }
 
   const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-  const transport = getTuffTransportMain(channel as any, keyManager as any)
+  const transport = getTuffTransportMain(channel, keyManager)
 
   transport.on(storageUpdateEvent, (data) => {
     if (
@@ -142,6 +142,5 @@ export function saveAiConfig(config: AiSDKPersistedConfig): void {
 export function debugPrintConfig(): void {
   const stored = getLatestConfig()
   if (!stored) {
-    return
   }
 }

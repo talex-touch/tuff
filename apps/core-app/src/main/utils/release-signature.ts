@@ -39,8 +39,9 @@ export class SignatureVerifier {
       const fileBuffer = await fs.readFile(filePath)
       const isValid = crypto.verify('RSA-SHA256', fileBuffer, publicKey, signature)
       return { valid: isValid, reason: isValid ? undefined : 'Signature mismatch' }
-    } catch (error: any) {
-      return { valid: false, reason: error?.message || 'Signature verification failed' }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
+      return { valid: false, reason: message || 'Signature verification failed' }
     }
   }
 
@@ -189,11 +190,11 @@ export class SignatureVerifier {
       .replace(/-----END[\s\S]*?-----/g, '')
     const compact = withoutPem.replace(/\s+/g, '')
 
-    if (/^[0-9a-fA-F]+$/.test(compact) && compact.length % 2 === 0) {
+    if (/^[0-9a-f]+$/i.test(compact) && compact.length % 2 === 0) {
       return Buffer.from(compact, 'hex')
     }
 
-    if (/^[A-Za-z0-9+/=]+$/.test(compact)) {
+    if (/^[A-Z0-9+/=]+$/i.test(compact)) {
       try {
         return Buffer.from(compact, 'base64')
       } catch {

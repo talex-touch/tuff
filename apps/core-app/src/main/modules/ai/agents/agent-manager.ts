@@ -20,12 +20,12 @@ import type { AgentImpl, AgentRegistry } from './agent-registry'
 import type { AgentScheduler } from './agent-scheduler'
 import type { ToolExecutorFn, ToolRegistry } from './tool-registry'
 import { EventEmitter } from 'node:events'
+import { createLogger } from '../../../utils/logger'
 import { agentExecutor } from './agent-executor'
 import { agentRegistry } from './agent-registry'
 import { agentScheduler } from './agent-scheduler'
 import { agentContextManager } from './memory'
 import { toolRegistry } from './tool-registry'
-import { createLogger } from '../../../utils/logger'
 
 const agentManagerLog = createLogger('Intelligence').child('AgentManager')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')

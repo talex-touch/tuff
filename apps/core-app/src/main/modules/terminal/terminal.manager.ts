@@ -1,10 +1,10 @@
 import type { ModuleKey } from '@talex-touch/utils'
+import type { HandlerContext } from '@talex-touch/utils/transport'
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import os from 'node:os'
 import process from 'node:process'
-import type { HandlerContext } from '@talex-touch/utils/transport'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BaseModule } from '../abstract-base-module'
@@ -29,6 +29,8 @@ const terminalExitEvent = defineRawEvent<{ id: string; exitCode: number | null }
   'terminal:exit'
 )
 
+type TerminalEventPayload = { id: string; data: string } | { id: string; exitCode: number | null }
+
 class TerminalModule extends BaseModule {
   private processes: Map<string, ChildProcess> = new Map()
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
@@ -46,7 +48,7 @@ class TerminalModule extends BaseModule {
     const channel = $app.channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel as any, keyManager as any)
+    this.transport = getTuffTransportMain(channel, keyManager)
 
     // For child_process, 'create' will be used to start a new command process.
     this.transport.on(terminalCreateEvent, (payload, context) => this.create(payload, context))
@@ -92,7 +94,7 @@ class TerminalModule extends BaseModule {
 
     const sendToSender = (
       event: typeof terminalDataEvent | typeof terminalExitEvent,
-      data: any
+      data: TerminalEventPayload
     ) => {
       if (!sender || sender.isDestroyed() || !transport) {
         return

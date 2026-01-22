@@ -14,7 +14,7 @@ export class ExtensionLoaderModule extends BaseModule {
   constructor() {
     super(ExtensionLoaderModule.key, {
       create: true,
-      dirName: 'extensions',
+      dirName: 'extensions'
     })
   }
 

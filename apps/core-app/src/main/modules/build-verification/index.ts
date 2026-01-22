@@ -1,15 +1,27 @@
 import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
-import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import path from 'node:path'
-import axios from 'axios'
-import fse from 'fs-extra'
-import { BrowserWindow, app } from 'electron'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
+import path from 'node:path'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { BaseModule } from '../abstract-base-module'
+import axios from 'axios'
+import { app, BrowserWindow } from 'electron'
+import fse from 'fs-extra'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
+import { BaseModule } from '../abstract-base-module'
+
+type BuildReleaseAsset = {
+  platform?: 'darwin' | 'win32' | 'linux'
+  arch?: 'x64' | 'arm64' | 'universal'
+  downloadUrl?: string
+  signatureUrl?: string
+}
+
+type BuildReleaseInfo = {
+  version?: string
+  assets?: BuildReleaseAsset[]
+}
 
 const buildVerificationStatusEvent = defineRawEvent<
   {
@@ -111,7 +123,7 @@ export class BuildVerificationModule extends BaseModule {
     return process.env.TUFF_RELEASE_API_URL || 'https://tuff.talex.link/api/releases'
   }
 
-  private async fetchReleaseByTag(apiBase: string, tag: string): Promise<any | null> {
+  private async fetchReleaseByTag(apiBase: string, tag: string): Promise<BuildReleaseInfo | null> {
     try {
       const response = await axios.get(`${apiBase}/${encodeURIComponent(tag)}`, {
         timeout: 8000,
@@ -130,7 +142,7 @@ export class BuildVerificationModule extends BaseModule {
     apiBase: string,
     channel: 'RELEASE' | 'BETA' | 'SNAPSHOT',
     platform: 'darwin' | 'win32' | 'linux'
-  ): Promise<any | null> {
+  ): Promise<BuildReleaseInfo | null> {
     try {
       const response = await axios.get(`${apiBase}/latest`, {
         timeout: 8000,
@@ -147,10 +159,10 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   private pickReleaseAsset(
-    assets: any[] | undefined,
+    assets: BuildReleaseAsset[] | undefined,
     platform: 'darwin' | 'win32' | 'linux',
     arch: 'x64' | 'arm64' | 'universal'
-  ): any | null {
+  ): BuildReleaseAsset | null {
     if (!assets || !assets.length) {
       return null
     }
@@ -190,7 +202,7 @@ export class BuildVerificationModule extends BaseModule {
     const arch = this.resolveArch()
 
     const tagCandidates = version.startsWith('v') ? [version] : [`v${version}`, version]
-    let release: any | null = null
+    let release: BuildReleaseInfo | null = null
 
     for (const tag of tagCandidates) {
       release = await this.fetchReleaseByTag(apiBase, tag)
@@ -266,7 +278,7 @@ export class BuildVerificationModule extends BaseModule {
     const channel = $app.channel as ITouchChannel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = getTuffTransportMain(channel, keyManager)
     const payload = {
       isOfficialBuild: this.isOfficialBuild,
       verificationFailed: this.verificationFailed,

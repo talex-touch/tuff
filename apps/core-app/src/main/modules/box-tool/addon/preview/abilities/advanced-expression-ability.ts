@@ -3,9 +3,11 @@ import type { PreviewAbilityContext } from '../preview-ability'
 import { performance } from 'node:perf_hooks'
 import { BasePreviewAbility } from '../preview-ability'
 
-let mathjs: any = null
+type MathJsInstance = ReturnType<(typeof import('mathjs'))['create']>
 
-async function getMathJs() {
+let mathjs: MathJsInstance | null = null
+
+async function getMathJs(): Promise<MathJsInstance | null> {
   if (!mathjs) {
     try {
       const m = await import('mathjs')
@@ -24,9 +26,16 @@ function formatNumber(value: unknown): string {
     return (Math.round(value * 1e10) / 1e10).toString()
   }
   if (typeof value === 'object' && value !== null && 'toNumber' in value) {
-    const num = (value as any).toNumber()
-    if (Number.isInteger(num)) return num.toString()
-    return (Math.round(num * 1e10) / 1e10).toString()
+    const toNumber = (value as { toNumber?: () => unknown }).toNumber
+    if (typeof toNumber === 'function') {
+      const num = toNumber()
+      if (typeof num === 'number') {
+        if (!Number.isFinite(num)) return ''
+        if (Number.isInteger(num)) return num.toString()
+        return (Math.round(num * 1e10) / 1e10).toString()
+      }
+      return String(num)
+    }
   }
   return String(value)
 }

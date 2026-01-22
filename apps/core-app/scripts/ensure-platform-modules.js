@@ -14,41 +14,40 @@ const baseModules = [
   '@libsql/isomorphic-ws',
   'libsql',
   '@neon-rs/load',
-  'detect-libc',
+  'detect-libc'
 ]
 
 const platformModuleMap = {
   darwin: {
     arm64: ['@libsql/darwin-arm64'],
-    x64: ['@libsql/darwin-x64'],
+    x64: ['@libsql/darwin-x64']
   },
   linux: {
     x64: ['@libsql/linux-x64-gnu', '@libsql/linux-x64-musl'],
     arm64: ['@libsql/linux-arm64-gnu', '@libsql/linux-arm64-musl'],
-    arm: ['@libsql/linux-arm-gnueabihf', '@libsql/linux-arm-musleabihf'],
+    arm: ['@libsql/linux-arm-gnueabihf', '@libsql/linux-arm-musleabihf']
   },
   win32: {
-    x64: ['@libsql/win32-x64-msvc'],
-  },
+    x64: ['@libsql/win32-x64-msvc']
+  }
 }
 
 const moduleRootOverrides = {
-  'detect-libc': resolveDetectLibcRoot(),
+  'detect-libc': resolveDetectLibcRoot()
 }
 
 function resolveDetectLibcRoot() {
   const candidates = [
     path.join(workspaceRoot, 'node_modules', '.pnpm'),
     path.join(workspaceRoot, 'node_modules'),
-    path.join(projectRoot, 'node_modules'),
+    path.join(projectRoot, 'node_modules')
   ]
 
   for (const basePath of candidates) {
     try {
       const resolved = require.resolve('detect-libc/package.json', { paths: [basePath] })
       return path.dirname(resolved)
-    }
-    catch {
+    } catch {
       continue
     }
   }
@@ -62,16 +61,14 @@ function resolveModuleRoot(moduleName) {
   }
 
   const directPath = path.join(workspaceNodeModules, moduleName)
-  if (fs.existsSync(directPath))
-    return directPath
+  if (fs.existsSync(directPath)) return directPath
 
   try {
     const pkgPath = require.resolve(path.join(moduleName, 'package.json'), {
-      paths: [workspaceRoot],
+      paths: [workspaceRoot]
     })
     return path.dirname(pkgPath)
-  }
-  catch (err) {
+  } catch (err) {
     console.warn(`[ensure-modules] Cannot resolve ${moduleName}: ${err.message}`)
     return null
   }
@@ -110,8 +107,7 @@ function copyModuleRecursive(moduleName, depth = 0) {
     fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true })
     copiedModules.add(moduleName)
     console.log(`[ensure-modules] Copied ${moduleName}`)
-  }
-  catch (err) {
+  } catch (err) {
     console.warn(`[ensure-modules] Failed to copy ${moduleName}: ${err.message}`)
     return
   }
@@ -119,8 +115,7 @@ function copyModuleRecursive(moduleName, depth = 0) {
   let pkgJson
   try {
     pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
-  }
-  catch (err) {
+  } catch (err) {
     console.warn(`[ensure-modules] Failed to read package.json for ${moduleName}: ${err.message}`)
     return
   }
@@ -129,12 +124,11 @@ function copyModuleRecursive(moduleName, depth = 0) {
   const allDeps = {
     ...(pkgJson.dependencies || {}),
     ...(pkgJson.peerDependencies || {}),
-    ...optionalDeps,
+    ...optionalDeps
   }
 
   for (const depName of Object.keys(allDeps)) {
-    if (depName.startsWith('@talex-touch/'))
-      continue
+    if (depName.startsWith('@talex-touch/')) continue
     copyModuleRecursive(depName, depth + 1)
   }
 }
@@ -142,7 +136,8 @@ function copyModuleRecursive(moduleName, depth = 0) {
 function ensurePlatformModules(targetPlatform, targetArch) {
   copiedModules.clear()
 
-  const platformKey = targetPlatform === 'mac' ? 'darwin' : targetPlatform === 'win' ? 'win32' : targetPlatform
+  const platformKey =
+    targetPlatform === 'mac' ? 'darwin' : targetPlatform === 'win' ? 'win32' : targetPlatform
   const archKey = targetArch || (platformKey === 'darwin' ? 'arm64' : 'x64')
 
   modulesToCopy = new Set(baseModules)
@@ -150,9 +145,8 @@ function ensurePlatformModules(targetPlatform, targetArch) {
   if (platformModules) {
     const archModules = platformModules[archKey]
     if (archModules && archModules.length > 0) {
-      archModules.forEach(mod => modulesToCopy.add(mod))
-    }
-    else {
+      archModules.forEach((mod) => modulesToCopy.add(mod))
+    } else {
       console.warn(`[ensure-modules] No platform modules defined for ${platformKey}/${archKey}`)
     }
   }

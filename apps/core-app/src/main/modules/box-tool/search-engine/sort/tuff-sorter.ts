@@ -159,8 +159,7 @@ export const tuffSorter: ISortMiddleware = {
     const searchKey = query.text?.trim().toLowerCase()
 
     const isPinnedItem = (item: TuffItem): boolean => {
-      const meta = item.meta as any
-      return Boolean(meta?.pinned?.isPinned)
+      return Boolean(item.meta?.pinned?.isPinned)
     }
 
     // Use the Schwartzian transform (decorate-sort-undecorate) for performance.

@@ -1,12 +1,13 @@
 import type { TuffQuery as TuffQueryBase } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ProviderDeactivatedEvent } from '../../../core/eventbus/touch-event'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { genTouchApp } from '../../../core'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { getMainConfig } from '../../storage'
@@ -14,6 +15,9 @@ import { SearchEngineCore } from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import { ipcManager } from './ipc'
 import { windowManager } from './window'
+
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
 
 interface ExpandOptions {
   length?: number
@@ -114,7 +118,7 @@ export class CoreBoxManager {
     // If trying to show, check if initialization is complete
     if (show) {
       try {
-        const appSetting = getMainConfig(StorageList.APP_SETTING) as any
+        const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting
         if (!appSetting?.beginner?.init) {
           console.warn('[CoreBoxManager] Initialization not complete, cannot open CoreBox')
           // Show main window to guide user to complete initialization
@@ -194,10 +198,8 @@ export class CoreBoxManager {
       const coreBoxWindow = windowManager.current?.window
       if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
         const channel = genTouchApp().channel
-        const transport = getTuffTransportMain(
-          channel as any,
-          (channel as any)?.keyManager ?? channel
-        )
+        const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+        const transport = getTuffTransportMain(channel, keyManager)
         void transport.sendTo(coreBoxWindow.webContents, CoreBoxEvents.ui.uiModeExited, {
           resetInput: true
         })

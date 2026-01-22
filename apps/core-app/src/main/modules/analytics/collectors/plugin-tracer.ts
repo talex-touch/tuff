@@ -19,7 +19,7 @@ export interface PluginStats {
   featureCalls: Record<string, number>
   totalCalls: number
   avgResponseTime: number
-  topFeatures: Array<{ id: string, count: number }>
+  topFeatures: Array<{ id: string; count: number }>
   counters: Record<string, number>
   gauges: Record<string, number>
   histograms: Record<string, number[]>
@@ -87,7 +87,7 @@ export class PluginTracer {
         featureCalls: state.featureCalls,
         totalCalls: state.totalCalls,
         avgResponseTime,
-        topFeatures,
+        topFeatures
       }
     }
 
@@ -110,7 +110,7 @@ export class PluginTracer {
       topFeatures,
       counters: state.counters,
       gauges: state.gauges,
-      histograms: state.histograms,
+      histograms: state.histograms
     }
   }
 
@@ -125,11 +125,11 @@ export class PluginTracer {
     return {
       count: metrics.count,
       avgDuration,
-      lastDuration: metrics.lastDuration,
+      lastDuration: metrics.lastDuration
     }
   }
 
-  getTopFeatures(pluginName: string, limit = 10): Array<{ id: string, count: number }> {
+  getTopFeatures(pluginName: string, limit = 10): Array<{ id: string; count: number }> {
     const state = this.ensurePlugin(pluginName)
     return Object.entries(state.featureCalls)
       .sort((a, b) => b[1] - a[1])
@@ -145,7 +145,7 @@ export class PluginTracer {
         totalDuration: 0,
         counters: {},
         gauges: {},
-        histograms: {},
+        histograms: {}
       })
     }
 

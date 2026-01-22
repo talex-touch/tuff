@@ -1,14 +1,14 @@
 // import PinyinMatch from 'pinyin-match'
 // import PinyinMatchTw from 'pinyin-match/es/traditional.js'
-import { isAsyncFunction } from 'node:util/types'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import type { ScannedAppInfo } from './apps/app-types'
 
 /**
  * App DataManager
  * Implementation of app data management, 实现智能缓存和刷新策略
  */
 class AppDataManager {
-  private apps: any[] = []
+  private apps: ScannedAppInfo[] = []
   private lastUpdateTime: number = 0
   private isUpdating: boolean = false
   private readonly pollingService = PollingService.getInstance()
@@ -30,10 +30,14 @@ class AppDataManager {
       this.pollingService.unregister(this.autoRefreshTaskId)
     }
 
-    this.pollingService.register(this.autoRefreshTaskId, () => {
-      console.log('[AppDataManager] Auto refresh triggered')
-      this.refreshApps(true)
-    }, { interval: this.AUTO_REFRESH_INTERVAL, unit: 'milliseconds' })
+    this.pollingService.register(
+      this.autoRefreshTaskId,
+      () => {
+        console.log('[AppDataManager] Auto refresh triggered')
+        this.refreshApps(true)
+      },
+      { interval: this.AUTO_REFRESH_INTERVAL, unit: 'milliseconds' }
+    )
     this.pollingService.start()
   }
 
@@ -41,12 +45,9 @@ class AppDataManager {
    * Check if refresh is needed
    */
   private shouldRefresh(forceRefresh: boolean = false): boolean {
-    if (forceRefresh)
-      return true
-    if (this.apps.length === 0)
-      return true
-    if (this.isUpdating)
-      return false
+    if (forceRefresh) return true
+    if (this.apps.length === 0) return true
+    if (this.isUpdating) return false
 
     const now = Date.now()
     const timeSinceLastUpdate = now - this.lastUpdateTime
@@ -57,17 +58,15 @@ class AppDataManager {
   /**
    * Get Raw App Data
    */
-  private async getRawApps(): Promise<any[]> {
+  private async getRawApps(): Promise<ScannedAppInfo[]> {
     const env = process.platform
-    let appSearch: any
+    let appSearch: (() => ScannedAppInfo[] | Promise<ScannedAppInfo[]>) | undefined
 
     if (env === 'darwin') {
       appSearch = (await import('./apps/darwin')).getApps
-    }
-    else if (env === 'win32') {
+    } else if (env === 'win32') {
       appSearch = (await import('./apps/win')).getApps
-    }
-    else if (env === 'linux') {
+    } else if (env === 'linux') {
       appSearch = (await import('./apps/linux')).getApps
     }
 
@@ -75,17 +74,8 @@ class AppDataManager {
       return []
     }
 
-    const res: any[] = []
-
-    if (isAsyncFunction(appSearch)) {
-      const apps = await appSearch()
-      res.push(...apps)
-    }
-    else {
-      res.push(...appSearch())
-    }
-
-    return res
+    const apps = await appSearch()
+    return [...apps]
   }
 
   /**
@@ -111,11 +101,9 @@ class AppDataManager {
       this.lastUpdateTime = Date.now()
 
       console.log(`[AppDataManager] App data refreshed, found ${newApps.length} apps`)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[AppDataManager] Failed to refresh app data:', error)
-    }
-    finally {
+    } finally {
       this.isUpdating = false
     }
   }
@@ -123,7 +111,7 @@ class AppDataManager {
   /**
    * Get Apps（Exposed）
    */
-  async getApps(forceRefresh: boolean = false): Promise<any[]> {
+  async getApps(forceRefresh: boolean = false): Promise<ScannedAppInfo[]> {
     await this.refreshApps(forceRefresh)
     return [...this.apps]
   }
@@ -131,7 +119,7 @@ class AppDataManager {
   /**
    * Get Apps（Sync）
    */
-  getAppsSync(): any[] {
+  getAppsSync(): ScannedAppInfo[] {
     // Synchronous app fetching is disabled due to module resolution issues.
     // The list will be populated asynchronously by getApps.
     return [...this.apps]
@@ -159,17 +147,17 @@ class AppDataManager {
 
 const appDataManager = new AppDataManager()
 
-export function getApps(): any[] {
+export function getApps(): ScannedAppInfo[] {
   return appDataManager.getAppsSync()
 }
 
-export async function getAppsAsync(forceRefresh: boolean = false): Promise<any[]> {
+export async function getAppsAsync(forceRefresh: boolean = false): Promise<ScannedAppInfo[]> {
   return await appDataManager.getApps(forceRefresh)
 }
 
 export { appDataManager }
 
-export const apps: any = getApps()
+export const apps: ScannedAppInfo[] = getApps()
 
 function check(keyword: string, appName: string): boolean {
   // let res = PinyinMatch.match(appName, keyword)
@@ -180,11 +168,11 @@ function check(keyword: string, appName: string): boolean {
   return appName.toLowerCase().includes(keyword.toLowerCase())
 }
 
-export default async (keyword: string): Promise<any[]> => {
+export default async (keyword: string): Promise<Array<ScannedAppInfo & { matched: boolean }>> => {
   const currentApps = appDataManager.getAppsSync()
-  const currentAppNames = currentApps?.map((app: any) => app.name) || []
+  const currentAppNames = currentApps?.map((app) => app.name) || []
 
-  const res = new Array<any>()
+  const res: Array<ScannedAppInfo & { matched: boolean }> = []
   let index = 0
 
   for (const appName of currentAppNames) {
@@ -195,7 +183,7 @@ export default async (keyword: string): Promise<any[]> => {
       if (app) {
         res.push({
           ...app,
-          matched,
+          matched
         })
       }
     }

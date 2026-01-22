@@ -9,7 +9,7 @@ export const LogStyle = {
   warning: chalk.yellow,
   error: chalk.red,
   highlight: chalk.cyan,
-  process: chalk.magenta,
+  process: chalk.magenta
 }
 
 /**
@@ -18,7 +18,7 @@ export const LogStyle = {
 export function formatLog(
   prefix: string,
   message: string,
-  style: (message: string) => string = LogStyle.info,
+  style: (message: string) => string = LogStyle.info
 ): string {
   const timestamp = new Date().toLocaleTimeString()
   return `${chalk.gray(timestamp)} ${style(`[${prefix}]`)} ${message}`
@@ -42,8 +42,8 @@ export function generateAcronym(name: string): string {
   }
   return name
     .split(' ')
-    .filter(word => word)
-    .map(word => word.charAt(0))
+    .filter((word) => word)
+    .map((word) => word.charAt(0))
     .join('')
     .toLowerCase()
 }

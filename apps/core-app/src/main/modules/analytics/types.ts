@@ -9,7 +9,7 @@ export type {
   AnalyticsRangeRequest,
   AnalyticsSnapshot,
   AnalyticsWindowType,
-  CoreMetrics,
+  CoreMetrics
 } from '@talex-touch/utils/analytics'
 
 /**

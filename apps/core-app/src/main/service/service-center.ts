@@ -4,6 +4,7 @@ import type {
   IServiceEvent,
   IServiceHandler
 } from '@talex-touch/utils/service'
+import type { ModuleInitContext } from '@talex-touch/utils'
 import type { TalexTouch } from '../types'
 import path from 'node:path'
 import { suffix2Service } from '@talex-touch/utils/service/protocol'
@@ -11,7 +12,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { dialog } from 'electron'
 import fse from 'fs-extra'
-import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus, type AppSecondaryLaunch } from '../core/eventbus/touch-event'
 import './protocol-handler'
 
 class ServiceCenter implements IServiceCenter {
@@ -105,7 +106,15 @@ let serviceCenter: ServiceCenter
 
 const serviceRegisterEvent = defineRawEvent<{ service: string }, boolean>('service:reg')
 const serviceUnregisterEvent = defineRawEvent<{ service: string }, boolean>('service:unreg')
-const serviceHandleEvent = defineRawEvent<{ data: any }, any>('service:handle')
+const serviceHandleEvent = defineRawEvent<{ data: Record<string, unknown> }, unknown>(
+  'service:handle'
+)
+
+type ServiceCenterModuleState = {
+  transport: ReturnType<typeof getTuffTransportMain> | null
+  modulePath?: string
+  listeners: Array<Function>
+}
 
 export function genServiceCenter(rootPath?: string): IServiceCenter {
   if (!serviceCenter) {
@@ -120,17 +129,18 @@ export default {
   filePath: 'services',
   listeners: new Array<Function>(),
   transport: null as ReturnType<typeof getTuffTransportMain> | null,
-  modulePath: undefined as any,
-  init(ctx: any) {
-    const channel = ctx.app.channel
+  modulePath: undefined as string | undefined,
+  init(ctx: ModuleInitContext<TalexEvents>) {
+    const channel = (ctx.app as { channel?: unknown } | null | undefined)?.channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel as any, keyManager as any)
-    this.modulePath = ctx.file?.dirPath
+    const moduleState = this as unknown as ServiceCenterModuleState
+    moduleState.transport = getTuffTransportMain(channel, keyManager)
+    moduleState.modulePath = ctx.file?.dirPath
 
-    touchEventBus.on(TalexEvents.APP_SECONDARY_LAUNCH, (event: any) => {
+    touchEventBus.on(TalexEvents.APP_SECONDARY_LAUNCH, (event) => {
       // AppSecondaryLaunch
-      const { argv } = event
+      const { argv } = event as AppSecondaryLaunch
 
       const arr = argv.slice(1)
       if (arr.length === 0) return
@@ -174,14 +184,14 @@ export default {
       })
     })
 
-    const perPath = this.modulePath
+    const perPath = moduleState.modulePath
 
     genServiceCenter(perPath)
 
-    const transport = this.transport
+    const transport = moduleState.transport
     if (!transport) return
 
-    this.listeners.push(
+    moduleState.listeners.push(
       transport.on(serviceRegisterEvent, async (payload, context) => {
         const { service } = payload || {}
         const plugin = context.plugin?.name
@@ -197,7 +207,7 @@ export default {
           async handle(event, _data) {
             console.log(`[Service] Plugin ${plugin} handle service: ${service}`, event, _data)
             const data = {
-              ..._data,
+              ...(_data as Record<string, unknown>),
               service: event.service.name
             }
 
@@ -211,7 +221,7 @@ export default {
       })
     )
 
-    this.listeners.push(
+    moduleState.listeners.push(
       transport.on(serviceUnregisterEvent, (payload, context) => {
         const { service } = payload || {}
         const plugin = context.plugin?.name
@@ -220,14 +230,15 @@ export default {
 
         if (!serviceCenter.hasServiceBySymbolStr(service)) return false
 
-        serviceCenter.unRegService(service)
+        serviceCenter.unRegServiceBySymbolStr(service)
         return true
       })
     )
   },
   destroy() {
-    this.listeners.forEach((listener) => listener())
+    const moduleState = this as unknown as ServiceCenterModuleState
+    moduleState.listeners.forEach((listener) => listener())
 
     serviceCenter.save()
   }
-} as any as TalexTouch.IModule<TalexEvents>
+} as TalexTouch.IModule<TalexEvents>

@@ -31,12 +31,12 @@ class DefaultStrategyManager implements StrategyManager {
 
     // Handle explicit provider preference
     if (options.preferredProviderId) {
-      const preferred = availableProviders.find(p => p.id === options.preferredProviderId)
+      const preferred = availableProviders.find((p) => p.id === options.preferredProviderId)
       if (preferred) {
         return {
           selectedProvider: preferred,
-          fallbackProviders: availableProviders.filter(p => p.id !== options.preferredProviderId),
-          reasoning: `Explicit preference for ${options.preferredProviderId}`,
+          fallbackProviders: availableProviders.filter((p) => p.id !== options.preferredProviderId),
+          reasoning: `Explicit preference for ${options.preferredProviderId}`
         }
       }
     }
@@ -51,14 +51,14 @@ class DefaultStrategyManager implements StrategyManager {
     // Handle model preference
     if (options.modelPreference && options.modelPreference.length > 0) {
       for (const preferredModel of options.modelPreference) {
-        const providerWithModel = sortedProviders.find(p =>
-          p.models?.includes(preferredModel) || p.defaultModel === preferredModel,
+        const providerWithModel = sortedProviders.find(
+          (p) => p.models?.includes(preferredModel) || p.defaultModel === preferredModel
         )
         if (providerWithModel) {
           return {
             selectedProvider: providerWithModel,
-            fallbackProviders: sortedProviders.filter(p => p.id !== providerWithModel.id),
-            reasoning: `Model preference for ${preferredModel}`,
+            fallbackProviders: sortedProviders.filter((p) => p.id !== providerWithModel.id),
+            reasoning: `Model preference for ${preferredModel}`
           }
         }
       }
@@ -70,7 +70,7 @@ class DefaultStrategyManager implements StrategyManager {
     return {
       selectedProvider: selected,
       fallbackProviders: fallbacks,
-      reasoning: `Default priority-based selection`,
+      reasoning: `Default priority-based selection`
     }
   }
 }

@@ -1,9 +1,9 @@
+import type { Buffer } from 'node:buffer'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsRequest,
   WorkerMetricsResponse
 } from './worker-status'
-import type { Buffer } from 'node:buffer'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'

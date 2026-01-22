@@ -3,7 +3,6 @@ import type { StartupInfo } from '../shared/types/startup-info'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { electronAPI } from '@electron-toolkit/preload'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { hasWindow } from '@talex-touch/utils/env'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
 import {
@@ -13,6 +12,7 @@ import {
   useArgMapper,
   useInitialize
 } from '@talex-touch/utils/renderer'
+import { AppEvents } from '@talex-touch/utils/transport'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge, ipcRenderer } from 'electron'
 import appLogoAsset from '../../public/logo.png?asset'
@@ -67,20 +67,15 @@ interface StartupHandshakePayload {
 /**
  * Request startup information from the main process before the renderer runs.
  */
-function requestStartupInfo(): StartupInfo | undefined {
+async function requestStartupInfo(): Promise<StartupInfo | undefined> {
   try {
-    const response = ipcRenderer.sendSync('@main-process-message', {
-      code: DataCode.SUCCESS,
-      data: { rendererStartTime: performance.timeOrigin } satisfies StartupHandshakePayload,
-      name: 'app-ready',
-      header: {
-        status: 'request',
-        type: ChannelType.MAIN
-      }
-    })
+    const eventName = AppEvents.system.startup.toEventName()
+    const response = await ipcRenderer.invoke(eventName, {
+      rendererStartTime: performance.timeOrigin
+    } satisfies StartupHandshakePayload)
 
-    if (response?.header?.status === 'reply' && response.data) {
-      return response.data as StartupInfo
+    if (response) {
+      return response as StartupInfo
     }
   } catch (error) {
     console.warn('[preload] Failed to request startup info', error)
@@ -91,10 +86,12 @@ function requestStartupInfo(): StartupInfo | undefined {
 
 const appLogo = resolveAssetSource(appLogoAsset)
 // const appIcon = resolveAssetSource(appIconAsset)
-const startupInfo = requestStartupInfo()
-if (startupInfo && typeof startupInfo.appUpdate === 'undefined') {
-  startupInfo.appUpdate = false
-}
+const startupInfoPromise = requestStartupInfo().then((info) => {
+  if (info && typeof info.appUpdate === 'undefined') {
+    info.appUpdate = false
+  }
+  return info
+})
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
 
@@ -111,9 +108,11 @@ if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
-    if (startupInfo) {
-      contextBridge.exposeInMainWorld('$startupInfo', startupInfo)
-    }
+    void startupInfoPromise.then((info) => {
+      if (info) {
+        contextBridge.exposeInMainWorld('$startupInfo', info)
+      }
+    })
   } catch (error) {
     console.error(error)
   }
@@ -122,9 +121,11 @@ if (process.contextIsolated) {
   window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.api = api
-  if (startupInfo) {
-    window.$startupInfo = startupInfo
-  }
+  void startupInfoPromise.then((info) => {
+    if (info) {
+      window.$startupInfo = info
+    }
+  })
 }
 
 // Set DivisionBox flag in preload (before renderer initialization)

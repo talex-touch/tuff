@@ -19,9 +19,11 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
+import { pluginModule } from '../plugin/plugin-module'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
-import { pluginModule } from '../plugin/plugin-module'
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 
 /**
  * Type for state change listener callback
@@ -67,7 +69,7 @@ export class DivisionBoxSession {
   private state: DivisionBoxState = DivisionBoxState.PREPARE
 
   /** Session-level state storage (key-value pairs) */
-  private sessionState: Map<string, any> = new Map()
+  private sessionState: Map<string, unknown> = new Map()
 
   /** Session metadata */
   readonly meta: SessionMeta
@@ -251,10 +253,7 @@ export class DivisionBoxSession {
 
       // Notify renderer about DivisionBox trigger via unified channel
       const channel = genTouchApp().channel
-      const transport = getTuffTransportMain(
-        channel as any,
-        (channel as any)?.keyManager ?? channel
-      )
+      const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
       void transport.sendTo(this.touchWindow.window.webContents, coreBoxTriggerEvent, {
         type: 'division-box',
         sessionId: this.sessionId,
@@ -551,7 +550,7 @@ export class DivisionBoxSession {
     // Send trigger to notify renderer about DivisionBox mode
     // This populates windowState.divisionBox in the renderer
     const channel = genTouchApp().channel
-    const transport = getTuffTransportMain(channel as any, (channel as any)?.keyManager ?? channel)
+    const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
     void transport.sendTo(this.touchWindow.window.webContents, coreBoxTriggerEvent, {
       type: 'division-box',
       sessionId: this.sessionId,
@@ -687,7 +686,7 @@ export class DivisionBoxSession {
    * @param key - State key
    * @param value - State value
    */
-  setSessionState(key: string, value: any): void {
+  setSessionState(key: string, value: unknown): void {
     this.sessionState.set(key, value)
   }
 
@@ -697,8 +696,8 @@ export class DivisionBoxSession {
    * @param key - State key
    * @returns State value or undefined
    */
-  getSessionState(key: string): any {
-    return this.sessionState.get(key)
+  getSessionState<T = unknown>(key: string): T | undefined {
+    return this.sessionState.get(key) as T | undefined
   }
 
   /**

@@ -5,10 +5,10 @@ import type {
   UpdateAvailableEvent
 } from '../../core/eventbus/touch-event'
 import type { TrayState } from './tray-state-manager'
+import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { TrayEvents } from '@talex-touch/utils/transport/events'
-import process from 'node:process'
 import { app, Tray } from 'electron'
 import {
   TalexEvents,
@@ -22,6 +22,9 @@ import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
 import { TrayStateManager } from './tray-state-manager'
+
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 
 /**
  * Main tray manager
@@ -47,9 +50,8 @@ export class TrayManager extends BaseModule {
 
   async onInit(): Promise<void> {
     if ($app.channel) {
-      const keyManager =
-        ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
-      this.transport = getTuffTransportMain($app.channel as any, keyManager as any)
+      const keyManager = resolveKeyManager($app.channel)
+      this.transport = getTuffTransportMain($app.channel, keyManager)
     }
 
     const shouldShowTray = this.shouldShowTray()
@@ -208,7 +210,8 @@ export class TrayManager extends BaseModule {
     const mainWindow = $app.window.window
 
     mainWindow.on('close', (event) => {
-      const closeToTray = ($app.config.data as any)?.window?.closeToTray ?? true
+      const configData = $app.config.data as { window?: { closeToTray?: boolean } } | undefined
+      const closeToTray = configData?.window?.closeToTray ?? true
       const isQuitting = $app.isQuitting || false
 
       if (closeToTray && !isQuitting) {

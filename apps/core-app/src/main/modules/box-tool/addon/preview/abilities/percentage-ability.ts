@@ -9,7 +9,7 @@ const PERCENT_PATTERNS = [
   /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*-\s*\(([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\)\s*$/,
   /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:的|的?)+\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*$/,
   /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*% of\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*$/i,
-  /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*([-+])\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*$/,
+  /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*([-+])\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*$/
 ]
 
 export class PercentageAbility extends BasePreviewAbility {
@@ -17,9 +17,8 @@ export class PercentageAbility extends BasePreviewAbility {
   readonly priority = 45
 
   override canHandle(query: { text?: string }): boolean {
-    if (!query.text)
-      return false
-    return PERCENT_PATTERNS.some(regex => regex.test(query.text!))
+    if (!query.text) return false
+    return PERCENT_PATTERNS.some((regex) => regex.test(query.text!))
   }
 
   async execute(context: PreviewAbilityContext): Promise<PreviewAbilityResult | null> {
@@ -33,29 +32,24 @@ export class PercentageAbility extends BasePreviewAbility {
     let purePercent = false
     for (const regex of PERCENT_PATTERNS) {
       const match = query.match(regex)
-      if (!match)
-        continue
+      if (!match) continue
       if (regex === PERCENT_PATTERNS[0]) {
         base = Number(match[1])
         percent = Number(match[3])
         operation = match[2] === '-' ? 'sub' : 'add'
-      }
-      else if (regex === PERCENT_PATTERNS[1]) {
+      } else if (regex === PERCENT_PATTERNS[1]) {
         base = Number(match[1])
         percent = Number(match[2])
         operation = 'add'
-      }
-      else if (regex === PERCENT_PATTERNS[2]) {
+      } else if (regex === PERCENT_PATTERNS[2]) {
         base = Number(match[1])
         percent = Number(match[2])
         operation = 'sub'
-      }
-      else if (regex === PERCENT_PATTERNS[4]) {
+      } else if (regex === PERCENT_PATTERNS[4]) {
         percent = Number(match[1])
         base = Number(match[2])
         operation = 'of'
-      }
-      else {
+      } else {
         base = Number(match[1])
         percent = Number(match[3])
         operation = match[2] === '-' ? 'sub' : 'add'
@@ -64,8 +58,7 @@ export class PercentageAbility extends BasePreviewAbility {
       break
     }
 
-    if (Number.isNaN(base) || Number.isNaN(percent))
-      return null
+    if (Number.isNaN(base) || Number.isNaN(percent)) return null
 
     this.throwIfAborted(context.signal)
 
@@ -94,17 +87,17 @@ export class PercentageAbility extends BasePreviewAbility {
         {
           rows: [
             { label: purePercent ? '基准百分比' : '基准', value: base.toString() },
-            { label: '百分比', value: `${percent}%` },
-          ],
-        },
-      ],
+            { label: '百分比', value: `${percent}%` }
+          ]
+        }
+      ]
     }
 
     return {
       abilityId: this.id,
       confidence: 0.7,
       payload,
-      durationMs: performance.now() - startedAt,
+      durationMs: performance.now() - startedAt
     }
   }
 }

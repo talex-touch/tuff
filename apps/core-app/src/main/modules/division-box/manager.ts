@@ -6,6 +6,7 @@
  */
 
 import type { CloseOptions, DivisionBoxConfig, SessionInfo } from '@talex-touch/utils'
+import type { TouchPlugin } from '../plugin/plugin'
 // app import removed - not currently used
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -222,7 +223,9 @@ export class DivisionBoxManager {
         // Get plugin reference if pluginId is provided
         const { pluginModule } = await import('../plugin/plugin-module')
         const plugin = validatedConfig.pluginId
-          ? (pluginModule.pluginManager?.getPluginByName(validatedConfig.pluginId) as any)
+          ? (pluginModule.pluginManager?.getPluginByName(validatedConfig.pluginId) as
+              | TouchPlugin
+              | undefined)
           : undefined
 
         await session.attachUIView(validatedConfig.url, plugin)
