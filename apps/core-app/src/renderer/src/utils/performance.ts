@@ -6,16 +6,16 @@
  * Debounce function - delays execution until after wait milliseconds have elapsed
  * since the last time it was invoked
  */
-export function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number,
-): (...args: Parameters<T>) => void {
+export function debounce<Args extends unknown[], TThis = unknown>(
+  func: (this: TThis, ...args: Args) => void,
+  wait: number
+): (this: TThis, ...args: Args) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
 
-  return function executedFunction(...args: Parameters<T>) {
+  return function executedFunction(this: TThis, ...args: Args) {
     const later = () => {
       timeout = null
-      func(...args)
+      func.apply(this, args)
     }
 
     if (timeout !== null) {
@@ -28,15 +28,15 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Throttle function - ensures function is called at most once per specified time period
  */
-export function throttle<T extends (...args: any[]) => any>(
-  func: T,
-  limit: number,
-): (...args: Parameters<T>) => void {
+export function throttle<Args extends unknown[], TThis = unknown>(
+  func: (this: TThis, ...args: Args) => void,
+  limit: number
+): (this: TThis, ...args: Args) => void {
   let inThrottle: boolean = false
 
-  return function executedFunction(...args: Parameters<T>): void {
+  return function executedFunction(this: TThis, ...args: Args): void {
     if (!inThrottle) {
-      func(...args)
+      func.apply(this, args)
       inThrottle = true
       setTimeout(() => {
         inThrottle = false
@@ -48,18 +48,18 @@ export function throttle<T extends (...args: any[]) => any>(
 /**
  * Request Animation Frame throttle - throttles to browser's animation frame rate
  */
-export function rafThrottle<T extends (...args: any[]) => any>(
-  func: T,
-): (...args: Parameters<T>) => void {
+export function rafThrottle<Args extends unknown[], TThis = unknown>(
+  func: (this: TThis, ...args: Args) => void
+): (this: TThis, ...args: Args) => void {
   let rafId: number | null = null
 
-  return function executedFunction(...args: Parameters<T>): void {
+  return function executedFunction(this: TThis, ...args: Args): void {
     if (rafId !== null) {
       return
     }
 
     rafId = requestAnimationFrame(() => {
-      func(...args)
+      func.apply(this, args)
       rafId = null
     })
   }
@@ -68,21 +68,21 @@ export function rafThrottle<T extends (...args: any[]) => any>(
 /**
  * Memoize function results with optional cache size limit
  */
-export function memoize<T extends (...args: any[]) => any>(
-  func: T,
-  maxCacheSize: number = 100,
-): T {
-  const cache = new Map<string, ReturnType<T>>()
+export function memoize<Args extends unknown[], R, TThis = unknown>(
+  func: (this: TThis, ...args: Args) => R,
+  maxCacheSize: number = 100
+): (this: TThis, ...args: Args) => R {
+  const cache = new Map<string, R>()
   const cacheOrder: string[] = []
 
-  return function memoized(...args: Parameters<T>): ReturnType<T> {
+  return function memoized(this: TThis, ...args: Args): R {
     const key = JSON.stringify(args)
 
     if (cache.has(key)) {
       return cache.get(key)!
     }
 
-    const result = func(...args)
+    const result = func.apply(this, args)
     cache.set(key, result)
     cacheOrder.push(key)
 
@@ -93,16 +93,13 @@ export function memoize<T extends (...args: any[]) => any>(
     }
 
     return result
-  } as T
+  }
 }
 
 /**
  * Batch multiple calls into a single execution
  */
-export function batch<T>(
-  func: (items: T[]) => void,
-  wait: number = 100,
-): (item: T) => void {
+export function batch<T>(func: (items: T[]) => void, wait: number = 100): (item: T) => void {
   let items: T[] = []
   let timeout: ReturnType<typeof setTimeout> | null = null
 

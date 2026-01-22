@@ -206,7 +206,7 @@ async function handleCapabilityTest(
     userInput?: string
     model?: string
     promptTemplate?: string
-    promptVariables?: Record<string, any>
+    promptVariables?: Record<string, unknown>
   }
 ): Promise<void> {
   if (capabilityTesting[capabilityId]) return
@@ -214,18 +214,18 @@ async function handleCapabilityTest(
   capabilityTests[capabilityId] = null
 
   try {
-    const response = await aiClient.testCapability({
+    const response = (await aiClient.testCapability({
       capabilityId,
       providerId: params?.providerId,
       userInput: params?.userInput,
       model: params?.model,
       promptTemplate: params?.promptTemplate,
       promptVariables: params?.promptVariables
-    })
+    })) as CapabilityTestResult
 
     // 使用格式化后的结果
     capabilityTests[capabilityId] = {
-      ...(response as any),
+      ...response,
       timestamp: Date.now()
     }
   } catch (error) {
@@ -314,7 +314,15 @@ async function handleCapabilityTest(
           @update-models="onUpdateModels"
           @update-prompt="onUpdatePrompt"
           @reorder-providers="onReorderProviders"
-          @test="(params?: any) => handleCapabilityTest(selectedCapability!.id, params)"
+          @test="
+            (params?: {
+              providerId?: string
+              userInput?: string
+              model?: string
+              promptTemplate?: string
+              promptVariables?: Record<string, unknown>
+            }) => handleCapabilityTest(selectedCapability!.id, params)
+          "
         />
       </div>
     </template>

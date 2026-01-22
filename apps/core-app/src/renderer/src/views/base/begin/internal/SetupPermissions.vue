@@ -2,6 +2,7 @@
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
+import type { Component } from 'vue'
 import { computed, inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -13,7 +14,7 @@ import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import Done from './Done.vue'
 
 type StepFunction = (
-  call: { comp: any; rect?: { width: number; height: number } },
+  call: { comp: Component; rect?: { width: number; height: number } },
   dataAction?: () => void
 ) => void
 
@@ -101,10 +102,10 @@ async function checkAllPermissions(): Promise<void> {
   isLoading.value = true
   try {
     // Check file access permission (required)
-    const fileAccessResult = (await Promise.race([
+    const fileAccessResult = await Promise.race<SystemPermissionCheckResult>([
       transport.send(systemPermissionCheck, 'fileAccess'),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-    ])) as any
+    ])
 
     if (fileAccessResult && fileAccessResult.status) {
       permissions.value.fileAccess = {
@@ -117,10 +118,10 @@ async function checkAllPermissions(): Promise<void> {
     // Check accessibility permission (macOS, optional)
     if (isMacOS.value) {
       try {
-        const accResult = (await Promise.race([
+        const accResult = await Promise.race<SystemPermissionCheckResult>([
           transport.send(systemPermissionCheck, 'accessibility'),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-        ])) as any
+        ])
 
         if (accResult && accResult.status) {
           permissions.value.accessibility = {
@@ -137,10 +138,10 @@ async function checkAllPermissions(): Promise<void> {
 
     // Check notification permission (optional)
     try {
-      const notifResult = (await Promise.race([
+      const notifResult = await Promise.race<SystemPermissionCheckResult>([
         transport.send(systemPermissionCheck, 'notifications'),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-      ])) as any
+      ])
 
       if (notifResult && notifResult.status) {
         permissions.value.notifications = {
@@ -157,10 +158,10 @@ async function checkAllPermissions(): Promise<void> {
     // Check admin privileges (Windows, optional)
     if (isWindows.value) {
       try {
-        const adminResult = (await Promise.race([
+        const adminResult = await Promise.race<SystemPermissionCheckResult>([
           transport.send(systemPermissionCheck, 'adminPrivileges'),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-        ])) as any
+        ])
 
         if (adminResult && adminResult.status) {
           permissions.value.adminPrivileges = {

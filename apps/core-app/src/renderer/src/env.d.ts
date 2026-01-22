@@ -8,8 +8,8 @@ declare module '*.vue' {
 }
 
 declare module 'talex-touch:information' {
-  export const packageJson: Record<string, any>
-  const information: Record<string, any>
+  export const packageJson: Record<string, unknown>
+  const information: Record<string, unknown>
   export default information
 }
 
@@ -51,12 +51,14 @@ declare global {
     $argMapper: import('@talex-touch/utils/electron').IArgMapperOptions
     $channel: import('@talex-touch/utils/channel').ITouchClientChannel
     $i18n: import('vue-i18n').I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
+    __VUE_ROUTER__?: import('vue-router').Router
+    __devAuthToken?: (token: string) => void
     $startupInfo: IStartupInfo
     api: import('@talex-touch/utils/preload').PreloadAPI
     ipcRenderer: {
-      send: (channel: string, data: any) => void
-      sendSync: (channel: string, data: any) => any
-      on: (channel: string, func: (...args: any[]) => void) => void
+      send: (channel: string, data: unknown) => void
+      sendSync: (channel: string, data: unknown) => unknown
+      on: (channel: string, func: (...args: unknown[]) => void) => void
     }
   }
 }

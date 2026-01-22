@@ -1,4 +1,4 @@
-import type { Component } from 'vue'
+import type { AppContext, Component } from 'vue'
 import { isCoreBox } from '@talex-touch/utils/renderer'
 import { createVNode, getCurrentInstance, render } from 'vue'
 import PlatformCompatibilityWarning from '~/components/base/dialog/PlatformCompatibilityWarning.vue'
@@ -7,7 +7,7 @@ import { useDialogManager } from './dialog-manager'
 /**
  * 全局应用上下文缓存（从 App.vue 捕获）
  */
-let globalAppContext: any = null
+let globalAppContext: AppContext | null = null
 
 /**
  * 捕获全局应用上下文
@@ -25,7 +25,7 @@ export function capturePlatformWarningContext(): void {
  */
 function renderWithGlobalContext(
   component: Component,
-  props: Record<string, any>,
+  props: Record<string, unknown>,
   container: HTMLElement
 ): () => void {
   const vnode = createVNode(component, props)

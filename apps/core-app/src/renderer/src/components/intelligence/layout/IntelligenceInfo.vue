@@ -65,21 +65,21 @@ watch(
   (newProvider) => {
     localProvider.value = { ...newProvider }
   },
-  { deep: true },
+  { deep: true }
 )
 
 watch(
   () => props.testResult,
   (newResult) => {
     testResult.value = newResult || null
-  },
+  }
 )
 
 watch(
   () => props.isTesting,
   (newState) => {
     isTesting.value = newState || false
-  },
+  }
 )
 
 /**
@@ -96,8 +96,7 @@ function handleDelete() {
 function handleChange() {
   const liveProvider = intelligenceSettings
     .get()
-    .providers
-    .find(p => p.id === localProvider.value.id)
+    .providers.find((p) => p.id === localProvider.value.id)
 
   emits('update', liveProvider ?? localProvider.value)
 }

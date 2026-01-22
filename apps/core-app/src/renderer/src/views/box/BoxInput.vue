@@ -2,18 +2,11 @@
 import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '../../modules/box/adapter'
+import type { IBoxOptions } from '../../modules/box/adapter'
 
 interface Props {
   modelValue: string
-  boxOptions: {
-    mode: BoxMode
-    data?: {
-      feature?: {
-        desc?: string
-        name?: string
-      }
-    }
-  }
+  boxOptions: IBoxOptions
   placeholder?: string
   disabled?: boolean
 }
@@ -49,7 +42,12 @@ const placeholder = computed(() => {
 
   // Feature mode: show feature description
   if (props.boxOptions.mode === BoxMode.FEATURE) {
-    return props.boxOptions.data?.feature?.desc ?? props.boxOptions.data?.feature?.name
+    const data = props.boxOptions.data
+    const feature =
+      data && typeof data === 'object'
+        ? (data as { feature?: { desc?: string; name?: string } }).feature
+        : undefined
+    return feature?.desc ?? feature?.name
   }
 
   // Use custom placeholder from settings, fallback to i18n default

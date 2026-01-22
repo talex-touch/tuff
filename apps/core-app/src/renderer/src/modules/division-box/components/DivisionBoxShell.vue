@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DivisionBoxSize } from '@talex-touch/utils'
+import type { DivisionBoxStateChangedPayload } from '@talex-touch/utils/transport/events/types/division-box'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -24,10 +25,10 @@ interface Props {
   icon?: string
 
   /** Size preset */
-  size: DivisionBoxSize
+  size?: DivisionBoxSize
 
   /** Show header */
-  showHeader: boolean
+  showHeader?: boolean
 
   /** Initial position */
   initialX?: number
@@ -152,7 +153,7 @@ onMounted(() => {
   isLoading.value = true
 
   // Listen for state changes from main process
-  const handleStateChange = (_event: any, data: any) => {
+  const handleStateChange = (data: DivisionBoxStateChangedPayload) => {
     if (data.sessionId === props.sessionId) {
       const oldState = currentState.value
       currentState.value = data.newState
@@ -174,7 +175,7 @@ onMounted(() => {
   }
 
   stateChangeCleanup = transport.on(DivisionBoxEvents.stateChanged, (event) => {
-    handleStateChange(null, event as any)
+    handleStateChange(event as DivisionBoxStateChangedPayload)
   })
 
   // Request initial state from main process
@@ -182,7 +183,7 @@ onMounted(() => {
     .send(DivisionBoxEvents.getState, { sessionId: props.sessionId })
     .then((response) => {
       if (response?.success) {
-        const state = (response.data as any)?.state
+        const state = (response.data as { state?: string } | null | undefined)?.state
         if (state) {
           currentState.value = state
         }

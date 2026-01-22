@@ -53,11 +53,12 @@ async function toggleEverything() {
         ? t('settings.settingEverything.enabledSuccess')
         : t('settings.settingEverything.disabledSuccess')
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[SettingEverything] Failed to toggle:', error)
     ElMessage.error(
       t('settings.settingEverything.toggleFailed', {
-        error: error?.message || String(error)
+        error: message
       })
     )
   }
@@ -84,11 +85,12 @@ async function testSearch() {
         })
       )
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error('[SettingEverything] Test search failed:', error)
     ElMessage.error(
       t('settings.settingEverything.testFailed', {
-        error: error?.message || String(error)
+        error: message
       })
     )
   } finally {

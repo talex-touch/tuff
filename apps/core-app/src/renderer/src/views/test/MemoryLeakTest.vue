@@ -8,7 +8,7 @@ const createCount = ref(0)
 const destroyCount = ref(0)
 const logs = ref<string[]>([])
 
-let testApp: any = null
+let testApp: ReturnType<typeof createApp> | null = null
 
 function addLog(message: string) {
   logs.value.push(`[${new Date().toLocaleTimeString()}] ${message}`)

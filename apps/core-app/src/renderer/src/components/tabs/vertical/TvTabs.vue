@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Component, VNode } from 'vue'
+import type { Component, VNode, VNodeChild } from 'vue'
 import { TxGradualBlur } from '@talex-touch/tuffex'
 import { defineComponent, h, nextTick, onMounted, reactive, ref, useSlots } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -15,8 +15,10 @@ export default defineComponent({
   },
   emits: ['update:modelValue', 'scroll'],
   setup(props, { emit }) {
+    type SlotObject = Record<string, (...args: unknown[]) => VNodeChild>
+
     // 状态管理
-    const activeNodes = reactive<Record<string, any>>({ ...props.modelValue })
+    const activeNodes = reactive<Record<string, string | undefined>>({ ...props.modelValue })
     const lastActive = ref<VNode | null>(null)
     const slotWrapper = ref<HTMLElement | null>(null)
     const headerWrapper = ref<HTMLElement | null>(null)
@@ -105,7 +107,7 @@ export default defineComponent({
         const isActive = (): boolean => activeNodes[tabIndex] === vnode.props?.name
 
         return h(
-          TvTabItem as any,
+          TvTabItem as Component,
           {
             active: isActive(),
             ...vnode.props,
@@ -221,7 +223,7 @@ export default defineComponent({
       // 获取选中插槽内容
       const getSelectSlotContent = (): VNode => {
         // 获取当前激活的内容
-        let activeContent: any = null
+        let activeContent: VNodeChild | VNodeChild[] | SlotObject | null = null
         const currentActiveKey = Object.keys(activeNodes).find((key) => activeNodes[key])
 
         if (currentActiveKey) {
@@ -234,9 +236,9 @@ export default defineComponent({
               activeChild.children &&
               'default' in activeChild.children
             ) {
-              activeContent = (activeChild.children as { default: () => any }).default?.()
+              activeContent = (activeChild.children as { default: () => VNodeChild }).default?.()
             } else if (typeof activeChild.children === 'object') {
-              activeContent = activeChild.children
+              activeContent = activeChild.children as SlotObject
             }
           }
         }
@@ -248,9 +250,9 @@ export default defineComponent({
             lastActive.value.children &&
             'default' in lastActive.value.children
           ) {
-            activeContent = (lastActive.value.children as { default: () => any }).default?.()
+            activeContent = (lastActive.value.children as { default: () => VNodeChild }).default?.()
           } else if (typeof lastActive.value.children === 'object') {
-            activeContent = lastActive.value.children
+            activeContent = lastActive.value.children as SlotObject
           }
         }
 
@@ -304,7 +306,7 @@ export default defineComponent({
             },
             [
               h('div', { class: 'TvTabs-BlurTop' }, [
-                h(TxGradualBlur as any, {
+                h(TxGradualBlur as Component, {
                   position: 'top',
                   height: '32px',
                   strength: 1.4,
@@ -313,7 +315,7 @@ export default defineComponent({
                 })
               ]),
               h('div', { class: 'TvTabs-BlurBottom' }, [
-                h(TxGradualBlur as any, {
+                h(TxGradualBlur as Component, {
                   position: 'bottom',
                   height: '32px',
                   strength: 1.4,

@@ -4,12 +4,12 @@ import lottie from 'lottie-web'
 const props = defineProps({
   data: {
     type: Object,
-    default: null,
+    default: null
   },
   loop: {
     type: Boolean,
-    default: true,
-  },
+    default: true
+  }
 })
 const dom = ref()
 
@@ -21,7 +21,7 @@ onMounted(() => {
     renderer: 'svg',
     loop: props.loop,
     autoplay: true,
-    animationData: props.data,
+    animationData: props.data
   })
 
   animation.resize()

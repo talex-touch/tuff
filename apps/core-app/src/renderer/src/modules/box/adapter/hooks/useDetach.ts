@@ -1,4 +1,4 @@
-import type { TuffItem } from '@talex-touch/utils'
+import type { FlowPayload, IProviderActivate, TuffItem } from '@talex-touch/utils'
 import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
@@ -11,7 +11,7 @@ interface UseDetachOptions {
   res: Ref<TuffItem[]>
   boxOptions: { focus: number }
   isUIMode: ComputedRef<boolean>
-  activeActivations: ComputedRef<any[] | undefined>
+  activeActivations: ComputedRef<IProviderActivate[] | undefined>
   deactivateProvider: (id?: string) => Promise<void>
 }
 
@@ -50,7 +50,7 @@ export function useDetach(options: UseDetachOptions) {
   const transport = useTuffTransport()
 
   const flowVisible = ref(false)
-  const flowPayload = ref<any>(null)
+  const flowPayload = ref<FlowPayload | null>(null)
   const flowSessionId = ref('')
 
   async function detachItem(item: TuffItem): Promise<void> {
@@ -79,7 +79,7 @@ export function useDetach(options: UseDetachOptions) {
     }
   }
 
-  async function detachUIMode(activation: any): Promise<void> {
+  async function detachUIMode(activation: IProviderActivate): Promise<void> {
     try {
       const config = {
         url: `plugin://${activation.id}/index.html`,

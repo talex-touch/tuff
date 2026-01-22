@@ -2,6 +2,7 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type {
   MetaAction,
+  MetaActionExecuteRequest,
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -89,7 +90,7 @@ const flatActions = computed(() => {
 
 // Listen for show/hide messages from main process via IPC
 const unregShow = transport.on(MetaOverlayEvents.ui.show, (data: MetaShowRequest) => {
-  item.value = data.item as any
+  item.value = data.item
   const merged: MetaAction[] = [
     ...(data.pluginActions || []),
     ...(data.itemActions || []),
@@ -196,11 +197,12 @@ async function handleActionExecute(action: MetaAction) {
 
   try {
     // Include item in request for main process to use
-    await transport.send(MetaOverlayEvents.action.execute, {
+    const payload: MetaActionExecuteRequest & { item?: TuffItem } = {
       actionId: action.id,
       itemId: item.value.id,
       item: item.value
-    } as any)
+    }
+    await transport.send(MetaOverlayEvents.action.execute, payload)
   } catch (error) {
     console.error('[MetaOverlay] Failed to execute action', error)
   }

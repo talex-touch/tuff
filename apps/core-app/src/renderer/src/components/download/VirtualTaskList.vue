@@ -11,16 +11,16 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  itemHeight: 120, // Default height for detailed view
+  itemHeight: 120 // Default height for detailed view
 })
 
 const emit = defineEmits<{
-  'pause': [taskId: string]
-  'resume': [taskId: string]
-  'cancel': [taskId: string]
-  'retry': [taskId: string]
-  'remove': [taskId: string]
-  'delete': [taskId: string]
+  pause: [taskId: string]
+  resume: [taskId: string]
+  cancel: [taskId: string]
+  retry: [taskId: string]
+  remove: [taskId: string]
+  delete: [taskId: string]
   'open-file': [taskId: string]
   'show-in-folder': [taskId: string]
   'show-details': [taskId: string]
@@ -48,7 +48,7 @@ const visibleRange = computed(() => {
 
   return {
     start: Math.max(0, start - overscan),
-    end: Math.min(props.tasks.length, end + overscan),
+    end: Math.min(props.tasks.length, end + overscan)
   }
 })
 
@@ -87,14 +87,17 @@ onUnmounted(() => {
 })
 
 // Reset scroll when tasks change significantly
-watch(() => props.tasks.length, (newLength, oldLength) => {
-  if (newLength < oldLength && scrollTop.value > totalHeight.value) {
-    scrollTop.value = Math.max(0, totalHeight.value - containerHeight.value)
-    if (containerRef.value) {
-      containerRef.value.scrollTop = scrollTop.value
+watch(
+  () => props.tasks.length,
+  (newLength, oldLength) => {
+    if (newLength < oldLength && scrollTop.value > totalHeight.value) {
+      scrollTop.value = Math.max(0, totalHeight.value - containerHeight.value)
+      if (containerRef.value) {
+        containerRef.value.scrollTop = scrollTop.value
+      }
     }
   }
-})
+)
 </script>
 
 <template>

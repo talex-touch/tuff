@@ -1,7 +1,28 @@
 <script name="TGroupBlock" setup>
 import { ref } from 'vue'
 
-const props = defineProps(['name', 'icon', 'description', 'expandFill', 'shrink'])
+const props = defineProps({
+  name: {
+    type: String,
+    required: true
+  },
+  icon: {
+    type: String,
+    required: true
+  },
+  description: {
+    type: String,
+    required: true
+  },
+  expandFill: {
+    type: Boolean,
+    default: false
+  },
+  shrink: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const expand = ref(!props.shrink)
 </script>

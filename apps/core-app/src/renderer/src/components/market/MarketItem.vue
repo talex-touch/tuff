@@ -1,6 +1,7 @@
 <script setup name="MarketItem" lang="ts">
+import type { MarketPluginListItem } from '~/composables/market/useMarketData'
 interface MarketItemProps {
-  item: any
+  item: MarketPluginListItem
 }
 
 defineProps<MarketItemProps>()

@@ -82,7 +82,7 @@ export function useAppLifecycle() {
       const transport = useTuffTransport()
       const channel = tryUseChannel()
       const hasStorageChannel = (value: typeof channel): boolean =>
-        !!value && typeof value.sendSync === 'function' && typeof value.unRegChannel === 'function'
+        !!value && typeof value.send === 'function' && typeof value.unRegChannel === 'function'
       if (hasStorageChannel(channel)) {
         initStorageTransport(transport)
         initStorageChannel(channel as IStorageChannel)
@@ -100,9 +100,8 @@ export function useAppLifecycle() {
 
       void (async () => {
         try {
-          const { startRendererPerformanceTelemetry } = await import(
-            '~/modules/telemetry/performance'
-          )
+          const { startRendererPerformanceTelemetry } =
+            await import('~/modules/telemetry/performance')
           await startRendererPerformanceTelemetry()
         } catch (error) {
           console.warn('[useAppLifecycle] Failed to start performance telemetry', error)

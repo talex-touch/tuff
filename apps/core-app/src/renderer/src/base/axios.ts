@@ -3,12 +3,12 @@ import _axios from 'axios'
 
 export function wrapperAxios(
   url = 'http://localhost:9981',
-  data: CreateAxiosDefaults = { timeout: 6000, proxy: false },
+  data: CreateAxiosDefaults = { timeout: 6000, proxy: false }
 ) {
   // Encapsulate the complete axios instance code
   const axios = _axios.create({
     baseURL: url,
-    ...data,
+    ...data
   })
 
   // Request interceptor
@@ -20,7 +20,7 @@ export function wrapperAxios(
     (error) => {
       // Do something with request error
       return Promise.reject(error)
-    },
+    }
   )
 
   // Response interceptor
@@ -39,12 +39,12 @@ export function wrapperAxios(
         code: 500,
         message: 'Server error',
         data: null,
-        error,
+        error
       } // Promise.reject(error)
-    },
+    }
   )
 
-  function post(url: string, data: any, config?: IReqConfig) {
+  function post(url: string, data: unknown, config?: IReqConfig) {
     return axios.post(url, data, config)
   }
 
@@ -52,7 +52,7 @@ export function wrapperAxios(
     return axios.get(url, config)
   }
 
-  function put(url: string, data: any, config?: IReqConfig) {
+  function put(url: string, data: unknown, config?: IReqConfig) {
     return axios.put(url, data, config)
   }
 
@@ -60,7 +60,7 @@ export function wrapperAxios(
     return axios.delete(url, config)
   }
 
-  function patch(url: string, data: any, config?: IReqConfig) {
+  function patch(url: string, data: unknown, config?: IReqConfig) {
     return axios.patch(url, data, config)
   }
 
@@ -85,7 +85,7 @@ export function wrapperAxios(
     patch,
     head,
     options,
-    request,
+    request
   }
 }
 

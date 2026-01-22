@@ -5,5 +5,5 @@ export {
   migrateAISDKSettings,
   migrateIntelligenceSettings,
   resetAISDKConfig,
-  resetIntelligenceConfig,
+  resetIntelligenceConfig
 } from '@talex-touch/utils/renderer/storage'

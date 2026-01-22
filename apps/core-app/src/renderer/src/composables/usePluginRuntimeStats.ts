@@ -50,21 +50,19 @@ const DEFAULT_MAX_POINTS = 60
 function pushHistory(
   history: PluginRuntimeHistoryPoint[],
   point: PluginRuntimeHistoryPoint,
-  maxPoints: number,
+  maxPoints: number
 ): PluginRuntimeHistoryPoint[] {
   const next = history.length ? [...history, point] : [point]
-  if (next.length <= maxPoints)
-    return next
+  if (next.length <= maxPoints) return next
   return next.slice(next.length - maxPoints)
 }
 
 function ensureSharedState(
   name: string,
-  options?: { intervalMs?: number, maxPoints?: number },
+  options?: { intervalMs?: number; maxPoints?: number }
 ): SharedRuntimeState {
   const cached = sharedStates.get(name)
-  if (cached)
-    return cached
+  if (cached) return cached
 
   const intervalMs = Math.max(250, options?.intervalMs ?? DEFAULT_INTERVAL_MS)
   const maxPoints = Math.max(10, options?.maxPoints ?? DEFAULT_MAX_POINTS)
@@ -79,18 +77,16 @@ function ensureSharedState(
     lastUpdatedAt: ref(0),
     error: ref<string | null>(null),
     start: () => {},
-    stop: () => {},
+    stop: () => {}
   }
 
   async function tick(): Promise<void> {
-    if (state.inFlight)
-      return
+    if (state.inFlight) return
 
     state.inFlight = true
     try {
       const res = await pluginSDK.getRuntimeStats(name)
-      if (!res)
-        return
+      if (!res) return
 
       const now = Date.now()
       state.stats.value = res
@@ -102,24 +98,21 @@ function ensureSharedState(
           workerThreads: res.workers.threadCount,
           uiProcesses: res.workers.uiProcessCount,
           memoryBytes: res.usage.memoryBytes,
-          cpuPercent: res.usage.cpuPercent,
+          cpuPercent: res.usage.cpuPercent
         },
-        maxPoints,
+        maxPoints
       )
       state.lastUpdatedAt.value = now
       state.error.value = null
-    }
-    catch (error) {
+    } catch (error) {
       state.error.value = error instanceof Error ? error.message : String(error)
-    }
-    finally {
+    } finally {
       state.inFlight = false
     }
   }
 
   function start(): void {
-    if (state.timerId != null)
-      return
+    if (state.timerId != null) return
     void tick()
     state.timerId = window.setInterval(() => {
       void tick()
@@ -127,8 +120,7 @@ function ensureSharedState(
   }
 
   function stop(): void {
-    if (state.timerId == null)
-      return
+    if (state.timerId == null) return
     window.clearInterval(state.timerId)
     state.timerId = null
   }
@@ -142,7 +134,7 @@ function ensureSharedState(
 
 function acquire(
   name: string,
-  options?: { intervalMs?: number, maxPoints?: number },
+  options?: { intervalMs?: number; maxPoints?: number }
 ): SharedRuntimeState {
   const state = ensureSharedState(name, options)
   state.refCount += 1
@@ -152,12 +144,10 @@ function acquire(
 
 function release(name: string): void {
   const state = sharedStates.get(name)
-  if (!state)
-    return
+  if (!state) return
 
   state.refCount = Math.max(0, state.refCount - 1)
-  if (state.refCount > 0)
-    return
+  if (state.refCount > 0) return
 
   state.stop()
   sharedStates.delete(name)
@@ -165,7 +155,7 @@ function release(name: string): void {
 
 export function usePluginRuntimeStats(
   pluginName: string | Ref<string>,
-  options?: { intervalMs?: number, maxPoints?: number },
+  options?: { intervalMs?: number; maxPoints?: number }
 ) {
   const shared = shallowRef<SharedRuntimeState | null>(null)
 
@@ -177,27 +167,25 @@ export function usePluginRuntimeStats(
   watch(
     nameRef,
     (name, prev) => {
-      if (prev)
-        release(prev)
+      if (prev) release(prev)
       if (!name) {
         shared.value = null
         return
       }
       shared.value = acquire(name, options)
     },
-    { immediate: true },
+    { immediate: true }
   )
 
   onBeforeUnmount(() => {
     const name = nameRef.value
-    if (name)
-      release(name)
+    if (name) release(name)
   })
 
   return {
     stats: computed(() => shared.value?.stats.value ?? null),
     history: computed(() => shared.value?.history.value ?? []),
     lastUpdatedAt: computed(() => shared.value?.lastUpdatedAt.value ?? 0),
-    error: computed(() => shared.value?.error.value ?? null),
+    error: computed(() => shared.value?.error.value ?? null)
   }
 }

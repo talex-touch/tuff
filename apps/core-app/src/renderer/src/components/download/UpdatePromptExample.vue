@@ -14,7 +14,7 @@ const downloadProgress = ref({
   speed: 0,
   downloadedSize: 0,
   totalSize: 0,
-  remainingTime: 0,
+  remainingTime: 0
 })
 
 const mockRelease = ref<GitHubRelease>({
@@ -49,9 +49,9 @@ This update is approximately 250 MB.`,
       size: 262144000, // 250 MB
       platform: 'darwin' as const,
       arch: 'x64' as const,
-      checksum: 'abc123def456',
-    },
-  ],
+      checksum: 'abc123def456'
+    }
+  ]
 })
 
 function showUpdateDialog() {
@@ -86,7 +86,7 @@ function simulateDownload() {
       speed,
       downloadedSize: downloaded,
       totalSize,
-      remainingTime: (totalSize - downloaded) / speed,
+      remainingTime: (totalSize - downloaded) / speed
     }
   }, 1000)
 }
@@ -114,9 +114,7 @@ function handleCancelDownload(taskId: string) {
 
 <template>
   <div class="update-prompt-example">
-    <el-button type="primary" @click="showUpdateDialog">
-      Show Update Dialog
-    </el-button>
+    <el-button type="primary" @click="showUpdateDialog"> Show Update Dialog </el-button>
 
     <UpdatePromptDialog
       v-model="dialogVisible"

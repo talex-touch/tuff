@@ -32,9 +32,9 @@ export function useMarketData() {
       plugins.value = result.plugins
       stats.value = result.stats
       lastUpdated.value = Date.now()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[Market] Failed to load plugins:', error)
-      const reason = typeof error?.message === 'string' ? error.message : ''
+      const reason = error instanceof Error ? error.message : ''
       errorMessage.value = reason || 'market.error.loadFailed'
     } finally {
       loading.value = false

@@ -1,10 +1,11 @@
 <script setup lang="ts" name="OptionMode">
+import type { Component } from 'vue'
 import type { Ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 import Done from './Done.vue'
 import Forbidden from './Forbidden.vue'
 
-type StepFunction = (call: { comp: any; rect?: { width: number; height: number } }) => void
+type StepFunction = (call: { comp: Component; rect?: { width: number; height: number } }) => void
 
 const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!

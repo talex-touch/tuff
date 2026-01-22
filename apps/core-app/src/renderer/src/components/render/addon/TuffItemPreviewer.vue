@@ -10,10 +10,11 @@ const props = defineProps<{
 
 const { t } = useI18n()
 
-function getFileType(filePath: string): 'image' | 'video' | 'audio' | 'text' | 'pdf' | 'archive' | 'document' | 'default' {
+function getFileType(
+  filePath: string
+): 'image' | 'video' | 'audio' | 'text' | 'pdf' | 'archive' | 'document' | 'default' {
   const extension = filePath.split('.').pop()?.toLowerCase()
-  if (!extension)
-    return 'default'
+  if (!extension) return 'default'
 
   if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) {
     return 'image'
@@ -41,8 +42,7 @@ function getFileType(filePath: string): 'image' | 'video' | 'audio' | 'text' | '
 
 const previewComponent = computed(() => {
   const filePath = props.item.meta?.file?.path
-  if (!filePath)
-    return DefaultPreview
+  if (!filePath) return DefaultPreview
 
   const fileType = getFileType(filePath)
 
@@ -128,9 +128,7 @@ const previewComponent = computed(() => {
             <div class="w-[80px] text-right">
               {{ t('fileInfo.fileSize') }}
             </div>
-            <div class="w-[65%]">
-              {{ item?.meta?.file?.size || 0 }} {{ t('fileInfo.bytes') }}
-            </div>
+            <div class="w-[65%]">{{ item?.meta?.file?.size || 0 }} {{ t('fileInfo.bytes') }}</div>
           </div>
           <div
             class="flex justify-between gap-2 border-b border-gray-200 dark:border-gray-700 py-1"

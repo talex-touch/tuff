@@ -14,13 +14,13 @@ const props = defineProps<Props>()
 // Emits
 const emit = defineEmits<{
   'update:visible': [visible: boolean]
-  'update-config': [config: Partial<DownloadConfig>]
+  'update-config': [config: DownloadConfig]
 }>()
 
 // 对话框可见性
 const dialogVisible = computed({
   get: () => props.visible,
-  set: value => emit('update:visible', value),
+  set: (value) => emit('update:visible', value)
 })
 
 // 表单数据
@@ -29,24 +29,24 @@ const form = reactive<DownloadConfig>({
     maxConcurrent: 3,
     autoAdjust: true,
     networkAware: true,
-    priorityBased: true,
+    priorityBased: true
   },
   chunk: {
     size: 1024 * 1024, // 1MB
     resume: true,
     autoRetry: true,
-    maxRetries: 3,
+    maxRetries: 3
   },
   storage: {
     tempDir: '',
     historyRetention: 30,
-    autoCleanup: true,
+    autoCleanup: true
   },
   network: {
     timeout: 30000,
     retryDelay: 5000,
-    maxRetries: 3,
-  },
+    maxRetries: 3
+  }
 })
 
 // 并发数标记
@@ -55,7 +55,7 @@ const concurrencyMarks = {
   3: '3',
   5: '5',
   8: '8',
-  10: '10',
+  10: '10'
 }
 
 // 切片大小选项
@@ -63,7 +63,7 @@ const chunkSizeOptions = [
   { label: '512 KB', value: 512 * 1024 },
   { label: '1 MB', value: 1024 * 1024 },
   { label: '2 MB', value: 2 * 1024 * 1024 },
-  { label: '4 MB', value: 4 * 1024 * 1024 },
+  { label: '4 MB', value: 4 * 1024 * 1024 }
 ]
 
 // 历史保留选项
@@ -71,7 +71,7 @@ const historyRetentionOptions = [
   { label: '7天', value: 7 },
   { label: '30天', value: 30 },
   { label: '90天', value: 90 },
-  { label: '永久', value: 0 },
+  { label: '永久', value: 0 }
 ]
 
 // 选择临时目录
@@ -85,8 +85,7 @@ async function selectTempDir() {
     //   form.storage.tempDir = result.filePaths[0]
     // }
     toast.info('选择目录功能待实现')
-  }
-  catch (error) {
+  } catch (error) {
     toast.error('选择目录失败')
   }
 }
@@ -110,7 +109,7 @@ watch(
       // 这里可以从存储中加载当前配置
       // loadCurrentConfig()
     }
-  },
+  }
 )
 </script>
 

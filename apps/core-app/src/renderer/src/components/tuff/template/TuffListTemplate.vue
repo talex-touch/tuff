@@ -23,7 +23,7 @@ export interface TuffListTemplateProps<TItem> {
   emptyText?: string
 }
 
-const props = defineProps<TuffListTemplateProps<any>>()
+const props = defineProps<TuffListTemplateProps<unknown>>()
 
 const emits = defineEmits<{
   'toggle-group': [groupId: string, collapsed: boolean]
@@ -31,7 +31,7 @@ const emits = defineEmits<{
 
 const collapsedState = reactive<Record<string, boolean>>({})
 
-function isGroupCollapsed(group: TuffListGroup<any>): boolean {
+function isGroupCollapsed(group: TuffListGroup<unknown>): boolean {
   if (!group.collapsible) return false
   const stored = collapsedState[group.id]
   if (typeof stored === 'boolean') {
@@ -40,7 +40,7 @@ function isGroupCollapsed(group: TuffListGroup<any>): boolean {
   return Boolean(group.collapsed)
 }
 
-function toggleGroup(group: TuffListGroup<any>): void {
+function toggleGroup(group: TuffListGroup<unknown>): void {
   if (!group.collapsible) return
   const next = !isGroupCollapsed(group)
   collapsedState[group.id] = next
@@ -53,14 +53,14 @@ function setGroupCollapsed(groupId: string, collapsed: boolean): void {
   collapsedState[group.id] = collapsed
 }
 
-const variantTitleColorMap: Record<NonNullable<TuffListGroup<any>['badgeVariant']>, string> = {
+const variantTitleColorMap: Record<NonNullable<TuffListGroup<unknown>['badgeVariant']>, string> = {
   info: 'var(--el-color-info)',
   success: 'var(--el-color-success)',
   warning: 'var(--el-color-warning)',
   danger: 'var(--el-color-danger)'
 }
 
-function resolveTitleColor(group: TuffListGroup<any>): string {
+function resolveTitleColor(group: TuffListGroup<unknown>): string {
   if (group.titleColor) {
     return group.titleColor
   }
@@ -76,7 +76,7 @@ function getGroupItems(groupId: string) {
 
 // Used in template v-for :key binding
 // @ts-ignore - Used in template
-function getItemKey(group: TuffListGroup<any>, item: any, index: number): string {
+function getItemKey(group: TuffListGroup<unknown>, item: unknown, index: number): string {
   if (group.itemKey) {
     return group.itemKey(item, index)
   }

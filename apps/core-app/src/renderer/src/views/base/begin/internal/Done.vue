@@ -1,10 +1,16 @@
 <script setup lang="ts" name="Done">
+import type { Component } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 import HelloData from '~/assets/lotties/welcome.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { appSetting } from '~/modules/channel/storage'
 
-const step: any = inject('step')!
+type StepFunction = (
+  call: { comp: Component | null; rect?: { width: number; height: number } },
+  onDone?: () => void
+) => void
+
+const step: StepFunction = inject('step')!
 
 function goon(): void {
   step(

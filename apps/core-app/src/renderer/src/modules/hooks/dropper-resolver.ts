@@ -7,8 +7,32 @@ import { blowMention, popperMention } from '../mention/dialog-mention'
 
 const bufferCache = new Map<string, Buffer>()
 const transport = useTuffTransport()
-const dropPluginEvent = defineRawEvent<any, any>('drop:plugin')
-const dropEvent = defineRawEvent<any, void>('drop')
+type DropPluginManifest = { name: string; [key: string]: unknown }
+type DropPluginRequest = { name: string; buffer: Buffer; size: number }
+type DropPluginResponse =
+  | { status: 'error'; msg: string }
+  | { status: 'success'; manifest: DropPluginManifest; path: string }
+type DropFileInfo = { lastModified: number; name: string; size: number; type: string }
+type DropEventPayload = {
+  shift: boolean
+  ctrl: boolean
+  alt: boolean
+  meta: boolean
+  pageX: number
+  pageY: number
+  composed: boolean
+  timeStamp: number
+  type: string
+  x: number
+  y: number
+  data: {
+    files: DropFileInfo[]
+    types: readonly string[]
+  }
+}
+
+const dropPluginEvent = defineRawEvent<DropPluginRequest, DropPluginResponse>('drop:plugin')
+const dropEvent = defineRawEvent<DropEventPayload, void>('drop')
 
 export function getBufferedFile(name: string): Buffer | undefined {
   return bufferCache.get(name)
@@ -75,7 +99,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
   return false
 }
 
-function parseFile(file: File): any {
+function parseFile(file: File): DropFileInfo {
   return {
     lastModified: file.lastModified,
     name: file.name,

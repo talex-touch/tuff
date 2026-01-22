@@ -14,11 +14,11 @@ const term = new Terminal({
   cursorBlink: true,
   disableStdin: true,
   fontSize: 16,
-  lineHeight: 1,
+  lineHeight: 1
 })
 
 defineExpose({
-  getTerminal: () => terminal.value,
+  getTerminal: () => terminal.value
 })
 
 onMounted(() => {

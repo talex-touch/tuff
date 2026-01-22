@@ -2,15 +2,14 @@
 import { computed } from 'vue'
 
 const props = defineProps<{
-  data: any // clipboard data with files
+  data: { content: string } // clipboard data with files
 }>()
 
 // Parse file paths
 const filePaths = computed(() => {
   try {
     return JSON.parse(props.data.content) as string[]
-  }
-  catch {
+  } catch {
     return []
   }
 })
@@ -19,16 +18,14 @@ const fileCount = computed(() => filePaths.value.length)
 
 // Get first file name
 const firstFileName = computed(() => {
-  if (filePaths.value.length === 0)
-    return ''
+  if (filePaths.value.length === 0) return ''
   const path = filePaths.value[0]
   return path.split(/[\\/]/).pop() || path
 })
 
 // Use tfile:// protocol for file icon
 const fileIconUrl = computed(() => {
-  if (filePaths.value.length === 0)
-    return null
+  if (filePaths.value.length === 0) return null
   return `tfile://${filePaths.value[0]}`
 })
 </script>
@@ -36,7 +33,7 @@ const fileIconUrl = computed(() => {
 <template>
   <div class="ClipboardFileTag">
     <div class="icon-container">
-      <img v-if="fileIconUrl" :src="fileIconUrl" class="file-icon" alt="file icon">
+      <img v-if="fileIconUrl" :src="fileIconUrl" class="file-icon" alt="file icon" />
       <i v-else class="ri-file-line file-icon-fallback" />
     </div>
     <span class="name">{{ firstFileName }}</span>

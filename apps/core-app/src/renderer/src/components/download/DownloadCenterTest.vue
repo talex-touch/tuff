@@ -29,14 +29,13 @@ async function testSmallFile() {
       module: DownloadModule.USER_MANUAL,
       metadata: {
         testType: 'small-file',
-        fileSize: 1024,
-      },
+        fileSize: 1024
+      }
     })
 
     addTestResult(`样式文件下载任务已创建: ${taskId}`)
     toast.success('小文件下载测试已启动')
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     addTestResult(`小文件下载测试失败: ${message}`)
     toast.error(`小文件下载测试失败: ${message}`)
@@ -56,14 +55,13 @@ async function testLargeFile() {
       module: DownloadModule.USER_MANUAL,
       metadata: {
         testType: 'large-file',
-        fileSize: 10485760,
-      },
+        fileSize: 10485760
+      }
     })
 
     addTestResult(`大文件下载任务已创建: ${taskId}`)
     toast.success('大文件下载测试已启动')
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     addTestResult(`大文件下载测试失败: ${message}`)
     toast.error(`大文件下载测试失败: ${message}`)
@@ -86,16 +84,15 @@ async function testConcurrentDownloads() {
         metadata: {
           testType: 'concurrent',
           index: i,
-          fileSize: 1048576,
-        },
+          fileSize: 1048576
+        }
       })
       tasks.push(taskId)
     }
 
     addTestResult(`并发下载任务已创建: ${tasks.join(', ')}`)
     toast.success('并发下载测试已启动')
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     addTestResult(`并发下载测试失败: ${message}`)
     toast.error(`并发下载测试失败: ${message}`)
@@ -115,14 +112,13 @@ async function testResumeDownload() {
       module: DownloadModule.USER_MANUAL,
       metadata: {
         testType: 'resume',
-        fileSize: 5242880,
-      },
+        fileSize: 5242880
+      }
     })
 
     addTestResult(`断点续传下载任务已创建: ${taskId}`)
     toast.success('断点续传测试已启动')
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     addTestResult(`断点续传测试失败: ${message}`)
     toast.error(`断点续传测试失败: ${message}`)
@@ -142,8 +138,7 @@ async function testGetTasks() {
     })
 
     toast.success(`获取到 ${tasks.length} 个任务`)
-  }
-  catch (error: unknown) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     addTestResult(`获取任务列表失败: ${message}`)
     toast.error(`获取任务列表失败: ${message}`)
@@ -157,21 +152,11 @@ async function testGetTasks() {
 
     <!-- 测试按钮 -->
     <div class="test-buttons">
-      <el-button type="primary" @click="testSmallFile">
-        测试小文件下载
-      </el-button>
-      <el-button type="primary" @click="testLargeFile">
-        测试大文件下载
-      </el-button>
-      <el-button type="primary" @click="testConcurrentDownloads">
-        测试并发下载
-      </el-button>
-      <el-button type="primary" @click="testResumeDownload">
-        测试断点续传
-      </el-button>
-      <el-button type="success" @click="testGetTasks">
-        获取任务列表
-      </el-button>
+      <el-button type="primary" @click="testSmallFile"> 测试小文件下载 </el-button>
+      <el-button type="primary" @click="testLargeFile"> 测试大文件下载 </el-button>
+      <el-button type="primary" @click="testConcurrentDownloads"> 测试并发下载 </el-button>
+      <el-button type="primary" @click="testResumeDownload"> 测试断点续传 </el-button>
+      <el-button type="success" @click="testGetTasks"> 获取任务列表 </el-button>
     </div>
 
     <!-- 测试结果 -->

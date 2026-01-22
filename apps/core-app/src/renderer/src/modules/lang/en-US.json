@@ -123,6 +123,13 @@
       "flow_detach_to_divisionbox": "Detach to Division Box",
       "flow_transfer_to_plugin": "Transfer to Plugin"
     },
+    "shortcutStatus": {
+      "conflictSystem": "Conflicts with system shortcuts",
+      "conflictPlugin": "Conflicts with plugin shortcuts",
+      "unavailable": "Shortcut registration failed; possibly reserved by the system",
+      "invalid": "Invalid shortcut",
+      "spotlightHint": "Disable Spotlight shortcut in macOS settings to free this combo"
+    },
     "autoPaste": "Auto paste",
     "autoPasteDesc": "Paste what you copied in searchbar.",
     "disabled": "Disabled",
@@ -143,6 +150,14 @@
     "recommendationShowReasonDesc": "Display the reason for each recommendation.",
     "recommendationMaxItems": "Max Recommendations",
     "recommendationMaxItemsDesc": "Maximum number of recommended items to show in search bar."
+  },
+  "permission": {
+    "system": {
+      "shortcut": {
+        "name": "Global Shortcuts",
+        "desc": "Register system-wide global shortcuts"
+      }
+    }
   },
   "settingUser": {
     "groupTitle": "Account",
@@ -416,6 +431,107 @@
       "storage": "Storage",
       "logs": "Logs",
       "details": "Details"
+    },
+    "permissions": {
+      "loading": "Loading permission info...",
+      "empty": "This plugin has no declared permissions",
+      "statusTitle": "Permission Status",
+      "statusGranted": "All required permissions granted",
+      "statusMissing": "Missing {count} required permission(s)",
+      "required": "Required Permissions",
+      "optional": "Optional Permissions",
+      "granted": "Granted",
+      "requiredTag": "Required",
+      "actionsTitle": "Permission Actions",
+      "actionsDesc": "Refresh or manage permissions in batch",
+      "actions": {
+        "refresh": "Refresh",
+        "grantAll": "Grant All",
+        "revokeAll": "Revoke All"
+      },
+      "legacyTitle": "SDK Version Warning",
+      "legacyWarning": "This plugin uses a legacy SDK; permission checks were skipped",
+      "legacyHint": "Upgrade to sdkapi >= {version} to enable permission checks",
+      "recommendationsTitle": "Recommendations",
+      "risk": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      },
+      "categoryDesc": "{count} permission(s)",
+      "categories": {
+        "fs": "File System",
+        "clipboard": "Clipboard",
+        "network": "Network",
+        "system": "System",
+        "ai": "AI",
+        "storage": "Storage",
+        "window": "Window"
+      },
+      "shortcuts": {
+        "title": "Shortcuts",
+        "desc": "Global shortcuts registered by this plugin",
+        "loading": "Loading shortcut info...",
+        "empty": "No shortcuts registered",
+        "status": {
+          "conflictSystem": "Conflicts with system shortcuts",
+          "conflictPlugin": "Conflicts with other plugin shortcuts",
+          "unavailable": "Registration failed; possibly reserved by the system",
+          "invalid": "Invalid shortcut"
+        },
+        "warning": {
+          "permissionMissing": "Shortcut permission not granted",
+          "legacySdk": "SDK too old; permission checks not enforced",
+          "missingDescription": "Missing shortcut description"
+        }
+      },
+      "registry": {
+        "fs": {
+          "read": { "name": "Read Files", "desc": "Read files from the user file system" },
+          "write": { "name": "Write Files", "desc": "Create, modify, or delete files" },
+          "execute": { "name": "Execute Files", "desc": "Run executable files or scripts" }
+        },
+        "clipboard": {
+          "read": { "name": "Read Clipboard", "desc": "Access clipboard contents" },
+          "write": { "name": "Write Clipboard", "desc": "Copy content to clipboard" }
+        },
+        "network": {
+          "local": { "name": "Local Network", "desc": "Access local network resources" },
+          "internet": { "name": "Internet Access", "desc": "Send and receive internet requests" },
+          "download": { "name": "Download Files", "desc": "Download files from the internet" }
+        },
+        "system": {
+          "shell": { "name": "Execute Commands", "desc": "Run system commands or scripts" },
+          "notification": { "name": "System Notifications", "desc": "Send system notifications" },
+          "tray": { "name": "Tray Access", "desc": "Access system tray features" },
+          "shortcut": { "name": "Global Shortcuts", "desc": "Register system-wide global shortcuts" }
+        },
+        "ai": {
+          "basic": { "name": "Basic AI", "desc": "Use basic AI capabilities" },
+          "advanced": { "name": "Advanced AI", "desc": "Use advanced AI models" },
+          "agents": { "name": "Agents", "desc": "Invoke the agent system" }
+        },
+        "storage": {
+          "plugin": { "name": "Plugin Storage", "desc": "Use private plugin storage" },
+          "shared": { "name": "Shared Storage", "desc": "Access shared storage across plugins" }
+        },
+        "window": {
+          "create": { "name": "Create Window", "desc": "Create new windows or views" },
+          "capture": { "name": "Screen Capture", "desc": "Capture screen content" }
+        }
+      },
+      "startup": {
+        "title": "Permission Request",
+        "requestMessage": "Plugin \"{name}\" requests the following permissions:",
+        "permissionItem": "• {name}",
+        "permissionItemWithReason": "• {name}: {reason}",
+        "timeout": "⏱ No action will auto-deny in {seconds}s",
+        "actions": {
+          "deny": "Deny",
+          "session": "Allow Once",
+          "always": "Always Allow"
+        }
+      }
     },
     "storage": {
       "title": "Storage Files",

@@ -1,14 +1,32 @@
 <script lang="ts">
+import type { Component, VNode, VNodeChild } from 'vue'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TTabHeader from '~/components/tabs/TTabHeader.vue'
 import TTabItem from '~/components/tabs/TTabItem.vue'
 
 const qualifiedName = ['TTabItem', 'TTabItemGroup', 'TTabHeader']
-const activeNode = ref()
-const slotWrapper = ref()
+const activeNode = ref<VNode | null>(null)
+const slotWrapper = ref<VNode | null>(null)
 
 const headerWrapper = ref<HTMLElement | null>(null)
+type NamedProps = { name?: string; disabled?: boolean }
+
+const getVNodeName = (node: VNode | null | undefined): string | undefined => {
+  const props = node?.props as NamedProps | null | undefined
+  return props?.name
+}
+
+const getVNodeTypeName = (node: VNode | null | undefined): string | undefined => {
+  const type = node?.type
+  if (typeof type === 'function') {
+    return type.name
+  }
+  if (type && typeof type === 'object' && 'name' in type) {
+    return (type as { name?: string }).name
+  }
+  return undefined
+}
 
 export default defineComponent({
   name: 'TTabs',
@@ -18,22 +36,27 @@ export default defineComponent({
   },
 
   render() {
-    let tabHeader: any = null
+    type PointerTarget = { el?: unknown } | null
+
+    let tabHeader: VNode | null = null
     const pointer = h('div', { class: 'TTabs-Pointer' })
-    let activeTabVNode: any = null
+    let activeTabVNode: VNode | null = null
 
-    const fixPointer = async (vnode: any): Promise<void> => {
+    const fixPointer = async (vnode: PointerTarget): Promise<void> => {
       const pointerEl = pointer.el
-      const nodeEl = vnode.el
-      if (!pointerEl || !nodeEl) return
+      const nodeEl = vnode?.el
+      if (!(pointerEl instanceof HTMLElement) || !(nodeEl instanceof HTMLElement)) return
 
-      const parentEl = (pointerEl as HTMLElement).offsetParent as HTMLElement | null
+      const pointerElement = pointerEl as HTMLElement
+      const nodeElement = nodeEl as HTMLElement
+
+      const parentEl = pointerElement.offsetParent as HTMLElement | null
       if (!parentEl) return
 
       const parentRect = parentEl.getBoundingClientRect()
-      const nodeRect = nodeEl.getBoundingClientRect()
+      const nodeRect = nodeElement.getBoundingClientRect()
 
-      const pointerStyle = pointerEl.style
+      const pointerStyle = pointerElement.style
       const diffTop = +(this.$props?.offset ?? 0)
 
       const top = nodeRect.top - parentRect.top + nodeRect.height * 0.2 + diffTop
@@ -47,15 +70,17 @@ export default defineComponent({
       })
     }
 
-    const createTab = (vnode: any): any => {
-      const tab = h(TTabItem, {
-        active: () => activeNode.value?.props.name === vnode.props.name,
-        ...vnode.props,
+    const createTab = (vnode: VNode): VNode => {
+      const vnodeProps = (vnode.props ?? {}) as Record<string, unknown>
+      const tabProps = {
+        ...vnodeProps,
+        active: () => getVNodeName(activeNode.value) === getVNodeName(vnode),
         onClick: () => {
-          if ('disabled' in vnode.props) return
+          const nodeProps = vnode.props as NamedProps | null | undefined
+          if (nodeProps?.disabled) return
 
           const el = slotWrapper.value?.el
-          if (el) {
+          if (el instanceof Element) {
             const classList = el.classList
             classList.remove('zoomInUp')
 
@@ -65,74 +90,69 @@ export default defineComponent({
             classList.add('zoomInUp')
           }
         }
-      })
+      }
+      const tab = h(TTabItem as Component, tabProps as Record<string, unknown>)
 
-      const isActivation = !!(tab.props && 'activation' in tab.props)
-      const isDefault = !!(this.$props?.default && vnode.props?.name === this.$props.default)
+      const activationProps = vnode.props as { activation?: boolean } | null | undefined
+      const isActivation = Boolean(activationProps?.activation)
+      const isDefault = Boolean(this.$props?.default) && getVNodeName(vnode) === this.$props.default
 
       if (!activeNode.value && (isDefault || isActivation)) {
         activeNode.value = vnode
         nextTick(() => fixPointer(tab))
       }
 
-      if (activeNode.value?.props?.name && activeNode.value?.props?.name === vnode.props?.name) {
+      if (
+        getVNodeName(activeNode.value) &&
+        getVNodeName(activeNode.value) === getVNodeName(vnode)
+      ) {
         activeTabVNode = tab
       }
 
       return tab
     }
 
-    const renderTabs = (): any[] => {
-      return (
-        this.$slots
-          .default?.()
-          ?.filter(
-            (slot) =>
-              slot.type &&
-              typeof slot.type === 'object' &&
-              'name' in slot.type &&
-              slot.type.name &&
-              qualifiedName.includes(slot.type.name as string)
-          )
-          ?.map((child) => {
-            if (
-              child.type &&
-              typeof child.type === 'object' &&
-              'name' in child.type &&
-              child.type.name === 'TTabHeader'
-            ) {
-              tabHeader = child
-              return null
-            } else if (
-              child.type &&
-              typeof child.type === 'object' &&
-              'name' in child.type &&
-              child.type.name === 'TTabItemGroup'
-            ) {
-              return h('div', { class: 'TTabs-TabGroup' }, [
-                h('div', { class: 'TTabs-TabGroup-Name' }, child.props?.name),
-                child.children &&
-                typeof child.children === 'object' &&
-                'default' in child.children &&
-                typeof child.children.default === 'function'
-                  ? child.children.default?.()?.map(createTab)
-                  : []
-              ])
-            } else {
-              return createTab(child)
-            }
-          })
-          ?.filter(Boolean) || []
-      )
+    const renderTabs = (): VNode[] => {
+      const nodes = this.$slots.default?.() ?? []
+      const tabs = nodes
+        .filter((slot) => {
+          const typeName = getVNodeTypeName(slot)
+          return Boolean(typeName && qualifiedName.includes(typeName))
+        })
+        .map((child) => {
+          const typeName = getVNodeTypeName(child)
+          if (typeName === 'TTabHeader') {
+            tabHeader = child
+            return null
+          }
+          if (typeName === 'TTabItemGroup') {
+            const groupChildren = child.children
+            const groupTabs =
+              groupChildren &&
+              typeof groupChildren === 'object' &&
+              'default' in groupChildren &&
+              typeof groupChildren.default === 'function'
+                ? groupChildren.default().map(createTab)
+                : []
+            return h('div', { class: 'TTabs-TabGroup' }, [
+              h('div', { class: 'TTabs-TabGroup-Name' }, child.props?.name),
+              groupTabs
+            ])
+          }
+          return createTab(child)
+        })
+        .filter((item): item is VNode => Boolean(item))
+      return tabs
     }
 
     const ensureDefault = async () => {
       await nextTick()
       if (!activeNode.value) {
         const nodes = this.$slots.default?.() ?? []
-        const first = nodes.find(
-          (n: any) => n?.props?.name && qualifiedName.includes(n?.type?.name)
-        )
+        const first = nodes.find((n: VNode) => {
+          const typeName = getVNodeTypeName(n)
+          return Boolean(getVNodeName(n) && typeName && qualifiedName.includes(typeName))
+        })
         if (first) activeNode.value = first
       }
 
@@ -153,16 +173,20 @@ export default defineComponent({
       await fixPointer({ el: activeEl })
     }
 
-    const renderContent = (): any => {
+    const renderContent = (): VNodeChild => {
       if (!activeNode.value) {
         return h('div', { class: 'TTabs-SelectSlot-Empty' }, 'No tab selected')
       }
 
-      const contentWrapper = h(
-        'div',
-        { class: 'TTabs-ContentWrapper' },
-        activeNode.value.children?.default?.()
-      )
+      const contentChildren = activeNode.value.children
+      const defaultSlot =
+        contentChildren &&
+        typeof contentChildren === 'object' &&
+        'default' in contentChildren &&
+        typeof contentChildren.default === 'function'
+          ? contentChildren.default()
+          : []
+      const contentWrapper = h('div', { class: 'TTabs-ContentWrapper' }, defaultSlot)
 
       const scrollableContent = h(
         TouchScroll,
@@ -175,19 +199,21 @@ export default defineComponent({
       )
 
       if (tabHeader) {
+        let headerNodes: VNodeChild | VNodeChild[] = []
+        const headerChildren = tabHeader.children
+        if (
+          headerChildren &&
+          typeof headerChildren === 'object' &&
+          'default' in headerChildren &&
+          typeof headerChildren.default === 'function'
+        ) {
+          headerNodes = headerChildren.default({
+            ...tabHeader.props,
+            node: activeNode.value
+          })
+        }
         return [
-          h(
-            TTabHeader,
-            tabHeader.children &&
-              typeof tabHeader.children === 'object' &&
-              'default' in tabHeader.children &&
-              typeof tabHeader.children.default === 'function'
-              ? tabHeader.children.default?.({
-                  ...tabHeader.props,
-                  node: activeNode.value
-                })
-              : {}
-          ),
+          h(TTabHeader as Component, {}, { default: () => headerNodes ?? [] }),
           scrollableContent
         ]
       }
@@ -195,12 +221,18 @@ export default defineComponent({
       return scrollableContent
     }
 
-    const selectSlot = h('div', { class: 'TTabs-SelectSlot animated' }, renderContent())
+    const content = renderContent()
+    const selectSlot = h('div', { class: 'TTabs-SelectSlot animated' }, content ?? '')
     slotWrapper.value = selectSlot
 
     const header = h(
       'div',
-      { ref: (el: any) => (headerWrapper.value = el), class: 'TTabs-Header' },
+      {
+        ref: (el) => {
+          headerWrapper.value = el as HTMLElement | null
+        },
+        class: 'TTabs-Header'
+      },
       [this.$slots?.tabHeader?.(), ...renderTabs()]
     )
 

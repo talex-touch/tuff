@@ -8,6 +8,11 @@
  */
 
 import type { CloseOptions, DivisionBoxConfig, SessionInfo } from '@talex-touch/utils'
+import type {
+  DivisionBoxSessionDestroyedPayload,
+  DivisionBoxStateChangedPayload,
+  DivisionBoxUpdateStateRequest
+} from '@talex-touch/utils/transport/events/types/division-box'
 import type { DivisionBoxStoreState } from '../types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
@@ -101,7 +106,11 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
     /**
      * Update session state
      */
-    async updateSessionState(sessionId: string, key: string, value: any): Promise<void> {
+    async updateSessionState(
+      sessionId: string,
+      key: string,
+      value: DivisionBoxUpdateStateRequest['value']
+    ): Promise<void> {
       try {
         const transport = useTuffTransport()
         const result = await transport.send(DivisionBoxEvents.updateState, {
@@ -195,10 +204,10 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
     /**
      * Handle state change event from main process
      */
-    handleStateChanged(event: { sessionId: string; oldState: string; newState: string }): void {
+    handleStateChanged(event: DivisionBoxStateChangedPayload): void {
       const session = this.activeSessions.get(event.sessionId)
       if (session) {
-        session.state = event.newState as any
+        session.state = event.newState
         this.activeSessions.set(event.sessionId, session)
       }
     },
@@ -220,11 +229,11 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
 
       const transport = useTuffTransport()
       disposeStateChanged = transport.on(DivisionBoxEvents.stateChanged, (event) => {
-        this.handleStateChanged(event as any)
+        this.handleStateChanged(event as DivisionBoxStateChangedPayload)
       })
 
       disposeSessionDestroyed = transport.on(DivisionBoxEvents.sessionDestroyed, (payload) => {
-        this.handleSessionDestroyed((payload as any)?.sessionId)
+        this.handleSessionDestroyed((payload as DivisionBoxSessionDestroyedPayload).sessionId)
       })
     }
   }

@@ -1,4 +1,5 @@
 import type {
+  FileIndexProgress,
   FileIndexRebuildRequest,
   FileIndexRebuildResult
 } from '@talex-touch/utils/transport/events/types'
@@ -13,7 +14,7 @@ import { ref } from 'vue'
 export function useFileIndexMonitor() {
   const transport = useTuffTransport()
 
-  const indexProgress = ref<any>(null)
+  const indexProgress = ref<FileIndexProgress | null>(null)
 
   /**
    * 查询当前索引状态
@@ -48,9 +49,10 @@ export function useFileIndexMonitor() {
     try {
       const stats = await transport.send(AppEvents.fileIndex.stats)
       return stats
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : ''
       // Ignore timeout errors during startup - module may not be ready yet
-      if (error?.message?.includes('timed out')) {
+      if (message.includes('timed out')) {
         console.debug('[FileIndexMonitor] Stats fetch timed out, module may be initializing')
         return null
       }
@@ -89,15 +91,15 @@ export function useFileIndexMonitor() {
    * 订阅索引进度更新
    * 返回取消订阅的函数
    */
-  const onProgressUpdate = (callback: (progress: any) => void) => {
+  const onProgressUpdate = (callback: (progress: FileIndexProgress) => void) => {
     let cancelled = false
     let controller: { cancel: () => void } | null = null
 
     transport
       .stream(AppEvents.fileIndex.progress, undefined, {
         onData: (data) => {
-          indexProgress.value = data
-          callback(data)
+          indexProgress.value = data as FileIndexProgress
+          callback(data as FileIndexProgress)
         },
         onError: (err) => {
           console.error('[FileIndexMonitor] Progress stream error:', err)

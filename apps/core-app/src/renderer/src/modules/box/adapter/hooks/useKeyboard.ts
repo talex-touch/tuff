@@ -1,7 +1,8 @@
-import type { TuffSection } from '@talex-touch/utils'
+import type { IProviderActivate, TuffAction, TuffItem, TuffSection } from '@talex-touch/utils'
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { ForwardedKeyEvent } from '../transport/key-transport'
+import type { MetaAction } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { onBeforeUnmount } from 'vue'
@@ -12,6 +13,21 @@ interface SectionRange {
   start: number
   end: number
   count: number
+}
+
+type ScrollbarLike = {
+  getScrollInfo: () => { clientHeight: number; scrollTop: number }
+  scrollTo: (x: number, y: number) => void
+}
+
+type ItemRef = { $el?: HTMLElement } | HTMLElement | null
+
+type ClipboardOptions = { last?: unknown }
+
+type TuffActionLike = TuffAction & {
+  title?: string
+  subtitle?: string
+  group?: string
 }
 
 /** Build section ranges from sections config */
@@ -169,9 +185,9 @@ const COREBOX_FLOW_EVENT = 'corebox:flow-item'
 // Helper functions for MetaOverlay
 const isMac = process.platform === 'darwin'
 
-function generateBuiltinActions(item: any): any[] {
-  const actions: any[] = []
-  const isPinned = !!(item.meta as any)?.pinned?.isPinned
+function generateBuiltinActions(item: TuffItem): MetaAction[] {
+  const actions: MetaAction[] = []
+  const isPinned = Boolean(item.meta?.pinned?.isPinned)
 
   // Pin/Unpin action
   actions.push({
@@ -244,7 +260,7 @@ function generateBuiltinActions(item: any): any[] {
   return actions
 }
 
-function convertTuffActionToMetaAction(tuffAction: any): any {
+function convertTuffActionToMetaAction(tuffAction: TuffActionLike): MetaAction {
   return {
     id: tuffAction.id || `item-action-${Date.now()}`,
     render: {
@@ -340,18 +356,18 @@ function serializeKeyEvent(event: KeyboardEvent): ForwardedKeyEvent {
 
 export function useKeyboard(
   boxOptions: IBoxOptions,
-  res: Ref<any[]>,
+  res: Ref<TuffItem[]>,
   select: Ref<number>,
-  scrollbar: Ref<any>,
+  scrollbar: Ref<ScrollbarLike | null>,
   searchVal: Ref<string>,
-  handleExecute: (item: any) => void,
+  handleExecute: (item: TuffItem | undefined) => void,
   handleExit: () => Promise<void>,
   inputEl: Ref<HTMLInputElement | undefined>,
-  clipboardOptions: any,
+  clipboardOptions: ClipboardOptions,
   clearClipboard: (options?: { remember?: boolean }) => void,
-  activeActivations: Ref<any>,
+  activeActivations: Ref<IProviderActivate[] | null>,
   handlePaste: (options?: { overrideDismissed?: boolean }) => void,
-  itemRefs: Ref<any[]>
+  itemRefs: Ref<ItemRef[]>
 ) {
   const transport = useTuffTransport()
   const keyTransport = createCoreBoxKeyTransport(transport)
@@ -368,7 +384,7 @@ export function useKeyboard(
    * Checks if CoreBox is currently in UI mode (plugin view attached).
    */
   function isInUIMode(): boolean {
-    return Boolean(activeActivations.value?.some((a: any) => a?.hideResults === true))
+    return Boolean(activeActivations.value?.some((a) => a?.hideResults === true))
   }
 
   /**
@@ -399,7 +415,7 @@ export function useKeyboard(
 
     // Check if in UI mode - input is hidden only when webcontent view is attached AND input is not allowed
     const uiMode = isInUIMode()
-    const inputAllowed = Boolean(activeActivations.value?.some((a: any) => a?.showInput === true))
+    const inputAllowed = Boolean(activeActivations.value?.some((a) => a?.showInput === true))
     const inputHidden = uiMode && !inputAllowed
 
     // Command/Ctrl+K: Open MetaOverlay action panel (should work even in UI mode)
@@ -470,7 +486,7 @@ export function useKeyboard(
     }
 
     if (event.key === 'Enter') {
-      if ((event as any).isComposing || (event as any).keyCode === 229) {
+      if (event.isComposing || event.keyCode === 229) {
         return
       }
       select.value = boxOptions.focus
@@ -644,7 +660,8 @@ export function useKeyboard(
       }
 
       // Step 2: Deactivate active providers (attachUIView)
-      if (activeActivations.value?.length > 0) {
+      const activeCount = activeActivations.value?.length ?? 0
+      if (activeCount > 0) {
         void handleExit()
         event.preventDefault()
         return
@@ -677,7 +694,11 @@ export function useKeyboard(
         return
       }
 
-      const activeEl = activeItemComponent?.$el || activeItemComponent
+      const activeEl =
+        activeItemComponent instanceof HTMLElement ? activeItemComponent : activeItemComponent.$el
+      if (!activeEl) {
+        return
+      }
       const sb = scrollbar.value
 
       if (activeEl && sb) {

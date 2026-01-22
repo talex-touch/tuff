@@ -30,7 +30,8 @@ function resolveToastMessage(request: NotificationRequest): { text: string; desc
 
 function showToast(id: string, request: NotificationRequest): void {
   const { text, description } = resolveToastMessage(request)
-  const options: Record<string, any> = {
+  type ToastOptions = NonNullable<Parameters<typeof toast.success>[1]>
+  const options: ToastOptions = {
     id,
     description
   }

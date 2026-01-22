@@ -1,16 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
-import {
-  computed,
-
-  nextTick,
-  onMounted,
-  onUnmounted,
-  ref,
-  useTemplateRef,
-  watch,
-} from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 
 interface GlassSurfaceProps {
   width?: string | number
@@ -71,14 +62,13 @@ const props = withDefaults(defineProps<GlassSurfaceProps>(), {
   yChannel: 'G',
   mixBlendMode: 'difference',
   className: '',
-  style: () => ({}),
+  style: () => ({})
 })
 
 const isDarkMode = ref(false)
 
 function updateDarkMode() {
-  if (!hasWindow())
-    return
+  if (!hasWindow()) return
 
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   isDarkMode.value = mediaQuery.matches
@@ -146,8 +136,7 @@ function updateDisplacementMap() {
 }
 
 function supportsSVGFilters() {
-  if (!hasWindow() || !hasNavigator() || !hasDocument())
-    return false
+  if (!hasWindow() || !hasNavigator() || !hasDocument()) return false
 
   const isWebkit = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
   const isFirefox = /Firefox/.test(navigator.userAgent)
@@ -162,19 +151,18 @@ function supportsSVGFilters() {
 }
 
 function supportsBackdropFilter() {
-  if (!hasWindow())
-    return false
+  if (!hasWindow()) return false
   return CSS.supports('backdrop-filter', 'blur(10px)')
 }
 
 const containerStyles = computed(() => {
   const baseStyles: Record<string, string | number> = {
     ...props.style,
-    'width': typeof props.width === 'number' ? `${props.width}px` : props.width,
-    'height': typeof props.height === 'number' ? `${props.height}px` : props.height,
-    'borderRadius': `${props.borderRadius}px`,
+    width: typeof props.width === 'number' ? `${props.width}px` : props.width,
+    height: typeof props.height === 'number' ? `${props.height}px` : props.height,
+    borderRadius: `${props.borderRadius}px`,
     '--glass-frost': props.backgroundOpacity,
-    '--glass-saturation': props.saturation,
+    '--glass-saturation': props.saturation
   }
 
   const svgSupported = supportsSVGFilters()
@@ -203,10 +191,9 @@ const containerStyles = computed(() => {
            0px 16px 56px rgba(17, 17, 26, 0.05),
            0px 4px 16px rgba(17, 17, 26, 0.05) inset,
            0px 8px 24px rgba(17, 17, 26, 0.05) inset,
-           0px 16px 56px rgba(17, 17, 26, 0.05) inset`,
+           0px 16px 56px rgba(17, 17, 26, 0.05) inset`
     }
-  }
-  else {
+  } else {
     if (isDarkMode.value) {
       if (!backdropFilterSupported) {
         return {
@@ -214,10 +201,9 @@ const containerStyles = computed(() => {
           background: 'rgba(0, 0, 0, 0.4)',
           border: '1px solid rgba(255, 255, 255, 0.2)',
           boxShadow: `inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)`,
+                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)`
         }
-      }
-      else {
+      } else {
         return {
           ...baseStyles,
           background: 'rgba(255, 255, 255, 0.1)',
@@ -225,21 +211,19 @@ const containerStyles = computed(() => {
           WebkitBackdropFilter: 'blur(12px) saturate(1.8) brightness(1.2)',
           border: '1px solid rgba(255, 255, 255, 0.2)',
           boxShadow: `inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)`,
+                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)`
         }
       }
-    }
-    else {
+    } else {
       if (!backdropFilterSupported) {
         return {
           ...baseStyles,
           background: 'rgba(255, 255, 255, 0.4)',
           border: '1px solid rgba(255, 255, 255, 0.3)',
           boxShadow: `inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
-                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.3)`,
+                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.3)`
         }
-      }
-      else {
+      } else {
         return {
           ...baseStyles,
           background: 'rgba(255, 255, 255, 0.25)',
@@ -249,15 +233,15 @@ const containerStyles = computed(() => {
           boxShadow: `0 8px 32px 0 rgba(31, 38, 135, 0.2),
                       0 2px 16px 0 rgba(31, 38, 135, 0.1),
                       inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
-                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.2)`,
+                      inset 0 -1px 0 0 rgba(255, 255, 255, 0.2)`
         }
       }
     }
   }
 })
 
-const glassSurfaceClasses
-  = 'relative flex items-center justify-center overflow-hidden transition-opacity duration-[260ms] ease-out'
+const glassSurfaceClasses =
+  'relative flex items-center justify-center overflow-hidden transition-opacity duration-[260ms] ease-out'
 
 const focusVisibleClasses = computed(() => {
   return isDarkMode.value
@@ -269,7 +253,7 @@ function updateFilterElements() {
   const elements = [
     { ref: redChannelRef, offset: props.redOffset },
     { ref: greenChannelRef, offset: props.greenOffset },
-    { ref: blueChannelRef, offset: props.blueOffset },
+    { ref: blueChannelRef, offset: props.blueOffset }
   ]
 
   elements.forEach(({ ref, offset }) => {
@@ -286,8 +270,7 @@ function updateFilterElements() {
 }
 
 function setupResizeObserver() {
-  if (!containerRef.value || typeof ResizeObserver === 'undefined')
-    return
+  if (!containerRef.value || typeof ResizeObserver === 'undefined') return
 
   resizeObserver = new ResizeObserver(() => {
     setTimeout(updateDisplacementMap, 0)
@@ -312,12 +295,12 @@ watch(
     () => props.blueOffset,
     () => props.xChannel,
     () => props.yChannel,
-    () => props.mixBlendMode,
+    () => props.mixBlendMode
   ],
   () => {
     updateDisplacementMap()
     updateFilterElements()
-  },
+  }
 )
 
 watch([() => props.width, () => props.height], () => {
@@ -334,8 +317,7 @@ onMounted(() => {
   })
 
   onUnmounted(() => {
-    if (cleanup)
-      cleanup()
+    if (cleanup) cleanup()
     if (resizeObserver) {
       resizeObserver.disconnect()
     }

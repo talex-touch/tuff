@@ -2,7 +2,7 @@
   setup
   lang="ts"
   name="TuffAsideList"
-  generic="T extends Record<string, any> = Record<string, any>"
+  generic="T extends Record<string, unknown> = Record<string, unknown>"
 >
 import { TxButton } from '@talex-touch/tuffex'
 

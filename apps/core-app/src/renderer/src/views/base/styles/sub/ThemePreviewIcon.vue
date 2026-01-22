@@ -15,14 +15,19 @@ withDefaults(
     active?: boolean
   }>(),
   {
-    active: false,
-  },
+    active: false
+  }
 )
 </script>
 
 <template>
   <div class="ThemePreviewIcon" :class="[`variant-${variant}`, { active }]">
-    <svg v-if="variant === 'personalized'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-if="variant === 'personalized'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <rect x="10" y="12" width="44" height="6" rx="3" class="bar bar-1" />
       <rect x="10" y="22" width="34" height="6" rx="3" class="bar bar-2" />
@@ -32,7 +37,12 @@ withDefaults(
       <circle cx="48" cy="35" r="4" class="knob" />
     </svg>
 
-    <svg v-else-if="variant === 'emphasis'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'emphasis'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <rect x="10" y="12" width="44" height="6" rx="3" class="bar bar-1" />
       <rect x="10" y="21" width="44" height="6" rx="3" class="bar bar-2" />
@@ -42,14 +52,24 @@ withDefaults(
       <circle cx="44" cy="34" r="3" class="pulse pulse-3" />
     </svg>
 
-    <svg v-else-if="variant === 'palette'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'palette'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <rect x="9" y="12" width="14" height="24" rx="5" class="swatch swatch-1" />
       <rect x="25" y="12" width="14" height="24" rx="5" class="swatch swatch-2" />
       <rect x="41" y="12" width="14" height="24" rx="5" class="swatch swatch-3" />
     </svg>
 
-    <svg v-else-if="variant === 'wallpaper'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'wallpaper'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <rect x="7" y="12" width="50" height="23" rx="6" class="sky" />
       <circle cx="18" cy="20" r="5" class="sun" />
@@ -57,7 +77,12 @@ withDefaults(
       <rect x="7" y="32" width="50" height="8" rx="3" class="ground" />
     </svg>
 
-    <svg v-else-if="variant === 'coloring'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'coloring'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <path
         class="drop"
@@ -66,7 +91,12 @@ withDefaults(
       <circle cx="32" cy="30" r="6" class="highlight" />
     </svg>
 
-    <svg v-else-if="variant === 'contrast'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'contrast'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <rect x="10" y="12" width="44" height="24" rx="6" class="split" />
       <rect x="10" y="12" width="22" height="24" rx="6" class="split-left" />
@@ -84,7 +114,12 @@ withDefaults(
     </svg>
 
     <!-- Animation group icon -->
-    <svg v-else-if="variant === 'animation'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'animation'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <circle cx="18" cy="24" r="6" class="anim-dot anim-dot-1" />
       <circle cx="32" cy="24" r="6" class="anim-dot anim-dot-2" />
@@ -94,7 +129,12 @@ withDefaults(
     </svg>
 
     <!-- Stagger animation icon -->
-    <svg v-else-if="variant === 'stagger'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'stagger'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <rect x="10" y="10" width="44" height="7" rx="3" class="stagger-bar stagger-bar-1" />
       <rect x="10" y="20" width="44" height="7" rx="3" class="stagger-bar stagger-bar-2" />
@@ -102,7 +142,12 @@ withDefaults(
     </svg>
 
     <!-- Transition animation icon -->
-    <svg v-else-if="variant === 'transition'" viewBox="0 0 64 48" role="presentation" aria-hidden="true">
+    <svg
+      v-else-if="variant === 'transition'"
+      viewBox="0 0 64 48"
+      role="presentation"
+      aria-hidden="true"
+    >
       <rect x="2" y="4" width="60" height="40" rx="10" class="panel" />
       <rect x="8" y="14" width="20" height="20" rx="4" class="trans-box trans-box-1" />
       <rect x="36" y="14" width="20" height="20" rx="4" class="trans-box trans-box-2" />

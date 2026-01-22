@@ -11,7 +11,7 @@ import {
   FolderOpened,
   Odometer,
   Remove,
-  Timer,
+  Timer
 } from '@element-plus/icons-vue'
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
@@ -26,7 +26,7 @@ const props = defineProps<Props>()
 defineEmits<{
   'open-file': [historyId: string]
   'show-in-folder': [historyId: string]
-  'clear': [historyId: string]
+  clear: [historyId: string]
 }>()
 
 const { t } = useI18n()
@@ -64,7 +64,7 @@ function getModuleName(module: DownloadModule): string {
     [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
     [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
     [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
-    [DownloadModule.USER_MANUAL]: t('download.module_user_manual'),
+    [DownloadModule.USER_MANUAL]: t('download.module_user_manual')
   }
   return moduleNames[module] || t('download.module_unknown')
 }
@@ -73,14 +73,13 @@ function getStatusText(status: DownloadStatus): string {
   const statusTexts = {
     [DownloadStatus.COMPLETED]: t('download.status_completed'),
     [DownloadStatus.FAILED]: t('download.status_failed'),
-    [DownloadStatus.CANCELLED]: t('download.status_cancelled'),
+    [DownloadStatus.CANCELLED]: t('download.status_cancelled')
   }
   return statusTexts[status] || status
 }
 
 function formatDate(date: Date | undefined): string {
-  if (!date)
-    return '-'
+  if (!date) return '-'
 
   const d = new Date(date)
   const now = new Date()
@@ -116,14 +115,11 @@ function formatDate(date: Date | undefined): string {
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  }
-  else if (bytes >= 1024 * 1024) {
+  } else if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
-  else if (bytes >= 1024) {
+  } else if (bytes >= 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`
-  }
-  else {
+  } else {
     return `${bytes} B`
   }
 }
@@ -131,13 +127,11 @@ function formatSize(bytes: number): string {
 function formatDuration(seconds: number): string {
   if (seconds < 60) {
     return `${Math.round(seconds)}${t('download.seconds')}`
-  }
-  else if (seconds < 3600) {
+  } else if (seconds < 3600) {
     const minutes = Math.floor(seconds / 60)
     const secs = Math.round(seconds % 60)
     return `${minutes}${t('download.minutes')}${secs}${t('download.seconds')}`
-  }
-  else {
+  } else {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     return `${hours}${t('download.hours')}${minutes}${t('download.minutes')}`
@@ -147,11 +141,9 @@ function formatDuration(seconds: number): string {
 function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond >= 1024 * 1024) {
     return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  }
-  else if (bytesPerSecond >= 1024) {
+  } else if (bytesPerSecond >= 1024) {
     return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  }
-  else {
+  } else {
     return `${bytesPerSecond.toFixed(0)} B/s`
   }
 }
@@ -203,12 +195,7 @@ function formatSpeed(bytesPerSecond: number): string {
           :content="$t('download.open_file')"
           placement="top"
         >
-          <el-button
-            size="small"
-            type="primary"
-            circle
-            @click="$emit('open-file', history.id)"
-          >
+          <el-button size="small" type="primary" circle @click="$emit('open-file', history.id)">
             <el-icon><FolderOpened /></el-icon>
           </el-button>
         </el-tooltip>
@@ -217,24 +204,12 @@ function formatSpeed(bytesPerSecond: number): string {
           :content="$t('download.show_in_folder')"
           placement="top"
         >
-          <el-button
-            size="small"
-            circle
-            @click="$emit('show-in-folder', history.id)"
-          >
+          <el-button size="small" circle @click="$emit('show-in-folder', history.id)">
             <el-icon><Folder /></el-icon>
           </el-button>
         </el-tooltip>
-        <el-tooltip
-          :content="$t('download.clear_history_item')"
-          placement="top"
-        >
-          <el-button
-            size="small"
-            type="danger"
-            circle
-            @click="$emit('clear', history.id)"
-          >
+        <el-tooltip :content="$t('download.clear_history_item')" placement="top">
+          <el-button size="small" type="danger" circle @click="$emit('clear', history.id)">
             <el-icon><Delete /></el-icon>
           </el-button>
         </el-tooltip>

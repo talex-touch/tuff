@@ -1,15 +1,22 @@
 <script name="AppList" setup lang="ts">
+import type { ITuffIcon } from '@talex-touch/utils'
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
+export interface AppListItem {
+  name: string
+  icon?: ITuffIcon
+  matched?: [number, number]
+}
+
 const props = defineProps<{
-  list: any[]
+  list: AppListItem[]
   index: number
 }>()
 
 const emits = defineEmits<{
   (e: 'search', val: string): void
-  (e: 'select', val: any, ind: number): void
+  (e: 'select', val: AppListItem | null, ind: number): void
 }>()
 
 const { t } = useI18n()
@@ -21,7 +28,7 @@ enum EOrderWay {
   FREQ = 3
 }
 
-const _list = ref<any[]>([])
+const _list = ref<AppListItem[]>([])
 const search = ref('')
 const orderWay = ref<EOrderWay>(0)
 
@@ -71,7 +78,7 @@ watch(
   }
 )
 
-function highlightText(text: string, matched: Array<any>) {
+function highlightText(text: string, matched: [number, number]) {
   let result = ''
 
   const [startIndex, endIndex] = matched
@@ -88,7 +95,7 @@ function highlightText(text: string, matched: Array<any>) {
   return result
 }
 
-function handleClick(item: any, ind: number) {
+function handleClick(item: AppListItem, ind: number) {
   // Repeat click => cancel
   if (props.index === ind) {
     emits('select', null, -1)
@@ -126,6 +133,7 @@ function handleClick(item: any, ind: number) {
         </div>
 
         <div class="Main">
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <p v-if="item.matched" v-html="highlightText(item.name, item.matched)" />
           <p v-else v-text="item.name" />
           <!-- <p class="desc">{{ item.desc }}</p> -->

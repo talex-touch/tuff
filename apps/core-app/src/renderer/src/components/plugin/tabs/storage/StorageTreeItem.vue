@@ -11,8 +11,8 @@ const props = withDefaults(
   }>(),
   {
     level: 0,
-    selectedPath: null,
-  },
+    selectedPath: null
+  }
 )
 
 // Emits
@@ -42,7 +42,7 @@ const iconClass = computed(() => {
     jpeg: 'i-ri-image-line',
     gif: 'i-ri-image-line',
     webp: 'i-ri-image-line',
-    svg: 'i-ri-image-line',
+    svg: 'i-ri-image-line'
   }
 
   return iconMap[ext || ''] || 'i-ri-file-line'
@@ -64,7 +64,7 @@ const iconColor = computed(() => {
     jpeg: 'var(--el-color-primary)',
     gif: 'var(--el-color-primary)',
     webp: 'var(--el-color-primary)',
-    svg: 'var(--el-color-primary)',
+    svg: 'var(--el-color-primary)'
   }
 
   return colorMap[ext || ''] || 'var(--el-text-color-secondary)'
@@ -72,8 +72,7 @@ const iconColor = computed(() => {
 
 // Methods
 function formatSize(bytes: number): string {
-  if (bytes === 0)
-    return '0 B'
+  if (bytes === 0) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -89,8 +88,7 @@ function toggleExpand(): void {
 function handleClick(): void {
   if (props.node.type === 'file') {
     emit('select', props.node)
-  }
-  else {
+  } else {
     toggleExpand()
   }
 }
@@ -102,7 +100,7 @@ function handleClick(): void {
       class="StorageTreeItem-Row flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-[var(--el-fill-color-light)] transition-colors"
       :class="{
         'bg-[var(--el-fill-color)]': isSelected,
-        'pl-8': level > 0,
+        'pl-8': level > 0
       }"
       :style="{ paddingLeft: `${level * 20 + 12}px` }"
       @click="handleClick"

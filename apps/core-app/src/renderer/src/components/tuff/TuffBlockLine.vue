@@ -8,8 +8,8 @@ const props = withDefaults(
   {
     title: '',
     description: '',
-    link: false,
-  },
+    link: false
+  }
 )
 
 const emits = defineEmits<{
@@ -17,8 +17,7 @@ const emits = defineEmits<{
 }>()
 
 function handleClick(event: MouseEvent) {
-  if (!props.link)
-    return
+  if (!props.link) return
   emits('click', event)
 }
 </script>

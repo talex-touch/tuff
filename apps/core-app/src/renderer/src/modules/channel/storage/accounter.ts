@@ -17,10 +17,10 @@ interface Role {
   id: number
   name: string
   desc: string
-  parent?: any
+  parent?: unknown
   createdAt: string
   updatedAt: string
-  deletedAt?: any
+  deletedAt?: unknown
   UserRole: UserRole
 }
 
@@ -30,7 +30,7 @@ interface UserRole {
   role_id: number
   createdAt: string
   updatedAt: string
-  deletedAt?: any
+  deletedAt?: unknown
 }
 
 interface Permission {
@@ -39,7 +39,7 @@ interface Permission {
   module: string
   createdAt: string
   updatedAt: string
-  deletedAt?: any
+  deletedAt?: unknown
 }
 
 interface User {
@@ -55,12 +55,12 @@ export class AccountStorage {
   eller?: Eller
   token?: Token
 
-  constructor(data?: any) {
+  constructor(data?: Partial<{ user: User; token: Token; eller: Eller }>) {
     // console.log( data )
     this.analyzeFromObj(data)
   }
 
-  analyzeFromObj(data: any): void {
+  analyzeFromObj(data?: Partial<{ user: User; token: Token; eller: Eller }>): void {
     if (!data) return
     if (data.user) this.user = data.user
     if (data.token) this.token = data.token

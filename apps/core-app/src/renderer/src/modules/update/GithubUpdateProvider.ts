@@ -9,6 +9,13 @@ import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
 import axios from 'axios'
 import { UpdateProvider } from './UpdateProvider'
 
+type GitHubApiAsset = {
+  name?: string
+  browser_download_url?: string
+  url?: string
+  size?: number
+}
+
 export class GithubUpdateProvider extends UpdateProvider {
   readonly name = 'GitHub Releases'
   readonly type = UpdateProviderType.GITHUB
@@ -31,11 +38,11 @@ export class GithubUpdateProvider extends UpdateProvider {
         const { rateLimitManager } = await import('./RateLimitManager')
 
         // Check if API call is allowed
-        if (!(rateLimitManager as any).isAllowed('github')) {
-          const timeUntilReset = (rateLimitManager as any).getTimeUntilReset('github')
+        if (!rateLimitManager.isAllowed('github')) {
+          const timeUntilReset = rateLimitManager.getTimeUntilReset('github')
           throw this.createError(
             UpdateErrorType.API_ERROR,
-            `Rate limit exceeded. Try again in ${(rateLimitManager as any).getTimeUntilResetString('github')}`,
+            `Rate limit exceeded. Try again in ${rateLimitManager.getTimeUntilResetString('github')}`,
             { retryAfter: timeUntilReset }
           )
         }
@@ -53,7 +60,19 @@ export class GithubUpdateProvider extends UpdateProvider {
         const response = await axios(config)
 
         // Update rate limit information from response headers
-        ;(rateLimitManager as any).updateRateLimit('github', response.headers)
+        const headerEntries = Object.entries(response.headers)
+        const normalizedHeaders = headerEntries.reduce<Record<string, string>>(
+          (acc, [key, value]) => {
+            if (Array.isArray(value)) {
+              acc[key] = value.join(',')
+            } else if (value !== undefined && value !== null) {
+              acc[key] = String(value)
+            }
+            return acc
+          },
+          {}
+        )
+        rateLimitManager.updateRateLimit('github', normalizedHeaders)
 
         if (response.status !== 200) {
           throw this.createError(
@@ -102,15 +121,11 @@ export class GithubUpdateProvider extends UpdateProvider {
           // Calculate backoff delay
           const baseDelay = 2000 // 2 seconds
           const maxDelay = 60000 // 1 minute
-          const delay = (rateLimitManager as any).calculateBackoffDelay(
-            attempt - 1,
-            baseDelay,
-            maxDelay
-          )
+          const delay = rateLimitManager.calculateBackoffDelay(attempt - 1, baseDelay, maxDelay)
 
           console.warn(
             `[GithubUpdateProvider] Attempt ${attempt} failed, retrying in ${delay}ms:`,
-            (error as any).message
+            error instanceof Error ? error.message : String(error)
           )
 
           // Wait before retrying
@@ -118,11 +133,14 @@ export class GithubUpdateProvider extends UpdateProvider {
           continue
         }
 
-        if ((error as any).type) {
+        if (this.isUpdateError(error)) {
           throw error // 重新抛出已知错误
         }
 
-        if ((error as any).code === 'ECONNABORTED' || (error as any).code === 'ETIMEDOUT') {
+        if (
+          axios.isAxiosError(error) &&
+          (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')
+        ) {
           throw this.createError(
             UpdateErrorType.TIMEOUT_ERROR,
             'Request to GitHub API timed out',
@@ -130,8 +148,8 @@ export class GithubUpdateProvider extends UpdateProvider {
           )
         }
 
-        if ((error as any).response) {
-          const statusCode = (error as any).response.status
+        if (axios.isAxiosError(error) && error.response) {
+          const statusCode = error.response.status
 
           if (statusCode >= 500) {
             throw this.createError(UpdateErrorType.API_ERROR, 'GitHub API server error', error)
@@ -152,7 +170,7 @@ export class GithubUpdateProvider extends UpdateProvider {
           }
         }
 
-        if ((error as any).request) {
+        if (axios.isAxiosError(error) && error.request) {
           throw this.createError(
             UpdateErrorType.NETWORK_ERROR,
             'Unable to connect to GitHub API',
@@ -180,13 +198,13 @@ export class GithubUpdateProvider extends UpdateProvider {
       return []
     }
 
-    const assets = release.assets as any[]
+    const assets = release.assets as GitHubApiAsset[]
     const signatureMap = new Map<string, string>()
 
     for (const asset of assets) {
       const name = String(asset.name || '')
       if (this.isSignatureAsset(name)) {
-        const url = (asset as any).browser_download_url || asset.url
+        const url = asset.browser_download_url || asset.url
         if (url) {
           signatureMap.set(this.normalizeAssetKey(this.stripSignatureSuffix(name)), url)
         }
@@ -194,13 +212,16 @@ export class GithubUpdateProvider extends UpdateProvider {
     }
 
     return assets
-      .filter((asset) => !this.isSignatureAsset(asset.name) && !this.isChecksumAsset(asset.name))
+      .filter((asset) => {
+        const name = asset.name ?? ''
+        return name.length > 0 && !this.isSignatureAsset(name) && !this.isChecksumAsset(name)
+      })
       .map((asset) => {
-        const name = asset.name
+        const name = asset.name ?? ''
         const signatureUrl = signatureMap.get(this.normalizeAssetKey(name))
         return {
           name,
-          url: (asset as any).browser_download_url || asset.url,
+          url: asset.browser_download_url || asset.url || '',
           size: asset.size || 0,
           platform: this.detectPlatform(name),
           arch: this.detectArch(name),
@@ -267,9 +288,12 @@ export class GithubUpdateProvider extends UpdateProvider {
   }
 
   // 提取校验和
-  private extractChecksum(asset: any): string | undefined {
+  private extractChecksum(asset: GitHubApiAsset): string | undefined {
     // 尝试从文件名或描述中提取校验和
-    const filename = asset.name.toLowerCase()
+    const filename = (asset.name ?? '').toLowerCase()
+    if (!filename) {
+      return undefined
+    }
 
     if (filename.includes('.sha256') || filename.includes('.sha1') || filename.includes('.md5')) {
       return asset.browser_download_url || asset.url
@@ -350,7 +374,7 @@ export class GithubUpdateProvider extends UpdateProvider {
 
   // 检查是否为预发布版本
   isPrerelease(release: GitHubRelease): boolean {
-    return (release as any).prerelease === true
+    return 'prerelease' in release && release.prerelease === true
   }
 
   // 获取发布日期
@@ -369,27 +393,37 @@ export class GithubUpdateProvider extends UpdateProvider {
   }
 
   // 检查错误是否可重试
-  private isRetryableError(error: any): boolean {
+  private isRetryableError(error: unknown): boolean {
     // Network errors are retryable
-    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-      return true
-    }
+    if (axios.isAxiosError(error)) {
+      if (
+        error.code === 'ECONNABORTED' ||
+        error.code === 'ETIMEDOUT' ||
+        error.code === 'ENOTFOUND'
+      ) {
+        return true
+      }
 
-    // Server errors (5xx) are retryable
-    if (error.response && error.response.status >= 500) {
-      return true
-    }
+      // Server errors (5xx) are retryable
+      if (error.response && error.response.status >= 500) {
+        return true
+      }
 
-    // Rate limit errors are retryable
-    if (error.response && error.response.status === 403) {
-      return true
-    }
+      // Rate limit errors are retryable
+      if (error.response && error.response.status === 403) {
+        return true
+      }
 
-    // Network connectivity issues are retryable
-    if (error.request && !error.response) {
-      return true
+      // Network connectivity issues are retryable
+      if (error.request && !error.response) {
+        return true
+      }
     }
 
     return false
+  }
+
+  private isUpdateError(error: unknown): error is { type: UpdateErrorType } {
+    return typeof error === 'object' && error !== null && 'type' in error
   }
 }

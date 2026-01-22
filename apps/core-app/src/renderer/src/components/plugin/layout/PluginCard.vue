@@ -1,6 +1,6 @@
 <script>
 export default {
-  name: 'PluginCard',
+  name: 'PluginCard'
 }
 </script>
 
@@ -8,8 +8,8 @@ export default {
 const props = defineProps({
   plugin: {
     type: Object,
-    required: true,
-  },
+    required: true
+  }
 })
 </script>
 

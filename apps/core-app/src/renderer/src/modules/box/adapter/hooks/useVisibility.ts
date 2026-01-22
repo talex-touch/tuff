@@ -16,7 +16,7 @@ interface UseVisibilityOptions {
   clipboardOptions: IClipboardOptions
   handleAutoFill: () => void
   handlePaste: (options?: { overrideDismissed?: boolean; triggerSearch?: boolean }) => void
-  boxInputRef: Ref<any>
+  boxInputRef: Ref<{ focus?: () => void } | null>
   deactivateAllProviders: () => Promise<void>
 }
 
@@ -111,7 +111,7 @@ export function useVisibility(options: UseVisibilityOptions) {
     wasTriggeredByShortcut.value = false
 
     setTimeout(() => {
-      nextTick(() => boxInputRef.value?.focus())
+      nextTick(() => boxInputRef.value?.focus?.())
     }, 120)
   }
 
@@ -125,8 +125,8 @@ export function useVisibility(options: UseVisibilityOptions) {
   return {
     visibility,
     cleanup: () => {
-      unregisterShortcutTrigger()
-      unregisterCoreBoxTrigger()
+      unregisterShortcutTrigger?.()
+      unregisterCoreBoxTrigger?.()
     }
   }
 }

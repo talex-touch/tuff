@@ -5,7 +5,7 @@ import { loadLocaleMessages, setI18nLanguage } from './i18n'
 
 export const SUPPORTED_LANGUAGES = [
   { key: 'zh-CN', name: '简体中文' },
-  { key: 'en-US', name: 'English' },
+  { key: 'en-US', name: 'English' }
 ] as const
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['key']
@@ -14,8 +14,7 @@ export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['key']
  * 根据传入 locale 匹配项目支持的语言
  */
 function resolveSupportedLocale(locale?: string | null): SupportedLanguage | null {
-  if (!locale)
-    return null
+  if (!locale) return null
   const normalized = locale.replace('_', '-').toLowerCase()
   const matched = SUPPORTED_LANGUAGES.find((lang) => {
     const langKey = lang.key.toLowerCase()
@@ -64,13 +63,13 @@ const followSystemLanguage = ref(initialFollowSystem)
  */
 function getSystemLanguage(): SupportedLanguage {
   const browserLanguage = hasNavigator() ? navigator.language : undefined
-  const intlLocale
-    = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : undefined
+  const intlLocale =
+    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : undefined
 
   const candidates: Array<string | null | undefined> = [
     browserLanguage,
     intlLocale,
-    appSetting?.lang?.locale,
+    appSetting?.lang?.locale
   ]
 
   for (const candidate of candidates) {
@@ -91,10 +90,10 @@ export function useLanguage() {
    * 获取全局 i18n 实例
    */
   function getI18nInstance() {
-    const i18n = (window as any).$i18n
+    const i18n = window.$i18n
     if (!i18n) {
       throw new Error(
-        '[useLanguage] i18n instance not initialized. Make sure window.$i18n is set before using useLanguage.',
+        '[useLanguage] i18n instance not initialized. Make sure window.$i18n is set before using useLanguage.'
       )
     }
     return i18n
@@ -122,8 +121,7 @@ export function useLanguage() {
       }
 
       console.debug(`[useLanguage] Language switched to: ${lang}`)
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[useLanguage] Failed to switch language:', error)
     }
   }
@@ -157,11 +155,9 @@ export function useLanguage() {
     if (savedFollowSystem) {
       const systemLang = getSystemLanguage()
       await switchLanguage(systemLang)
-    }
-    else if (savedLanguage && SUPPORTED_LANGUAGES.some(lang => lang.key === savedLanguage)) {
+    } else if (savedLanguage && SUPPORTED_LANGUAGES.some((lang) => lang.key === savedLanguage)) {
       await switchLanguage(savedLanguage)
-    }
-    else {
+    } else {
       // 默认使用中文
       await switchLanguage('zh-CN')
     }
@@ -177,7 +173,7 @@ export function useLanguage() {
           await switchLanguage(systemLang)
         }
       }
-    },
+    }
   )
 
   return {
@@ -187,6 +183,6 @@ export function useLanguage() {
     switchLanguage,
     setFollowSystemLanguage,
     initializeLanguage,
-    getSystemLanguage,
+    getSystemLanguage
   }
 }

@@ -21,9 +21,14 @@ export function useUserPlugins() {
     const all = plugins.value
     return {
       total: all.length,
-      approved: all.filter((p) => (p.metadata as any)?.status === 'approved').length,
-      pending: all.filter((p) => (p.metadata as any)?.status === 'pending').length,
-      draft: all.filter((p) => (p.metadata as any)?.status === 'draft').length
+      approved: all.filter(
+        (p) => (p.metadata as { status?: string } | undefined)?.status === 'approved'
+      ).length,
+      pending: all.filter(
+        (p) => (p.metadata as { status?: string } | undefined)?.status === 'pending'
+      ).length,
+      draft: all.filter((p) => (p.metadata as { status?: string } | undefined)?.status === 'draft')
+        .length
     }
   })
 
@@ -76,42 +81,69 @@ export function useUserPlugins() {
     }
   }
 
-  function normalizePlugins(rawPlugins: any[], baseUrl: string): MarketPlugin[] {
-    return rawPlugins.map((plugin) => ({
-      id: plugin.slug || plugin.id,
-      name: plugin.name,
-      author: plugin.author?.name,
-      version: plugin.latestVersion?.version,
-      description: plugin.summary,
-      category: plugin.category,
-      timestamp: plugin.latestVersion?.createdAt || plugin.updatedAt,
-      icon: plugin.iconUrl ?? undefined,
-      metadata: {
-        status: plugin.status,
-        installs: plugin.installs,
-        badges: plugin.badges,
-        isOfficial: plugin.isOfficial,
-        homepage: plugin.homepage
-      },
-      readmeUrl: plugin.readmeMarkdown
-        ? `${baseUrl}/api/market/plugins/${plugin.slug}/readme`
-        : undefined,
-      homepage: plugin.homepage ?? undefined,
-      downloadUrl: plugin.latestVersion?.packageUrl ?? '',
-      install: plugin.latestVersion?.packageUrl
-        ? {
-            type: 'url' as const,
-            url: plugin.latestVersion.packageUrl,
-            format: 'tpex'
-          }
-        : undefined,
-      providerId: 'nexus',
-      providerName: 'Tuff Nexus',
-      providerType: 'tpexApi',
-      providerTrustLevel: 'official' as const,
-      trusted: true,
-      official: plugin.isOfficial || false
-    }))
+  interface NexusPlugin {
+    slug?: string
+    id?: string
+    name?: string
+    author?: { name?: string }
+    latestVersion?: { version?: string; createdAt?: number; packageUrl?: string }
+    summary?: string
+    category?: string
+    updatedAt?: number
+    iconUrl?: string
+    status?: string
+    installs?: number
+    badges?: string[]
+    isOfficial?: boolean
+    homepage?: string
+    readmeMarkdown?: string
+  }
+
+  function normalizePlugins(rawPlugins: NexusPlugin[], baseUrl: string): MarketPlugin[] {
+    return rawPlugins.flatMap((plugin) => {
+      const id = plugin.slug ?? plugin.id
+      if (!id) {
+        return []
+      }
+      const name = plugin.name ?? id
+      return [
+        {
+          id,
+          name,
+          author: plugin.author?.name,
+          version: plugin.latestVersion?.version,
+          description: plugin.summary,
+          category: plugin.category,
+          timestamp: plugin.latestVersion?.createdAt || plugin.updatedAt,
+          icon: plugin.iconUrl ?? undefined,
+          metadata: {
+            status: plugin.status,
+            installs: plugin.installs,
+            badges: plugin.badges,
+            isOfficial: plugin.isOfficial,
+            homepage: plugin.homepage
+          },
+          readmeUrl: plugin.readmeMarkdown
+            ? `${baseUrl}/api/market/plugins/${plugin.slug}/readme`
+            : undefined,
+          homepage: plugin.homepage ?? undefined,
+          downloadUrl: plugin.latestVersion?.packageUrl ?? '',
+          install: plugin.latestVersion?.packageUrl
+            ? {
+                type: 'url' as const,
+                url: plugin.latestVersion.packageUrl,
+                format: 'tpex'
+              }
+            : undefined,
+          providerId: 'nexus',
+          providerName: 'Tuff Nexus',
+          providerType: 'tpexApi',
+          providerTrustLevel: 'official' as const,
+          trusted: true,
+          official: plugin.isOfficial || false
+        }
+      ]
+    })
   }
 
   function clear(): void {

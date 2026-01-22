@@ -3,12 +3,21 @@ import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import IconButton from '~/components/base/button/IconButton.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 
-const props = defineProps(['fileAdpoter', 'modelValue'])
+const props = defineProps({
+  fileAdpoter: {
+    type: Object,
+    required: true
+  },
+  modelValue: {
+    type: Array,
+    required: true
+  }
+})
 const emit = defineEmits(['update:modelValue'])
 
 const treeDom = ref()
 const options = reactive({
-  select: null,
+  select: null
 })
 const files = useModelWrapper(props, emit)
 
@@ -16,10 +25,10 @@ onMounted(() => {
   watchEffect(() => {
     if (!treeDom.value) {
       return
-    }[...props.modelValue].forEach((item) => {
+    }
+    ;[...props.modelValue].forEach((item) => {
       const node = treeDom.value.getNode(item)
-      if (node)
-        treeDom.value.setChecked(node, true)
+      if (node) treeDom.value.setChecked(node, true)
     })
   })
 })
@@ -30,8 +39,7 @@ function currentChange(val) {
 
 let _resolve, g_node
 async function refresh() {
-  if (!g_node || !_resolve)
-    return
+  if (!g_node || !_resolve) return
   console.log(treeDom.value)
 
   g_node.childNodes = []
@@ -59,8 +67,7 @@ async function loadNode(node, resolve) {
   const _p = []
   let _node = node
   while (_node.parent) {
-    if (_node.data.name)
-      _p.push(_node.data.name)
+    if (_node.data.name) _p.push(_node.data.name)
 
     _node = _node.parent
   }
@@ -69,8 +76,7 @@ async function loadNode(node, resolve) {
 }
 
 function suffix2Icon(suffix) {
-  if (!suffix || suffix.length < 2)
-    return ''
+  if (!suffix || suffix.length < 2) return ''
   const s = String(suffix.pop()).toLowerCase()
 
   const mapper = {
@@ -105,20 +111,19 @@ function suffix2Icon(suffix) {
     css: 'css3',
     less: 'css3',
     scss: 'css3',
-    sass: 'css3',
+    sass: 'css3'
   }
 
   const t = mapper[s] ? { t: 'r', n: mapper[s] } : { t: 'u' }
 
   return {
     s,
-    ...t,
+    ...t
   }
 }
 
 function item2Obj(array, paths = []) {
-  if (!array)
-    return []
+  if (!array) return []
   const t = []
 
   array.forEach((item) => {
@@ -127,7 +132,7 @@ function item2Obj(array, paths = []) {
       file: item[Symbol('type')] === 1,
       suffix: suffix2Icon(item.name.split('.')),
       children: [],
-      paths,
+      paths
     })
   })
 

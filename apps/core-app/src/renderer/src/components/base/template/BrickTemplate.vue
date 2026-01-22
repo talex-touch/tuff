@@ -1,9 +1,10 @@
 <script name="BrickTemplate" setup lang="ts">
+import type { Ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 
-const _disabled: any = inject('disabled')
+const _disabled = inject<Ref<boolean>>('disabled')
 
-const disabled = computed(() => _disabled.value)
+const disabled = computed(() => _disabled?.value ?? false)
 </script>
 
 <template>

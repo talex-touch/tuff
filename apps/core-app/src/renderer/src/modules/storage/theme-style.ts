@@ -30,16 +30,16 @@ const defaultThemeStyle: IThemeStyle = {
     window: 'Mica',
     style: {
       dark: false,
-      auto: true,
+      auto: true
     },
     addon: {
       contrast: false,
-      coloring: false,
+      coloring: false
     },
     transition: {
-      route: 'slide',
-    },
-  },
+      route: 'slide'
+    }
+  }
 }
 
 /**
@@ -47,7 +47,7 @@ const defaultThemeStyle: IThemeStyle = {
  */
 export const themeStyle: RemovableRef<IThemeStyle> = useStorage<IThemeStyle>(
   'theme-style',
-  defaultThemeStyle,
+  defaultThemeStyle
 )
 
 /**
@@ -83,7 +83,7 @@ function updateDocumentClass(isDarkMode: boolean): void {
 /**
  * Theme mode type
  */
-type ThemeMode = 'auto' | 'dark' | 'light'
+export type ThemeMode = 'auto' | 'dark' | 'light'
 
 /**
  * Triggers a theme transition with a circular animation effect
@@ -93,7 +93,7 @@ type ThemeMode = 'auto' | 'dark' | 'light'
  */
 export async function triggerThemeTransition(
   pos: [number, number],
-  mode: ThemeMode,
+  mode: ThemeMode
 ): Promise<void> {
   const [x, y] = pos
   const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)
@@ -106,8 +106,7 @@ export async function triggerThemeTransition(
     // Set dark value based on mode
     if (mode === 'auto') {
       isDark.value = systemDarkMode.value
-    }
-    else {
+    } else {
       isDark.value = mode === 'dark'
     }
 
@@ -131,12 +130,11 @@ export async function triggerThemeTransition(
     //   "::view-transition-new(root)"
 
     // Apply animation
-    document.documentElement.animate(
-      [{ clipPath: animationPath[0] } as any, { clipPath: animationPath[1] } as any],
-      {
-        duration: 300,
-        easing: 'ease-in',
-      } as any,
-    )
+    const keyframes: Keyframe[] = [{ clipPath: animationPath[0] }, { clipPath: animationPath[1] }]
+    const animationOptions: AnimationEffectTiming = {
+      duration: 300,
+      easing: 'ease-in'
+    }
+    document.documentElement.animate(keyframes, animationOptions)
   })
 }

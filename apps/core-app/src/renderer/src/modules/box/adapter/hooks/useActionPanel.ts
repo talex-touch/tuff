@@ -27,7 +27,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
 
   function open(targetItem: TuffItem): void {
     item.value = targetItem
-    isPinned.value = !!(targetItem.meta as any)?.pinned?.isPinned
+    isPinned.value = Boolean(targetItem.meta?.pinned?.isPinned)
     visible.value = true
   }
 

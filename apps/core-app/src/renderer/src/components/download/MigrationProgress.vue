@@ -90,11 +90,11 @@ function handleRetry() {
   window.electron?.ipcRenderer.send('download:retry-migration')
 }
 
-function handleProgress(_event: any, data: MigrationProgress) {
+function handleProgress(_event: unknown, data: MigrationProgress) {
   progress.value = data
 }
 
-function handleResult(_event: any, data: MigrationResult) {
+function handleResult(_event: unknown, data: MigrationResult) {
   result.value = data
 }
 

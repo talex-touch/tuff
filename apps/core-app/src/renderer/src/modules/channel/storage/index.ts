@@ -46,7 +46,9 @@ export class StorageManager {
     const startAt = performance.now()
     try {
       const data = await this.transport.send(StorageEvents.app.get, { key: 'account.ini' })
-      this.account.analyzeFromObj(data)
+      if (data && typeof data === 'object') {
+        this.account.analyzeFromObj(data as Parameters<typeof this.account.analyzeFromObj>[0])
+      }
     } catch (error) {
       console.warn('[StorageManager] Failed to load account storage:', error)
     } finally {
@@ -82,8 +84,7 @@ export class StorageManager {
 // Auto-save all registered storages before the app closes
 window.onbeforeunload = () => {
   for (const storage of storages.values()) {
-    // Use synchronous save to ensure data is persisted before window closes
-    storage.saveSync()
+    void storage.saveToRemote({ force: true })
   }
 }
 

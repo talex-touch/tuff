@@ -1,4 +1,5 @@
 <script setup lang="ts" name="DivisionBoxHeader">
+import type { IBoxOptions } from '~/modules/box/adapter'
 import type { IUseSearch } from '~/modules/box/adapter/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
@@ -25,7 +26,7 @@ const isMac = process.platform === 'darwin'
 
 interface Props {
   searchVal: string
-  boxOptions: any
+  boxOptions: IBoxOptions
   showInput?: boolean
   placeholder?: string
   providers?: IUseSearch['activeActivations']['value']

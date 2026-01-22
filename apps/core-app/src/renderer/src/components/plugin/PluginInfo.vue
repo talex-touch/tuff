@@ -54,8 +54,14 @@ const isAppDev = computed(() => startupInfo.value?.isDev === true)
 const slots = useSlots()
 const tabItems = computed(() => {
   const defaultSlots = slots.default?.() || []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return defaultSlots.filter((vnode: VNode) => (vnode.type as any)?.name === 'TvTabItem')
+  return defaultSlots.filter((vnode: VNode) => {
+    const type = vnode.type
+    const name =
+      typeof type === 'object' || typeof type === 'function'
+        ? (type as { name?: string }).name
+        : undefined
+    return name === 'TvTabItem'
+  })
 })
 
 watchEffect(() => {

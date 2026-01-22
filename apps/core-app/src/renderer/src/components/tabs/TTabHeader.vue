@@ -1,11 +1,16 @@
 <script>
 export default {
-  name: 'TTabHeader',
+  name: 'TTabHeader'
 }
 </script>
 
 <script setup>
-const props = defineProps(['node'])
+const props = defineProps({
+  node: {
+    type: Object,
+    default: undefined
+  }
+})
 </script>
 
 <template>

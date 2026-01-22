@@ -6,7 +6,7 @@ interface CommandData {
   name?: string
   shortcut?: string
   desc?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 defineProps<{

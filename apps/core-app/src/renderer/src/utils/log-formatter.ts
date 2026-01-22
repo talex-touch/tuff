@@ -12,14 +12,14 @@ const colors = {
   magenta: '\x1B[35m',
   cyan: '\x1B[36m',
   white: '\x1B[37m',
-  gray: '\x1B[90m',
+  gray: '\x1B[90m'
 }
 
 const levelColors = {
   ERROR: colors.red,
   WARN: colors.yellow,
   INFO: colors.green,
-  DEBUG: colors.gray,
+  DEBUG: colors.gray
 }
 
 /**
@@ -40,8 +40,7 @@ export function formatLogForTerminal(log: LogItem): string {
     try {
       const dataStr = JSON.stringify(log.data, null, 2)
       message += `\n${colors.dim}${dataStr}${colors.reset}`
-    }
-    catch (e) {
+    } catch (_e) {
       // ignore
     }
   }

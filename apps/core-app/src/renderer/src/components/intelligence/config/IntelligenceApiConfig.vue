@@ -131,7 +131,10 @@ async function handleTest() {
       baseUrl: testProvider.baseUrl
     })
 
-    const result = (await aiClient.testProvider(testProvider)) as any
+    const result = (await aiClient.testProvider(testProvider)) as {
+      success?: boolean
+      message?: string
+    }
 
     if (result?.success) {
       testResult.value = t('intelligence.config.api.testSuccess')
@@ -140,7 +143,7 @@ async function handleTest() {
       await forDialogMention(
         '连接测试成功',
         `已成功连接到 ${props.modelValue.name}`,
-        { type: 'remix', value: 'ri-checkbox-circle-line' },
+        { type: 'class', value: 'i-ri-checkbox-circle-line' },
         [{ content: '确定', type: 'success', onClick: () => true }]
       )
 
@@ -153,7 +156,7 @@ async function handleTest() {
       await forDialogMention(
         '连接测试失败',
         result?.message || '无法连接到提供商，请检查您的配置',
-        { type: 'remix', value: 'ri-error-warning-line' },
+        { type: 'class', value: 'i-ri-error-warning-line' },
         [{ content: '确定', type: 'danger', onClick: () => true }]
       )
     }
@@ -165,7 +168,7 @@ async function handleTest() {
     await forDialogMention(
       '连接测试失败',
       `连接过程中发生错误: ${message}`,
-      { type: 'remix', value: 'ri-error-warning-line' },
+      { type: 'class', value: 'i-ri-error-warning-line' },
       [{ content: '确定', type: 'danger', onClick: () => true }]
     )
 
@@ -175,12 +178,16 @@ async function handleTest() {
   }
 }
 
-async function fetchAvailableModels(provider: any) {
+async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
   try {
     console.log('[API Config] Fetching available models...')
 
     // 使用 intelligence client 获取模型列表
-    const result = (await aiClient.fetchModels(provider)) as any
+    const result = (await aiClient.fetchModels(provider)) as {
+      success?: boolean
+      models?: string[]
+      message?: string
+    }
 
     if (result?.success && result?.models) {
       // 直接更新 provider 的模型列表
@@ -193,7 +200,7 @@ async function fetchAvailableModels(provider: any) {
       await forDialogMention(
         '模型获取成功',
         `已获取 ${result.models.length} 个可用模型`,
-        { type: 'remix', value: 'ri-checkbox-circle-line' },
+        { type: 'class', value: 'i-ri-checkbox-circle-line' },
         [{ content: '确定', type: 'success', onClick: () => true }]
       )
     } else {
@@ -221,9 +228,9 @@ async function fetchAvailableModels(provider: any) {
       active-icon="i-carbon-password"
       @blur="handleApiKeyBlur"
     >
-      <template #control="{ modelValue, update, focus }">
+      <template #control="{ modelValue: slotValue, update, focus }">
         <FlatInput
-          v-model="modelValue as string"
+          v-model="slotValue as string"
           :placeholder="t('intelligence.config.api.apiKeyPlaceholder')"
           password
           @update:model-value="update"
@@ -243,9 +250,9 @@ async function fetchAvailableModels(provider: any) {
       clearable
       @blur="handleBaseUrlBlur"
     >
-      <template #control="{ modelValue, update, focus }">
+      <template #control="{ modelValue: slotValue, update, focus }">
         <FlatInput
-          :model-value="String(modelValue)"
+          :model-value="String(slotValue)"
           :placeholder="t('intelligence.config.api.baseUrlPlaceholder')"
           @update:model-value="update"
           @focus="focus"

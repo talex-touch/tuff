@@ -19,8 +19,7 @@ export function unregisterCustomRenderer(name: string): void {
 }
 
 export function registerDefaultCustomRenderers(): void {
-  if (defaultsRegistered)
-    return
+  if (defaultsRegistered) return
   defaultsRegistered = true
 
   registerCustomRenderer(DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD, PreviewResultCard)

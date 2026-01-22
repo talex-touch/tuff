@@ -28,7 +28,7 @@ export interface RendererPerfReport {
 export function reportPerfToMain(report: RendererPerfReport): void {
   try {
     const transport = useTuffTransport()
-    void transport.send(AppEvents.analytics.perfReport, report as any).catch(() => {})
+    void transport.send(AppEvents.analytics.perfReport, report).catch(() => {})
   } catch {
     // ignore perf reporting failures
   }

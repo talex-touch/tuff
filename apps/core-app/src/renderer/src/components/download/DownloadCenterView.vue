@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DownloadTask } from '@talex-touch/utils'
+import type { DownloadConfig, DownloadTask } from '@talex-touch/utils'
 import {
   Delete,
   Document,
@@ -9,7 +9,7 @@ import {
   Search,
   Setting,
   VideoPause,
-  VideoPlay,
+  VideoPlay
 } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { computed, ref } from 'vue'
@@ -40,7 +40,7 @@ const {
   removeTask: removeTaskHook,
   clearHistory: clearHistoryHook,
   updateConfig: updateConfigHook,
-  updateTaskPriority: updateTaskPriorityHook,
+  updateTaskPriority: updateTaskPriorityHook
 } = useDownloadCenter()
 
 const settingsVisible = ref(false)
@@ -67,9 +67,9 @@ const filteredTasks = computed(() => {
   }
 
   const filterTasks = (tasks: DownloadTask[]) => {
-    return tasks.filter(task =>
-      task.filename.toLowerCase().includes(query)
-      || task.url.toLowerCase().includes(query),
+    return tasks.filter(
+      (task) =>
+        task.filename.toLowerCase().includes(query) || task.url.toLowerCase().includes(query)
     )
   }
 
@@ -79,7 +79,7 @@ const filteredTasks = computed(() => {
     completed: filterTasks(tasksByStatus.value.completed),
     failed: filterTasks(tasksByStatus.value.failed),
     paused: filterTasks(tasksByStatus.value.paused),
-    cancelled: filterTasks(tasksByStatus.value.cancelled),
+    cancelled: filterTasks(tasksByStatus.value.cancelled)
   }
 })
 
@@ -120,8 +120,7 @@ async function pauseTask(taskId: string) {
   try {
     await pauseTaskHook(taskId)
     toast.success(t('download.task_paused'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.pause_failed')}: ${message}`)
   }
@@ -137,15 +136,13 @@ async function cancelTask(taskId: string) {
       {
         confirmButtonText: t('common.confirm'),
         cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      },
+        type: 'warning'
+      }
     )
     await cancelTaskHook(taskId)
     toast.success(t('download.task_cancelled'))
-  }
-  catch (err: unknown) {
-    if (err === 'cancel')
-      return
+  } catch (err: unknown) {
+    if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.cancel_failed')}: ${message}`)
   }
@@ -155,8 +152,7 @@ async function retryTask(taskId: string) {
   try {
     await retryTaskHook(taskId)
     toast.success(t('download.task_retrying'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.retry_failed')}: ${message}`)
   }
@@ -170,15 +166,13 @@ async function removeTask(taskId: string) {
       {
         confirmButtonText: t('common.confirm'),
         cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      },
+        type: 'warning'
+      }
     )
     await removeTaskHook(taskId)
     toast.success(t('download.task_removed'))
-  }
-  catch (err: unknown) {
-    if (err === 'cancel')
-      return
+  } catch (err: unknown) {
+    if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.remove_failed')}: ${message}`)
   }
@@ -188,8 +182,7 @@ async function openFile(taskId: string) {
   try {
     await openFileHook(taskId)
     toast.success(t('download.file_opened'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.open_file_failed')}: ${message}`)
   }
@@ -198,8 +191,7 @@ async function openFile(taskId: string) {
 async function showInFolder(taskId: string) {
   try {
     await showInFolderHook(taskId)
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.show_folder_failed')}: ${message}`)
   }
@@ -214,22 +206,20 @@ async function deleteTask(taskId: string) {
         confirmButtonText: t('common.confirm'),
         cancelButtonText: t('common.cancel'),
         type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      },
+        confirmButtonClass: 'el-button--danger'
+      }
     )
     await deleteFileHook(taskId)
     toast.success(t('download.file_deleted'))
-  }
-  catch (err: unknown) {
-    if (err === 'cancel')
-      return
+  } catch (err: unknown) {
+    if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.delete_failed')}: ${message}`)
   }
 }
 
 function showTaskDetails(taskId: string) {
-  const task = downloadTasks.value.find(t => t.id === taskId)
+  const task = downloadTasks.value.find((t) => t.id === taskId)
   if (task) {
     selectedTask.value = task
     detailsVisible.value = true
@@ -240,8 +230,7 @@ async function pauseAllTasks() {
   try {
     await pauseAllTasksHook()
     toast.success(t('download.all_tasks_paused'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.pause_all_failed')}: ${message}`)
   }
@@ -251,8 +240,7 @@ async function resumeAllTasks() {
   try {
     await resumeAllTasksHook()
     toast.success(t('download.all_tasks_resumed'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.resume_all_failed')}: ${message}`)
   }
@@ -266,15 +254,13 @@ async function clearHistory() {
       {
         confirmButtonText: t('common.confirm'),
         cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      },
+        type: 'warning'
+      }
     )
     await clearHistoryHook()
     toast.success(t('download.history_cleared'))
-  }
-  catch (err: unknown) {
-    if (err === 'cancel')
-      return
+  } catch (err: unknown) {
+    if (err === 'cancel') return
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.clear_history_failed')}: ${message}`)
   }
@@ -284,19 +270,17 @@ async function handlePriorityChange(taskId: string, newPriority: number) {
   try {
     await updateTaskPriorityHook(taskId, newPriority)
     toast.success(t('download.priority_updated'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.priority_update_failed')}: ${message}`)
   }
 }
 
-async function updateConfig(config: any) {
+async function updateConfig(config: DownloadConfig) {
   try {
     await updateConfigHook(config)
     toast.success(t('download.config_updated'))
-  }
-  catch (err: unknown) {
+  } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     toast.error(`${t('download.config_update_failed')}: ${message}`)
   }
@@ -315,7 +299,10 @@ async function updateConfig(config: any) {
       </div>
       <div class="header-right">
         <el-button-group>
-          <el-button :type="viewMode === 'detailed' ? 'primary' : ''" @click="viewMode = 'detailed'">
+          <el-button
+            :type="viewMode === 'detailed' ? 'primary' : ''"
+            @click="viewMode = 'detailed'"
+          >
             <el-icon><List /></el-icon>
           </el-button>
           <el-button :type="viewMode === 'compact' ? 'primary' : ''" @click="viewMode = 'compact'">
@@ -345,24 +332,15 @@ async function updateConfig(config: any) {
         </template>
       </el-input>
       <div class="filter-actions">
-        <el-button
-          v-if="tasksByStatus.downloading.length > 0"
-          @click="pauseAllTasks"
-        >
+        <el-button v-if="tasksByStatus.downloading.length > 0" @click="pauseAllTasks">
           <el-icon><VideoPause /></el-icon>
           {{ $t('download.pause_all') }}
         </el-button>
-        <el-button
-          v-if="tasksByStatus.paused.length > 0"
-          @click="resumeAllTasks"
-        >
+        <el-button v-if="tasksByStatus.paused.length > 0" @click="resumeAllTasks">
           <el-icon><VideoPlay /></el-icon>
           {{ $t('download.resume_all') }}
         </el-button>
-        <el-button
-          v-if="tasksByStatus.completed.length > 0"
-          @click="clearHistory"
-        >
+        <el-button v-if="tasksByStatus.completed.length > 0" @click="clearHistory">
           <el-icon><Delete /></el-icon>
           {{ $t('download.clear_history') }}
         </el-button>
@@ -371,7 +349,10 @@ async function updateConfig(config: any) {
 
     <!-- 标签页 -->
     <el-tabs v-model="activeTab" class="download-tabs">
-      <el-tab-pane :label="`${$t('download.downloading')} (${tasksByStatus.downloading.length})`" name="downloading">
+      <el-tab-pane
+        :label="`${$t('download.downloading')} (${tasksByStatus.downloading.length})`"
+        name="downloading"
+      >
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.downloading"
@@ -391,7 +372,10 @@ async function updateConfig(config: any) {
           @priority-change="handlePriorityChange"
         />
       </el-tab-pane>
-      <el-tab-pane :label="`${$t('download.waiting')} (${tasksByStatus.pending.length})`" name="pending">
+      <el-tab-pane
+        :label="`${$t('download.waiting')} (${tasksByStatus.pending.length})`"
+        name="pending"
+      >
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.pending"
@@ -411,7 +395,10 @@ async function updateConfig(config: any) {
           @priority-change="handlePriorityChange"
         />
       </el-tab-pane>
-      <el-tab-pane :label="`${$t('download.completed')} (${tasksByStatus.completed.length})`" name="completed">
+      <el-tab-pane
+        :label="`${$t('download.completed')} (${tasksByStatus.completed.length})`"
+        name="completed"
+      >
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.completed"
@@ -433,7 +420,10 @@ async function updateConfig(config: any) {
           @delete="deleteTask"
         />
       </el-tab-pane>
-      <el-tab-pane :label="`${$t('download.failed')} (${tasksByStatus.failed.length})`" name="failed">
+      <el-tab-pane
+        :label="`${$t('download.failed')} (${tasksByStatus.failed.length})`"
+        name="failed"
+      >
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.failed"

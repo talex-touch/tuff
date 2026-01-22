@@ -18,7 +18,7 @@ const CHANNEL_SEND_WARN_MS = 500
 const CHANNEL_SEND_ERROR_MS = 2_000
 
 class TouchChannel implements ITouchClientChannel {
-  channelMap: Map<string, ((data: StandardChannelData) => any)[]> = new Map()
+  channelMap: Map<string, ((data: StandardChannelData) => unknown)[]> = new Map()
 
   pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
 
@@ -26,9 +26,9 @@ class TouchChannel implements ITouchClientChannel {
     ipcRenderer.on('@main-process-message', this.__handle_main.bind(this))
   }
 
-  __parse_raw_data(e: IpcRendererEvent | null, arg: any): RawStandardChannelData | null {
-    if (arg) {
-      const { name, header, code, plugin, data, sync } = arg
+  __parse_raw_data(e: IpcRendererEvent | null, arg: unknown): RawStandardChannelData | null {
+    if (arg && typeof arg === 'object') {
+      const { name, header, code, plugin, data, sync } = arg as RawStandardChannelData
 
       if (header) {
         return {
@@ -52,7 +52,7 @@ class TouchChannel implements ITouchClientChannel {
     // throw new Error("Invalid message!");
   }
 
-  __handle_main(e: IpcRendererEvent, arg: any): void {
+  __handle_main(e: IpcRendererEvent, arg: unknown): void {
     const rawData = this.__parse_raw_data(e, arg)
     if (!rawData?.header) {
       console.error('Invalid message: ', arg)
@@ -68,7 +68,7 @@ class TouchChannel implements ITouchClientChannel {
     this.channelMap.get(rawData.name)?.forEach((func) => {
       let replySent = false
       const handInData: StandardChannelData & { replySent?: boolean } = {
-        reply: (code: DataCode, data: any) => {
+        reply: (code: DataCode, data: unknown) => {
           if (replySent) return
           replySent = true
           e.sender.send(
@@ -105,7 +105,7 @@ class TouchChannel implements ITouchClientChannel {
   __parse_sender(
     code: DataCode,
     rawData: RawStandardChannelData,
-    data: any,
+    data: unknown,
     sync?: RawChannelSyncData
   ): RawStandardChannelData {
     return {
@@ -153,7 +153,7 @@ class TouchChannel implements ITouchClientChannel {
     return formatPayloadPreview(payload)
   }
 
-  send(eventName: string, arg: any): Promise<any> {
+  send(eventName: string, arg: unknown): Promise<unknown> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(12)}`
     const startedAt = performance.now()
     const stack = new Error().stack
@@ -279,7 +279,7 @@ class TouchChannel implements ITouchClientChannel {
     })
   }
 
-  sendSync(eventName: string, arg?: any): any {
+  sendSync(eventName: string, arg?: unknown): unknown {
     const data = {
       code: DataCode.SUCCESS,
       data: arg,
@@ -331,7 +331,7 @@ class TouchChannel implements ITouchClientChannel {
     }
   }
 
-  unRegChannel(eventName: string, callback: (data: StandardChannelData) => any): boolean {
+  unRegChannel(eventName: string, callback: (data: StandardChannelData) => unknown): boolean {
     const callbacks = this.channelMap.get(eventName)
     if (callbacks) {
       const index = callbacks.indexOf(callback)

@@ -41,11 +41,10 @@ export class RateLimitManager {
           limit,
           remaining: Math.max(0, remaining), // Ensure non-negative
           resetTime: Math.max(Date.now(), resetTime), // Ensure reset time is in the future
-          retryAfter: retryAfter > 0 && !isNaN(retryAfter) ? retryAfter : undefined,
+          retryAfter: retryAfter > 0 && !isNaN(retryAfter) ? retryAfter : undefined
         })
       }
-    }
-    catch (error) {
+    } catch (error) {
       console.warn(`Failed to update rate limit for ${source}:`, error)
     }
   }
@@ -116,8 +115,7 @@ export class RateLimitManager {
 
     if (minutes > 0) {
       return `${minutes}m ${seconds}s`
-    }
-    else {
+    } else {
       return `${seconds}s`
     }
   }

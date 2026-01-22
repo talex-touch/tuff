@@ -31,9 +31,12 @@ function isKeepAliveRoute(route: { meta?: Record<string, unknown> } | null | und
   return Boolean(route?.meta && (route.meta as { keepAlive?: boolean }).keepAlive)
 }
 
-function resolveRouteCacheKey(route: { name?: unknown; fullPath?: string; meta?: any }): string {
-  const metaKey =
-    route?.meta && typeof route.meta.keepAliveKey === 'string' ? route.meta.keepAliveKey : ''
+function resolveRouteCacheKey(route: {
+  name?: unknown
+  fullPath?: string
+  meta?: Record<string, unknown>
+}): string {
+  const metaKey = typeof route?.meta?.keepAliveKey === 'string' ? route.meta.keepAliveKey : ''
   if (metaKey) {
     return metaKey
   }

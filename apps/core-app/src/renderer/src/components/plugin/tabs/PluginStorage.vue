@@ -42,6 +42,8 @@ interface StorageEntry {
   modified: number
 }
 
+type StorageTreeNode = StorageEntry & { children?: StorageTreeNode[] }
+
 const entries = ref<StorageEntry[]>([])
 
 // Computed
@@ -111,14 +113,10 @@ async function loadStorageData(): Promise<void> {
   }
 }
 
-function flattenTree(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nodes: any[]
-): StorageEntry[] {
+function flattenTree(nodes: StorageTreeNode[]): StorageEntry[] {
   const items: StorageEntry[] = []
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function traverse(nodeList: any[]) {
+  function traverse(nodeList: StorageTreeNode[]) {
     for (const node of nodeList) {
       const type = node.type === 'directory' ? 'directory' : 'file'
       items.push({

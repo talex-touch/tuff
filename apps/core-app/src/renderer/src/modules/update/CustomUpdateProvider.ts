@@ -6,6 +6,28 @@ import type {
   UpdateSourceConfig
 } from '@talex-touch/utils'
 import type { AxiosRequestConfig } from 'axios'
+
+type CustomDownloadEntry = {
+  filename?: string
+  name?: string
+  url?: string
+  size?: number
+  checksum?: string
+  hash?: string
+  signatureUrl?: string
+  sigUrl?: string
+}
+
+type CustomUpdatePayload = {
+  version?: string
+  downloads?: CustomDownloadEntry[]
+  name?: string
+  published_at?: string
+  description?: string
+  changelog?: string
+}
+
+type DownloadAssetWithSignature = DownloadAsset & { signatureUrl?: string }
 import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
 import axios from 'axios'
 import { UpdateProvider } from './UpdateProvider'
@@ -127,15 +149,19 @@ export class CustomUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map((asset) => ({
-      name: asset.name,
-      url: asset.url,
-      size: asset.size || 0,
-      platform: this.detectPlatform(asset.name),
-      arch: this.detectArch(asset.name),
-      checksum: asset.checksum,
-      signatureUrl: (asset as any).signatureUrl
-    }))
+    return release.assets.map((asset) => {
+      const assetWithSignature = asset as DownloadAssetWithSignature
+      const normalized: DownloadAssetWithSignature = {
+        name: asset.name,
+        url: asset.url,
+        size: asset.size || 0,
+        platform: this.detectPlatform(asset.name),
+        arch: this.detectArch(asset.name),
+        checksum: asset.checksum,
+        signatureUrl: assetWithSignature.signatureUrl
+      }
+      return normalized
+    })
   }
 
   // 健康检查
@@ -161,7 +187,7 @@ export class CustomUpdateProvider extends UpdateProvider {
   }
 
   // 解析GitHub格式数据
-  private parseGitHubFormat(data: any, channel: AppPreviewChannel): GitHubRelease {
+  private parseGitHubFormat(data: unknown, channel: AppPreviewChannel): GitHubRelease {
     if (Array.isArray(data)) {
       // 多个发布版本
       const releases = data as GitHubRelease[]
@@ -177,41 +203,61 @@ export class CustomUpdateProvider extends UpdateProvider {
       const latestRelease = channelReleases[0]
       this.validateRelease(latestRelease)
       return latestRelease
-    } else {
+    }
+
+    if (data && typeof data === 'object') {
       // 单个发布版本
       const release = data as GitHubRelease
       this.validateRelease(release)
       return release
     }
+
+    throw this.createError(
+      UpdateErrorType.PARSE_ERROR,
+      'Invalid GitHub API format: expected release object or array'
+    )
   }
 
   // 解析自定义格式数据
-  private parseCustomFormat(data: any, _channel: AppPreviewChannel): GitHubRelease {
+  private parseCustomFormat(data: unknown, _channel: AppPreviewChannel): GitHubRelease {
     // 自定义格式解析逻辑
     // 这里需要根据具体的API格式来实现
+    if (!data || typeof data !== 'object') {
+      throw this.createError(
+        UpdateErrorType.PARSE_ERROR,
+        'Invalid custom API format: payload is not an object'
+      )
+    }
 
-    if (!data.version || !data.downloads) {
+    const payload = data as CustomUpdatePayload
+    if (!payload.version || !Array.isArray(payload.downloads)) {
       throw this.createError(
         UpdateErrorType.PARSE_ERROR,
         'Invalid custom API format: missing required fields'
       )
     }
 
+    const downloads = payload.downloads
+
     const release: GitHubRelease = {
-      tag_name: data.version,
-      name: data.name || data.version,
-      published_at: data.published_at || new Date().toISOString(),
-      body: data.description || data.changelog || '',
-      assets: data.downloads.map((download: any) => ({
-        name: download.filename || download.name,
-        browser_download_url: download.url,
-        url: download.url,
-        size: download.size || 0,
-        platform: this.detectPlatform(download.filename || download.name),
-        arch: this.detectArch(download.filename || download.name),
-        checksum: download.checksum || download.hash,
-        signatureUrl: download.signatureUrl || download.sigUrl
-      }))
+      tag_name: payload.version,
+      name: payload.name || payload.version,
+      published_at: payload.published_at || new Date().toISOString(),
+      body: payload.description || payload.changelog || '',
+      assets: downloads.map((download) => {
+        const filename = download.filename || download.name || ''
+        const url = download.url || ''
+        const asset: DownloadAssetWithSignature = {
+          name: filename,
+          url,
+          size: typeof download.size === 'number' ? download.size : 0,
+          platform: this.detectPlatform(filename),
+          arch: this.detectArch(filename),
+          checksum: download.checksum || download.hash,
+          signatureUrl: download.signatureUrl || download.sigUrl
+        }
+        return asset
+      })
     }
 
     this.validateRelease(release)
@@ -252,13 +298,22 @@ export class CustomUpdateProvider extends UpdateProvider {
   }
 
   // 验证自定义API格式
-  validateCustomFormat(data: any): boolean {
+  validateCustomFormat(data: unknown): boolean {
     try {
-      if (this.apiFormat === 'github') {
-        return Array.isArray(data) || (data.tag_name && data.assets)
-      } else {
-        return data.version && data.downloads
+      if (!data || typeof data !== 'object') {
+        return false
       }
+
+      if (this.apiFormat === 'github') {
+        if (Array.isArray(data)) {
+          return true
+        }
+        const payload = data as { tag_name?: unknown; assets?: unknown }
+        return typeof payload.tag_name === 'string' && Array.isArray(payload.assets)
+      }
+
+      const payload = data as { version?: unknown; downloads?: unknown }
+      return typeof payload.version === 'string' && Array.isArray(payload.downloads)
     } catch {
       return false
     }

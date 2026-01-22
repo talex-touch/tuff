@@ -5,6 +5,19 @@ import axios from 'axios'
 import { appSetting } from '~/modules/channel/storage'
 import { UpdateProvider } from './UpdateProvider'
 
+type OfficialReleaseAsset = {
+  name?: string
+  browser_download_url?: string
+  url?: string
+  size?: number
+  platform?: DownloadAsset['platform']
+  arch?: DownloadAsset['arch']
+  sha256?: string
+  signatureUrl?: string
+}
+
+type DownloadAssetWithSignature = DownloadAsset & { signatureUrl?: string }
+
 // Nexus API 响应类型
 interface NexusReleaseAsset {
   id: string
@@ -170,12 +183,23 @@ export class OfficialUpdateProvider extends UpdateProvider {
       this.validateRelease(release)
 
       return release
-    } catch (error: any) {
-      if (error.type) {
+    } catch (error: unknown) {
+      const maybeError =
+        error && typeof error === 'object'
+          ? (error as {
+              type?: unknown
+              code?: unknown
+              response?: { status?: number }
+              request?: unknown
+            })
+          : undefined
+
+      if (maybeError?.type) {
         throw error
       }
 
-      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      const errorCode = typeof maybeError?.code === 'string' ? maybeError.code : undefined
+      if (errorCode === 'ECONNABORTED' || errorCode === 'ETIMEDOUT') {
         throw this.createError(
           UpdateErrorType.TIMEOUT_ERROR,
           'Request to Official API timed out',
@@ -183,23 +207,23 @@ export class OfficialUpdateProvider extends UpdateProvider {
         )
       }
 
-      if (error.response) {
-        const statusCode = error.response.status
+      if (maybeError?.response) {
+        const statusCode = maybeError.response?.status
 
-        if (statusCode >= 500) {
+        if (typeof statusCode === 'number' && statusCode >= 500) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Official API server error', error)
         } else if (statusCode === 404) {
           throw this.createError(UpdateErrorType.API_ERROR, 'Release not found', error)
         } else {
           throw this.createError(
             UpdateErrorType.API_ERROR,
-            `Official API error: ${statusCode}`,
+            `Official API error: ${statusCode ?? 'unknown'}`,
             error
           )
         }
       }
 
-      if (error.request) {
+      if (maybeError?.request) {
         throw this.createError(
           UpdateErrorType.NETWORK_ERROR,
           'Unable to connect to Official API',
@@ -221,15 +245,21 @@ export class OfficialUpdateProvider extends UpdateProvider {
       return []
     }
 
-    return release.assets.map((asset: any) => ({
-      name: asset.name,
-      url: asset.browser_download_url || asset.url,
-      size: asset.size || 0,
-      platform: asset.platform || this.detectPlatform(asset.name),
-      arch: asset.arch || this.detectArch(asset.name),
-      checksum: asset.sha256 || undefined,
-      signatureUrl: asset.signatureUrl || (asset.url ? `${asset.url}.sig` : undefined)
-    }))
+    return release.assets.map((asset) => {
+      const assetData = asset as OfficialReleaseAsset
+      const name = assetData.name || asset.name
+      const url = assetData.browser_download_url || assetData.url || asset.url
+      const normalized: DownloadAssetWithSignature = {
+        name,
+        url,
+        size: assetData.size ?? asset.size ?? 0,
+        platform: assetData.platform || this.detectPlatform(name),
+        arch: assetData.arch || this.detectArch(name),
+        checksum: assetData.sha256 || undefined,
+        signatureUrl: assetData.signatureUrl || (url ? `${url}.sig` : undefined)
+      }
+      return normalized
+    })
   }
 
   // 健康检查

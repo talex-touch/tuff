@@ -2,7 +2,7 @@
  * Cache entry interface
  */
 interface CacheEntry {
-  data: any
+  data: unknown
   timestamp: number
   ttl: number
   source: string
@@ -49,7 +49,7 @@ export class UpdateCache {
       data,
       timestamp: now,
       ttl: ttl || this.defaultTTL,
-      source: source || 'unknown',
+      source: source || 'unknown'
     }
 
     this.cache.set(key, entry)
@@ -115,7 +115,7 @@ export class UpdateCache {
     return {
       totalEntries: this.cache.size,
       expiredEntries,
-      memoryUsage,
+      memoryUsage
     }
   }
 

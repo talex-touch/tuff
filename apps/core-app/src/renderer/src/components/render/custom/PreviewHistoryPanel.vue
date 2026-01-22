@@ -5,9 +5,9 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    visible: boolean
-    loading: boolean
-    items: CalculationHistoryEntry[]
+    visible?: boolean
+    loading?: boolean
+    items?: CalculationHistoryEntry[]
     activeIndex?: number
   }>(),
   {

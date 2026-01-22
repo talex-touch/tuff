@@ -1,6 +1,6 @@
 <script>
 export default {
-  name: 'RemixAnimateIcon',
+  name: 'RemixAnimateIcon'
 }
 </script>
 
@@ -8,18 +8,18 @@ export default {
 const props = defineProps({
   category: {
     type: String,
-    required: true,
+    required: true
   },
   from: {
     type: String,
-    required: true,
+    required: true
   },
   style: {
     type: String,
     validator(value) {
       return ['line', 'fill'].includes(value)
-    },
-  },
+    }
+  }
 })
 </script>
 

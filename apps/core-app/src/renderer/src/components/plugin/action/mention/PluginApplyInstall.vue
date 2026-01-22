@@ -10,8 +10,8 @@ import { blowMention, forTouchTip } from '~/modules/mention/dialog-mention'
 
 interface Manifest {
   name: string
-  description: string
-  version: string
+  description?: string
+  version?: string
 }
 
 const props = defineProps<{
@@ -21,7 +21,18 @@ const props = defineProps<{
 }>()
 
 const transport = useTuffTransport()
-const installEvent = defineRawEvent<any, any>('@install-plugin')
+type PluginInstallRequest = {
+  name: string
+  buffer: Buffer
+  forceUpdate: boolean
+}
+
+type PluginInstallResponse = {
+  status?: string
+  msg?: unknown
+}
+
+const installEvent = defineRawEvent<PluginInstallRequest, PluginInstallResponse>('@install-plugin')
 const installing = ref(false)
 const close = inject('destroy') as () => void
 
@@ -96,11 +107,12 @@ async function install(forceUpdate = false): Promise<void> {
         `Plugin "${props.manifest.name}" installed successfully!`
       )
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     installing.value = false
     close()
     console.error('[PluginApplyInstall] Installation error:', error)
-    await blowMention('Install Error', `Unexpected error: ${error?.message || 'Unknown error'}`)
+    const message = error instanceof Error ? error.message : String(error)
+    await blowMention('Install Error', `Unexpected error: ${message || 'Unknown error'}`)
   } finally {
     clearBufferedFile(props.fileName)
   }

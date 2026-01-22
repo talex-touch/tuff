@@ -81,7 +81,7 @@ const testEnabledBindings = computed(() => {
 async function handlePromptTest(options: {
   providerId: string
   model?: string
-  promptVariables?: Record<string, any>
+  promptVariables?: Record<string, unknown>
   userInput?: string
   promptTemplate?: string
 }): Promise<void> {
@@ -90,17 +90,17 @@ async function handlePromptTest(options: {
   promptTestResult.value = null
 
   try {
-    const response = await aiClient.testCapability({
+    const response = (await aiClient.testCapability({
       capabilityId: testCapabilityId.value,
       providerId: options.providerId,
       userInput: options.userInput,
       model: options.model,
       promptTemplate: promptDraft.content,
       promptVariables: options.promptVariables
-    })
+    })) as UiCapabilityTestResult
 
     promptTestResult.value = {
-      ...(response as any),
+      ...response,
       timestamp: Date.now()
     }
   } catch (error) {

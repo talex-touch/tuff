@@ -16,6 +16,17 @@ const pendingTasks = new Map<
 let downloadListenerRegistered = false
 const downloadDisposers: Array<() => void> = []
 
+type TempFileCreateRequest = {
+  namespace: string
+  ext: string
+  prefix: string
+  retentionMs?: number
+}
+
+type TempFileCreateResponse = {
+  url: string
+}
+
 export function useSvgContent(
   tempUrl: string = '',
   autoFetch = true,
@@ -27,7 +38,9 @@ export function useSvgContent(
   const loading = ref(false)
   const error = ref<Error | null>(null)
   const transport = useTuffTransport()
-  const tempFileCreateEvent = defineRawEvent<any, any>('temp-file:create')
+  const tempFileCreateEvent = defineRawEvent<TempFileCreateRequest, TempFileCreateResponse>(
+    'temp-file:create'
+  )
   const downloadSdk = isElectronRenderer() ? useDownloadSdk() : null
 
   const retrier = createRetrier(

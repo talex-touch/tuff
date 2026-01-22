@@ -6,15 +6,20 @@
  */
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 import { TxButton } from '@talex-touch/tuffex'
+import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PermissionEvents } from '@talex-touch/utils/transport/events'
 import { ElEmpty, ElTag } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { shortconApi } from '~/modules/channel/main/shortcon'
 
 interface Props {
   plugin: ITouchPlugin
@@ -22,6 +27,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const transport = useTuffTransport()
+const { t } = useI18n()
 
 interface PluginPermissionStatus {
   pluginId: string
@@ -38,27 +44,19 @@ interface PluginPermissionStatus {
 // State
 const loading = ref(true)
 const status = ref<PluginPermissionStatus | null>(null)
+const shortcutsLoading = ref(false)
+const shortcuts = ref<ShortcutWithStatus[]>([])
 
-// Permission translations
-const permissionTranslations: Record<string, { name: string; desc: string }> = {
-  'fs.read': { name: '读取文件', desc: '读取用户文件系统中的文件' },
-  'fs.write': { name: '写入文件', desc: '创建、修改或删除用户文件' },
-  'fs.execute': { name: '执行文件', desc: '运行可执行文件或脚本' },
-  'clipboard.read': { name: '读取剪贴板', desc: '访问剪贴板中的内容' },
-  'clipboard.write': { name: '写入剪贴板', desc: '将内容复制到剪贴板' },
-  'network.local': { name: '本地网络', desc: '访问本地网络资源' },
-  'network.internet': { name: '互联网访问', desc: '发送和接收互联网请求' },
-  'network.download': { name: '下载文件', desc: '从互联网下载文件到本地' },
-  'system.shell': { name: '执行命令', desc: '运行系统命令或脚本' },
-  'system.notification': { name: '系统通知', desc: '发送系统通知' },
-  'system.tray': { name: '托盘交互', desc: '访问系统托盘功能' },
-  'ai.basic': { name: '基础 AI', desc: '使用基础 AI 能力' },
-  'ai.advanced': { name: '高级 AI', desc: '使用高级 AI 模型' },
-  'ai.agents': { name: '智能体', desc: '调用智能体系统' },
-  'storage.plugin': { name: '插件存储', desc: '使用插件私有存储空间' },
-  'storage.shared': { name: '共享存储', desc: '访问跨插件共享存储' },
-  'window.create': { name: '创建窗口', desc: '创建新窗口或视图' },
-  'window.capture': { name: '屏幕截图', desc: '捕获屏幕内容' }
+function getPermissionName(permissionId: string): string {
+  const key = `plugin.permissions.registry.${permissionId}.name`
+  const translated = t(key)
+  return translated === key ? permissionId : translated
+}
+
+function getPermissionDesc(permissionId: string): string {
+  const key = `plugin.permissions.registry.${permissionId}.desc`
+  const translated = t(key)
+  return translated === key ? '' : translated
 }
 
 // Computed
@@ -74,14 +72,13 @@ const permissionList = computed(() => {
   const unique = [...new Set(all)]
 
   return unique.map((id) => {
-    const trans = permissionTranslations[id]
     const category = id.split('.')[0]
     const risk = getRisk(id)
 
     return {
       id,
-      name: trans?.name || id,
-      desc: trans?.desc || '',
+      name: getPermissionName(id),
+      desc: getPermissionDesc(id),
       category,
       risk,
       required: status.value!.required.includes(id),
@@ -91,14 +88,14 @@ const permissionList = computed(() => {
 })
 
 // Category definitions
-const categoryInfo: Record<string, { name: string; icon: string }> = {
-  fs: { name: '文件系统', icon: 'i-carbon-folder' },
-  clipboard: { name: '剪贴板', icon: 'i-carbon-copy' },
-  network: { name: '网络', icon: 'i-carbon-network-3' },
-  system: { name: '系统', icon: 'i-carbon-terminal' },
-  ai: { name: 'AI 能力', icon: 'i-carbon-bot' },
-  storage: { name: '存储', icon: 'i-carbon-data-base' },
-  window: { name: '窗口', icon: 'i-carbon-application' }
+const categoryInfo: Record<string, { nameKey: string; icon: string }> = {
+  fs: { nameKey: 'plugin.permissions.categories.fs', icon: 'i-carbon-folder' },
+  clipboard: { nameKey: 'plugin.permissions.categories.clipboard', icon: 'i-carbon-copy' },
+  network: { nameKey: 'plugin.permissions.categories.network', icon: 'i-carbon-network-3' },
+  system: { nameKey: 'plugin.permissions.categories.system', icon: 'i-carbon-terminal' },
+  ai: { nameKey: 'plugin.permissions.categories.ai', icon: 'i-carbon-bot' },
+  storage: { nameKey: 'plugin.permissions.categories.storage', icon: 'i-carbon-data-base' },
+  window: { nameKey: 'plugin.permissions.categories.window', icon: 'i-carbon-application' }
 }
 
 // Group permissions by category
@@ -115,11 +112,20 @@ const permissionCategories = computed(() => {
 
   return Object.entries(groups).map(([id, permissions]) => ({
     id,
-    name: categoryInfo[id]?.name || id,
+    name: categoryInfo[id] ? t(categoryInfo[id].nameKey) : id,
     icon: categoryInfo[id]?.icon || 'i-carbon-folder',
     permissions
   }))
 })
+
+const pluginShortcuts = computed(() =>
+  shortcuts.value
+    .filter(
+      (shortcut) =>
+        shortcut.type === ShortcutType.RENDERER && shortcut.meta?.author === props.plugin.name
+    )
+    .sort((a, b) => a.accelerator.localeCompare(b.accelerator))
+)
 
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
   const highRisk = ['fs.write', 'fs.execute', 'system.shell', 'ai.agents', 'window.capture']
@@ -129,6 +135,7 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
     'network.internet',
     'network.download',
     'system.tray',
+    'system.shortcut',
     'ai.advanced',
     'storage.shared'
   ]
@@ -150,6 +157,7 @@ function getPermissionIcon(permissionId: string): string {
     'system.shell': 'i-carbon-terminal',
     'system.notification': 'i-carbon-notification',
     'system.tray': 'i-carbon-overflow-menu-vertical',
+    'system.shortcut': 'i-carbon-keyboard',
     'ai.basic': 'i-carbon-bot',
     'ai.advanced': 'i-carbon-machine-learning',
     'ai.agents': 'i-carbon-user-multiple',
@@ -176,14 +184,55 @@ function getRiskTagType(
   }
 }
 
+function getShortcutTitle(shortcut: ShortcutWithStatus): string {
+  const meta = shortcut.meta as { description?: string; shortcutId?: string } | undefined
+  return meta?.description || meta?.shortcutId || shortcut.id
+}
+
+function getShortcutStatusLabel(shortcut: ShortcutWithStatus): string | null {
+  const status = shortcut.status
+  if (!status || status.state === 'active') {
+    return null
+  }
+  if (status.state === 'conflict') {
+    return status.reason === 'conflict-system'
+      ? t('plugin.permissions.shortcuts.status.conflictSystem')
+      : t('plugin.permissions.shortcuts.status.conflictPlugin')
+  }
+  if (status.reason === 'invalid') {
+    return t('plugin.permissions.shortcuts.status.invalid')
+  }
+  return t('plugin.permissions.shortcuts.status.unavailable')
+}
+
+function getShortcutStatusTagType(shortcut: ShortcutWithStatus): 'danger' | 'warning' | 'info' {
+  const status = shortcut.status
+  if (!status || status.state === 'active') return 'info'
+  if (status.state === 'conflict') return 'danger'
+  return 'warning'
+}
+
+function getShortcutWarningLabel(warning: ShortcutWarning): string {
+  switch (warning) {
+    case 'permission-missing':
+      return t('plugin.permissions.shortcuts.warning.permissionMissing')
+    case 'sdk-legacy':
+      return t('plugin.permissions.shortcuts.warning.legacySdk')
+    case 'missing-description':
+      return t('plugin.permissions.shortcuts.warning.missingDescription')
+    default:
+      return warning
+  }
+}
+
 function getRiskLabel(risk: 'low' | 'medium' | 'high'): string {
   switch (risk) {
     case 'low':
-      return '低'
+      return t('plugin.permissions.risk.low')
     case 'medium':
-      return '中'
+      return t('plugin.permissions.risk.medium')
     case 'high':
-      return '高'
+      return t('plugin.permissions.risk.high')
     default:
       return risk
   }
@@ -209,6 +258,33 @@ async function loadStatus() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadShortcuts() {
+  shortcutsLoading.value = true
+  try {
+    shortcuts.value = await shortconApi.getAll()
+  } catch (e) {
+    console.error('Failed to load shortcuts:', e)
+  } finally {
+    shortcutsLoading.value = false
+  }
+}
+
+async function updatePluginShortcut(id: string, newAccelerator: string): Promise<void> {
+  if (!id || !newAccelerator) return
+  const target = shortcuts.value.find((item) => item.id === id)
+  const previousValue = target?.accelerator
+
+  if (target) {
+    target.accelerator = newAccelerator
+  }
+
+  const success = await shortconApi.update(id, newAccelerator)
+  if (!success && target && previousValue) {
+    target.accelerator = previousValue
+  }
+  await loadShortcuts()
 }
 
 // Toggle permission
@@ -260,9 +336,18 @@ async function handleRevokeAll() {
 }
 
 // Watch plugin changes
-watch(() => props.plugin.name, loadStatus)
+watch(
+  () => props.plugin.name,
+  () => {
+    loadStatus()
+    loadShortcuts()
+  }
+)
 
-onMounted(loadStatus)
+onMounted(() => {
+  loadStatus()
+  loadShortcuts()
+})
 </script>
 
 <template>
@@ -270,21 +355,27 @@ onMounted(loadStatus)
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="i-ri-loader-4-line animate-spin text-2xl" />
-      <span>加载权限信息...</span>
+      <span>{{ t('plugin.permissions.loading') }}</span>
     </div>
 
     <!-- No Permissions -->
-    <ElEmpty v-else-if="!hasPermissions" description="此插件未声明任何权限" :image-size="80" />
+    <ElEmpty
+      v-else-if="!hasPermissions"
+      :description="t('plugin.permissions.empty')"
+      :image-size="80"
+    />
 
     <!-- Permission Content -->
     <template v-else>
       <!-- Status Overview -->
       <TuffGroupBlock
-        name="权限状态"
+        :name="t('plugin.permissions.statusTitle')"
         :description="
           status?.missingRequired.length === 0
-            ? '所有必需权限已授予'
-            : `缺少 ${status?.missingRequired.length} 个必需权限`
+            ? t('plugin.permissions.statusGranted')
+            : t('plugin.permissions.statusMissing', {
+                count: status?.missingRequired.length || 0
+              })
         "
         :default-icon="
           status?.missingRequired.length === 0
@@ -298,21 +389,21 @@ onMounted(loadStatus)
         "
         memory-name="plugin-permissions-status"
       >
-        <TuffBlockLine title="必需权限">
+        <TuffBlockLine :title="t('plugin.permissions.required')">
           <template #description>
             <ElTag type="danger" effect="light" size="small">
               {{ status?.required.length || 0 }}
             </ElTag>
           </template>
         </TuffBlockLine>
-        <TuffBlockLine title="可选权限">
+        <TuffBlockLine :title="t('plugin.permissions.optional')">
           <template #description>
             <ElTag type="info" effect="light" size="small">
               {{ status?.optional.length || 0 }}
             </ElTag>
           </template>
         </TuffBlockLine>
-        <TuffBlockLine title="已授予">
+        <TuffBlockLine :title="t('plugin.permissions.granted')">
           <template #description>
             <ElTag type="success" effect="light" size="small">
               {{ status?.granted.length || 0 }}
@@ -322,19 +413,19 @@ onMounted(loadStatus)
 
         <!-- Actions -->
         <TuffBlockSlot
-          title="权限操作"
-          description="刷新或批量管理权限"
+          :title="t('plugin.permissions.actionsTitle')"
+          :description="t('plugin.permissions.actionsDesc')"
           default-icon="i-carbon-settings"
           active-icon="i-carbon-settings"
         >
           <div class="flex items-center gap-2">
             <TxButton variant="flat" @click="loadStatus">
               <i class="i-ri-refresh-line" />
-              <span>刷新</span>
+              <span>{{ t('plugin.permissions.actions.refresh') }}</span>
             </TxButton>
             <TxButton v-if="status?.missingRequired.length" variant="flat" @click="handleGrantAll">
               <i class="i-ri-check-double-line" />
-              <span>授予全部</span>
+              <span>{{ t('plugin.permissions.actions.grantAll') }}</span>
             </TxButton>
             <TxButton
               v-if="status?.granted.length"
@@ -343,7 +434,7 @@ onMounted(loadStatus)
               @click="handleRevokeAll"
             >
               <i class="i-ri-close-line" />
-              <span>撤销全部</span>
+              <span>{{ t('plugin.permissions.actions.revokeAll') }}</span>
             </TxButton>
           </div>
         </TuffBlockSlot>
@@ -352,19 +443,67 @@ onMounted(loadStatus)
       <!-- SDK Warning -->
       <TuffGroupBlock
         v-if="status?.warning && !status?.enforcePermissions"
-        name="SDK 版本警告"
-        description="此插件使用旧版 SDK，权限校验已跳过"
+        :name="t('plugin.permissions.legacyTitle')"
+        :description="t('plugin.permissions.legacyWarning')"
         default-icon="i-carbon-warning"
         active-icon="i-carbon-warning"
         memory-name="plugin-permissions-sdk-warning"
       >
-        <TuffBlockLine title="建议">
+        <TuffBlockLine :title="t('plugin.permissions.recommendationsTitle')">
           <template #description>
-            <span class="text-[var(--el-color-warning)]"
-              >升级到 sdkapi >= 251212 以启用权限校验</span
-            >
+            <span class="text-[var(--el-color-warning)]">{{
+              t('plugin.permissions.legacyHint', { version: 251212 })
+            }}</span>
           </template>
         </TuffBlockLine>
+      </TuffGroupBlock>
+
+      <TuffGroupBlock
+        :name="t('plugin.permissions.shortcuts.title')"
+        :description="t('plugin.permissions.shortcuts.desc')"
+        default-icon="i-carbon-keyboard"
+        active-icon="i-carbon-keyboard"
+        memory-name="plugin-permissions-shortcuts"
+      >
+        <div v-if="shortcutsLoading" class="PluginShortcuts-Loading">
+          {{ t('plugin.permissions.shortcuts.loading') }}
+        </div>
+        <ElEmpty
+          v-else-if="pluginShortcuts.length === 0"
+          :description="t('plugin.permissions.shortcuts.empty')"
+          :image-size="80"
+        />
+        <div v-else class="PluginShortcuts-List">
+          <div v-for="shortcut in pluginShortcuts" :key="shortcut.id" class="PluginShortcuts-Item">
+            <div class="PluginShortcuts-Info">
+              <div class="PluginShortcuts-Title">
+                {{ getShortcutTitle(shortcut) }}
+              </div>
+              <div v-if="getShortcutStatusLabel(shortcut)" class="PluginShortcuts-Status">
+                <ElTag :type="getShortcutStatusTagType(shortcut)" effect="light" size="small">
+                  {{ getShortcutStatusLabel(shortcut) }}
+                </ElTag>
+              </div>
+              <div v-if="(shortcut.status?.warnings || []).length" class="PluginShortcuts-Warnings">
+                <ElTag
+                  v-for="warning in shortcut.status?.warnings || []"
+                  :key="warning"
+                  type="warning"
+                  effect="light"
+                  size="small"
+                >
+                  {{ getShortcutWarningLabel(warning) }}
+                </ElTag>
+              </div>
+            </div>
+            <FlatKeyInput
+              :model-value="shortcut.accelerator"
+              @update:model-value="
+                (newValue) => updatePluginShortcut(shortcut.id, String(newValue))
+              "
+            />
+          </div>
+        </div>
       </TuffGroupBlock>
 
       <!-- Permission List by Category -->
@@ -372,7 +511,7 @@ onMounted(loadStatus)
         v-for="category in permissionCategories"
         :key="category.id"
         :name="category.name"
-        :description="`${category.permissions.length} 个权限`"
+        :description="t('plugin.permissions.categoryDesc', { count: category.permissions.length })"
         :default-icon="category.icon"
         :active-icon="category.icon"
         :memory-name="`plugin-permissions-${category.id}`"
@@ -388,7 +527,9 @@ onMounted(loadStatus)
           @change="(val) => handleToggle(perm.id, val)"
         >
           <template #tags>
-            <ElTag v-if="perm.required" type="danger" effect="light" size="small"> 必需 </ElTag>
+            <ElTag v-if="perm.required" type="danger" effect="light" size="small">
+              {{ t('plugin.permissions.requiredTag') }}
+            </ElTag>
             <ElTag :type="getRiskTagType(perm.risk)" effect="light" size="small">
               {{ getRiskLabel(perm.risk) }}
             </ElTag>
@@ -417,5 +558,51 @@ onMounted(loadStatus)
 
 .danger {
   color: var(--el-color-danger) !important;
+}
+
+.PluginShortcuts-Loading {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  padding: 6px 0;
+}
+
+.PluginShortcuts-List {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.PluginShortcuts-Item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.PluginShortcuts-Item:last-child {
+  border-bottom: none;
+}
+
+.PluginShortcuts-Info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.PluginShortcuts-Title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.PluginShortcuts-Status,
+.PluginShortcuts-Warnings {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 </style>

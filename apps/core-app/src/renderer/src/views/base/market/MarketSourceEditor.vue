@@ -114,6 +114,7 @@ function handleAdd() {
             class="MarketSourceEditor-Content-Item Item"
           >
             <div class="handle" />
+            <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="GhostTitle" v-html="item.name" />
 
             <div class="Item-Container">

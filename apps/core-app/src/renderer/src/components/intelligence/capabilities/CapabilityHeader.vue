@@ -1,9 +1,15 @@
 <script lang="ts" setup>
 import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
+import { computed } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   capability: AISDKCapabilityConfig
 }>()
+
+const capabilityType = computed(() => {
+  const meta = props.capability.metadata as { type?: string } | undefined
+  return typeof meta?.type === 'string' ? meta.type : 'capability'
+})
 </script>
 
 <template>
@@ -11,7 +17,7 @@ defineProps<{
     <div class="capability-header__content">
       <div class="capability-header__meta">
         <span class="capability-header__id">{{ capability.id }}</span>
-        <span class="capability-header__type-badge">{{ (capability as any).type || 'capability' }}</span>
+        <span class="capability-header__type-badge">{{ capabilityType }}</span>
       </div>
       <h1 class="capability-header__title">
         {{ capability.label || capability.id }}
@@ -70,7 +76,11 @@ defineProps<{
   margin: 0 0 0.875rem 0;
   color: var(--el-text-color-primary);
   line-height: 1.2;
-  background: linear-gradient(135deg, var(--el-text-color-primary) 0%, var(--el-text-color-regular) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--el-text-color-primary) 0%,
+    var(--el-text-color-regular) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

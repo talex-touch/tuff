@@ -10,6 +10,7 @@ import { TxAutoSizer, TxSpinner } from '@talex-touch/tuffex'
  * - Shows loading, empty, and plugin list states
  */
 import gsap from 'gsap'
+import type { ComponentPublicInstance } from 'vue'
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMarketInstall } from '~/composables/market/useMarketInstall'
@@ -38,7 +39,7 @@ const emit = defineEmits<{
 const { getInstallTask } = useMarketInstall()
 
 const { t } = useI18n()
-const gridRef = ref<HTMLElement | null>(null)
+const gridRef = ref<HTMLElement | ComponentPublicInstance | null>(null)
 const isTransitioning = ref(false)
 const enterStagger = 0.04
 const flipStagger = 0.02
@@ -93,7 +94,9 @@ watch(
 
     isTransitioning.value = true
     const gridEl =
-      gridRef.value instanceof HTMLElement ? gridRef.value : (gridRef.value as any)?.$el
+      gridRef.value instanceof HTMLElement
+        ? gridRef.value
+        : (gridRef.value as ComponentPublicInstance | null)?.$el
     if (!gridEl) {
       isTransitioning.value = false
       return

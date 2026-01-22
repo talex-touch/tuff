@@ -22,7 +22,7 @@ const { t } = useI18n()
 
 const visible = computed({
   get: () => props.modelValue,
-  set: value => emit('update:modelValue', value),
+  set: (value) => emit('update:modelValue', value)
 })
 
 function handleClose() {
@@ -41,7 +41,9 @@ function handleShowInFolder() {
   }
 }
 
-function getStatusType(status: DownloadStatus): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+function getStatusType(
+  status: DownloadStatus
+): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
   switch (status) {
     case DownloadStatus.DOWNLOADING:
       return 'primary'
@@ -63,7 +65,7 @@ function getStatusText(status: DownloadStatus): string {
     [DownloadStatus.COMPLETED]: t('download.status_completed'),
     [DownloadStatus.FAILED]: t('download.status_failed'),
     [DownloadStatus.PAUSED]: t('download.status_paused'),
-    [DownloadStatus.CANCELLED]: t('download.status_cancelled'),
+    [DownloadStatus.CANCELLED]: t('download.status_cancelled')
   }
   return statusMap[status] || status
 }
@@ -73,42 +75,33 @@ function getModuleName(module: DownloadModule): string {
     [DownloadModule.APP_UPDATE]: t('download.module_app_update'),
     [DownloadModule.PLUGIN_INSTALL]: t('download.module_plugin_install'),
     [DownloadModule.RESOURCE_DOWNLOAD]: t('download.module_resource_download'),
-    [DownloadModule.USER_MANUAL]: t('download.module_user_manual'),
+    [DownloadModule.USER_MANUAL]: t('download.module_user_manual')
   }
   return moduleMap[module] || module
 }
 
 function getPriorityType(priority: number): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
-  if (priority >= DownloadPriority.CRITICAL)
-    return 'danger'
-  if (priority >= DownloadPriority.HIGH)
-    return 'warning'
-  if (priority >= DownloadPriority.NORMAL)
-    return 'primary'
+  if (priority >= DownloadPriority.CRITICAL) return 'danger'
+  if (priority >= DownloadPriority.HIGH) return 'warning'
+  if (priority >= DownloadPriority.NORMAL) return 'primary'
   return 'info'
 }
 
 function getPriorityText(priority: number): string {
-  if (priority >= DownloadPriority.CRITICAL)
-    return t('download.priority_critical')
-  if (priority >= DownloadPriority.HIGH)
-    return t('download.priority_high')
-  if (priority >= DownloadPriority.NORMAL)
-    return t('download.priority_normal')
+  if (priority >= DownloadPriority.CRITICAL) return t('download.priority_critical')
+  if (priority >= DownloadPriority.HIGH) return t('download.priority_high')
+  if (priority >= DownloadPriority.NORMAL) return t('download.priority_normal')
   return t('download.priority_low')
 }
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-  }
-  else if (bytes >= 1024 * 1024) {
+  } else if (bytes >= 1024 * 1024) {
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-  }
-  else if (bytes >= 1024) {
+  } else if (bytes >= 1024) {
     return `${(bytes / 1024).toFixed(2)} KB`
-  }
-  else {
+  } else {
     return `${bytes} B`
   }
 }
@@ -116,11 +109,9 @@ function formatSize(bytes: number): string {
 function formatSpeed(bytesPerSecond: number): string {
   if (bytesPerSecond >= 1024 * 1024) {
     return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`
-  }
-  else if (bytesPerSecond >= 1024) {
+  } else if (bytesPerSecond >= 1024) {
     return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`
-  }
-  else {
+  } else {
     return `${bytesPerSecond.toFixed(0)} B/s`
   }
 }
@@ -128,20 +119,17 @@ function formatSpeed(bytesPerSecond: number): string {
 function formatRemainingTime(seconds: number): string {
   if (seconds < 60) {
     return `${Math.round(seconds)}${t('common.seconds')}`
-  }
-  else if (seconds < 3600) {
+  } else if (seconds < 3600) {
     const minutes = Math.round(seconds / 60)
     return `${minutes}${t('common.minutes')}`
-  }
-  else {
+  } else {
     const hours = Math.round(seconds / 3600)
     return `${hours}${t('common.hours')}`
   }
 }
 
 function formatDate(date: Date | number | undefined): string {
-  if (!date)
-    return '-'
+  if (!date) return '-'
   const d = typeof date === 'number' ? new Date(date) : date
   return d.toLocaleString()
 }
@@ -203,7 +191,10 @@ function formatDate(date: Date | number | undefined): string {
           <span class="detail-label">{{ $t('download.speed') }}:</span>
           <span class="detail-value">{{ formatSpeed(task.progress.speed || 0) }}</span>
         </div>
-        <div v-if="task.status === 'downloading' && task.progress.remainingTime" class="detail-item">
+        <div
+          v-if="task.status === 'downloading' && task.progress.remainingTime"
+          class="detail-item"
+        >
           <span class="detail-label">{{ $t('download.remaining_time') }}:</span>
           <span class="detail-value">{{ formatRemainingTime(task.progress.remainingTime) }}</span>
         </div>
@@ -220,7 +211,9 @@ function formatDate(date: Date | number | undefined): string {
         </div>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.destination') }}:</span>
-          <span class="detail-value path-text" :title="task.destination">{{ task.destination }}</span>
+          <span class="detail-value path-text" :title="task.destination">{{
+            task.destination
+          }}</span>
         </div>
       </div>
 
@@ -264,18 +257,11 @@ function formatDate(date: Date | number | undefined): string {
         <el-button @click="handleClose">
           {{ $t('common.close') }}
         </el-button>
-        <el-button
-          v-if="task?.status === 'completed'"
-          type="primary"
-          @click="handleOpenFile"
-        >
+        <el-button v-if="task?.status === 'completed'" type="primary" @click="handleOpenFile">
           <el-icon><FolderOpened /></el-icon>
           {{ $t('download.open_file') }}
         </el-button>
-        <el-button
-          v-if="task?.status === 'completed'"
-          @click="handleShowInFolder"
-        >
+        <el-button v-if="task?.status === 'completed'" @click="handleShowInFolder">
           <el-icon><Folder /></el-icon>
           {{ $t('download.show_in_folder') }}
         </el-button>

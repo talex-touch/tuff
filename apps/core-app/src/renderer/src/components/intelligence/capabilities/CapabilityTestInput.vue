@@ -24,7 +24,7 @@ const emits = defineEmits<{
       providerId: string
       model?: string
       promptTemplate?: string
-      promptVariables?: Record<string, any>
+      promptVariables?: Record<string, unknown>
       userInput?: string
     }
   ]
@@ -61,7 +61,7 @@ const testButtonText = computed(() => {
 function handleTest(): void {
   if (!canTest.value) return
 
-  let promptVariables: Record<string, any> | undefined
+  let promptVariables: Record<string, unknown> | undefined
   const raw = promptVariablesText.value.trim()
   if (raw) {
     try {

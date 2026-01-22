@@ -144,7 +144,7 @@ function escapeHtml(str: string): string {
 }
 
 const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
-const recommendation = computed(() => (props.item.meta as any)?.recommendation)
+const recommendation = computed(() => props.item.meta?.recommendation)
 </script>
 
 <template>
@@ -185,6 +185,7 @@ const recommendation = computed(() => (props.item.meta as any)?.recommendation)
     </div>
 
     <div class="flex-1 overflow-hidden">
+      <!-- eslint-disable-next-line vue/no-v-html -->
       <h5
         class="text-sm font-semibold truncate"
         v-html="

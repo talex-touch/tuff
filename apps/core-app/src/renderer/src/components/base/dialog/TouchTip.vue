@@ -40,7 +40,7 @@ interface Props {
   /** Dialog message */
   message?: string
   /** Array of buttons */
-  buttons: Button[]
+  buttons?: Button[]
   /** Close callback function */
   close: () => void
 }
@@ -51,7 +51,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
-  buttons: () => [],
+  buttons: () => []
 })
 
 // Refs
@@ -73,12 +73,12 @@ watchEffect(() => {
       content: btn.content,
       type: btn.type,
       onClick: btn.onClick,
-      loading: false, // Initialize loading as false
+      loading: false // Initialize loading as false
     }
 
     // Create reactive object
     const obj = {
-      value: buttonState,
+      value: buttonState
     }
 
     // Handle loading callback
@@ -105,8 +105,7 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
 
   await sleep(200)
 
-  if (await btn.value.onClick())
-    await forClose()
+  if (await btn.value.onClick()) await forClose()
 
   btn.value.loading = false
 }
@@ -116,7 +115,7 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
  */
 function listener(): void {
   window.scrollTo({
-    top: 0,
+    top: 0
   })
 }
 
@@ -125,8 +124,7 @@ function listener(): void {
  */
 async function forClose(): Promise<void> {
   const el = wholeDom.value
-  if (!el)
-    return
+  if (!el) return
 
   const style = el.style
 
@@ -195,6 +193,7 @@ onUnmounted(() => {
       <h1 id="dialog-title" v-text="title" />
 
       <!-- Dialog message content with line breaks -->
+      <!-- eslint-disable-next-line vue/no-v-html -->
       <span
         id="dialog-message"
         class="TDialogTip-Content"
@@ -213,7 +212,7 @@ onUnmounted(() => {
             'warn-tip': btn.value?.type === 'warning',
             'error-tip': btn.value?.type === 'error',
             'success-tip': btn.value?.type === 'success',
-            'loading-tip': btn.value.loading,
+            'loading-tip': btn.value.loading
           }"
           class="TDialogTip-Btn-Item"
           role="button"

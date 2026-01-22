@@ -54,6 +54,31 @@ export interface AppVersion {
   patch: number
 }
 
+type ReleaseAsset = GitHubRelease['assets'][number]
+
+type UpdateTransportResponse<T> = { success: true; data: T } | { success: false; error?: string }
+
+type UpdateStatusInfo = {
+  enabled: boolean
+  frequency: UpdateSettings['frequency']
+  source: UpdateSettings['source']
+  channel: AppPreviewChannel
+  polling: boolean
+  lastCheck: number | null
+}
+
+type UpdateCheckPayload = { force?: boolean }
+type UpdateSettingsPayload = { settings: Partial<UpdateSettings> }
+type UpdateCachedReleasePayload = { channel?: AppPreviewChannel }
+type UpdateRecordActionPayload = { tag: string; action: UpdateUserAction }
+
+type UpdateAvailablePayload = {
+  hasUpdate: boolean
+  release?: GitHubRelease
+  source?: string
+  channel?: AppPreviewChannel
+}
+
 /**
  * Simplified application update manager that communicates with main process
  */
@@ -152,7 +177,7 @@ export class AppUpdate {
    */
   public async check(force = false): Promise<UpdateCheckResult> {
     try {
-      const response = await this.sendRequest('update:check', { force })
+      const response = await this.sendRequest<UpdateCheckResult>('update:check', { force })
 
       if (response.success) {
         return response.data
@@ -187,8 +212,8 @@ export class AppUpdate {
     const currentPlatform = process.platform
     const currentArch = process.arch
 
-    const asset = assets.find((a: unknown) => {
-      const name = (a as any).name.toLowerCase()
+    const asset = assets.find((a: ReleaseAsset) => {
+      const name = a.name.toLowerCase()
       const platformMatch =
         (currentPlatform === 'win32' && (name.includes('win') || name.includes('.exe'))) ||
         (currentPlatform === 'darwin' && (name.includes('mac') || name.includes('.dmg'))) ||
@@ -212,9 +237,9 @@ export class AppUpdate {
     }
 
     await addDownloadTask({
-      url: (asset as any).url,
+      url: asset.url,
       destination,
-      filename: (asset as any).name,
+      filename: asset.name,
       priority: DownloadPriority.CRITICAL,
       module: DownloadModule.APP_UPDATE,
       metadata: {
@@ -224,7 +249,7 @@ export class AppUpdate {
         platform: currentPlatform,
         arch: currentArch
       },
-      checksum: (asset as any).checksum
+      checksum: asset.checksum
     })
   }
 
@@ -267,9 +292,9 @@ export class AppUpdate {
    */
   public async getSettings(): Promise<UpdateSettings> {
     try {
-      const response = await this.sendRequest('update:get-settings')
+      const response = await this.sendRequest<UpdateSettings>('update:get-settings')
       if (response.success) {
-        const serverSettings = response.data as UpdateSettings
+        const serverSettings = response.data
         serverSettings.frequency = this.normalizeFrequencyLabel(serverSettings.frequency)
         this.settings = serverSettings
       }
@@ -300,7 +325,7 @@ export class AppUpdate {
         payload.frequency = this.normalizeFrequencyLabel(payload.frequency)
       }
 
-      const response = await this.sendRequest('update:update-settings', payload)
+      const response = await this.sendRequest<void>('update:update-settings', payload)
       if (response.success) {
         this.settings = { ...this.settings, ...payload }
       } else {
@@ -317,7 +342,7 @@ export class AppUpdate {
    */
   public async clearCache(): Promise<void> {
     try {
-      const response = await this.sendRequest('update:clear-cache')
+      const response = await this.sendRequest<void>('update:clear-cache')
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear cache')
       }
@@ -330,9 +355,9 @@ export class AppUpdate {
   /**
    * Get update status from main process
    */
-  public async getStatus(): Promise<any> {
+  public async getStatus(): Promise<UpdateStatusInfo> {
     try {
-      const response = await this.sendRequest('update:get-status')
+      const response = await this.sendRequest<UpdateStatusInfo>('update:get-status')
       if (response.success) {
         return response.data
       } else {
@@ -346,7 +371,10 @@ export class AppUpdate {
 
   public async getCachedRelease(channel?: AppPreviewChannel): Promise<CachedUpdateRecord | null> {
     try {
-      const response = await this.sendRequest('update:get-cached-release', { channel })
+      const response = await this.sendRequest<CachedUpdateRecord | null>(
+        'update:get-cached-release',
+        { channel }
+      )
       if (response.success) {
         return (response.data as CachedUpdateRecord) || null
       }
@@ -359,7 +387,7 @@ export class AppUpdate {
 
   public async recordAction(tag: string, action: UpdateUserAction): Promise<void> {
     try {
-      const response = await this.sendRequest('update:record-action', { tag, action })
+      const response = await this.sendRequest<void>('update:record-action', { tag, action })
       if (!response.success) {
         throw new Error(response.error || 'Failed to record action')
       }
@@ -369,44 +397,62 @@ export class AppUpdate {
     }
   }
 
-  private async sendRequest(channel: string, payload?: unknown): Promise<any> {
+  private async sendRequest<T>(
+    channel: string,
+    payload?: unknown
+  ): Promise<UpdateTransportResponse<T>> {
     try {
       switch (channel) {
-        case 'update:check':
-          return await withTimeout(
-            this.transport.send(UpdateEvents.check, (payload || {}) as any),
+        case 'update:check': {
+          const requestPayload: UpdateCheckPayload =
+            payload && typeof payload === 'object' ? (payload as UpdateCheckPayload) : {}
+          return (await withTimeout(
+            this.transport.send(UpdateEvents.check, requestPayload),
             AppUpdate.CHANNEL_TIMEOUT
-          )
+          )) as UpdateTransportResponse<T>
+        }
         case 'update:get-settings':
-          return await withTimeout(
+          return (await withTimeout(
             this.transport.send(UpdateEvents.getSettings),
             AppUpdate.CHANNEL_TIMEOUT
-          )
-        case 'update:update-settings':
-          return await withTimeout(
-            this.transport.send(UpdateEvents.updateSettings, { settings: payload as any }),
+          )) as UpdateTransportResponse<T>
+        case 'update:update-settings': {
+          const settings =
+            payload && typeof payload === 'object' ? (payload as Partial<UpdateSettings>) : {}
+          const requestPayload: UpdateSettingsPayload = { settings }
+          return (await withTimeout(
+            this.transport.send(UpdateEvents.updateSettings, requestPayload),
             AppUpdate.CHANNEL_TIMEOUT
-          )
+          )) as UpdateTransportResponse<T>
+        }
         case 'update:clear-cache':
-          return await withTimeout(
+          return (await withTimeout(
             this.transport.send(UpdateEvents.clearCache),
             AppUpdate.CHANNEL_TIMEOUT
-          )
+          )) as UpdateTransportResponse<T>
         case 'update:get-status':
-          return await withTimeout(
+          return (await withTimeout(
             this.transport.send(UpdateEvents.getStatus),
             AppUpdate.CHANNEL_TIMEOUT
-          )
-        case 'update:get-cached-release':
-          return await withTimeout(
-            this.transport.send(UpdateEvents.getCachedRelease, (payload || {}) as any),
+          )) as UpdateTransportResponse<T>
+        case 'update:get-cached-release': {
+          const requestPayload: UpdateCachedReleasePayload =
+            payload && typeof payload === 'object' ? (payload as UpdateCachedReleasePayload) : {}
+          return (await withTimeout(
+            this.transport.send(UpdateEvents.getCachedRelease, requestPayload),
             AppUpdate.CHANNEL_TIMEOUT
-          )
-        case 'update:record-action':
-          return await withTimeout(
-            this.transport.send(UpdateEvents.recordAction, (payload || {}) as any),
+          )) as UpdateTransportResponse<T>
+        }
+        case 'update:record-action': {
+          if (!payload || typeof payload !== 'object') {
+            throw new Error('Invalid update action payload')
+          }
+          const requestPayload = payload as UpdateRecordActionPayload
+          return (await withTimeout(
+            this.transport.send(UpdateEvents.recordAction, requestPayload),
             AppUpdate.CHANNEL_TIMEOUT
-          )
+          )) as UpdateTransportResponse<T>
+        }
         default:
           throw new Error(`Unsupported update channel: ${channel}`)
       }
@@ -625,15 +671,15 @@ export function useApplicationUpgrade() {
     try {
       const transport = useTuffTransport()
 
-      transport.on(UpdateEvents.available, (data) => {
+      transport.on(UpdateEvents.available, (data: UpdateAvailablePayload) => {
         console.log('[useApplicationUpgrade] Received update notification:', data)
 
-        if ((data as any).hasUpdate && (data as any).release) {
+        if (data.hasUpdate && data.release) {
           appStates.hasUpdate = true
 
           blowMention('New Version Available', () => {
             return h(AppUpdateView, {
-              release: (data as any).release as unknown as Record<string, unknown>
+              release: data.release as unknown as Record<string, unknown>
             })
           })
         }

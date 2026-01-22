@@ -9,14 +9,8 @@ const versions = reactive({ ...window.electron.process.versions })
 
 <template>
   <ul class="versions">
-    <li class="electron-version">
-      {{ t('versions.electron') }} v{{ versions.electron }}
-    </li>
-    <li class="chrome-version">
-      {{ t('versions.chrome') }} v{{ versions.chrome }}
-    </li>
-    <li class="node-version">
-      {{ t('versions.node') }} v{{ versions.node }}
-    </li>
+    <li class="electron-version">{{ t('versions.electron') }} v{{ versions.electron }}</li>
+    <li class="chrome-version">{{ t('versions.chrome') }} v{{ versions.chrome }}</li>
+    <li class="node-version">{{ t('versions.node') }} v{{ versions.node }}</li>
   </ul>
 </template>

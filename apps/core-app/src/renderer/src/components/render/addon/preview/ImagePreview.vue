@@ -8,7 +8,7 @@ defineProps<{
 
 <template>
   <div class="ImagePreview">
-    <img :src="`tfile://${item.meta?.file?.path}`">
+    <img :src="`tfile://${item.meta?.file?.path}`" />
   </div>
 </template>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts" name="TagSection">
 import type { IBoxOptions } from '../../../modules/box/adapter'
+import type { IClipboardOptions } from '../../../modules/box/adapter/hooks/types'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BoxMode } from '../../../modules/box/adapter'
@@ -8,7 +9,7 @@ import UnifiedFileTag from './UnifiedFileTag.vue'
 
 const props = defineProps<{
   boxOptions: IBoxOptions
-  clipboardOptions: any
+  clipboardOptions: IClipboardOptions
 }>()
 
 const { t } = useI18n()
@@ -21,6 +22,19 @@ const TAG_LABEL_KEYS: Record<string, string> = {
   account: 'tagSection.tags.account',
   email: 'tagSection.tags.email'
 }
+
+type ClipboardItem = NonNullable<IClipboardOptions['last']>
+type ActiveTag =
+  | { type: 'clipboard-image'; data: ClipboardItem }
+  | {
+      type: 'file'
+      iconPath: string | null
+      paths: string[] | null
+      clipboardData: ClipboardItem | null
+    }
+  | { type: 'clipboard-text'; data: ClipboardItem }
+  | { type: 'command' }
+  | null
 
 // Truncate clipboard content for display (text only)
 const clipboardPreview = computed(() => {
@@ -84,7 +98,7 @@ const clipboardTagChips = computed(() => {
 })
 
 // Determine which tag to show based on priority: image > file > text
-const activeTag = computed(() => {
+const activeTag = computed<ActiveTag>(() => {
   // Priority 1: Image (clipboard image)
   if (props.clipboardOptions.last?.type === 'image') {
     return { type: 'clipboard-image', data: props.clipboardOptions.last }
@@ -94,7 +108,7 @@ const activeTag = computed(() => {
   if (props.boxOptions.mode === BoxMode.FILE && props.boxOptions.file?.paths?.length > 0) {
     return {
       type: 'file',
-      iconPath: props.boxOptions.file.iconPath,
+      iconPath: props.boxOptions.file.iconPath ?? null,
       paths: props.boxOptions.file.paths,
       clipboardData: null
     }

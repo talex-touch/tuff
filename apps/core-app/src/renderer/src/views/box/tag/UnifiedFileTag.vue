@@ -1,6 +1,7 @@
 <script name="UnifiedFileTag" setup lang="ts">
 import path from 'path-browserify'
 import { computed } from 'vue'
+import type { IClipboardItem } from '../../../modules/box/adapter/hooks/types'
 
 /**
  * Unified file tag component that handles both FILE mode and clipboard files
@@ -12,7 +13,7 @@ const props = defineProps<{
   /** Icon path for FILE mode */
   iconPath?: string | null
   /** Clipboard data object (clipboard files) */
-  clipboardData?: any | null
+  clipboardData?: IClipboardItem | null
 }>()
 
 /**

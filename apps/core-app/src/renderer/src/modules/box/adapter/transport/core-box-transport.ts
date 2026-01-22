@@ -18,10 +18,12 @@ export function createCoreBoxTransport<TPayload, TResponse = void>(
   const { event, debounceMs, onError } = options
   const eventName = event.toEventName()
 
-  const maybeDebounce = <T extends (...args: any[]) => void>(fn: T): T => {
+  const maybeDebounce = <Args extends unknown[]>(
+    fn: (...args: Args) => void
+  ): ((...args: Args) => void) => {
     if (!debounceMs) return fn
 
-    return useDebounceFn(fn, debounceMs) as unknown as T
+    return useDebounceFn(fn, debounceMs) as unknown as (...args: Args) => void
   }
 
   const emit = maybeDebounce((payload: TPayload) => {
