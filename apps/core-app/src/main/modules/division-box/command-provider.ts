@@ -11,6 +11,12 @@ import { TuffInputType } from '@talex-touch/utils'
 import { DivisionBoxManager } from './manager'
 import { shortcutTriggerManager } from './shortcut-trigger'
 
+type DivisionBoxCommandMeta = NonNullable<TuffItem['meta']> & {
+  command?: 'show-active-sessions'
+  mappingId?: string
+  config?: import('./shortcut-trigger').ShortcutMapping['config']
+}
+
 /**
  * DivisionBoxCommandProvider
  *
@@ -89,7 +95,7 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
         ],
         meta: {
           command: 'show-active-sessions'
-        } as any
+        } as DivisionBoxCommandMeta
       })
     }
 
@@ -152,7 +158,7 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
       meta: {
         mappingId: mapping.id,
         config
-      } as any
+      } as DivisionBoxCommandMeta
     }
   }
 

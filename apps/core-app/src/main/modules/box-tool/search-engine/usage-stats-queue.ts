@@ -44,14 +44,14 @@ export class UsageStatsQueue {
     sourceId: string,
     itemId: string,
     sourceType: string,
-    type: 'search' | 'execute' | 'cancel',
+    type: 'search' | 'execute' | 'cancel'
   ): void {
     const operation: IncrementOperation = {
       sourceId,
       itemId,
       sourceType,
       type,
-      timestamp: new Date(),
+      timestamp: new Date()
     }
 
     const key = this.getQueueKey(operation)
@@ -163,7 +163,7 @@ export class UsageStatsQueue {
           cancelCount,
           lastSearched,
           lastExecuted,
-          lastCancelled,
+          lastCancelled
         })
       }
 
@@ -175,7 +175,7 @@ export class UsageStatsQueue {
             .select()
             .from(itemUsageStats)
             .where(
-              sql`${itemUsageStats.sourceId} = ${upsert.sourceId} AND ${itemUsageStats.itemId} = ${upsert.itemId}`,
+              sql`${itemUsageStats.sourceId} = ${upsert.sourceId} AND ${itemUsageStats.itemId} = ${upsert.itemId}`
             )
             .get()
 
@@ -188,27 +188,26 @@ export class UsageStatsQueue {
                 executeCount: sql`${itemUsageStats.executeCount} + ${upsert.executeCount}`,
                 cancelCount: sql`${itemUsageStats.cancelCount} + ${upsert.cancelCount}`,
                 lastSearched:
-                  upsert.lastSearched
-                  && (!existing.lastSearched || upsert.lastSearched > existing.lastSearched)
+                  upsert.lastSearched &&
+                  (!existing.lastSearched || upsert.lastSearched > existing.lastSearched)
                     ? upsert.lastSearched
                     : existing.lastSearched,
                 lastExecuted:
-                  upsert.lastExecuted
-                  && (!existing.lastExecuted || upsert.lastExecuted > existing.lastExecuted)
+                  upsert.lastExecuted &&
+                  (!existing.lastExecuted || upsert.lastExecuted > existing.lastExecuted)
                     ? upsert.lastExecuted
                     : existing.lastExecuted,
                 lastCancelled:
-                  upsert.lastCancelled
-                  && (!existing.lastCancelled || upsert.lastCancelled > existing.lastCancelled)
+                  upsert.lastCancelled &&
+                  (!existing.lastCancelled || upsert.lastCancelled > existing.lastCancelled)
                     ? upsert.lastCancelled
                     : existing.lastCancelled,
-                updatedAt: new Date(),
+                updatedAt: new Date()
               })
               .where(
-                sql`${itemUsageStats.sourceId} = ${upsert.sourceId} AND ${itemUsageStats.itemId} = ${upsert.itemId}`,
+                sql`${itemUsageStats.sourceId} = ${upsert.sourceId} AND ${itemUsageStats.itemId} = ${upsert.itemId}`
               )
-          }
-          else {
+          } else {
             // Insert new record
             await tx.insert(itemUsageStats).values({
               sourceId: upsert.sourceId,
@@ -221,22 +220,20 @@ export class UsageStatsQueue {
               lastExecuted: upsert.lastExecuted,
               lastCancelled: upsert.lastCancelled,
               createdAt: new Date(),
-              updatedAt: new Date(),
+              updatedAt: new Date()
             })
           }
         }
       })
 
       console.debug(
-        `[UsageStatsQueue] Flushed ${operations.length} operations (${upserts.length} unique items)`,
+        `[UsageStatsQueue] Flushed ${operations.length} operations (${upserts.length} unique items)`
       )
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[UsageStatsQueue] Failed to flush queue:', error)
       // Re-queue operations on failure (optional: could implement retry logic)
       throw error
-    }
-    finally {
+    } finally {
       this.isFlushing = false
 
       // If there are new operations queued during flush, schedule another flush

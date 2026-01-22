@@ -26,11 +26,45 @@ const pluginLogSubscribeEvent = defineRawEvent<{ pluginName: string }, void>('pl
 const pluginLogUnsubscribeEvent = defineRawEvent<{ pluginName: string }, void>(
   'plugin-log:unsubscribe'
 )
-const pluginLogGetSessionsEvent = defineRawEvent<any, any>('plugin-log:get-sessions')
-const pluginLogOpenSessionFileEvent = defineRawEvent<any, any>('plugin-log:open-session-file')
-const pluginLogOpenDirectoryEvent = defineRawEvent<any, any>('plugin-log:open-log-directory')
-const pluginLogGetBufferEvent = defineRawEvent<any, any>('plugin-log:get-buffer')
-const pluginLogGetSessionLogEvent = defineRawEvent<any, any>('plugin-log:get-session-log')
+type PluginLogError = { error: string }
+type PluginLogGetSessionsPayload = { pluginName: string; page?: number; pageSize?: number }
+type PluginLogGetSessionsResponse =
+  | {
+      sessions: PluginLogSessionMeta[]
+      total: number
+      page: number
+      pageSize: number
+      latestSessionId: string | null
+    }
+  | PluginLogError
+type PluginLogOpenSessionPayload = { pluginName: string; sessionFolder?: string; session?: string }
+type PluginLogOpenSessionResponse = { success: true } | PluginLogError
+type PluginLogOpenDirectoryPayload = { pluginName: string }
+type PluginLogOpenDirectoryResponse = { success: true } | PluginLogError
+type PluginLogGetBufferPayload = { pluginName: string }
+type PluginLogGetSessionLogPayload = { pluginName: string; session: string }
+type PluginLogGetSessionLogResponse = LogItem[] | PluginLogError
+
+const pluginLogGetSessionsEvent = defineRawEvent<
+  PluginLogGetSessionsPayload,
+  PluginLogGetSessionsResponse
+>('plugin-log:get-sessions')
+const pluginLogOpenSessionFileEvent = defineRawEvent<
+  PluginLogOpenSessionPayload,
+  PluginLogOpenSessionResponse
+>('plugin-log:open-session-file')
+const pluginLogOpenDirectoryEvent = defineRawEvent<
+  PluginLogOpenDirectoryPayload,
+  PluginLogOpenDirectoryResponse
+>('plugin-log:open-log-directory')
+const pluginLogGetBufferEvent = defineRawEvent<
+  PluginLogGetBufferPayload,
+  LogItem[] | PluginLogError
+>('plugin-log:get-buffer')
+const pluginLogGetSessionLogEvent = defineRawEvent<
+  PluginLogGetSessionLogPayload,
+  PluginLogGetSessionLogResponse
+>('plugin-log:get-session-log')
 
 export class PluginLogModule extends BaseModule {
   private subscriptions: Map<string, Set<WebContents>> = new Map()
@@ -146,7 +180,9 @@ export class PluginLogModule extends BaseModule {
   public setupIpcHandlers(channel: ITouchChannel): void {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = getTuffTransportMain(channel, keyManager)
+    const toErrorMessage = (error: unknown) =>
+      error instanceof Error ? error.message : String(error)
 
     transport.on(pluginLogSubscribeEvent, (payload, context) => {
       const pluginName = payload?.pluginName
@@ -210,9 +246,9 @@ export class PluginLogModule extends BaseModule {
           pageSize,
           latestSessionId: sessionFolders[0] ?? null
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error(`[PluginLogService] Error reading log directory for ${pluginName}:`, error)
-        return { error: error.message }
+        return { error: toErrorMessage(error) }
       }
     })
 
@@ -241,7 +277,7 @@ export class PluginLogModule extends BaseModule {
 
       shell.openPath(logFilePath)
       console.info(`[PluginLogService] Successfully opened ${logFilePath}`)
-      return { success: true }
+      return { success: true } as const
     })
 
     transport.on(pluginLogOpenDirectoryEvent, (payload) => {
@@ -261,7 +297,7 @@ export class PluginLogModule extends BaseModule {
 
       shell.openPath(logsBaseDir)
       console.info(`[PluginLogService] Opened log directory ${logsBaseDir}`)
-      return { success: true }
+      return { success: true } as const
     })
 
     transport.on(pluginLogGetBufferEvent, (payload) => {
@@ -298,8 +334,8 @@ export class PluginLogModule extends BaseModule {
       try {
         const logItems = await this.readSessionLog(targetLogPath)
         return logItems
-      } catch (error: any) {
-        return { error: error.message }
+      } catch (error) {
+        return { error: toErrorMessage(error) }
       }
     })
   }

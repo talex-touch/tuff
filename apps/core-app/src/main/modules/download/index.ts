@@ -10,7 +10,12 @@ export { DownloadWorker } from './download-worker'
 
 // Export migration utilities
 export { MigrationManager } from './migration-manager'
-export type { MigrationProgress, MigrationResult, OldDownloadRecord, OldUpdateConfig } from './migration-manager'
+export type {
+  MigrationProgress,
+  MigrationResult,
+  OldDownloadRecord,
+  OldUpdateConfig
+} from './migration-manager'
 export { allMigrations, MigrationRunner } from './migrations'
 export type { Migration, MigrationStatus } from './migrations'
 

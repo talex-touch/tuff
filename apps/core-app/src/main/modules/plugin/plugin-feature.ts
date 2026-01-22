@@ -6,7 +6,7 @@ import type {
   IPlatform,
   IPluginDev,
   IPluginFeature,
-  ITouchPlugin,
+  ITouchPlugin
 } from '@talex-touch/utils/plugin'
 import vm from 'node:vm'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
@@ -38,7 +38,7 @@ export function createBuilderWithPluginContext(pluginName: string): typeof TuffI
 export function loadPluginFeatureContextFromContent(
   plugin: ITouchPlugin,
   scriptContent: string,
-  context: any,
+  context: Record<string, unknown>
 ): IFeatureLifeCycle {
   const sandbox = {
     exports: {},
@@ -46,13 +46,20 @@ export function loadPluginFeatureContextFromContent(
     require: createPluginRequire(plugin.name),
     __dirname: plugin.pluginPath,
     __filename: 'index.js',
-    ...context,
+    ...context
   }
 
   vm.createContext(sandbox)
   vm.runInContext(scriptContent, sandbox)
 
-  return sandbox.module.exports
+  const exported = sandbox.module.exports
+  const lifecycle =
+    typeof exported === 'object' && exported ? (exported as Partial<IFeatureLifeCycle>) : {}
+
+  return {
+    onFeatureTriggered: lifecycle.onFeatureTriggered ?? (() => undefined),
+    ...lifecycle
+  }
 }
 
 /**
@@ -65,7 +72,7 @@ export function loadPluginFeatureContextFromContent(
 export function loadPluginFeatureContext(
   plugin: ITouchPlugin,
   featureIndex: string,
-  context: any,
+  context: Record<string, unknown>
 ): IFeatureLifeCycle {
   const scriptContent = fse.readFileSync(featureIndex, 'utf-8')
   return loadPluginFeatureContextFromContent(plugin, scriptContent, context)
@@ -114,14 +121,14 @@ export class PluginFeature implements IPluginFeature {
       icon: {
         type: this.icon.type,
         value: this.icon.value,
-        status: this.icon.status,
+        status: this.icon.status
       },
       keywords: this.keywords,
       push: this.push,
       platform: this.platform,
       commands: this.commands,
       interaction: this.interaction,
-      priority: this.priority,
+      priority: this.priority
     }
   }
 }

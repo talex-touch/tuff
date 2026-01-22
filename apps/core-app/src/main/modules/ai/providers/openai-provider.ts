@@ -12,6 +12,25 @@ import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 
+type OpenAIChatChoice = {
+  message?: {
+    content?: string
+  }
+}
+
+type OpenAIEmbeddingData = {
+  embedding?: number[]
+}
+
+type OpenAIUsage = {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 export class OpenAIProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.OPENAI
 
@@ -61,8 +80,8 @@ export class OpenAIProvider extends IntelligenceProvider {
     }
 
     const data = await this.parseJsonResponse<{
-      choices: any[]
-      usage?: any
+      choices: OpenAIChatChoice[]
+      usage?: OpenAIUsage
       model?: string
     }>(response, { endpoint: '/chat/completions' })
     const latency = Date.now() - startTime
@@ -179,8 +198,8 @@ export class OpenAIProvider extends IntelligenceProvider {
     }
 
     const data = await this.parseJsonResponse<{
-      data: any[]
-      usage?: any
+      data: OpenAIEmbeddingData[]
+      usage?: OpenAIUsage
       model?: string
     }>(response, { endpoint: '/embeddings' })
     const latency = Date.now() - startTime
@@ -272,8 +291,8 @@ export class OpenAIProvider extends IntelligenceProvider {
     }
 
     const data = await this.parseJsonResponse<{
-      choices: any[]
-      usage?: any
+      choices: OpenAIChatChoice[]
+      usage?: OpenAIUsage
       model?: string
     }>(response, { endpoint: '/chat/completions (vision)' })
     const latency = Date.now() - startTime
@@ -286,15 +305,24 @@ export class OpenAIProvider extends IntelligenceProvider {
 
     const rawContent = data.choices[0]?.message?.content || ''
     const parsed = this.safeParseJson(rawContent)
+    const parsedRecord = isRecord(parsed) ? parsed : null
+    const text = typeof parsedRecord?.text === 'string' ? parsedRecord.text : rawContent
+    const confidence =
+      typeof parsedRecord?.confidence === 'number' ? parsedRecord.confidence : undefined
+    const language = typeof parsedRecord?.language === 'string' ? parsedRecord.language : undefined
+    const keywords = Array.isArray(parsedRecord?.keywords)
+      ? parsedRecord.keywords.filter((item): item is string => typeof item === 'string')
+      : []
+    const blocks = Array.isArray(parsedRecord?.blocks) ? parsedRecord.blocks : undefined
 
-    const ocrResult: import('@talex-touch/utils').IntelligenceVisionOcrResult = parsed
+    const ocrResult: import('@talex-touch/utils').IntelligenceVisionOcrResult = parsedRecord
       ? {
-          text: parsed.text ?? rawContent,
-          confidence: parsed.confidence,
-          language: parsed.language,
-          keywords: parsed.keywords ?? [],
-          blocks: parsed.blocks,
-          raw: parsed
+          text,
+          confidence,
+          language,
+          keywords,
+          blocks,
+          raw: parsedRecord
         }
       : {
           text: rawContent,
@@ -334,7 +362,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     throw new Error('[OpenAIProvider] Invalid vision image source')
   }
 
-  protected override safeParseJson(text: string): any {
+  protected override safeParseJson(text: string): unknown {
     try {
       return JSON.parse(text)
     } catch {

@@ -33,14 +33,14 @@ export class FailedFilesCleanupTask implements BackgroundTask {
 
   constructor(
     db: LibSQLDatabase<typeof schema>,
-    options: Partial<FailedFilesCleanupTaskOptions> = {},
+    options: Partial<FailedFilesCleanupTaskOptions> = {}
   ) {
     this.dbUtils = createDbUtils(db)
     this.options = {
       maxRetryAge: 24 * 60 * 60 * 1000, // 24小时
       batchSize: 100,
       maxRetries: 3,
-      ...options,
+      ...options
     }
   }
 
@@ -61,15 +61,15 @@ export class FailedFilesCleanupTask implements BackgroundTask {
           id: fileIndexProgress.fileId,
           path: filesSchema.path,
           lastError: fileIndexProgress.lastError,
-          updatedAt: fileIndexProgress.updatedAt,
+          updatedAt: fileIndexProgress.updatedAt
         })
         .from(fileIndexProgress)
         .innerJoin(filesSchema, eq(fileIndexProgress.fileId, filesSchema.id))
         .where(
           and(
             eq(fileIndexProgress.status, 'failed'),
-            lt(fileIndexProgress.updatedAt, new Date(cutoffTime)),
-          ),
+            lt(fileIndexProgress.updatedAt, new Date(cutoffTime))
+          )
         )
         .limit(this.options.batchSize)
 
@@ -80,7 +80,7 @@ export class FailedFilesCleanupTask implements BackgroundTask {
         return
       }
 
-      const fileIds = failedFiles.map(f => f.id)
+      const fileIds = failedFiles.map((f) => f.id)
       await this.dbUtils
         .getDb()
         .delete(fileIndexProgress)
@@ -96,10 +96,9 @@ export class FailedFilesCleanupTask implements BackgroundTask {
       const duration = Date.now() - startTime
       this.logDebug(`Completed failed files cleanup`, {
         processedFiles: failedFiles.length,
-        duration: `${duration}ms`,
+        duration: `${duration}ms`
       })
-    }
-    catch (error) {
+    } catch (error) {
       this.logError('Failed files cleanup task failed', error)
       throw error
     }
@@ -108,8 +107,7 @@ export class FailedFilesCleanupTask implements BackgroundTask {
   private logError(message: string, error?: unknown): void {
     if (error) {
       fileProviderLog.error(`[FailedFilesCleanupTask] ${message}`, error)
-    }
-    else {
+    } else {
       fileProviderLog.error(`[FailedFilesCleanupTask] ${message}`)
     }
   }
@@ -127,7 +125,7 @@ export class FailedFilesCleanupTask implements BackgroundTask {
  */
 export function createFailedFilesCleanupTask(
   db: LibSQLDatabase<typeof schema>,
-  options?: Partial<FailedFilesCleanupTaskOptions>,
+  options?: Partial<FailedFilesCleanupTaskOptions>
 ): FailedFilesCleanupTask {
   return new FailedFilesCleanupTask(db, options)
 }

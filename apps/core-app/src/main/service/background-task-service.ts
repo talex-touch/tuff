@@ -61,7 +61,7 @@ export class BackgroundTaskService extends EventEmitter {
 
   private constructor(
     activityTracker: UserActivityTracker,
-    options: Partial<BackgroundTaskServiceOptions> = {},
+    options: Partial<BackgroundTaskServiceOptions> = {}
   ) {
     super()
     this.activityTracker = activityTracker
@@ -70,7 +70,7 @@ export class BackgroundTaskService extends EventEmitter {
       checkIntervalMs: 5 * 60 * 1000,
       maxConcurrentTasks: 2,
       taskTimeoutMs: 30 * 60 * 1000,
-      ...options,
+      ...options
     }
   }
 
@@ -79,7 +79,7 @@ export class BackgroundTaskService extends EventEmitter {
    */
   static getInstance(
     activityTracker?: UserActivityTracker,
-    options?: Partial<BackgroundTaskServiceOptions>,
+    options?: Partial<BackgroundTaskServiceOptions>
   ): BackgroundTaskService {
     if (!BackgroundTaskService.instance) {
       if (!activityTracker) {
@@ -125,13 +125,13 @@ export class BackgroundTaskService extends EventEmitter {
     this.logInfo('Starting background task service', {
       idleThreshold: formatDuration(this.options.idleThresholdMs),
       checkInterval: formatDuration(this.options.checkIntervalMs),
-      maxConcurrentTasks: this.options.maxConcurrentTasks,
+      maxConcurrentTasks: this.options.maxConcurrentTasks
     })
 
     BackgroundTaskService.pollingService.register(
       BackgroundTaskService.pollingTaskId,
       () => this.checkAndExecuteTasks(),
-      { interval: this.options.checkIntervalMs, unit: 'milliseconds' },
+      { interval: this.options.checkIntervalMs, unit: 'milliseconds' }
     )
     BackgroundTaskService.pollingService.start()
 
@@ -177,7 +177,7 @@ export class BackgroundTaskService extends EventEmitter {
       runningTasks: this.runningTasks.size,
       queuedTasks: this.taskQueue.length,
       lastActivityTime: this.lastActivityTime,
-      isUserIdle: this.isUserIdle(),
+      isUserIdle: this.isUserIdle()
     }
   }
 
@@ -188,8 +188,7 @@ export class BackgroundTaskService extends EventEmitter {
   }
 
   private async checkAndExecuteTasks(): Promise<void> {
-    if (!this.isRunning)
-      return
+    if (!this.isRunning) return
 
     const isIdle = this.isUserIdle()
     const canExecuteMore = this.runningTasks.size < this.options.maxConcurrentTasks
@@ -239,16 +238,14 @@ export class BackgroundTaskService extends EventEmitter {
       await task.execute()
       const duration = performance.now() - startTime
       this.logDebug(`Completed background task: ${task.name}`, {
-        duration: formatDuration(duration),
+        duration: formatDuration(duration)
       })
       this.emit('taskCompleted', { task, duration })
-    }
-    catch (error) {
+    } catch (error) {
       const duration = performance.now() - startTime
       this.logError(`Background task failed: ${task.name}`, error as Error)
       this.emit('taskFailed', { task, error, duration })
-    }
-    finally {
+    } finally {
       clearTimeout(timeoutId)
       this.runningTasks.delete(taskId)
     }
@@ -276,8 +273,7 @@ export class BackgroundTaskService extends EventEmitter {
   private logError(message: string, error?: unknown): void {
     if (error) {
       fileProviderLog.error(`[BackgroundTaskService] ${message}`, error)
-    }
-    else {
+    } else {
       fileProviderLog.error(`[BackgroundTaskService] ${message}`)
     }
   }

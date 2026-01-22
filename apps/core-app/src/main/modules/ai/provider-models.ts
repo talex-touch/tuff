@@ -7,7 +7,7 @@ const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
   [IntelligenceProviderType.DEEPSEEK]: 'https://api.deepseek.com/v1',
   [IntelligenceProviderType.SILICONFLOW]: 'https://api.siliconflow.cn/v1',
   [IntelligenceProviderType.CUSTOM]: undefined,
-  [IntelligenceProviderType.LOCAL]: undefined,
+  [IntelligenceProviderType.LOCAL]: undefined
 }
 
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -34,27 +34,30 @@ function ensureApiKey(provider: IntelligenceProviderConfig): string {
   return key || ''
 }
 
-function normalizeModelEntries(entries: any[]): string[] {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+function normalizeModelEntries(entries: unknown[]): string[] {
   const normalized: string[] = []
   for (const entry of entries) {
-    if (!entry)
-      continue
+    if (!entry) continue
     if (typeof entry === 'string') {
       normalized.push(entry)
       continue
     }
-    const id = entry.id ?? entry.name ?? entry.slug ?? entry.model
-    if (id)
-      normalized.push(id)
+    if (!isRecord(entry)) continue
+    const id = [entry.id, entry.name, entry.slug, entry.model].find(
+      (value): value is string => typeof value === 'string'
+    )
+    if (id) normalized.push(id)
   }
   return Array.from(new Set(normalized))
 }
 
-async function parseJsonBody(response: Response): Promise<any> {
+async function parseJsonBody(response: Response): Promise<unknown> {
   try {
     return await response.json()
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -66,33 +69,35 @@ export async function fetchProviderModels(provider: IntelligenceProviderConfig):
 
   const baseUrl = resolveBaseUrl(provider)
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json'
   }
 
   if (provider.type === IntelligenceProviderType.ANTHROPIC) {
     headers['x-api-key'] = ensureApiKey(provider)
     headers['anthropic-version'] = ANTHROPIC_VERSION
-  }
-  else {
+  } else {
     headers.Authorization = `Bearer ${ensureApiKey(provider)}`
   }
 
   const endpoint = joinUrl(baseUrl, 'models')
   const response = await fetch(endpoint, {
     method: 'GET',
-    headers,
+    headers
   })
 
   if (!response.ok) {
     const message = await response.text().catch(() => response.statusText)
-    throw new Error(`Failed to fetch models: ${response.status} ${response.statusText} - ${message}`)
+    throw new Error(
+      `Failed to fetch models: ${response.status} ${response.statusText} - ${message}`
+    )
   }
 
   const body = await parseJsonBody(response)
-  const rawEntries = Array.isArray(body?.data)
-    ? body?.data
-    : Array.isArray(body?.models)
-      ? body?.models
+  const bodyRecord = isRecord(body) ? body : {}
+  const rawEntries = Array.isArray(bodyRecord.data)
+    ? bodyRecord.data
+    : Array.isArray(bodyRecord.models)
+      ? bodyRecord.models
       : []
 
   const models = normalizeModelEntries(rawEntries)

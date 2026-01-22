@@ -23,6 +23,9 @@ import { activeAppService } from './active-app'
 
 const dashboardLog = createLogger('TuffDashboard')
 
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
+
 const tuffDashboardEvent = defineRawEvent<
   TuffDashboardOptions | undefined,
   {
@@ -51,9 +54,8 @@ export class TuffDashboardModule extends BaseModule {
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const channel = genTouchApp().channel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+    const transport = getTuffTransportMain(channel, keyManager)
 
     transport.on(tuffDashboardEvent, async (options) => {
       const requestId = null

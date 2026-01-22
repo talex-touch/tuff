@@ -6,6 +6,10 @@ import fse from 'fs-extra'
 import { checkDirWithCreate } from '../../utils/common-util'
 import { pluginModule } from './plugin-module'
 
+type ResolverEvent = { msg: unknown }
+const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
 export enum ResolverStatus {
   UNCOMPRESS_ERROR,
   MANIFEST_NOT_FOUND,
@@ -92,9 +96,10 @@ export class PluginResolver {
         // Remove old plugin files
         await fse.remove(_target)
         console.log(`[PluginResolver] Removed old plugin files: ${manifest.name}`)
-      } catch (e: any) {
-        console.error(`[PluginResolver] Failed to remove old plugin ${manifest.name}:`, e)
-        return cb(`Failed to remove old plugin: ${e.message}`, 'error')
+      } catch (error: unknown) {
+        const message = toErrorMessage(error)
+        console.error(`[PluginResolver] Failed to remove old plugin ${manifest.name}:`, error)
+        return cb(`Failed to remove old plugin: ${message}`, 'error')
       }
     }
 
@@ -117,19 +122,20 @@ export class PluginResolver {
       }
 
       cb('success', 'success')
-    } catch (e: any) {
-      console.error(`[PluginResolver] Failed to install plugin ${manifest.name}:`, e)
-      cb(e.message || 'Install failed', 'error')
+    } catch (error: unknown) {
+      const message = toErrorMessage(error)
+      console.error(`[PluginResolver] Failed to install plugin ${manifest.name}:`, error)
+      cb(message || 'Install failed', 'error')
     }
   }
 
   async resolve(
-    callback: (result: { event: any; type: string }) => void,
+    callback: (result: { event: ResolverEvent; type: string }) => void,
     whole = false,
     options?: ResolverOptions
   ): Promise<void> {
     console.debug(`[PluginResolver] Resolving plugin: ${this.filePath}`)
-    const event = { msg: '' } as any
+    const event: ResolverEvent = { msg: '' }
     const tempDir = path.join(os.tmpdir(), `talex-touch-resolve-${Date.now()}`)
 
     try {
@@ -170,8 +176,8 @@ export class PluginResolver {
         event.msg = manifest
         callback({ event, type: 'success' })
       }
-    } catch (e: any) {
-      console.error(`[PluginResolver] Failed to resolve plugin ${this.filePath}:`, e)
+    } catch (error: unknown) {
+      console.error(`[PluginResolver] Failed to resolve plugin ${this.filePath}:`, error)
       event.msg = ResolverStatus.UNCOMPRESS_ERROR
       callback({ event, type: 'error' })
     } finally {

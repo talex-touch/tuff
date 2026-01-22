@@ -202,7 +202,7 @@ export class NativeShareService {
 
       await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`)
       return { success: true, target: 'airdrop' }
-    } catch (error) {
+    } catch (_error) {
       // Fallback: open AirDrop window
       await execAsync(
         'open /System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app'

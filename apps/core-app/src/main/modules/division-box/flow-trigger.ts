@@ -9,29 +9,8 @@
  * future integration.
  */
 
-import type { DivisionBoxConfig } from '@talex-touch/utils'
+import type { DivisionBoxConfig, FlowPayload, FlowPayloadType } from '@talex-touch/utils'
 import { DivisionBoxManager } from './manager'
-
-/**
- * Flow payload types supported by DivisionBox
- */
-export type FlowPayloadType = 'text' | 'file' | 'json' | 'custom'
-
-/**
- * Flow payload structure
- *
- * Represents data being transferred through the Flow system.
- */
-export interface FlowPayload {
-  /** Type of the payload */
-  type: FlowPayloadType
-
-  /** Payload data */
-  data: any
-
-  /** Optional context metadata */
-  context?: Record<string, any>
-}
 
 /**
  * Flow target configuration for DivisionBox

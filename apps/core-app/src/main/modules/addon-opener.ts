@@ -11,6 +11,16 @@ import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolve
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
 
+type ChannelKeyManagerHolder = {
+  keyManager?: unknown
+}
+
+const resolveKeyManager = (channel: unknown): unknown => {
+  if (!channel || typeof channel !== 'object') return channel
+  if (!('keyManager' in channel)) return channel
+  return (channel as ChannelKeyManagerHolder).keyManager ?? channel
+}
+
 const addonOpenerLog = createLogger('AddonOpener')
 const authExternalCallbackEvent = defineRawEvent<{ token: string; appToken?: string }, void>(
   'auth:external-callback'
@@ -66,10 +76,8 @@ const schemaHandlers: SchemaHandler[] = [
             meta: { appTokenLength: appToken.length }
           })
         }
-        const transport = getTuffTransportMain(
-          $app.channel as any,
-          ($app.channel as any)?.keyManager ?? $app.channel
-        )
+        const channel = $app.channel
+        const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
         void transport.sendTo($app.window.window.webContents, authExternalCallbackEvent, {
           token,
           appToken
@@ -113,10 +121,8 @@ export class AddonOpenerModule extends BaseModule {
   }
 
   onInit(): MaybePromise<void> {
-    const transport = getTuffTransportMain(
-      $app.channel as any,
-      ($app.channel as any)?.keyManager ?? $app.channel
-    )
+    const channel = $app.channel
+    const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
     const win = $app.window.window
 
     windowsAdapter($app)

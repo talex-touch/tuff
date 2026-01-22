@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -28,37 +27,37 @@ globalThis.logger = log4js.getLogger()
 globalThis.errLogger = log4js.getLogger('error')
 const consoleRef = globalThis.console
 consoleRef._log = consoleRef.log
-consoleRef.log = (...args: any[]) => {
+consoleRef.log = (...args: unknown[]) => {
   globalThis.logger.info(args)
 }
-consoleRef.log = (message: any, ...args: any[]) => {
+consoleRef.log = (message: unknown, ...args: unknown[]) => {
   if (args?.length) globalThis.logger.info(message, args)
   else globalThis.logger.info(message)
 }
 
 consoleRef._error = consoleRef.error
-consoleRef.error = (...args: any[]) => {
+consoleRef.error = (...args: unknown[]) => {
   globalThis.errLogger.error(args)
 }
-consoleRef.error = (message: any, ...args: any[]) => {
+consoleRef.error = (message: unknown, ...args: unknown[]) => {
   if (args?.length) globalThis.errLogger.error(message, args)
   else globalThis.errLogger.error(message)
 }
 
 consoleRef._warn = consoleRef.warn
-consoleRef.warn = (...args: any[]) => {
+consoleRef.warn = (...args: unknown[]) => {
   globalThis.logger.warn(args)
 }
-consoleRef.warn = (message: any, ...args: any[]) => {
+consoleRef.warn = (message: unknown, ...args: unknown[]) => {
   if (args?.length) globalThis.logger.warn(message, args)
   else globalThis.logger.warn(message)
 }
 
 consoleRef._debug = consoleRef.debug
-consoleRef.debug = (...args: any[]) => {
+consoleRef.debug = (...args: unknown[]) => {
   globalThis.logger.debug(args)
 }
-consoleRef.debug = (message: any, ...args: any[]) => {
+consoleRef.debug = (message: unknown, ...args: unknown[]) => {
   if (args?.length) globalThis.logger.debug(message, args)
   else globalThis.logger.debug(message)
 }

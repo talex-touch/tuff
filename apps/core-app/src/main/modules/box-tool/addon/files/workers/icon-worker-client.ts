@@ -1,10 +1,10 @@
+import type { Buffer } from 'node:buffer'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsResponse,
   WorkerStatusSnapshot,
   WorkerTaskSnapshot
 } from './worker-status'
-import type { Buffer } from 'node:buffer'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'

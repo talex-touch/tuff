@@ -12,7 +12,6 @@ import { ai } from '../../modules/ai/intelligence-sdk'
 import { WindowManager } from '../../modules/box-tool/core-box/window'
 import { TouchPlugin } from '../../modules/plugin'
 import { normalizePrompt } from './internal-ai-utils'
-import { InternalPluginLogger } from './internal-plugin-logger'
 
 const AI_SYSTEM_PROMPT =
   '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
@@ -22,6 +21,10 @@ const INTERNAL_AI_ICON = new TuffIconImpl(
   'url',
   'https://api.iconify.design/majesticons:sparkles.svg'
 )
+
+type InternalAiPlugin = TouchPlugin & {
+  ask: (prompt: string) => Promise<void>
+}
 
 export function createInternalAiPlugin(): TouchPlugin {
   const pluginPath = path.join(app.getPath('userData'), '__internal_ai__')
@@ -35,9 +38,8 @@ export function createInternalAiPlugin(): TouchPlugin {
     pluginPath,
     {},
     { skipDataInit: false }
-  )
+  ) as InternalAiPlugin
 
-  ;(aiPlugin as any).logger = new InternalPluginLogger(aiPlugin.name)
   const feature = createAiFeature()
   const featureAdded = aiPlugin.addFeature(feature)
 
@@ -48,7 +50,7 @@ export function createInternalAiPlugin(): TouchPlugin {
   aiPlugin.pluginLifecycle = createAiLifecycle(aiPlugin)
 
   // Provide imperative API for other modules
-  ;(aiPlugin as any).ask = async (prompt: string) => {
+  aiPlugin.ask = async (prompt: string) => {
     const lifecycle = aiPlugin.pluginLifecycle
     await lifecycle?.onFeatureTriggered?.(feature.id, prompt, feature)
   }
@@ -252,8 +254,7 @@ function createAiLifecycle(plugin: TouchPlugin): IFeatureLifeCycle {
     },
 
     async onItemAction(item) {
-      const meta = item.meta as any
-      const intelligence = meta?.intelligence
+      const intelligence = item.meta?.intelligence
 
       // 只处理 action 状态的 item
       if (!intelligence || intelligence.status !== 'action') {

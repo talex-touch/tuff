@@ -21,7 +21,7 @@ export enum BoxItemEventType {
   /** 同步请求 */
   SYNC = 'sync',
   /** 同步响应 */
-  SYNC_RESPONSE = 'sync-response',
+  SYNC_RESPONSE = 'sync-response'
 }
 
 /**
@@ -29,7 +29,7 @@ export enum BoxItemEventType {
  */
 export interface BoxItemEvent {
   type: BoxItemEventType
-  data?: any
+  data?: unknown
 }
 
 /**

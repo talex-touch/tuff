@@ -13,9 +13,9 @@ import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
 import { StorageList } from '@talex-touch/utils'
-import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
+import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport'
 import { app, BrowserWindow } from 'electron'
 import { innerRootPath } from '../../core/precore'
 import { createLogger } from '../../utils/logger'
@@ -36,6 +36,9 @@ interface ClerkUser {
 const sentryLog = createLogger('SentryService')
 const SENTRY_PERF_TASK_ID = 'sentry.perf.flush'
 const SENTRY_NEXUS_TASK_ID = 'sentry.nexus.flush'
+
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
 
 // Sentry DSN
 const SENTRY_DSN =
@@ -237,9 +240,8 @@ export class SentryServiceModule extends BaseModule {
   private setupIPCChannels(): void {
     const channel = $app.channel
     if (!channel) return
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+    const transport = getTuffTransportMain(channel, keyManager)
 
     // Listen for user context updates from renderer
     transport.on(SentryEvents.api.updateUser, (payload) => {

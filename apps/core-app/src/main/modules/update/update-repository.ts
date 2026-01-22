@@ -7,7 +7,7 @@ export enum UpdateRecordStatus {
   PENDING = 'pending',
   SKIPPED = 'skipped',
   SNOOZED = 'snoozed',
-  ACKNOWLEDGED = 'acknowledged',
+  ACKNOWLEDGED = 'acknowledged'
 }
 
 export type UpdateRecordRow = typeof schema.appUpdateRecords.$inferSelect
@@ -16,7 +16,11 @@ type UpdateRecordInsert = typeof schema.appUpdateRecords.$inferInsert
 export class UpdateRepository {
   constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
 
-  async saveRelease(release: GitHubRelease, channel: AppPreviewChannel, source: string): Promise<void> {
+  async saveRelease(
+    release: GitHubRelease,
+    channel: AppPreviewChannel,
+    source: string
+  ): Promise<void> {
     const payload = JSON.stringify(release)
     const publishedAt = release.published_at ? new Date(release.published_at).getTime() : null
     const now = Date.now()
@@ -30,7 +34,7 @@ export class UpdateRepository {
         source,
         publishedAt,
         fetchedAt: now,
-        payload,
+        payload
       })
       .onConflictDoUpdate({
         target: schema.appUpdateRecords.tag,
@@ -40,8 +44,8 @@ export class UpdateRepository {
           source,
           publishedAt,
           fetchedAt: now,
-          payload,
-        },
+          payload
+        }
       })
   }
 
@@ -69,12 +73,12 @@ export class UpdateRepository {
   async markStatus(
     tag: string,
     status: UpdateRecordStatus,
-    options?: { snoozeUntil?: number | null },
+    options?: { snoozeUntil?: number | null }
   ): Promise<void> {
     const patch: Partial<UpdateRecordInsert> = {
       status,
       lastActionAt: Date.now(),
-      snoozeUntil: options?.snoozeUntil ?? null,
+      snoozeUntil: options?.snoozeUntil ?? null
     }
 
     if (status !== UpdateRecordStatus.SNOOZED) {

@@ -1,11 +1,11 @@
-import type { ChunkInfo, DownloadConfig, DownloadTask } from '@talex-touch/utils'
+import type { ChunkInfo, DownloadConfig, DownloadProgress, DownloadTask } from '@talex-touch/utils'
 import type { AxiosRequestConfig } from 'axios'
 import type { ChunkManager } from './chunk-manager'
 import type { NetworkMonitor } from './network-monitor'
 import { createWriteStream, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
-import { ChunkStatus, DownloadModule, DownloadStatus } from '@talex-touch/utils'
+import { ChunkStatus, DownloadModule } from '@talex-touch/utils'
 import axios from 'axios'
 import { DownloadErrorClass } from './error-types'
 import { ProgressTracker } from './progress-tracker'
@@ -33,7 +33,7 @@ export class DownloadWorker {
   // 启动下载任务
   async startTask(
     task: DownloadTask,
-    onProgress?: (taskId: string, progress: any) => void
+    onProgress?: (taskId: string, progress: DownloadProgress) => void
   ): Promise<void> {
     if (this.activeTasks.has(task.id)) {
       throw new Error(`Task ${task.id} is already active`)
@@ -93,7 +93,7 @@ export class DownloadWorker {
   private async downloadTask(
     task: DownloadTask,
     progressTracker: ProgressTracker,
-    onProgress?: (taskId: string, progress: any) => void
+    onProgress?: (taskId: string, progress: DownloadProgress) => void
   ): Promise<void> {
     const errorContext = {
       taskId: task.id,
@@ -123,7 +123,6 @@ export class DownloadWorker {
 
         if (onProgress) {
           onProgress(task.id, {
-            status: DownloadStatus.COMPLETED,
             percentage: 100,
             totalSize: finalTotalSize,
             downloadedSize: directResult.downloadedSize,
@@ -163,7 +162,6 @@ export class DownloadWorker {
       // 通知完成
       if (onProgress) {
         onProgress(task.id, {
-          status: DownloadStatus.COMPLETED,
           percentage: 100,
           totalSize,
           downloadedSize: totalSize,
@@ -172,20 +170,14 @@ export class DownloadWorker {
         })
       }
     } catch (error: unknown) {
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
       // 转换为 DownloadErrorClass
       const downloadError =
         error instanceof DownloadErrorClass
           ? error
-          : DownloadErrorClass.fromError(error as Error, errorContext)
+          : DownloadErrorClass.fromError(normalizedError, errorContext)
 
       console.error(`Download failed for task ${task.id}:`, downloadError.userMessage)
-
-      if (onProgress) {
-        onProgress(task.id, {
-          status: DownloadStatus.FAILED,
-          error: downloadError.userMessage
-        })
-      }
 
       throw downloadError
     }
@@ -208,7 +200,13 @@ export class DownloadWorker {
       validateStatus: (status) => status >= 200 && status < 300
     })
 
-    const totalSize = this.resolveTotalSize(response.headers)
+    const normalizedHeaders: Record<string, string | number | string[] | undefined | null> = {}
+    for (const [key, value] of Object.entries(response.headers ?? {})) {
+      if (typeof value === 'boolean') continue
+      normalizedHeaders[key] = value as string | number | string[] | null | undefined
+    }
+
+    const totalSize = this.resolveTotalSize(normalizedHeaders)
     let downloadedSize = 0
 
     if (totalSize && totalSize > 0) {
@@ -228,8 +226,12 @@ export class DownloadWorker {
       writeStream.destroy()
       try {
         await fs.unlink(outputPath)
-      } catch (cleanupError: any) {
-        if (cleanupError?.code !== 'ENOENT') {
+      } catch (cleanupError: unknown) {
+        const code =
+          typeof cleanupError === 'object' && cleanupError !== null && 'code' in cleanupError
+            ? (cleanupError as { code?: string }).code
+            : undefined
+        if (code !== 'ENOENT') {
           console.warn('Failed to cleanup partial download file:', cleanupError)
         }
       }
@@ -244,7 +246,7 @@ export class DownloadWorker {
     task: DownloadTask,
     chunks: ChunkInfo[],
     progressTracker: ProgressTracker,
-    _onProgress?: (taskId: string, progress: any) => void
+    _onProgress?: (taskId: string, progress: DownloadProgress) => void
   ): Promise<void> {
     const concurrentLimit = Math.min(this.maxConcurrent, chunks.length)
     const semaphore = new Array(concurrentLimit).fill(null)
@@ -384,9 +386,15 @@ export class DownloadWorker {
       }
 
       const response = await axios(config)
-      const contentLength = response.headers['content-length']
+      const contentLengthHeader = response.headers['content-length']
+      const contentLengthValue = Array.isArray(contentLengthHeader)
+        ? contentLengthHeader[0]
+        : contentLengthHeader
 
-      return contentLength ? Number.parseInt(contentLength, 10) : null
+      if (typeof contentLengthValue === 'number') {
+        return Math.floor(contentLengthValue)
+      }
+      return typeof contentLengthValue === 'string' ? Number.parseInt(contentLengthValue, 10) : null
     } catch (error) {
       const downloadError =
         error instanceof DownloadErrorClass ? error : DownloadErrorClass.fromError(error as Error)
@@ -396,16 +404,33 @@ export class DownloadWorker {
     }
   }
 
-  private resolveTotalSize(headers: Record<string, any>): number | undefined {
-    const contentLength = headers?.['content-length']
-    if (contentLength) {
-      const parsed = Number.parseInt(contentLength, 10)
+  private resolveTotalSize(
+    headers: Record<string, string | number | string[] | undefined | null>
+  ): number | undefined {
+    const contentLengthHeader = headers?.['content-length']
+    const contentLengthValue = Array.isArray(contentLengthHeader)
+      ? contentLengthHeader[0]
+      : contentLengthHeader
+
+    if (typeof contentLengthValue === 'number') {
+      const parsed = Math.floor(contentLengthValue)
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed
+      }
+    }
+
+    if (typeof contentLengthValue === 'string') {
+      const parsed = Number.parseInt(contentLengthValue, 10)
       if (!Number.isNaN(parsed) && parsed > 0) {
         return parsed
       }
     }
 
-    const contentRange = headers?.['content-range']
+    const contentRangeHeader = headers?.['content-range']
+    const contentRange = Array.isArray(contentRangeHeader)
+      ? contentRangeHeader[0]
+      : contentRangeHeader
+
     if (typeof contentRange === 'string') {
       const match = contentRange.match(/\/(\d+)$/)
       if (match) {

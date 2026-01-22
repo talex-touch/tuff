@@ -33,7 +33,7 @@ export class IpcTracer {
         p95Latency: 0,
         p99Latency: 0,
         errorCount: this.errorCount,
-        slowRequests: this.slowRequests,
+        slowRequests: this.slowRequests
       }
     }
 
@@ -52,7 +52,7 @@ export class IpcTracer {
       p95Latency: percentile(95),
       p99Latency: percentile(99),
       errorCount: this.errorCount,
-      slowRequests: this.slowRequests,
+      slowRequests: this.slowRequests
     }
   }
 

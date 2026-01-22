@@ -4,7 +4,7 @@ import type {
   SortStat,
   TuffItem,
   TuffQuery,
-  TuffSearchResult,
+  TuffSearchResult
 } from '@talex-touch/utils'
 import type { TalexEvents } from '../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../core/touch-app'

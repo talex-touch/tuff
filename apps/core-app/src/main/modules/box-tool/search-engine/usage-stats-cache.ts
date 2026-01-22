@@ -59,11 +59,11 @@ export class UsageStatsCache {
    * Batch get usage stats from cache
    */
   getBatch(
-    keys: Array<{ sourceId: string, itemId: string }>,
+    keys: Array<{ sourceId: string; itemId: string }>
   ): Map<string, typeof schema.itemUsageStats.$inferSelect> {
     const result = new Map<string, typeof schema.itemUsageStats.$inferSelect>()
     const now = Date.now()
-    const missingKeys: Array<{ sourceId: string, itemId: string }> = []
+    const missingKeys: Array<{ sourceId: string; itemId: string }> = []
 
     for (const { sourceId, itemId } of keys) {
       const key = this.getKey(sourceId, itemId)
@@ -74,8 +74,7 @@ export class UsageStatsCache {
         // Move to end (LRU)
         this.cache.delete(key)
         this.cache.set(key, entry)
-      }
-      else {
+      } else {
         if (entry) {
           // Remove expired entry
           this.cache.delete(key)
@@ -90,15 +89,11 @@ export class UsageStatsCache {
   /**
    * Set usage stats in cache
    */
-  set(
-    sourceId: string,
-    itemId: string,
-    data: typeof schema.itemUsageStats.$inferSelect,
-  ): void {
+  set(sourceId: string, itemId: string, data: typeof schema.itemUsageStats.$inferSelect): void {
     const key = this.getKey(sourceId, itemId)
     const entry: CacheEntry = {
       data,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     }
 
     // If cache is full, remove oldest entry
@@ -153,7 +148,7 @@ export class UsageStatsCache {
       maxSize: this.maxSize,
       hitRate: 0, // Will be calculated by caller if needed
       hits: 0, // Will be tracked by caller if needed
-      misses: 0, // Will be tracked by caller if needed
+      misses: 0 // Will be tracked by caller if needed
     }
   }
 }
@@ -164,11 +159,11 @@ export class UsageStatsCache {
 export async function getUsageStatsBatchCached(
   dbUtils: {
     getUsageStatsBatch: (
-      keys: Array<{ sourceId: string, itemId: string }>,
+      keys: Array<{ sourceId: string; itemId: string }>
     ) => Promise<(typeof schema.itemUsageStats.$inferSelect)[]>
   },
   cache: UsageStatsCache,
-  keys: Array<{ sourceId: string, itemId: string }>,
+  keys: Array<{ sourceId: string; itemId: string }>
 ): Promise<(typeof schema.itemUsageStats.$inferSelect)[]> {
   const start = performance.now()
 
@@ -177,7 +172,7 @@ export async function getUsageStatsBatchCached(
 
   // Find missing keys
   const missingKeys = keys.filter(
-    ({ sourceId, itemId }) => !cached.has(cache.getKey(sourceId, itemId)),
+    ({ sourceId, itemId }) => !cached.has(cache.getKey(sourceId, itemId))
   )
 
   // If all keys are cached, return immediately
@@ -191,7 +186,7 @@ export async function getUsageStatsBatchCached(
       }
     }
     console.debug(
-      `[UsageStatsCache] All ${keys.length} stats retrieved from cache in ${(performance.now() - start).toFixed(2)}ms`,
+      `[UsageStatsCache] All ${keys.length} stats retrieved from cache in ${(performance.now() - start).toFixed(2)}ms`
     )
     return result
   }
@@ -230,7 +225,7 @@ export async function getUsageStatsBatchCached(
   const cacheHitCount = cached.size
   const cacheMissCount = missingKeys.length
   console.debug(
-    `[UsageStatsCache] Retrieved ${keys.length} stats (${cacheHitCount} cached, ${cacheMissCount} from DB) in ${duration.toFixed(2)}ms`,
+    `[UsageStatsCache] Retrieved ${keys.length} stats (${cacheHitCount} cached, ${cacheMissCount} from DB) in ${duration.toFixed(2)}ms`
   )
 
   return result

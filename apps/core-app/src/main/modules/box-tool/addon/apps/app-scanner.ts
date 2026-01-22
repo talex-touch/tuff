@@ -7,6 +7,7 @@ import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import chalk from 'chalk'
 import { createLogger } from '../../../../utils/logger'
 import { formatLog, LogStyle } from './app-utils'
+import type { ScannedAppInfo } from './app-types'
 
 const appScannerLog = createLogger('AppScanner')
 
@@ -17,9 +18,9 @@ const appScannerLog = createLogger('AppScanner')
  * @class AppScanner
  */
 export class AppScanner {
-  private cachedApps: any[] | null = null
+  private cachedApps: ScannedAppInfo[] | null = null
   private cachedAt = 0
-  private scanPromise: Promise<any[]> | null = null
+  private scanPromise: Promise<ScannedAppInfo[]> | null = null
   private readonly cacheTtlMs = 5 * 60 * 1000
 
   /**
@@ -50,9 +51,9 @@ export class AppScanner {
 
   /**
    * Retrieves all applications for the current platform.
-   * @returns {Promise<any[]>} A promise that resolves to an array of applications.
+   * @returns {Promise<ScannedAppInfo[]>} A promise that resolves to an array of applications.
    */
-  async getApps(options?: { forceRefresh?: boolean }): Promise<any[]> {
+  async getApps(options?: { forceRefresh?: boolean }): Promise<ScannedAppInfo[]> {
     const forceRefresh = Boolean(options?.forceRefresh)
     const now = Date.now()
 
@@ -75,12 +76,12 @@ export class AppScanner {
     }
   }
 
-  private async scanApps(): Promise<any[]> {
+  private async scanApps(): Promise<ScannedAppInfo[]> {
     appScannerLog.info(formatLog('AppScanner', 'Starting application scan...', LogStyle.process))
 
     try {
       const apps =
-        (await withOSAdapter<void, Promise<any[]>>({
+        (await withOSAdapter<void, Promise<ScannedAppInfo[]>>({
           darwin: async () => {
             appScannerLog.info(
               formatLog(
@@ -135,15 +136,15 @@ export class AppScanner {
   /**
    * Retrieves application information by its file path.
    * @param {string} filePath - The path to the application file.
-   * @returns {Promise<any>} A promise that resolves to the application's information.
+   * @returns {Promise<ScannedAppInfo | null>} A promise that resolves to the application's information.
    */
-  async getAppInfoByPath(filePath: string): Promise<any> {
+  async getAppInfoByPath(filePath: string): Promise<ScannedAppInfo | null> {
     try {
       appScannerLog.info(
         formatLog('AppScanner', `Getting app info for: ${chalk.cyan(filePath)}`, LogStyle.info)
       )
 
-      const appInfo = await withOSAdapter<string, Promise<any>>({
+      const appInfo = await withOSAdapter<string, Promise<ScannedAppInfo | null>>({
         onBeforeExecute: () => filePath,
         darwin: async (filePath) => {
           const { getAppInfo } = await import('./darwin')
@@ -176,13 +177,13 @@ export class AppScanner {
 
   /**
    * Runs an `mdls` update scan on macOS to refresh application metadata.
-   * @param {any[]} apps - The list of applications to scan.
-   * @returns {Promise<{updatedApps: any[], updatedCount: number, deletedApps: any[]}>} A promise that resolves to the updated apps, count, and deleted apps.
+   * @param {ScannedAppInfo[]} apps - The list of applications to scan.
+   * @returns {Promise<{updatedApps: ScannedAppInfo[], updatedCount: number, deletedApps: ScannedAppInfo[]}>} A promise that resolves to the updated apps, count, and deleted apps.
    */
-  async runMdlsUpdateScan(apps: any[]): Promise<{
-    updatedApps: any[]
+  async runMdlsUpdateScan(apps: ScannedAppInfo[]): Promise<{
+    updatedApps: ScannedAppInfo[]
     updatedCount: number
-    deletedApps: any[]
+    deletedApps: ScannedAppInfo[]
   }> {
     if (process.platform !== 'darwin') {
       appScannerLog.info(formatLog('AppScanner', 'Not on macOS, skipping mdls scan', LogStyle.info))
@@ -208,8 +209,8 @@ export class AppScanner {
 
     let updatedCount = 0
     let processedCount = 0
-    const updatedApps: any[] = []
-    const deletedApps: any[] = []
+    const updatedApps: ScannedAppInfo[] = []
+    const deletedApps: ScannedAppInfo[] = []
     const startTime = Date.now()
 
     // 先过滤掉不存在的应用
@@ -231,7 +232,7 @@ export class AppScanner {
 
     // 批量处理：每批 50 个应用，使用一次 mdls 调用
     const BATCH_SIZE = 50
-    const batches: (typeof apps)[] = []
+    const batches: ScannedAppInfo[][] = []
     for (let i = 0; i < existingApps.length; i += BATCH_SIZE) {
       batches.push(existingApps.slice(i, i + BATCH_SIZE))
     }

@@ -5,7 +5,7 @@ export class PreviewAbilityRegistry {
   private abilities: PreviewAbility[] = []
 
   register(ability: PreviewAbility): void {
-    if (this.abilities.some(item => item.id === ability.id)) {
+    if (this.abilities.some((item) => item.id === ability.id)) {
       console.warn(`[PreviewAbilityRegistry] Ability '${ability.id}' already registered.`)
       return
     }
@@ -34,8 +34,7 @@ export class PreviewAbilityRegistry {
         if (result) {
           return result
         }
-      }
-      catch (error) {
+      } catch (error) {
         if ((error as DOMException).name === 'AbortError') {
           return null
         }

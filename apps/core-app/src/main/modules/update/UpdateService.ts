@@ -32,6 +32,7 @@ import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
 import { UpdateSystem } from './update-system'
+import type { DownloadCenterModule } from '../download/download-center'
 
 const updateLog = createLogger('UpdateService')
 
@@ -87,7 +88,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private settings: UpdateSettings
   private currentVersion: string
   private currentChannel: AppPreviewChannel
-  private cache: Map<string, any> = new Map()
+  private cache: Map<string, { data: UpdateCheckResult; timestamp: number; ttl: number }> =
+    new Map()
   private checkInFlight: Promise<UpdateCheckResult> | null = null
   private settingsSaveTimer: NodeJS.Timeout | null = null
   private releaseCacheSaveTimer: NodeJS.Timeout | null = null
@@ -118,11 +120,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     const downloadCenterModule = ctx.manager.getModule(Symbol.for('DownloadCenter'))
-    if (!downloadCenterModule) {
+    if (
+      !downloadCenterModule ||
+      typeof (downloadCenterModule as { getNotificationService?: unknown })
+        .getNotificationService !== 'function'
+    ) {
       return false
     }
 
-    this.updateSystem = new UpdateSystem(downloadCenterModule, {
+    this.updateSystem = new UpdateSystem(downloadCenterModule as DownloadCenterModule, {
       autoDownload: this.settings.autoDownload,
       autoCheck: this.settings.enabled,
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
@@ -147,8 +153,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       updateLog.warn('Failed to initialize UpdateRepository', { error })
     }
 
-    const channel = ((ctx.app as any)?.channel ?? ($app as any)?.channel) as any
-    this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
+    const channel =
+      (ctx.app as { channel?: unknown } | null | undefined)?.channel ??
+      ($app as { channel?: unknown } | null | undefined)?.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    this.transport = getTuffTransportMain(channel, keyManager)
     this.registerTransportHandlers()
 
     // Load settings
@@ -260,61 +270,64 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         return { success: true, data: this.settings }
       }),
 
-      tx.on(UpdateEvents.updateSettings, async (payload) => {
-        const newSettings = (payload as any)?.settings as Partial<UpdateSettings>
-        try {
-          const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
+      tx.on(
+        UpdateEvents.updateSettings,
+        async (payload: { settings?: Partial<UpdateSettings> }) => {
+          const newSettings = payload?.settings ?? {}
+          try {
+            const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
 
-          if ('updateChannel' in sanitizedSettings) {
-            sanitizedSettings.updateChannel = this.enforceChannelPreference(
-              sanitizedSettings.updateChannel
-            )
-          }
-
-          if ('frequency' in sanitizedSettings && sanitizedSettings.frequency) {
-            sanitizedSettings.frequency = this.normalizeFrequency(sanitizedSettings.frequency)
-          }
-
-          if ('lastCheckedAt' in sanitizedSettings) {
-            delete (sanitizedSettings as Record<string, unknown>).lastCheckedAt
-          }
-
-          this.settings = { ...this.settings, ...sanitizedSettings }
-          this.saveSettings()
-
-          if (this.updateSystem) {
-            if (typeof sanitizedSettings.autoDownload === 'boolean') {
-              this.updateSystem.setAutoDownload(sanitizedSettings.autoDownload)
-            }
-            if (typeof sanitizedSettings.enabled === 'boolean') {
-              this.updateSystem.setAutoCheck(sanitizedSettings.enabled)
-            }
-            if (sanitizedSettings.frequency) {
-              this.updateSystem.setCheckFrequency(
-                this.mapFrequencyToCheckFrequency(sanitizedSettings.frequency)
+            if ('updateChannel' in sanitizedSettings) {
+              sanitizedSettings.updateChannel = this.enforceChannelPreference(
+                sanitizedSettings.updateChannel
               )
             }
-            if (sanitizedSettings.updateChannel) {
-              this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
+
+            if ('frequency' in sanitizedSettings && sanitizedSettings.frequency) {
+              sanitizedSettings.frequency = this.normalizeFrequency(sanitizedSettings.frequency)
+            }
+
+            if ('lastCheckedAt' in sanitizedSettings) {
+              delete (sanitizedSettings as Record<string, unknown>).lastCheckedAt
+            }
+
+            this.settings = { ...this.settings, ...sanitizedSettings }
+            this.saveSettings()
+
+            if (this.updateSystem) {
+              if (typeof sanitizedSettings.autoDownload === 'boolean') {
+                this.updateSystem.setAutoDownload(sanitizedSettings.autoDownload)
+              }
+              if (typeof sanitizedSettings.enabled === 'boolean') {
+                this.updateSystem.setAutoCheck(sanitizedSettings.enabled)
+              }
+              if (sanitizedSettings.frequency) {
+                this.updateSystem.setCheckFrequency(
+                  this.mapFrequencyToCheckFrequency(sanitizedSettings.frequency)
+                )
+              }
+              if (sanitizedSettings.updateChannel) {
+                this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
+              }
+            }
+
+            if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
+              this.pollingService.unregister(UPDATE_POLL_TASK_ID)
+            }
+            if (this.settings.enabled) {
+              this.startPolling()
+            }
+
+            return { success: true }
+          } catch (error) {
+            updateLog.error('Failed to update settings', { error })
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Unknown error'
             }
           }
-
-          if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
-            this.pollingService.unregister(UPDATE_POLL_TASK_ID)
-          }
-          if (this.settings.enabled) {
-            this.startPolling()
-          }
-
-          return { success: true }
-        } catch (error) {
-          updateLog.error('Failed to update settings', { error })
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
         }
-      }),
+      ),
 
       tx.on(UpdateEvents.getStatus, async () => {
         return {
@@ -713,12 +726,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     return null
   }
 
-  private parseDownloadTaskMetadata(metadata?: string | null): Record<string, any> | null {
+  private parseDownloadTaskMetadata(metadata?: string | null): Record<string, unknown> | null {
     if (!metadata) {
       return null
     }
     try {
-      return JSON.parse(metadata) as Record<string, any>
+      return JSON.parse(metadata) as Record<string, unknown>
     } catch (error) {
       updateLog.warn('Failed to parse download task metadata', { error })
       return null

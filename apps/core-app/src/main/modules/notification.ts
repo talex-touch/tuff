@@ -51,11 +51,15 @@ class NotificationInboxStore {
 
   private ensureLoaded(): void {
     if (this.loaded) return
-    const data = getMainConfig(StorageList.NOTIFICATION_CENTER) as any
+    const data = getMainConfig(StorageList.NOTIFICATION_CENTER)
     if (Array.isArray(data)) {
-      this.entries = data
-    } else if (Array.isArray(data?.entries)) {
-      this.entries = data.entries
+      this.entries = data as NotificationInboxEntry[]
+    } else if (
+      data &&
+      typeof data === 'object' &&
+      Array.isArray((data as { entries?: unknown }).entries)
+    ) {
+      this.entries = (data as { entries: NotificationInboxEntry[] }).entries
     } else {
       this.entries = []
     }
@@ -216,7 +220,7 @@ export class NotificationModule extends BaseModule {
 
   onInit(_ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const app = genTouchApp()
-    const channel = (app as any).channel as any
+    const channel = app.channel
     this.transport = getTuffTransportMain(channel, getKeyManager(channel) ?? channel)
     this.registerTransportHandlers()
   }

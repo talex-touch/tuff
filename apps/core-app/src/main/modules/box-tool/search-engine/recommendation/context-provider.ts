@@ -1,4 +1,5 @@
 import type { ContextSignal, TimePattern } from '@talex-touch/utils/core-box'
+import type { IClipboardItem } from '../../../clipboard'
 import * as crypto from 'node:crypto'
 
 /**
@@ -85,11 +86,11 @@ export class ContextProvider {
   /**
    * Detects semantic type of clipboard content.
    */
-  private detectClipboardContentType(item: any): {
+  private detectClipboardContentType(item: IClipboardItem): {
     contentType?: 'url' | 'text' | 'code' | 'file'
-    meta?: Record<string, any>
+    meta?: Record<string, unknown>
   } {
-    const meta: Record<string, any> = {}
+    const meta: Record<string, unknown> = {}
     let contentType: 'url' | 'text' | 'code' | 'file' = 'text'
 
     if (item.type === 'text') {

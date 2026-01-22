@@ -5,26 +5,17 @@ import type { ScannedFileInfo } from './types'
 import path from 'node:path'
 import {
   isIndexableFile as globalIsIndexableFile,
-  scanDirectory as globalScanDirectory,
+  scanDirectory as globalScanDirectory
 } from '@talex-touch/utils/common/file-scan-utils'
 import { WHITELISTED_EXTENSIONS } from './constants'
 
-const DIRECT_IMAGE_EXTENSIONS = new Set([
-  'png',
-  'jpg',
-  'jpeg',
-  'svg',
-  'gif',
-  'bmp',
-  'webp',
-  'ico',
-])
+const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
 export function isIndexableFile(
   fullPath: string,
   extension: string,
   fileName: string,
-  options?: FileScanOptions,
+  options?: FileScanOptions
 ): boolean {
   // 使用全局工具进行基础过滤
   if (!globalIsIndexableFile(fullPath, extension, fileName, options)) {
@@ -42,19 +33,19 @@ export function isIndexableFile(
 export async function scanDirectory(
   dirPath: string,
   excludePaths?: Set<string>,
-  options?: FileScanOptions,
+  options?: FileScanOptions
 ): Promise<ScannedFileInfo[]> {
   // 使用全局扫描工具
   const globalFiles = await globalScanDirectory(dirPath, options, excludePaths)
 
   // 转换为本地 ScannedFileInfo 格式
-  return globalFiles.map(file => ({
+  return globalFiles.map((file) => ({
     path: file.path,
     name: file.name,
     extension: file.extension,
     size: file.size,
     ctime: file.ctime,
-    mtime: file.mtime,
+    mtime: file.mtime
   }))
 }
 
@@ -63,33 +54,31 @@ export function mapFileToTuffItem(
   _extensions: Record<string, string>,
   providerId: string,
   providerName: string,
-  onMissingIcon?: (file: typeof filesSchema.$inferSelect) => void,
+  onMissingIcon?: (file: typeof filesSchema.$inferSelect) => void
 ): TuffItem {
   const extension = (file.extension || path.extname(file.name) || '')
     .replace(/^\./, '')
     .toLowerCase()
 
-  let icon: { type: 'file' | 'url' | 'class' | 'emoji', value: string }
+  let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string }
 
   if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
     icon = {
       type: 'file',
-      value: file.path,
+      value: file.path
     }
-  }
-  else if (_extensions.icon) {
+  } else if (_extensions.icon) {
     icon = {
       type: 'url',
-      value: _extensions.icon,
+      value: _extensions.icon
     }
-  }
-  else {
+  } else {
     // Trigger lazy load if callback provided
     onMissingIcon?.(file)
     // Return default/empty icon while loading
     icon = {
       type: 'class',
-      value: 'i-ri-file-line', // Default file icon
+      value: 'i-ri-file-line' // Default file icon
     }
   }
 
@@ -98,7 +87,7 @@ export function mapFileToTuffItem(
     source: {
       type: 'file',
       id: providerId,
-      name: providerName,
+      name: providerName
     },
     kind: 'file',
     render: {
@@ -106,8 +95,8 @@ export function mapFileToTuffItem(
       basic: {
         title: file.name,
         subtitle: file.path,
-        icon,
-      },
+        icon
+      }
     },
     actions: [
       {
@@ -116,17 +105,17 @@ export function mapFileToTuffItem(
         label: 'Open',
         primary: true,
         payload: {
-          path: file.path,
-        },
+          path: file.path
+        }
       },
       {
         id: 'open-folder',
         type: 'open',
         label: 'Open Folder',
         payload: {
-          path: path.dirname(file.path),
-        },
-      },
+          path: path.dirname(file.path)
+        }
+      }
     ],
     meta: {
       file: {
@@ -136,8 +125,8 @@ export function mapFileToTuffItem(
         modified_at: file.mtime.toISOString(),
         extension: (file.extension || path.extname(file.name) || '')
           .replace(/^\./, '')
-          .toLowerCase(),
-      },
-    },
+          .toLowerCase()
+      }
+    }
   }
 }

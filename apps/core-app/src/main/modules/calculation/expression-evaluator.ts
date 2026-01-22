@@ -75,19 +75,23 @@ function formatResult(value: unknown): string {
     return rounded.toString()
   }
 
-  if (typeof value === 'object' && value !== null) {
-    // Handle mathjs BigNumber
-    if ('toNumber' in value && typeof (value as any).toNumber === 'function') {
-      const num = (value as any).toNumber()
-      if (Number.isInteger(num)) {
-        return num.toString()
-      }
-      const rounded = Math.round(num * 1e10) / 1e10
-      return rounded.toString()
+  const derived = extractNumber(value)
+  if (derived !== undefined) {
+    if (Number.isInteger(derived)) {
+      return derived.toString()
     }
+    const rounded = Math.round(derived * 1e10) / 1e10
+    return rounded.toString()
   }
 
   return String(value)
+}
+
+function extractNumber(value: unknown): number | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  if (!('toNumber' in value)) return undefined
+  const candidate = (value as { toNumber?: unknown }).toNumber
+  return typeof candidate === 'function' ? candidate() : undefined
 }
 
 /**
@@ -119,9 +123,7 @@ export function evaluateExpression(expression: string): ExpressionResult {
 
     const formatted = formatResult(result)
     const numericValue =
-      typeof result === 'number'
-        ? result
-        : ((result as any)?.toNumber?.() ?? Number.parseFloat(formatted))
+      typeof result === 'number' ? result : (extractNumber(result) ?? Number.parseFloat(formatted))
 
     return {
       success: true,

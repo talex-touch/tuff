@@ -18,6 +18,25 @@ import { IntelligenceProvider } from '../runtime/base-provider'
 const DEFAULT_BASE_URL = 'https://api.siliconflow.cn/v1'
 const DEFAULT_VISION_MODEL = 'deepseek-ai/DeepSeek-OCR'
 
+type SiliconflowChatChoice = {
+  message?: {
+    content?: unknown
+  }
+}
+
+type SiliconflowEmbeddingData = {
+  embedding: number[]
+}
+
+type SiliconflowUsage = {
+  prompt_tokens?: number
+  completion_tokens?: number
+  total_tokens?: number
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 export class SiliconflowProvider extends IntelligenceProvider {
   readonly type = IntelligenceProviderType.SILICONFLOW
 
@@ -60,11 +79,11 @@ export class SiliconflowProvider extends IntelligenceProvider {
       stop: payload.stop
     }
 
-    const data = await this.post<{ choices: any[]; usage?: any; model?: string }>(
-      '/chat/completions',
-      body,
-      options.timeout
-    )
+    const data = await this.post<{
+      choices: SiliconflowChatChoice[]
+      usage?: SiliconflowUsage
+      model?: string
+    }>('/chat/completions', body, options.timeout)
     const latency = Date.now() - startTime
 
     const usage: AiUsageInfo = {
@@ -173,8 +192,8 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }
 
     const data = await this.post<{
-      data: Array<{ embedding: number[] }>
-      usage?: any
+      data: SiliconflowEmbeddingData[]
+      usage?: SiliconflowUsage
       model?: string
     }>('/embeddings', body, options.timeout)
 
@@ -257,11 +276,11 @@ export class SiliconflowProvider extends IntelligenceProvider {
       ]
     }
 
-    const data = await this.post<{ choices: any[]; usage?: any; model?: string }>(
-      '/chat/completions',
-      body,
-      options.timeout
-    )
+    const data = await this.post<{
+      choices: SiliconflowChatChoice[]
+      usage?: SiliconflowUsage
+      model?: string
+    }>('/chat/completions', body, options.timeout)
 
     const latency = Date.now() - startTime
     const usage: AiUsageInfo = {
@@ -272,15 +291,24 @@ export class SiliconflowProvider extends IntelligenceProvider {
 
     const rawContent = this.extractMessageContent(data.choices[0]?.message?.content)
     const parsed = this.safeParseJson(rawContent)
+    const parsedRecord = isRecord(parsed) ? parsed : null
+    const text = typeof parsedRecord?.text === 'string' ? parsedRecord.text : rawContent
+    const confidence =
+      typeof parsedRecord?.confidence === 'number' ? parsedRecord.confidence : undefined
+    const language = typeof parsedRecord?.language === 'string' ? parsedRecord.language : undefined
+    const keywords = Array.isArray(parsedRecord?.keywords)
+      ? parsedRecord.keywords.filter((item): item is string => typeof item === 'string')
+      : []
+    const blocks = Array.isArray(parsedRecord?.blocks) ? parsedRecord.blocks : undefined
 
-    const ocrResult: IntelligenceVisionOcrResult = parsed
+    const ocrResult: IntelligenceVisionOcrResult = parsedRecord
       ? {
-          text: parsed.text ?? '',
-          confidence: parsed.confidence,
-          language: parsed.language,
-          keywords: parsed.keywords ?? [],
-          blocks: parsed.blocks,
-          raw: parsed
+          text,
+          confidence,
+          language,
+          keywords,
+          blocks,
+          raw: parsedRecord
         }
       : {
           text: rawContent,
@@ -298,7 +326,11 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }
   }
 
-  private async post<T>(endpoint: string, body: any, timeout?: number): Promise<T> {
+  private async post<T>(
+    endpoint: string,
+    body: Record<string, unknown>,
+    timeout?: number
+  ): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
       headers: this.headers,
@@ -362,13 +394,13 @@ export class SiliconflowProvider extends IntelligenceProvider {
         .filter(Boolean)
         .join('\n')
     }
-    if (typeof content === 'object' && 'text' in (content as any)) {
-      return String((content as any).text)
+    if (isRecord(content) && 'text' in content) {
+      return String(content.text)
     }
     return ''
   }
 
-  protected override safeParseJson(content: string): any | null {
+  protected override safeParseJson(content: string): unknown | null {
     if (!content) return null
     const trimmed = content.trim()
     if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null

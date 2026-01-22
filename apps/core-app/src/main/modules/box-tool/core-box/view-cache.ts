@@ -27,6 +27,11 @@ const DEFAULT_CONFIG: ViewCacheConfig = {
   hotCacheDurationMs: 120000
 }
 
+type WebContentsWithRenderGone = Electron.WebContents & {
+  once: (event: 'render-process-gone', listener: () => void) => Electron.WebContents
+  removeListener: (event: 'render-process-gone', listener: () => void) => Electron.WebContents
+}
+
 export class ViewCacheManager {
   private static instance: ViewCacheManager
   private cache = new Map<string, CachedView>()
@@ -76,10 +81,10 @@ export class ViewCacheManager {
   }
 
   private getWebContents(view: WebContentsView | null | undefined): Electron.WebContents | null {
-    const webContents = (view as any)?.webContents
+    const webContents = view?.webContents
     if (!webContents) return null
     if (typeof webContents.isDestroyed !== 'function') return null
-    return webContents as Electron.WebContents
+    return webContents
   }
 
   private isCachedAlive(cached: CachedView | null | undefined): boolean {
@@ -102,12 +107,13 @@ export class ViewCacheManager {
       this.removeEntry(key, { close: false })
     }
 
+    const renderGoneEmitter = webContents as WebContentsWithRenderGone
     webContents.once('destroyed', onDestroyed)
-    ;(webContents as any).once?.('render-process-gone', onRenderGone)
+    renderGoneEmitter.once('render-process-gone', onRenderGone)
 
     return () => {
       webContents.removeListener('destroyed', onDestroyed)
-      ;(webContents as any).removeListener?.('render-process-gone', onRenderGone)
+      renderGoneEmitter.removeListener('render-process-gone', onRenderGone)
     }
   }
 

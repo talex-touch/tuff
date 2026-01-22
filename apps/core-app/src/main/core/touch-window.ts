@@ -7,7 +7,7 @@ import type {
 } from 'electron'
 import process from 'node:process'
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import { IS_WINDOWS_11, MicaBrowserWindow, WIN10, useMicaElectron } from 'talex-mica-electron'
+import { IS_WINDOWS_11, MicaBrowserWindow, useMicaElectron, WIN10 } from 'talex-mica-electron'
 import { createLogger } from '../utils/logger'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 

@@ -2,7 +2,7 @@ import type { IDownloadOptions } from '@talex-touch/utils/plugin/plugin-source'
 import type {
   PluginInstallRequest,
   PluginProviderContext,
-  PluginProviderType,
+  PluginProviderType
 } from '@talex-touch/utils/plugin/providers'
 import type { RiskLevel } from '@talex-touch/utils/plugin/risk'
 import crypto from 'node:crypto'
@@ -14,7 +14,7 @@ import fse from 'fs-extra'
 export async function downloadToTempFile(
   url: string,
   fallbackExt = '.tar',
-  options?: IDownloadOptions,
+  options?: IDownloadOptions
 ): Promise<string> {
   const requestTimeout = options?.timeout ?? 30_000
   const resolvedExt = (() => {
@@ -22,8 +22,7 @@ export async function downloadToTempFile(
       const parsed = new URL(url)
       const ext = path.extname(parsed.pathname)
       return ext || fallbackExt
-    }
-    catch (error) {
+    } catch {
       return fallbackExt
     }
   })()
@@ -34,7 +33,7 @@ export async function downloadToTempFile(
   const response = await axios.get<NodeJS.ReadableStream>(url, {
     responseType: 'stream',
     timeout: requestTimeout,
-    proxy: false,
+    proxy: false
   })
 
   const totalLength = Number(response.headers['content-length'] ?? 0)
@@ -43,13 +42,11 @@ export async function downloadToTempFile(
   const writer = fse.createWriteStream(filePath)
 
   const reportProgress = (value: number): void => {
-    if (!options?.onProgress)
-      return
+    if (!options?.onProgress) return
     try {
       const normalized = Math.max(0, Math.min(100, value))
       options.onProgress(normalized)
-    }
-    catch (error) {
+    } catch (error) {
       console.warn('[PluginProvider] Failed to emit download progress:', error)
     }
   }
@@ -98,7 +95,9 @@ export async function downloadToTempFile(
 
   // Verify file size matches expected if Content-Length was provided
   if (totalLength > 0 && stat.size !== totalLength) {
-    console.warn(`[PluginProvider] Downloaded file size mismatch: expected ${totalLength}, got ${stat.size}`)
+    console.warn(
+      `[PluginProvider] Downloaded file size mismatch: expected ${totalLength}, got ${stat.size}`
+    )
     // Don't throw, just warn - some servers may not report accurate Content-Length
   }
 
@@ -115,18 +114,17 @@ export async function ensureRiskAccepted(
   context?: PluginProviderContext,
   level: RiskLevel = 'needs_confirmation',
   description?: string,
-  metadata?: Record<string, unknown>,
+  metadata?: Record<string, unknown>
 ): Promise<void> {
   const handler = context?.riskPrompt
-  if (!handler || level === 'trusted')
-    return
+  if (!handler || level === 'trusted') return
 
   const accepted = await handler({
     sourceType: provider,
     sourceId: request.source,
     level,
     description,
-    metadata,
+    metadata
   })
 
   if (!accepted) {

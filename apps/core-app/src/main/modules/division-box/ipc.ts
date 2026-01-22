@@ -6,16 +6,18 @@
  */
 
 import type {
-  CloseOptions,
   DivisionBoxConfig,
   IPCResponse,
   SessionInfo,
   StateChangeEvent
 } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
-import type { FlowPayload } from './flow-trigger'
-import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxIPCChannel } from '@talex-touch/utils'
-import { DivisionBoxEvents, getTuffTransportMain } from '@talex-touch/utils/transport'
+import { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
+import {
+  DivisionBoxEvents,
+  getTuffTransportMain,
+  type HandlerContext
+} from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPermissionModule } from '../permission'
 import { flowTriggerManager } from './flow-trigger'
@@ -27,25 +29,27 @@ import { DivisionBoxManager } from './manager'
  * @param config - Configuration to validate
  * @returns Validation result with error message if invalid
  */
-function validateConfig(config: any): { valid: boolean; error?: string } {
+function validateConfig(config: unknown): { valid: boolean; error?: string } {
   if (!config || typeof config !== 'object') {
     return { valid: false, error: 'Configuration must be an object' }
   }
 
-  if (!config.url || typeof config.url !== 'string') {
+  const candidate = config as Partial<DivisionBoxConfig>
+
+  if (!candidate.url || typeof candidate.url !== 'string') {
     return { valid: false, error: 'Missing or invalid "url" field' }
   }
 
-  if (!config.title || typeof config.title !== 'string') {
+  if (!candidate.title || typeof candidate.title !== 'string') {
     return { valid: false, error: 'Missing or invalid "title" field' }
   }
 
   // Validate optional fields if present
-  if (config.size && !['compact', 'medium', 'expanded'].includes(config.size)) {
+  if (candidate.size && !['compact', 'medium', 'expanded'].includes(candidate.size)) {
     return { valid: false, error: 'Invalid "size" field. Must be compact, medium, or expanded' }
   }
 
-  if (config.keepAlive !== undefined && typeof config.keepAlive !== 'boolean') {
+  if (candidate.keepAlive !== undefined && typeof candidate.keepAlive !== 'boolean') {
     return { valid: false, error: 'Invalid "keepAlive" field. Must be a boolean' }
   }
 
@@ -58,7 +62,7 @@ function validateConfig(config: any): { valid: boolean; error?: string } {
  * @param sessionId - Session ID to validate
  * @returns Validation result with error message if invalid
  */
-function validateSessionId(sessionId: any): { valid: boolean; error?: string } {
+function validateSessionId(sessionId: unknown): { valid: boolean; error?: string } {
   if (!sessionId || typeof sessionId !== 'string') {
     return { valid: false, error: 'Invalid or missing sessionId' }
   }
@@ -158,12 +162,12 @@ export class DivisionBoxIPC {
       return
     }
 
-    const channel = this.channel as any
-    this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    const channel = this.channel as ITouchChannel & { keyManager?: unknown }
+    this.transport = getTuffTransportMain(channel, channel.keyManager ?? channel)
 
     const transport = this.transport
 
-    const enforce = (context: any, apiName: string, sdkapi?: number) => {
+    const enforce = (context: HandlerContext, apiName: string, sdkapi?: number) => {
       const pluginId = context?.plugin?.name
       if (!pluginId) {
         return
@@ -176,15 +180,14 @@ export class DivisionBoxIPC {
     }
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.open, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.open, async (payload, context) => {
         enforce(context, 'division-box:session:open', payload?._sdkapi)
-        const config = payload as DivisionBoxConfig
-        const validation = validateConfig(config)
+        const validation = validateConfig(payload)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
         }
 
-        const session = await this.manager.createSession(config)
+        const session = await this.manager.createSession(payload)
         const pluginName = session.getAttachedPlugin()?.name ?? session.meta?.pluginId
 
         session.onStateChange((event) => {
@@ -202,9 +205,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.close, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.close, async (payload, context) => {
         enforce(context, 'division-box:session:close', payload?._sdkapi)
-        const { sessionId, options } = payload as { sessionId: string; options?: CloseOptions }
+        const { sessionId, options } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -220,9 +223,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.getState, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.getState, async (payload, context) => {
         enforce(context, 'division-box:session:get-state', payload?._sdkapi)
-        const { sessionId, key } = payload as { sessionId: string; key?: string }
+        const { sessionId, key } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -248,9 +251,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.updateState, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.updateState, async (payload, context) => {
         enforce(context, 'division-box:session:update-state', payload?._sdkapi)
-        const { sessionId, key, value } = payload as { sessionId: string; key: string; value: any }
+        const { sessionId, key, value } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -277,7 +280,7 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.getActiveSessions, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.getActiveSessions, async (payload, context) => {
         enforce(context, 'division-box:session:get-active-sessions', payload?._sdkapi)
         const sessions = this.manager.getActiveSessionsInfo()
         return createSuccessResponse(sessions)
@@ -285,12 +288,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.flowTrigger, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.flowTrigger, async (payload, context) => {
         enforce(context, 'division-box:flow:trigger', payload?._sdkapi)
-        const { targetId, payload: flowPayload } = payload as {
-          targetId: string
-          payload: FlowPayload
-        }
+        const { targetId, payload: flowPayload } = payload
 
         if (!targetId || typeof targetId !== 'string') {
           return createErrorResponse('Invalid or missing targetId')
@@ -311,9 +311,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.togglePin, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.togglePin, async (payload, context) => {
         enforce(context, 'division-box:window:toggle-pin', payload?._sdkapi)
-        const { sessionId } = payload as { sessionId: string }
+        const { sessionId } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -330,9 +330,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.setOpacity, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.setOpacity, async (payload, context) => {
         enforce(context, 'division-box:window:set-opacity', payload?._sdkapi)
-        const { sessionId, opacity } = payload as { sessionId: string; opacity: number }
+        const { sessionId, opacity } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -349,9 +349,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.toggleDevTools, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.toggleDevTools, async (payload, context) => {
         enforce(context, 'division-box:window:toggle-devtools', payload?._sdkapi)
-        const { sessionId } = payload as { sessionId: string }
+        const { sessionId } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -373,9 +373,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.getWindowState, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.getWindowState, async (payload, context) => {
         enforce(context, 'division-box:window:get-window-state', payload?._sdkapi)
-        const { sessionId } = payload as { sessionId: string }
+        const { sessionId } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -395,13 +395,9 @@ export class DivisionBoxIPC {
     )
 
     this.transportDisposers.push(
-      transport.on(DivisionBoxEvents.inputChange, async (payload: any, context: any) => {
+      transport.on(DivisionBoxEvents.inputChange, async (payload, context) => {
         enforce(context, 'division-box:ui:input-change', payload?._sdkapi)
-        const { sessionId, input, query } = payload as {
-          sessionId: string
-          input: string
-          query: any
-        }
+        const { sessionId, input, query } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -458,12 +454,10 @@ export class DivisionBoxIPC {
       }
     }
 
-    if (pluginName) {
-      try {
-        this.channel.sendPlugin(pluginName, DivisionBoxIPCChannel.STATE_CHANGED, event)
-      } catch {
-        // ignore
-      }
+    if (pluginName && this.transport) {
+      void this.transport
+        .sendToPlugin(pluginName, DivisionBoxEvents.stateChanged, event)
+        .catch(() => {})
     }
   }
 
@@ -481,12 +475,10 @@ export class DivisionBoxIPC {
       }
     }
 
-    if (pluginName) {
-      try {
-        this.channel.sendPlugin(pluginName, DivisionBoxIPCChannel.SESSION_DESTROYED, { sessionId })
-      } catch {
-        // ignore
-      }
+    if (pluginName && this.transport) {
+      void this.transport
+        .sendToPlugin(pluginName, DivisionBoxEvents.sessionDestroyed, { sessionId })
+        .catch(() => {})
     }
   }
 }

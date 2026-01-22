@@ -538,10 +538,12 @@ export class RecommendationEngine {
     const pinnedKeys = new Set(pinnedItems.map((p) => `${p.sourceId}:${p.itemId}`))
     const pinnedIdentityKeys = new Set(pinnedTuffItems.map((item) => this.getItemIdentity(item)))
     const filteredItems = this.dedupeItems(items).filter((item) => {
-      const meta = item.meta as any
+      const meta = item.meta as Record<string, unknown> | undefined
+      const originalSourceId = meta?._originalSourceId
+      const originalItemId = meta?._originalItemId
       const originalKey =
-        meta?._originalSourceId && meta?._originalItemId
-          ? `${meta._originalSourceId}:${meta._originalItemId}`
+        typeof originalSourceId === 'string' && typeof originalItemId === 'string'
+          ? `${originalSourceId}:${originalItemId}`
           : `${item.source.id}:${item.id}`
       const identityKey = this.getItemIdentity(item)
       return !pinnedKeys.has(originalKey) && !pinnedIdentityKeys.has(identityKey)
@@ -549,8 +551,9 @@ export class RecommendationEngine {
 
     for (const item of filteredItems) {
       if (!item.meta) item.meta = {}
-      if (!(item.meta as any).recommendation) {
-        ;(item.meta as any).recommendation = { source: 'frequent' }
+      const meta = item.meta as Record<string, unknown>
+      if (!('recommendation' in meta)) {
+        meta.recommendation = { source: 'frequent' }
       }
     }
 
@@ -1445,7 +1448,7 @@ export class RecommendationEngine {
   }
 
   private getItemIdentity(item: TuffItem): string {
-    const meta = item.meta as Record<string, any> | null | undefined
+    const meta = item.meta
     const sourceId = item.source?.id || 'unknown'
     const appMeta = meta?.app
     if (appMeta?.bundle_id) {
@@ -1454,12 +1457,15 @@ export class RecommendationEngine {
     if (appMeta?.path) {
       return `${sourceId}:path:${appMeta.path}`
     }
-    const systemActionId = meta?.raw?.systemActionId
+    const systemActionId = (meta?.raw as { systemActionId?: string } | undefined)?.systemActionId
     if (systemActionId) {
       return `${sourceId}:system:${systemActionId}`
     }
-    if (meta?._originalSourceId && meta?._originalItemId) {
-      return `${meta._originalSourceId}:${meta._originalItemId}`
+    const metaRecord = meta as Record<string, unknown> | undefined
+    const originalSourceId = metaRecord?._originalSourceId
+    const originalItemId = metaRecord?._originalItemId
+    if (typeof originalSourceId === 'string' && typeof originalItemId === 'string') {
+      return `${originalSourceId}:${originalItemId}`
     }
     if (item.id) {
       return `${sourceId}:${item.id}`

@@ -15,7 +15,7 @@ function getInstrumentedWorkerThreadsModule(
 
   class InstrumentedWorker extends workerThreads.Worker {
     constructor(filename: string | URL, options?: WorkerOptions) {
-      super(filename as any, options as any)
+      super(filename, options)
       pluginRuntimeTracker.registerWorker(pluginName, this as unknown as NodeWorker)
     }
   }

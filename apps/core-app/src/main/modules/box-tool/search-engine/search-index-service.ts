@@ -1,5 +1,4 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import type { LibSQLTransaction } from 'drizzle-orm/libsql/session'
 import { performance } from 'node:perf_hooks'
 import { eq, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
@@ -191,7 +190,7 @@ export class SearchIndexService {
   }
 
   private async applyDocument(
-    tx: LibSQLTransaction<typeof schema, any>,
+    tx: Pick<LibSQLDatabase<typeof schema>, 'run' | 'delete' | 'insert'>,
     doc: PreparedIndexDocument
   ): Promise<void> {
     await tx.run(sql`DELETE FROM search_index WHERE item_id = ${doc.itemId}`)

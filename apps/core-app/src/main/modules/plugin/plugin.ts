@@ -20,6 +20,7 @@ import type {
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { TouchWindow } from '../../core/touch-window'
 import path from 'node:path'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import {
   createBoxSDK,
@@ -30,7 +31,6 @@ import {
   PluginStatus
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
@@ -115,6 +115,16 @@ export class TouchPlugin implements ITouchPlugin {
 
   private get transport(): ITuffTransportMain | null {
     return TouchPlugin._transport
+  }
+
+  private resolveTransport(): ITuffTransportMain {
+    if (this.transport) {
+      return this.transport
+    }
+    const channel = genTouchApp().channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    return getTuffTransportMain(channel, keyManager)
   }
 
   dev: IPluginDev
@@ -246,7 +256,6 @@ export class TouchPlugin implements ITouchPlugin {
         plugin: this.name,
         status: this._status
       })
-      return
     }
   }
 
@@ -600,10 +609,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this.status = PluginStatus.ENABLED
-    const channel = genTouchApp().channel as any
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    const transport = this.resolveTransport()
     this._uniqueChannelKey = transport.keyManager.requestKey(this.name)
 
     const now = Date.now()
@@ -642,10 +648,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLING
     this.logger.debug('Disabling plugin')
 
-    const channel = genTouchApp().channel as any
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    const transport = this.resolveTransport()
     transport
       .sendToPlugin(this.name, PluginEvents.lifecycleSignal.disabled, this.toJSONObject())
       .catch(() => {})
@@ -720,9 +723,7 @@ export class TouchPlugin implements ITouchPlugin {
     const pluginName = this.name
     const appInstance = genTouchApp()
     const channel = appInstance.channel as ITouchChannel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    const transport = this.resolveTransport()
     const mainWindowId = appInstance.window.window.id
 
     const http = axios
@@ -1723,10 +1724,7 @@ export class TouchPlugin implements ITouchPlugin {
    * 广播存储更新事件
    */
   private broadcastStorageUpdate(fileName?: string): void {
-    const channel = genTouchApp().channel as ITouchChannel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = this.transport ?? getTuffTransportMain(channel as any, keyManager as any)
+    const transport = this.resolveTransport()
     transport.broadcast(PluginEvents.storage.update, {
       name: this.name,
       fileName

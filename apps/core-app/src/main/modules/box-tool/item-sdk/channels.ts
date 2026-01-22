@@ -20,7 +20,7 @@ export const BOX_ITEM_CHANNELS = {
   /** 请求同步所有 items */
   SYNC: 'box-item:sync',
   /** 同步响应 */
-  SYNC_RESPONSE: 'box-item:sync-response',
+  SYNC_RESPONSE: 'box-item:sync-response'
 } as const
 
 export type BoxItemChannel = (typeof BOX_ITEM_CHANNELS)[keyof typeof BOX_ITEM_CHANNELS]

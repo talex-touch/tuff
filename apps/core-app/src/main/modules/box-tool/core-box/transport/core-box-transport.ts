@@ -1,10 +1,13 @@
+import type { TouchApp } from '../../../../core/touch-app'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import type { TouchApp } from '../../../../core/touch-app'
 import { genTouchApp } from '../../../../core'
 
 type Handler<TPayload> = (payload: TPayload) => void | TPayload
+
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
 
 /**
  * Transport layer for CoreBox IPC communication.
@@ -25,8 +28,9 @@ export class CoreBoxTransport {
 
   private get tuffTransport(): ReturnType<typeof getTuffTransportMain> {
     if (!this.transport) {
-      const channel = this.touchApp.channel as any
-      this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+      const channel = this.touchApp.channel
+      const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+      this.transport = getTuffTransportMain(channel, keyManager)
     }
     return this.transport
   }
@@ -43,7 +47,7 @@ export class CoreBoxTransport {
     event: string,
     handler: Handler<TPayload>
   ): () => void {
-    const rawEvent = defineRawEvent<TPayload, any>(event)
+    const rawEvent = defineRawEvent<TPayload, unknown>(event)
     return this.tuffTransport.on(rawEvent, (payload, context) => {
       const isPlugin = Boolean(context.plugin)
       if (channelType === ChannelType.MAIN && isPlugin) {

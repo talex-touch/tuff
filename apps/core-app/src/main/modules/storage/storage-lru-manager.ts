@@ -21,7 +21,7 @@ export class StorageLRUManager {
     onEvict: (name: string) => Promise<void>,
     evictionTimeout: number = 60000,
     cleanupInterval: number = 30000,
-    hotConfigs: Set<string> = new Set(),
+    hotConfigs: Set<string> = new Set()
   ) {
     this.cache = cache
     this.onEvict = onEvict
@@ -50,14 +50,13 @@ export class StorageLRUManager {
     }
 
     console.info(
-      chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`),
+      chalk.blue(`[StorageLRU] Started cleanup with ${this.CLEANUP_INTERVAL / 1000}s interval`)
     )
 
-    pollingService.register(
-      this.cleanupTaskId,
-      () => this.performCleanup(),
-      { interval: this.CLEANUP_INTERVAL, unit: 'milliseconds' },
-    )
+    pollingService.register(this.cleanupTaskId, () => this.performCleanup(), {
+      interval: this.CLEANUP_INTERVAL,
+      unit: 'milliseconds'
+    })
     pollingService.start()
   }
 
@@ -81,13 +80,12 @@ export class StorageLRUManager {
 
       const lastAccess = this.cache.getLastAccessTime(name)
 
-      if (lastAccess && (now - lastAccess > this.EVICTION_TIMEOUT)) {
+      if (lastAccess && now - lastAccess > this.EVICTION_TIMEOUT) {
         try {
           await this.onEvict(name)
           this.cache.evict(name)
           evicted.push(name)
-        }
-        catch (error) {
+        } catch (error) {
           console.error(chalk.red(`[StorageLRU] Failed to evict "${name}"`), error)
         }
       }
@@ -95,7 +93,7 @@ export class StorageLRUManager {
 
     if (evicted.length > 0) {
       console.info(
-        chalk.cyan(`[StorageLRU] Evicted ${evicted.length} config(s): ${evicted.join(', ')}`),
+        chalk.cyan(`[StorageLRU] Evicted ${evicted.length} config(s): ${evicted.join(', ')}`)
       )
     }
   }
@@ -112,13 +110,12 @@ export class StorageLRUManager {
     for (const name of names) {
       const lastAccess = this.cache.getLastAccessTime(name)
 
-      if (lastAccess && (now - lastAccess > this.EVICTION_TIMEOUT)) {
+      if (lastAccess && now - lastAccess > this.EVICTION_TIMEOUT) {
         try {
           await this.onEvict(name)
           this.cache.evict(name)
           evicted.push(name)
-        }
-        catch (error) {
+        } catch (error) {
           console.error(chalk.red(`[StorageLRU] Manual evict failed for "${name}"`), error)
         }
       }
@@ -138,8 +135,7 @@ export class StorageLRUManager {
     try {
       await this.onEvict(name)
       this.cache.evict(name)
-    }
-    catch (error) {
+    } catch (error) {
       console.error(chalk.red(`[StorageLRU] Force evict failed for "${name}"`), error)
     }
   }
@@ -147,10 +143,10 @@ export class StorageLRUManager {
   /**
    * Get pending evictions (for debugging)
    */
-  getPendingEvictions(): Array<{ name: string, idleTime: number }> {
+  getPendingEvictions(): Array<{ name: string; idleTime: number }> {
     const now = Date.now()
     const names = this.cache.getAllNames()
-    const pending: Array<{ name: string, idleTime: number }> = []
+    const pending: Array<{ name: string; idleTime: number }> = []
 
     for (const name of names) {
       const lastAccess = this.cache.getLastAccessTime(name)

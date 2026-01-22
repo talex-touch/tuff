@@ -29,12 +29,12 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PerfSummary } from '../../utils/perf-monitor'
 import type { AnalyticsMessageStore } from './message-store'
 import type { StartupHistory, StartupMetrics } from './types'
+import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import process from 'node:process'
 import { app } from 'electron'
 import { getStartupAnalytics } from '.'
 import { setIpcTracer } from '../../core/channel-core'
@@ -56,6 +56,12 @@ const MESSAGE_REPORT_MAX_DELAY_MS = 5 * 60_000
 const MESSAGE_REPORT_MAX_QUEUE = 120
 const MESSAGE_REPORT_BATCH_SIZE = 10
 const MESSAGE_REPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+const getKeyManager = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object') return undefined
+  if (!('keyManager' in value)) return undefined
+  return (value as { keyManager?: unknown }).keyManager
+}
 const ANALYTICS_CLEANUP_TASK_ID = 'analytics.cleanup'
 
 const pollingService = PollingService.getInstance()
@@ -102,8 +108,12 @@ export class AnalyticsModule extends BaseModule {
     }
     setPerfSummaryReporter((summary) => this.handlePerfSummary(summary))
 
-    const channel = ((ctx.app as any)?.channel ?? ($app as any)?.channel) as any
-    this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
+    const channel =
+      (ctx.app as { channel?: unknown } | undefined)?.channel ??
+      ($app as { channel?: unknown } | undefined)?.channel
+    if (channel) {
+      this.transport = getTuffTransportMain(channel, getKeyManager(channel) ?? channel)
+    }
 
     setIpcTracer((_eventName, durationMs, success) => {
       this.core.trackIPC(durationMs, success)

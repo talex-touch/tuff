@@ -3,7 +3,7 @@ import {
   AfterAppStartEvent,
   BeforeAppStartEvent,
   TalexEvents,
-  touchEventBus,
+  touchEventBus
 } from './eventbus/touch-event'
 import { TouchApp } from './touch-app'
 

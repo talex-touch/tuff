@@ -9,7 +9,7 @@ import { BaseModule } from './abstract-base-module'
 import { TrayIconProvider } from './tray/tray-icon-provider'
 
 const legacyTrayRef: { value: Tray | null } = {
-  value: null,
+  value: null
 }
 
 interface IconItem {
@@ -28,8 +28,7 @@ interface IconItem {
 const iconItems: IconItem[] = [
   {
     name: 'tray-icon',
-    targetFilename:
-      process.platform === 'darwin' ? 'TrayIconTemplate.png' : 'tray_icon.png',
+    targetFilename: process.platform === 'darwin' ? 'TrayIconTemplate.png' : 'tray_icon.png',
     resolveSourcePath: () => TrayIconProvider.getIconPath(),
     copyRetinaVariant: process.platform === 'darwin',
     apply: (app: TalexTouch.TouchApp, filePath: string) => {
@@ -53,7 +52,7 @@ const iconItems: IconItem[] = [
           type: 'radio',
           click() {
             contextMenu.items[1].checked = !contextMenu.items[1].checked
-          },
+          }
         },
         {
           label: 'Exit',
@@ -61,8 +60,8 @@ const iconItems: IconItem[] = [
           click() {
             app.app.quit()
             process.exit(0)
-          },
-        },
+          }
+        }
       ])
 
       contextMenu.items[1].checked = false
@@ -77,7 +76,7 @@ const iconItems: IconItem[] = [
       })
 
       legacyTrayRef.value = tray
-    },
+    }
   },
   {
     name: 'app-icon',
@@ -95,12 +94,11 @@ const iconItems: IconItem[] = [
         if (app.version === TalexTouch.AppVersion.DEV) {
           app.app.dock?.setBadge(app.version)
         }
-      }
-      else {
+      } else {
         app.window.window.setIcon(filePath)
       }
-    },
-  },
+    }
+  }
 ]
 
 /**
@@ -114,7 +112,7 @@ export class TrayHolderModule extends BaseModule {
   constructor() {
     super(TrayHolderModule.key, {
       create: true,
-      dirName: 'tray',
+      dirName: 'tray'
     })
   }
 
@@ -145,8 +143,7 @@ export class TrayHolderModule extends BaseModule {
             fse.copyFileSync(retinaSource, retinaTarget)
           }
         }
-      }
-      catch (error) {
+      } catch (error) {
         console.error(`[TrayHolder] Failed to copy icon for ${item.name}:`, error)
         return
       }
@@ -154,8 +151,7 @@ export class TrayHolderModule extends BaseModule {
       if (item.apply) {
         try {
           item.apply($app, targetPath)
-        }
-        catch (error) {
+        } catch (error) {
           console.error(`[TrayHolder] Failed to apply icon for ${item.name}:`, error)
         }
       }
@@ -166,11 +162,9 @@ export class TrayHolderModule extends BaseModule {
     if (legacyTrayRef.value) {
       try {
         legacyTrayRef.value.destroy()
-      }
-      catch (error) {
+      } catch (error) {
         console.warn('[TrayHolder] Failed to destroy legacy tray:', error)
-      }
-      finally {
+      } finally {
         legacyTrayRef.value = null
       }
     }

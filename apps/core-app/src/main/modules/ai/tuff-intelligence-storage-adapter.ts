@@ -13,7 +13,10 @@ import type {
 import { eq } from 'drizzle-orm'
 import { config } from '../../db/schema'
 import { databaseModule } from '../database'
-import { intelligenceAuditLogger } from './intelligence-audit-logger'
+import {
+  intelligenceAuditLogger,
+  type IntelligenceAuditLogEntry
+} from './intelligence-audit-logger'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 
 const CONFIG_KEYS = {
@@ -55,7 +58,7 @@ async function readConfigValue(key: string): Promise<string | null> {
 
 export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorageAdapter {
   async saveAuditLog(entry: IntelligenceAuditLog): Promise<void> {
-    await intelligenceAuditLogger.log(entry as any)
+    await intelligenceAuditLogger.log(entry)
   }
 
   async queryAuditLogs(filter: TuffStorageAuditFilter): Promise<IntelligenceAuditLog[]> {
@@ -71,17 +74,18 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
     return logs.filter((log) => {
       if (filter.model && log.model !== filter.model) return false
       if (filter.promptId) {
-        const promptId = (log as any).metadata?.promptId
+        const promptId =
+          typeof log.metadata?.promptId === 'string' ? log.metadata.promptId : undefined
         if (promptId !== filter.promptId) return false
       }
       return true
-    }) as any
+    })
   }
 
   async saveUsageDelta(caller: string, delta: TuffUsageDelta): Promise<void> {
     const traceId = intelligenceAuditLogger.generateTraceId()
 
-    await intelligenceAuditLogger.log({
+    const entry: IntelligenceAuditLogEntry = {
       traceId,
       timestamp: delta.timestamp ?? Date.now(),
       capabilityId: delta.capabilityId ?? 'unknown',
@@ -101,7 +105,8 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
         ...delta.metadata,
         promptId: delta.promptId
       }
-    } as any)
+    }
+    await intelligenceAuditLogger.log(entry)
   }
 
   async getQuota(caller: string): Promise<TuffQuota | null> {

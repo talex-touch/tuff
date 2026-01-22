@@ -81,6 +81,8 @@ async function getDb(): Promise<LibSQLDatabase<typeof import('../db/schema')> | 
   return databaseModule.getDb()
 }
 
+type DeleteTable = Parameters<LibSQLDatabase<typeof import('../db/schema')>['delete']>[0]
+
 function toCutoffDate(beforeDays?: number): Date | null {
   if (!beforeDays || !Number.isFinite(beforeDays) || beforeDays <= 0) return null
   return new Date(Date.now() - beforeDays * 24 * 60 * 60 * 1000)
@@ -101,7 +103,7 @@ export async function cleanupFileIndex(
 
   const removedCount: number[] = []
 
-  const removeAll = async (table: any) => {
+  const removeAll = async (table: DeleteTable) => {
     const rows = await db.select({ count: sql<number>`count(*)` }).from(table)
     removedCount.push(rows[0]?.count ?? 0)
     await db.delete(table)

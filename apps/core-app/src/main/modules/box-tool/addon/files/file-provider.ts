@@ -16,6 +16,7 @@ import type {
   FileIndexRebuildResult
 } from '@talex-touch/utils/transport/events/types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { Buffer } from 'node:buffer'
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
@@ -25,7 +26,6 @@ import type {
   SearchIndexService
 } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
-import type { Buffer } from 'node:buffer'
 import type { FileTypeTag } from './constants'
 import type { ScannedFileInfo } from './types'
 import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
@@ -54,6 +54,7 @@ import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import extractFileIcon from 'extract-file-icon'
 import plist from 'plist'
+import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { FileAddedEvent, TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import {
@@ -64,7 +65,6 @@ import {
   scanProgress
 } from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
-import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import {
@@ -162,6 +162,18 @@ interface ResolvedOpener {
   logo: string
   path?: string
   lastResolvedAt: string
+}
+
+type LaunchServicesRoleKey = 'LSHandlerRoleAll' | 'LSHandlerRoleViewer' | 'LSHandlerRoleEditor'
+
+type LaunchServicesHandler = {
+  LSHandlerContentTag?: string
+  LSHandlerContentTagClass?: string
+  LSHandlerContentType?: string
+  LSHandlerRoleAll?: string
+  LSHandlerRoleViewer?: string
+  LSHandlerRoleEditor?: string
+  LSHandlerPreferredVersions?: Partial<Record<LaunchServicesRoleKey, string>>
 }
 
 const openerResolveEvent = defineRawEvent<{ extension: string }, ResolvedOpener | null>(
@@ -264,7 +276,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private openersChannelRegistered = false
   private readonly progressStreamContexts = new Set<StreamContext<FileIndexProgressPayload>>()
-  private launchServicesLoadPromise: Promise<any[]> | null = null
+  private launchServicesLoadPromise: Promise<LaunchServicesHandler[]> | null = null
   private readonly openerNegativeCache = new Map<string, number>()
   private readonly openerResolveConcurrency = 2
   private openerResolveInFlight = 0
@@ -282,7 +294,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly openerCache = new Map<string, ResolvedOpener>()
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
   private readonly openerIconJobs = new Map<string, Promise<void>>()
-  private launchServicesHandlers: any[] | null = null
+  private launchServicesHandlers: LaunchServicesHandler[] | null = null
   private launchServicesMTime?: number
   private readonly failedContentCache = new Map<
     number,
@@ -929,7 +941,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const channel = context.touchApp.channel as unknown
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = getTuffTransportMain(channel, keyManager)
 
     transport.on(openerResolveEvent, async (payload) => {
       const extension = typeof payload?.extension === 'string' ? payload.extension : null
@@ -962,7 +974,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const channel = this.touchApp.channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = getTuffTransportMain(channel, keyManager)
 
     try {
       transport.broadcast(fileIndexFailedEvent, {
@@ -1703,12 +1715,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return bundleId
   }
 
-  private pickBundleIdFromHandler(handler: any): string | null {
-    if (!handler || typeof handler !== 'object') {
+  private pickBundleIdFromHandler(
+    handler: LaunchServicesHandler | null | undefined
+  ): string | null {
+    if (!handler) {
       return null
     }
 
-    const roleKeys = ['LSHandlerRoleAll', 'LSHandlerRoleViewer', 'LSHandlerRoleEditor']
+    const roleKeys: LaunchServicesRoleKey[] = [
+      'LSHandlerRoleAll',
+      'LSHandlerRoleViewer',
+      'LSHandlerRoleEditor'
+    ]
 
     for (const key of roleKeys) {
       const value = handler[key]
@@ -1718,7 +1736,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const preferred = handler.LSHandlerPreferredVersions
-    if (preferred && typeof preferred === 'object') {
+    if (preferred) {
       for (const key of roleKeys) {
         const value = preferred[key]
         if (typeof value === 'string' && value.length > 0) {
@@ -1730,7 +1748,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return null
   }
 
-  private async loadLaunchServicesHandlers(): Promise<any[]> {
+  private async loadLaunchServicesHandlers(): Promise<LaunchServicesHandler[]> {
     if (process.platform !== 'darwin') {
       return []
     }
@@ -1754,7 +1772,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           LAUNCH_SERVICES_PLIST_PATH
         ])
 
-        const parsed = plist.parse(stdout.toString()) as { LSHandlers?: any[] }
+        const parsed = plist.parse(stdout.toString()) as {
+          LSHandlers?: LaunchServicesHandler[]
+        }
         const handlers = Array.isArray(parsed?.LSHandlers) ? parsed.LSHandlers : []
 
         this.launchServicesHandlers = handlers
@@ -2842,9 +2862,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       )
 
       if (extensionsToAdd.length > 0) {
-        await this.withDbWrite(
-          'file-index.extensions.upsert',
-          () => this.dbUtils!.addFileExtensions(extensionsToAdd) as any
+        await this.withDbWrite('file-index.extensions.upsert', () =>
+          this.dbUtils!.addFileExtensions(extensionsToAdd)
         )
       }
     } catch (error) {
@@ -3902,8 +3921,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await fs.access(filePath)
       await shell.openPath(filePath)
       return null
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
+    } catch (err: unknown) {
+      const errorCode =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? (err as { code?: string }).code
+          : undefined
+      if (errorCode === 'ENOENT') {
         this.logError('File not found', new Error(`File does not exist: ${filePath}`), {
           path: filePath
         })

@@ -1,22 +1,23 @@
-import type { AiInvokeResult } from '@talex-touch/utils'
+import type { AiInvokeResult, IntelligenceTranslatePayload } from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 
-export class TranslateCapabilityTester extends BaseCapabilityTester {
+export class TranslateCapabilityTester extends BaseCapabilityTester<
+  IntelligenceTranslatePayload,
+  string
+> {
   readonly capabilityType = 'translate'
 
-  async generateTestPayload(input: CapabilityTestPayload): Promise<any> {
+  async generateTestPayload(input: CapabilityTestPayload): Promise<IntelligenceTranslatePayload> {
     const text = input.userInput || 'Hello, how are you today?'
     return {
       text,
-      targetLang: 'Chinese',
+      targetLang: 'Chinese'
     }
   }
 
   formatTestResult(result: AiInvokeResult<string>) {
-    const preview = result.result.length > 200
-      ? `${result.result.slice(0, 200)}...`
-      : result.result
+    const preview = result.result.length > 200 ? `${result.result.slice(0, 200)}...` : result.result
 
     return {
       success: true,
@@ -24,7 +25,7 @@ export class TranslateCapabilityTester extends BaseCapabilityTester {
       textPreview: preview,
       provider: result.provider,
       model: result.model,
-      latency: result.latency,
+      latency: result.latency
     }
   }
 

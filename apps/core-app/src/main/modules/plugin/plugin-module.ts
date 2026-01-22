@@ -75,6 +75,19 @@ type WindowNewPayload = TalexTouch.TouchWindowConstructorOptions & {
   url?: string
 }
 
+interface WindowVisiblePayload {
+  id: number
+  visible?: boolean
+}
+
+interface WindowPropertyPayload {
+  id: number
+  property: {
+    window?: Record<string, unknown>
+    webContents?: Record<string, unknown>
+  }
+}
+
 interface IndexCommunicatePayload {
   key?: string
   info?: unknown
@@ -157,6 +170,9 @@ class DevPluginWatcher {
     this.watcher.on(
       'change',
       debounce(async (filePath) => {
+        if (typeof filePath !== 'string') {
+          return
+        }
         const pluginName = Array.from(this.devPlugins.values()).find(
           (p) =>
             !p.dev.source &&
@@ -1366,6 +1382,115 @@ export class PluginModule extends BaseModule {
           })
 
           return { id: webContents.id }
+        }
+      ),
+
+      transport.on(
+        defineRawEvent<WindowVisiblePayload, { visible?: boolean; error?: string }>(
+          'window:visible'
+        ),
+        async (payload, context) => {
+          const pluginName = context.plugin?.name
+          const touchPlugin = pluginName
+            ? (manager.plugins.get(pluginName) as TouchPlugin)
+            : undefined
+          if (!touchPlugin) {
+            return { error: 'Plugin not found!' }
+          }
+
+          const id = payload?.id
+          if (typeof id !== 'number') {
+            return { error: 'Window id is required' }
+          }
+
+          const win = touchPlugin._windows.get(id)
+          if (!win || win.window.isDestroyed()) {
+            return { error: 'Window not found' }
+          }
+
+          if (payload?.visible === undefined) {
+            if (win.window.isVisible()) {
+              win.window.hide()
+            } else {
+              win.window.show()
+            }
+          } else if (payload.visible) {
+            win.window.show()
+          } else {
+            win.window.hide()
+          }
+
+          return { visible: win.window.isVisible() }
+        }
+      ),
+
+      transport.on(
+        defineRawEvent<WindowPropertyPayload, { success?: boolean; error?: string }>(
+          'window:property'
+        ),
+        async (payload, context) => {
+          const pluginName = context.plugin?.name
+          const touchPlugin = pluginName
+            ? (manager.plugins.get(pluginName) as TouchPlugin)
+            : undefined
+          if (!touchPlugin) {
+            return { error: 'Plugin not found!' }
+          }
+
+          const id = payload?.id
+          const property = payload?.property
+          if (typeof id !== 'number') {
+            return { error: 'Window id is required' }
+          }
+          if (!property) {
+            return { error: 'Property is required' }
+          }
+
+          const win = touchPlugin._windows.get(id)
+          if (!win || win.window.isDestroyed()) {
+            return { error: 'Window not found' }
+          }
+
+          const applyProps = (target: Record<string, unknown>, props?: Record<string, unknown>) => {
+            if (!props) return { success: true }
+            for (const [key, value] of Object.entries(props)) {
+              if (value === undefined) continue
+              try {
+                const current = target[key]
+                if (typeof current === 'function') {
+                  if (Array.isArray(value)) {
+                    current(...value)
+                  } else {
+                    current(value)
+                  }
+                } else {
+                  target[key] = value
+                }
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                return { success: false, error: `Failed to set ${key}: ${message}` }
+              }
+            }
+            return { success: true }
+          }
+
+          const windowResult = applyProps(
+            win.window as unknown as Record<string, unknown>,
+            property.window
+          )
+          if (!windowResult.success) {
+            return windowResult
+          }
+
+          const webContentsResult = applyProps(
+            win.window.webContents as unknown as Record<string, unknown>,
+            property.webContents
+          )
+          if (!webContentsResult.success) {
+            return webContentsResult
+          }
+
+          return { success: true }
         }
       ),
 

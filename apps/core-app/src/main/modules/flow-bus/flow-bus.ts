@@ -450,7 +450,7 @@ export class FlowBus {
   /**
    * Acknowledges a session from target
    */
-  acknowledge(sessionId: string, ackPayload?: any): boolean {
+  acknowledge(sessionId: string, ackPayload?: unknown): boolean {
     return flowSessionManager.acknowledge(sessionId, ackPayload)
   }
 

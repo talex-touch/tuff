@@ -2,7 +2,7 @@ import type {
   IntelligenceProviderAdapter,
   IntelligenceProviderConfig,
   IntelligenceProviderType,
-  ProviderManagerAdapter,
+  ProviderManagerAdapter
 } from '@talex-touch/utils'
 import { createLogger } from '../../../utils/logger'
 
@@ -10,9 +10,15 @@ const providerManagerLog = createLogger('Intelligence').child('ProviderManager')
 
 export class IntelligenceProviderManager implements ProviderManagerAdapter {
   private providers = new Map<string, IntelligenceProviderAdapter>()
-  private factories = new Map<IntelligenceProviderType, (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter>()
+  private factories = new Map<
+    IntelligenceProviderType,
+    (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter
+  >()
 
-  registerFactory(type: IntelligenceProviderType, factory: (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter): void {
+  registerFactory(
+    type: IntelligenceProviderType,
+    factory: (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter
+  ): void {
     this.factories.set(type, factory)
   }
 
@@ -32,12 +38,14 @@ export class IntelligenceProviderManager implements ProviderManagerAdapter {
     }
     const provider = factory(config)
     this.register(provider)
-    providerManagerLog.info(`Registered provider ${config.id} (${config.type}), enabled: ${provider.isEnabled()}`)
+    providerManagerLog.info(
+      `Registered provider ${config.id} (${config.type}), enabled: ${provider.isEnabled()}`
+    )
     return provider
   }
 
   getEnabled(): IntelligenceProviderAdapter[] {
-    return Array.from(this.providers.values()).filter(provider => provider.isEnabled())
+    return Array.from(this.providers.values()).filter((provider) => provider.isEnabled())
   }
 
   get(providerId: string): IntelligenceProviderAdapter | undefined {

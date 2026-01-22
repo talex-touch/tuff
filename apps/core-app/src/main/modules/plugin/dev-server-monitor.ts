@@ -9,6 +9,16 @@ import { PluginStatus } from '@talex-touch/utils/plugin'
 import axios from 'axios'
 import { createLogger } from '../../utils/logger'
 
+type PluginWindowInfo = {
+  window?: {
+    isDestroyed: () => boolean
+    webContents?: { send: (...args: unknown[]) => void }
+  }
+}
+type PluginWindows = Map<number, PluginWindowInfo>
+const toErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
 const monitorLog = createLogger('DevServerMonitor')
 
 interface FileStatus {
@@ -150,11 +160,11 @@ export class DevServerHealthMonitor {
       } else {
         await this.handleUnhealthyResponse(plugin, result)
       }
-    } catch (error: any) {
-      monitorLog.error(`Health check failed for plugin ${plugin.name}:`, error)
+    } catch (error: unknown) {
+      monitorLog.error(`Health check failed for plugin ${plugin.name}:`, { error })
       await this.handleUnhealthyResponse(plugin, {
         healthy: false,
-        error: error.message,
+        error: toErrorMessage(error),
         timestamp: Date.now()
       })
     }
@@ -176,11 +186,11 @@ export class DevServerHealthMonitor {
         healthy: true,
         timestamp: Date.now()
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         healthy: false,
         timestamp: Date.now(),
-        error: error.message
+        error: toErrorMessage(error)
       }
     }
   }
@@ -249,9 +259,9 @@ export class DevServerHealthMonitor {
    * Per PRD: Already opened view windows should NOT be forcibly closed
    */
   private notifyViewWindowsDisconnected(plugin: ITouchPlugin): void {
-    const pluginImpl = plugin as any
-    if (pluginImpl._windows && typeof pluginImpl._windows.forEach === 'function') {
-      pluginImpl._windows.forEach((windowInfo: any, id: number) => {
+    const windows = (plugin as { _windows?: PluginWindows })._windows
+    if (windows && typeof windows.forEach === 'function') {
+      windows.forEach((windowInfo, id: number) => {
         try {
           const win = windowInfo?.window
           if (win && !win.isDestroyed() && win.webContents) {
@@ -266,8 +276,8 @@ export class DevServerHealthMonitor {
             })
             plugin.logger.info(`Notified view window ${id} about Dev Server disconnection`)
           }
-        } catch (error: any) {
-          plugin.logger.warn(`Error notifying view window ${id}:`, error)
+        } catch (error: unknown) {
+          plugin.logger.warn(`Error notifying view window ${id}:`, toErrorMessage(error))
         }
       })
     }
@@ -277,9 +287,9 @@ export class DevServerHealthMonitor {
    * Notify view windows about reconnection success
    */
   private notifyViewWindowsReconnected(plugin: ITouchPlugin): void {
-    const pluginImpl = plugin as any
-    if (pluginImpl._windows && typeof pluginImpl._windows.forEach === 'function') {
-      pluginImpl._windows.forEach((windowInfo: any, id: number) => {
+    const windows = (plugin as { _windows?: PluginWindows })._windows
+    if (windows && typeof windows.forEach === 'function') {
+      windows.forEach((windowInfo, id: number) => {
         try {
           const win = windowInfo?.window
           if (win && !win.isDestroyed() && win.webContents) {
@@ -291,8 +301,8 @@ export class DevServerHealthMonitor {
             })
             plugin.logger.info(`Notified view window ${id} about Dev Server reconnection`)
           }
-        } catch (error: any) {
-          plugin.logger.warn(`Error notifying view window ${id}:`, error)
+        } catch (error: unknown) {
+          plugin.logger.warn(`Error notifying view window ${id}:`, toErrorMessage(error))
         }
       })
     }

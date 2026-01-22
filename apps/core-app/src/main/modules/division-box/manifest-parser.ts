@@ -7,6 +7,7 @@
 
 import type { DivisionBoxSize, ManifestDivisionBoxConfig } from '@talex-touch/utils'
 import { createLogger } from '../../utils/logger'
+import type { Primitive } from '../../utils/logger'
 
 const logger = createLogger('DivisionBoxManifestParser')
 
@@ -32,8 +33,25 @@ const VALID_SIZES: readonly DivisionBoxSize[] = ['compact', 'medium', 'expanded'
  * @param size - Size value to validate
  * @returns True if valid, false otherwise
  */
-function isValidSize(size: any): size is DivisionBoxSize {
+function isValidSize(size: unknown): size is DivisionBoxSize {
   return typeof size === 'string' && VALID_SIZES.includes(size as DivisionBoxSize)
+}
+
+function formatMetaValue(value: unknown): Primitive {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value
+  }
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
 }
 
 /**
@@ -50,19 +68,20 @@ function isValidSize(size: any): size is DivisionBoxSize {
  * @returns Validated configuration with defaults applied
  */
 export function parseManifestDivisionBoxConfig(
-  manifestConfig: any,
+  manifestConfig: unknown,
   pluginName: string
 ): ManifestDivisionBoxConfig {
   // If no config provided, return defaults
   if (!manifestConfig || typeof manifestConfig !== 'object') {
     if (manifestConfig !== undefined && manifestConfig !== null) {
       logger.warn(`[${pluginName}] Invalid divisionBox configuration format, using defaults`, {
-        meta: { providedConfig: manifestConfig }
+        meta: { providedConfig: formatMetaValue(manifestConfig) }
       })
     }
     return { ...DEFAULT_MANIFEST_CONFIG }
   }
 
+  const config = manifestConfig as Record<string, unknown>
   const result: ManifestDivisionBoxConfig = {
     defaultSize: DEFAULT_MANIFEST_CONFIG.defaultSize,
     keepAlive: DEFAULT_MANIFEST_CONFIG.keepAlive,
@@ -70,15 +89,15 @@ export function parseManifestDivisionBoxConfig(
   }
 
   // Parse and validate defaultSize
-  if ('defaultSize' in manifestConfig) {
-    if (isValidSize(manifestConfig.defaultSize)) {
-      result.defaultSize = manifestConfig.defaultSize
+  if ('defaultSize' in config) {
+    if (isValidSize(config.defaultSize)) {
+      result.defaultSize = config.defaultSize
     } else {
       logger.warn(
-        `[${pluginName}] Invalid defaultSize: "${manifestConfig.defaultSize}", using default "medium". Valid sizes: ${Array.from(VALID_SIZES).join(', ')}`,
+        `[${pluginName}] Invalid defaultSize: "${config.defaultSize}", using default "medium". Valid sizes: ${Array.from(VALID_SIZES).join(', ')}`,
         {
           meta: {
-            providedSize: String(manifestConfig.defaultSize)
+            providedSize: String(config.defaultSize)
           }
         }
       )
@@ -86,15 +105,15 @@ export function parseManifestDivisionBoxConfig(
   }
 
   // Parse and validate keepAlive
-  if ('keepAlive' in manifestConfig) {
-    if (typeof manifestConfig.keepAlive === 'boolean') {
-      result.keepAlive = manifestConfig.keepAlive
+  if ('keepAlive' in config) {
+    if (typeof config.keepAlive === 'boolean') {
+      result.keepAlive = config.keepAlive
     } else {
       logger.warn(
-        `[${pluginName}] Invalid keepAlive value: "${manifestConfig.keepAlive}", using default false`,
+        `[${pluginName}] Invalid keepAlive value: "${config.keepAlive}", using default false`,
         {
           meta: {
-            providedValue: manifestConfig.keepAlive,
+            providedValue: formatMetaValue(config.keepAlive),
             expectedType: 'boolean'
           }
         }
@@ -103,12 +122,8 @@ export function parseManifestDivisionBoxConfig(
   }
 
   // Parse and validate header configuration
-  if (
-    'header' in manifestConfig &&
-    typeof manifestConfig.header === 'object' &&
-    manifestConfig.header !== null
-  ) {
-    const headerConfig = manifestConfig.header
+  if ('header' in config && typeof config.header === 'object' && config.header !== null) {
+    const headerConfig = config.header as Record<string, unknown>
 
     // Validate header.show
     if ('show' in headerConfig) {
@@ -119,7 +134,7 @@ export function parseManifestDivisionBoxConfig(
           `[${pluginName}] Invalid header.show value: "${headerConfig.show}", using default true`,
           {
             meta: {
-              providedValue: headerConfig.show,
+              providedValue: formatMetaValue(headerConfig.show),
               expectedType: 'boolean'
             }
           }
@@ -138,7 +153,7 @@ export function parseManifestDivisionBoxConfig(
       } else if (headerConfig.title !== undefined && headerConfig.title !== null) {
         logger.warn(`[${pluginName}] Invalid header.title value, ignoring`, {
           meta: {
-            providedValue: headerConfig.title,
+            providedValue: formatMetaValue(headerConfig.title),
             expectedType: 'non-empty string'
           }
         })
@@ -152,16 +167,16 @@ export function parseManifestDivisionBoxConfig(
       } else if (headerConfig.icon !== undefined && headerConfig.icon !== null) {
         logger.warn(`[${pluginName}] Invalid header.icon value, ignoring`, {
           meta: {
-            providedValue: headerConfig.icon,
+            providedValue: formatMetaValue(headerConfig.icon),
             expectedType: 'non-empty string'
           }
         })
       }
     }
-  } else if ('header' in manifestConfig && manifestConfig.header !== undefined) {
+  } else if ('header' in config && config.header !== undefined) {
     logger.warn(`[${pluginName}] Invalid header configuration format, using defaults`, {
       meta: {
-        providedHeader: manifestConfig.header,
+        providedHeader: formatMetaValue(config.header),
         expectedType: 'object'
       }
     })

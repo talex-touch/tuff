@@ -2,9 +2,11 @@ import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport'
 import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/events/types'
 import type { TalexEvents } from '../../../core/eventbus/touch-event'
+import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getTuffTransportMain } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { genTouchApp } from '../../../core'
 import { createLogger } from '../../../utils/logger'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
@@ -18,6 +20,9 @@ const coreBoxLog = createLogger('CoreBox')
 const COREBOX_MIN_HEIGHT = 64
 
 export { getCoreBoxWindow } from './window'
+
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
 
 let lastScreenId: number | undefined
 
@@ -37,12 +42,13 @@ export class CoreBoxModule extends BaseModule {
     })
   }
 
-  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+  async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     await $app.moduleManager.loadModule(SearchEngineCore)
     await searchLogger.init()
 
-    const channel = (ctx.app as any).channel as any
-    this.transport = getTuffTransportMain(channel, channel?.keyManager ?? channel)
+    const channel = genTouchApp().channel
+    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
+    this.transport = getTuffTransportMain(channel, keyManager)
     this.registerTransportHandlers()
 
     coreBoxManager.init()
@@ -50,7 +56,7 @@ export class CoreBoxModule extends BaseModule {
     shortcutModule.registerMainShortcut('core.box.toggle', 'CommandOrControl+E', () => {
       // Check if initialization is complete
       try {
-        const appSetting = getMainConfig(StorageList.APP_SETTING) as any
+        const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting
         if (!appSetting?.beginner?.init) {
           coreBoxLog.warn('Initialization not complete, CoreBox is disabled')
           // Optionally show a notification or dialog to user

@@ -20,12 +20,10 @@ function evaluateExpression(expression: string): number | null {
     return null
   }
   try {
-    // eslint-disable-next-line no-new-func
     const evaluator = new Function(`return (${expression})`)
     const result = evaluator()
     return typeof result === 'number' && Number.isFinite(result) ? result : null
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -36,18 +34,15 @@ export class BasicExpressionAbility extends BasePreviewAbility {
 
   override canHandle(query: TuffQuery): boolean {
     const normalized = query.text?.trim() ?? ''
-    if (normalized.length < 2)
-      return false
-    if (!/[+\-*/%]/.test(normalized))
-      return false
+    if (normalized.length < 2) return false
+    if (!/[+\-*/%]/.test(normalized)) return false
     return EXPRESSION_REGEX.test(normalized)
   }
 
   async execute(context: PreviewAbilityContext): Promise<PreviewAbilityResult | null> {
     const startedAt = performance.now()
     const expression = this.getNormalizedQuery(context.query)
-    if (!expression)
-      return null
+    if (!expression) return null
 
     const sanitized = expression.replace(/[^0-9+\-*/().%\s]/g, '')
     this.throwIfAborted(context.signal)
@@ -66,21 +61,21 @@ export class BasicExpressionAbility extends BasePreviewAbility {
         {
           rows: [
             { label: '表达式', value: expression },
-            { label: '算式（安全）', value: sanitized },
-          ],
-        },
+            { label: '算式（安全）', value: sanitized }
+          ]
+        }
       ],
       meta: {
         expression,
-        sanitized,
-      },
+        sanitized
+      }
     }
 
     return {
       abilityId: this.id,
       confidence: 0.6,
       payload,
-      durationMs: performance.now() - startedAt,
+      durationMs: performance.now() - startedAt
     }
   }
 }

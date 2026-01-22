@@ -13,9 +13,13 @@
 | resources/db/migrations/0003_exotic_human_robot.sql | B | 迁移脚本，post-migration guard 处理重复列 |
 | scripts/build-target.js | B | 构建版本号解析的 fallback 逻辑 |
 | docs/compatibility-legacy-scan.md | C | 扫描规范文档（非运行时逻辑） |
+| src/renderer/components.d.ts | B | 组件类型声明包含 Migration/Compatibility 名称 |
+| src/renderer/src/composables/market/useVersionCompare.ts | B | semver-compatible 版本比较注释 |
 | src/renderer/src/locales/zh-CN/download-migration.json | B | 迁移流程文案 |
 | src/renderer/src/locales/en/download-migration.json | B | 迁移流程文案 |
 | src/renderer/src/env.d.ts | B | vue-i18n Legacy 类型引用 |
+| src/renderer/src/components/intelligence/config/IntelligenceModelConfig.vue | B | 模型分组 fallback key/label |
+| src/renderer/src/components/render/sourceMeta.ts | B | source label fallback |
 | src/renderer/src/components/render/BoxGrid.vue | B | 网格布局 fallback 渲染 |
 | src/renderer/src/components/download/IMPLEMENTATION_SUMMARY.md | B | 下载组件文档中提及 fallback |
 | src/renderer/src/components/download/MigrationProgress.vue | B | 下载迁移进度 UI |
@@ -26,28 +30,35 @@
 | src/renderer/src/components/tuff/tags/TuffMacOSTag.vue | B | 标签渲染文案 fallback |
 | src/renderer/src/components/permission/PermissionStatusCard.vue | A | Legacy SDK 警告 UI |
 | src/renderer/src/components/base/input/FlatMarkdown.vue | B | 兼容类型问题的注释说明 |
+| src/renderer/src/components/base/dialog/PlatformCompatibilityWarning.vue | B | 平台兼容提示 UI |
 | src/renderer/src/components/base/select/TSelectItem.vue | B | composedPath 兼容 legacy path |
 | src/renderer/src/modules/install/install-manager.ts | B | 兼容旧索引字段与 fallback |
-| src/renderer/src/modules/box/adapter/hooks/useClipboardChannel.ts | A | Clipboard 通道 deprecated 事件/方法 |
+| src/renderer/src/modules/box/adapter/hooks/useResize.ts | B | legacy element wrap fallback |
 | src/renderer/src/modules/mousetrap-record.ts | B | Mousetrap 兼容性注释 |
 | src/renderer/src/modules/layout/index.ts | B | Legacy export for backward compatibility |
+| src/renderer/src/modules/layout/useSecondaryNavigation.ts | B | fallback parent route |
 | src/renderer/src/modules/storage/README.md | B | 迁移与 fallback 行为文档 |
 | src/renderer/src/modules/storage/intelligence-storage.ts | B | Backward compatibility aliases |
 | src/renderer/src/modules/lang/i18n.ts | B | legacy 模式与 locale fallback |
+| src/renderer/src/modules/lang/zh-CN.json | B | 兼容/compatible 文案 |
+| src/renderer/src/modules/lang/en-US.json | B | compatible 文案 |
 | src/renderer/src/modules/lang/I18N_IMPLEMENTATION.md | B | i18n fallback 文档 |
 | src/renderer/src/modules/tuffex/index.ts | B | 组件迁移阶段说明 |
 | src/renderer/src/modules/hooks/core-box.ts | B | fallback 检查逻辑 |
-| src/renderer/src/modules/hooks/dropper-resolver.ts | A | 旧插件格式弃用提示 |
+| src/renderer/src/modules/hooks/useAppLifecycle.ts | B | 平台兼容提示触发 |
+| src/renderer/src/modules/hooks/useSvgContent.ts | B | fallback URL |
+| src/renderer/src/modules/mention/platform-warning.ts | B | 平台兼容提示组件引用 |
 | src/renderer/src/modules/market/providers/nexus-store-provider.ts | B | 兼容 legacy API 格式 |
 | src/renderer/src/modules/market/providers/repository-provider.ts | B | git clone fallback |
 | src/renderer/src/views/box/BoxInput.vue | B | placeholder fallback |
 | src/renderer/src/views/box/tag/UnifiedFileTag.vue | B | icon fallback |
-| src/renderer/src/views/box/tag/FileTag.vue | A | 旧 buffer 字段已 deprecated |
+| src/renderer/src/views/box/tag/FileTag.vue | B | 路径缺失时 fallback 兜底 |
 | src/renderer/src/views/box/tag/ClipboardFileTag.vue | B | icon fallback |
 | src/renderer/src/views/base/settings/SettingFileIndex.vue | B | 数值解析兜底 |
 | src/renderer/src/views/base/settings/SettingPermission.vue | A | legacy SDK 统计与警告 UI |
 | src/renderer/src/views/base/styles/sub/ThemePreference.vue | B | theme fallback 检查 |
-| src/renderer/src/views/base/application/AppList.vue | A | deprecated 排序逻辑注释 |
+| src/renderer/src/views/base/styles/LayoutSection.vue | B | layout label fallback |
+| src/renderer/src/assets/docs/license.md | B | license 文案包含 compatible |
 | src/main/core/main-window-state.ts | B | layout fallback 计算 |
 | src/main/core/touch-window.ts | B | Windows fallback 渲染策略 |
 | src/main/core/module-manager.ts | B | legacy filePath 兼容 |
@@ -56,7 +67,6 @@
 | src/main/channel/common.ts | B | 失败场景 fallback 打开配置 |
 | src/main/service/device-idle-service.ts | B | 参数 fallback clamp |
 | src/main/modules/database/index.ts | B | 数据库迁移流程 |
-| src/main/modules/flow-bus/module.ts | A | Deprecated 说明（破坏性变更） |
 | src/main/modules/flow-bus/flow-bus.ts | B | fallback 复制流程 |
 | src/main/modules/flow-bus/native-share.ts | B | 分享 fallback 行为 |
 | src/main/modules/abstract-base-module.ts | B | 读取配置 fallback |
@@ -65,12 +75,15 @@
 | src/main/modules/box-tool/search-engine/search-gather.ts | B | legacy 搜索控制器 fallback |
 | src/main/modules/box-tool/search-engine/search-core.ts | B | 搜索 fallback 路径 |
 | src/main/modules/box-tool/search-engine/search-logger.ts | B | legacy setting fallback |
+| src/main/modules/box-tool/core-box/window.ts | B | 输入修饰键兼容说明 |
 | src/main/modules/box-tool/addon/system/system-provider.ts | B | fallback 匹配逻辑 |
 | src/main/modules/box-tool/addon/files/file-provider.ts | B | legacy 通道迁移说明 |
+| src/main/modules/box-tool/addon/files/everything-provider.ts | B | mapFileToTuffItem 兼容说明 |
 | src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts | B | API fallback |
 | src/main/modules/box-tool/addon/apps/app-provider.ts | B | 数值 fallback clamp |
-| src/main/modules/plugin/widget/widget-compiler.ts | A | legacy 接口与 deprecated compile |
+| src/main/modules/box-tool/addon/apps/search-processing-service.ts | B | 高亮 fallback 处理 |
 | src/main/modules/plugin/plugin.ts | A | 多处 deprecated API 与 backward compatibility |
+| src/main/modules/plugin/providers/utils.ts | B | fallback 扩展名 |
 | src/main/modules/plugin/adapters/plugin-features-adapter.ts | B | fallback 文本匹配 |
 | src/main/modules/plugin/plugin-loaders.ts | B | SDK 版本兼容/legacy fallback |
 | src/main/modules/ocr/ocr-service.ts | B | fallback normalize |
@@ -89,12 +102,16 @@
 | src/main/modules/download/index.ts | B | 迁移导出 |
 | src/main/modules/download/PERFORMANCE_OPTIMIZATIONS.md | B | 迁移相关性能记录 |
 | src/main/modules/download/PERFORMANCE_QUICK_REFERENCE.md | B | 迁移相关速查 |
+| src/main/modules/ai/intelligence-strategy-manager.ts | B | fallback providers |
 | src/main/modules/ai/provider-models.ts | B | 模型列表 fallback |
+| src/main/modules/ai/runtime/base-provider.ts | B | incompatible 模型校验 |
 | src/main/modules/ai/agents/agent-manager.ts | B | fallback 执行路径 |
+| src/main/modules/ai/intelligence-module.ts | B | OpenAI-compatible provider |
 | src/main/modules/ai/intelligence-sdk.ts | B | provider fallback |
 | src/main/modules/ai/tuff-intelligence-storage-adapter.ts | B | JSON 解析 fallback |
-| src/main/modules/division-box/session.ts | A | @deprecated API |
+| src/main/modules/division-box/flow-trigger.ts | B | forward-compatible 注释 |
 | src/main/modules/permission/permission-store.ts | B | 迁移与兼容检查 |
 | src/main/modules/permission/permission-guard.ts | B | legacy SDK 兼容路径 |
+| src/main/modules/permission/channel-guard.ts | B | allowLegacy 配置 |
 | src/main/modules/analytics/analytics-module.ts | B | 兼容旧事件处理 |
 | src/main/modules/analytics/README.md | B | legacy 搜索说明 |

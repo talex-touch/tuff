@@ -36,6 +36,20 @@ function traceIpc(eventName: string, startedAt: number, success: boolean): void 
   ipcTracer(eventName, duration, success)
 }
 
+const getWebContents = (
+  target?: Electron.BrowserWindow | WebContentsView | null
+): Electron.WebContents | undefined => {
+  if (!target) return undefined
+  return 'webContents' in target ? target.webContents : undefined
+}
+
+const toRecord = (value: unknown): Record<string, unknown> => {
+  if (value && typeof value === 'object') {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
 class TouchChannel implements ITouchChannel {
   channelMap: Map<ChannelType, Map<string, ChannelCallback[]>> = new Map()
 
@@ -414,11 +428,11 @@ class TouchChannel implements ITouchChannel {
     win: Electron.BrowserWindow | WebContentsView | undefined,
     type: ChannelType,
     eventName: string,
-    arg: any,
-    header: any = {}
-  ): Promise<any> {
+    arg: unknown,
+    header: Record<string, unknown> = {}
+  ): Promise<unknown> {
     const startedAt = performance.now()
-    const webContents = (win as any)?.webContents as Electron.WebContents | undefined
+    const webContents = getWebContents(win)
 
     if (!webContents) {
       channelLog.warn(
@@ -474,7 +488,8 @@ class TouchChannel implements ITouchChannel {
     }
 
     if (type === ChannelType.PLUGIN) {
-      if (arg.plugin === void 0) {
+      const argRecord = toRecord(arg)
+      if (argRecord.plugin === void 0) {
         throw new Error('Invalid plugin name!')
       }
       // return this.send(ChannelType.MAIN, 'plugin:message-transport', {
@@ -484,7 +499,7 @@ class TouchChannel implements ITouchChannel {
       _channelCategory = '@plugin-process-message'
       if (webContents.isDestroyed()) {
         channelLog.error(
-          `[Channel] Plugin process message for ${JSON.stringify(arg)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`
+          `[Channel] Plugin process message for ${JSON.stringify(argRecord)} | ${JSON.stringify(header)} has been destroyed(webContentsView).`
         )
         return Promise.resolve()
       }
@@ -557,8 +572,8 @@ class TouchChannel implements ITouchChannel {
     win: Electron.BrowserWindow,
     type: ChannelType,
     eventName: string,
-    arg: any
-  ): Promise<any> {
+    arg: unknown
+  ): Promise<unknown> {
     return this._sendTo(win, type, eventName, arg)
   }
 
@@ -567,8 +582,8 @@ class TouchChannel implements ITouchChannel {
     type: ChannelType,
     eventName: string,
     pluginName: string,
-    arg: any
-  ): Promise<any> {
+    arg: unknown
+  ): Promise<unknown> {
     if (!win) {
       // UI view not ready yet, silently skip
       return Promise.resolve()
@@ -576,26 +591,20 @@ class TouchChannel implements ITouchChannel {
 
     const key = this.nameToKeyMap.get(pluginName)
 
-    return this._sendTo(
-      win,
-      type,
-      eventName,
-      { ...arg, plugin: pluginName },
-      {
-        uniqueKey: key
-      }
-    )
+    const payload = { ...toRecord(arg), plugin: pluginName }
+
+    return this._sendTo(win, type, eventName, payload, { uniqueKey: key })
   }
 
-  send(type: ChannelType, eventName: string, arg: any): Promise<any> {
+  send(type: ChannelType, eventName: string, arg: unknown): Promise<unknown> {
     return this.sendTo(this.app.window.window, type, eventName, arg)
   }
 
-  sendSync(type: ChannelType, eventName: string, arg: any): Promise<any> {
+  sendSync(type: ChannelType, eventName: string, arg: unknown): Promise<unknown> {
     return this.send(type, eventName, arg)
   }
 
-  sendMain(eventName: string, arg?: any): Promise<any> {
+  sendMain(eventName: string, arg?: unknown): Promise<unknown> {
     return this.sendTo(this.app.window.window, ChannelType.MAIN, eventName, arg)
   }
 
@@ -603,7 +612,7 @@ class TouchChannel implements ITouchChannel {
    * Broadcast a message without waiting for a response.
    * Use for notification-style messages that don't need acknowledgment.
    */
-  broadcast(type: ChannelType, eventName: string, arg: any): void {
+  broadcast(type: ChannelType, eventName: string, arg: unknown): void {
     this.broadcastTo(this.app.window.window, type, eventName, arg)
   }
 
@@ -614,9 +623,9 @@ class TouchChannel implements ITouchChannel {
     win: Electron.BrowserWindow | WebContentsView | undefined,
     type: ChannelType,
     eventName: string,
-    arg: any
+    arg: unknown
   ): void {
-    const webContents = (win as any)?.webContents as Electron.WebContents | undefined
+    const webContents = getWebContents(win)
 
     if (!webContents || webContents.isDestroyed()) {
       return
@@ -656,24 +665,25 @@ class TouchChannel implements ITouchChannel {
     }
   }
 
-  sendToMain(win: Electron.BrowserWindow, eventName: string, arg?: any): Promise<any> {
+  sendToMain(win: Electron.BrowserWindow, eventName: string, arg?: unknown): Promise<unknown> {
     return this.sendTo(win, ChannelType.MAIN, eventName, arg)
   }
 
   /**
    * Broadcast a message to a plugin without waiting for a response.
    */
-  broadcastPlugin(pluginName: string, eventName: string, arg?: any): void {
+  broadcastPlugin(pluginName: string, eventName: string, arg?: unknown): void {
     const uiView = WindowManager.getInstance().getUIView()
     if (!uiView) return
 
     const key = this.nameToKeyMap.get(pluginName)
-    const webContents = (uiView as any)?.webContents as Electron.WebContents | undefined
+    const webContents = getWebContents(uiView)
     if (!webContents || webContents.isDestroyed()) return
 
+    const payload = { ...toRecord(arg), plugin: pluginName }
     const data = {
       code: DataCode.SUCCESS,
-      data: { ...arg, plugin: pluginName },
+      data: payload,
       name: eventName,
       header: {
         status: 'request',
@@ -696,7 +706,7 @@ class TouchChannel implements ITouchChannel {
     }
   }
 
-  sendPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
+  sendPlugin(pluginName: string, eventName: string, arg?: unknown): Promise<unknown> {
     return this._sendToPlugin(
       WindowManager.getInstance().getUIView(),
       ChannelType.PLUGIN,
@@ -706,7 +716,7 @@ class TouchChannel implements ITouchChannel {
     )
   }
 
-  sendToPlugin(pluginName: string, eventName: string, arg?: any): Promise<any> {
+  sendToPlugin(pluginName: string, eventName: string, arg?: unknown): Promise<unknown> {
     return this._sendToPlugin(
       WindowManager.getInstance().getUIView(),
       ChannelType.PLUGIN,

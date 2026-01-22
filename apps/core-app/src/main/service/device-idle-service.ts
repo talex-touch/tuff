@@ -186,7 +186,8 @@ export class DeviceIdleService {
       if (typeof powerMonitor.isOnBatteryPower === 'function') {
         return powerMonitor.isOnBatteryPower()
       }
-      return ((powerMonitor as any)?.onBatteryPower ?? false) as boolean
+      const monitor = powerMonitor as { onBatteryPower?: boolean }
+      return monitor.onBatteryPower ?? false
     } catch {
       return false
     }

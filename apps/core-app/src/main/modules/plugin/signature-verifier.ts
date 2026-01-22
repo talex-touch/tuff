@@ -20,14 +20,14 @@ export interface VersionSignatureInfo {
 export async function verifyPackageSignature(
   filePath: string,
   expectedSignature?: string,
-  expectedSize?: number,
+  expectedSize?: number
 ): Promise<SignatureVerificationResult> {
   try {
     // Check file exists
     if (!(await fse.pathExists(filePath))) {
       return {
         valid: false,
-        reason: 'Package file not found',
+        reason: 'Package file not found'
       }
     }
 
@@ -39,7 +39,7 @@ export async function verifyPackageSignature(
     if (expectedSize !== undefined && actualSize !== expectedSize) {
       return {
         valid: false,
-        reason: `File size mismatch: expected ${expectedSize}, got ${actualSize}`,
+        reason: `File size mismatch: expected ${expectedSize}, got ${actualSize}`
       }
     }
 
@@ -53,7 +53,7 @@ export async function verifyPackageSignature(
       return {
         valid: true,
         signature: computedSignature,
-        reason: 'No signature to verify against',
+        reason: 'No signature to verify against'
       }
     }
 
@@ -64,7 +64,7 @@ export async function verifyPackageSignature(
     if (normalizedExpected === normalizedComputed) {
       return {
         valid: true,
-        signature: computedSignature,
+        signature: computedSignature
       }
     }
 
@@ -72,13 +72,13 @@ export async function verifyPackageSignature(
       valid: false,
       reason: 'Signature mismatch',
       signature: computedSignature,
-      expectedSignature: normalizedExpected,
+      expectedSignature: normalizedExpected
     }
-  }
-  catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : ''
     return {
       valid: false,
-      reason: error?.message || 'Failed to verify signature',
+      reason: message || 'Failed to verify signature'
     }
   }
 }
@@ -87,19 +87,17 @@ export async function verifyPackageSignature(
  * Extract signature info from API version metadata
  */
 export function extractSignatureInfo(
-  metadata?: Record<string, unknown>,
+  metadata?: Record<string, unknown>
 ): VersionSignatureInfo | undefined {
-  if (!metadata)
-    return undefined
+  if (!metadata) return undefined
 
   const signature = metadata.signature
   const packageSize = metadata.packageSize
 
-  if (typeof signature !== 'string' || !signature.trim())
-    return undefined
+  if (typeof signature !== 'string' || !signature.trim()) return undefined
 
   return {
     signature: signature.trim(),
-    packageSize: typeof packageSize === 'number' ? packageSize : 0,
+    packageSize: typeof packageSize === 'number' ? packageSize : 0
   }
 }

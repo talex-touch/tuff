@@ -22,6 +22,17 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
 import { mapFileToTuffItem } from './utils'
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const getErrorCode = (error: unknown): string | undefined => {
+  if (!isRecord(error)) return undefined
+  return typeof error.code === 'string' ? error.code : undefined
+}
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
 const execFileAsync = promisify(execFile)
 const fileProviderLog = getLogger('file-provider')
 
@@ -198,7 +209,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const channel = context.touchApp.channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel as any, keyManager as any)
+    const transport = getTuffTransportMain(channel, keyManager)
 
     transport.on(everythingStatusEvent, async () => {
       return {
@@ -241,10 +252,10 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           resultCount: results.length,
           duration: Math.round(duration)
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         return {
           success: false,
-          error: error?.message || String(error)
+          error: getErrorMessage(error)
         }
       }
     })
@@ -328,8 +339,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       })
 
       return results
-    } catch (error: any) {
-      if (error.code === 'ETIMEDOUT') {
+    } catch (error: unknown) {
+      if (getErrorCode(error) === 'ETIMEDOUT') {
         this.logWarn('Everything search timed out', error, { query })
       } else {
         this.logError('Everything search failed', error, { query })
@@ -514,8 +525,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       await fs.access(filePath)
       await shell.openPath(filePath)
       return null
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
+    } catch (err: unknown) {
+      if (getErrorCode(err) === 'ENOENT') {
         this.logError('File not found', new Error(`File does not exist: ${filePath}`), {
           path: filePath
         })

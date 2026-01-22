@@ -9,6 +9,7 @@ import type {
   TuffSearchResult
 } from '@talex-touch/utils'
 import type { ProviderContext } from '../types'
+import type { IClipboardItem } from '../../../clipboard'
 import crypto from 'node:crypto'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
@@ -22,6 +23,9 @@ import { coreBoxManager } from '../../core-box/manager'
 import { windowManager } from '../../core-box/window'
 import { getBoxItemManager } from '../../item-sdk'
 import searchEngineCore from '../search-core'
+
+const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
+  channel.keyManager ?? channel
 
 const AI_SYSTEM_PROMPT =
   '你是 Talex Touch 桌面助手中的智能助理，以简洁、可靠的方式回答用户问题。如有需要，可提供结构化的列表或步骤。'
@@ -257,12 +261,16 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
         return []
       }
 
-      const historyItems: TuffItem[] = history.map((item: any) => {
-        const meta = item.meta || {}
-        const prompt = meta.prompt || ''
-        const answer = meta.answer || ''
-        const model = meta.model || 'Unknown'
-        const requestId = meta.requestId || crypto.randomUUID()
+      const historyItems: TuffItem[] = history.map((item: IClipboardItem) => {
+        const meta = (item.meta ?? {}) as Record<string, unknown>
+        const prompt = typeof meta.prompt === 'string' ? meta.prompt : ''
+        const answer = typeof meta.answer === 'string' ? meta.answer : ''
+        const model = typeof meta.model === 'string' ? meta.model : 'Unknown'
+        const requestId = typeof meta.requestId === 'string' ? meta.requestId : crypto.randomUUID()
+        const usage =
+          typeof meta.usage === 'object' && meta.usage !== null
+            ? (meta.usage as AiUsageInfo)
+            : undefined
 
         // 创建历史记录的结果 item
         const payload: IntelligencePayload = {
@@ -271,7 +279,7 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
           status: 'ready',
           answer,
           model,
-          usage: meta.usage,
+          usage,
           createdAt: item.timestamp ? new Date(item.timestamp).getTime() : Date.now()
         }
 
@@ -395,10 +403,8 @@ export class IntelligenceSearchProvider implements ISearchProvider<ProviderConte
       return
     }
 
-    const transport = getTuffTransportMain(
-      app.channel as any,
-      (app.channel as any)?.keyManager ?? app.channel
-    )
+    const keyManager = resolveKeyManager(app.channel as { keyManager?: unknown })
+    const transport = getTuffTransportMain(app.channel, keyManager)
     void transport.sendTo(coreWindow.webContents, CoreBoxEvents.input.setQuery, {
       value: 'ai '
     })

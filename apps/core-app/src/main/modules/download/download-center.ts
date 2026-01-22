@@ -1,5 +1,7 @@
 import type {
   DownloadConfig,
+  DownloadHistory,
+  DownloadProgress,
   DownloadRequest,
   DownloadTask,
   ModuleDestroyContext,
@@ -17,6 +19,7 @@ import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { desc, eq } from 'drizzle-orm'
 import { shell } from 'electron'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { ChunkManager } from './chunk-manager'
@@ -87,7 +90,7 @@ export class DownloadCenterModule extends BaseModule {
   private lastProgressBroadcast: Map<string, number> = new Map() // Progress throttling
   private progressThrottleMs = 1000 // Throttle to 1 update/second
 
-  async onInit(ctx: ModuleInitContext<any>): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const moduleDir = ctx.file.dirPath
     if (!moduleDir) {
       throw new Error('DownloadCenterModule requires a module directory but none was provided')
@@ -130,8 +133,10 @@ export class DownloadCenterModule extends BaseModule {
     this.downloadWorkers = []
     this.initializeWorkers()
 
-    const channel = ($app as any).channel as any
-    this.transport = getTuffTransportMain(channel, (channel as any)?.keyManager ?? channel)
+    const channel = $app.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    this.transport = getTuffTransportMain(channel, keyManager)
 
     // 注册Transport通道
     this.registerTransportHandlers()
@@ -148,7 +153,7 @@ export class DownloadCenterModule extends BaseModule {
     console.log('DownloadCenterModule initialized')
   }
 
-  async onDestroy(_ctx: ModuleDestroyContext<any>): Promise<void> {
+  async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     this.isRunning = false
 
     this.pollingService.unregister(this.networkMonitorTaskId)
@@ -423,12 +428,28 @@ export class DownloadCenterModule extends BaseModule {
   }
 
   // 获取下载历史
-  async getTaskHistory(limit?: number): Promise<any[]> {
-    return await this.getDb()
+  async getTaskHistory(limit?: number): Promise<DownloadHistory[]> {
+    const rows = await this.getDb()
       .select()
       .from(downloadHistory)
       .orderBy(desc(downloadHistory.createdAt))
       .limit(limit || 50)
+
+    return rows.map((row) => ({
+      id: row.id,
+      taskId: row.taskId,
+      url: row.url,
+      filename: row.filename,
+      module: row.module as DownloadTask['module'],
+      status: row.status as DownloadTask['status'],
+      totalSize: row.totalSize ?? undefined,
+      downloadedSize: row.downloadedSize ?? 0,
+      duration: row.duration ?? undefined,
+      averageSpeed: row.averageSpeed ?? undefined,
+      destination: '',
+      createdAt: new Date(row.createdAt),
+      completedAt: row.completedAt ? new Date(row.completedAt) : undefined
+    }))
   }
 
   // 清除历史记录
@@ -521,7 +542,7 @@ export class DownloadCenterModule extends BaseModule {
             try {
               const size = await this.getDirectorySize(dirPath)
               cleanedSize += size
-            } catch (error) {
+            } catch (_error) {
               // Ignore size calculation errors
             }
 
@@ -570,7 +591,7 @@ export class DownloadCenterModule extends BaseModule {
           totalSize += stats.size
         }
       }
-    } catch (error) {
+    } catch (_error) {
       // Ignore errors, return current size
     }
 
@@ -810,14 +831,16 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     const tx = this.transport
+    const toErrorMessage = (error: unknown) =>
+      error instanceof Error ? error.message : String(error)
 
     this.transportDisposers.push(
       tx.on(DownloadEvents.task.add, async (request) => {
         try {
           const taskId = await this.addTask(request)
           return { success: true, taskId }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -825,8 +848,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.pauseTask(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -834,8 +857,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.resumeTask(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -843,8 +866,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.cancelTask(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -852,8 +875,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const tasks = this.getAllTasks()
           return { success: true, tasks }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -861,8 +884,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const task = this.getTaskStatus(payload.taskId)
           return { success: true, task }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -870,8 +893,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           this.updateConfig(payload.config)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -879,8 +902,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.retryTask(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -888,8 +911,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.pauseAllTasks()
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -897,8 +920,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.resumeAllTasks()
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -906,8 +929,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.cancelAllTasks()
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -915,8 +938,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const tasks = this.getTasksByStatus(payload.status)
           return { success: true, tasks }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -924,8 +947,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.updateTaskPriority(payload.taskId, payload.priority)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -933,17 +956,17 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.removeTask(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
-      tx.on(DownloadEvents.history.get, async (payload) => {
+      tx.on(DownloadEvents.history.get, async (payload, _context) => {
         try {
           const history = await this.getTaskHistory(payload?.limit)
           return { success: true, history }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -951,8 +974,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.clearHistory()
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -960,8 +983,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.clearHistoryItem(payload.historyId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -969,8 +992,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.openFile(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -978,8 +1001,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.showInFolder(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -987,8 +1010,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.deleteFile(payload.taskId)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -996,8 +1019,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.cleanupTempFiles()
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1005,8 +1028,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const config = this.getConfig()
           return { success: true, config }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1014,8 +1037,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           this.updateNotificationConfig(payload.config as Partial<NotificationConfig>)
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1023,8 +1046,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const config = this.getNotificationConfig()
           return { success: true, config }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1032,8 +1055,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const logs = await this.errorLogger.readLogs(payload?.limit)
           return { success: true, logs }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1041,8 +1064,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const stats = await this.errorLogger.getErrorStats()
           return { success: true, stats }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1050,8 +1073,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           await this.errorLogger.clearLogs()
           return { success: true }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1059,8 +1082,8 @@ export class DownloadCenterModule extends BaseModule {
         try {
           const stats = await this.getTempFileStats()
           return { success: true, stats }
-        } catch (error: any) {
-          return { success: false, error: error?.message ?? String(error) }
+        } catch (error) {
+          return { success: false, error: toErrorMessage(error) }
         }
       }),
 
@@ -1204,12 +1227,13 @@ export class DownloadCenterModule extends BaseModule {
       } else {
         throw result.error || new Error('Download failed')
       }
-    } catch (error: any) {
+    } catch (error) {
       // 转换为 DownloadErrorClass
+      const normalizedError = error instanceof Error ? error : new Error(String(error))
       const downloadError =
         error instanceof DownloadErrorClass
           ? error
-          : DownloadErrorClass.fromError(error, {
+          : DownloadErrorClass.fromError(normalizedError, {
               taskId: task.id,
               url: task.url,
               filename: task.filename,
@@ -1230,7 +1254,7 @@ export class DownloadCenterModule extends BaseModule {
     }
   }
 
-  private handleTaskProgress(taskId: string, progress: any): void {
+  private handleTaskProgress(taskId: string, progress: DownloadProgress): void {
     const task = this.taskQueue.getTask(taskId)
     if (!task) return
 

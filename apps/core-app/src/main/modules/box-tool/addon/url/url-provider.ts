@@ -7,6 +7,7 @@ import type {
   TuffSearchResult
 } from '@talex-touch/utils'
 import type { ProviderContext } from '../../search-engine/types'
+import type { ScannedAppInfo } from '../apps/app-types'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
@@ -230,7 +231,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
       }
     ]
 
-    const allApps = await appScanner.getApps()
+    const allApps: ScannedAppInfo[] = await appScanner.getApps()
     const installedBrowsers: Array<{
       id: string
       name: string
@@ -240,7 +241,7 @@ class URLProvider implements ISearchProvider<ProviderContext> {
     }> = []
 
     for (const browser of knownBrowsers) {
-      const app = allApps.find((a: any) => a.bundleId === browser.bundleId)
+      const app = allApps.find((a) => a.bundleId === browser.bundleId)
       if (app) {
         installedBrowsers.push({
           id: browser.id,

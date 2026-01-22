@@ -27,6 +27,12 @@ export interface PermissionCheckResult {
   durationMs?: number
 }
 
+type PermissionDeniedError = Error & {
+  code: 'PERMISSION_DENIED'
+  permissionId: string
+  pluginId: string
+}
+
 /**
  * API to permission mapping
  */
@@ -68,6 +74,7 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'system:exec', permissions: ['system.shell'] },
   { pattern: 'notification:*', permissions: ['system.notification'] },
   { pattern: 'tray:*', permissions: ['system.tray'] },
+  { pattern: 'shortcon:reg', permissions: ['system.shortcut'] },
 
   // AI APIs
   { pattern: 'ai:chat', permissions: ['ai.basic'] },
@@ -239,10 +246,10 @@ export class PermissionGuard {
   enforce(pluginId: string, apiName: string, sdkapi?: number): void {
     const result = this.check(pluginId, apiName, sdkapi)
     if (!result.allowed) {
-      const error = new Error(`Permission denied: ${result.reason}`)
-      ;(error as any).code = 'PERMISSION_DENIED'
-      ;(error as any).permissionId = result.permissionId
-      ;(error as any).pluginId = pluginId
+      const error = new Error(`Permission denied: ${result.reason}`) as PermissionDeniedError
+      error.code = 'PERMISSION_DENIED'
+      error.permissionId = result.permissionId
+      error.pluginId = pluginId
       throw error
     }
   }

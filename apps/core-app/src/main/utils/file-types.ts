@@ -66,7 +66,7 @@ export const TYPE_ALIAS_MAP: Record<string, FileTypeTag> = {
   books: 'ebook',
   design: 'design',
   designs: 'design',
-  设计: 'design',
+  设计: 'design'
 }
 
 /**
@@ -76,7 +76,7 @@ export const FILE_INDEX_STATUS = {
   PENDING: 'pending',
   PROCESSING: 'processing',
   COMPLETED: 'completed',
-  FAILED: 'failed',
+  FAILED: 'failed'
 } as const
 
 export type FileIndexStatus = (typeof FILE_INDEX_STATUS)[keyof typeof FILE_INDEX_STATUS]

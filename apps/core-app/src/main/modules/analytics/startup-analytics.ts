@@ -37,7 +37,7 @@ const REPORT_QUEUE_BACKOFF_BASE_MS = 30_000
 const REPORT_QUEUE_BACKOFF_MAX_MS = 10 * 60_000
 
 export interface FileReportQueueItem {
-  payload: any
+  payload: Record<string, unknown>
   endpoint: string
   createdAt: number
   retryCount?: number

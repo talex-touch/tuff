@@ -15,8 +15,8 @@ import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { dialog, shell } from 'electron'
 import { pinyin } from 'pinyin-pro'
-import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
 import { createLogger } from '../../../../utils/logger'
+import { PermissionChecker, PermissionStatus } from '../../../system/permission-checker'
 import { calculateHighlights } from '../apps/highlighting-service'
 
 const execAsync = promisify(exec)
@@ -109,13 +109,13 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
             if (result.response === 1) {
               await execAsync('osascript -e \'tell app "System Events" to shut down\'')
             }
-          } catch (error) {
+          } catch (_error) {
             await this.showPermissionError('关机')
           }
         } else if (isWindows) {
           try {
             await execAsync('shutdown /s /t 0')
-          } catch (error) {
+          } catch (_error) {
             await this.showPermissionError('关机')
           }
         }
@@ -145,13 +145,13 @@ class SystemProvider implements ISearchProvider<ProviderContext> {
             if (result.response === 1) {
               await execAsync('osascript -e \'tell app "System Events" to restart\'')
             }
-          } catch (error) {
+          } catch (_error) {
             await this.showPermissionError('重启')
           }
         } else if (isWindows) {
           try {
             await execAsync('shutdown /r /t 0')
-          } catch (error) {
+          } catch (_error) {
             await this.showPermissionError('重启')
           }
         }

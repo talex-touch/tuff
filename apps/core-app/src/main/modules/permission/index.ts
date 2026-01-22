@@ -5,6 +5,11 @@
  */
 
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import {
+  PermissionCategory,
+  permissionRegistry,
+  PermissionRiskLevel
+} from '@talex-touch/utils/permission'
 import { getTuffTransportMain, PermissionEvents } from '@talex-touch/utils/transport'
 import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
@@ -13,6 +18,9 @@ import { PermissionGuard } from './permission-guard'
 import { PermissionStore } from './permission-store'
 
 const permLog = createLogger('Permission')
+const SHORTCUT_PERMISSION_ID = 'system.shortcut'
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 
 export { createProtectedRegister, registerProtectedChannels, withPermission } from './channel-guard'
 export type { ProtectedChannelDefinition, ProtectedChannelOptions } from './channel-guard'
@@ -50,11 +58,21 @@ export class PermissionModule extends BaseModule {
     // Initialize permission guard
     this.guard = new PermissionGuard(this.store)
 
+    if (!permissionRegistry.has(SHORTCUT_PERMISSION_ID)) {
+      permissionRegistry.register({
+        id: SHORTCUT_PERMISSION_ID,
+        nameKey: 'permission.system.shortcut.name',
+        descKey: 'permission.system.shortcut.desc',
+        category: PermissionCategory.SYSTEM,
+        risk: PermissionRiskLevel.MEDIUM,
+        icon: 'Keyboard'
+      })
+    }
+
     // Register IPC channels
     if ($app.channel) {
-      const keyManager =
-        ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
-      this.transport = getTuffTransportMain($app.channel as any, keyManager as any)
+      const keyManager = resolveKeyManager($app.channel)
+      this.transport = getTuffTransportMain($app.channel, keyManager)
     }
     this.registerChannels()
 
@@ -190,12 +208,7 @@ export class PermissionModule extends BaseModule {
   private broadcastUpdate(pluginId: string): void {
     const transport =
       this.transport ??
-      ($app.channel
-        ? getTuffTransportMain(
-            $app.channel as any,
-            (($app.channel as any)?.keyManager ?? $app.channel) as any
-          )
-        : null)
+      ($app.channel ? getTuffTransportMain($app.channel, resolveKeyManager($app.channel)) : null)
 
     transport?.broadcast(PermissionEvents.push.updated, { pluginId })
   }

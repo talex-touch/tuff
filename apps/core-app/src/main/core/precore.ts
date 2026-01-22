@@ -91,9 +91,13 @@ if (!app.requestSingleInstanceLock()) {
   mainLog.warn('Secondary launch detected, quitting existing process')
 
   app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
+    const launchData =
+      typeof additionalData === 'object' && additionalData !== null
+        ? (additionalData as Record<string, unknown>)
+        : {}
     touchEventBus.emit(
       TalexEvents.APP_SECONDARY_LAUNCH,
-      new AppSecondaryLaunch(event, argv, workingDirectory, additionalData)
+      new AppSecondaryLaunch(event, argv, workingDirectory, launchData)
     )
   })
 

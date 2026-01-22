@@ -1,4 +1,11 @@
-import type { DownloadChunk, DownloadHistory, DownloadTask, NewDownloadChunk, NewDownloadHistory, NewDownloadTask } from './schema'
+import type {
+  DownloadChunk,
+  DownloadHistory,
+  DownloadTask,
+  NewDownloadChunk,
+  NewDownloadHistory,
+  NewDownloadTask
+} from './schema'
 import fs from 'node:fs'
 import { createClient } from '@libsql/client'
 import { ChunkStatus, DownloadStatus } from '@talex-touch/utils'
@@ -6,15 +13,7 @@ import { and, desc, eq, lt } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import { addPerformanceIndexes, runMigrations } from './migrations'
 import { PerformanceMonitor } from './performance-monitor'
-import {
-
-  downloadChunksSchema,
-
-  downloadHistorySchema,
-
-  downloadTasksSchema,
-
-} from './schema'
+import { downloadChunksSchema, downloadHistorySchema, downloadTasksSchema } from './schema'
 
 export class DatabaseService {
   private db: ReturnType<typeof drizzle>
@@ -25,7 +24,7 @@ export class DatabaseService {
   constructor(dbPath: string) {
     this.dbPath = dbPath
     const client = createClient({
-      url: `file:${dbPath}`,
+      url: `file:${dbPath}`
     })
     this.db = drizzle(client)
   }
@@ -50,8 +49,7 @@ export class DatabaseService {
       await runMigrations(this.dbPath, [addPerformanceIndexes])
       this.initialized = true
       console.log('[DatabaseService] Initialized successfully')
-    }
-    catch (error) {
+    } catch (error) {
       console.error('[DatabaseService] Initialization failed:', error)
       // Don't throw - allow the app to continue even if migrations fail
     }
@@ -69,7 +67,7 @@ export class DatabaseService {
       .set({
         status,
         updatedAt: Date.now(),
-        completedAt: status === DownloadStatus.COMPLETED ? Date.now() : undefined,
+        completedAt: status === DownloadStatus.COMPLETED ? Date.now() : undefined
       })
       .where(eq(downloadTasksSchema.id, taskId))
   }
@@ -81,7 +79,7 @@ export class DatabaseService {
       .set({
         downloadedSize,
         totalSize,
-        updatedAt: Date.now(),
+        updatedAt: Date.now()
       })
       .where(eq(downloadTasksSchema.id, taskId))
   }
@@ -92,7 +90,7 @@ export class DatabaseService {
       .update(downloadTasksSchema)
       .set({
         error,
-        updatedAt: Date.now(),
+        updatedAt: Date.now()
       })
       .where(eq(downloadTasksSchema.id, taskId))
   }
@@ -110,15 +108,12 @@ export class DatabaseService {
 
   // 获取所有任务
   async getAllTasks(): Promise<DownloadTask[]> {
-    return await this.performanceMonitor.measure(
-      'db_get_all_tasks',
-      async () => {
-        return await this.db
-          .select()
-          .from(downloadTasksSchema)
-          .orderBy(desc(downloadTasksSchema.createdAt))
-      },
-    )
+    return await this.performanceMonitor.measure('db_get_all_tasks', async () => {
+      return await this.db
+        .select()
+        .from(downloadTasksSchema)
+        .orderBy(desc(downloadTasksSchema.createdAt))
+    })
   }
 
   // 获取进行中的任务
@@ -129,8 +124,8 @@ export class DatabaseService {
       .where(
         and(
           eq(downloadTasksSchema.status, DownloadStatus.DOWNLOADING),
-          eq(downloadTasksSchema.status, DownloadStatus.PENDING),
-        ),
+          eq(downloadTasksSchema.status, DownloadStatus.PENDING)
+        )
       )
       .orderBy(desc(downloadTasksSchema.priority))
   }
@@ -144,11 +139,11 @@ export class DatabaseService {
   async updateChunkStatus(
     chunkId: string,
     status: ChunkStatus,
-    downloaded?: number,
+    downloaded?: number
   ): Promise<void> {
-    const updateData: any = {
+    const updateData: Partial<NewDownloadChunk> = {
       status,
-      updatedAt: Date.now(),
+      updatedAt: Date.now()
     }
 
     if (downloaded !== undefined) {
@@ -181,7 +176,7 @@ export class DatabaseService {
           .orderBy(desc(downloadHistorySchema.createdAt))
           .limit(limit)
       },
-      { limit },
+      { limit }
     )
   }
 
@@ -205,7 +200,7 @@ export class DatabaseService {
           ? Math.round(task.downloadedSize / ((task.completedAt - task.createdAt) / 1000))
           : undefined,
       createdAt: task.createdAt,
-      completedAt: task.completedAt,
+      completedAt: task.completedAt
     }
 
     await this.db.insert(downloadHistorySchema).values(history)
@@ -227,8 +222,8 @@ export class DatabaseService {
       .where(
         and(
           eq(downloadTasksSchema.status, DownloadStatus.COMPLETED),
-          lt(downloadTasksSchema.completedAt, cutoffDate),
-        ),
+          lt(downloadTasksSchema.completedAt, cutoffDate)
+        )
       )
 
     for (const task of completedTasks) {
@@ -263,8 +258,7 @@ export class DatabaseService {
         if (chunk.status === ChunkStatus.FAILED && chunk.filePath) {
           await fs.promises.unlink(chunk.filePath)
         }
-      }
-      catch (error: unknown) {
+      } catch (error: unknown) {
         // 忽略文件不存在错误
         if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
           console.error(`Failed to cleanup chunk file ${chunk.filePath}:`, error)
@@ -282,30 +276,30 @@ export class DatabaseService {
     averageSpeed: number
   }> {
     const tasks = await this.getAllTasks()
-    const completedTasks = tasks.filter(t => t.status === DownloadStatus.COMPLETED)
-    const failedTasks = tasks.filter(t => t.status === DownloadStatus.FAILED)
+    const completedTasks = tasks.filter((t) => t.status === DownloadStatus.COMPLETED)
+    const failedTasks = tasks.filter((t) => t.status === DownloadStatus.FAILED)
 
     const totalDownloaded = completedTasks.reduce(
       (sum, task) => sum + (task.downloadedSize || 0),
-      0,
+      0
     )
 
     const speeds = completedTasks
-      .filter(task => task.createdAt && task.completedAt && task.downloadedSize)
+      .filter((task) => task.createdAt && task.completedAt && task.downloadedSize)
       .map((task) => {
         const duration = (task.completedAt! - task.createdAt) / 1000
         return task.downloadedSize! / duration
       })
 
-    const averageSpeed
-      = speeds.length > 0 ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 0
+    const averageSpeed =
+      speeds.length > 0 ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 0
 
     return {
       totalTasks: tasks.length,
       completedTasks: completedTasks.length,
       failedTasks: failedTasks.length,
       totalDownloaded,
-      averageSpeed: Math.round(averageSpeed),
+      averageSpeed: Math.round(averageSpeed)
     }
   }
 }

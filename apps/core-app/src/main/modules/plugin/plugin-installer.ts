@@ -8,7 +8,7 @@ import type { RiskPromptHandler, RiskPromptInput } from '@talex-touch/utils/plug
 import type { ResolverOptions } from './plugin-resolver'
 import os from 'node:os'
 import path from 'node:path'
-import { BrowserWindow, dialog } from 'electron'
+import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 
@@ -18,7 +18,7 @@ function createDialogRiskPrompt(): RiskPromptHandler {
 
     // TODO(@talex-touch): Integrate more advanced verification methods like TouchID here later
     const window = BrowserWindow.getFocusedWindow()
-    const { response } = await dialog.showMessageBox(window as any, {
+    const dialogOptions: MessageBoxOptions = {
       type: 'warning',
       buttons: ['Continue Installation', 'Cancel'],
       defaultId: 1,
@@ -29,7 +29,10 @@ function createDialogRiskPrompt(): RiskPromptHandler {
         input.description ??
         `Source Type: ${input.sourceType}\nSource ID: ${input.sourceId}\nPlease confirm you trust this source before continuing.`,
       noLink: true
-    })
+    }
+    const { response } = window
+      ? await dialog.showMessageBox(window, dialogOptions)
+      : await dialog.showMessageBox(dialogOptions)
 
     return response === 0
   }
@@ -57,10 +60,14 @@ async function runResolver(
       .resolve(
         ({ event, type }) => {
           if (type === 'error') {
-            reject(new Error(event.msg))
+            reject(new Error(String(event.msg)))
             return
           }
-          resolve({ code: 'success', manifest: event.msg })
+          if (event.msg && typeof event.msg === 'object') {
+            resolve({ code: 'success', manifest: event.msg as IManifest })
+            return
+          }
+          reject(new Error('Invalid manifest payload'))
         },
         whole,
         options
