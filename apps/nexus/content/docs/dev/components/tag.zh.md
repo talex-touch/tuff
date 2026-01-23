@@ -23,12 +23,12 @@ tags: [tag, label, badge]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxTag label="默认" />
   <TxTag label="成功" color="var(--tx-color-success)" />
   <TxTag label="警告" color="var(--tx-color-warning)" />
   <TxTag label="危险" color="var(--tx-color-danger)" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

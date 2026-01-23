@@ -34,7 +34,7 @@ tags: [dialog, modal, confirm]
     />
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
   <TxModal v-model="dialogOpen" title="Delete project">
     <p>This action cannot be undone. Continue?</p>
@@ -43,7 +43,7 @@ tags: [dialog, modal, confirm]
       <TxButton>Confirm</TxButton>
     </template>
   </TxModal>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

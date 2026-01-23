@@ -28,9 +28,9 @@ tags: [toast, feedback, status]
     />
   </template>
   <template #code>
-    <TuffCodeBlock lang="ts" :code="`toast({ title: 'Saved', description: 'Changes stored' })
-toast({ title: 'Network unstable', description: 'Retry later', variant: 'warning' })
-toast({ title: 'Save failed', description: 'Check permissions', variant: 'danger' })`" />
+    <TuffCodeBlock lang="ts" :code='`toast({ title: "Saved", description: "Changes stored" })
+toast({ title: "Network unstable", description: "Retry later", variant: "warning" })
+toast({ title: "Save failed", description: "Check permissions", variant: "danger" })`' />
   </template>
 </TuffDemo>
 

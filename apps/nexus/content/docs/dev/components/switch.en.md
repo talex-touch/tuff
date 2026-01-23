@@ -29,10 +29,10 @@ tags: [switch, toggle, state]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TuffSwitch :model-value="false" />
   <TuffSwitch :model-value="true" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

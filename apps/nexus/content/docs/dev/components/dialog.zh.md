@@ -34,7 +34,7 @@ tags: [dialog, modal, confirm]
     />
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
   <TxModal v-model="dialogOpen" title="删除项目">
     <p>这项操作不可撤销，确定继续吗？</p>
@@ -43,7 +43,7 @@ tags: [dialog, modal, confirm]
       <TxButton>确认</TxButton>
     </template>
   </TxModal>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

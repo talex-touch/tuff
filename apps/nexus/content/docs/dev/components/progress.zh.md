@@ -22,11 +22,11 @@ tags: [progress, status, loading]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TuffProgress :percentage="40" />
   <TuffProgress :percentage="72" status="warning" />
   <TuffProgress :percentage="100" status="success" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

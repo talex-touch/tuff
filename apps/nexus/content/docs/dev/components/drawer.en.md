@@ -24,12 +24,12 @@ tags: [drawer, panel, overlay]
     />
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
   <TxDrawer v-model:visible="drawerOpen" title="Settings" width="420px">
     <p>Place your form or settings here.</p>
   </TxDrawer>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

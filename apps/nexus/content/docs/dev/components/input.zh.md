@@ -29,10 +29,10 @@ tags: [input, field, search]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TuffInput model-value="" placeholder="输入内容..." />
   <TxSearchInput model-value="" placeholder="搜索..." />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

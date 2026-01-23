@@ -23,14 +23,14 @@ tags: [grid, layout, alignment]
     </TxGrid>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxGrid :cols="4" gap="12">
     <TxGridItem>1</TxGridItem>
     <TxGridItem>2</TxGridItem>
     <TxGridItem>3</TxGridItem>
     <TxGridItem>4</TxGridItem>
   </TxGrid>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

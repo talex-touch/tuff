@@ -28,9 +28,9 @@ tags: [toast, feedback, status]
     />
   </template>
   <template #code>
-    <TuffCodeBlock lang="ts" :code="`toast({ title: '保存成功', description: '已写入本地' })
-toast({ title: '网络不稳定', description: '请稍后重试', variant: 'warning' })
-toast({ title: '保存失败', description: '请检查权限', variant: 'danger' })`" />
+    <TuffCodeBlock lang="ts" :code='`toast({ title: "保存成功", description: "已写入本地" })
+toast({ title: "网络不稳定", description: "请稍后重试", variant: "warning" })
+toast({ title: "保存失败", description: "请检查权限", variant: "danger" })`' />
   </template>
 </TuffDemo>
 
