@@ -13,7 +13,17 @@ tags: [progress, bar, loading]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Stateful Progress" description="加载、警告、成功态一屏展示。">
+<TuffDemo
+  title="Stateful Progress"
+  description="加载、警告、成功态一屏展示。"
+  code-lang="vue"
+  :code='`<template>
+  <TxProgressBar :percentage="32" show-text />
+  <TxProgressBar :percentage="68" status="warning" show-text />
+  <TxProgressBar success message="完成" />
+  <TxProgressBar loading message="同步中" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row" style="flex-direction: column; align-items: stretch; width: 100%;">
       <TxProgressBar :percentage="32" show-text />
@@ -21,14 +31,6 @@ tags: [progress, bar, loading]
       <TxProgressBar success message="完成" />
       <TxProgressBar loading message="同步中" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxProgressBar :percentage="32" show-text />
-  <TxProgressBar :percentage="68" status="warning" show-text />
-  <TxProgressBar success message="完成" />
-  <TxProgressBar loading message="同步中" />
-</template>`' />
   </template>
 </TuffDemo>
 

@@ -21,18 +21,20 @@ tags: [input, field, search]
 ```
 
 ## Demo
-<TuffDemo title="Focus State" description="聚焦态更轻，避免夺目。">
+<TuffDemo
+  title="Focus State"
+  description="聚焦态更轻，避免夺目。"
+  code-lang="vue"
+  :code='`<template>
+  <TuffInput model-value="" placeholder="输入内容..." />
+  <TxSearchInput model-value="" placeholder="搜索..." />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TuffInput model-value="" placeholder="输入内容..." />
       <TxSearchInput model-value="" placeholder="搜索..." />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TuffInput model-value="" placeholder="输入内容..." />
-  <TxSearchInput model-value="" placeholder="搜索..." />
-</template>`' />
   </template>
 </TuffDemo>
 

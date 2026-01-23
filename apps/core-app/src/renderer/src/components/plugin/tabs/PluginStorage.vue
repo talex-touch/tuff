@@ -2,6 +2,8 @@
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { StorageStats } from '@talex-touch/utils/types/storage'
 import { TxButton, TxProgressBar } from '@talex-touch/tuffex'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,6 +22,7 @@ const emit = defineEmits<{
 
 // Composables
 const { t } = useI18n()
+const transport = useTuffTransport()
 
 // State
 const loading = ref(false)
@@ -88,17 +91,18 @@ async function loadStorageData(): Promise<void> {
   loading.value = true
   try {
     const [statsResponse, treeResponse] = await Promise.all([
-      window.$channel.send('plugin:storage:get-stats', { pluginName: props.plugin.name }),
-      window.$channel.send('plugin:storage:get-tree', { pluginName: props.plugin.name })
+      transport.send(PluginEvents.storage.getStats, { pluginName: props.plugin.name }),
+      transport.send(PluginEvents.storage.getTree, { pluginName: props.plugin.name })
     ])
 
     if (statsResponse && typeof statsResponse === 'object') {
+      const stats = statsResponse as Partial<StorageStats>
       storageStats.value = {
-        totalSize: Number(statsResponse.totalSize) || 0,
-        fileCount: Number(statsResponse.fileCount) || 0,
-        dirCount: Number(statsResponse.dirCount) || 0,
-        maxSize: Number(statsResponse.maxSize) || 10 * 1024 * 1024,
-        usagePercent: Number(statsResponse.usagePercent) || 0
+        totalSize: Number(stats.totalSize) || 0,
+        fileCount: Number(stats.fileCount) || 0,
+        dirCount: Number(stats.dirCount) || 0,
+        maxSize: Number(stats.maxSize) || 10 * 1024 * 1024,
+        usagePercent: Number(stats.usagePercent) || 0
       }
     }
 
@@ -196,7 +200,7 @@ function getEntryTypeLabel(entry: StorageEntry): string {
 
 async function handleOpenInEditor(): Promise<void> {
   try {
-    await window.$channel.send('plugin:storage:open-in-editor', {
+    await transport.send(PluginEvents.storage.openInEditor, {
       pluginName: props.plugin.name
     })
   } catch (error) {
@@ -218,7 +222,7 @@ async function handleClearStorage(): Promise<void> {
     )
 
     clearing.value = true
-    const response = await window.$channel.send('plugin:storage:clear', {
+    const response = await transport.send(PluginEvents.storage.clear, {
       pluginName: props.plugin.name
     })
 
@@ -239,7 +243,7 @@ async function handleClearStorage(): Promise<void> {
 
 async function handleOpenFolder(): Promise<void> {
   try {
-    await window.$channel.send('plugin:storage:open-folder', {
+    await transport.send(PluginEvents.storage.openFolder, {
       pluginName: props.plugin.name
     })
   } catch {

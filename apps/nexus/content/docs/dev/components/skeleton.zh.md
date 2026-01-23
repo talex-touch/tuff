@@ -13,18 +13,20 @@ tags: [skeleton, loading, placeholder]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Skeleton" description="文本与头像混合占位">
+<TuffDemo
+  title="Skeleton"
+  description="文本与头像混合占位"
+  code-lang="vue"
+  :code='`<template>
+  <TxSkeleton :loading="true" :lines="3" />
+  <TxSkeleton variant="circle" :width="40" :height="40" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxSkeleton :loading="true" :lines="3" />
       <TxSkeleton variant="circle" :width="40" :height="40" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxSkeleton :loading="true" :lines="3" />
-  <TxSkeleton variant="circle" :width="40" :height="40" />
-</template>`' />
   </template>
 </TuffDemo>
 

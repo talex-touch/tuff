@@ -13,7 +13,17 @@ tags: [badge, status, signal]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Status Signals" description="成功/警告/错误/信息">
+<TuffDemo
+  title="Status Signals"
+  description="成功/警告/错误/信息"
+  code-lang="vue"
+  :code='`<template>
+  <TxStatusBadge text="成功" status="success" />
+  <TxStatusBadge text="警告" status="warning" />
+  <TxStatusBadge text="错误" status="danger" />
+  <TxStatusBadge text="信息" status="info" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxStatusBadge text="成功" status="success" />
@@ -21,14 +31,6 @@ tags: [badge, status, signal]
       <TxStatusBadge text="错误" status="danger" />
       <TxStatusBadge text="信息" status="info" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxStatusBadge text="成功" status="success" />
-  <TxStatusBadge text="警告" status="warning" />
-  <TxStatusBadge text="错误" status="danger" />
-  <TxStatusBadge text="信息" status="info" />
-</template>`' />
   </template>
 </TuffDemo>
 

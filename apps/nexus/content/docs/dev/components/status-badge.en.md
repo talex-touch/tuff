@@ -13,7 +13,17 @@ tags: [badge, status, signal]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Status Signals" description="Success, warning, error, info">
+<TuffDemo
+  title="Status Signals"
+  description="Success, warning, error, info"
+  code-lang="vue"
+  :code='`<template>
+  <TxStatusBadge text="Success" status="success" />
+  <TxStatusBadge text="Warning" status="warning" />
+  <TxStatusBadge text="Error" status="danger" />
+  <TxStatusBadge text="Info" status="info" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxStatusBadge text="Success" status="success" />
@@ -21,14 +31,6 @@ tags: [badge, status, signal]
       <TxStatusBadge text="Error" status="danger" />
       <TxStatusBadge text="Info" status="info" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxStatusBadge text="Success" status="success" />
-  <TxStatusBadge text="Warning" status="warning" />
-  <TxStatusBadge text="Error" status="danger" />
-  <TxStatusBadge text="Info" status="info" />
-</template>`' />
   </template>
 </TuffDemo>
 

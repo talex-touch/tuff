@@ -13,20 +13,22 @@ tags: [avatar, identity, profile]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Size System" description="Small for lists, large for profiles.">
+<TuffDemo
+  title="Size System"
+  description="Small for lists, large for profiles."
+  code-lang="vue"
+  :code='`<template>
+  <TxAvatar name="TA" />
+  <TxAvatar name="UX" />
+  <TxAvatar name="PM" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxAvatar name="TA" />
       <TxAvatar name="UX" />
       <TxAvatar name="PM" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxAvatar name="TA" />
-  <TxAvatar name="UX" />
-  <TxAvatar name="PM" />
-</template>`' />
   </template>
 </TuffDemo>
 

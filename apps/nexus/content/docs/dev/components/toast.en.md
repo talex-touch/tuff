@@ -13,7 +13,14 @@ tags: [toast, feedback, status]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Status Toasts" description="Success, warning, and error states.">
+<TuffDemo
+  title="Status Toasts"
+  description="Success, warning, and error states."
+  code-lang="ts"
+  :code='`toast({ title: "Saved", description: "Changes stored" })
+toast({ title: "Network unstable", description: "Retry later", variant: "warning" })
+toast({ title: "Save failed", description: "Check permissions", variant: "danger" })`'
+>
   <template #preview>
     <TuffToastDemo
       success-label="Success"
@@ -26,11 +33,6 @@ tags: [toast, feedback, status]
       error-title="Save failed"
       error-description="Check permissions"
     />
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="ts" :code='`toast({ title: "Saved", description: "Changes stored" })
-toast({ title: "Network unstable", description: "Retry later", variant: "warning" })
-toast({ title: "Save failed", description: "Check permissions", variant: "danger" })`' />
   </template>
 </TuffDemo>
 

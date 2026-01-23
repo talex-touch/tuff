@@ -13,7 +13,19 @@ tags: [tooltip, hint, overlay]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Hover Hint" description="Short hints with low intrusion.">
+<TuffDemo
+  title="Hover Hint"
+  description="Short hints with low intrusion."
+  code-lang="vue"
+  :code='`<template>
+  <TxTooltip content="Hint">
+    <TxButton variant="ghost">Hover me</TxButton>
+  </TxTooltip>
+  <TxTooltip content="Info">
+    <TxButton variant="ghost">Info</TxButton>
+  </TxTooltip>
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxTooltip content="Hint">
@@ -23,13 +35,6 @@ tags: [tooltip, hint, overlay]
         <TxButton variant="ghost">Info</TxButton>
       </TxTooltip>
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxTooltip content="Hint">
-    <TxButton variant="ghost">Hover me</TxButton>
-  </TxTooltip>
-</template>`' />
   </template>
 </TuffDemo>
 

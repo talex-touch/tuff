@@ -59,6 +59,16 @@ const lastUpdatedText = computed(() => {
   return lastUpdated.value.toLocaleString()
 })
 
+const statusSummary = computed(() =>
+  statusOrder
+    .map((status) => ({
+      status,
+      label: statusLabel(status),
+      count: capabilities.value.filter((item) => item.status === status).length
+    }))
+    .filter((summary) => summary.count > 0)
+)
+
 function scopeLabel(scope: PlatformCapabilityScope): string {
   return t(`settings.settingPlatformCapabilities.scope.${scope}`)
 }
@@ -107,13 +117,24 @@ onMounted(() => {
     memory-name="platform-capabilities"
   >
     <div class="PlatformCapabilities-Toolbar">
-      <div class="PlatformCapabilities-Meta">
-        <span>{{
-          t('settings.settingPlatformCapabilities.total', { count: capabilities.length })
-        }}</span>
-        <span v-if="lastUpdatedText">
-          {{ t('settings.settingPlatformCapabilities.lastUpdated', { time: lastUpdatedText }) }}
-        </span>
+      <div class="PlatformCapabilities-Overview">
+        <div class="PlatformCapabilities-Meta">
+          <span>{{
+            t('settings.settingPlatformCapabilities.total', { count: capabilities.length })
+          }}</span>
+          <span v-if="lastUpdatedText">
+            {{ t('settings.settingPlatformCapabilities.lastUpdated', { time: lastUpdatedText }) }}
+          </span>
+        </div>
+        <div v-if="statusSummary.length" class="PlatformCapabilities-Stats">
+          <TuffStatusBadge
+            v-for="summary in statusSummary"
+            :key="summary.status"
+            size="sm"
+            :text="`${summary.label} ${summary.count}`"
+            :status="statusTone(summary.status)"
+          />
+        </div>
       </div>
       <TxButton variant="flat" :disabled="loading" @click="loadCapabilities">
         {{
@@ -155,7 +176,6 @@ onMounted(() => {
               :text="statusLabel(item.status)"
               :status="statusTone(item.status)"
             />
-            <TuffStatusBadge size="sm" :text="scopeLabel(item.scope)" status="muted" />
             <TuffStatusBadge
               v-if="item.sensitive"
               size="sm"
@@ -163,7 +183,7 @@ onMounted(() => {
               status="warning"
             />
           </template>
-          <span class="PlatformCapabilities-Id">{{ item.id }}</span>
+          <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
         </TuffBlockSlot>
       </div>
     </div>
@@ -173,11 +193,18 @@ onMounted(() => {
 <style lang="scss" scoped>
 .PlatformCapabilities-Toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 12px;
+}
+
+.PlatformCapabilities-Overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
 }
 
 .PlatformCapabilities-Meta {
@@ -186,6 +213,12 @@ onMounted(() => {
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.PlatformCapabilities-Stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .PlatformCapabilities-State {
@@ -219,15 +252,21 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.PlatformCapabilities-Id {
-  font-family: monospace;
-  font-size: 12px;
+.PlatformCapabilities-IdBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--el-border-color);
+  background: var(--el-fill-color-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 11px;
   color: var(--el-text-color-secondary);
   max-width: 240px;
   word-break: break-all;
 }
 @media (max-width: 768px) {
-  .PlatformCapabilities-Id {
+  .PlatformCapabilities-IdBadge {
     max-width: 160px;
   }
 }

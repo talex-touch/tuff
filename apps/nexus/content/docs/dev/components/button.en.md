@@ -34,20 +34,24 @@ tags: [action, tactile, primary]
 ```
 
 ## Demo
-<TuffDemo title="Primary / Flat" description="Tactile primary and restrained flat styles.">
+<TuffDemo
+  title="Primary / Flat"
+  description="Tactile primary and restrained flat styles."
+  code-lang="vue"
+  :code-lines="[
+    '<template>',
+    '  <TxButton>Primary</TxButton>',
+    '  <TuffFlatButton>Flat</TuffFlatButton>',
+    '  <TxButton variant=\"ghost\">Ghost</TxButton>',
+    '</template>',
+  ]"
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxButton>Primary</TxButton>
       <TuffFlatButton>Flat</TuffFlatButton>
       <TxButton variant="ghost">Ghost</TxButton>
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxButton>Primary</TxButton>
-  <TuffFlatButton>Flat</TuffFlatButton>
-  <TxButton variant="ghost">Ghost</TxButton>
-</template>`' />
   </template>
 </TuffDemo>
 

@@ -7,7 +7,6 @@ import SettingEverything from './SettingEverything.vue'
 import SettingFileIndex from './SettingFileIndex.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
-import SettingPlatformCapabilities from './SettingPlatformCapabilities.vue'
 import SettingSentry from './SettingSentry.vue'
 import SettingSetup from './SettingSetup.vue'
 import SettingStorage from './SettingStorage.vue'
@@ -17,7 +16,6 @@ import SettingUser from './SettingUser.vue'
 
 const isWindows = computed(() => window.electron?.process?.platform === 'win32')
 </script>
-
 <template>
   <ViewTemplate title="Settings">
     <div class="AppSettings-Container">
@@ -38,8 +36,6 @@ const isWindows = computed(() => window.electron?.process?.platform === 'win32')
       <SettingDownload />
 
       <SettingUpdate />
-
-      <SettingPlatformCapabilities />
 
       <SettingSentry />
 

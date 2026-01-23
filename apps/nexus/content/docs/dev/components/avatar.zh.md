@@ -13,20 +13,22 @@ tags: [avatar, identity, profile]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Size System" description="小尺寸适合列表，大尺寸用于详情页。">
+<TuffDemo
+  title="Size System"
+  description="小尺寸适合列表，大尺寸用于详情页。"
+  code-lang="vue"
+  :code='`<template>
+  <TxAvatar name="TA" />
+  <TxAvatar name="UX" />
+  <TxAvatar name="PM" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxAvatar name="TA" />
       <TxAvatar name="UX" />
       <TxAvatar name="PM" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxAvatar name="TA" />
-  <TxAvatar name="UX" />
-  <TxAvatar name="PM" />
-</template>`' />
   </template>
 </TuffDemo>
 

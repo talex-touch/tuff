@@ -21,18 +21,20 @@ tags: [switch, toggle, state]
 ```
 
 ## Demo
-<TuffDemo title="Toggle State" description="Movement and color change together.">
+<TuffDemo
+  title="Toggle State"
+  description="Movement and color change together."
+  code-lang="vue"
+  :code='`<template>
+  <TuffSwitch :model-value="false" />
+  <TuffSwitch :model-value="true" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TuffSwitch :model-value="false" />
       <TuffSwitch :model-value="true" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TuffSwitch :model-value="false" />
-  <TuffSwitch :model-value="true" />
-</template>`' />
   </template>
 </TuffDemo>
 

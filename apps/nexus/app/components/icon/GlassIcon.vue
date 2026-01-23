@@ -7,7 +7,7 @@ interface GlassIconsItem {
 }
 
 interface Props {
-  items: GlassIconsItem[]
+  items?: GlassIconsItem[]
   className?: string
 }
 

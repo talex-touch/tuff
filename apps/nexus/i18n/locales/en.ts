@@ -1028,6 +1028,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     backHome: 'Back to docs home',
     redirecting: 'Redirecting to the docs landing…',
     outlineLabel: 'Outline',
+    sidebarLabel: 'Navigation',
     defaultTitle: 'Documentation',
     noOutline: 'Headings will appear here once added to this document.',
     lastUpdatedLabel: 'Last edited on',

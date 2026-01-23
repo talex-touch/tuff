@@ -13,20 +13,22 @@ tags: [skeleton, layout, loading]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Layout Placeholder" description="容器决定骨架尺寸。">
+<TuffDemo
+  title="Layout Placeholder"
+  description="容器决定骨架尺寸。"
+  code-lang="vue"
+  :code='`<template>
+  <div style="height: 240px;">
+    <TxLayoutSkeleton />
+  </div>
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row" style="width: 100%;">
       <div style="width: 100%; height: 240px;">
         <TxLayoutSkeleton />
       </div>
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <div style="height: 240px;">
-    <TxLayoutSkeleton />
-  </div>
-</template>`' />
   </template>
 </TuffDemo>
 

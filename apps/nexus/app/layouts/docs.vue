@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { TxGradualBlur } from '@talex-touch/tuffex'
+import { ref } from 'vue'
+import Drawer from '~/components/ui/Drawer.vue'
+
+const { t } = useI18n()
+const sidebarVisible = ref(false)
+const outlineVisible = ref(false)
 </script>
 
 <template>
@@ -20,6 +26,24 @@ import { TxGradualBlur } from '@talex-touch/tuffex'
           </aside>
           <main class="flex-1">
             <div class="mx-auto max-w-3xl space-y-10">
+              <div class="flex items-center gap-2 xl:hidden">
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white/80 px-3 py-1.5 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:border-light/10 dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40"
+                  @click="sidebarVisible = true"
+                >
+                  <span class="i-carbon-menu text-base" />
+                  {{ t('docs.sidebarLabel') }}
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white/80 px-3 py-1.5 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:border-light/10 dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40 lg:hidden"
+                  @click="outlineVisible = true"
+                >
+                  <span class="i-carbon-list text-base" />
+                  {{ t('docs.outlineLabel') }}
+                </button>
+              </div>
               <slot />
             </div>
           </main>
@@ -32,6 +56,28 @@ import { TxGradualBlur } from '@talex-touch/tuffex'
       </div>
     </div>
     <TuffFooter />
+    <Drawer
+      :visible="sidebarVisible"
+      :title="t('docs.sidebarLabel')"
+      width="82%"
+      direction="left"
+      @update:visible="(v) => (sidebarVisible = v)"
+    >
+      <div class="p-4">
+        <DocsSidebar />
+      </div>
+    </Drawer>
+    <Drawer
+      :visible="outlineVisible"
+      :title="t('docs.outlineLabel')"
+      width="82%"
+      direction="right"
+      @update:visible="(v) => (outlineVisible = v)"
+    >
+      <div class="p-4">
+        <DocsOutline />
+      </div>
+    </Drawer>
   </div>
 </template>
 

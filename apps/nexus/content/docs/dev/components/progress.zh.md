@@ -13,20 +13,22 @@ tags: [progress, status, loading]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Progress States" description="基础进度 + 状态色">
+<TuffDemo
+  title="Progress States"
+  description="基础进度 + 状态色"
+  code-lang="vue"
+  :code='`<template>
+  <TuffProgress :percentage="40" />
+  <TuffProgress :percentage="72" status="warning" />
+  <TuffProgress :percentage="100" status="success" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TuffProgress :percentage="40" />
       <TuffProgress :percentage="72" status="warning" />
       <TuffProgress :percentage="100" status="success" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TuffProgress :percentage="40" />
-  <TuffProgress :percentage="72" status="warning" />
-  <TuffProgress :percentage="100" status="success" />
-</template>`' />
   </template>
 </TuffDemo>
 

@@ -13,7 +13,17 @@ tags: [tag, label, badge]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Tags" description="颜色与尺寸组合">
+<TuffDemo
+  title="Tags"
+  description="颜色与尺寸组合"
+  code-lang="vue"
+  :code='`<template>
+  <TxTag label="默认" />
+  <TxTag label="成功" color="var(--tx-color-success)" />
+  <TxTag label="警告" color="var(--tx-color-warning)" />
+  <TxTag label="危险" color="var(--tx-color-danger)" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxTag label="默认" />
@@ -21,14 +31,6 @@ tags: [tag, label, badge]
       <TxTag label="警告" color="var(--tx-color-warning)" />
       <TxTag label="危险" color="var(--tx-color-danger)" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxTag label="默认" />
-  <TxTag label="成功" color="var(--tx-color-success)" />
-  <TxTag label="警告" color="var(--tx-color-warning)" />
-  <TxTag label="危险" color="var(--tx-color-danger)" />
-</template>`' />
   </template>
 </TuffDemo>
 

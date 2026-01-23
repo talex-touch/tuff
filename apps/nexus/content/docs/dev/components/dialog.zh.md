@@ -23,18 +23,11 @@ tags: [dialog, modal, confirm]
 ```
 
 ## Demo
-<TuffDemo title="Critical Confirm" description="关键操作保持收束与聚焦。">
-  <template #preview>
-    <TuffDialogDemo
-      trigger-label="打开弹窗"
-      title="删除项目"
-      content="这项操作不可撤销，确定继续吗？"
-      cancel-label="取消"
-      confirm-label="确认"
-    />
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
+<TuffDemo
+  title="Critical Confirm"
+  description="关键操作保持收束与聚焦。"
+  code-lang="vue"
+  :code='`<template>
   <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
   <TxModal v-model="dialogOpen" title="删除项目">
     <p>这项操作不可撤销，确定继续吗？</p>
@@ -43,7 +36,16 @@ tags: [dialog, modal, confirm]
       <TxButton>确认</TxButton>
     </template>
   </TxModal>
-</template>`' />
+</template>`'
+>
+  <template #preview>
+    <TuffDialogDemo
+      trigger-label="打开弹窗"
+      title="删除项目"
+      content="这项操作不可撤销，确定继续吗？"
+      cancel-label="取消"
+      confirm-label="确认"
+    />
   </template>
 </TuffDemo>
 

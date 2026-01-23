@@ -185,13 +185,14 @@ const recommendation = computed(() => props.item.meta?.recommendation)
     </div>
 
     <div class="flex-1 overflow-hidden">
-      <!-- eslint-disable-next-line vue/no-v-html -->
+      <!-- eslint-disable vue/no-v-html -->
       <h5
         class="text-sm font-semibold truncate"
         v-html="
           getHighlightedHTML(render.basic?.title || '', props.item.meta?.extension?.matchResult)
         "
       />
+      <!-- eslint-enable vue/no-v-html -->
       <ItemSubtitle :item="item" :render="render" />
     </div>
 

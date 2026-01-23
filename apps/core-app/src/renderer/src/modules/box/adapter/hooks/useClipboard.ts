@@ -42,6 +42,14 @@ export function useClipboard(
   onPasteCallback?: () => void,
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
+  function resolveAutoPasteBaseTimestamp(timestamp: number): number {
+    const detectedAt = clipboardOptions.detectedAt
+    if (typeof detectedAt === 'number' && Number.isFinite(detectedAt)) {
+      return Math.min(timestamp, detectedAt)
+    }
+    return timestamp
+  }
+
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last?.timestamp) return false
     if (!appSetting.tools.autoPaste.enable) return false
@@ -52,7 +60,8 @@ export function useClipboard(
     if (autoPastedTimestamps.has(timestamp)) return false
 
     // Check clipboard freshness
-    const clipboardAge = Date.now() - timestamp
+    const baseTimestamp = resolveAutoPasteBaseTimestamp(timestamp)
+    const clipboardAge = Date.now() - baseTimestamp
     const limit = appSetting.tools.autoPaste.time
     const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_MS : limit * 1000
     return clipboardAge <= effectiveLimit

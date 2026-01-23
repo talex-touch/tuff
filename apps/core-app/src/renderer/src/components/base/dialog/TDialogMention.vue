@@ -205,12 +205,13 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
         <!-- Dialog title -->
         <h1 id="dialog-title" v-text="title" />
         <!-- Dialog message content with line breaks -->
-        <!-- eslint-disable-next-line vue/no-v-html -->
+        <!-- eslint-disable vue/no-v-html -->
         <span
           id="dialog-message"
           class="TDialogTip-Content"
           v-html="message.replace('\n', '<br /><br />')"
         />
+        <!-- eslint-enable vue/no-v-html -->
 
         <!-- Loading indicator wrapper -->
         <div class="TDialogTip-Loading-Wrapper">
