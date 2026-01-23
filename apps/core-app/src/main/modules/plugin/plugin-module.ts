@@ -9,7 +9,7 @@ import type {
   PluginInstallRequest,
   PluginInstallSummary
 } from '@talex-touch/utils/plugin/providers'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   PluginInstallSourceResponse,
   PluginPerformanceGetPathsResponse
@@ -22,7 +22,7 @@ import * as util from 'node:util'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   CoreBoxEvents,

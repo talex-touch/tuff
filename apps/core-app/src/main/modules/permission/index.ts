@@ -10,7 +10,7 @@ import {
   permissionRegistry,
   PermissionRiskLevel
 } from '@talex-touch/utils/permission'
-import { getTuffTransportMain, PermissionEvents } from '@talex-touch/utils/transport'
+import { getTuffTransportMain, PermissionEvents } from '@talex-touch/utils/transport/main'
 import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'

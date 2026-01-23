@@ -5,7 +5,11 @@ import {
   MARKET_SOURCES_STORAGE_KEY,
   MARKET_SOURCES_STORAGE_VERSION
 } from '@talex-touch/utils/market'
-import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
+import {
+  createStorageDataProxy,
+  createStorageProxy,
+  TouchStorage
+} from '@talex-touch/utils/renderer/storage/base-storage'
 
 const MARKET_SOURCES_SINGLETON_KEY = `storage:${MARKET_SOURCES_STORAGE_KEY}`
 
@@ -95,6 +99,8 @@ export const marketSourcesStorage = createStorageProxy(
   MARKET_SOURCES_SINGLETON_KEY,
   () => new MarketSourcesStorage()
 )
+
+export const marketSourcesData = createStorageDataProxy(marketSourcesStorage)
 
 export function getMarketSourceDefinitions(): MarketProviderDefinition[] {
   return marketSourcesStorage.getSources()

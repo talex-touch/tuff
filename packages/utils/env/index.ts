@@ -1,9 +1,11 @@
-import process from 'node:process'
-
 export const NEXUS_BASE_URL = 'https://tuff.tagzxia.com'
 
 export interface EnvLike {
   [key: string]: unknown
+}
+
+function getProcess(): any {
+  return (globalThis as any)?.process
 }
 
 function readGlobalEnv(): Record<string, string | undefined> {
@@ -22,7 +24,7 @@ function readGlobalEnv(): Record<string, string | undefined> {
     }
   }
 
-  const p: any = process
+  const p: any = getProcess()
   if (p && p.env && typeof p.env === 'object') {
     for (const [k, v] of Object.entries(p.env)) {
       if (typeof v === 'string') {
@@ -87,25 +89,26 @@ export function isBrowserRuntime(): boolean {
 }
 
 export function isNodeRuntime(): boolean {
-  const proc: any = process
+  const proc: any = getProcess()
   return typeof proc !== 'undefined'
     && Boolean(proc?.versions?.node)
 }
 
 export function isElectronRuntime(): boolean {
-  return isNodeRuntime()
-    && Boolean((process as any)?.versions?.electron)
+  const proc: any = getProcess()
+  return Boolean(proc?.versions?.electron)
 }
 
 export function isElectronRenderer(): boolean {
-  return isElectronRuntime()
-    && (process as any)?.type === 'renderer'
+  const proc: any = getProcess()
+  return Boolean(proc?.versions?.electron)
+    && proc?.type === 'renderer'
 }
 
 export function isElectronMain(): boolean {
-  return isElectronRuntime()
-    && ((process as any)?.type === 'browser'
-      || !(process as any)?.type)
+  const proc: any = getProcess()
+  return Boolean(proc?.versions?.electron)
+    && (proc?.type === 'browser' || !proc?.type)
 }
 
 export function isDevEnv(): boolean {

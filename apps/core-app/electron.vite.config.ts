@@ -6,7 +6,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
-import type { PluginOption } from 'vite'
+import type { Plugin, PluginOption } from 'vite'
 import Unocss from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
@@ -21,8 +21,9 @@ const workspaceRoot = path.resolve(__dirname, '..', '..')
 const basePath = path.join(__dirname, 'src')
 const rendererPath = path.join(basePath, 'renderer', 'src')
 const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
-const tuffexComponentSrc = path.join(tuffexRoot, 'packages', 'components', 'src')
+const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src', 'index.ts')
 const tuffexStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
+const tuffexUtilsEntry = path.join(tuffexRoot, 'packages', 'utils', 'index.ts')
 // Disable sourcemap in production/release builds to reduce package size
 const isProduction = process.env.BUILD_TYPE === 'release' || process.env.NODE_ENV === 'production'
 const enableSourcemap = !isProduction
@@ -30,7 +31,8 @@ const tuffexAliases = isProduction
   ? []
   : [
       { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
-      { find: /^@talex-touch\/tuffex$/, replacement: tuffexComponentSrc }
+      { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
+      { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry }
     ]
 const tuffexDevPlugins: PluginOption[] = isProduction
   ? []
@@ -48,6 +50,27 @@ const tuffexDevPlugins: PluginOption[] = isProduction
         }
       }
     ]
+const vueSetupExtendPlugin = VueSetupExtend() as Plugin
+const shouldSkipSetupExtend = (id: string) => {
+  const cleanId = id.split('?', 1)[0]
+  return cleanId.includes('/packages/tuffex/')
+}
+const filteredVueSetupExtend: Plugin = {
+  name: 'vite:setup-name-support-filter',
+  enforce: 'pre',
+  transform(code, id, options) {
+    if (shouldSkipSetupExtend(id)) return null
+    const hook = vueSetupExtendPlugin.transform
+    if (!hook) return null
+    if (typeof hook === 'function') {
+      return hook.call(this, code, id, options)
+    }
+    if (typeof hook.handler === 'function') {
+      return hook.handler.call(this, code, id, options)
+    }
+    return null
+  }
+}
 
 export default defineConfig({
   main: {
@@ -172,7 +195,7 @@ export default defineConfig({
       Components({
         resolvers: [ElementPlusResolver({ importStyle: 'sass' })]
       }),
-      VueSetupExtend(),
+      filteredVueSetupExtend,
       VueI18nPlugin({
         runtimeOnly: false
       }),

@@ -1,19 +1,31 @@
 <script lang="ts" name="FlatInput" setup>
-import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 
-const props = defineProps<{
-  modelValue: string
-  placeholder?: string
-  icon?: string
-  password?: boolean
-  nonWin?: boolean
-  area?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string
+    placeholder?: string
+    icon?: string
+    password?: boolean
+    nonWin?: boolean
+    area?: boolean
+  }>(),
+  {
+    modelValue: '',
+    placeholder: '',
+    icon: '',
+    password: false,
+    nonWin: false,
+    area: false
+  }
+)
 const emits = defineEmits(['update:modelValue'])
 
 const lapsLock = ref(false)
-const value = useModelWrapper(props, emits)
+const value = computed({
+  get: () => props.modelValue ?? '',
+  set: (next: string) => emits('update:modelValue', next)
+})
 
 function onKeyDown(e) {
   if (!props.password) return
@@ -39,16 +51,10 @@ function onKeyDown(e) {
         <RemixIcon :name="icon || ''" :style="'line'" />
       </slot>
     </span>
-    <textarea
-      v-if="area"
-      v-model="value.value"
-      resize="false"
-      :placeholder="placeholder"
-      relative
-    />
+    <textarea v-if="area" v-model="value" resize="false" :placeholder="placeholder" relative />
     <input
       v-else
-      v-model="value.value"
+      v-model="value"
       :placeholder="placeholder"
       relative
       :type="password ? 'password' : 'text'"

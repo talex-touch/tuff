@@ -23,40 +23,40 @@ function resolveSupportedLocale(locale?: string | null): SupportedLanguage | nul
   return matched?.key ?? null
 }
 
-const initialLanguage = (() => {
+// 语言设置状态
+const currentLanguage = ref<SupportedLanguage>('zh-CN')
+const followSystemLanguage = ref(false)
+let initialStateResolved = false
+
+function resolveInitialState(): void {
+  if (initialStateResolved) {
+    return
+  }
+  initialStateResolved = true
+
   if (!hasWindow()) {
-    return resolveSupportedLocale(appSetting?.lang?.locale) ?? 'zh-CN'
+    currentLanguage.value = resolveSupportedLocale(appSetting?.lang?.locale) ?? 'zh-CN'
+    followSystemLanguage.value = Boolean(appSetting?.lang?.followSystem)
+    return
   }
 
-  const stored = resolveSupportedLocale(localStorage.getItem('app-language'))
-  if (stored) {
-    return stored
-  }
+  const storedLanguage = resolveSupportedLocale(localStorage.getItem('app-language'))
+  const settingLanguage = resolveSupportedLocale(appSetting?.lang?.locale)
+  currentLanguage.value = storedLanguage ?? settingLanguage ?? 'zh-CN'
 
-  const fromSetting = resolveSupportedLocale(appSetting?.lang?.locale)
-  return fromSetting ?? 'zh-CN'
-})()
-
-const initialFollowSystem = (() => {
-  if (!hasWindow()) {
-    return Boolean(appSetting?.lang?.followSystem)
-  }
-
-  const stored = localStorage.getItem('app-follow-system-language')
-  if (stored === 'true' || stored === 'false') {
-    return stored === 'true'
+  const storedFollowSystem = localStorage.getItem('app-follow-system-language')
+  if (storedFollowSystem === 'true' || storedFollowSystem === 'false') {
+    followSystemLanguage.value = storedFollowSystem === 'true'
+    return
   }
 
   if (appSetting?.lang?.followSystem !== undefined) {
-    return Boolean(appSetting.lang.followSystem)
+    followSystemLanguage.value = Boolean(appSetting.lang.followSystem)
+    return
   }
 
-  return false
-})()
-
-// 语言设置状态
-const currentLanguage = ref<SupportedLanguage>(initialLanguage)
-const followSystemLanguage = ref(initialFollowSystem)
+  followSystemLanguage.value = false
+}
 
 /**
  * 获取系统语言（使用浏览器可见的 locale 以及本地设置作为回退）
@@ -86,6 +86,7 @@ function getSystemLanguage(): SupportedLanguage {
  * 语言管理 composable
  */
 export function useLanguage() {
+  resolveInitialState()
   /**
    * 获取全局 i18n 实例
    */

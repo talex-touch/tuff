@@ -1,5 +1,9 @@
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
-import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
+import {
+  createStorageDataProxy,
+  createStorageProxy,
+  TouchStorage
+} from '@talex-touch/utils/renderer/storage/base-storage'
 
 export interface PromptLibraryData {
   version: number
@@ -51,3 +55,5 @@ export const promptLibraryStorage = createStorageProxy(
   PROMPT_LIBRARY_SINGLETON_KEY,
   () => new PromptLibraryStorage()
 )
+
+export const promptLibraryData = createStorageDataProxy(promptLibraryStorage)

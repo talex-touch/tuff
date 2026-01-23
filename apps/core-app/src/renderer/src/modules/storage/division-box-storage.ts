@@ -1,4 +1,8 @@
-import { createStorageProxy, TouchStorage } from '@talex-touch/utils/renderer/storage/base-storage'
+import {
+  createStorageDataProxy,
+  createStorageProxy,
+  TouchStorage
+} from '@talex-touch/utils/renderer/storage/base-storage'
 
 interface DivisionBoxPreferences {
   version: number
@@ -32,3 +36,5 @@ export const divisionBoxStorage = createStorageProxy(
   DIVISION_BOX_SINGLETON_KEY,
   () => new DivisionBoxStorage()
 )
+
+export const divisionBoxData = createStorageDataProxy(divisionBoxStorage)

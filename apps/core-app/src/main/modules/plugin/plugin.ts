@@ -17,7 +17,7 @@ import type {
   PluginIssue,
   PluginMeta
 } from '@talex-touch/utils/plugin'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
 import path from 'node:path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
@@ -31,7 +31,7 @@ import {
   PluginStatus
 } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'

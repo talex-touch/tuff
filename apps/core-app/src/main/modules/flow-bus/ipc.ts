@@ -5,7 +5,11 @@
  */
 
 import type { ITouchChannel } from '@talex-touch/utils/channel'
-import { FlowEvents, getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport'
+import {
+  FlowEvents,
+  getTuffTransportMain,
+  type HandlerContext
+} from '@talex-touch/utils/transport/main'
 import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'

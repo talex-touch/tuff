@@ -1,6 +1,6 @@
 import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
-import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   ClipboardApplyRequest,
   ClipboardChangePayload,
@@ -22,7 +22,7 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'

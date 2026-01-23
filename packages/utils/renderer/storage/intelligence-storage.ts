@@ -9,7 +9,7 @@ import {
   DEFAULT_PROVIDERS,
   IntelligenceProviderType,
 } from '../../types/intelligence'
-import { createStorageProxy, TouchStorage } from './base-storage'
+import { createStorageDataProxy, createStorageProxy, TouchStorage } from './base-storage'
 
 // Re-export types for convenience
 export { IntelligenceProviderType }
@@ -131,6 +131,8 @@ export const intelligenceStorage = createStorageProxy<IntelligenceStorage>(
   () => new IntelligenceStorage(),
 )
 
+export const intelligenceData = createStorageDataProxy(intelligenceStorage)
+
 /**
  * Alias for backward compatibility
  * @deprecated Use intelligenceStorage instead
@@ -142,6 +144,9 @@ export const aisdkStorage = intelligenceStorage
  * @deprecated Use intelligenceStorage instead
  */
 export const intelligenceSettings = intelligenceStorage
+
+export const aisdkData = intelligenceData
+export const intelligenceSettingsData = intelligenceData
 
 export async function migrateIntelligenceSettings(): Promise<void> {
   intelligenceStorageLog.info('Starting migration check...')

@@ -50,6 +50,7 @@ let transport: ITuffTransport | null = null
  */
 export function initStorageChannel(c: IStorageChannel): void {
   channel = c
+  initializeStorageInstances()
 }
 
 /**
@@ -57,6 +58,7 @@ export function initStorageChannel(c: IStorageChannel): void {
  */
 export function initStorageTransport(t: ITuffTransport): void {
   transport = t
+  initializeStorageInstances()
 }
 
 /**
@@ -77,6 +79,12 @@ function getGlobalStorageMap(): GlobalStorageMap {
 }
 
 export const storages: GlobalStorageMap = getGlobalStorageMap()
+
+function initializeStorageInstances(): void {
+  for (const storage of storages.values()) {
+    storage.initializeChannel()
+  }
+}
 
 const GLOBAL_SINGLETON_KEY = '__talex_touch_storage_singletons__'
 type StorageSingletonMap = Map<string, unknown>
@@ -123,6 +131,34 @@ export function createStorageProxy<T extends object>(key: string, factory: () =>
   })
 }
 
+export function createStorageDataProxy<TData extends object>(
+  storage: { data: TData },
+): TData {
+  return new Proxy({} as TData, {
+    get(_target, prop) {
+      const data = storage.data as Record<PropertyKey, unknown>
+      const value = data[prop as PropertyKey]
+      return typeof value === 'function' ? value.bind(data) : value
+    },
+    set(_target, prop, value) {
+      (storage.data as Record<PropertyKey, unknown>)[prop as PropertyKey] = value
+      return true
+    },
+    has(_target, prop) {
+      return prop in (storage.data as Record<PropertyKey, unknown>)
+    },
+    ownKeys() {
+      return Reflect.ownKeys(storage.data as Record<PropertyKey, unknown>)
+    },
+    getOwnPropertyDescriptor(_target, prop) {
+      return Object.getOwnPropertyDescriptor(
+        storage.data as Record<PropertyKey, unknown>,
+        prop,
+      )
+    },
+  })
+}
+
 /**
  * Save result from main process
  */
@@ -156,7 +192,8 @@ export class TouchStorage<T extends object> {
 
   /**
    * Creates a new reactive storage instance.
-   * IMPORTANT: `initStorageChannel()` or `initStorageTransport()` must be called before creating any TouchStorage instances.
+   * NOTE: `initStorageChannel()` or `initStorageTransport()` can be called later;
+   * storage will sync once the channel/transport is ready.
    *
    * @param qName Globally unique name for the instance
    * @param initData Initial data to populate the storage
@@ -181,10 +218,7 @@ export class TouchStorage<T extends object> {
   ) {
     if (!channel && !transport) {
       if (isElectronRenderer()) {
-        throw new Error(
-          `TouchStorage: Cannot create storage "${qName}" before channel is initialized. `
-          + 'Please call initStorageChannel() or initStorageTransport() first.',
-        )
+        // Allow lazy initialization; channel/transport can be set later.
       }
     }
     void options
@@ -204,8 +238,10 @@ export class TouchStorage<T extends object> {
     // Register to storages map immediately
     storages.set(qName, this)
 
-    // Initialize channel-dependent operations immediately
-    this.#initializeChannel()
+    if (channel || transport) {
+      // Initialize channel-dependent operations immediately when ready
+      this.#initializeChannel()
+    }
   }
 
   /**
@@ -227,6 +263,10 @@ export class TouchStorage<T extends object> {
     if (this.#autoSave && !this.#autoSaveStopHandle) {
       this.#startAutoSaveWatcher()
     }
+  }
+
+  public initializeChannel(): void {
+    this.#initializeChannel()
   }
 
   async #getVersionedAsync(): Promise<StorageGetVersionedResponse | null> {

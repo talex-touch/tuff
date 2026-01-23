@@ -4,7 +4,7 @@ import type {
   IntelligenceProviderConfig
 } from '@talex-touch/utils'
 import { IntelligenceProviderType } from '@talex-touch/utils'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'

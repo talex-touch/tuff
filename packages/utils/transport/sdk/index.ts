@@ -3,8 +3,7 @@
  * @module @talex-touch/utils/transport/sdk
  */
 
-import type { ITuffTransport, ITuffTransportMain } from '../types'
-import { TuffMainTransport } from './main-transport'
+import type { ITuffTransport } from '../types'
 import { createPluginTuffTransport } from './plugin-transport'
 import { TuffRendererTransport } from './renderer-transport'
 
@@ -59,35 +58,3 @@ export function createTuffRendererTransport(module?: string): ITuffTransport {
 }
 
 export { createPluginTuffTransport }
-
-/**
- * Gets the TuffTransportMain instance for the main process.
- *
- * @param channel - The TouchChannel instance from the main process
- * @param keyManager - The plugin key manager instance
- * @returns The TuffTransportMain instance
- *
- * @remarks
- * This function should only be called from the main process.
- * The channel and keyManager should be obtained from the main process context.
- *
- * @example
- * ```typescript
- * import { getTuffTransportMain } from '@talex-touch/utils/transport'
- * import { genTouchChannel } from '../core/channel-core'
- *
- * const channel = genTouchChannel(app)
- * const transport = getTuffTransportMain(channel, keyManager)
- *
- * transport.on(ClipboardEvents.getLatest, async (payload, context) => {
- *   // Handle request
- *   return latestItem
- * })
- * ```
- */
-export function getTuffTransportMain(
-  channel: any,
-  keyManager: any,
-): ITuffTransportMain {
-  return new TuffMainTransport(channel, keyManager)
-}

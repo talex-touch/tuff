@@ -4,7 +4,7 @@ import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
 
-import type { PluginInstallRequest, PluginInstallSummary } from './providers'
+import type { PluginInstallRequest, PluginInstallSummary } from './providers/types'
 
 export enum PluginStatus {
   DISABLED,
@@ -563,7 +563,6 @@ export interface IManifest {
 
 export * from './install'
 export type { IPluginLogger, LogDataType, LogItem } from './log/types'
-export * from './providers'
 export * from './risk'
 export * from './sdk-version'
 export * from './sdk/index'

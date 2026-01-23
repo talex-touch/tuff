@@ -1,5 +1,3 @@
-import { Buffer } from 'node:buffer'
-
 export interface PayloadPreviewOptions {
   maxOutputChars?: number
   maxStringChars?: number

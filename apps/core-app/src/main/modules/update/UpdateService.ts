@@ -16,7 +16,7 @@ import {
   UpdateProviderType
 } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { and, desc, eq } from 'drizzle-orm'

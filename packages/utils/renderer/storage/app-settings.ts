@@ -1,6 +1,6 @@
 import type { AppSetting } from '../..'
 import { appSettingOriginData, StorageList } from '../..'
-import { createStorageProxy, TouchStorage } from './base-storage'
+import { createStorageDataProxy, createStorageProxy, TouchStorage } from './base-storage'
 
 /**
  * Application settings storage manager
@@ -42,3 +42,5 @@ export const appSettings = createStorageProxy<AppSettingsStorage>(
   APP_SETTINGS_SINGLETON_KEY,
   () => new AppSettingsStorage(),
 )
+
+export const appSettingsData = createStorageDataProxy(appSettings)

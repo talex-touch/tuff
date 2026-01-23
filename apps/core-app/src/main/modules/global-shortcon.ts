@@ -3,7 +3,7 @@ import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut
 import process from 'node:process'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BrowserWindow, globalShortcut } from 'electron'
 import { createLogger } from '../utils/logger'

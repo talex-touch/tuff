@@ -7,7 +7,7 @@ import type {
 import type { TrayState } from './tray-state-manager'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { TrayEvents } from '@talex-touch/utils/transport/events'
 import { app, Tray } from 'electron'
 import {

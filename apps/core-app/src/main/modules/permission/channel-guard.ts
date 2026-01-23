@@ -1,7 +1,7 @@
 /**
  * Middleware for adding permission checks to transport handlers.
  */
-import type { HandlerContext } from '@talex-touch/utils/transport'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { getPermissionModule } from './index'
 
 export interface ProtectedChannelOptions {

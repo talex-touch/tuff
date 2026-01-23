@@ -1,5 +1,5 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   PackageInfo,
   ReadFileRequest,
@@ -16,7 +16,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { isLocalhostUrl } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 import { BrowserWindow, powerMonitor, shell, type OpenDevToolsOptions } from 'electron'

@@ -4,7 +4,7 @@ import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget
 import type { FSWatcher } from 'chokidar'
 import type { WidgetCompilationContext } from './widget-processor'
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import chokidar from 'chokidar'
 import { genTouchApp } from '../../../core'

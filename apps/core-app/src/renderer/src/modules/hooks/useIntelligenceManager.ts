@@ -8,7 +8,7 @@ import type {
   TestResult
 } from '@talex-touch/utils/types/intelligence'
 import type { ComputedRef, Ref } from 'vue'
-import { aisdkStorage, intelligenceSettings } from '@talex-touch/utils/renderer/storage'
+import { intelligenceData, intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, ref, watch } from 'vue'
 
 /**
@@ -118,9 +118,9 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   })
 
   const capabilities = computed<Record<string, AISDKCapabilityConfig>>({
-    get: () => aisdkStorage.data.capabilities,
+    get: () => intelligenceData.capabilities,
     set: (value) => {
-      aisdkStorage.data.capabilities = value
+      intelligenceData.capabilities = value
     }
   })
 

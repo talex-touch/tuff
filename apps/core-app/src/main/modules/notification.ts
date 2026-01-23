@@ -4,7 +4,7 @@ import type {
   ModuleInitContext,
   ModuleKey
 } from '@talex-touch/utils'
-import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   NotificationActionPayload,
   NotificationChannel,
@@ -25,7 +25,7 @@ import type { NotificationAction as SystemNotificationAction } from 'electron'
 import type { TalexEvents } from '../core/eventbus/touch-event'
 import { randomUUID } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
-import { getTuffTransportMain, NotificationEvents } from '@talex-touch/utils/transport'
+import { getTuffTransportMain, NotificationEvents } from '@talex-touch/utils/transport/main'
 import { Notification } from 'electron'
 import { genTouchApp } from '../core'
 import { BaseModule } from './abstract-base-module'

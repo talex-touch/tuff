@@ -12,7 +12,11 @@ import type {
   TaskProgress
 } from '@talex-touch/utils'
 import type { AgentInstallOptions, AgentSearchOptions } from '../../../service/agent-market.service'
-import { AgentsEvents, getTuffTransportMain, type TuffEvent } from '@talex-touch/utils/transport'
+import {
+  AgentsEvents,
+  getTuffTransportMain,
+  type TuffEvent
+} from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../../core'
 import { agentMarketService } from '../../../service/agent-market.service'

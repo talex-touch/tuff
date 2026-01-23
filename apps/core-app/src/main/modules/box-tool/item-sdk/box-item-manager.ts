@@ -15,7 +15,7 @@ import {
   getTuffTransportMain,
   type HandlerContext,
   type TuffEvent
-} from '@talex-touch/utils/transport'
+} from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../../core'
 import { getCoreBoxWindow } from '../core-box'

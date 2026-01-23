@@ -1,6 +1,6 @@
 import type { AiCapabilityRoutingConfig, AiSDKPersistedConfig } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { ai } from './intelligence-sdk'

@@ -104,7 +104,6 @@ export * from './events'
 export {
   createPluginTuffTransport,
   createTuffRendererTransport,
-  getTuffTransportMain,
   useTuffTransport,
 } from './sdk'
 
