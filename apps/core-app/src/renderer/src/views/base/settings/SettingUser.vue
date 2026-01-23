@@ -3,16 +3,45 @@ import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
+import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { getAuthBaseUrl, isLocalAuthMode } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
 import { appSetting } from '~/modules/channel/storage'
 
 const { t } = useI18n()
-const { isLoggedIn, currentUser, loginWithBrowser, logout, authLoadingState } = useAuth()
+const {
+  isLoggedIn,
+  currentUser,
+  user,
+  getDisplayName,
+  getPrimaryEmail,
+  openLoginSettings,
+  loginWithBrowser,
+  logout,
+  authLoadingState
+} = useAuth()
 const appSdk = useAppSdk()
+const profileEditorVisible = ref(false)
+
+const displayName = computed(() => {
+  const name = getDisplayName()
+  if (name) return name
+  return currentUser.value?.name || ''
+})
+const displayEmail = computed(() => {
+  const email = getPrimaryEmail()
+  if (email) return email
+  return currentUser.value?.email || ''
+})
+const avatarUrl = computed(() => user.value?.imageUrl || currentUser.value?.avatar || '')
+const displayInitial = computed(() => {
+  const seed = displayName.value || displayEmail.value
+  return seed ? seed.trim().charAt(0).toUpperCase() : '?'
+})
 
 const isDev = import.meta.env.DEV
 const useLocalServer = computed({
@@ -33,28 +62,45 @@ async function handleLogin() {
     }
   } catch (error) {
     console.error('登录过程出错:', error)
-    toast.error('登录过程中发生错误')
+    toast.error(t('settingUser.loginError'))
   }
 }
 
 async function handleLogout() {
   try {
     await logout()
-    toast.success('已登出')
+    toast.success(t('settingUser.logoutSuccess'))
   } catch (error) {
     console.error('登出失败:', error)
-    toast.error('登出失败')
+    toast.error(t('settingUser.logoutFailed'))
   }
 }
 
-function openUserProfile() {
-  const profileUrl = `${getAuthBaseUrl()}/dashboard/account`
-  void appSdk.openExternal(profileUrl)
+function openProfileEditor() {
+  profileEditorVisible.value = true
 }
 
 function openDeviceManagement() {
   const devicesUrl = `${getAuthBaseUrl()}/dashboard/devices`
   void appSdk.openExternal(devicesUrl)
+}
+
+async function handleLoginMethods() {
+  if (isLocalAuthMode()) {
+    toast.info(t('userProfile.loginMethodsLocal'))
+    return
+  }
+  try {
+    const opened = await openLoginSettings()
+    if (!opened) {
+      const loginUrl = `${getAuthBaseUrl()}/dashboard/account#security`
+      await appSdk.openExternal(loginUrl)
+      toast.info(t('userProfile.loginMethodsWeb'))
+    }
+  } catch (error) {
+    console.error('Failed to open login methods:', error)
+    toast.error(t('userProfile.loginMethodsFailed'))
+  }
 }
 </script>
 
@@ -69,24 +115,45 @@ function openDeviceManagement() {
     <!-- Logged in state -->
     <TuffBlockSlot
       v-if="isLoggedIn"
-      :title="currentUser.value?.name || '用户'"
-      :description="currentUser.value?.email || '已登录'"
+      :title="displayName || t('settingUser.defaultName')"
+      :description="displayEmail || t('settingUser.loggedIn')"
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
-      @click="openUserProfile"
+      @click="openProfileEditor"
     >
+      <template #icon>
+        <div class="user-avatar">
+          <img
+            v-if="avatarUrl"
+            :src="avatarUrl"
+            :alt="displayName || displayEmail || 'User'"
+            class="user-avatar-image"
+          />
+          <div v-else class="user-avatar-placeholder">
+            {{ displayInitial }}
+          </div>
+        </div>
+      </template>
       <template #tags>
         <span class="user-tag">
           <span class="i-carbon-checkmark-filled text-xs text-green-500" />
-          {{ t('settingUser.verified', '已验证') }}
+          {{ t('settingUser.verified') }}
         </span>
       </template>
-      <TxButton variant="flat" size="sm" @click.stop="openDeviceManagement">
-        <span class="i-carbon-devices text-sm" />
-      </TxButton>
-      <TxButton variant="flat" type="danger" @click.stop="handleLogout">
-        {{ t('settingUser.logout') }}
-      </TxButton>
+      <div class="user-actions">
+        <TxButton variant="flat" size="sm" @click.stop="openProfileEditor">
+          {{ t('settingUser.editProfile') }}
+        </TxButton>
+        <TxButton variant="flat" size="sm" @click.stop="handleLoginMethods">
+          {{ t('settingUser.loginSettings') }}
+        </TxButton>
+        <TxButton variant="flat" size="sm" @click.stop="openDeviceManagement">
+          {{ t('settingUser.deviceManagement') }}
+        </TxButton>
+        <TxButton variant="flat" type="danger" size="sm" @click.stop="handleLogout">
+          {{ t('settingUser.logout') }}
+        </TxButton>
+      </div>
     </TuffBlockSlot>
 
     <!-- Not logged in state -->
@@ -104,11 +171,7 @@ function openDeviceManagement() {
         @click="handleLogin"
       >
         <span v-if="authLoadingState.isLoggingIn" class="i-carbon-circle-dash animate-spin mr-1" />
-        {{
-          authLoadingState.isLoggingIn
-            ? t('settingUser.loggingIn', '登录中...')
-            : t('settingUser.login')
-        }}
+        {{ authLoadingState.isLoggingIn ? t('settingUser.loggingIn') : t('settingUser.login') }}
       </TxButton>
     </TuffBlockSlot>
 
@@ -122,6 +185,15 @@ function openDeviceManagement() {
       active-icon="i-carbon-development"
     />
   </TuffGroupBlock>
+
+  <TModal v-model="profileEditorVisible" :title="t('userProfile.editTitle', 'Edit profile')">
+    <UserProfileEditor :visible="profileEditorVisible" />
+    <template #footer>
+      <TxButton variant="ghost" @click="profileEditorVisible = false">
+        {{ t('common.close') }}
+      </TxButton>
+    </template>
+  </TModal>
 </template>
 
 <style scoped>
@@ -134,5 +206,36 @@ function openDeviceManagement() {
   font-size: 11px;
   background: color-mix(in srgb, var(--el-color-success) 15%, transparent);
   color: var(--el-color-success);
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--el-color-primary-light-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-avatar-placeholder {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-8);
+}
+
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 </style>
