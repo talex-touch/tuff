@@ -8,6 +8,7 @@ export interface ClerkUser {
   lastName?: string
   username?: string
   imageUrl?: string
+  publicMetadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }

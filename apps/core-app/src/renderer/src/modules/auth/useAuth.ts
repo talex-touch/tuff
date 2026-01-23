@@ -231,6 +231,144 @@ function getPrimaryEmail(): string {
   return authState.user.emailAddresses[0].emailAddress
 }
 
+type ProfileUpdateInput = {
+  displayName?: string
+  bio?: string
+}
+
+function splitDisplayName(name: string): { firstName: string; lastName: string } {
+  const trimmed = name.trim()
+  if (!trimmed) return { firstName: '', lastName: '' }
+  const parts = trimmed.split(/\s+/)
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] }
+}
+
+function getUserBio(): string {
+  const metadata = authState.user?.publicMetadata
+  return typeof metadata?.bio === 'string' ? metadata.bio : ''
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('FileReader failed'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function updateUserProfile(payload: ProfileUpdateInput): Promise<ClerkUser | null> {
+  if (!payload.displayName && payload.bio === undefined) {
+    return authState.user
+  }
+
+  if (isLocalAuthMode()) {
+    const localUser = authState.user ?? buildLocalUser()
+    const updatedUser: ClerkUser = { ...localUser }
+
+    if (payload.displayName !== undefined) {
+      const { firstName, lastName } = splitDisplayName(payload.displayName)
+      updatedUser.firstName = firstName || undefined
+      updatedUser.lastName = lastName || undefined
+    }
+
+    if (payload.bio !== undefined) {
+      const metadata = { ...(updatedUser.publicMetadata || {}) }
+      metadata.bio = payload.bio
+      updatedUser.publicMetadata = metadata
+    }
+
+    updatedUser.updatedAt = new Date().toISOString()
+    authState.user = updatedUser
+    writeLocalAuthUser(updatedUser, authState.sessionId ?? undefined)
+    return updatedUser
+  }
+
+  const { getClerk, initializeClerk } = useClerkProvider()
+  let clerk = getClerk()
+  if (!clerk) {
+    clerk = await initializeClerk()
+  }
+
+  if (!clerk?.user) {
+    throw new Error('User not available')
+  }
+
+  const clerkUser = clerk.user as unknown as {
+    update: (payload: Record<string, unknown>) => Promise<unknown>
+    publicMetadata?: Record<string, unknown>
+  }
+
+  const updatePayload: Record<string, unknown> = {}
+  if (payload.displayName !== undefined) {
+    const { firstName, lastName } = splitDisplayName(payload.displayName)
+    updatePayload.firstName = firstName
+    updatePayload.lastName = lastName
+  }
+  if (payload.bio !== undefined) {
+    const metadata = { ...(clerkUser.publicMetadata || {}) }
+    metadata.bio = payload.bio
+    updatePayload.publicMetadata = metadata
+  }
+
+  await clerkUser.update(updatePayload)
+  updateAuthState(clerk)
+  return authState.user
+}
+
+async function updateUserAvatar(file: File): Promise<ClerkUser | null> {
+  if (isLocalAuthMode()) {
+    const dataUrl = await fileToDataUrl(file)
+    const localUser = authState.user ?? buildLocalUser()
+    const updatedUser: ClerkUser = {
+      ...localUser,
+      imageUrl: dataUrl,
+      updatedAt: new Date().toISOString()
+    }
+    authState.user = updatedUser
+    writeLocalAuthUser(updatedUser, authState.sessionId ?? undefined)
+    return updatedUser
+  }
+
+  const { getClerk, initializeClerk } = useClerkProvider()
+  let clerk = getClerk()
+  if (!clerk) {
+    clerk = await initializeClerk()
+  }
+
+  if (!clerk?.user) {
+    throw new Error('User not available')
+  }
+
+  const clerkUser = clerk.user as unknown as {
+    setProfileImage?: (payload: { file: File }) => Promise<unknown>
+  }
+  if (typeof clerkUser.setProfileImage !== 'function') {
+    throw new Error('Profile image update not supported')
+  }
+
+  await clerkUser.setProfileImage({ file })
+  updateAuthState(clerk)
+  return authState.user
+}
+
+async function openLoginSettings(): Promise<boolean> {
+  if (isLocalAuthMode()) return false
+  const { getClerk, initializeClerk } = useClerkProvider()
+  let clerk = getClerk()
+  if (!clerk) {
+    clerk = await initializeClerk()
+  }
+  if (!clerk) return false
+  const clerkWithProfile = clerk as unknown as { openUserProfile?: () => Promise<void> }
+  if (typeof clerkWithProfile.openUserProfile === 'function') {
+    await clerkWithProfile.openUserProfile()
+    return true
+  }
+  return false
+}
+
 async function initializeAuth() {
   if (isInitialized) return
 
@@ -955,6 +1093,10 @@ export function useAuth() {
     checkAuthStatus,
     initializeAuth,
     getDisplayName,
-    getPrimaryEmail
+    getPrimaryEmail,
+    getUserBio,
+    updateUserProfile,
+    updateUserAvatar,
+    openLoginSettings
   }
 }

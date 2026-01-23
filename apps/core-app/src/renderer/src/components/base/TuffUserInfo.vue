@@ -3,15 +3,26 @@ import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk, useClerkProvider } from '@talex-touch/utils/renderer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
 import TModal from '~/components/base/tuff/TModal.vue'
-import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { getAuthBaseUrl, isLocalAuthMode } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
 import { fetchNexusWithAuth } from '~/modules/market/nexus-auth-client'
 
 const { t } = useI18n()
-const { currentUser, isLoggedIn } = useAuth()
+const {
+  currentUser,
+  isLoggedIn,
+  user,
+  getDisplayName,
+  getPrimaryEmail,
+  getUserBio,
+  openLoginSettings
+} = useAuth()
 
 const profileVisible = ref(false)
+const profileEditing = ref(false)
 const accountLoading = ref(false)
 const accountLoaded = ref(false)
 const accountError = ref('')
@@ -21,9 +32,23 @@ const deviceCount = ref<number | null>(null)
 const lastFetchedAt = ref(0)
 const appSdk = useAppSdk()
 
-const displayName = computed(() => currentUser.value?.name || '')
-const displayEmail = computed(() => currentUser.value?.email || '')
-const displayId = computed(() => currentUser.value?.id || '')
+const displayName = computed(() => {
+  const name = getDisplayName()
+  if (name) return name
+  return currentUser.value?.name || ''
+})
+const displayEmail = computed(() => {
+  const email = getPrimaryEmail()
+  if (email) return email
+  return currentUser.value?.email || ''
+})
+const displayId = computed(() => user.value?.id || currentUser.value?.id || '')
+const avatarUrl = computed(() => user.value?.imageUrl || currentUser.value?.avatar || '')
+const displayInitial = computed(() => {
+  const seed = displayName.value || displayEmail.value
+  return seed ? seed.trim().charAt(0).toUpperCase() : '?'
+})
+const profileBio = computed(() => getUserBio())
 const planLabel = computed(() =>
   subscriptionStatus.value ? formatPlan(subscriptionStatus.value.plan) : '-'
 )
@@ -87,6 +112,34 @@ function openUserProfile() {
   const profileUrl = `${getAuthBaseUrl()}/dashboard/account`
   void appSdk.openExternal(profileUrl)
   profileVisible.value = false
+}
+
+function openDeviceManagement() {
+  const devicesUrl = `${getAuthBaseUrl()}/dashboard/devices`
+  void appSdk.openExternal(devicesUrl)
+  profileVisible.value = false
+}
+
+function toggleProfileEditor() {
+  profileEditing.value = !profileEditing.value
+}
+
+async function handleLoginMethods() {
+  if (isLocalAuthMode()) {
+    toast.info(t('userProfile.loginMethodsLocal'))
+    return
+  }
+  try {
+    const opened = await openLoginSettings()
+    if (!opened) {
+      const loginUrl = `${getAuthBaseUrl()}/dashboard/account#security`
+      await appSdk.openExternal(loginUrl)
+      toast.info(t('userProfile.loginMethodsWeb'))
+    }
+  } catch (error) {
+    console.error('Failed to open login methods:', error)
+    toast.error(t('userProfile.loginMethodsFailed'))
+  }
 }
 
 function openProfileDialog() {
@@ -233,6 +286,8 @@ function formatQuota(used?: number, limit?: number): string {
 watch(profileVisible, (visible) => {
   if (visible) {
     loadAccountOverview()
+  } else {
+    profileEditing.value = false
   }
 })
 
@@ -249,24 +304,24 @@ watch(isLoggedIn, (loggedIn) => {
     class="FlatUserInfo"
     @click="openProfileDialog"
   >
-    <template v-if="isLoggedIn && currentUser.value?.name">
+    <template v-if="isLoggedIn">
       <div class="user-avatar">
         <img
-          v-if="currentUser.value?.avatar"
-          :src="currentUser.value.avatar"
-          :alt="currentUser.value.name"
+          v-if="avatarUrl"
+          :src="avatarUrl"
+          :alt="displayName || displayEmail || 'User'"
           class="avatar-image"
         />
         <div v-else class="avatar-placeholder">
-          {{ currentUser.value.name.charAt(0).toUpperCase() }}
+          {{ displayInitial }}
         </div>
       </div>
       <div class="user-info">
         <p class="user-name">
-          {{ currentUser.value.name }}
+          {{ displayName || t('userProfile.unknownName', 'User') }}
         </p>
         <span class="user-email">
-          {{ currentUser.value.email }}
+          {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
         </span>
       </div>
       <span class="open-external-icon i-carbon-launch" />
@@ -277,13 +332,13 @@ watch(isLoggedIn, (loggedIn) => {
       <div class="UserProfile-Header">
         <div class="UserProfile-Avatar">
           <img
-            v-if="currentUser.value?.avatar"
-            :src="currentUser.value.avatar"
-            :alt="displayName"
+            v-if="avatarUrl"
+            :src="avatarUrl"
+            :alt="displayName || displayEmail"
             class="avatar-image"
           />
           <div v-else class="avatar-placeholder">
-            {{ displayName?.charAt(0).toUpperCase() }}
+            {{ displayInitial }}
           </div>
         </div>
         <div class="UserProfile-Identity">
@@ -294,6 +349,9 @@ watch(isLoggedIn, (loggedIn) => {
             {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
           </p>
         </div>
+      </div>
+      <div v-if="profileBio" class="UserProfile-Bio">
+        {{ profileBio }}
       </div>
       <div class="UserProfile-Details">
         <div class="UserProfile-Row">
@@ -312,6 +370,32 @@ watch(isLoggedIn, (loggedIn) => {
             {{ t('userProfile.statusSignedIn', 'Signed in') }}
           </span>
         </div>
+      </div>
+      <div class="UserProfile-Section">
+        <div class="UserProfile-SectionTitle">
+          {{ t('userProfile.actions', 'Profile actions') }}
+        </div>
+        <div class="UserProfile-Actions">
+          <TxButton variant="flat" size="sm" @click="toggleProfileEditor">
+            {{
+              profileEditing
+                ? t('userProfile.hideEditor', 'Hide editor')
+                : t('userProfile.editProfile', 'Edit profile')
+            }}
+          </TxButton>
+          <TxButton variant="flat" size="sm" @click="handleLoginMethods">
+            {{ t('userProfile.loginMethods', 'Login methods') }}
+          </TxButton>
+          <TxButton variant="flat" size="sm" @click="openDeviceManagement">
+            {{ t('userProfile.devices', 'Devices') }}
+          </TxButton>
+        </div>
+      </div>
+      <div v-if="profileEditing" class="UserProfile-Section">
+        <div class="UserProfile-SectionTitle">
+          {{ t('userProfile.editTitle', 'Edit profile') }}
+        </div>
+        <UserProfileEditor :visible="profileEditing" />
       </div>
       <div class="UserProfile-Section">
         <div class="UserProfile-SectionTitle">
@@ -618,6 +702,12 @@ watch(isLoggedIn, (loggedIn) => {
   text-overflow: ellipsis;
 }
 
+.UserProfile-Bio {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  line-height: 1.5;
+}
+
 .UserProfile-Details {
   display: flex;
   flex-direction: column;
@@ -625,6 +715,13 @@ watch(isLoggedIn, (loggedIn) => {
   padding: 12px;
   border-radius: 12px;
   background: var(--el-fill-color-lighter);
+}
+
+.UserProfile-Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .UserProfile-Section {
