@@ -23,6 +23,7 @@
 | Nexus 官网首页整改 | 未开始 | `plan/2026-01-21_13-25-00-nexus-homepage-revamp.md:1` | 仍为整改计划。 |
 | 内部下载可见性控制 | 未开始 | `apps/core-app/src/main/modules/download/notification-service.ts:222` | hidden 逻辑仍与 packaged 环境强绑定。 |
 | SearchLogger 生命周期分析 | 部分完成 | `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts:17` | 通过 try/catch 兜底，未正式进入生命周期托管。 |
+| 文件系统搜索范围权限收敛 | 未开始 | `plan/2026-01-22_10-00-00-file-search-scope-permission.md:1` | 默认范围与授权策略待落地。 |
 | 自动发布与 Nexus 同步 | 未开始 | `plan/planprd-release-pipeline.md:1` | 仅 PRD/方案存在。 |
 | App Indexing 周期对比 | 已完成 | `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts:425` | 启动补漏与周期全量已落地。 |
 | stash 弹出恢复 | 未开始 | `plan/2026-01-20_21-17-14-stash-pop-recovery.md:1` | 仅操作性计划。 |

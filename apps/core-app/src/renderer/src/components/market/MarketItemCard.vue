@@ -7,6 +7,7 @@ import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
  * Delegates installation state logic to MarketInstallButton component.
  */
 import { TxStatusBadge, TxTag } from '@talex-touch/tuffex'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MarketIcon from '~/components/market/MarketIcon.vue'
 import MarketInstallButton from '~/components/market/MarketInstallButton.vue'
@@ -41,7 +42,7 @@ interface MarketItemCardProps {
   hasUpgrade?: boolean
 }
 
-defineProps<MarketItemCardProps>()
+const props = defineProps<MarketItemCardProps>()
 
 const emit = defineEmits<{
   /** Emitted when install button is clicked */
@@ -51,6 +52,22 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  tools: 'utilities',
+  tool: 'utilities'
+}
+
+const categoryLabel = computed(() => {
+  const raw = props.item.category
+  if (!raw) return ''
+  const normalized = raw.trim().toLowerCase()
+  if (!normalized) return raw
+  const resolved = CATEGORY_ALIASES[normalized] ?? normalized
+  const key = `market.categories.${resolved}`
+  const translated = t(key)
+  return translated === key ? raw : translated
+})
 
 /**
  * Handles card click to open plugin details
@@ -116,7 +133,7 @@ function handleInstall(): void {
       </div>
 
       <div>
-        <TxStatusBadge v-if="item.category" icon="i-ri-file-2-line" :text="item.category" />
+        <TxStatusBadge v-if="categoryLabel" icon="i-ri-file-2-line" :text="categoryLabel" />
         <TxTag v-for="tag in item.metadata?.badges" :key="tag" :label="tag" />
       </div>
 

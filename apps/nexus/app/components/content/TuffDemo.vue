@@ -5,13 +5,24 @@ interface DemoProps {
   title?: string
   description?: string
   codeLabel?: string
+  code?: string
+  codeLines?: string[]
+  codeLang?: string
 }
 
 const props = defineProps<DemoProps>()
 const slots = useSlots()
 const hasPreview = computed(() => Boolean(slots.preview || slots.default))
-const hasCode = computed(() => Boolean(slots.code))
+const resolvedCode = computed(() => {
+  if (props.code)
+    return props.code
+  if (props.codeLines?.length)
+    return props.codeLines.join('\n')
+  return ''
+})
+const hasCode = computed(() => Boolean(resolvedCode.value || slots.code))
 const codeLabel = computed(() => props.codeLabel || '')
+const codeLang = computed(() => props.codeLang || 'vue')
 </script>
 
 <template>
@@ -44,7 +55,9 @@ const codeLabel = computed(() => props.codeLabel || '')
         {{ codeLabel }}
       </div>
       <div class="tuff-demo__code-body">
-        <slot name="code" />
+        <slot name="code">
+          <TuffCodeBlock v-if="resolvedCode" :lang="codeLang" :code="resolvedCode" />
+        </slot>
       </div>
     </div>
   </section>

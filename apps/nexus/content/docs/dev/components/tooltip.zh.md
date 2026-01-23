@@ -13,7 +13,19 @@ tags: [tooltip, hint, overlay]
 > **状态**：Beta
 
 ## Demo
-<TuffDemo title="Hover Hint" description="短文本提示，保持低侵入感。">
+<TuffDemo
+  title="Hover Hint"
+  description="短文本提示，保持低侵入感。"
+  code-lang="vue"
+  :code='`<template>
+  <TxTooltip content="提示信息">
+    <TxButton variant="ghost">Hover me</TxButton>
+  </TxTooltip>
+  <TxTooltip content="信息">
+    <TxButton variant="ghost">Info</TxButton>
+  </TxTooltip>
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxTooltip content="提示信息">
@@ -23,13 +35,6 @@ tags: [tooltip, hint, overlay]
         <TxButton variant="ghost">Info</TxButton>
       </TxTooltip>
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxTooltip content="提示信息">
-    <TxButton variant="ghost">Hover me</TxButton>
-  </TxTooltip>
-</template>`' />
   </template>
 </TuffDemo>
 

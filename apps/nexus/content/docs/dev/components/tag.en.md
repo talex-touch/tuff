@@ -13,7 +13,17 @@ tags: [tag, label, badge]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Tags" description="Color and size variations">
+<TuffDemo
+  title="Tags"
+  description="Color and size variations"
+  code-lang="vue"
+  :code='`<template>
+  <TxTag label="Default" />
+  <TxTag label="Success" color="var(--tx-color-success)" />
+  <TxTag label="Warning" color="var(--tx-color-warning)" />
+  <TxTag label="Danger" color="var(--tx-color-danger)" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxTag label="Default" />
@@ -21,14 +31,6 @@ tags: [tag, label, badge]
       <TxTag label="Warning" color="var(--tx-color-warning)" />
       <TxTag label="Danger" color="var(--tx-color-danger)" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxTag label="Default" />
-  <TxTag label="Success" color="var(--tx-color-success)" />
-  <TxTag label="Warning" color="var(--tx-color-warning)" />
-  <TxTag label="Danger" color="var(--tx-color-danger)" />
-</template>`' />
   </template>
 </TuffDemo>
 

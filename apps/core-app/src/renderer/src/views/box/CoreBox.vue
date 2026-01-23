@@ -211,7 +211,7 @@ const effectiveProviders = computed<IProviderActivate[]>(() => {
   return activeActivationsList.value
 })
 
-const { cleanup: cleanupVisibility } = useVisibility({
+const { cleanup: cleanupVisibility, checkAutoClear } = useVisibility({
   boxOptions,
   searchVal,
   clipboardOptions,
@@ -220,6 +220,24 @@ const { cleanup: cleanupVisibility } = useVisibility({
   boxInputRef,
   deactivateAllProviders
 })
+
+const featureModeEnteredAt = ref<number | null>(null)
+
+watch(
+  () => boxOptions.mode,
+  (mode, prevMode) => {
+    if (mode === BoxMode.FEATURE && prevMode !== BoxMode.FEATURE) {
+      featureModeEnteredAt.value = Date.now()
+      return
+    }
+    if (prevMode === BoxMode.FEATURE && mode !== BoxMode.FEATURE) {
+      if (featureModeEnteredAt.value) {
+        checkAutoClear(featureModeEnteredAt.value)
+      }
+      featureModeEnteredAt.value = null
+    }
+  }
+)
 
 type ItemRef = HTMLElement | ComponentPublicInstance
 const itemRefs = ref<ItemRef[]>([])

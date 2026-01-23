@@ -13,7 +13,17 @@ tags: [drawer, panel, overlay]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Side Drawer" description="Right drawer for forms and settings">
+<TuffDemo
+  title="Side Drawer"
+  description="Right drawer for forms and settings"
+  code-lang="vue"
+  :code='`<template>
+  <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
+  <TxDrawer v-model:visible="drawerOpen" title="Settings" width="420px">
+    <p>Place your form or settings here.</p>
+  </TxDrawer>
+</template>`'
+>
   <template #preview>
     <TuffDrawerDemo
       trigger-label="Open Drawer"
@@ -22,14 +32,6 @@ tags: [drawer, panel, overlay]
       close-label="Close"
       width="420px"
     />
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
-  <TxDrawer v-model:visible="drawerOpen" title="Settings" width="420px">
-    <p>Place your form or settings here.</p>
-  </TxDrawer>
-</template>`' />
   </template>
 </TuffDemo>
 

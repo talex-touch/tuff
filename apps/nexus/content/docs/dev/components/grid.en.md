@@ -13,7 +13,19 @@ tags: [grid, layout, alignment]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Grid Rhythm" description="Consistent spacing keeps the layout steady.">
+<TuffDemo
+  title="Grid Rhythm"
+  description="Consistent spacing keeps the layout steady."
+  code-lang="vue"
+  :code='`<template>
+  <TxGrid :cols="4" gap="12">
+    <TxGridItem>1</TxGridItem>
+    <TxGridItem>2</TxGridItem>
+    <TxGridItem>3</TxGridItem>
+    <TxGridItem>4</TxGridItem>
+  </TxGrid>
+</template>`'
+>
   <template #preview>
     <TxGrid :cols="4" gap="12">
       <TxGridItem>1</TxGridItem>
@@ -21,16 +33,6 @@ tags: [grid, layout, alignment]
       <TxGridItem>3</TxGridItem>
       <TxGridItem>4</TxGridItem>
     </TxGrid>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxGrid :cols="4" gap="12">
-    <TxGridItem>1</TxGridItem>
-    <TxGridItem>2</TxGridItem>
-    <TxGridItem>3</TxGridItem>
-    <TxGridItem>4</TxGridItem>
-  </TxGrid>
-</template>`' />
   </template>
 </TuffDemo>
 

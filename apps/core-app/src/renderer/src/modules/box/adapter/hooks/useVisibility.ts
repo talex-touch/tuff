@@ -67,10 +67,12 @@ export function useVisibility(options: UseVisibilityOptions) {
     deactivateAllProviders().catch(() => {})
   }
 
-  function checkAutoClear(): void {
-    if (appSetting.tools.autoClear === -1 || boxOptions.lastHidden <= 0) return
+  function checkAutoClear(lastHiddenOverride?: number): void {
+    const lastHiddenAt =
+      typeof lastHiddenOverride === 'number' ? lastHiddenOverride : boxOptions.lastHidden
+    if (appSetting.tools.autoClear === -1 || lastHiddenAt <= 0) return
 
-    const timeSinceHidden = Date.now() - boxOptions.lastHidden
+    const timeSinceHidden = Date.now() - lastHiddenAt
     const autoClearMs = appSetting.tools.autoClear * 1000
 
     if (timeSinceHidden > autoClearMs) {
@@ -96,7 +98,25 @@ export function useVisibility(options: UseVisibilityOptions) {
     if (!clipboard?.timestamp) return false
 
     const copiedTime = new Date(clipboard.timestamp).getTime()
-    const clipboardAge = Date.now() - copiedTime
+    if (!Number.isFinite(copiedTime)) return false
+
+    const lastTimestamp = clipboardOptions.last?.timestamp
+      ? new Date(clipboardOptions.last.timestamp).getTime()
+      : null
+    const sameItem =
+      Boolean(
+        clipboardOptions.last?.id && clipboard.id && clipboardOptions.last.id === clipboard.id
+      ) ||
+      (typeof lastTimestamp === 'number' && lastTimestamp === copiedTime)
+    const detectedAt =
+      sameItem && typeof clipboardOptions.detectedAt === 'number'
+        ? clipboardOptions.detectedAt
+        : null
+    const baseTime =
+      typeof detectedAt === 'number' && Number.isFinite(detectedAt)
+        ? Math.min(copiedTime, detectedAt)
+        : copiedTime
+    const clipboardAge = Date.now() - baseTime
     const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_MS : limit * 1000
     return clipboardAge <= effectiveLimit
   }
@@ -124,6 +144,7 @@ export function useVisibility(options: UseVisibilityOptions) {
 
   return {
     visibility,
+    checkAutoClear,
     cleanup: () => {
       unregisterShortcutTrigger?.()
       unregisterCoreBoxTrigger?.()

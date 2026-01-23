@@ -23,18 +23,11 @@ tags: [dialog, modal, confirm]
 ```
 
 ## Demo
-<TuffDemo title="Critical Confirm" description="Keep focus and a decisive hierarchy.">
-  <template #preview>
-    <TuffDialogDemo
-      trigger-label="Open Dialog"
-      title="Delete project"
-      content="This action cannot be undone. Continue?"
-      cancel-label="Cancel"
-      confirm-label="Confirm"
-    />
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
+<TuffDemo
+  title="Critical Confirm"
+  description="Keep focus and a decisive hierarchy."
+  code-lang="vue"
+  :code='`<template>
   <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
   <TxModal v-model="dialogOpen" title="Delete project">
     <p>This action cannot be undone. Continue?</p>
@@ -43,7 +36,16 @@ tags: [dialog, modal, confirm]
       <TxButton>Confirm</TxButton>
     </template>
   </TxModal>
-</template>`' />
+</template>`'
+>
+  <template #preview>
+    <TuffDialogDemo
+      trigger-label="Open Dialog"
+      title="Delete project"
+      content="This action cannot be undone. Continue?"
+      cancel-label="Cancel"
+      confirm-label="Confirm"
+    />
   </template>
 </TuffDemo>
 

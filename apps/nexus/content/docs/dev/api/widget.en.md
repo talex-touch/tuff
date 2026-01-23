@@ -51,6 +51,24 @@ my-plugin/
 └── index.js
 ```
 
+## Dev Mode (Remote Source)
+
+When `dev.enable` and `dev.source` are true, widgets are loaded from your dev server instead of the local `widgets/` folder. The runtime resolves widget URLs as:
+
+`{dev.address}/widgets/{interaction.path}` (defaults to `.vue` when no extension is provided).
+
+```json
+{
+  "dev": {
+    "enable": true,
+    "source": true,
+    "address": "http://localhost:5173/"
+  }
+}
+```
+
+Remote widgets are fetched on each trigger; local file watching only applies to local sources.
+
 ## Vue Widget Example
 
 `widgets/todo-panel.vue`

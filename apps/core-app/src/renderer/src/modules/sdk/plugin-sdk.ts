@@ -6,7 +6,7 @@
  */
 
 import type { ITouchPlugin } from '@talex-touch/utils'
-import type { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import type { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
 import type {
   InputChangedRequest,
   PluginFilters,

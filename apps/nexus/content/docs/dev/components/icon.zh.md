@@ -21,20 +21,22 @@ tags: [icon, glyph, visual]
 ```
 
 ## Demo
-<TuffDemo title="Icon Density" description="保持线性与留白一致。">
+<TuffDemo
+  title="Icon Density"
+  description="保持线性与留白一致。"
+  code-lang="vue"
+  :code='`<template>
+  <TuffIcon name="i-ri-home-line" />
+  <TuffIcon name="i-ri-search-line" />
+  <TuffIcon name="i-ri-settings-3-line" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TuffIcon name="i-ri-home-line" />
       <TuffIcon name="i-ri-search-line" />
       <TuffIcon name="i-ri-settings-3-line" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TuffIcon name="i-ri-home-line" />
-  <TuffIcon name="i-ri-search-line" />
-  <TuffIcon name="i-ri-settings-3-line" />
-</template>`' />
   </template>
 </TuffDemo>
 

@@ -64,12 +64,13 @@ provide('destroy', destroy)
           no-padding
           class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px box-border"
         >
-          <!-- eslint-disable-next-line vue/no-v-html -->
+          <!-- eslint-disable vue/no-v-html -->
           <span
             class="w-full block text-center my-1rem leading-1.25rem"
             style="position: relative; height: 100%"
             v-html="message"
           />
+          <!-- eslint-enable vue/no-v-html -->
         </TouchScroll>
         <div
           v-wave

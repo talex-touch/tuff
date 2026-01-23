@@ -34,20 +34,22 @@ tags: [action, tactile, primary]
 ```
 
 ## Demo
-<TuffDemo title="Primary / Flat" description="触感与扁平并置，用于不同层级场景。">
+<TuffDemo
+  title="Primary / Flat"
+  description="触感与扁平并置，用于不同层级场景。"
+  code-lang="vue"
+  :code='`<template>
+  <TxButton>Primary</TxButton>
+  <TuffFlatButton>Flat</TuffFlatButton>
+  <TxButton variant="ghost">Ghost</TxButton>
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row">
       <TxButton>Primary</TxButton>
       <TuffFlatButton>Flat</TuffFlatButton>
       <TxButton variant="ghost">Ghost</TxButton>
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxButton>Primary</TxButton>
-  <TuffFlatButton>Flat</TuffFlatButton>
-  <TxButton variant="ghost">Ghost</TxButton>
-</template>`' />
   </template>
 </TuffDemo>
 

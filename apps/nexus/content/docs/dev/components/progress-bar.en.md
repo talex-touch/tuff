@@ -13,7 +13,17 @@ tags: [progress, bar, loading]
 > **Status**: Beta
 
 ## Demo
-<TuffDemo title="Stateful Progress" description="Loading, warning, and success in one panel.">
+<TuffDemo
+  title="Stateful Progress"
+  description="Loading, warning, and success in one panel."
+  code-lang="vue"
+  :code='`<template>
+  <TxProgressBar :percentage="32" show-text />
+  <TxProgressBar :percentage="68" status="warning" show-text />
+  <TxProgressBar success message="Done" />
+  <TxProgressBar loading message="Syncing" />
+</template>`'
+>
   <template #preview>
     <div class="tuff-demo-row" style="flex-direction: column; align-items: stretch; width: 100%;">
       <TxProgressBar :percentage="32" show-text />
@@ -21,14 +31,6 @@ tags: [progress, bar, loading]
       <TxProgressBar success message="Done" />
       <TxProgressBar loading message="Syncing" />
     </div>
-  </template>
-  <template #code>
-    <TuffCodeBlock lang="vue" :code='`<template>
-  <TxProgressBar :percentage="32" show-text />
-  <TxProgressBar :percentage="68" status="warning" show-text />
-  <TxProgressBar success message="Done" />
-  <TxProgressBar loading message="Syncing" />
-</template>`' />
   </template>
 </TuffDemo>
 

@@ -163,6 +163,13 @@ export class WidgetManager {
   }
 
   private watchWidgetFile(plugin: ITouchPlugin, feature: IPluginFeature, filePath: string): void {
+    if (/^https?:\/\//i.test(filePath)) {
+      plugin.logger.debug(
+        `[WidgetManager] Skip watching remote widget "${feature.id}" at ${filePath}`
+      )
+      return
+    }
+
     const watcherKey = `${plugin.name}::${feature.id}`
     if (this.watchers.has(watcherKey)) {
       this.watchers.get(watcherKey)?.add(filePath)

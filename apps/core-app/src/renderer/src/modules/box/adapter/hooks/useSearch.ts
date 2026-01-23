@@ -869,8 +869,20 @@ export function useSearch(
     resetSearchState()
   })
 
-  transport.on(CoreBoxEvents.search.noResults, () => {
-    // Window resize is handled via layout updates (useResize)
+  transport.on(CoreBoxEvents.search.noResults, (payload) => {
+    if (!payload || typeof payload !== 'object') return
+    if (!payload.shouldShrink) return
+    if (searchVal.value || activeActivations.value?.length) return
+
+    recommendationPending.value = false
+    loading.value = false
+
+    if (res.value.length === 0) {
+      transport.send(CoreBoxEvents.ui.expand, { mode: 'collapse' }).catch(() => {})
+      return
+    }
+
+    window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
   })
 
   return {

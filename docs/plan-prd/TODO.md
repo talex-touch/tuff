@@ -28,20 +28,34 @@
 - [x] Config Storage 上下文整理与策略文档（`plan/2026-01-20_18-55-03-context-requirements.md`、`plan/2026-01-20_18-47-35-config-storage-sqlite-json-sync.md`）
 
 ### 🟡 部分完成
+- [ ] Config Storage SQLite/JSON 统一落地（pilot key 已落地，迁移/回滚/双写策略待补）（`plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md`）
 - [ ] SearchLogger 延迟初始化已修复，测试与验证补齐（`plan/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md`）
 - [ ] Nexus Examples 入口已落地，但“单一来源”策略未统一（`plan/2026-01-21_13-22-14-nexus-examples-section.md`）
 - [ ] Transport MessagePort 支持已在 SDK 落地，业务高频通道迁移待推进（`plan/2026-01-21_03-01-57-transport-message-port.md`）
+- [ ] TuffTransport 全量迁移与 async 任务模型，清理 sendSync（renderer 仍保留旧 Channel）（`plan/2026-01-21_01-29-05-transport-migration-async.md`）
+- [ ] CLI refine：主流程已实现，`tuff validate` 与 manifest 校验待补（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
 
 ### 📝 待实现
-- [ ] Config Storage SQLite/JSON 统一落地（ConfigRepository + 迁移/回滚/双写策略）（`plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md`）
-- [ ] TuffTransport 全量迁移与 async 任务模型，清理 sendSync（`plan/2026-01-21_01-29-05-transport-migration-async.md`）
-- [ ] CLI 补齐 `tuff validate` 与 manifest 校验（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
+- [ ] 文件系统/搜索范围权限收敛（默认不含用户目录，允许授权；区分 macOS/Windows 差异，尽量限制在 app 相关目录）（`plan/2026-01-22_10-00-00-file-search-scope-permission.md`）
 - [ ] Perf Log 优化项：core-box:query 同步改造、/setting 路由拆分、tfile 路径兼容（`plan/2026-01-19_11-10-40-perf-log-analysis.md`）
 - [ ] Nexus 首页内容整改与占位移除（`plan/2026-01-21_13-25-00-nexus-homepage-revamp.md`）
 - [ ] Release Pipeline：OIDC + RSA + notes/assets 同步（`plan/planprd-release-pipeline.md`）
 
 ### ❓ 需人工确认
 - [ ] Stash 弹出恢复处理（`plan/2026-01-20_21-17-14-stash-pop-recovery.md`）
+
+### 📁 apps/core-app/plan 目录对照（2026-01）
+
+> 来源：`apps/core-app/plan/` 目录。此处记录与实际落地的差距与后续待办。
+
+#### ✅ 已落地
+- [x] 需求汇总与执行顺序整合（统一需求文档已生成）（`apps/core-app/plan/2026-01-21_14-50-21-requirements-consolidation.md`）
+
+#### 🟡 部分完成
+- [ ] Script/Python/DLL 跨平台能力：已有文档与示例，未见代码实现（`apps/core-app/plan/2026-01-21_13-21-43-script-python-dll-cross-platform.md`）
+
+#### 📝 待实现
+- [ ] 自动更新方案梳理与落地（`apps/core-app/plan/2026-01-21_13-31-08-auto-update-plan.md`）
 
 ### ✅ 已完成 PRD (可归档)
 - `05-archive/plugin-loading-refactor.md` - 插件加载重构
@@ -81,6 +95,7 @@
 - [ ] 全仓校验：grep 清理旧名（tuff-ui/tuffex-ui/touchx-ui）残留，确认无影响构建的引用
 - [ ] 清理产物：确认 `packages/tuffex/**/node_modules` 与旧 `playground` 目录已删除（仓库内不提交）
 - [ ] 提交变更：README/CONTRIBUTING/Nexus docs 链接更新 + createTestVue 删除 + 构建脚本修复
+- [ ] 现有 ElMessageBox/ElMessage 等弹窗/提示统一迁移到目标组件方案，清点调用点并替换
 
 ### ✅ 模块日志系统 (v2.4.8) - Phase 1-4 核心完成
 **来源**: `plan-prd/02-architecture/module-logging-system-prd.md`
