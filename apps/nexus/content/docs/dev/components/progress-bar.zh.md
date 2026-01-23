@@ -23,12 +23,12 @@ tags: [progress, bar, loading]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxProgressBar :percentage="32" show-text />
   <TxProgressBar :percentage="68" status="warning" show-text />
   <TxProgressBar success message="完成" />
   <TxProgressBar loading message="同步中" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

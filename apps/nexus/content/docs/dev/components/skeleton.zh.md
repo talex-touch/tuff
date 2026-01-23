@@ -21,10 +21,10 @@ tags: [skeleton, loading, placeholder]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxSkeleton :loading="true" :lines="3" />
   <TxSkeleton variant="circle" :width="40" :height="40" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

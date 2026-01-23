@@ -43,11 +43,11 @@ tags: [action, tactile, primary]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxButton>Primary</TxButton>
   <TuffFlatButton>Flat</TuffFlatButton>
   <TxButton variant="ghost">Ghost</TxButton>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

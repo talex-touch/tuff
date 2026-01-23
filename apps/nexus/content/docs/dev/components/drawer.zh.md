@@ -24,12 +24,12 @@ tags: [drawer, panel, overlay]
     />
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
   <TxDrawer v-model:visible="drawerOpen" title="设置" width="420px">
     <p>这里放表单或设置项。</p>
   </TxDrawer>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

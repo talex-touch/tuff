@@ -22,11 +22,11 @@ tags: [skeleton, layout, loading]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <div style="height: 240px;">
     <TxLayoutSkeleton />
   </div>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

@@ -22,11 +22,11 @@ tags: [avatar, identity, profile]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxAvatar name="TA" />
   <TxAvatar name="UX" />
   <TxAvatar name="PM" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

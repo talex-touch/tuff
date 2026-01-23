@@ -25,11 +25,11 @@ tags: [tooltip, hint, overlay]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxTooltip content="Hint">
     <TxButton variant="ghost">Hover me</TxButton>
   </TxTooltip>
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

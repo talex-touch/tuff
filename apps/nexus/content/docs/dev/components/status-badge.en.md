@@ -23,12 +23,12 @@ tags: [badge, status, signal]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TxStatusBadge text="Success" status="success" />
   <TxStatusBadge text="Warning" status="warning" />
   <TxStatusBadge text="Error" status="danger" />
   <TxStatusBadge text="Info" status="info" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 

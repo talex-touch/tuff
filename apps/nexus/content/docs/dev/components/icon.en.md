@@ -30,11 +30,11 @@ tags: [icon, glyph, visual]
     </div>
   </template>
   <template #code>
-    <TuffCodeBlock lang="vue" :code="`<template>
+    <TuffCodeBlock lang="vue" :code='`<template>
   <TuffIcon name="i-ri-home-line" />
   <TuffIcon name="i-ri-search-line" />
   <TuffIcon name="i-ri-settings-3-line" />
-</template>`" />
+</template>`' />
   </template>
 </TuffDemo>
 
