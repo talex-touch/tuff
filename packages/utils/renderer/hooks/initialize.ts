@@ -1,5 +1,3 @@
-import process from 'node:process'
-
 /**
  * Interface for renderer initialization information
  * @interface IInitializationInfo
@@ -104,7 +102,7 @@ export function useInitialize(): IInitializationInfo {
   }
 
   const now = Date.now()
-  const runtimePlatform = process?.platform ?? navigator.platform
+  const runtimePlatform = (globalThis as any)?.process?.platform ?? navigator.platform
   const initInfo: IInitializationInfo = {
     initTimestamp: now,
     initTime: new Date(now).toISOString(),

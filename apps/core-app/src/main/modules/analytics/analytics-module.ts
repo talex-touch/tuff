@@ -14,7 +14,7 @@ import type {
   TrackDurationPayload,
   TrackEventPayload
 } from '@talex-touch/utils/analytics'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   AnalyticsRangeRequest,
   AnalyticsSnapshotRequest,
@@ -33,7 +33,7 @@ import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app } from 'electron'
 import { getStartupAnalytics } from '.'

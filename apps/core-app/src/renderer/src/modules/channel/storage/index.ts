@@ -1,6 +1,5 @@
 import { storages } from '@talex-touch/utils/renderer'
-import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
-import { openersStorage } from '@talex-touch/utils/renderer/storage/openers'
+import { appSettingsData, openersData } from '@talex-touch/utils/renderer/storage'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { reactive, toRaw, unref } from 'vue'
@@ -108,10 +107,10 @@ export const storageManager = new StorageManager()
  * appSetting.autoStart = true;
  * ```
  */
-export const appSetting = appSettings.data
+export const appSetting = appSettingsData
 
 /**
  * Openers storage instance.
- * Access reactive data via `openers.data`.
+ * Access reactive data via `openers`.
  */
-export const openers = openersStorage.data
+export const openers = openersData

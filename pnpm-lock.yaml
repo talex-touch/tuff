@@ -188,10 +188,10 @@ importers:
     dependencies:
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@38.7.2)
+        version: 3.0.2(electron@40.0.0)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@38.7.2)
+        version: 4.0.0(electron@40.0.0)
       '@langchain/core':
         specifier: ^0.3.80
         version: 0.3.80(@opentelemetry/api@1.9.0)(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.9.0))
@@ -404,8 +404,8 @@ importers:
         specifier: ^0.31.8
         version: 0.31.8
       electron:
-        specifier: ^38.7.2
-        version: 38.7.2
+        specifier: ^40.0.0
+        version: 40.0.0
       electron-builder:
         specifier: ^26.4.0
         version: 26.4.0
@@ -1008,7 +1008,7 @@ importers:
     dependencies:
       '@talex-touch/unplugin-export-plugin':
         specifier: 1.2.7
-        version: 1.2.7(chalk@5.6.2)(cli-progress@3.12.0)(compressing@2.0.0)(debug@4.4.3)(electron@38.7.2)(fs-extra@11.3.3)(pathe@2.0.3)(unplugin@2.3.10)(vue@3.5.25(typescript@5.9.3))
+        version: 1.2.7(chalk@5.6.2)(cli-progress@3.12.0)(compressing@2.0.0)(debug@4.4.3)(electron@40.0.0)(fs-extra@11.3.3)(pathe@2.0.3)(unplugin@2.3.10)(vue@3.5.25(typescript@5.9.3))
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
@@ -8489,8 +8489,8 @@ packages:
       '@swc/core':
         optional: true
 
-  electron@38.7.2:
-    resolution: {integrity: sha512-BcjR0IHqp3uv4ytVQwW2/9zAWo17Rjwrydn6RS+g+vqhpcPTzmBHDCHKaEcqheSl/7zzKPgFZdvT21BoSfrxRQ==}
+  electron@40.0.0:
+    resolution: {integrity: sha512-UyBy5yJ0/wm4gNugCtNPjvddjAknMTuXR2aCHioXicH7aKRKGDBPp4xqTEi/doVcB3R+MN3wfU9o8d/9pwgK2A==}
     engines: {node: '>= 12.20.55'}
     hasBin: true
 
@@ -13088,6 +13088,7 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
 
   tar@7.5.2:
     resolution: {integrity: sha512-7NyxrTE4Anh8km8iEy7o0QYPs+0JKBTj5ZaqHg6B39erLg0qYXN3BijtShwbsNSvQ+LN75+KV+C4QR/f6Gwnpg==}
@@ -16250,17 +16251,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron-toolkit/preload@3.0.2(electron@38.7.2)':
+  '@electron-toolkit/preload@3.0.2(electron@40.0.0)':
     dependencies:
-      electron: 38.7.2
+      electron: 40.0.0
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@24.1.0)':
     dependencies:
       '@types/node': 24.1.0
 
-  '@electron-toolkit/utils@4.0.0(electron@38.7.2)':
+  '@electron-toolkit/utils@4.0.0(electron@40.0.0)':
     dependencies:
-      electron: 38.7.2
+      electron: 40.0.0
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -20156,9 +20157,9 @@ snapshots:
       fs: 0.0.1-security
       unplugin: 2.3.10
 
-  '@talex-touch/unplugin-export-plugin@1.2.7(chalk@5.6.2)(cli-progress@3.12.0)(compressing@2.0.0)(debug@4.4.3)(electron@38.7.2)(fs-extra@11.3.3)(pathe@2.0.3)(unplugin@2.3.10)(vue@3.5.25(typescript@5.9.3))':
+  '@talex-touch/unplugin-export-plugin@1.2.7(chalk@5.6.2)(cli-progress@3.12.0)(compressing@2.0.0)(debug@4.4.3)(electron@40.0.0)(fs-extra@11.3.3)(pathe@2.0.3)(unplugin@2.3.10)(vue@3.5.25(typescript@5.9.3))':
     dependencies:
-      '@talex-touch/utils': 1.0.31(electron@38.7.2)(vue@3.5.25(typescript@5.9.3))
+      '@talex-touch/utils': 1.0.31(electron@40.0.0)(vue@3.5.25(typescript@5.9.3))
       chalk: 5.6.2
       cli-progress: 3.12.0
       compressing: 2.0.0
@@ -20170,10 +20171,10 @@ snapshots:
       - electron
       - vue
 
-  '@talex-touch/utils@1.0.31(electron@38.7.2)(vue@3.5.25(typescript@5.9.3))':
+  '@talex-touch/utils@1.0.31(electron@40.0.0)(vue@3.5.25(typescript@5.9.3))':
     dependencies:
       '@vueuse/core': 13.9.0(vue@3.5.25(typescript@5.9.3))
-      electron: 38.7.2
+      electron: 40.0.0
       path-browserify: 1.0.1
       vue: 3.5.25(typescript@5.9.3)
 
@@ -24295,7 +24296,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@38.7.2:
+  electron@40.0.0:
     dependencies:
       '@electron/get': 2.0.3
       '@types/node': 24.1.0

@@ -1,11 +1,11 @@
 import type { ModuleKey } from '@talex-touch/utils'
-import type { HandlerContext } from '@talex-touch/utils/transport'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
 import os from 'node:os'
 import process from 'node:process'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BaseModule } from '../abstract-base-module'
 

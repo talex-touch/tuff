@@ -1,13 +1,13 @@
 import type { Component, ComputedRef, Ref } from 'vue'
 import type { LayoutConfig } from './layouts-definition'
-import { appSettings } from '@talex-touch/utils/renderer/storage/app-settings'
+import { appSettingsData } from '@talex-touch/utils/renderer/storage'
 import { computed, nextTick, ref, watch } from 'vue'
 import layoutsDefinition from './layouts-definition'
 
 const componentCache = new Map<string, Component>()
 
 function getCurrentLayoutName(): string {
-  const layout = appSettings?.data?.layout
+  const layout = appSettingsData?.layout
   if (layout && layoutsDefinition[layout]) {
     return layout
   }
@@ -18,7 +18,7 @@ function getCurrentLayoutName(): string {
 function setCurrentLayoutName(layoutName: string): void {
   if (!layoutsDefinition[layoutName]) return
   try {
-    appSettings?.data && (appSettings.data.layout = layoutName)
+    appSettingsData && (appSettingsData.layout = layoutName)
   } catch {
     // appSettings not initialized
   }
@@ -108,7 +108,7 @@ export function useDynamicTuffLayout(): {
   }
 
   watch(
-    () => appSettings?.data?.layout,
+    () => appSettingsData?.layout,
     (newLayout) => {
       if (newLayout && newLayout !== currentLayoutName.value && layoutsDefinition[newLayout]) {
         currentLayoutName.value = newLayout

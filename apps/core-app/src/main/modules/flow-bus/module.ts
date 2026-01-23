@@ -9,7 +9,11 @@ import type { MaybePromise, NativeShareOptions } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { FlowBusIPC } from './ipc'
-import { FlowEvents, getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport'
+import {
+  FlowEvents,
+  getTuffTransportMain,
+  type HandlerContext
+} from '@talex-touch/utils/transport/main'
 import { genTouchApp } from '../../core'
 import { BaseModule } from '../abstract-base-module'
 import { coreBoxManager } from '../box-tool/core-box/manager'

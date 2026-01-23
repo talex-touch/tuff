@@ -1,5 +1,5 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   StorageGetRequest,
   StorageGetVersionedResponse,
@@ -13,7 +13,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { eq } from 'drizzle-orm'

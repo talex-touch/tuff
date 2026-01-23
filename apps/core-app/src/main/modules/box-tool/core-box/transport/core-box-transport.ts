@@ -1,6 +1,6 @@
 import type { TouchApp } from '../../../../core/touch-app'
 import { ChannelType } from '@talex-touch/utils/channel'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../../../core'
 

@@ -17,7 +17,7 @@ import {
   DivisionBoxEvents,
   getTuffTransportMain,
   type HandlerContext
-} from '@talex-touch/utils/transport'
+} from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPermissionModule } from '../permission'
 import { flowTriggerManager } from './flow-trigger'

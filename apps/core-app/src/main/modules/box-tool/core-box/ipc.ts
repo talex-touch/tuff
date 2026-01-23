@@ -1,5 +1,5 @@
 import type { TuffItem } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   ActivationState,
   AllowClipboardRequest,
@@ -17,7 +17,7 @@ import type {
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { TouchApp } from '../../../core/touch-app'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'

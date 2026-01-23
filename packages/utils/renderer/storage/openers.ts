@@ -1,6 +1,6 @@
 import type { OpenersMap } from '../..'
 import { openersOriginData, StorageList } from '../..'
-import { createStorageProxy, TouchStorage } from './base-storage'
+import { createStorageDataProxy, createStorageProxy, TouchStorage } from './base-storage'
 
 class OpenersStorage extends TouchStorage<OpenersMap> {
   constructor() {
@@ -19,3 +19,5 @@ export const openersStorage = createStorageProxy<OpenersStorage>(
   OPENERS_STORAGE_KEY,
   () => new OpenersStorage(),
 )
+
+export const openersData = createStorageDataProxy(openersStorage)

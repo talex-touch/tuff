@@ -8,7 +8,7 @@ import type {
 } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { IntelligenceCapabilityType, IntelligenceProviderType } from '@talex-touch/utils'
-import { getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport'
+import { getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'

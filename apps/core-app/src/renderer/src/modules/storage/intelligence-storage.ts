@@ -1,6 +1,9 @@
 export {
   // Backward compatibility aliases
+  aisdkData,
   aisdkStorage,
+  intelligenceData,
+  intelligenceSettingsData,
   intelligenceStorage,
   migrateAISDKSettings,
   migrateIntelligenceSettings,

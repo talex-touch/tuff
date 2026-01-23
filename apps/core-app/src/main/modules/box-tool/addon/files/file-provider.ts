@@ -8,7 +8,7 @@ import type {
   TuffSearchResult
 } from '@talex-touch/utils'
 import type { FileParserProgress, FileParserResult } from '@talex-touch/utils/electron/file-parsers'
-import type { StreamContext } from '@talex-touch/utils/transport'
+import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   FileIndexBatteryStatus,
   FileIndexProgress as FileIndexProgressPayload,
@@ -48,7 +48,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'

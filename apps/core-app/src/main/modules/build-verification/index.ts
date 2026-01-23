@@ -1,7 +1,7 @@
 import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import path from 'node:path'
-import { getTuffTransportMain } from '@talex-touch/utils/transport'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import axios from 'axios'
 import { app, BrowserWindow } from 'electron'

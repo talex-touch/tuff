@@ -4,7 +4,7 @@ import type {
   PluginInstallProgressEvent
 } from '@talex-touch/utils/plugin'
 import type { PluginInstallRequest } from '@talex-touch/utils/plugin/providers/types'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { PluginInstaller, PreparedPluginInstall } from './plugin-installer'
 import type { ResolverInstallOptions } from './plugin-resolver'
 import crypto from 'node:crypto'
