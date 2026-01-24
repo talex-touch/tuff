@@ -17,11 +17,7 @@ tags: [skeleton, layout, loading]
   title="Layout Placeholder"
   description="容器决定骨架尺寸。"
   code-lang="vue"
-  :code='`<template>
-  <div style="height: 240px;">
-    <TxLayoutSkeleton />
-  </div>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;div style=\\\"height: 240px;\\\"&gt;", "    &lt;TxLayoutSkeleton /&gt;", "  &lt;/div&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row" style="width: 100%;">

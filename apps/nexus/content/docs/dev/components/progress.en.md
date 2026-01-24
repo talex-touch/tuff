@@ -17,11 +17,7 @@ tags: [progress, status, loading]
   title="Progress States"
   description="Base progress with status colors"
   code-lang="vue"
-  :code='`<template>
-  <TuffProgress :percentage="40" />
-  <TuffProgress :percentage="72" status="warning" />
-  <TuffProgress :percentage="100" status="success" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TuffProgress :percentage=\\\"40\\\" /&gt;", "  &lt;TuffProgress :percentage=\\\"72\\\" status=\\\"warning\\\" /&gt;", "  &lt;TuffProgress :percentage=\\\"100\\\" status=\\\"success\\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

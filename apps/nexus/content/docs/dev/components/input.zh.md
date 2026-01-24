@@ -25,10 +25,7 @@ tags: [input, field, search]
   title="Focus State"
   description="聚焦态更轻，避免夺目。"
   code-lang="vue"
-  :code='`<template>
-  <TuffInput model-value="" placeholder="输入内容..." />
-  <TxSearchInput model-value="" placeholder="搜索..." />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TuffInput model-value=\\"\\" placeholder=\\"输入内容...\\" /&gt;", "  &lt;TxSearchInput model-value=\\"\\" placeholder=\\"搜索...\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

@@ -265,6 +265,16 @@ async function saveAppIndexSettings() {
   }
 }
 
+function handleDeviceIdleBlur(blur: () => void) {
+  blur()
+  saveDeviceIdleSettings()
+}
+
+function handleAppIndexBlur(blur: () => void) {
+  blur()
+  saveAppIndexSettings()
+}
+
 let unsubscribeProgress: (() => void) | null = null
 let statusCheckInterval: ReturnType<typeof setInterval> | null = null
 
@@ -553,10 +563,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveDeviceIdleSettings()
-            "
+            @blur="handleDeviceIdleBlur(blur)"
           />
           <span class="input-unit">{{ t('settings.settingFileIndex.unitMinutes') }}</span>
         </div>
@@ -582,10 +589,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveDeviceIdleSettings()
-            "
+            @blur="handleDeviceIdleBlur(blur)"
           />
           <span class="input-unit">%</span>
         </div>
@@ -611,10 +615,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveDeviceIdleSettings()
-            "
+            @blur="handleDeviceIdleBlur(blur)"
           />
           <span class="input-unit">%</span>
         </div>
@@ -649,10 +650,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveDeviceIdleSettings()
-            "
+            @blur="handleDeviceIdleBlur(blur)"
           />
           <span class="input-unit">{{ t('settings.settingFileIndex.unitHours') }}</span>
         </div>
@@ -695,10 +693,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveAppIndexSettings()
-            "
+            @blur="handleAppIndexBlur(blur)"
           />
           <span class="input-unit">{{ t('settings.settingFileIndex.unitTimes') }}</span>
         </div>
@@ -723,10 +718,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveAppIndexSettings()
-            "
+            @blur="handleAppIndexBlur(blur)"
           />
           <span class="input-unit">{{ t('settings.settingFileIndex.unitSeconds') }}</span>
         </div>
@@ -751,10 +743,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveAppIndexSettings()
-            "
+            @blur="handleAppIndexBlur(blur)"
           />
           <span class="input-unit">{{ t('settings.settingFileIndex.unitMinutes') }}</span>
         </div>
@@ -789,10 +778,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveAppIndexSettings()
-            "
+            @blur="handleAppIndexBlur(blur)"
           />
           <span class="input-unit">{{ t('settings.settingFileIndex.unitHours') }}</span>
         </div>
@@ -817,10 +803,7 @@ async function triggerRebuild() {
             :disabled="disabled"
             @input="update(Number(($event.target as HTMLInputElement).value))"
             @focus="focus"
-            @blur="
-              blur()
-              saveAppIndexSettings()
-            "
+            @blur="handleAppIndexBlur(blur)"
           />
           <span class="input-unit">{{ t('settings.settingFileIndex.unitMinutes') }}</span>
         </div>

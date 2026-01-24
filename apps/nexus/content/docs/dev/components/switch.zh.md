@@ -25,10 +25,7 @@ tags: [switch, toggle, state]
   title="Toggle State"
   description="移动与颜色同步变化。"
   code-lang="vue"
-  :code='`<template>
-  <TuffSwitch :model-value="false" />
-  <TuffSwitch :model-value="true" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TuffSwitch :model-value=\\"false\\" /&gt;", "  &lt;TuffSwitch :model-value=\\"true\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

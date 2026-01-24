@@ -17,12 +17,7 @@ tags: [progress, bar, loading]
   title="Stateful Progress"
   description="加载、警告、成功态一屏展示。"
   code-lang="vue"
-  :code='`<template>
-  <TxProgressBar :percentage="32" show-text />
-  <TxProgressBar :percentage="68" status="warning" show-text />
-  <TxProgressBar success message="完成" />
-  <TxProgressBar loading message="同步中" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxProgressBar :percentage=\\\"32\\\" show-text /&gt;", "  &lt;TxProgressBar :percentage=\\\"68\\\" status=\\\"warning\\\" show-text /&gt;", "  &lt;TxProgressBar success message=\\\"完成\\\" /&gt;", "  &lt;TxProgressBar loading message=\\\"同步中\\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row" style="flex-direction: column; align-items: stretch; width: 100%;">

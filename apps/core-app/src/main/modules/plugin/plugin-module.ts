@@ -64,6 +64,8 @@ import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 const pluginLog = getLogger('plugin-system')
 const pluginModuleLog = createLogger('PluginSystem')
 const devWatcherLog = pluginLog.child('DevWatcher')
+const WIDGET_ROOT_DIR = 'widgets'
+const WIDGET_ALLOWED_EXTENSIONS = new Set(['.vue', '.tsx', '.jsx', '.ts', '.js'])
 
 type IPluginManagerWithInternals = IPluginManager & {
   __installQueue?: PluginInstallQueue
@@ -1549,6 +1551,40 @@ export class PluginModule extends BaseModule {
       return { pluginName, plugin }
     }
 
+    const resolveWidgetTarget = (
+      pluginPath: string,
+      widgetPath: string
+    ): { absolutePath: string; relativePath: string } | { error: string } => {
+      const trimmed = widgetPath.trim()
+      if (!trimmed) {
+        return { error: 'Widget path is required' }
+      }
+
+      const normalized = trimmed.replace(/\\/g, '/').replace(/^\/+/, '')
+      const withoutRoot = normalized.replace(/^widgets\//, '')
+      if (!withoutRoot || withoutRoot.split('/').some((segment) => segment === '..')) {
+        return { error: 'Widget path is invalid' }
+      }
+
+      const widgetsDir = path.resolve(pluginPath, WIDGET_ROOT_DIR)
+      const candidate = path.resolve(widgetsDir, withoutRoot)
+      const relative = path.relative(widgetsDir, candidate)
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        return { error: 'Widget path is outside widgets directory' }
+      }
+
+      const finalPath = path.extname(candidate) ? candidate : `${candidate}.vue`
+      const ext = path.extname(finalPath)
+      if (!WIDGET_ALLOWED_EXTENSIONS.has(ext)) {
+        return { error: `Unsupported widget file type: ${ext}` }
+      }
+
+      return {
+        absolutePath: finalPath,
+        relativePath: path.relative(widgetsDir, finalPath).split(path.sep).join('/')
+      }
+    }
+
     // Plugin Storage Channel Handlers
     this.transportDisposers.push(
       transport.on(PluginEvents.storage.getFile, async (payload, context) => {
@@ -2122,6 +2158,57 @@ export class PluginModule extends BaseModule {
           return { success: true }
         } catch (error) {
           console.error('Error in plugin:api:save-manifest handler:', error)
+          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.api.saveWidgetFile, async (payload) => {
+        try {
+          const name = payload?.name
+          const widgetPath = payload?.widgetPath
+          const source = payload?.source
+          const overwrite = payload?.overwrite !== false
+
+          if (!name) {
+            return { success: false, error: 'Plugin name is required' }
+          }
+          if (typeof widgetPath !== 'string') {
+            return { success: false, error: 'Widget path is required' }
+          }
+          if (typeof source !== 'string') {
+            return { success: false, error: 'Widget source is required' }
+          }
+
+          const plugin = manager.plugins.get(name) as TouchPlugin
+          if (!plugin) {
+            return { success: false, error: `Plugin ${name} not found` }
+          }
+
+          if (!plugin.dev?.enable) {
+            return { success: false, error: 'Widget editing is only available in dev mode' }
+          }
+
+          const resolved = resolveWidgetTarget(plugin.pluginPath, widgetPath)
+          if ('error' in resolved) {
+            return { success: false, error: resolved.error }
+          }
+
+          if (!overwrite && fse.existsSync(resolved.absolutePath)) {
+            return { success: false, error: 'Widget file already exists' }
+          }
+
+          fse.ensureDirSync(path.dirname(resolved.absolutePath))
+          fse.writeFileSync(resolved.absolutePath, source, 'utf-8')
+
+          if (plugin.dev?.enable && !plugin.dev?.source) {
+            await manager.reloadPlugin(plugin.name)
+          }
+
+          return { success: true, relativePath: resolved.relativePath }
+        } catch (error) {
+          console.error('Error in plugin:api:save-widget-file handler:', error)
           return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
         }
       })

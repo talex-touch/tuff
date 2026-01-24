@@ -17,12 +17,7 @@ tags: [tag, label, badge]
   title="Tags"
   description="颜色与尺寸组合"
   code-lang="vue"
-  :code='`<template>
-  <TxTag label="默认" />
-  <TxTag label="成功" color="var(--tx-color-success)" />
-  <TxTag label="警告" color="var(--tx-color-warning)" />
-  <TxTag label="危险" color="var(--tx-color-danger)" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxTag label=\\"默认\\" /&gt;", "  &lt;TxTag label=\\"成功\\" color=\\"var(--tx-color-success)\\" /&gt;", "  &lt;TxTag label=\\"警告\\" color=\\"var(--tx-color-warning)\\" /&gt;", "  &lt;TxTag label=\\"危险\\" color=\\"var(--tx-color-danger)\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

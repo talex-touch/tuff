@@ -33,6 +33,7 @@ import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app } from 'electron'
@@ -56,6 +57,14 @@ const MESSAGE_REPORT_MAX_DELAY_MS = 5 * 60_000
 const MESSAGE_REPORT_MAX_QUEUE = 120
 const MESSAGE_REPORT_BATCH_SIZE = 10
 const MESSAGE_REPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+type StartupPerformanceSummary = {
+  totalTime: number
+  mainProcessTime: number
+  rendererTime: number
+  moduleCount: number
+  rating: 'excellent' | 'good' | 'fair' | 'poor'
+}
 
 const getKeyManager = (value: unknown): unknown => {
   if (!value || typeof value !== 'object') return undefined
@@ -350,6 +359,10 @@ export class AnalyticsModule extends BaseModule {
 
     // Compatibility handlers for existing analytics events
     const startupAnalytics = getStartupAnalytics()
+    const legacySummaryEvent = defineRawEvent<void, StartupPerformanceSummary | null>(
+      'analytics:get-summary'
+    )
+    const legacyExportEvent = defineRawEvent<void, string>('analytics:export')
 
     this.disposers.push(
       this.transport.on<void, CurrentMetrics>(AppEvents.analytics.getCurrent, () =>
@@ -367,6 +380,16 @@ export class AnalyticsModule extends BaseModule {
       this.transport.on<void, PerformanceSummary>(AppEvents.analytics.getSummary, () =>
         this.toSummary(startupAnalytics.getHistory())
       )
+    )
+
+    this.disposers.push(
+      this.transport.on<void, StartupPerformanceSummary | null>(legacySummaryEvent, () =>
+        startupAnalytics.getPerformanceSummary()
+      )
+    )
+
+    this.disposers.push(
+      this.transport.on<void, string>(legacyExportEvent, () => startupAnalytics.exportMetrics())
     )
 
     this.disposers.push(

@@ -17,12 +17,7 @@ tags: [drawer, panel, overlay]
   title="Side Drawer"
   description="右侧抽屉用于表单与设置面板"
   code-lang="vue"
-  :code='`<template>
-  <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
-  <TxDrawer v-model:visible="drawerOpen" title="设置" width="420px">
-    <p>这里放表单或设置项。</p>
-  </TxDrawer>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxButton @click=\\\"drawerOpen = true\\\"&gt;Open Drawer&lt;/TxButton&gt;", "  &lt;TxDrawer v-model:visible=\\\"drawerOpen\\\" title=\\\"设置\\\" width=\\\"420px\\\"&gt;", "    &lt;p&gt;这里放表单或设置项。&lt;/p&gt;", "  &lt;/TxDrawer&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <TuffDrawerDemo

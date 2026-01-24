@@ -25,11 +25,7 @@ tags: [icon, glyph, visual]
   title="Icon Density"
   description="保持线性与留白一致。"
   code-lang="vue"
-  :code='`<template>
-  <TuffIcon name="i-ri-home-line" />
-  <TuffIcon name="i-ri-search-line" />
-  <TuffIcon name="i-ri-settings-3-line" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TuffIcon name=\\\"i-ri-home-line\\\" /&gt;", "  &lt;TuffIcon name=\\\"i-ri-search-line\\\" /&gt;", "  &lt;TuffIcon name=\\\"i-ri-settings-3-line\\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

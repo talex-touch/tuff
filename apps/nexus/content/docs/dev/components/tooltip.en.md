@@ -17,14 +17,7 @@ tags: [tooltip, hint, overlay]
   title="Hover Hint"
   description="Short hints with low intrusion."
   code-lang="vue"
-  :code='`<template>
-  <TxTooltip content="Hint">
-    <TxButton variant="ghost">Hover me</TxButton>
-  </TxTooltip>
-  <TxTooltip content="Info">
-    <TxButton variant="ghost">Info</TxButton>
-  </TxTooltip>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxTooltip content=\\\"Hint\\\"&gt;", "    &lt;TxButton variant=\\\"ghost\\\"&gt;Hover me&lt;/TxButton&gt;", "  &lt;/TxTooltip&gt;", "  &lt;TxTooltip content=\\\"Info\\\"&gt;", "    &lt;TxButton variant=\\\"ghost\\\"&gt;Info&lt;/TxButton&gt;", "  &lt;/TxTooltip&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

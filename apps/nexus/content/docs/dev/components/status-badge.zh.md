@@ -17,12 +17,7 @@ tags: [badge, status, signal]
   title="Status Signals"
   description="成功/警告/错误/信息"
   code-lang="vue"
-  :code='`<template>
-  <TxStatusBadge text="成功" status="success" />
-  <TxStatusBadge text="警告" status="warning" />
-  <TxStatusBadge text="错误" status="danger" />
-  <TxStatusBadge text="信息" status="info" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxStatusBadge text=\\\"成功\\\" status=\\\"success\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"警告\\\" status=\\\"warning\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"错误\\\" status=\\\"danger\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"信息\\\" status=\\\"info\\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

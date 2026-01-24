@@ -25,10 +25,7 @@ tags: [input, field, search]
   title="Focus State"
   description="Lighter focus that stays readable."
   code-lang="vue"
-  :code='`<template>
-  <TuffInput model-value="" placeholder="Type here..." />
-  <TxSearchInput model-value="" placeholder="Search..." />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TuffInput model-value=\\"\\" placeholder=\\"Type here...\\" /&gt;", "  &lt;TxSearchInput model-value=\\"\\" placeholder=\\"Search...\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

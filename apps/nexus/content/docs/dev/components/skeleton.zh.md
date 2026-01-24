@@ -17,10 +17,7 @@ tags: [skeleton, loading, placeholder]
   title="Skeleton"
   description="文本与头像混合占位"
   code-lang="vue"
-  :code='`<template>
-  <TxSkeleton :loading="true" :lines="3" />
-  <TxSkeleton variant="circle" :width="40" :height="40" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxSkeleton :loading=\\"true\\" :lines=\\"3\\" /&gt;", "  &lt;TxSkeleton variant=\\"circle\\" :width=\\"40\\" :height=\\"40\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

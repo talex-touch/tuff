@@ -17,14 +17,7 @@ tags: [grid, layout, alignment]
   title="Grid Rhythm"
   description="Consistent spacing keeps the layout steady."
   code-lang="vue"
-  :code='`<template>
-  <TxGrid :cols="4" gap="12">
-    <TxGridItem>1</TxGridItem>
-    <TxGridItem>2</TxGridItem>
-    <TxGridItem>3</TxGridItem>
-    <TxGridItem>4</TxGridItem>
-  </TxGrid>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxGrid :cols=\\"4\\" gap=\\"12\\"&gt;", "    &lt;TxGridItem&gt;1&lt;/TxGridItem&gt;", "    &lt;TxGridItem&gt;2&lt;/TxGridItem&gt;", "    &lt;TxGridItem&gt;3&lt;/TxGridItem&gt;", "    &lt;TxGridItem&gt;4&lt;/TxGridItem&gt;", "  &lt;/TxGrid&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <TxGrid :cols="4" gap="12">

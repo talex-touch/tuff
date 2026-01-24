@@ -1,18 +1,19 @@
 <script lang="ts" name="AppSettings" setup>
-import { computed } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
-import SettingAbout from './SettingAbout.vue'
-import SettingDownload from './SettingDownload.vue'
-import SettingEverything from './SettingEverything.vue'
-import SettingFileIndex from './SettingFileIndex.vue'
 import SettingHeader from './SettingHeader.vue'
 import SettingLanguage from './SettingLanguage.vue'
-import SettingSentry from './SettingSentry.vue'
 import SettingSetup from './SettingSetup.vue'
-import SettingStorage from './SettingStorage.vue'
 import SettingTools from './SettingTools.vue'
-import SettingUpdate from './SettingUpdate.vue'
 import SettingUser from './SettingUser.vue'
+
+const SettingAbout = defineAsyncComponent(() => import('./SettingAbout.vue'))
+const SettingDownload = defineAsyncComponent(() => import('./SettingDownload.vue'))
+const SettingEverything = defineAsyncComponent(() => import('./SettingEverything.vue'))
+const SettingFileIndex = defineAsyncComponent(() => import('./SettingFileIndex.vue'))
+const SettingSentry = defineAsyncComponent(() => import('./SettingSentry.vue'))
+const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue'))
+const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
 
 const isWindows = computed(() => window.electron?.process?.platform === 'win32')
 </script>

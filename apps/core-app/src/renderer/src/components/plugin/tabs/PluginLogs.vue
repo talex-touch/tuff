@@ -66,6 +66,8 @@ const pendingLiveUpdates = ref(false)
 const currentPluginName = ref<string | null>(null)
 const liveIndicatorExpanded = ref(true)
 let liveIndicatorTimer: number | null = null
+const liveClock = ref(Date.now())
+let liveClockTimer: number | null = null
 let unsubscribeLogStream: (() => void) | null = null
 
 const currentPage = ref(1)
@@ -104,6 +106,7 @@ const liveStreamLabel = computed(() => {
   const value = t('plugin.logs.liveStreamLabel')
   return value === 'plugin.logs.liveStreamLabel' ? 'Live Stream' : value
 })
+const liveClockLabel = computed(() => new Date(liveClock.value).toLocaleTimeString())
 const loadingLabel = computed(() => {
   const value = t('common.loading')
   return value === 'common.loading' ? '加载中…' : value
@@ -530,12 +533,19 @@ watch(
 
 onMounted(() => {
   scheduleLiveIndicatorCollapse()
+  liveClockTimer = window.setInterval(() => {
+    liveClock.value = Date.now()
+  }, 1000)
 })
 
 onUnmounted(() => {
   if (liveIndicatorTimer) {
     window.clearTimeout(liveIndicatorTimer)
     liveIndicatorTimer = null
+  }
+  if (liveClockTimer) {
+    window.clearInterval(liveClockTimer)
+    liveClockTimer = null
   }
   cleanup()
 })
@@ -549,89 +559,39 @@ defineExpose({
 
 <template>
   <div class="plugin-logs-wrapper">
-    <header class="plugin-logs-toolbar">
-      <div class="toolbar-metrics">
-        <PluginPerfCharts :plugin-name="plugin.name" layout="bar" />
-      </div>
-      <div class="toolbar-actions">
-        <ElTooltip
-          popper-class="tuff-tooltip-blur"
-          :content="historyActionLabel"
-          placement="bottom"
-          effect="dark"
-        >
-          <TxButton
-            variant="bare"
-            class="toolbar-icon"
-            native-type="button"
-            @click="openHistoryDrawer"
-          >
-            <i class="i-ri-history-line" />
-          </TxButton>
-        </ElTooltip>
-
-        <ElTooltip
-          popper-class="tuff-tooltip-blur"
-          :content="refreshLabel"
-          placement="bottom"
-          effect="dark"
-        >
-          <TxButton
-            variant="bare"
-            class="toolbar-icon"
-            native-type="button"
-            @click="handleManualRefresh"
-          >
-            <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
-          </TxButton>
-        </ElTooltip>
-
-        <ElTooltip
-          popper-class="tuff-tooltip-blur"
-          :content="openFileLabel"
-          placement="bottom"
-          effect="dark"
-        >
-          <TxButton
-            variant="bare"
-            class="toolbar-icon"
-            native-type="button"
-            :disabled="!canOpenLogFile"
-            @click="openSelectedSessionFile"
-          >
-            <i class="i-ri-file-text-line" />
-          </TxButton>
-        </ElTooltip>
-
-        <ElTooltip
-          popper-class="tuff-tooltip-blur"
-          :content="openDirectoryLabel"
-          placement="bottom"
-          effect="dark"
-        >
-          <TxButton
-            variant="bare"
-            class="toolbar-icon"
-            native-type="button"
-            :disabled="!canOpenLogDirectory"
-            @click="openLogDirectory"
-          >
-            <i class="i-ri-folder-open-line" />
-          </TxButton>
-        </ElTooltip>
-      </div>
-    </header>
-
     <section class="plugin-logs-terminal">
-      <header class="terminal-header">
-        <div class="terminal-title">
-          <h2>{{ activeSessionLabel }}</h2>
-          <span
-            class="terminal-state"
-            :class="[isViewingLiveSession ? 'state-live' : 'state-archive']"
+      <div class="terminal-body">
+        <LogTerminal :logs="terminalLogs" :auto-scroll="isLiveStreaming" />
+        <div v-if="isLoadingLogs" class="terminal-overlay loading">
+          {{ loadingLabel }}
+        </div>
+        <div v-else-if="noLogs" class="terminal-overlay empty">
+          {{ emptyLabel }}
+        </div>
+      </div>
+      <footer class="terminal-footer">
+        <div class="terminal-meta">
+          <div class="toolbar-metrics">
+            <PluginPerfCharts :plugin-name="plugin.name" layout="bar" />
+          </div>
+          <div class="terminal-session">
+            <span class="terminal-session-label">{{ activeSessionLabel }}</span>
+            <span
+              class="terminal-state"
+              :class="[isViewingLiveSession ? 'state-live' : 'state-archive']"
+            >
+              {{ isViewingLiveSession ? liveLabel : archiveLabel }}
+            </span>
+            <span v-if="isViewingLiveSession" class="terminal-clock">{{ liveClockLabel }}</span>
+          </div>
+          <div
+            class="live-indicator"
+            :class="{ collapsed: !liveIndicatorExpanded, inactive: !isViewingLiveSession }"
+            @click="toggleLiveIndicator"
           >
-            {{ isViewingLiveSession ? liveLabel : archiveLabel }}
-          </span>
+            <span class="indicator-dot" />
+            <span v-if="liveIndicatorExpanded" class="indicator-label">{{ liveStreamLabel }}</span>
+          </div>
         </div>
         <div class="terminal-toolbar">
           <ElTooltip
@@ -702,24 +662,74 @@ defineExpose({
             </TxButton>
           </ElTooltip>
         </div>
-      </header>
-      <div class="terminal-body">
-        <div
-          class="live-indicator"
-          :class="{ collapsed: !liveIndicatorExpanded, inactive: !isViewingLiveSession }"
-          @click="toggleLiveIndicator"
-        >
-          <span class="indicator-dot" />
-          <span v-if="liveIndicatorExpanded" class="indicator-label">{{ liveStreamLabel }}</span>
+        <div class="toolbar-actions">
+          <ElTooltip
+            popper-class="tuff-tooltip-blur"
+            :content="historyActionLabel"
+            placement="bottom"
+            effect="dark"
+          >
+            <TxButton
+              variant="bare"
+              class="toolbar-icon"
+              native-type="button"
+              @click="openHistoryDrawer"
+            >
+              <i class="i-ri-history-line" />
+            </TxButton>
+          </ElTooltip>
+
+          <ElTooltip
+            popper-class="tuff-tooltip-blur"
+            :content="refreshLabel"
+            placement="bottom"
+            effect="dark"
+          >
+            <TxButton
+              variant="bare"
+              class="toolbar-icon"
+              native-type="button"
+              @click="handleManualRefresh"
+            >
+              <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
+            </TxButton>
+          </ElTooltip>
+
+          <ElTooltip
+            popper-class="tuff-tooltip-blur"
+            :content="openFileLabel"
+            placement="bottom"
+            effect="dark"
+          >
+            <TxButton
+              variant="bare"
+              class="toolbar-icon"
+              native-type="button"
+              :disabled="!canOpenLogFile"
+              @click="openSelectedSessionFile"
+            >
+              <i class="i-ri-file-text-line" />
+            </TxButton>
+          </ElTooltip>
+
+          <ElTooltip
+            popper-class="tuff-tooltip-blur"
+            :content="openDirectoryLabel"
+            placement="bottom"
+            effect="dark"
+          >
+            <TxButton
+              variant="bare"
+              class="toolbar-icon"
+              native-type="button"
+              :disabled="!canOpenLogDirectory"
+              @click="openLogDirectory"
+            >
+              <i class="i-ri-folder-open-line" />
+            </TxButton>
+          </ElTooltip>
         </div>
-        <LogTerminal :logs="terminalLogs" />
-        <div v-if="isLoadingLogs" class="terminal-overlay loading">
-          {{ loadingLabel }}
-        </div>
-        <div v-else-if="noLogs" class="terminal-overlay empty">
-          {{ emptyLabel }}
-        </div>
-      </div>
+      </footer>
     </section>
   </div>
 
@@ -780,26 +790,32 @@ defineExpose({
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
-  gap: 0.6rem;
+  flex: 1;
+  min-height: 0;
+  align-self: stretch;
+  background: #0b0d10;
+  gap: 0;
+  padding: 0;
+  margin: 0;
   box-sizing: border-box;
 }
 
 .plugin-logs-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: rgba(15, 23, 42, 0.92);
-  border-radius: 10px;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.25);
-  min-height: 44px;
+  justify-content: flex-start;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  min-height: 0;
 }
 
 .toolbar-metrics {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 260px;
+  max-width: 420px;
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -814,6 +830,7 @@ defineExpose({
   align-items: center;
   gap: 0.35rem;
   flex-shrink: 0;
+  justify-content: flex-end;
 }
 
 .toolbar-icon {
@@ -824,7 +841,7 @@ defineExpose({
   height: 32px;
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(2, 6, 23, 0.55);
+  background: rgba(15, 17, 20, 0.85);
   color: rgba(226, 232, 240, 0.85);
   cursor: pointer;
   transition: all 0.18s ease;
@@ -832,7 +849,7 @@ defineExpose({
 
 .toolbar-icon:hover:not(:disabled) {
   border-color: rgba(226, 232, 240, 0.28);
-  background: rgba(2, 6, 23, 0.78);
+  background: rgba(28, 30, 34, 0.9);
   color: rgba(226, 232, 240, 0.95);
 }
 
@@ -855,7 +872,7 @@ defineExpose({
 }
 
 :global(.tuff-tooltip-blur.is-dark) {
-  background: rgba(15, 23, 42, 0.72) !important;
+  background: rgba(17, 19, 23, 0.92) !important;
   border: 1px solid rgba(148, 163, 184, 0.18);
   color: rgba(226, 232, 240, 0.92);
 }
@@ -887,34 +904,56 @@ defineExpose({
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: var(--el-bg-color);
-  border-radius: 12px;
-  border: 1px solid var(--el-border-color-light);
+  min-height: 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.06);
+  box-shadow: none;
 }
 
-.terminal-header {
-  padding: 0.65rem 0.9rem;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.96);
+.terminal-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+  background: #0b0d10;
 }
 
-.terminal-title {
+.terminal-meta {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
-.terminal-title h2 {
-  margin: 0;
-  font-size: 1.05rem;
+.terminal-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.terminal-session-label {
+  font-size: 0.9rem;
   font-weight: 600;
   color: rgba(226, 232, 240, 0.92);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.terminal-clock {
+  font-size: 0.78rem;
+  color: rgba(148, 163, 184, 0.92);
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
@@ -943,6 +982,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  flex-shrink: 0;
 }
 
 .terminal-toolbar-spacer {
@@ -957,7 +997,7 @@ defineExpose({
   height: 32px;
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(2, 6, 23, 0.55);
+  background: rgba(15, 17, 20, 0.85);
   color: rgba(226, 232, 240, 0.88);
   cursor: pointer;
   transition: all 0.18s ease;
@@ -965,7 +1005,7 @@ defineExpose({
 
 .terminal-icon:hover:not(:disabled) {
   border-color: rgba(226, 232, 240, 0.32);
-  background: rgba(2, 6, 23, 0.85);
+  background: rgba(28, 30, 34, 0.92);
 }
 
 .terminal-icon:disabled {
@@ -991,8 +1031,8 @@ defineExpose({
 }
 
 .terminal-icon-new {
-  border-color: rgba(59, 130, 246, 0.32);
-  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .terminal-chip {
@@ -1002,7 +1042,7 @@ defineExpose({
   padding: 0.25rem 0.55rem;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(2, 6, 23, 0.65);
+  background: rgba(15, 17, 20, 0.9);
   color: rgba(226, 232, 240, 0.88);
   font-size: 0.75rem;
   line-height: 1;
@@ -1016,7 +1056,7 @@ defineExpose({
 
 .terminal-chip:hover:not(:disabled) {
   border-color: rgba(226, 232, 240, 0.32);
-  background: rgba(2, 6, 23, 0.85);
+  background: rgba(28, 30, 34, 0.95);
 }
 
 .terminal-chip:disabled {
@@ -1038,8 +1078,8 @@ defineExpose({
 }
 
 .terminal-chip-new {
-  border-color: rgba(59, 130, 246, 0.35);
-  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .chip-dot {
@@ -1062,30 +1102,33 @@ defineExpose({
 .terminal-body {
   position: relative;
   flex: 1;
-  padding: 0.75rem;
-  background: rgba(2, 6, 23, 0.98);
+  padding: 0;
+  background: #0b0d10;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .live-indicator {
-  position: absolute;
-  top: 0.9rem;
-  right: 1rem;
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: rgba(15, 23, 42, 0.72);
+  background: rgba(17, 19, 23, 0.92);
   color: #fff;
-  padding: 0.25rem 0.65rem;
+  padding: 0.2rem 0.55rem;
   border-radius: 999px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(34, 197, 94, 0.25);
 }
 
 .live-indicator.collapsed {
   padding: 0.35rem;
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(17, 19, 23, 0.92);
 }
 
 .live-indicator.inactive {
@@ -1115,7 +1158,7 @@ defineExpose({
   justify-content: center;
   font-size: 0.95rem;
   color: var(--el-text-color-secondary);
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(11, 13, 16, 0.35);
   backdrop-filter: blur(2px);
   pointer-events: none;
 }
@@ -1130,11 +1173,15 @@ defineExpose({
 
 .LogTerminal-Container {
   box-sizing: border-box;
-  border-radius: 8px;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
   overflow: hidden;
   :deep(.xterm-viewport) {
-    background: rgba(15, 23, 42, 0.82) !important;
-    border-radius: 8px;
+    background: transparent !important;
+    border-radius: 0;
   }
   :deep(.xterm-screen .xterm-rows) {
     color: #e2e8f0 !important;

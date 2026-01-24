@@ -157,6 +157,19 @@ export class IpcManager {
     })
   }
 
+  private getActiveProvidersState(): ActivationState {
+    const activeProviders = (searchEngineCore.getActivationState() ?? [])
+      .map((activation) => {
+        if (activation?.id === 'plugin-features' && activation?.meta?.pluginName) {
+          return `${activation.id}:${activation.meta.pluginName}`
+        }
+        return String(activation?.id ?? '')
+      })
+      .filter(Boolean)
+
+    return { activeProviders }
+  }
+
   public static getInstance(): IpcManager {
     if (!IpcManager.instance) {
       IpcManager.instance = new IpcManager()
@@ -286,16 +299,7 @@ export class IpcManager {
           }
 
           searchEngineCore.deactivateProvider(id)
-          const activeProviders = (searchEngineCore.getActivationState() ?? [])
-            .map((activation) => {
-              if (activation?.id === 'plugin-features' && activation?.meta?.pluginName) {
-                return `${activation.id}:${activation.meta.pluginName}`
-              }
-              return String(activation?.id ?? '')
-            })
-            .filter(Boolean)
-
-          return { activeProviders } satisfies ActivationState
+          return this.getActiveProvidersState()
         }
       )
     )
@@ -307,6 +311,10 @@ export class IpcManager {
         searchEngineCore.deactivateProviders()
         return { activeProviders: [] } satisfies ActivationState
       })
+    )
+
+    this.transportDisposers.push(
+      transport.on(CoreBoxEvents.provider.getActivated, async () => this.getActiveProvidersState())
     )
 
     this.transportDisposers.push(

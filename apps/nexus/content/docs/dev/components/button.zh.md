@@ -38,11 +38,7 @@ tags: [action, tactile, primary]
   title="Primary / Flat"
   description="触感与扁平并置，用于不同层级场景。"
   code-lang="vue"
-  :code='`<template>
-  <TxButton>Primary</TxButton>
-  <TuffFlatButton>Flat</TuffFlatButton>
-  <TxButton variant="ghost">Ghost</TxButton>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxButton&gt;Primary&lt;/TxButton&gt;", "  &lt;TuffFlatButton&gt;Flat&lt;/TuffFlatButton&gt;", "  &lt;TxButton variant=\\\"ghost\\\"&gt;Ghost&lt;/TxButton&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">
