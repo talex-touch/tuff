@@ -1,0 +1,76 @@
+name: Tuffex Package Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/tuffex/**"
+      - ".github/workflows/package-tuffex-publish.yml"
+
+jobs:
+  publish:
+    name: Publish - tuffex
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check version bump
+        id: version_check
+        run: |
+          set -e
+          current_version=$(node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('packages/tuffex/package.json','utf8')); console.log(pkg.version)")
+          before_sha="${{ github.event.before }}"
+
+          echo "current_version=$current_version" >> "$GITHUB_OUTPUT"
+
+          if [ "$before_sha" = "0000000000000000000000000000000000000000" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_version=$(git show "$before_sha:packages/tuffex/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
+          echo "previous_version=$previous_version" >> "$GITHUB_OUTPUT"
+
+          if [ "$current_version" != "$previous_version" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip publish (version unchanged)
+        if: steps.version_check.outputs.should_publish != 'true'
+        run: echo "Tuffex version unchanged. Skipping publish."
+
+      - name: Build package
+        if: steps.version_check.outputs.should_publish == 'true'
+        working-directory: packages/tuffex
+        run: pnpm build
+
+      - name: Publish to npm
+        if: steps.version_check.outputs.should_publish == 'true'
+        working-directory: packages/tuffex
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

@@ -56,6 +56,10 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Triggers on changes to `packages/tuffex/**`
   - Runs build process
 
+- **`package-tuffex-publish.yml`** - Publish for `@talex-touch/tuffex`
+  - Triggers on version changes in `packages/tuffex/package.json` (push to main)
+  - Builds and publishes to npm
+
 - **`package-unplugin-ci.yml`** - CI for `@talex-touch/unplugin-export-plugin`
   - Triggers on changes to `packages/unplugin-export-plugin/**`
   - Runs lint and build

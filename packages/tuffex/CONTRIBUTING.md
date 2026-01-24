@@ -328,21 +328,19 @@ We follow [Semantic Versioning](https://semver.org/):
 ### Release Workflow
 
 1. **Automated Releases**
-   - Releases are automated via GitHub Actions
-   - Based on conventional commit messages
-   - Changelog generated automatically
+   - Publishing to npm is triggered by a version bump in `packages/tuffex/package.json` on `main`
+   - The publish workflow builds the package before releasing
 
 2. **Manual Release Steps** (for maintainers)
    ```bash
-   # Update version
-   pnpm changeset
+   # Update version (semver)
+   # Edit packages/tuffex/package.json
 
-   # Build and test
-   pnpm build
-   pnpm test
+   # Build
+   pnpm -C packages/tuffex run build
 
-   # Publish
-   pnpm release
+   # Publish (fallback)
+   cd packages/tuffex && npm publish --access public
    ```
 
 ## 🎯 Component Design Principles
