@@ -17,12 +17,7 @@ tags: [drawer, panel, overlay]
   title="Side Drawer"
   description="Right drawer for forms and settings"
   code-lang="vue"
-  :code='`<template>
-  <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
-  <TxDrawer v-model:visible="drawerOpen" title="Settings" width="420px">
-    <p>Place your form or settings here.</p>
-  </TxDrawer>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxButton @click=\\\"drawerOpen = true\\\"&gt;Open Drawer&lt;/TxButton&gt;", "  &lt;TxDrawer v-model:visible=\\\"drawerOpen\\\" title=\\\"Settings\\\" width=\\\"420px\\\"&gt;", "    &lt;p&gt;Place your form or settings here.&lt;/p&gt;", "  &lt;/TxDrawer&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <TuffDrawerDemo

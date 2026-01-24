@@ -357,6 +357,8 @@ import type {
   PluginApiOperationResponse,
   PluginApiSaveManifestRequest,
   PluginApiSaveManifestResponse,
+  PluginApiSaveWidgetFileRequest,
+  PluginApiSaveWidgetFileResponse,
   PluginApiTriggerFeatureRequest,
   PluginApiTriggerFeatureResponse,
   PluginDevServerStatusRequest,
@@ -1848,6 +1850,11 @@ export const PluginEvents = {
       .module('api')
       .event('save-manifest')
       .define<PluginApiSaveManifestRequest, PluginApiSaveManifestResponse>(),
+
+    saveWidgetFile: defineEvent('plugin')
+      .module('api')
+      .event('save-widget-file')
+      .define<PluginApiSaveWidgetFileRequest, PluginApiSaveWidgetFileResponse>(),
 
     getPaths: defineEvent('plugin')
       .module('api')

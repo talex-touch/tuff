@@ -386,6 +386,25 @@ class PluginSDK {
     }
   }
 
+  async saveWidgetFile(
+    name: string,
+    widgetPath: string,
+    source: string,
+    options?: { overwrite?: boolean }
+  ): Promise<{ success: boolean; error?: string; relativePath?: string }> {
+    try {
+      return await pluginTransportSdk.saveWidgetFile({
+        name,
+        widgetPath,
+        source,
+        overwrite: options?.overwrite
+      })
+    } catch (error) {
+      console.error('[PluginSDK] Failed to save widget file:', error)
+      return { success: false, error: 'SAVE_WIDGET_FILE_FAILED' }
+    }
+  }
+
   /**
    * Get plugin paths (pluginPath, dataPath, configPath, logsPath, tempPath)
    * @param name - Plugin name

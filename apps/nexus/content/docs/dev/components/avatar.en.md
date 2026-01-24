@@ -17,11 +17,7 @@ tags: [avatar, identity, profile]
   title="Size System"
   description="Small for lists, large for profiles."
   code-lang="vue"
-  :code='`<template>
-  <TxAvatar name="TA" />
-  <TxAvatar name="UX" />
-  <TxAvatar name="PM" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxAvatar name=\\"TA\\" /&gt;", "  &lt;TxAvatar name=\\"UX\\" /&gt;", "  &lt;TxAvatar name=\\"PM\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

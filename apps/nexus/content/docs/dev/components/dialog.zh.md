@@ -27,16 +27,7 @@ tags: [dialog, modal, confirm]
   title="Critical Confirm"
   description="关键操作保持收束与聚焦。"
   code-lang="vue"
-  :code='`<template>
-  <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
-  <TxModal v-model="dialogOpen" title="删除项目">
-    <p>这项操作不可撤销，确定继续吗？</p>
-    <template #footer>
-      <TxButton variant="ghost">取消</TxButton>
-      <TxButton>确认</TxButton>
-    </template>
-  </TxModal>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxButton @click=\\\"dialogOpen = true\\\"&gt;Open Dialog&lt;/TxButton&gt;", "  &lt;TxModal v-model=\\\"dialogOpen\\\" title=\\\"删除项目\\\"&gt;", "    &lt;p&gt;这项操作不可撤销，确定继续吗？&lt;/p&gt;", "    &lt;template #footer&gt;", "      &lt;TxButton variant=\\\"ghost\\\"&gt;取消&lt;/TxButton&gt;", "      &lt;TxButton&gt;确认&lt;/TxButton&gt;", "    &lt;/template&gt;", "  &lt;/TxModal&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <TuffDialogDemo

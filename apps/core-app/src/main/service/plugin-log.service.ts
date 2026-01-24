@@ -65,9 +65,11 @@ const pluginLogGetSessionLogEvent = defineRawEvent<
   PluginLogGetSessionLogPayload,
   PluginLogGetSessionLogResponse
 >('plugin-log:get-session-log')
+const pluginLogStreamEvent = defineRawEvent<LogItem, void>('plugin-log-stream')
 
 export class PluginLogModule extends BaseModule {
   private subscriptions: Map<string, Set<WebContents>> = new Map()
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   static key: symbol = Symbol.for('PluginLog')
   name: ModuleKey = PluginLogModule.key
@@ -162,13 +164,16 @@ export class PluginLogModule extends BaseModule {
       const logEvent = event as PluginLogAppendEvent
       const log = logEvent.log
       const pluginName = log.plugin
+      const transport = this.transport
 
       if (this.subscriptions.has(pluginName)) {
         const subscribers = this.subscriptions.get(pluginName)!
         subscribers.forEach((subscriber) => {
           if (!subscriber.isDestroyed()) {
-            // TODO: Format log before sending
-            subscriber.send('plugin-log-stream', log)
+            if (!transport) return
+            void transport.sendTo(subscriber, pluginLogStreamEvent, log).catch(() => {
+              subscribers.delete(subscriber)
+            })
           } else {
             subscribers.delete(subscriber)
           }
@@ -180,7 +185,8 @@ export class PluginLogModule extends BaseModule {
   public setupIpcHandlers(channel: ITouchChannel): void {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel, keyManager)
+    this.transport = getTuffTransportMain(channel, keyManager)
+    const transport = this.transport
     const toErrorMessage = (error: unknown) =>
       error instanceof Error ? error.message : String(error)
 
@@ -378,8 +384,8 @@ export class PluginLogModule extends BaseModule {
   }
 
   async onInit(): Promise<void> {
-    this.listenToLogEvents()
     this.setupIpcHandlers($app.channel)
+    this.listenToLogEvents()
   }
 
   async onDestroy(): Promise<void> {

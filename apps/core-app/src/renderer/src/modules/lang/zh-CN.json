@@ -652,6 +652,31 @@
         "viewJson": "查看 JSON",
         "rawData": "功能原始数据",
         "viewFullJson": "查看完整功能 JSON"
+      },
+      "widget": {
+        "title": "Widget",
+        "widgetId": "Widget ID",
+        "path": "Widget 路径",
+        "extension": "扩展名",
+        "extensionDefault": "默认 (.vue)",
+        "devSource": "开发源地址",
+        "devHint": "开发模式下可以直接创建或更新 widget 源码。",
+        "pathInput": "文件路径",
+        "pathPlaceholder": "例如：answer-card.vue 或 folder/answer-card",
+        "sourceInput": "源码内容",
+        "dragHint": "拖拽 widget 文件到此处，或粘贴/编辑代码",
+        "sourcePlaceholder": "粘贴 widget 源码（Vue SFC / TSX / JS）",
+        "extensionsHint": "保存后将写入插件的 widgets/ 目录",
+        "save": "保存 Widget",
+        "devOnly": "仅在插件开发模式启用时可编辑",
+        "missingPath": "未设置",
+        "invalidFileType": "仅支持 .vue/.tsx/.jsx/.ts/.js 文件",
+        "pathRequired": "请填写 widget 路径",
+        "sourceRequired": "请填写 widget 源码",
+        "invalidExtension": "不支持的文件扩展名",
+        "saveSuccess": "Widget 已保存",
+        "saveFailed": "保存 widget 失败",
+        "savedButManifestFailed": "源码已保存，但 manifest 更新失败"
       }
     },
     "logs": {

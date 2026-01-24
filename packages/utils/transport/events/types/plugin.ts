@@ -384,6 +384,19 @@ export interface PluginApiSaveManifestResponse {
   error?: string
 }
 
+export interface PluginApiSaveWidgetFileRequest {
+  name: string
+  widgetPath: string
+  source: string
+  overwrite?: boolean
+}
+
+export interface PluginApiSaveWidgetFileResponse {
+  success: boolean
+  error?: string
+  relativePath?: string
+}
+
 export interface PluginApiGetPathsRequest {
   name: string
 }

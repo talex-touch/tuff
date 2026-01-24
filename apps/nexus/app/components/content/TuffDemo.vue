@@ -13,11 +13,23 @@ interface DemoProps {
 const props = defineProps<DemoProps>()
 const slots = useSlots()
 const hasPreview = computed(() => Boolean(slots.preview || slots.default))
+const htmlEntityMap: Record<string, string> = {
+  '&lt;': '<',
+  '&gt;': '>',
+  '&amp;': '&',
+  '&quot;': '"',
+  '&#39;': '\'',
+}
+
+function decodeHtmlEntities(value: string) {
+  return value.replace(/&(lt|gt|amp|quot|#39);/g, (match) => htmlEntityMap[match] ?? match)
+}
+
 const resolvedCode = computed(() => {
   if (props.code)
-    return props.code
+    return decodeHtmlEntities(props.code)
   if (props.codeLines?.length)
-    return props.codeLines.join('\n')
+    return props.codeLines.map(decodeHtmlEntities).join('\n')
   return ''
 })
 const hasCode = computed(() => Boolean(resolvedCode.value || slots.code))

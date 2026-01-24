@@ -25,6 +25,8 @@ import type {
   PluginApiOperationResponse,
   PluginApiSaveManifestRequest,
   PluginApiSaveManifestResponse,
+  PluginApiSaveWidgetFileRequest,
+  PluginApiSaveWidgetFileResponse,
   PluginApiTriggerFeatureRequest,
   PluginDevServerStatusRequest,
   PluginDevServerStatusResponse,
@@ -60,6 +62,7 @@ export interface PluginSdk {
   getOfficialList: (request?: PluginApiGetOfficialListRequest) => Promise<PluginApiGetOfficialListResponse>
   getManifest: (request: PluginApiGetManifestRequest) => Promise<PluginApiGetManifestResponse>
   saveManifest: (request: PluginApiSaveManifestRequest) => Promise<PluginApiSaveManifestResponse>
+  saveWidgetFile: (request: PluginApiSaveWidgetFileRequest) => Promise<PluginApiSaveWidgetFileResponse>
   getPaths: (request: PluginApiGetPathsRequest) => Promise<PluginApiGetPathsResponse>
   openPath: (request: PluginApiOpenPathRequest) => Promise<PluginApiOpenPathResponse>
   getPerformance: (request: PluginApiGetPerformanceRequest) => Promise<PluginApiGetPerformanceResponse>
@@ -98,6 +101,7 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     getOfficialList: async request => transport.send(PluginEvents.api.getOfficialList, request ?? {}),
     getManifest: async request => transport.send(PluginEvents.api.getManifest, request),
     saveManifest: async request => transport.send(PluginEvents.api.saveManifest, request),
+    saveWidgetFile: async request => transport.send(PluginEvents.api.saveWidgetFile, request),
     getPaths: async request => transport.send(PluginEvents.api.getPaths, request),
     openPath: async request => transport.send(PluginEvents.api.openPath, request),
     getPerformance: async request => transport.send(PluginEvents.api.getPerformance, request),

@@ -652,6 +652,31 @@
         "viewJson": "View JSON",
         "rawData": "Raw Feature Data",
         "viewFullJson": "View Complete Feature JSON"
+      },
+      "widget": {
+        "title": "Widget",
+        "widgetId": "Widget ID",
+        "path": "Widget Path",
+        "extension": "Extension",
+        "extensionDefault": "Default (.vue)",
+        "devSource": "Dev Source URL",
+        "devHint": "In dev mode, you can create or update widget source directly.",
+        "pathInput": "File path",
+        "pathPlaceholder": "e.g. answer-card.vue or folder/answer-card",
+        "sourceInput": "Source code",
+        "dragHint": "Drag a widget file here, or paste/edit code",
+        "sourcePlaceholder": "Paste widget source (Vue SFC / TSX / JS)",
+        "extensionsHint": "Saved under plugin widgets/ directory",
+        "save": "Save Widget",
+        "devOnly": "Editing is available only when plugin dev mode is enabled",
+        "missingPath": "Not set",
+        "invalidFileType": "Only .vue/.tsx/.jsx/.ts/.js files are supported",
+        "pathRequired": "Please enter widget path",
+        "sourceRequired": "Please enter widget source",
+        "invalidExtension": "Unsupported file extension",
+        "saveSuccess": "Widget saved",
+        "saveFailed": "Failed to save widget",
+        "savedButManifestFailed": "Source saved, but manifest update failed"
       }
     },
     "logs": {

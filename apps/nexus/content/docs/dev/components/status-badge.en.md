@@ -17,12 +17,7 @@ tags: [badge, status, signal]
   title="Status Signals"
   description="Success, warning, error, info"
   code-lang="vue"
-  :code='`<template>
-  <TxStatusBadge text="Success" status="success" />
-  <TxStatusBadge text="Warning" status="warning" />
-  <TxStatusBadge text="Error" status="danger" />
-  <TxStatusBadge text="Info" status="info" />
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxStatusBadge text=\\\"Success\\\" status=\\\"success\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"Warning\\\" status=\\\"warning\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"Error\\\" status=\\\"danger\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"Info\\\" status=\\\"info\\\" /&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <div class="tuff-demo-row">

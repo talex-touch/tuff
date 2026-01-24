@@ -17,9 +17,7 @@ tags: [toast, feedback, status]
   title="Status Toasts"
   description="成功、警告、失败三类状态。"
   code-lang="ts"
-  :code='`toast({ title: "保存成功", description: "已写入本地" })
-toast({ title: "网络不稳定", description: "请稍后重试", variant: "warning" })
-toast({ title: "保存失败", description: "请检查权限", variant: "danger" })`'
+  :code-lines='["toast({ title: \\\"保存成功\\\", description: \\\"已写入本地\\\" })", "toast({ title: \\\"网络不稳定\\\", description: \\\"请稍后重试\\\", variant: \\\"warning\\\" })", "toast({ title: \\\"保存失败\\\", description: \\\"请检查权限\\\", variant: \\\"danger\\\" })"]'
 >
   <template #preview>
     <TuffToastDemo

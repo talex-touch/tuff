@@ -8,6 +8,10 @@ const props = defineProps({
   logs: {
     type: Array,
     required: true
+  },
+  autoScroll: {
+    type: Boolean,
+    default: true
   }
 })
 
@@ -22,10 +26,10 @@ const term = new Terminal({
   fontFamily:
     "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   theme: {
-    background: '#020617',
-    foreground: '#e2e8f0',
-    cursor: '#94a3b8',
-    selectionBackground: 'rgba(148, 163, 184, 0.25)'
+    background: '#0b0d10',
+    foreground: '#e5e7eb',
+    cursor: '#9ca3af',
+    selectionBackground: 'rgba(148, 163, 184, 0.2)'
   }
 })
 
@@ -44,6 +48,18 @@ function writeLogLine(log: unknown): void {
   }
 }
 
+function scheduleScrollToBottom(): void {
+  if (!props.autoScroll) return
+  if (!opened) return
+  window.requestAnimationFrame(() => {
+    try {
+      term.scrollToBottom()
+    } catch {
+      // ignore
+    }
+  })
+}
+
 function scheduleFit(): void {
   window.requestAnimationFrame(() => {
     try {
@@ -58,6 +74,7 @@ function renderAll(logs: unknown[]): void {
   term.reset()
   logs.forEach(writeLogLine)
   scheduleFit()
+  scheduleScrollToBottom()
 }
 
 watch(
@@ -92,8 +109,18 @@ watch(
 
     newLogs.slice(oldLength).forEach(writeLogLine)
     scheduleFit()
+    scheduleScrollToBottom()
   },
   { deep: true }
+)
+
+watch(
+  () => props.autoScroll,
+  (value) => {
+    if (value) {
+      scheduleScrollToBottom()
+    }
+  }
 )
 
 onMounted(() => {

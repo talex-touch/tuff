@@ -27,16 +27,7 @@ tags: [dialog, modal, confirm]
   title="Critical Confirm"
   description="Keep focus and a decisive hierarchy."
   code-lang="vue"
-  :code='`<template>
-  <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
-  <TxModal v-model="dialogOpen" title="Delete project">
-    <p>This action cannot be undone. Continue?</p>
-    <template #footer>
-      <TxButton variant="ghost">Cancel</TxButton>
-      <TxButton>Confirm</TxButton>
-    </template>
-  </TxModal>
-</template>`'
+  :code-lines='["&lt;template&gt;", "  &lt;TxButton @click=\\\"dialogOpen = true\\\"&gt;Open Dialog&lt;/TxButton&gt;", "  &lt;TxModal v-model=\\\"dialogOpen\\\" title=\\\"Delete project\\\"&gt;", "    &lt;p&gt;This action cannot be undone. Continue?&lt;/p&gt;", "    &lt;template #footer&gt;", "      &lt;TxButton variant=\\\"ghost\\\"&gt;Cancel&lt;/TxButton&gt;", "      &lt;TxButton&gt;Confirm&lt;/TxButton&gt;", "    &lt;/template&gt;", "  &lt;/TxModal&gt;", "&lt;/template&gt;"]'
 >
   <template #preview>
     <TuffDialogDemo
