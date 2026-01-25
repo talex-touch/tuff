@@ -3,6 +3,7 @@ name: Tuffex Package Publish
 on:
   push:
     branches:
+      - master
       - main
     paths:
       - "packages/tuffex/**"
