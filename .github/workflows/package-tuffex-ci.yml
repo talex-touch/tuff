@@ -3,6 +3,7 @@ name: Tuffex Package CI
 on:
   pull_request:
     branches:
+      - master
       - main
     paths:
       - 'packages/tuffex/**'
@@ -10,6 +11,7 @@ on:
       - '.github/workflows/package-ci.yml'
   push:
     branches:
+      - master
       - main
     paths:
       - 'packages/tuffex/**'
