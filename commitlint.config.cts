@@ -38,17 +38,7 @@ export default {
         'start-case', // Start Case
       ],
     ],
-    'subject-case': [
-      2,
-      'always',
-      [
-        'sentence-case', // Sentence case
-        'start-case', // Start Case
-        'pascal-case', // PascalCase
-        'lower-case', // lowercase
-        'upper-case', // UPPERCASE
-      ],
-    ],
+    'subject-case': [0],
     'subject-empty': [2, 'never'],
     'body-max-line-length': [0],
     'footer-max-line-length': [0],

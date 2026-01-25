@@ -169,18 +169,18 @@ async function submit() {
           {{ error }}
         </p>
       </form>
-
-      <template #footer>
-        <div class="flex items-center justify-end gap-2">
-          <FlatButton @click="emit('close')">
-            {{ t('dashboard.sections.updates.closeButton') }}
-          </FlatButton>
-          <Button :disabled="saving" @click="submit">
-            <span v-if="saving" class="i-carbon-circle-dash mr-1 animate-spin" />
-            {{ mode === 'create' ? t('dashboard.sections.updates.createSubmit') : t('dashboard.sections.updates.updateSubmit') }}
-          </Button>
-        </div>
-      </template>
     </div>
+
+    <template #footer>
+      <div class="flex items-center justify-end gap-2">
+        <FlatButton @click="emit('close')">
+          {{ t('dashboard.sections.updates.closeButton') }}
+        </FlatButton>
+        <Button :disabled="saving" @click="submit">
+          <span v-if="saving" class="i-carbon-circle-dash mr-1 animate-spin" />
+          {{ mode === 'create' ? t('dashboard.sections.updates.createSubmit') : t('dashboard.sections.updates.updateSubmit') }}
+        </Button>
+      </div>
+    </template>
   </Drawer>
 </template>
