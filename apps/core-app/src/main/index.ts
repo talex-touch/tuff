@@ -18,6 +18,7 @@ import { buildVerificationModule } from './modules/build-verification'
 import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
 import { downloadCenterModule } from './modules/download/download-center'
+import { customAppModule } from './modules/box-tool/addon/apps/custom-app-module'
 import { extensionLoaderModule } from './modules/extension-loader'
 import { fileProtocolModule } from './modules/file-protocol'
 import { flowBusModule } from './modules/flow-bus'
@@ -149,7 +150,8 @@ const modulesToLoad = [
   tuffDashboardModule,
   FileSystemWatcher,
   terminalModule,
-  downloadCenterModule
+  downloadCenterModule,
+  customAppModule
 ]
 
 // Record when Electron becomes ready
