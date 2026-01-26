@@ -1,5 +1,6 @@
 import type { Theme } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
+import Layout from './Layout.vue'
 // 导入 TuffEx 组件
 import {
   TouchScroll,
@@ -104,6 +105,9 @@ import {
 } from '../../../packages/components/src'
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
+import ComponentCanvas from './components/ComponentCanvas.vue'
+import ApiSpecTable from './components/ApiSpecTable.vue'
+import DocSourceLink from './components/DocSourceLink.vue'
 import CardActionsDemo from './components/demos/CardActionsDemo.vue'
 
 import CardBackgroundScrollDemo from './components/demos/CardBackgroundScrollDemo.vue'
@@ -132,6 +136,7 @@ import '../../../packages/components/style/index.scss'
 
 export default {
   extends: DefaultTheme,
+  Layout,
   enhanceApp({ app }) {
     if (typeof window !== 'undefined') {
       document.documentElement.classList.add('touch-blur')
@@ -254,6 +259,9 @@ export default {
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)
+    app.component('ComponentCanvas', ComponentCanvas)
+    app.component('ApiSpecTable', ApiSpecTable)
+    app.component('DocSourceLink', DocSourceLink)
     app.component('GradualBlurAnimatedDemo', GradualBlurAnimatedDemo)
     app.component('ScrollBasicDemo', ScrollBasicDemo)
     app.component('ScrollHorizontalDemo', ScrollHorizontalDemo)

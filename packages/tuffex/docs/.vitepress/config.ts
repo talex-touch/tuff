@@ -37,6 +37,7 @@ export default defineConfig({
   ],
 
   themeConfig: {
+    sourceBase: 'https://github.com/talex-touch/tuff/blob/main/',
     logo: '/logo.svg',
     siteTitle: 'TuffEx',
 

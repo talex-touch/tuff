@@ -16,7 +16,7 @@
 
 <p align="center">
   A modern Vue3 component library focused on <strong>tactile experience</strong> and <strong>smooth animations</strong><br/>
-  Part of the <a href="https://tuffex.tagzxia.com">Tuff</a> ecosystem - bringing life to every interaction
+  Part of the <a href="https://tuff.tagzxia.com">Tuff</a> ecosystem - bringing life to every interaction
 </p>
 
 <p align="center">

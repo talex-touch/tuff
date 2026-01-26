@@ -2,7 +2,22 @@
 
 按钮用于触发一个操作，如提交表单。该组件风格参考 core-app 的 **TuffButton(TButton)**：圆角 pill 形态，支持 `variant` / `type` / `size` / `block` / `loading` / `disabled`，并提供 `plain` / `round` / `circle` / `dashed` 等外观。
 
-## 基础用法
+<ComponentCanvas name="Button">
+  <TxButton variant="primary" size="lg">
+    Action Label
+  </TxButton>
+</ComponentCanvas>
+
+## Usage
+
+按钮是最常用的触发器，建议用于触发明确的主操作或状态切换：
+
+- 保持每个视图只有一个主按钮，避免主次权重混乱
+- 使用 `variant` 和 `size` 建立动作层级
+
+## Variants
+
+### Appearance
 
 基础的按钮用法。
 
@@ -50,7 +65,7 @@
 
 :::
 
-## 禁用状态
+### Disabled
 
 按钮不可用状态。
 
@@ -88,7 +103,7 @@
 
 :::
 
-## 加载中
+### Loading
 
 点击按钮后进行数据加载操作，在按钮上显示加载状态。
 
@@ -97,6 +112,108 @@ import { ref } from 'vue'
 
 const loading = ref(false)
 const splitLoading = ref(false)
+
+const buttonProps = [
+  {
+    name: 'variant',
+    description: '视觉风格变体',
+    type: "'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info' | 'flat' | 'bare'",
+    default: '-',
+  },
+  {
+    name: 'type',
+    description: '快捷语义类型（兼容旧用法）',
+    type: "'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'",
+    default: '-',
+  },
+  {
+    name: 'size',
+    description: '按钮尺寸',
+    type: "'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'",
+    default: "'md'",
+  },
+  {
+    name: 'block',
+    description: '是否块级（撑满容器）',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'plain',
+    description: '是否朴素按钮',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'dashed',
+    description: '是否虚线按钮',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'round',
+    description: '是否圆角按钮',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'circle',
+    description: '是否圆形按钮',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'loading',
+    description: '是否加载中状态',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'disabled',
+    description: '是否禁用状态',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'icon',
+    description: '图标类名',
+    type: 'string',
+    default: '-',
+  },
+  {
+    name: 'autofocus',
+    description: '是否默认聚焦',
+    type: 'boolean',
+    default: 'false',
+  },
+  {
+    name: 'native-type',
+    description: '原生 type 属性',
+    type: "'button' | 'submit' | 'reset'",
+    default: "'button'",
+  },
+  {
+    name: 'vibrate',
+    description: '是否启用震动反馈',
+    type: 'boolean',
+    default: 'true',
+  },
+  {
+    name: 'vibrate-type',
+    description: '震动类型',
+    type: "'light' | 'medium' | 'heavy' | 'bit' | 'success' | 'warning' | 'error'",
+    default: "'light'",
+  },
+]
+
+const buttonEvents = [
+  {
+    name: 'click',
+    description: '点击时触发',
+    type: '(event: MouseEvent) => void',
+    default: '-',
+  },
+]
 
 async function handleClick() {
   loading.value = true
@@ -143,33 +260,7 @@ async function handleRun() {
 
 :::
 
-## Split Button
-
-用于“主操作 + 更多操作”的组合按钮（例如 RUN + …）。
-
-<div class="group">
-  <TxSplitButton
-    variant="primary"
-    size="sm"
-    icon="i-ri-play-fill"
-    :loading="splitLoading"
-    @click="handleRun"
-  >
-    RUN
-    <template #menu="{ close }">
-      <div style="display: flex; flex-direction: column; gap: 6px;">
-        <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
-          Settings
-        </TxButton>
-        <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
-          Open Folder
-        </TxButton>
-      </div>
-    </template>
-  </TxSplitButton>
-</div>
-
-## 不同尺寸
+### Sizes
 
 Button 组件提供除了默认值以外的三种尺寸，可以在不同场景下选择合适的按钮尺寸。
 
@@ -199,7 +290,7 @@ Button 组件提供除了默认值以外的三种尺寸，可以在不同场景�
 
 :::
 
-## Block
+### Block
 
 <div class="group" style="width: 260px;">
   <TxButton block variant="primary">Block Button</TxButton>
@@ -215,7 +306,7 @@ Button 组件提供除了默认值以外的三种尺寸，可以在不同场景�
 ```
 :::
 
-## 其他外观
+### Shapes
 
 <div class="group">
   <TxButton dashed>Dashed</TxButton>
@@ -241,7 +332,7 @@ Button 组件提供除了默认值以外的三种尺寸，可以在不同场景�
 ```
 :::
 
-## 震动反馈
+### Haptics
 
 按钮支持震动反馈功能，在移动设备上提供触觉反馈。
 
@@ -279,24 +370,60 @@ Button 组件提供除了默认值以外的三种尺寸，可以在不同场景�
 
 :::
 
-## API
+## API Specifications
 
-### Button Attributes
+<ApiSpecTable title="Button Attributes" :rows="buttonProps" />
 
-| 参数 | 说明 | 类型 | 可选值 | 默认值 |
-|------|------|------|--------|--------|
-| variant | 变体 | string | primary / secondary / ghost / danger | — |
-| size | 尺寸 | string | sm / md / lg | md |
-| block | 是否块级（撑满容器） | boolean | — | false |
-| loading | 是否加载中状态 | boolean | — | false |
-| disabled | 是否禁用状态 | boolean | — | false |
-| autofocus | 是否默认聚焦 | boolean | — | false |
-| native-type | 原生 type 属性 | string | button / submit / reset | button |
-| vibrate | 是否启用震动反馈 | boolean | — | true |
-| vibrate-type | 震动类型 | string | light / medium / heavy / bit / success / warning / error | light |
+<ApiSpecTable title="Button Events" :rows="buttonEvents" />
 
-### Button Events
+## Composition Notes
 
-| 事件名称 | 说明 | 回调参数 |
-|----------|------|----------|
-| click | 点击时触发 | event |
+### Split Button
+
+用于“主操作 + 更多操作”的组合按钮（例如 RUN + …）。
+
+<div class="group">
+  <TxSplitButton
+    variant="primary"
+    size="sm"
+    icon="i-ri-play-fill"
+    :loading="splitLoading"
+    @click="handleRun"
+  >
+    RUN
+    <template #menu="{ close }">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+          Settings
+        </TxButton>
+        <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+          Open Folder
+        </TxButton>
+      </div>
+    </template>
+  </TxSplitButton>
+</div>
+
+### Primary + Ghost
+
+主动作 + 次动作组合时，建议使用 `primary + ghost` 保持层级清晰。
+
+<div class="group">
+  <TxButton variant="primary">
+    Confirm
+  </TxButton>
+  <TxButton variant="ghost">
+    Learn More
+  </TxButton>
+</div>
+
+## Design Principles
+
+- 主按钮始终只有一个，避免操作权重冲突
+- 同类操作保持 `variant` 一致，方便用户形成记忆
+- 异步操作必须搭配 `loading`，避免重复触发
+- 移动端优先使用 `vibrate` 增强触感反馈
+
+## Source
+
+<DocSourceLink />
