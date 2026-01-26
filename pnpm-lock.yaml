@@ -82,6 +82,9 @@ catalogs:
     typeit:
       specifier: ^8.8.7
       version: 8.8.7
+    vue-sonner:
+      specifier: ^2.0.9
+      version: 2.0.9
   dev:
     '@antfu/eslint-config':
       specifier: ^4.17.0
@@ -504,43 +507,6 @@ importers:
         specifier: ^6.0.6
         version: 6.0.6
 
-  apps/core-app/out:
-    dependencies:
-      '@libsql/client':
-        specifier: ^0.15.15
-        version: 0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@libsql/core':
-        specifier: ^0.15.15
-        version: 0.15.15
-      '@libsql/darwin-arm64':
-        specifier: ^0.5.22
-        version: 0.5.22
-      '@libsql/hrana-client':
-        specifier: ^0.7.0
-        version: 0.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@libsql/isomorphic-fetch':
-        specifier: ^0.3.1
-        version: 0.3.1
-      '@neon-rs/load':
-        specifier: ^0.0.4
-        version: 0.0.4
-      detect-libc:
-        specifier: ^2.1.2
-        version: 2.1.2
-      fs-extra:
-        specifier: ^11.3.3
-        version: 11.3.3
-      libsql:
-        specifier: ^0.5.22
-        version: 0.5.22
-      marked:
-        specifier: ^17.0.1
-        version: 17.0.1
-    devDependencies:
-      '@sentry/vite-plugin':
-        specifier: ^4.7.0
-        version: 4.7.0(encoding@0.1.13)
-
   apps/nexus:
     dependencies:
       '@clerk/nuxt':
@@ -583,7 +549,7 @@ importers:
         specifier: 'catalog:'
         version: 8.8.7
       vue-sonner:
-        specifier: ^2.0.9
+        specifier: 'catalog:'
         version: 2.0.9(@nuxt/kit@4.2.1(magicast@0.5.1))(@nuxt/schema@4.2.1)(nuxt@4.2.1(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@parcel/watcher@2.5.1)(@types/node@24.1.0)(@vue/compiler-sfc@3.5.27)(bufferutil@4.1.0)(db0@0.3.4(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20251128.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6)))(drizzle-orm@0.44.7(@cloudflare/workers-types@4.20251128.0)(@libsql/client@0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.0)(@types/pg@8.15.6))(encoding@0.1.13)(eslint@9.39.1(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.8.2)(magicast@0.5.1)(optionator@0.9.4)(rollup@4.53.2)(sass@1.94.0)(terser@5.44.1)(tsx@4.21.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(vite@7.0.6(@types/node@24.1.0)(jiti@2.6.1)(sass@1.94.0)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.1))(vue-tsc@3.1.3(typescript@5.9.3))(yaml@2.8.1))
     devDependencies:
       '@antfu/eslint-config':
@@ -17459,7 +17425,8 @@ snapshots:
     dependencies:
       js-base64: 3.7.8
 
-  '@libsql/darwin-arm64@0.5.22': {}
+  '@libsql/darwin-arm64@0.5.22':
+    optional: true
 
   '@libsql/darwin-x64@0.5.22':
     optional: true
