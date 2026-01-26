@@ -12,26 +12,59 @@ tags: [tag, label, badge]
 > Small labels for categories, status, and context.  
 > **Status**: Beta
 
+**Since**: {{ $doc.since }}
+
 ## Demo
-<TuffDemo
-  title="Tags"
-  description="Color and size variations"
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TxTag label=\\"Default\\" /&gt;", "  &lt;TxTag label=\\"Success\\" color=\\"var(--tx-color-success)\\" /&gt;", "  &lt;TxTag label=\\"Warning\\" color=\\"var(--tx-color-warning)\\" /&gt;", "  &lt;TxTag label=\\"Danger\\" color=\\"var(--tx-color-danger)\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TxTag label="Default" />
-      <TxTag label="Success" color="var(--tx-color-success)" />
-      <TxTag label="Warning" color="var(--tx-color-warning)" />
-      <TxTag label="Danger" color="var(--tx-color-danger)" />
-    </div>
+::TuffDemo{title="Tags" description="Color and size variations" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTag label="Default" />
+    <TxTag label="Success" color="var(--tx-color-success)" />
+    <TxTag label="Warning" color="var(--tx-color-warning)" />
+    <TxTag label="Danger" color="var(--tx-color-danger)" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-tag label="Default" />
+  <tx-tag label="Success" color="var(--tx-color-success)" />
+  <tx-tag label="Warning" color="var(--tx-color-warning)" />
+  <tx-tag label="Danger" color="var(--tx-color-danger)" />
+</div>
+::
 
 ## API (Lite)
-<TuffPropsTable :rows="[
-  { name: 'label', type: 'string', default: '-', description: 'Label text' },
-  { name: 'color', type: 'string', default: '-', description: 'Background color' },
-  { name: 'size', type: \"'sm' | 'md'\", default: 'md', description: 'Size' },
-]" />
+::TuffPropsTable
+---
+rows:
+  - name: label
+    type: 'string'
+    default: '-'
+    description: 'Label text'
+  - name: color
+    type: 'string'
+    default: '-'
+    description: 'Background color'
+  - name: size
+    type: "'sm' | 'md'"
+    default: 'md'
+    description: 'Size'
+---
+::
+
+## Composite Patterns
+::TuffDemo{title="Tag + Button" description="Tags paired with actions." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTag label="Beta" />
+    <TxButton size="sm">Upgrade</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-tag label="Beta" />
+  <tx-button size="sm">Upgrade</tx-button>
+</div>
+::

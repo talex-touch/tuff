@@ -12,24 +12,57 @@ tags: [skeleton, loading, placeholder]
 > Structural placeholders to reduce layout shift.  
 > **Status**: Beta
 
+**Since**: {{ $doc.since }}
+
 ## Demo
-<TuffDemo
-  title="Skeleton"
-  description="Text and avatar placeholders"
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TxSkeleton :loading=\\"true\\" :lines=\\"3\\" /&gt;", "  &lt;TxSkeleton variant=\\"circle\\" :width=\\"40\\" :height=\\"40\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TxSkeleton :loading="true" :lines="3" />
-      <TxSkeleton variant="circle" :width="40" :height="40" />
-    </div>
+::TuffDemo{title="Skeleton" description="Text and avatar placeholders" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSkeleton :loading="true" :lines="3" />
+    <TxSkeleton variant="circle" :width="40" :height="40" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-skeleton :loading="true" :lines="3" />
+  <tx-skeleton variant="circle" :width="40" :height="40" />
+</div>
+::
 
 ## API (Lite)
-<TuffPropsTable :rows="[
-  { name: 'loading', type: 'boolean', default: 'true', description: 'Show skeleton' },
-  { name: 'lines', type: 'number', default: '3', description: 'Text lines' },
-  { name: 'variant', type: \"'line' | 'circle'\", default: 'line', description: 'Shape' },
-]" />
+::TuffPropsTable
+---
+rows:
+  - name: loading
+    type: 'boolean'
+    default: 'true'
+    description: 'Show skeleton'
+  - name: lines
+    type: 'number'
+    default: '3'
+    description: 'Text lines'
+  - name: variant
+    type: "'line' | 'circle'"
+    default: 'line'
+    description: 'Shape'
+---
+::
+
+## Composite Patterns
+::TuffDemo{title="Card Placeholder" description="Skeletons inside cards for feeds." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxSkeleton :loading="true" :lines="2" />
+    </TxCard>
+  </template>
+---
+#preview
+<div class="tuff-demo-row" style="width: 100%;">
+  <tx-card style="width: 100%;">
+    <tx-skeleton :loading="true" :lines="2" />
+  </tx-card>
+</div>
+::

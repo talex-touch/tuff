@@ -12,41 +12,83 @@ tags: [input, field, search]
 > Lighter inputs, restrained borders, and focused readability.  
 > **Status**: Beta
 
+**Since**: {{ $doc.since }}
+
 ## Basic Usage
-```vue
-<template>
-  <TuffInput v-model="value" placeholder="Type here..." />
-  <TxSearchInput v-model="keyword" placeholder="Search..." />
-</template>
-```
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="value" placeholder="Type here..." />
+    <TxSearchInput v-model="keyword" placeholder="Search..." />
+  </template>
+---
+::
 
 ## Demo
-<TuffDemo
-  title="Focus State"
-  description="Lighter focus that stays readable."
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TuffInput model-value=\\"\\" placeholder=\\"Type here...\\" /&gt;", "  &lt;TxSearchInput model-value=\\"\\" placeholder=\\"Search...\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TuffInput model-value="" placeholder="Type here..." />
-      <TxSearchInput model-value="" placeholder="Search..." />
-    </div>
+::TuffDemo{title="Focus State" description="Lighter focus that stays readable." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput model-value="" placeholder="Type here..." />
+    <TxSearchInput model-value="" placeholder="Search..." />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input model-value="" placeholder="Type here..." />
+  <tx-search-input model-value="" placeholder="Search..." />
+</div>
+::
 
 ## States
-- `disabled`: disabled state  
-- `error`: error state  
-- `loading`: loading state
+::TuffPropsTable
+---
+rows:
+  - name: disabled
+    description: 'Disabled state'
+  - name: error
+    description: 'Error state'
+  - name: loading
+    description: 'Loading state'
+---
+::
 
 ## API (Lite)
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `modelValue` | `string` | `''` | Input value |
-| `placeholder` | `string` | `''` | Placeholder |
-| `disabled` | `boolean` | `false` | Disabled state |
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: 'string'
+    default: "''"
+    description: 'Input value'
+  - name: placeholder
+    type: 'string'
+    default: "''"
+    description: 'Placeholder'
+  - name: disabled
+    type: 'boolean'
+    default: 'false'
+    description: 'Disabled state'
+---
+::
 
 ## Design Notes
 - Use subtle border/shadow shifts to express focus.  
 - Search states should feel lighter for toolbars and lists.
+
+## Composite Patterns
+::TuffDemo{title="Search Row" description="Input paired with action button." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput placeholder="Search..." />
+    <TxButton size="sm">Go</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input placeholder="Search..." />
+  <tx-button size="sm">Go</tx-button>
+</div>
+::

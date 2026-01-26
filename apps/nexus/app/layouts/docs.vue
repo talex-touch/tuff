@@ -47,9 +47,12 @@ const outlineVisible = ref(false)
               <slot />
             </div>
           </main>
-          <aside class="hidden w-[200px] shrink-0 lg:block">
-            <div class="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto p-5">
-              <DocsOutline />
+          <aside class="hidden w-[240px] shrink-0 lg:block">
+            <div class="sticky top-24 flex flex-col gap-6">
+              <div class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2">
+                <DocsOutline />
+              </div>
+              <DocsAsideCards />
             </div>
           </aside>
         </div>
@@ -96,6 +99,23 @@ const outlineVisible = ref(false)
   background: rgba(0, 0, 0, 0.1);
 }
 :root.dark .docs-sidebar:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.docs-outline-panel::-webkit-scrollbar {
+  width: 4px;
+}
+.docs-outline-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.docs-outline-panel::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+}
+.docs-outline-panel:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+:root.dark .docs-outline-panel:hover::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
 }
 </style>

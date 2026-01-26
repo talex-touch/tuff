@@ -12,29 +12,36 @@ tags: [icon, glyph, visual]
 > A unified icon system with consistent density and alignment.  
 > **Status**: Beta
 
+**Since**: {{ $doc.since }}
+
 ## Basic Usage
-```vue
-<template>
-  <TuffIcon name="i-ri-home-line" />
-  <TuffIcon name="chevron-down" />
-</template>
-```
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TuffIcon name="i-ri-home-line" />
+    <TuffIcon name="chevron-down" />
+  </template>
+---
+::
 
 ## Demo
-<TuffDemo
-  title="Icon Density"
-  description="Keep icon rhythm and spacing consistent."
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TuffIcon name=\\\"i-ri-home-line\\\" /&gt;", "  &lt;TuffIcon name=\\\"i-ri-search-line\\\" /&gt;", "  &lt;TuffIcon name=\\\"i-ri-settings-3-line\\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TuffIcon name="i-ri-home-line" />
-      <TuffIcon name="i-ri-search-line" />
-      <TuffIcon name="i-ri-settings-3-line" />
-    </div>
+::TuffDemo{title="Icon Density" description="Keep icon rhythm and spacing consistent." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffIcon name="i-ri-home-line" />
+    <TuffIcon name="i-ri-search-line" />
+    <TuffIcon name="i-ri-settings-3-line" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-icon name="i-ri-home-line" />
+  <tuff-icon name="i-ri-search-line" />
+  <tuff-icon name="i-ri-settings-3-line" />
+</div>
+::
 
 ## Types & Sources
 - `class`: icon class name (recommended).
@@ -43,12 +50,40 @@ tags: [icon, glyph, visual]
 - `builtin`: built-in common icons.
 
 ## API (Lite)
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `name` | `string` | `-` | Icon name or class |
-| `size` | `number` | `16` | Icon size |
-| `colorful` | `boolean` | `false` | Keep original colors |
+::TuffPropsTable
+---
+rows:
+  - name: name
+    type: 'string'
+    default: '-'
+    description: 'Icon name or class'
+  - name: size
+    type: 'number'
+    default: '16'
+    description: 'Icon size'
+  - name: colorful
+    type: 'boolean'
+    default: 'false'
+    description: 'Keep original colors'
+---
+::
 
 ## Design Notes
 - Use 16/18/20 sizes when aligning with text.  
 - Prefer line icons in dense lists to reduce visual noise.
+
+## Composite Patterns
+::TuffDemo{title="Icon Button" description="Icons paired with buttons for quick actions." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton icon="i-ri-add-line">Create</TxButton>
+    <TxButton variant="ghost" icon="i-ri-more-2-line">More</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button icon="i-ri-add-line">Create</tx-button>
+  <tx-button variant="ghost" icon="i-ri-more-2-line">More</tx-button>
+</div>
+::

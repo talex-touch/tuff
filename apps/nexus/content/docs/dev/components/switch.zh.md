@@ -12,41 +12,84 @@ tags: [switch, toggle, state]
 > 轻触反馈 + 明确状态色，适合密集设置页。  
 > **状态**：Beta
 
+**Since**: {{ $doc.since }}
+
 ## 基础用法
-```vue
-<template>
-  <TuffSwitch v-model="enabled" />
-  <TuffSwitch v-model="enabled" size="small" />
-</template>
-```
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TuffSwitch v-model="enabled" />
+    <TuffSwitch v-model="enabled" size="small" />
+  </template>
+---
+::
 
 ## Demo
-<TuffDemo
-  title="Toggle State"
-  description="移动与颜色同步变化。"
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TuffSwitch :model-value=\\"false\\" /&gt;", "  &lt;TuffSwitch :model-value=\\"true\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TuffSwitch :model-value="false" />
-      <TuffSwitch :model-value="true" />
-    </div>
+::TuffDemo{title="Toggle State" description="移动与颜色同步变化。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffSwitch :model-value="false" />
+    <TuffSwitch :model-value="true" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-switch :model-value="false" />
+  <tuff-switch :model-value="true" />
+</div>
+::
 
 ## 状态
-- `disabled`：禁用态  
-- `loading`：加载态  
-- `size`：`small` / `medium` / `large`
+::TuffPropsTable
+---
+rows:
+  - name: disabled
+    description: '禁用态'
+  - name: loading
+    description: '加载态'
+  - name: size
+    values: ['small', 'medium', 'large']
+    description: '尺寸规格'
+---
+::
 
 ## API（简版）
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `modelValue` | `boolean` | `false` | 开关值 |
-| `size` | `'small' | 'medium' | 'large'` | `'medium'` | 尺寸 |
-| `disabled` | `boolean` | `false` | 禁用状态 |
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: 'boolean'
+    default: 'false'
+    description: '开关值'
+  - name: size
+    type: "'small' | 'medium' | 'large'"
+    default: "'medium'"
+    description: '尺寸'
+  - name: disabled
+    type: 'boolean'
+    default: 'false'
+    description: '禁用状态'
+---
+::
 
 ## Design Notes
 - 开关位移与颜色变化必须同步。  
 - 小尺寸用于列表，大尺寸用于设置页。
+
+## 组合示例
+::TuffDemo{title="设置项" description="开关搭配标签用于设置列表。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTag>通知</TxTag>
+    <TuffSwitch :model-value="true" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-tag>通知</tx-tag>
+  <tuff-switch :model-value="true" />
+</div>
+::

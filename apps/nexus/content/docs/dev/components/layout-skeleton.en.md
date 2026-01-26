@@ -12,36 +12,67 @@ tags: [skeleton, layout, loading]
 > Layout-level placeholder for page or panel loading.  
 > **Status**: Beta
 
+**Since**: {{ $doc.since }}
+
 ## Demo
-<TuffDemo
-  title="Layout Placeholder"
-  description="The wrapper controls the size."
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;div style=\\\"height: 240px;\\\"&gt;", "    &lt;TxLayoutSkeleton /&gt;", "  &lt;/div&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row" style="width: 100%;">
-      <div style="width: 100%; height: 240px;">
-        <TxLayoutSkeleton />
-      </div>
+::TuffDemo{title="Layout Placeholder" description="The wrapper controls the size." code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="height: 240px;">
+      <TxLayoutSkeleton />
     </div>
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row" style="width: 100%;">
+  <div style="width: 100%; height: 240px;">
+    <tx-layout-skeleton />
+  </div>
+</div>
+::
 
 ## Basic Usage
-```vue
-<template>
-  <div style="height: 240px;">
-    <TxLayoutSkeleton />
-  </div>
-</template>
-```
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <div style="height: 240px;">
+      <TxLayoutSkeleton />
+    </div>
+  </template>
+---
+::
 
 ## Usage Notes
 - The wrapper controls size and layout ratio.
 - Ideal for page-level loading with consistent rhythm.
 
 ## API (Brief)
-<TuffPropsTable :rows="[
-  { name: '—', type: '-', default: '-', description: 'No extra props; size follows the container' },
-]" />
+::TuffPropsTable
+---
+rows:
+  - name: '—'
+    type: '-'
+    default: '-'
+    description: 'No extra props; size follows the container'
+---
+::
+
+## Composite Patterns
+::TuffDemo{title="Panel Placeholder" description="Skeleton paired with card containers." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxLayoutSkeleton />
+    </TxCard>
+  </template>
+---
+#preview
+<div class="tuff-demo-row" style="width: 100%;">
+  <tx-card style="width: 100%;">
+    <tx-layout-skeleton />
+  </tx-card>
+</div>
+::
