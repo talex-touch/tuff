@@ -1041,8 +1041,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
   },
   docsSidebar: {
     error: 'Navigation failed to load. Please try again.',
-    extensions: 'Extensions',
-    components: 'Components',
+    extensions: 'Ext',
+    components: 'UI',
     categories: {
       basic: 'Basic',
       form: 'Form',

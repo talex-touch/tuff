@@ -12,26 +12,59 @@ tags: [badge, status, signal]
 > 用于状态指示与系统反馈的轻量徽标。  
 > **状态**：Beta
 
+**Since**: {{ $doc.since }}
+
 ## Demo
-<TuffDemo
-  title="Status Signals"
-  description="成功/警告/错误/信息"
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TxStatusBadge text=\\\"成功\\\" status=\\\"success\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"警告\\\" status=\\\"warning\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"错误\\\" status=\\\"danger\\\" /&gt;", "  &lt;TxStatusBadge text=\\\"信息\\\" status=\\\"info\\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TxStatusBadge text="成功" status="success" />
-      <TxStatusBadge text="警告" status="warning" />
-      <TxStatusBadge text="错误" status="danger" />
-      <TxStatusBadge text="信息" status="info" />
-    </div>
+::TuffDemo{title="Status Signals" description="成功/警告/错误/信息" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStatusBadge text="成功" status="success" />
+    <TxStatusBadge text="警告" status="warning" />
+    <TxStatusBadge text="错误" status="danger" />
+    <TxStatusBadge text="信息" status="info" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-status-badge text="成功" status="success" />
+  <tx-status-badge text="警告" status="warning" />
+  <tx-status-badge text="错误" status="danger" />
+  <tx-status-badge text="信息" status="info" />
+</div>
+::
 
 ## API（简版）
-<TuffPropsTable :rows="[
-  { name: 'text', type: 'string', default: '-', description: '显示文字' },
-  { name: 'status', type: \"'success' | 'warning' | 'danger' | 'info' | 'muted'\", default: 'info', description: '状态类型' },
-  { name: 'size', type: \"'sm' | 'md'\", default: 'md', description: '尺寸' },
-]" />
+::TuffPropsTable
+---
+rows:
+  - name: text
+    type: 'string'
+    default: '-'
+    description: '显示文字'
+  - name: status
+    type: "'success' | 'warning' | 'danger' | 'info' | 'muted'"
+    default: 'info'
+    description: '状态类型'
+  - name: size
+    type: "'sm' | 'md'"
+    default: 'md'
+    description: '尺寸'
+---
+::
+
+## 组合示例
+::TuffDemo{title="状态行" description="徽标搭配头像进行状态展示。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAvatar name="TA" />
+    <TxStatusBadge text="在线" status="success" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-avatar name="TA" />
+  <tx-status-badge text="在线" status="success" />
+</div>
+::

@@ -12,33 +12,68 @@ tags: [progress, status, loading]
 > Linear progress shows stages and rhythm of work.  
 > **Status**: Beta
 
+**Since**: {{ $doc.since }}
+
 ## Demo
-<TuffDemo
-  title="Progress States"
-  description="Base progress with status colors"
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TuffProgress :percentage=\\\"40\\\" /&gt;", "  &lt;TuffProgress :percentage=\\\"72\\\" status=\\\"warning\\\" /&gt;", "  &lt;TuffProgress :percentage=\\\"100\\\" status=\\\"success\\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TuffProgress :percentage="40" />
-      <TuffProgress :percentage="72" status="warning" />
-      <TuffProgress :percentage="100" status="success" />
-    </div>
+::TuffDemo{title="Progress States" description="Base progress with status colors" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffProgress :percentage="40" />
+    <TuffProgress :percentage="72" status="warning" />
+    <TuffProgress :percentage="100" status="success" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-progress :percentage="40" />
+  <tuff-progress :percentage="72" status="warning" />
+  <tuff-progress :percentage="100" status="success" />
+</div>
+::
 
 ## Basic Usage
-```vue
-<template>
-  <TuffProgress :percentage="60" />
-  <TuffProgress :percentage="60" :show-text="false" />
-</template>
-```
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TuffProgress :percentage="60" />
+    <TuffProgress :percentage="60" :show-text="false" />
+  </template>
+---
+::
 
 ## API (Lite)
-<TuffPropsTable :rows="[
-  { name: 'percentage', type: 'number', default: '0', description: 'Progress percentage' },
-  { name: 'status', type: \"'success' | 'warning' | 'error'\", default: '-', description: 'Status color' },
-  { name: 'indeterminate', type: 'boolean', default: 'false', description: 'Indeterminate mode' },
-]" />
+::TuffPropsTable
+---
+rows:
+  - name: percentage
+    type: 'number'
+    default: '0'
+    description: 'Progress percentage'
+  - name: status
+    type: "'success' | 'warning' | 'error'"
+    default: '-'
+    description: 'Status color'
+  - name: indeterminate
+    type: 'boolean'
+    default: 'false'
+    description: 'Indeterminate mode'
+---
+::
+
+## Composite Patterns
+::TuffDemo{title="Progress Row" description="Progress paired with status label." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffProgress :percentage="60" />
+    <TxStatusBadge text="Running" status="warning" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-progress :percentage="60" />
+  <tx-status-badge text="Running" status="warning" />
+</div>
+::

@@ -59,7 +59,7 @@ function updateMarker() {
   }
 
   hasActive.value = true
-  markerHeight.value = 16
+  markerHeight.value = 18
   const navRect = navRef.value.getBoundingClientRect()
   const linkRect = activeLink.getBoundingClientRect()
   markerTop.value = linkRect.top - navRect.top + (activeLink.offsetHeight - markerHeight.value) / 2
@@ -206,8 +206,8 @@ watch(
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 text-sm">
-    <div class="text-[11px] font-semibold tracking-wider text-black/35 uppercase dark:text-white/35">
+  <div class="docs-outline flex flex-col text-sm">
+    <div class="docs-outline__label">
       {{ t('docs.outlineLabel') }}
     </div>
 
@@ -234,12 +234,12 @@ watch(
         <NuxtLink
           :to="`#${entry.id}`"
           replace
-          class="group relative flex items-center py-1.5 text-[13px] leading-snug no-underline transition-all duration-150"
+          class="outline-link group relative flex items-center py-2 text-[14px] leading-snug no-underline transition-all duration-150"
           :style="{ paddingLeft: `${8 + entry.indent * 12}px` }"
           :class="[
             activeHash === entry.id
-              ? 'text-black font-medium dark:text-white'
-              : 'text-black/40 hover:text-black/70 dark:text-white/40 dark:hover:text-white/70',
+              ? 'text-primary font-semibold'
+              : 'text-black/45 hover:text-black/75 dark:text-white/45 dark:hover:text-white/75',
           ]"
           :data-id="entry.id"
           @click.prevent="scrollToHeading(entry.id)"
@@ -253,3 +253,34 @@ watch(
     </div>
   </div>
 </template>
+
+<style scoped>
+.docs-outline {
+  gap: 14px;
+}
+
+.docs-outline__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.35);
+}
+
+.outline-nav {
+  padding-left: 6px;
+}
+
+.outline-item + .outline-item {
+  margin-top: 2px;
+}
+
+.outline-item-nested .outline-link {
+  font-size: 13px;
+}
+
+:global(.dark .docs-outline__label),
+:global([data-theme='dark'] .docs-outline__label) {
+  color: rgba(226, 232, 240, 0.35);
+}
+</style>

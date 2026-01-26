@@ -12,24 +12,57 @@ tags: [skeleton, loading, placeholder]
 > 加载中结构提示，避免内容跳动。  
 > **状态**：Beta
 
+**Since**: {{ $doc.since }}
+
 ## Demo
-<TuffDemo
-  title="Skeleton"
-  description="文本与头像混合占位"
-  code-lang="vue"
-  :code-lines='["&lt;template&gt;", "  &lt;TxSkeleton :loading=\\"true\\" :lines=\\"3\\" /&gt;", "  &lt;TxSkeleton variant=\\"circle\\" :width=\\"40\\" :height=\\"40\\" /&gt;", "&lt;/template&gt;"]'
->
-  <template #preview>
-    <div class="tuff-demo-row">
-      <TxSkeleton :loading="true" :lines="3" />
-      <TxSkeleton variant="circle" :width="40" :height="40" />
-    </div>
+::TuffDemo{title="Skeleton" description="文本与头像混合占位" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSkeleton :loading="true" :lines="3" />
+    <TxSkeleton variant="circle" :width="40" :height="40" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-skeleton :loading="true" :lines="3" />
+  <tx-skeleton variant="circle" :width="40" :height="40" />
+</div>
+::
 
 ## API（简版）
-<TuffPropsTable :rows="[
-  { name: 'loading', type: 'boolean', default: 'true', description: '是否显示骨架' },
-  { name: 'lines', type: 'number', default: '3', description: '文本行数' },
-  { name: 'variant', type: \"'line' | 'circle'\", default: 'line', description: '形状' },
-]" />
+::TuffPropsTable
+---
+rows:
+  - name: loading
+    type: 'boolean'
+    default: 'true'
+    description: '是否显示骨架'
+  - name: lines
+    type: 'number'
+    default: '3'
+    description: '文本行数'
+  - name: variant
+    type: "'line' | 'circle'"
+    default: 'line'
+    description: '形状'
+---
+::
+
+## 组合示例
+::TuffDemo{title="卡片占位" description="骨架屏配合卡片承载列表。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCard>
+      <TxSkeleton :loading="true" :lines="2" />
+    </TxCard>
+  </template>
+---
+#preview
+<div class="tuff-demo-row" style="width: 100%;">
+  <tx-card style="width: 100%;">
+    <tx-skeleton :loading="true" :lines="2" />
+  </tx-card>
+</div>
+::

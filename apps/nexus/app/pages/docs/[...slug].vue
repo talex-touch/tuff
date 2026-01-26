@@ -50,7 +50,7 @@ const docPath = computed(() => {
   const rawPath = route.path.endsWith('/') && route.path.length > 1
     ? route.path.slice(0, -1)
     : route.path
-  const normalized = stripLocalePrefix(rawPath)
+  const normalized = stripLocalePrefix(rawPath).replace(/\.(en|zh)$/, '')
   return normalized || '/docs'
 })
 
@@ -96,6 +96,8 @@ const { data: doc, status } = await useAsyncData(
   { watch: [docPath, locale] },
 )
 
+const docMeta = computed(() => (doc.value ?? {}) as Record<string, any>)
+
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 
 watch(requestKey, () => {
@@ -127,6 +129,75 @@ const { data: navigationTree } = await useAsyncData(
 const outlineState = useState<any[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
 const docLocaleState = useState<string>('docs-locale', () => locale.value)
+function extractDocText(value: any): string {
+  if (!value)
+    return ''
+  if (typeof value === 'string')
+    return value
+  if (Array.isArray(value))
+    return value.map(extractDocText).join(' ')
+  if (typeof value === 'object') {
+    if (typeof value.value === 'string')
+      return value.value
+    if (typeof value.text === 'string')
+      return value.text
+    if (Array.isArray(value.children))
+      return value.children.map(extractDocText).join(' ')
+  }
+  return ''
+}
+
+const heroBreadcrumbs = computed(() => {
+  const path = doc.value?.path ?? docPath.value
+  const isComponentDoc = typeof path === 'string' && path.includes('/docs/dev/components')
+  const prefix = isComponentDoc
+    ? (locale.value === 'zh' ? '组件' : 'Components')
+    : (locale.value === 'zh' ? '文档' : 'Docs')
+  const title = doc.value?.title ? String(doc.value.title) : ''
+  const category = docMeta.value.category ? String(docMeta.value.category) : ''
+  if (title)
+    return [prefix, title]
+  if (category)
+    return [prefix, category]
+  return [prefix]
+})
+const heroSinceLabel = computed(() => {
+  const since = docMeta.value.since ? String(docMeta.value.since).trim() : ''
+  if (!since)
+    return ''
+  const normalized = /^v/i.test(since) ? since : `v${since}`
+  return locale.value === 'zh' ? `自 ${normalized}` : `Since ${normalized}`
+})
+const heroStatusLabel = computed(() => {
+  const status = docMeta.value.status ? String(docMeta.value.status).trim() : ''
+  if (!status)
+    return ''
+  return status.charAt(0).toUpperCase() + status.slice(1)
+})
+const heroReadTimeLabel = computed(() => {
+  const text = extractDocText(doc.value?.body).replace(/\s+/g, ' ').trim()
+  if (!text)
+    return ''
+  if (locale.value === 'zh') {
+    const charCount = text.replace(/\s/g, '').length
+    const minutes = Math.max(1, Math.round(charCount / 350))
+    return `${minutes} 分钟阅读`
+  }
+  const words = text.split(/\s+/).length
+  const minutes = Math.max(1, Math.round(words / 200))
+  return `${minutes} min read`
+})
+const heroMetaItems = computed(() => {
+  const items: Array<{ key: string; label: string; variant?: string }> = []
+  if (heroSinceLabel.value)
+    items.push({ key: 'since', label: heroSinceLabel.value, variant: 'is-since' })
+  if (heroStatusLabel.value)
+    items.push({ key: 'status', label: heroStatusLabel.value, variant: 'is-status' })
+  if (heroReadTimeLabel.value)
+    items.push({ key: 'read', label: heroReadTimeLabel.value, variant: 'is-read' })
+  return items
+})
+const showDocHero = computed(() => Boolean(doc.value?.title && (docMeta.value.category || docMeta.value.status || docMeta.value.since || doc.value?.description)))
 
 function resolveDocLocale(target: any) {
   const path = typeof target?.path === 'string' ? target.path : null
@@ -382,6 +453,8 @@ function enhanceCodeBlocks() {
 
   const blocks = document.querySelectorAll<HTMLPreElement>('.docs-prose pre')
   blocks.forEach((pre) => {
+    if (pre.closest('.tuff-code-block'))
+      return
     const code = pre.querySelector<HTMLElement>('code')
     if (!code)
       return
@@ -497,10 +570,43 @@ watch(
         <div
           v-else-if="viewState === 'content'"
           class="docs-surface px-8 py-10 space-y-10"
+          :class="{ 'docs-surface--hero': showDocHero }"
         >
+          <section v-if="showDocHero" class="docs-hero">
+            <div v-if="heroBreadcrumbs.length" class="docs-hero__breadcrumb">
+              <template v-for="(crumb, index) in heroBreadcrumbs" :key="`${crumb}-${index}`">
+                <span
+                  class="docs-hero__crumb"
+                  :class="{ 'is-current': index === heroBreadcrumbs.length - 1 }"
+                >
+                  {{ crumb }}
+                </span>
+                <span v-if="index < heroBreadcrumbs.length - 1" class="docs-hero__crumb-sep">/</span>
+              </template>
+            </div>
+            <h1 class="docs-hero__title">
+              {{ doc?.title }}
+            </h1>
+            <p v-if="doc?.description" class="docs-hero__desc">
+              {{ doc?.description }}
+            </p>
+            <div v-if="heroMetaItems.length" class="docs-hero__meta">
+              <span v-for="item in heroMetaItems" :key="item.key" class="docs-hero__pill" :class="item.variant">
+                {{ item.label }}
+              </span>
+            </div>
+          </section>
           <ContentRenderer
             :value="doc ?? {}"
-            class="docs-prose markdown-body max-w-none prose prose-neutral dark:prose-invert"
+            :class="[
+              'docs-prose',
+              'markdown-body',
+              'max-w-none',
+              'prose',
+              'prose-neutral',
+              'dark:prose-invert',
+              { 'docs-prose--hero': showDocHero },
+            ]"
           />
           <div
             v-if="formattedLastUpdated || isAdmin"
@@ -612,6 +718,200 @@ watch(
   position: relative;
   border-radius: 8px;
   background: transparent;
+  isolation: isolate;
+}
+
+.docs-surface--hero::before {
+  content: '';
+  position: absolute;
+  left: -40px;
+  right: -40px;
+  top: -52px;
+  height: 300px;
+  border-radius: 36px;
+  background:
+    radial-gradient(120% 140% at 15% 0%, rgba(96, 165, 250, 0.24), transparent 62%),
+    radial-gradient(120% 140% at 85% 0%, rgba(244, 114, 182, 0.16), transparent 64%),
+    linear-gradient(120deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.6));
+  filter: blur(0);
+  opacity: 0.92;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.docs-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 36px 44px;
+  border-radius: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+.docs-hero__breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(100, 116, 139, 0.7);
+}
+
+.docs-hero__crumb {
+  color: var(--docs-muted);
+}
+
+.docs-hero__crumb.is-current {
+  color: var(--docs-ink);
+}
+
+.docs-hero__crumb-sep {
+  color: var(--docs-muted);
+  opacity: 0.6;
+}
+
+.docs-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.docs-hero__pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--docs-ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.docs-hero__pill.is-since {
+  border-color: rgba(56, 189, 248, 0.25);
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--docs-accent-strong);
+}
+
+.docs-hero__pill.is-status {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--docs-ink);
+}
+
+.docs-hero__pill.is-read {
+  border-color: rgba(14, 165, 233, 0.18);
+  background: rgba(14, 165, 233, 0.08);
+  color: var(--docs-accent);
+}
+
+::deep(.dark .docs-hero__crumb),
+::deep([data-theme='dark'] .docs-hero__crumb) {
+  color: rgba(226, 232, 240, 0.6);
+}
+
+::deep(.dark .docs-hero__crumb.is-current),
+::deep([data-theme='dark'] .docs-hero__crumb.is-current) {
+  color: rgba(248, 250, 252, 0.95);
+}
+
+::deep(.dark .docs-hero__pill),
+::deep([data-theme='dark'] .docs-hero__pill) {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(30, 41, 59, 0.55);
+  color: rgba(226, 232, 240, 0.85);
+}
+
+::deep(.dark .docs-hero__pill.is-since),
+::deep([data-theme='dark'] .docs-hero__pill.is-since) {
+  border-color: rgba(125, 211, 252, 0.35);
+  background: rgba(14, 165, 233, 0.22);
+  color: rgba(226, 232, 240, 0.95);
+}
+
+::deep(.dark .docs-hero__pill.is-read),
+::deep([data-theme='dark'] .docs-hero__pill.is-read) {
+  border-color: rgba(56, 189, 248, 0.28);
+  background: rgba(14, 165, 233, 0.16);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+:deep(.dark .docs-hero__breadcrumb),
+:deep([data-theme='dark'] .docs-hero__breadcrumb) {
+  color: rgba(226, 232, 240, 0.5);
+}
+
+.docs-hero__title {
+  margin: 0;
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: var(--docs-ink);
+}
+
+.docs-hero__desc {
+  margin: 0;
+  max-width: 640px;
+  font-size: 1.1rem;
+  color: rgba(71, 85, 105, 0.85);
+}
+
+:deep(.dark .docs-hero__desc),
+:deep([data-theme='dark'] .docs-hero__desc) {
+  color: rgba(226, 232, 240, 0.75);
+}
+
+:deep(.docs-prose--hero > h1:first-of-type),
+:deep(.docs-prose--hero > h1:first-of-type + blockquote),
+:deep(.docs-prose--hero > h1:first-of-type + blockquote + p) {
+  display: none;
+}
+
+:deep(.dark .docs-surface--hero)::before,
+:deep([data-theme='dark'] .docs-surface--hero)::before {
+  background:
+    radial-gradient(120% 140% at 15% 0%, rgba(14, 116, 144, 0.4), transparent 62%),
+    radial-gradient(120% 140% at 85% 0%, rgba(59, 130, 246, 0.3), transparent 64%),
+    linear-gradient(120deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.65));
+  opacity: 0.82;
+}
+
+:deep(.dark .docs-hero),
+:deep([data-theme='dark'] .docs-hero) {
+  border-color: rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+}
+
+:deep(.dark .docs-hero__badge),
+:deep([data-theme='dark'] .docs-hero__badge) {
+  border-color: rgba(125, 211, 252, 0.3);
+  background: rgba(56, 189, 248, 0.16);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+@media (max-width: 768px) {
+  .docs-hero {
+    padding: 24px;
+  }
+
+  .docs-hero__title {
+    font-size: 2.2rem;
+  }
+
+  .docs-hero__desc {
+    font-size: 0.95rem;
+  }
 }
 
 :deep(.docs-prose) {
@@ -727,7 +1027,7 @@ watch(
   color: var(--docs-ink);
 }
 
-:deep(.docs-prose pre) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre)) {
   position: relative;
   margin: 1.2rem 0;
   padding: 2.2rem 1rem 1rem;
@@ -737,7 +1037,7 @@ watch(
   overflow-x: auto;
 }
 
-:deep(.docs-prose pre code) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre) code) {
   background-color: transparent !important;
   padding: 0;
   border-radius: 0;
@@ -747,7 +1047,7 @@ watch(
   line-height: 1.6;
 }
 
-:deep(.docs-prose pre .docs-code-header) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-header) {
   position: absolute;
   top: 0;
   left: 0;
@@ -764,24 +1064,24 @@ watch(
   background: rgba(15, 23, 42, 0.03);
 }
 
-:deep(.dark .docs-prose pre .docs-code-header),
-:deep([data-theme='dark'] .docs-prose pre .docs-code-header) {
+:deep(.dark .docs-prose pre:not(.tuff-code-block__pre) .docs-code-header),
+:deep([data-theme='dark'] .docs-prose pre:not(.tuff-code-block__pre) .docs-code-header) {
   color: rgba(226, 232, 240, 0.88);
   background: rgba(15, 23, 42, 0.55);
   border-bottom-color: rgba(148, 163, 184, 0.24);
 }
 
-:deep(.docs-prose pre .docs-code-language) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-language) {
   font-weight: 600;
   color: inherit;
 }
 
-:deep(.docs-prose pre .docs-code-copy) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy) {
   font-size: 0.7rem;
   letter-spacing: 0.05em;
 }
 
-:deep(.docs-prose pre .docs-code-copy:disabled) {
+:deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy:disabled) {
   opacity: 0.5;
   cursor: default;
 }
