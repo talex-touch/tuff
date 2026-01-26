@@ -137,7 +137,27 @@ async function getLocalizedDisplayName(appPath: string): Promise<string | null> 
 
       const stringsPath = path.join(resourcesPath, lproj, 'InfoPlist.strings')
       try {
-        const content = await fs.readFile(stringsPath, 'utf-8')
+        // Read file as buffer to detect encoding
+        const buffer = await fs.readFile(stringsPath)
+        let content: string
+
+        // Detect encoding by BOM (Byte Order Mark)
+        if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
+          // UTF-16 LE with BOM
+          content = buffer.toString('utf16le')
+        } else if (buffer.length >= 2 && buffer[0] === 0xFE && buffer[1] === 0xFF) {
+          // UTF-16 BE with BOM - use iconv-lite for proper decoding
+          try {
+            const iconv = await import('iconv-lite')
+            content = iconv.decode(buffer, 'utf16be')
+          } catch {
+            // Fallback to utf16le if iconv-lite is not available
+            content = buffer.toString('utf16le')
+          }
+        } else {
+          // No BOM, try UTF-8 first
+          content = buffer.toString('utf-8')
+        }
 
         // Parse strings file format: "CFBundleDisplayName" = "微信";
         // or CFBundleName
@@ -193,11 +213,24 @@ async function getAppInfoUnstable(appPath: string): Promise<{
   const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
   const fileName = path.basename(appPath, '.app')
 
-  // Try to get localized display name (e.g., "微信" for WeChat)
+  // Try to get display name from Spotlight metadata (most reliable for localized names)
+  let spotlightName: string | null = null
+  try {
+    const { stdout } = await execAsync(`mdls -name kMDItemDisplayName -raw "${appPath}"`)
+    const rawName = stdout.trim()
+    if (rawName && rawName !== '(null)') {
+      spotlightName = rawName.endsWith('.app') ? rawName.slice(0, -4) : rawName
+    }
+  } catch {
+    // Spotlight query failed, will fallback to other methods
+  }
+
+  // Try to get localized display name from .lproj files (e.g., "微信" for WeChat)
   const localizedName = await getLocalizedDisplayName(appPath)
 
-  // Priority: localized name > plist display name > bundle name
-  const displayName = localizedName || plistDisplayName || bundleName
+  // Priority: Spotlight name > localized name > plist display name > bundle name
+  // Spotlight is most reliable as it's maintained by macOS and handles localization automatically
+  const displayName = spotlightName || localizedName || plistDisplayName || bundleName
 
   // `name` is always the file name
   const name = fileName
@@ -209,7 +242,7 @@ async function getAppInfoUnstable(appPath: string): Promise<{
 
   return {
     name,
-    displayName: displayName || undefined,
+    displayName: displayName && displayName.trim() ? displayName.trim() : undefined,
     fileName,
     path: appPath,
     icon: icon ? `data:image/png;base64,${icon}` : '',
