@@ -68,11 +68,11 @@ function handleAsk() {
 }
 
 .docs-aside-card {
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 14px 14px 12px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  box-shadow: none;
 }
 
 .docs-aside-card__title {
@@ -156,13 +156,6 @@ function handleAsk() {
 
 .docs-aside-card__link:hover {
   color: rgba(15, 23, 42, 0.95);
-}
-
-:global(.dark .docs-aside-card),
-:global([data-theme='dark'] .docs-aside-card) {
-  background: rgba(15, 23, 42, 0.82);
-  border-color: rgba(148, 163, 184, 0.2);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
 
 :global(.dark .docs-aside-card__title),
