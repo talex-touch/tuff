@@ -251,6 +251,11 @@ export function useSearch(
     pendingSearchEndById.clear()
     pendingSearchUpdatesById.clear()
     window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
+    
+    // Trigger collapse if no input and no results
+    if (!searchVal.value || searchVal.value.trim() === '') {
+      transport.send(CoreBoxEvents.ui.expand, { mode: 'collapse' }).catch(() => {})
+    }
   }
 
   const broadcastDivisionBoxInput = (query: TuffQuery): void => {
@@ -357,7 +362,11 @@ export function useSearch(
       const RECOMMENDATION_TIMEOUT_MS = 400
       recommendationTimeoutId = setTimeout(() => {
         if (recommendationPending.value && searchResults.value.length === 0) {
+          recommendationPending.value = false
+          loading.value = false
           resetSearchState()
+          // Explicitly trigger collapse when recommendation times out
+          transport.send(CoreBoxEvents.ui.expand, { mode: 'collapse' }).catch(() => {})
         }
         recommendationTimeoutId = null
       }, RECOMMENDATION_TIMEOUT_MS)

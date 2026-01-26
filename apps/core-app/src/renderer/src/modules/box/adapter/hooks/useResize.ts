@@ -73,7 +73,13 @@ export function useResize(options: UseResizeOptions): void {
       ? (recommendationPending?.value ?? false)
       : false
 
-    const height = calculateDesiredHeight(resultCount)
+    // When no results and not waiting for data, force minimum height
+    let height: number
+    if (resultCount === 0 && !isLoading && !isRecommendationPending) {
+      height = MIN_HEIGHT
+    } else {
+      height = calculateDesiredHeight(resultCount)
+    }
 
     const payload: CoreBoxLayoutUpdateRequest = {
       height,

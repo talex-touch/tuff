@@ -190,6 +190,7 @@ export class CoreBoxModule extends BaseModule {
     const loading = payload.loading === true
     const recommendationPending = payload.recommendationPending === true
 
+    // Strict collapse condition: no results, not loading, not waiting for recommendation
     const shouldCollapse = resultCount === 0 && !loading && !recommendationPending
     if (shouldCollapse) {
       coreBoxManager.shrink()
@@ -198,7 +199,13 @@ export class CoreBoxModule extends BaseModule {
 
     // When waiting for data (loading/recommendation), keep current window size stable.
     // This avoids collapse-then-expand jitter while results are still pending.
+    // However, if already collapsed, stay collapsed.
     if (resultCount === 0 && (loading || recommendationPending)) {
+      if (coreBoxManager.isCollapsed) {
+        // Already collapsed, keep it collapsed
+        return
+      }
+      // Not collapsed yet, keep current size to avoid jitter
       return
     }
 
