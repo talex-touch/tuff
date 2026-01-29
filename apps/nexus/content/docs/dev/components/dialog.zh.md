@@ -12,7 +12,6 @@ tags: [dialog, modal, confirm]
 > 用于关键确认与安全关闭，强调焦点控制与信息层级。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}

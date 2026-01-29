@@ -12,7 +12,6 @@ tags: [skeleton, loading, placeholder]
 > Structural placeholders to reduce layout shift.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Skeleton" description="Text and avatar placeholders" code-lang="vue"}

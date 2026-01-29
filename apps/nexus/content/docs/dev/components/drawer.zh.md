@@ -12,7 +12,6 @@ tags: [drawer, panel, overlay]
 > 用于侧滑承载表单与复杂内容。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Side Drawer" description="右侧抽屉用于表单与设置面板" code-lang="vue"}

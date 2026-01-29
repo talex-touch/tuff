@@ -12,7 +12,6 @@ tags: [skeleton, layout, loading]
 > 用于页面/面板级别的布局占位。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Layout Placeholder" description="容器决定骨架尺寸。" code-lang="vue"}

@@ -12,7 +12,6 @@ tags: [input, field, search]
 > 更轻的输入框，更克制的边界，强调可读性与聚焦态。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}

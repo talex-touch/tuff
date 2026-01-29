@@ -12,7 +12,6 @@ tags: [avatar, identity, profile]
 > The smallest identity unit needs a stable size system and clear hierarchy.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Size System" description="Small for lists, large for profiles." code-lang="vue"}

@@ -1,0 +1,90 @@
+---
+title: "Popover 弹出层"
+description: "基于 Floating UI 的点击弹出层。"
+---
+# Popover 弹出层
+
+基于 Floating UI 的点击弹出层。
+
+Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` 控制面板的边框、背景与阴影。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+import PopoverVisualEffectsDemo from '~/components/content/demos/PopoverVisualEffectsDemo.vue'
+import PopoverVisualEffectsDemoSource from '~/components/content/demos/PopoverVisualEffectsDemo.vue?raw'
+const open = ref(false)
+</script>
+
+## 基础用法
+
+<DemoBlock title="Popover">
+<template #preview>
+<TxPopover v-model="open">
+  <template #reference>
+    <TxButton>Click</TxButton>
+  </template>
+
+  <div style="width: 240px;">
+    <div style="font-weight: 600; margin-bottom: 6px;">Title</div>
+    <div style="color: var(--tx-text-color-secondary); font-size: 12px;">Windows-like floating panel.</div>
+  </div>
+</TxPopover>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxPopover v-model="open">
+    <template #reference>
+      <TxButton>Click</TxButton>
+    </template>
+
+    Popover content
+  </TxPopover>
+</template>
+```
+</template>
+</DemoBlock>
+
+## 视觉效果（split / fusion / mask）
+
+<DemoBlock title="Popover (visual effects)" :code="PopoverVisualEffectsDemoSource">
+<template #preview>
+<PopoverVisualEffectsDemo />
+</template>
+</DemoBlock>
+
+## API
+
+### TxPopover Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `boolean` | `false` | 是否打开（v-model） |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | 位置 |
+| `offset` | `number` | `8` | 间距 |
+| `width` | `number` | `0` | 面板宽度（0 = 跟随 reference） |
+| `minWidth` | `number` | `0` | 最小宽度（width=0 时也会生效） |
+| `maxWidth` | `number` | `360` | 最大宽度 |
+| `referenceFullWidth` | `boolean` | `false` | reference 容器是否占满宽度（用于 flex 场景） |
+| `showArrow` | `boolean` | `false` | 显示箭头 |
+| `arrowSize` | `number` | `12` | 箭头尺寸 |
+| `motion` | `'fade' \| 'split'` | `'split'` | 动效 |
+| `fusion` | `boolean` | `false` | 融合滤镜 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 面板背景（TxCard background） |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
+| `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
+| `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
+| `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
+| `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open` | - | 打开 |
+| `close` | - | 关闭 |
+| `update:modelValue` | `boolean` | v-model 更新 |

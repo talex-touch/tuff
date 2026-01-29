@@ -2,6 +2,7 @@
 import { TxButton, TxLoadingState } from '@talex-touch/tuffex'
 import { defineComponent, h, render } from 'vue'
 import { toast, Toaster } from 'vue-sonner'
+import DocHero from '~/components/docs/DocHero.vue'
 
 definePageMeta({
   layout: 'docs',
@@ -99,6 +100,7 @@ const { data: doc, status } = await useAsyncData(
 const docMeta = computed(() => (doc.value ?? {}) as Record<string, any>)
 
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
+const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
 
 watch(requestKey, () => {
   isLoading.value = true
@@ -109,6 +111,14 @@ watch(
   (value) => {
     if (value === 'success' || value === 'error')
       isLoading.value = false
+  },
+  { immediate: true },
+)
+
+watch(
+  isLoading,
+  (value) => {
+    outlineLoadingState.value = value
   },
   { immediate: true },
 )
@@ -161,19 +171,6 @@ const heroBreadcrumbs = computed(() => {
     return [prefix, category]
   return [prefix]
 })
-const heroSinceLabel = computed(() => {
-  const since = docMeta.value.since ? String(docMeta.value.since).trim() : ''
-  if (!since)
-    return ''
-  const normalized = /^v/i.test(since) ? since : `v${since}`
-  return locale.value === 'zh' ? `自 ${normalized}` : `Since ${normalized}`
-})
-const heroStatusLabel = computed(() => {
-  const status = docMeta.value.status ? String(docMeta.value.status).trim() : ''
-  if (!status)
-    return ''
-  return status.charAt(0).toUpperCase() + status.slice(1)
-})
 const heroReadTimeLabel = computed(() => {
   const text = extractDocText(doc.value?.body).replace(/\s+/g, ' ').trim()
   if (!text)
@@ -187,17 +184,30 @@ const heroReadTimeLabel = computed(() => {
   const minutes = Math.max(1, Math.round(words / 200))
   return `${minutes} min read`
 })
-const heroMetaItems = computed(() => {
-  const items: Array<{ key: string; label: string; variant?: string }> = []
-  if (heroSinceLabel.value)
-    items.push({ key: 'since', label: heroSinceLabel.value, variant: 'is-since' })
-  if (heroStatusLabel.value)
-    items.push({ key: 'status', label: heroStatusLabel.value, variant: 'is-status' })
-  if (heroReadTimeLabel.value)
-    items.push({ key: 'read', label: heroReadTimeLabel.value, variant: 'is-read' })
-  return items
+const heroSinceLabel = computed(() => {
+  const raw = docMeta.value?.since
+  const fallback = locale.value === 'zh' ? '通用组件' : 'Universal Component'
+  if (!raw)
+    return fallback
+  const value = String(raw).trim()
+  if (!value)
+    return fallback
+  const normalized = value.toLowerCase().startsWith('v') ? value : `v${value}`
+  return locale.value === 'zh' ? `自 ${normalized}` : `Since ${normalized}`
 })
-const showDocHero = computed(() => Boolean(doc.value?.title && (docMeta.value.category || docMeta.value.status || docMeta.value.since || doc.value?.description)))
+const showDocHero = computed(() => {
+  const heroFlag = docMeta.value?.hero
+  const hideHero = docMeta.value?.hideHero
+  const normalizedHero = typeof heroFlag === 'string' ? heroFlag.trim().toLowerCase() : heroFlag
+  const normalizedHide = typeof hideHero === 'string' ? hideHero.trim().toLowerCase() : hideHero
+  if (normalizedHide === true || normalizedHide === 'true' || normalizedHide === '1')
+    return false
+  if (normalizedHero === false || normalizedHero === 'false' || normalizedHero === '0' || normalizedHero === 'off' || normalizedHero === 'no')
+    return false
+  if (normalizedHero === true || normalizedHero === 'true' || normalizedHero === '1' || normalizedHero === 'on' || normalizedHero === 'yes')
+    return true
+  return Boolean(doc.value?.title)
+})
 
 function resolveDocLocale(target: any) {
   const path = typeof target?.path === 'string' ? target.path : null
@@ -208,6 +218,15 @@ function resolveDocLocale(target: any) {
   if (path.endsWith('.en'))
     return 'en'
   return 'en'
+}
+
+function matchesLocale(target: any) {
+  const path = typeof target?.path === 'string' ? target.path : ''
+  if (path.endsWith('.zh'))
+    return locale.value === 'zh'
+  if (path.endsWith('.en'))
+    return locale.value === 'en'
+  return true
 }
 
 const normalizedDocPath = computed(() => normalizeContentPath(doc.value?.path ?? docPath.value))
@@ -236,7 +255,7 @@ function collectSectionPages(node: any): any[] {
     if (!current)
       continue
     const currentPath = normalizeContentPath(current.path)
-    if (currentPath && current.page !== false)
+    if (currentPath && current.page !== false && matchesLocale(current))
       result.push(current)
     if (Array.isArray(current.children) && current.children.length > 0)
       result.push(...collectSectionPages(current.children))
@@ -286,11 +305,20 @@ const lastUpdatedDate = computed(() => {
     return null
 
   const meta = source.meta as Record<string, unknown> | undefined
+  const record = source as Record<string, unknown>
   const candidates = [
     meta?.updatedAt,
     meta?.modifiedAt,
     meta?.mtime,
     meta?.createdAt,
+    record.updatedAt,
+    record.modifiedAt,
+    record.mtime,
+    record.createdAt,
+    record._updatedAt,
+    record._modifiedAt,
+    record._mtime,
+    record._createdAt,
   ]
 
   for (const candidate of candidates) {
@@ -304,6 +332,19 @@ const lastUpdatedDate = computed(() => {
   }
 
   return null
+})
+
+const heroUpdatedLocale = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
+const heroUpdatedAgo = useTimeAgo(
+  () => lastUpdatedDate.value?.getTime() ?? Date.now(),
+  { locale: heroUpdatedLocale },
+)
+const heroUpdatedLabel = computed(() => {
+  if (!lastUpdatedDate.value)
+    return ''
+  return locale.value === 'zh'
+    ? `更新于 ${heroUpdatedAgo.value}`
+    : `Updated ${heroUpdatedAgo.value}`
 })
 
 const formattedLastUpdated = computed(() => {
@@ -572,30 +613,26 @@ watch(
           class="docs-surface px-8 py-10 space-y-10"
           :class="{ 'docs-surface--hero': showDocHero }"
         >
-          <section v-if="showDocHero" class="docs-hero">
-            <div v-if="heroBreadcrumbs.length" class="docs-hero__breadcrumb">
+          <div v-if="showDocHero" class="docs-hero-block">
+            <div v-if="heroBreadcrumbs.length" class="docs-hero-breadcrumb">
               <template v-for="(crumb, index) in heroBreadcrumbs" :key="`${crumb}-${index}`">
                 <span
-                  class="docs-hero__crumb"
+                  class="docs-hero-crumb"
                   :class="{ 'is-current': index === heroBreadcrumbs.length - 1 }"
                 >
                   {{ crumb }}
                 </span>
-                <span v-if="index < heroBreadcrumbs.length - 1" class="docs-hero__crumb-sep">/</span>
+                <span v-if="index < heroBreadcrumbs.length - 1" class="docs-hero-crumb-sep">/</span>
               </template>
             </div>
-            <h1 class="docs-hero__title">
-              {{ doc?.title }}
-            </h1>
-            <p v-if="doc?.description" class="docs-hero__desc">
-              {{ doc?.description }}
-            </p>
-            <div v-if="heroMetaItems.length" class="docs-hero__meta">
-              <span v-for="item in heroMetaItems" :key="item.key" class="docs-hero__pill" :class="item.variant">
-                {{ item.label }}
-              </span>
-            </div>
-          </section>
+            <DocHero
+              :title="doc?.title"
+              :description="doc?.description"
+              :since-label="heroSinceLabel"
+              :read-time-label="heroReadTimeLabel"
+              :updated-label="heroUpdatedLabel"
+            />
+          </div>
           <ContentRenderer
             :value="doc ?? {}"
             :class="[
@@ -628,7 +665,7 @@ watch(
           </div>
 
           <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
-            <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.2em] uppercase dark:text-light/40">
+            <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.12em] uppercase dark:text-light/40">
               {{ docPager.sectionTitle }}
             </div>
             <div class="grid gap-4 lg:grid-cols-2">
@@ -637,7 +674,7 @@ watch(
                 :to="localePath({ path: pagerPrevPath })"
                 class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
               >
-                <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">
+                <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
                   <span class="i-carbon-arrow-left text-base" />
                   {{ t('docs.previousChapter') }}
                 </span>
@@ -648,9 +685,9 @@ watch(
               <NuxtLink
                 v-if="pagerNextPath"
                 :to="localePath({ path: pagerNextPath })"
-                class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
+                class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
               >
-                <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.2em] uppercase dark:text-light/40 group-hover:text-primary">
+                <span class="dark:group-hover:text-primary-200 flex items-center justify-end gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
                   {{ t('docs.nextChapter') }}
                   <span class="i-carbon-arrow-right text-base" />
                 </span>
@@ -721,41 +758,18 @@ watch(
   isolation: isolate;
 }
 
-.docs-surface--hero::before {
-  content: '';
-  position: absolute;
-  left: -40px;
-  right: -40px;
-  top: -52px;
-  height: 300px;
-  border-radius: 36px;
-  background:
-    radial-gradient(120% 140% at 15% 0%, rgba(96, 165, 250, 0.24), transparent 62%),
-    radial-gradient(120% 140% at 85% 0%, rgba(244, 114, 182, 0.16), transparent 64%),
-    linear-gradient(120deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.6));
-  filter: blur(0);
-  opacity: 0.92;
-  pointer-events: none;
-  z-index: -1;
-}
-
-.docs-hero {
+.docs-hero-block {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 36px 44px;
-  border-radius: 28px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(12px);
+  gap: 12px;
 }
 
-.docs-hero__breadcrumb {
+.docs-hero-breadcrumb {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  padding: 0 32px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.22em;
@@ -763,112 +777,32 @@ watch(
   color: rgba(100, 116, 139, 0.7);
 }
 
-.docs-hero__crumb {
+.docs-hero-crumb {
   color: var(--docs-muted);
 }
 
-.docs-hero__crumb.is-current {
+.docs-hero-crumb.is-current {
   color: var(--docs-ink);
 }
 
-.docs-hero__crumb-sep {
+.docs-hero-crumb-sep {
   color: var(--docs-muted);
   opacity: 0.6;
 }
 
-.docs-hero__meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.docs-hero__pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(15, 23, 42, 0.04);
-  color: var(--docs-ink);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.docs-hero__pill.is-since {
-  border-color: rgba(56, 189, 248, 0.25);
-  background: rgba(56, 189, 248, 0.12);
-  color: var(--docs-accent-strong);
-}
-
-.docs-hero__pill.is-status {
-  border-color: rgba(15, 23, 42, 0.16);
-  background: rgba(15, 23, 42, 0.05);
-  color: var(--docs-ink);
-}
-
-.docs-hero__pill.is-read {
-  border-color: rgba(14, 165, 233, 0.18);
-  background: rgba(14, 165, 233, 0.08);
-  color: var(--docs-accent);
-}
-
-::deep(.dark .docs-hero__crumb),
-::deep([data-theme='dark'] .docs-hero__crumb) {
-  color: rgba(226, 232, 240, 0.6);
-}
-
-::deep(.dark .docs-hero__crumb.is-current),
-::deep([data-theme='dark'] .docs-hero__crumb.is-current) {
-  color: rgba(248, 250, 252, 0.95);
-}
-
-::deep(.dark .docs-hero__pill),
-::deep([data-theme='dark'] .docs-hero__pill) {
-  border-color: rgba(148, 163, 184, 0.28);
-  background: rgba(30, 41, 59, 0.55);
-  color: rgba(226, 232, 240, 0.85);
-}
-
-::deep(.dark .docs-hero__pill.is-since),
-::deep([data-theme='dark'] .docs-hero__pill.is-since) {
-  border-color: rgba(125, 211, 252, 0.35);
-  background: rgba(14, 165, 233, 0.22);
-  color: rgba(226, 232, 240, 0.95);
-}
-
-::deep(.dark .docs-hero__pill.is-read),
-::deep([data-theme='dark'] .docs-hero__pill.is-read) {
-  border-color: rgba(56, 189, 248, 0.28);
-  background: rgba(14, 165, 233, 0.16);
-  color: rgba(226, 232, 240, 0.92);
-}
-
-:deep(.dark .docs-hero__breadcrumb),
-:deep([data-theme='dark'] .docs-hero__breadcrumb) {
+::global(.dark .docs-hero-breadcrumb),
+::global([data-theme='dark'] .docs-hero-breadcrumb) {
   color: rgba(226, 232, 240, 0.5);
 }
 
-.docs-hero__title {
-  margin: 0;
-  font-size: 3rem;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  color: var(--docs-ink);
+::global(.dark .docs-hero-crumb),
+::global([data-theme='dark'] .docs-hero-crumb) {
+  color: rgba(226, 232, 240, 0.6);
 }
 
-.docs-hero__desc {
-  margin: 0;
-  max-width: 640px;
-  font-size: 1.1rem;
-  color: rgba(71, 85, 105, 0.85);
-}
-
-:deep(.dark .docs-hero__desc),
-:deep([data-theme='dark'] .docs-hero__desc) {
-  color: rgba(226, 232, 240, 0.75);
+::global(.dark .docs-hero-crumb.is-current),
+::global([data-theme='dark'] .docs-hero-crumb.is-current) {
+  color: rgba(248, 250, 252, 0.95);
 }
 
 :deep(.docs-prose--hero > h1:first-of-type),
@@ -877,42 +811,9 @@ watch(
   display: none;
 }
 
-:deep(.dark .docs-surface--hero)::before,
-:deep([data-theme='dark'] .docs-surface--hero)::before {
-  background:
-    radial-gradient(120% 140% at 15% 0%, rgba(14, 116, 144, 0.4), transparent 62%),
-    radial-gradient(120% 140% at 85% 0%, rgba(59, 130, 246, 0.3), transparent 64%),
-    linear-gradient(120deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.65));
-  opacity: 0.82;
-}
 
-:deep(.dark .docs-hero),
-:deep([data-theme='dark'] .docs-hero) {
-  border-color: rgba(148, 163, 184, 0.3);
-  background: rgba(15, 23, 42, 0.78);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
-}
 
-:deep(.dark .docs-hero__badge),
-:deep([data-theme='dark'] .docs-hero__badge) {
-  border-color: rgba(125, 211, 252, 0.3);
-  background: rgba(56, 189, 248, 0.16);
-  color: rgba(226, 232, 240, 0.9);
-}
 
-@media (max-width: 768px) {
-  .docs-hero {
-    padding: 24px;
-  }
-
-  .docs-hero__title {
-    font-size: 2.2rem;
-  }
-
-  .docs-hero__desc {
-    font-size: 0.95rem;
-  }
-}
 
 :deep(.docs-prose) {
   --docs-accent: #1bb5f4;

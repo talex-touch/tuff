@@ -12,7 +12,6 @@ tags: [progress, status, loading]
 > Linear progress shows stages and rhythm of work.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Progress States" description="Base progress with status colors" code-lang="vue"}

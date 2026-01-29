@@ -12,7 +12,6 @@ tags: [grid, layout, alignment]
 > A structured layout system that keeps rhythm and alignment.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Grid Rhythm" description="Consistent spacing keeps the layout steady." code-lang="vue"}

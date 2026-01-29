@@ -12,7 +12,6 @@ tags: [icon, glyph, visual]
 > A unified icon system with consistent density and alignment.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}

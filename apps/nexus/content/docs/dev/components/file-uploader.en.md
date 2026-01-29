@@ -1,0 +1,75 @@
+---
+title: "FileUploader 文件上传"
+description: "通用文件上传组件，支持多文件、拖拽与列表管理。"
+---
+# FileUploader 文件上传
+
+通用文件上传组件，支持多文件、拖拽与列表管理。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const files = ref([])
+</script>
+
+## 基础用法
+
+<div class="group" style="max-width: 480px;">
+  <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
+</div>
+
+:::: details Show Code
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const files = ref([])
+</script>
+
+<template>
+  <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
+</template>
+```
+::::
+
+## API
+
+### TxFileUploader Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|------|------|
+| `modelValue` | `FileUploaderFile[]` | `[]` | 文件列表 |
+| `multiple` | `boolean` | `true` | 是否多选 |
+| `accept` | `string` | `*/*` | 接受类型 |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `max` | `number` | `10` | 最大文件数 |
+| `showSize` | `boolean` | `true` | 显示大小 |
+| `allowDrop` | `boolean` | `true` | 允许拖拽 |
+| `buttonText` | `string` | `'Choose files'` | 按钮文案 |
+| `dropText` | `string` | `'Drop files here'` | 拖拽文案 |
+| `hintText` | `string` | `'or click to browse'` | 辅助文案 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(files)` | 文件变化 |
+| `change` | `(files)` | 文件变化 |
+| `add` | `(files)` | 添加文件 |
+| `remove` | `({ id, value })` | 删除文件 |
+
+### FileUploaderFile
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 唯一标识 |
+| `name` | `string` | 文件名 |
+| `size` | `number` | 文件大小 |
+| `type` | `string` | MIME 类型 |
+| `file` | `File` | 原始文件 |
+
+### Expose
+
+| 名称 | 说明 |
+|------|------|
+| `pick()` | 打开系统文件选择 |

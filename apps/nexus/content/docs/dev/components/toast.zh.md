@@ -12,7 +12,6 @@ tags: [toast, feedback, status]
 > 短暂可感知的状态提醒，避免打断操作路径。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Status Toasts" description="成功、警告、失败三类状态。" code-lang="ts"}

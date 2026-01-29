@@ -1,0 +1,31 @@
+---
+title: "StatCard 指标卡片"
+description: "用于展示一个数字/指标与对应描述。"
+---
+# StatCard 指标卡片
+
+用于展示一个数字/指标与对应描述。
+
+<script setup lang="ts">
+import StatCardBasicDemo from '~/components/content/demos/StatCardBasicDemo.vue'
+import StatCardBasicDemoSource from '~/components/content/demos/StatCardBasicDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="StatCard" :code="StatCardBasicDemoSource">
+  <template #preview>
+    <StatCardBasicDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `value` | `number \| string` | - | 显示值 |
+| `label` | `string` | - | 描述文本 |
+| `iconClass` | `string` | `''` | 图标 class（UnoCSS icones） |
+| `clickable` | `boolean` | `false` | 鼠标悬浮/点击态 |

@@ -12,7 +12,13 @@ tags: [action, tactile, primary]
 > A tactile button system focused on press feedback and controlled damping.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
+<div class="tuff-doc-canvas">
+  <TuffComponentCanvas name="Button">
+    <TxButton variant="primary" size="lg">
+      Action Label
+    </TxButton>
+  </TuffComponentCanvas>
+</div>
 
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}
@@ -30,8 +36,12 @@ code: |
 ---
 rows:
   - name: loading
+    type: 'boolean'
+    default: 'false'
     description: 'Loading state'
   - name: disabled
+    type: 'boolean'
+    default: 'false'
     description: 'Disabled state'
   - name: size
     values: ['sm', 'md', 'lg']
@@ -95,6 +105,16 @@ rows:
 ---
 ::
 
+## Types
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type { TxButtonProps } from '@talex-touch/tuffex'
+
+  export interface ButtonProps extends TxButtonProps {}
+---
+::
+
 ## Design Notes
 - Emphasize press feedback with smooth rebound.  
 - Translucent surfaces need proper background contrast.  
@@ -115,3 +135,17 @@ code: |
   <tx-button variant="ghost">Ghost Variant</tx-button>
 </div>
 ::
+
+## Source
+
+<TuffDocSourceLink label="View source" />
+
+<style scoped>
+.tuff-doc-canvas {
+  margin: 18px 0 32px;
+}
+
+::global(.docs-background) {
+  display: none;
+}
+</style>

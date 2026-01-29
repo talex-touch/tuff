@@ -98,17 +98,18 @@ function toggleCode() {
           </div>
         </div>
       </div>
+      <div v-if="hasCode" class="tuff-demo__toggle-row">
+        <button
+          type="button"
+          class="tuff-demo__toggle"
+          :aria-expanded="showCode"
+          @click="toggleCode"
+        >
+          <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
+          {{ toggleLabel }}
+        </button>
+      </div>
     </div>
-    <button
-      v-if="hasCode"
-      type="button"
-      class="tuff-demo__toggle"
-      :aria-expanded="showCode"
-      @click="toggleCode"
-    >
-      <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
-      {{ toggleLabel }}
-    </button>
   </section>
 </template>
 
@@ -210,11 +211,18 @@ function toggleCode() {
   width: 100%;
 }
 
+.tuff-demo__toggle-row {
+  display: flex;
+  justify-content: center;
+  padding: 16px 18px 20px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.98);
+}
+
 .tuff-demo__toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  align-self: center;
   padding: 8px 16px;
   border-radius: 999px;
   border: 1px solid rgba(59, 130, 246, 0.45);
@@ -222,7 +230,7 @@ function toggleCode() {
   color: rgba(30, 64, 175, 0.95);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
@@ -292,6 +300,12 @@ function toggleCode() {
 :global(.dark .tuff-demo__preview),
 :global([data-theme='dark'] .tuff-demo__preview) {
   background: rgba(15, 23, 42, 0.65);
+}
+
+:global(.dark .tuff-demo__toggle-row),
+:global([data-theme='dark'] .tuff-demo__toggle-row) {
+  border-top-color: rgba(148, 163, 184, 0.15);
+  background: rgba(15, 23, 42, 0.6);
 }
 
 :global(.dark .tuff-demo__code),

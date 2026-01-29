@@ -12,7 +12,6 @@ tags: [grid, layout, alignment]
 > 用于结构化布局与信息栅格化，强调对齐与节奏。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Grid Rhythm" description="保持间距一致，避免视觉跳动。" code-lang="vue"}

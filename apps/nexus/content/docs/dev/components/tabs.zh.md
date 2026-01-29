@@ -1,0 +1,135 @@
+---
+title: "Tabs 标签页"
+description: "用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。"
+---
+# Tabs 标签页
+
+用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。
+
+<script setup lang="ts">
+import TabsBasicDemo from '~/components/content/demos/TabsBasicDemo.vue'
+import TabsBasicDemoSource from '~/components/content/demos/TabsBasicDemo.vue?raw'
+
+import TabsPlacementDemo from '~/components/content/demos/TabsPlacementDemo.vue'
+import TabsPlacementDemoSource from '~/components/content/demos/TabsPlacementDemo.vue?raw'
+
+import TabsAutoSizeDemo from '~/components/content/demos/TabsAutoSizeDemo.vue'
+import TabsAutoSizeDemoSource from '~/components/content/demos/TabsAutoSizeDemo.vue?raw'
+
+import TabsDynamicContentDemo from '~/components/content/demos/TabsDynamicContentDemo.vue'
+import TabsDynamicContentDemoSource from '~/components/content/demos/TabsDynamicContentDemo.vue?raw'
+
+import TabsIndicatorShowcaseDemo from '~/components/content/demos/TabsIndicatorShowcaseDemo.vue'
+import TabsIndicatorShowcaseDemoSource from '~/components/content/demos/TabsIndicatorShowcaseDemo.vue?raw'
+
+import TabsDisableAnimDemo from '~/components/content/demos/TabsDisableAnimDemo.vue'
+import TabsDisableAnimDemoSource from '~/components/content/demos/TabsDisableAnimDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="Tabs" :code="TabsBasicDemoSource">
+  <template #preview>
+    <TabsBasicDemo />
+  </template>
+</DemoBlock>
+
+## Indicator Showcase
+
+<DemoBlock title="Indicator variants & motions" :code="TabsIndicatorShowcaseDemoSource">
+<template #preview>
+<TabsIndicatorShowcaseDemo />
+</template>
+</DemoBlock>
+
+## 动态内容尺寸（manual, rich content）
+
+<DemoBlock title="Dynamic Content (manual)" :code="TabsDynamicContentDemoSource">
+  <template #preview>
+    <TabsDynamicContentDemo />
+  </template>
+</DemoBlock>
+
+## 布局方向（placement）
+
+<DemoBlock title="Placement + Header Slot" :code="TabsPlacementDemoSource">
+  <template #preview>
+    <TabsPlacementDemo />
+  </template>
+</DemoBlock>
+
+## 高度跟随内容（animation.size）
+
+<DemoBlock title="Auto Size (contentScrollable=false)" :code="TabsAutoSizeDemoSource">
+  <template #preview>
+    <TabsAutoSizeDemo />
+  </template>
+</DemoBlock>
+
+## 关闭动画（indicator/content）
+
+<DemoBlock title="Disable Animations" :code="TabsDisableAnimDemoSource">
+  <template #preview>
+    <TabsDisableAnimDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### TxTabs Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | - | 当前激活 tab（v-model） |
+| `defaultValue` | `string` | - | 默认激活 tab（当未传 modelValue 时） |
+| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Tabs 布局位置 |
+| `offset` | `number` | `0` | 指示条定位偏移 |
+| `navMinWidth` | `number` | `220` | 左侧导航最小宽度 |
+| `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |
+| `contentPadding` | `number` | `12` | 内容区 padding |
+| `contentScrollable` | `boolean` | `true` | 内容是否可滚动（关闭后可用于 autoHeight/autoWidth 的尺寸测量） |
+| `autoHeight` | `boolean` | `false` | 自动高度（需要 `contentScrollable=false` + `animation.size.enabled=true`） |
+| `autoWidth` | `boolean` | `false` | 自动宽度（需要 `animation.size.enabled=true`） |
+| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | 指示器样式 |
+| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器动效风格 |
+| `indicatorMotionStrength` | `number` | `1` | 指示器动效强度（数值越大越“Q弹”，`0` 基本关闭 scale 弹性） |
+| `animation` | `TabsAnimation` | - | 动画配置（size/nav/indicator/content） |
+| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时兼容 `autoHeight*` |
+| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | 导航容器动画（nav 宽度/布局变化过渡） |
+| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | 指示条动画 |
+| `animation.content` | `boolean \| { enabled? }` | - | 内容切换过渡（zoom 动画） |
+| `autoHeight` | `boolean` | `false` | 兼容字段：等价于 `animation.size` |
+| `autoHeightDurationMs` | `number` | `250` | 兼容字段：`animation.size.durationMs` |
+| `autoHeightEasing` | `string` | `ease` | 兼容字段：`animation.size.easing` |
+
+### Slots
+
+| 名称 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 放置 `TxTabItem` / `TxTabItemGroup` / `TxTabHeader` |
+| `nav-right` | - | 顶部/底部 Tabs 的导航右侧区域（适合放按钮、搜索等），宽度变化会配合 `autoWidth` 跟随内容 |
+
+### Expose
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `refresh` | `() => void` | 触发内容尺寸重新测量（AutoSizer passthrough） |
+| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | 包裹一次变更并使用 FLIP 尺寸过渡 |
+| `action` | `(fn: (el: HTMLElement) => void \| Promise<void>, optionsOrDetect?: any) => Promise<any>` | AutoSizer 的 action wrapper（用于丝滑自动切换） |
+| `size` | `() => { width: number; height: number } \| undefined` | 当前测量的尺寸信息 |
+
+### TxTabItem Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `name` | `string` | - | tab 名称（唯一 key） |
+| `iconClass` | `string` | `''` | 图标 class |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `activation` | `boolean` | `false` | 是否作为初始激活项 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `change` | `string` | 切换时触发 |
+| `update:modelValue` | `string` | v-model 更新 |

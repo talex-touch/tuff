@@ -12,7 +12,6 @@ tags: [tag, label, badge]
 > Small labels for categories, status, and context.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Tags" description="Color and size variations" code-lang="vue"}

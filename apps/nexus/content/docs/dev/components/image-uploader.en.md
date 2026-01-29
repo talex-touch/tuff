@@ -1,0 +1,34 @@
+---
+title: "ImageUploader 图片上传"
+description: "用于图片选择、预览、删除。"
+---
+# ImageUploader 图片上传
+
+用于图片选择、预览、删除。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const files = ref([])
+</script>
+
+## 基础用法
+
+<DemoBlock title="ImageUploader">
+<template #preview>
+<div style="width: 560px;">
+  <TxImageUploader v-model="files" />
+  <div style="margin-top: 12px; font-size: 12px; opacity: 0.75;">
+    {{ files.length }} files
+  </div>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxImageUploader v-model="files" />
+</template>
+```
+</template>
+</DemoBlock>

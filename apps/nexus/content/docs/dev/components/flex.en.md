@@ -1,0 +1,33 @@
+---
+title: "Flex 弹性布局"
+description: "通用 Flex 容器。"
+---
+# Flex 弹性布局
+
+通用 Flex 容器。
+
+<script setup lang="ts">
+import FlexBasicDemo from '~/components/content/demos/FlexBasicDemo.vue'
+import FlexBasicDemoSource from '~/components/content/demos/FlexBasicDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="Flex" :code="FlexBasicDemoSource">
+  <template #preview>
+    <FlexBasicDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | flex-direction |
+| `gap` | `number \| string` | `12` | 间距 |
+| `align` | `string` | `'stretch'` | align-items |
+| `justify` | `string` | `'flex-start'` | justify-content |
+| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | flex-wrap |
+| `inline` | `boolean` | `false` | 是否使用 inline-flex |

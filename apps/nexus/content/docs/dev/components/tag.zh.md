@@ -12,7 +12,6 @@ tags: [tag, label, badge]
 > 用于分类、标记与状态提示的小型标签。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Tags" description="颜色与尺寸组合" code-lang="vue"}

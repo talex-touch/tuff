@@ -12,7 +12,6 @@ tags: [badge, status, signal]
 > 用于状态指示与系统反馈的轻量徽标。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Status Signals" description="成功/警告/错误/信息" code-lang="vue"}

@@ -12,7 +12,6 @@ tags: [progress, status, loading]
 > 线性进度用于呈现任务阶段与节奏变化。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Progress States" description="基础进度 + 状态色" code-lang="vue"}

@@ -483,9 +483,7 @@ watch(
   () => normalizedRoutePath.value,
   () => {
     for (const section of sections.value) {
-      if (sectionContainsActive(section)) {
-        expandedSections.value[sectionKey(section)] = true
-      }
+      expandedSections.value[sectionKey(section)] = true
     }
   },
 )
@@ -523,18 +521,19 @@ watch(
       </template>
       <template v-else-if="sections.length === 0">
         <!-- Show direct links when no subsections -->
-        <div v-if="currentSectionData" class="flex flex-col gap-1">
-          <NuxtLink
-            v-if="linkTarget(currentSectionData)"
-            :to="localePath({ path: linkTarget(currentSectionData)! })"
-            class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium no-underline transition-colors"
-            :class="isLinkActive(linkTarget(currentSectionData) || '')
-              ? 'bg-primary/10 text-primary'
-              : 'text-black/70 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white'"
-          >
-            {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
-          </NuxtLink>
-        </div>
+        <ul v-if="currentSectionData" class="docs-nav-list">
+          <li class="docs-nav-item">
+            <NuxtLink
+              v-if="linkTarget(currentSectionData)"
+              :to="localePath({ path: linkTarget(currentSectionData)! })"
+              class="docs-nav-link"
+              :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
+              :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
+            >
+              {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
+            </NuxtLink>
+          </li>
+        </ul>
       </template>
       <template v-else>
         <DocSection
@@ -549,18 +548,16 @@ watch(
             <span class="flex-1 truncate">{{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}</span>
           </template>
           <li
-            v-for="(child, index) in section.children"
+            v-for="child in section.children"
             :key="child.path ?? child.title"
-            class="docs-tree-item relative"
-            :class="{ 'docs-tree-last': index === section.children.length - 1 }"
+            class="docs-nav-item"
           >
             <NuxtLink
               v-if="linkTarget(child)"
               :to="localePath({ path: linkTarget(child)! })"
-              class="group/link relative flex items-center py-1 pl-3 pr-2 text-[12.5px] no-underline transition-all duration-150"
-              :class="isLinkActive(linkTarget(child) || child.path || '')
-                ? 'text-black font-medium dark:text-white'
-                : 'text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80'"
+              class="docs-nav-link"
+              :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
+              :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"
             >
               <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
             </NuxtLink>
@@ -572,32 +569,123 @@ watch(
 </template>
 
 <style scoped>
-/* Tree-style vertical line */
-.docs-tree-item::before {
+:deep(.docs-nav-list) {
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 14px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: transparent;
+  box-shadow: none;
+}
+
+:deep(.docs-nav-list)::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
+  left: 4px;
+  top: 4px;
+  bottom: 4px;
   width: 1px;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(15, 23, 42, 0.12);
 }
 
-.dark .docs-tree-item::before {
-  background: rgba(255, 255, 255, 0.1);
+:deep(.docs-nav-item) {
+  position: relative;
+  background: transparent;
+  box-shadow: none;
 }
 
-/* Last item: line only goes to middle */
-.docs-tree-item.docs-tree-last::before {
-  bottom: 50%;
+:deep(.docs-nav-link) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px 6px 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(15, 23, 42, 0.58);
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  text-decoration: none;
+  transition: color 0.2s ease;
 }
 
-/* Active item highlight */
-.docs-tree-item:has(a.font-medium)::before {
-  background: rgba(0, 0, 0, 0.3);
+:deep(.docs-nav-link)::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleY(0.6);
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.dark .docs-tree-item:has(a.font-medium)::before {
-  background: rgba(255, 255, 255, 0.3);
+:deep(.docs-nav-link:hover) {
+  color: rgba(15, 23, 42, 0.82);
+}
+
+:deep(.docs-nav-link.is-active) {
+  color: rgba(15, 23, 42, 0.95);
+  font-weight: 600;
+  background: transparent !important;
+}
+
+:deep(.docs-nav-link.is-active)::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+:deep(.docs-nav-link.router-link-active),
+:deep(.docs-nav-link.router-link-exact-active) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:global(.dark .docs-nav-list)::before,
+:global([data-theme='dark'] .docs-nav-list)::before {
+  background: rgba(148, 163, 184, 0.16);
+}
+
+:global(.dark .docs-nav-list),
+:global([data-theme='dark'] .docs-nav-list),
+:global(.dark .docs-nav-item),
+:global([data-theme='dark'] .docs-nav-item),
+:global(.dark .docs-nav-link),
+:global([data-theme='dark'] .docs-nav-link) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:global(.dark .docs-nav-item),
+:global([data-theme='dark'] .docs-nav-item) {
+  background: transparent;
+}
+
+:global(.dark .docs-nav-link),
+:global([data-theme='dark'] .docs-nav-link) {
+  color: rgba(226, 232, 240, 0.56);
+  background: transparent;
+  box-shadow: none;
+}
+
+:global(.dark .docs-nav-link:hover),
+:global([data-theme='dark'] .docs-nav-link:hover) {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+:global(.dark .docs-nav-link.is-active),
+:global([data-theme='dark'] .docs-nav-link.is-active) {
+  color: rgba(248, 250, 252, 0.95);
+}
+
+:global(.dark .docs-nav-link)::before,
+:global([data-theme='dark'] .docs-nav-link)::before {
+  background: currentColor;
 }
 </style>

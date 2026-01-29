@@ -1,0 +1,67 @@
+---
+title: "Picker 滚轮选择"
+description: "移动端风格的滚轮选择器，支持多列。"
+---
+# Picker 滚轮选择
+
+移动端风格的滚轮选择器，支持多列。
+
+<script setup lang="ts">
+import PickerBasicDemo from '~/components/content/demos/PickerBasicDemo.vue'
+import PickerBasicDemoSource from '~/components/content/demos/PickerBasicDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="Picker" :code="PickerBasicDemoSource">
+  <template #preview>
+    <PickerBasicDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `(string \| number)[]` | `[]` | 当前值（按列） |
+| `columns` | `PickerColumn[]` | `[]` | 列定义（options） |
+| `visible` | `boolean` | `false` | 弹层显示（v-model:visible） |
+| `popup` | `boolean` | `true` | 是否使用底部弹层模式 |
+| `title` | `string` | `''` | 标题 |
+| `showToolbar` | `boolean` | `true` | 是否显示工具栏 |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
+| `cancelText` | `string` | `'Cancel'` | 取消按钮文案 |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `itemHeight` | `number` | `36` | 每项高度（px） |
+| `visibleItemCount` | `number` | `5` | 可见项数量（会自动调整为奇数） |
+| `closeOnClickMask` | `boolean` | `true` | 点击遮罩关闭 |
+| `lazyMount` | `boolean` | `true` | 首次打开后再渲染弹层 |
+
+### PickerColumn
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `key` | `string` | 可选 key |
+| `options` | `PickerOption[]` | 选项列表 |
+
+### PickerOption
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `value` | `string \| number` | 值 |
+| `label` | `string` | 展示文本 |
+| `disabled` | `boolean` | 是否禁用 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value)` | v-model 更新 |
+| `change` | `(value)` | 值变化 |
+| `update:visible` | `(visible)` | 弹层显示更新 |
+| `confirm` | `(value)` | 点击确认 |
+| `cancel` | - | 点击取消 |
+| `open` | - | 打开弹层 |
+| `close` | - | 关闭弹层 |

@@ -1,0 +1,35 @@
+---
+title: "PermissionState 权限不足"
+description: "用于权限不足或未授权场景。"
+---
+# PermissionState 权限不足
+
+用于权限不足或未授权场景。
+
+## 基础用法
+
+<DemoBlock title="PermissionState">
+<template #preview>
+<div style="max-width: 420px;">
+  <TxPermissionState
+    description="Request access to continue."
+    :primary-action="{ label: 'Request access', type: 'primary' }"
+  />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxPermissionState
+    description="Request access to continue."
+    :primary-action="{ label: 'Request access', type: 'primary' }"
+  />
+</template>
+```
+</template>
+</DemoBlock>
+
+## API
+
+Props / Slots / Events 同 `TxEmptyState`。

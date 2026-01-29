@@ -12,7 +12,6 @@ tags: [badge, status, signal]
 > Lightweight badges for system status and signals.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Status Signals" description="Success, warning, error, info" code-lang="vue"}

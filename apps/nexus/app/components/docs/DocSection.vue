@@ -18,14 +18,12 @@ const linkable = computed(() => props.list <= 0)
 </script>
 
 <template>
-  <div class="DocSection flex flex-col">
+  <div class="DocSection flex flex-col gap-2">
     <NuxtLink
       v-if="linkable"
       :to="link"
-      class="DocSection-Header group w-full flex cursor-pointer items-center py-1 text-[12.5px] font-normal transition-colors no-underline"
-      :class="active
-        ? 'text-black dark:text-white'
-        : 'text-black/50 hover:text-black/70 dark:text-white/50 dark:hover:text-white/70'"
+      class="DocSection-Header"
+      :class="active ? 'is-active' : ''"
       @click="emit('click')"
     >
       <span class="truncate">
@@ -35,10 +33,8 @@ const linkable = computed(() => props.list <= 0)
     <button
       v-else
       type="button"
-      class="DocSection-Header group w-full flex cursor-pointer items-center justify-between rounded-xl px-2.5 py-2 text-[10.5px] font-semibold tracking-wider uppercase transition-all duration-150 bg-black/[0.04] dark:bg-white/[0.06]"
-      :class="active
-        ? 'text-black/70 dark:text-white/75 bg-black/[0.06] dark:bg-white/[0.12]'
-        : 'text-black/45 hover:text-black/60 dark:text-white/45 dark:hover:text-white/60'"
+      class="DocSection-Header"
+      :class="active ? 'is-active' : ''"
       :aria-expanded="active"
       @click="emit('click')"
     >
@@ -46,8 +42,9 @@ const linkable = computed(() => props.list <= 0)
         <slot name="header" />
       </span>
       <span
-        class="i-carbon-chevron-down text-[9px] transition-transform duration-200"
-        :class="active ? '' : '-rotate-90'"
+        class="DocSection-Indicator i-carbon-chevron-down"
+        :class="active ? 'is-open' : ''"
+        aria-hidden="true"
       />
     </button>
 
@@ -55,11 +52,75 @@ const linkable = computed(() => props.list <= 0)
       class="grid transition-[grid-template-rows] duration-200 ease-out"
       :style="{ gridTemplateRows: active && list > 0 ? '1fr' : '0fr' }"
     >
-      <div class="overflow-hidden">
-        <ul class="m-0 flex flex-col list-none gap-0.5 py-1 pl-0.5">
+      <div class="overflow-hidden min-h-0">
+        <ul class="docs-nav-list">
           <slot />
         </ul>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.DocSection-Header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(15, 23, 42, 0.68);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.DocSection-Header:hover {
+  color: rgba(15, 23, 42, 0.85);
+}
+
+.DocSection-Header.is-active {
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.DocSection-Indicator {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0;
+  transform: rotate(-90deg);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.DocSection-Header:hover .DocSection-Indicator,
+.DocSection-Header:focus-visible .DocSection-Indicator {
+  opacity: 0.7;
+}
+
+.DocSection-Indicator.is-open {
+  transform: rotate(0deg);
+}
+
+:global(.dark .DocSection-Header),
+:global([data-theme='dark'] .DocSection-Header) {
+  color: rgba(226, 232, 240, 0.7);
+}
+
+:global(.dark .DocSection-Header:hover),
+:global([data-theme='dark'] .DocSection-Header:hover) {
+  color: rgba(248, 250, 252, 0.86);
+}
+
+:global(.dark .DocSection-Header.is-active),
+:global([data-theme='dark'] .DocSection-Header.is-active) {
+  color: rgba(248, 250, 252, 0.95);
+}
+
+:global(.dark .DocSection-Indicator),
+:global([data-theme='dark'] .DocSection-Indicator) {
+  color: rgba(226, 232, 240, 0.78);
+}
+</style>
