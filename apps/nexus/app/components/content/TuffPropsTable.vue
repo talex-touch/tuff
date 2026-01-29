@@ -181,7 +181,7 @@ async function copyText(text?: string, key?: string) {
   text-align: left;
   padding: 12px 12px;
   font-size: 11px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--docs-muted);
   background: transparent;

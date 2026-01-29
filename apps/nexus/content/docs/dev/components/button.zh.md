@@ -12,13 +12,13 @@ tags: [action, tactile, primary]
 > 触感与阻尼并存的按钮体系，强调“按下去”的真实反馈。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
-
-<TuffComponentCanvas name="Button">
-  <TxButton variant="primary" size="lg">
-    Action Label
-  </TxButton>
-</TuffComponentCanvas>
+<div class="tuff-doc-canvas">
+  <TuffComponentCanvas name="Button">
+    <TxButton variant="primary" size="lg">
+      Action Label
+    </TxButton>
+  </TuffComponentCanvas>
+</div>
 
 ## Usage
 
@@ -215,6 +215,16 @@ rows:
 ---
 :::
 
+### 类型
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type { TxButtonProps } from '@talex-touch/tuffex'
+
+  export interface ButtonProps extends TxButtonProps {}
+---
+::
+
 ## Composition Notes
 
 ### Primary + Ghost
@@ -259,3 +269,9 @@ async function handleClick() {
   }, 3000)
 }
 </script>
+
+<style scoped>
+.tuff-doc-canvas {
+  margin: 18px 0 32px;
+}
+</style>

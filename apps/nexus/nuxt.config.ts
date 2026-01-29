@@ -98,6 +98,9 @@ export default defineNuxtConfig({
         proxyUrl: process.env.NUXT_PUBLIC_CLERK_PROXY_URL,
         pricingTableId: process.env.NUXT_PUBLIC_CLERK_PRICING_TABLE_ID,
       },
+      docs: {
+        asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
+      },
     },
   },
 

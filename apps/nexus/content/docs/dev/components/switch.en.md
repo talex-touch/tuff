@@ -12,7 +12,6 @@ tags: [switch, toggle, state]
 > Tactile toggles with clear state color and movement.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}

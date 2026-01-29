@@ -14,10 +14,12 @@ const route = useRoute()
 
 const tocState = useState<TocLink[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
+const outlineLoadingState = useState<boolean>('docs-outline-loading', () => false)
 
 const activeHash = ref('')
 const headingElements = ref<Record<string, HTMLElement>>({})
 const SCROLL_OFFSET = 120
+const skeletonRows = ['72%', '88%', '64%', '76%', '54%', '70%', '82%']
 
 // Marker state
 const markerTop = ref(0)
@@ -162,6 +164,7 @@ const outlineEntries = computed(() => {
 })
 
 const hasOutline = computed(() => outlineEntries.value.length > 0)
+const showSkeleton = computed(() => outlineLoadingState.value && !hasOutline.value)
 
 watch(
   outlineEntries,
@@ -248,6 +251,14 @@ watch(
         </NuxtLink>
       </div>
     </nav>
+    <div v-else-if="showSkeleton" class="outline-skeleton">
+      <div
+        v-for="(width, index) in skeletonRows"
+        :key="index"
+        class="outline-skeleton__item"
+        :style="{ width }"
+      />
+    </div>
     <div v-else class="text-[12px] text-black/30 dark:text-white/30">
       {{ t('docs.noOutline') }}
     </div>
@@ -271,6 +282,20 @@ watch(
   padding-left: 6px;
 }
 
+.outline-skeleton {
+  display: grid;
+  gap: 10px;
+  padding-left: 6px;
+}
+
+.outline-skeleton__item {
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.08) 0%, rgba(15, 23, 42, 0.16) 50%, rgba(15, 23, 42, 0.08) 100%);
+  background-size: 200% 100%;
+  animation: outline-shimmer 1.6s ease-in-out infinite;
+}
+
 .outline-item + .outline-item {
   margin-top: 2px;
 }
@@ -282,5 +307,20 @@ watch(
 :global(.dark .docs-outline__label),
 :global([data-theme='dark'] .docs-outline__label) {
   color: rgba(226, 232, 240, 0.35);
+}
+
+:global(.dark .outline-skeleton__item),
+:global([data-theme='dark'] .outline-skeleton__item) {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.18) 0%, rgba(148, 163, 184, 0.32) 50%, rgba(148, 163, 184, 0.18) 100%);
+  background-size: 200% 100%;
+}
+
+@keyframes outline-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
 }
 </style>

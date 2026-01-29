@@ -12,7 +12,6 @@ tags: [switch, toggle, state]
 > 轻触反馈 + 明确状态色，适合密集设置页。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}

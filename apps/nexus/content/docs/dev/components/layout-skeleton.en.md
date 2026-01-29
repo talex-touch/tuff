@@ -12,7 +12,6 @@ tags: [skeleton, layout, loading]
 > Layout-level placeholder for page or panel loading.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Layout Placeholder" description="The wrapper controls the size." code-lang="vue"}

@@ -1,0 +1,64 @@
+---
+title: "CornerOverlay 角标容器"
+description: "`TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。"
+---
+# CornerOverlay 角标容器
+
+`TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。
+
+## 基础用法
+
+<DemoBlock title="Basic">
+<template #preview>
+<div style="display:flex; gap:16px; align-items:center;">
+  <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
+    <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+    <template #overlay>
+      <span style="width:12px;height:12px;border-radius:999px;background:#22c55e;border:2px solid var(--tx-bg-color);" />
+    </template>
+  </TxCornerOverlay>
+
+  <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
+    <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+    <template #overlay>
+      <span style="background:var(--tx-bg-color);border-radius:999px;padding:2px;box-shadow:0 1px 6px rgba(0,0,0,.12);">
+        <TxIcon name="i-carbon-checkmark-filled" style="font-size:18px;color:var(--tx-color-primary);" />
+      </span>
+    </template>
+  </TxCornerOverlay>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxCornerOverlay placement="bottom-right" :offset-x="-2" :offset-y="-2">
+    <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+    <template #overlay>
+      <span style="width:12px;height:12px;border-radius:999px;background:#22c55e;border:2px solid var(--tx-bg-color);" />
+    </template>
+  </TxCornerOverlay>
+
+  <TxCornerOverlay placement="top-right" :offset-x="-4" :offset-y="-4">
+    <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+    <template #overlay>
+      <span style="background:var(--tx-bg-color);border-radius:999px;padding:2px;box-shadow:0 1px 6px rgba(0,0,0,.12);">
+        <TxIcon name="i-carbon-checkmark-filled" style="font-size:18px;color:var(--tx-color-primary);" />
+      </span>
+    </template>
+  </TxCornerOverlay>
+</template>
+```
+</template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| placement | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `bottom-right` | 角标位置 |
+| offsetX | `string \| number` | `0` | X 偏移 |
+| offsetY | `string \| number` | `0` | Y 偏移 |
+| overlayPointerEvents | `'none' \| 'auto'` | `none` | overlay 的 pointer-events |

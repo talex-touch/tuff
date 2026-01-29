@@ -12,7 +12,6 @@ tags: [tooltip, hint, overlay]
 > Small and lightweight hints that do not interrupt the flow.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Hover Hint" description="Short hints with low intrusion." code-lang="vue"}

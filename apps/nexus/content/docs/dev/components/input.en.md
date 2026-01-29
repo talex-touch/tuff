@@ -12,7 +12,6 @@ tags: [input, field, search]
 > Lighter inputs, restrained borders, and focused readability.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}

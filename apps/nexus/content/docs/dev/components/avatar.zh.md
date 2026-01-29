@@ -12,7 +12,6 @@ tags: [avatar, identity, profile]
 > 头像是身份的最小单元，需要稳定的尺寸体系与清晰的层级。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Size System" description="小尺寸适合列表，大尺寸用于详情页。" code-lang="vue"}

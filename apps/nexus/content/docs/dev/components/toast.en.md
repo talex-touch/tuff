@@ -12,7 +12,6 @@ tags: [toast, feedback, status]
 > Short-lived status hints that keep the flow uninterrupted.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Status Toasts" description="Success, warning, and error states." code-lang="ts"}

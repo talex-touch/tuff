@@ -12,7 +12,6 @@ tags: [drawer, panel, overlay]
 > Side panels for forms and settings.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Side Drawer" description="Right drawer for forms and settings" code-lang="vue"}

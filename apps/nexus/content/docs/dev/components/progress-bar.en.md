@@ -12,7 +12,6 @@ tags: [progress, bar, loading]
 > Finer-grained progress feedback with loading / success / error states.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Stateful Progress" description="Loading, warning, and success in one panel." code-lang="vue"}

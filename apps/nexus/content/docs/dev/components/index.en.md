@@ -21,22 +21,129 @@ description: The component gallery for Tuffex (Ta Fu)
 </TuffDemo>
 
 ## Quick Access
-- **[Button](./button.en.md)** — tactile buttons and flat variants.
-- **[Icon](./icon.en.md)** — unified icon system and visual density.
-- **[Input](./input.en.md)** — lightweight inputs and search states.
-- **[Dialog](./dialog.en.md)** — confirmations and interaction loops.
-- **[Switch](./switch.en.md)** — tactile toggles with state feedback.
-- **[Avatar](./avatar.en.md)** — identity and sizing system.
-- **[Tooltip](./tooltip.en.md)** — lightweight hints and hierarchy.
-- **[Toast](./toast.en.md)** — quick feedback and transient states.
-- **[Grid](./grid.en.md)** — structured layout and alignment.
-- **[Progress](./progress.en.md)** — linear progress and status feedback.
-- **[ProgressBar](./progress-bar.en.md)** — multi-state progress and loading.
-- **[StatusBadge](./status-badge.en.md)** — status signals and system feedback.
-- **[Tag](./tag.en.md)** — categories and labels.
-- **[Skeleton](./skeleton.en.md)** — loading placeholders and structure hints.
-- **[LayoutSkeleton](./layout-skeleton.en.md)** — layout-level skeleton placeholder.
-- **[Drawer](./drawer.en.md)** — side panels and form surfaces.
+<div class="docs-component-grid">
+  <section class="docs-component-group">
+    <h3>Basics</h3>
+    <ul>
+      <li><a href="./button.en.md"><strong>Button</strong></a><span class="docs-component-desc"> — Tactile button system with flat variants</span></li>
+      <li><a href="./icon.en.md"><strong>Icon</strong></a><span class="docs-component-desc"> — Unified icon system and visual density control</span></li>
+      <li><a href="./avatar.en.md"><strong>Avatar</strong></a><span class="docs-component-desc"> — Identity and sizing system</span></li>
+      <li><a href="./avatar-variants.en.md"><strong>Avatar Variants 头像变体</strong></a><span class="docs-component-desc"> — 基于 `TxAvatar` + `TxOutlineBorder` + `TxCornerOverlay` 的组合配方集合，用于快速拼装在线状态、角标、平台标记、系统徽章、动效等“头像变体”。</span></li>
+      <li><a href="./tag.en.md"><strong>Tag</strong></a><span class="docs-component-desc"> — Categories and labels</span></li>
+      <li><a href="./status-badge.en.md"><strong>StatusBadge</strong></a><span class="docs-component-desc"> — Status signals and system feedback</span></li>
+      <li><a href="./stat-card.en.md"><strong>StatCard 指标卡片</strong></a><span class="docs-component-desc"> — 用于展示一个数字/指标与对应描述。</span></li>
+      <li><a href="./card.en.md"><strong>Card 卡片</strong></a><span class="docs-component-desc"> — Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。</span></li>
+      <li><a href="./card-item.en.md"><strong>CardItem 卡片项</strong></a><span class="docs-component-desc"> — 用于列表/设置页等场景的通用条目：左侧头像/图标，右侧标题信息，支持右侧操作区。</span></li>
+    </ul>
+  </section>
+  <section class="docs-component-group">
+    <h3>Form & Input</h3>
+    <ul>
+      <li><a href="./input.en.md"><strong>Input</strong></a><span class="docs-component-desc"> — Lightweight inputs and search states</span></li>
+      <li><a href="./select.en.md"><strong>Select 选择器</strong></a><span class="docs-component-desc"> — 下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。</span></li>
+      <li><a href="./search-input.en.md"><strong>SearchInput 搜索输入框</strong></a><span class="docs-component-desc"> — 基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。</span></li>
+      <li><a href="./search-select.en.md"><strong>SearchSelect 搜索选择器</strong></a><span class="docs-component-desc"> — 搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。</span></li>
+      <li><a href="./checkbox.en.md"><strong>Checkbox 复选框</strong></a><span class="docs-component-desc"> — 复选框组件，具有 SVG 动画勾选效果。</span></li>
+      <li><a href="./radio.en.md"><strong>Radio 单选框</strong></a><span class="docs-component-desc"> — 用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。</span></li>
+      <li><a href="./switch.en.md"><strong>Switch</strong></a><span class="docs-component-desc"> — Tactile toggles with state feedback</span></li>
+      <li><a href="./slider.en.md"><strong>Slider 滑块</strong></a><span class="docs-component-desc"> — 用于在区间内选择数值的滑块组件。</span></li>
+      <li><a href="./segmented-slider.en.md"><strong>SegmentedSlider 分段滑块</strong></a><span class="docs-component-desc"> — 用于在预定义的离散选项中进行选择的分段滑块组件。</span></li>
+      <li><a href="./date-picker.en.md"><strong>DatePicker 日期选择</strong></a><span class="docs-component-desc"> — 基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。</span></li>
+      <li><a href="./picker.en.md"><strong>Picker 滚轮选择</strong></a><span class="docs-component-desc"> — 移动端风格的滚轮选择器，支持多列。</span></li>
+      <li><a href="./cascader.en.md"><strong>Cascader 级联选择</strong></a><span class="docs-component-desc"> — 用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。</span></li>
+      <li><a href="./tag-input.en.md"><strong>TagInput 标签输入</strong></a><span class="docs-component-desc"> — 用于快速录入标签，支持分隔符与回车确认。</span></li>
+      <li><a href="./form.en.md"><strong>Form 表单</strong></a><span class="docs-component-desc"> — 提供表单容器与校验能力，配合 `TxFormItem` 统一布局与提示。</span></li>
+      <li><a href="./file-uploader.en.md"><strong>FileUploader 文件上传</strong></a><span class="docs-component-desc"> — 通用文件上传组件，支持多文件、拖拽与列表管理。</span></li>
+      <li><a href="./image-uploader.en.md"><strong>ImageUploader 图片上传</strong></a><span class="docs-component-desc"> — 用于图片选择、预览、删除。</span></li>
+    </ul>
+  </section>
+  <section class="docs-component-group">
+    <h3>Feedback & States</h3>
+    <ul>
+      <li><a href="./dialog.en.md"><strong>Dialog</strong></a><span class="docs-component-desc"> — Confirmation flows and critical decisions</span></li>
+      <li><a href="./drawer.en.md"><strong>Drawer</strong></a><span class="docs-component-desc"> — Side panels and form surfaces</span></li>
+      <li><a href="./toast.en.md"><strong>Toast</strong></a><span class="docs-component-desc"> — Quick feedback and transient states</span></li>
+      <li><a href="./tooltip.en.md"><strong>Tooltip</strong></a><span class="docs-component-desc"> — Lightweight hints and hierarchy</span></li>
+      <li><a href="./popover.en.md"><strong>Popover 弹出层</strong></a><span class="docs-component-desc"> — 基于 Floating UI 的点击弹出层。</span></li>
+      <li><a href="./loading-state.en.md"><strong>LoadingState 加载态</strong></a><span class="docs-component-desc"> — 用于加载中占位展示。</span></li>
+      <li><a href="./loading-overlay.en.md"><strong>LoadingOverlay 加载遮罩</strong></a><span class="docs-component-desc"> — 用于在内容区域或全屏展示加载遮罩。</span></li>
+      <li><a href="./progress.en.md"><strong>Progress</strong></a><span class="docs-component-desc"> — Linear progress and status feedback</span></li>
+      <li><a href="./progress-bar.en.md"><strong>ProgressBar</strong></a><span class="docs-component-desc"> — Multi-state progress bar with loading feedback</span></li>
+      <li><a href="./spinner.en.md"><strong>Spinner 加载</strong></a><span class="docs-component-desc"> — 用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。</span></li>
+      <li><a href="./empty.en.md"><strong>Empty 空状态</strong></a><span class="docs-component-desc"> — 统一的空状态组件。</span></li>
+      <li><a href="./empty-state.en.md"><strong>EmptyState 空态引导</strong></a><span class="docs-component-desc"> — 通用空态/引导组件，适用于页面为空、未选择、无权限等场景。</span></li>
+      <li><a href="./offline-state.en.md"><strong>OfflineState 离线</strong></a><span class="docs-component-desc"> — 用于离线或网络不可用时的提示。</span></li>
+      <li><a href="./permission-state.en.md"><strong>PermissionState 权限不足</strong></a><span class="docs-component-desc"> — 用于权限不足或未授权场景。</span></li>
+      <li><a href="./search-empty.en.md"><strong>SearchEmpty 搜索空态</strong></a><span class="docs-component-desc"> — 用于搜索无结果时的状态提示。</span></li>
+      <li><a href="./skeleton.en.md"><strong>Skeleton</strong></a><span class="docs-component-desc"> — Loading placeholders and structure hints</span></li>
+      <li><a href="./layout-skeleton.en.md"><strong>LayoutSkeleton</strong></a><span class="docs-component-desc"> — Layout-level skeleton placeholder</span></li>
+      <li><a href="./no-data.en.md"><strong>NoData 无数据</strong></a><span class="docs-component-desc"> — 用于列表、表格或图表数据为空的状态提示。</span></li>
+      <li><a href="./no-selection.en.md"><strong>NoSelection 未选择</strong></a><span class="docs-component-desc"> — 用于详情面板等未选择任何项的状态提示。</span></li>
+      <li><a href="./blank-slate.en.md"><strong>BlankSlate 空白页</strong></a><span class="docs-component-desc"> — 用于首次进入、引导用户开始操作的空白页布局。</span></li>
+    </ul>
+  </section>
+  <section class="docs-component-group">
+    <h3>Layout & Structure</h3>
+    <ul>
+      <li><a href="./grid.en.md"><strong>Grid</strong></a><span class="docs-component-desc"> — Structured layout and alignment</span></li>
+      <li><a href="./grid-layout.en.md"><strong>GridLayout 网格布局</strong></a><span class="docs-component-desc"> — 用于快速构建响应式网格，并可选启用 hover 光斑交互效果。</span></li>
+      <li><a href="./flex.en.md"><strong>Flex 弹性布局</strong></a><span class="docs-component-desc"> — 通用 Flex 容器。</span></li>
+      <li><a href="./stack.en.md"><strong>Stack 堆叠</strong></a><span class="docs-component-desc"> — 通用堆叠布局容器（横向/纵向）。</span></li>
+      <li><a href="./container.en.md"><strong>Container 容器</strong></a><span class="docs-component-desc"> — 容器组件是页面布局的基础，提供了灵活的布局选项和响应式设计支持。TouchX UI 的容器组件帮助您快速构建结构化的页面布局。</span></li>
+      <li><a href="./splitter.en.md"><strong>Splitter 分割面板</strong></a><span class="docs-component-desc"> — 可拖拽分割面板，支持水平/垂直。</span></li>
+      <li><a href="./outline-border.en.md"><strong>OutlineBorder 描边容器</strong></a><span class="docs-component-desc"> — `TxOutlineBorder` 用于给任意内容添加可配置的描边（border/ring/ring-offset），并提供多种裁切方式（overflow/clipPath/mask）。它本身不关心内部内容形态，完全通过 slot 组合。</span></li>
+      <li><a href="./glass-surface.en.md"><strong>GlassSurface 玻璃拟态</strong></a><span class="docs-component-desc"> — 用于渲染带玻璃拟态效果的容器。</span></li>
+      <li><a href="./auto-sizer.en.md"><strong>AutoSizer 自适应尺寸</strong></a><span class="docs-component-desc"> — 用于让容器在内容变化时自动跟随宽/高，并带过渡动画。</span></li>
+      <li><a href="./scroll.en.md"><strong>Scroll 滚动</strong></a><span class="docs-component-desc"> — 基于 `@better-scroll/scroll-bar` 的滚动容器，提供更一致的滚动条体验，并兼容 `TouchScroll` 组件名。</span></li>
+      <li><a href="./group-block.en.md"><strong>GroupBlock 分组块</strong></a><span class="docs-component-desc"> — 用于组织相关内容的可折叠分组容器，带有平滑动画效果。</span></li>
+    </ul>
+  </section>
+  <section class="docs-component-group">
+    <h3>Navigation & Commands</h3>
+    <ul>
+      <li><a href="./nav-bar.en.md"><strong>NavBar 导航栏</strong></a><span class="docs-component-desc"> — 移动端顶部导航栏，支持标题、左右插槽与返回按钮。</span></li>
+      <li><a href="./tab-bar.en.md"><strong>TabBar 底部导航</strong></a><span class="docs-component-desc"> — 移动端底部 TabBar，支持图标与 badge。</span></li>
+      <li><a href="./tabs.en.md"><strong>Tabs 标签页</strong></a><span class="docs-component-desc"> — 用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。</span></li>
+      <li><a href="./dropdown-menu.en.md"><strong>DropdownMenu 下拉菜单</strong></a><span class="docs-component-desc"> — 基于 Popover 的下拉菜单（Windows 风格）。</span></li>
+      <li><a href="./command-palette.en.md"><strong>CommandPalette 命令面板</strong></a><span class="docs-component-desc"> — 用于全局快捷指令/搜索的命令面板。</span></li>
+      <li><a href="./context-menu.en.md"><strong>ContextMenu 右键菜单</strong></a><span class="docs-component-desc"> — 基于 Floating UI 的右键菜单（跟随鼠标坐标）。</span></li>
+    </ul>
+  </section>
+  <section class="docs-component-group">
+    <h3>Data & Lists</h3>
+    <ul>
+      <li><a href="./data-table.en.md"><strong>DataTable 数据表格</strong></a><span class="docs-component-desc"> — 轻量数据表格组件，提供排序、行选择与自定义渲染能力。</span></li>
+      <li><a href="./tree.en.md"><strong>Tree 树形</strong></a><span class="docs-component-desc"> — 基础树形组件，支持搜索过滤、单选/多选与展开控制。</span></li>
+      <li><a href="./tree-select.en.md"><strong>TreeSelect 树选择器</strong></a><span class="docs-component-desc"> — 用于在下拉浮层中选择树形数据，支持搜索、单选/多选。</span></li>
+      <li><a href="./sortable-list.en.md"><strong>SortableList 拖拽排序</strong></a><span class="docs-component-desc"> — 用于拖拽排序的列表容器（基于 HTML5 Drag &amp; Drop）。</span></li>
+      <li><a href="./virtual-list.en.md"><strong>VirtualList 虚拟列表</strong></a><span class="docs-component-desc"> — 用于长列表渲染场景，降低 DOM 数量提升性能。</span></li>
+    </ul>
+  </section>
+  <section class="docs-component-group">
+    <h3>Content & Media</h3>
+    <ul>
+      <li><a href="./chat.en.md"><strong>Chat 消息列表</strong></a><span class="docs-component-desc"> — 常见 AI 消息列表（支持 markdown、图片缩略图、消息依次进入）。</span></li>
+      <li><a href="./chat-composer.en.md"><strong>ChatComposer 消息输入</strong></a><span class="docs-component-desc"> — 用于 AI 消息输入、发送。</span></li>
+      <li><a href="./typing-indicator.en.md"><strong>TypingIndicator 打字中</strong></a><span class="docs-component-desc"> — 用于展示 AI 正在回复的状态。</span></li>
+      <li><a href="./markdown-view.en.md"><strong>MarkdownView Markdown 渲染</strong></a><span class="docs-component-desc"> — 用于将 Markdown 渲染为 HTML（默认开启 sanitize）。</span></li>
+      <li><a href="./image-gallery.en.md"><strong>ImageGallery 图片预览</strong></a><span class="docs-component-desc"> — 用于图片网格与 Modal 预览。</span></li>
+      <li><a href="./agents.en.md"><strong>Agents 智能体列表</strong></a><span class="docs-component-desc"> — 用于展示智能体列表（分组、选中、loading、badge）。这是一个纯展示组件，不包含执行/请求等业务逻辑。</span></li>
+    </ul>
+  </section>
+  <section class="docs-component-group">
+    <h3>Motion & Effects</h3>
+    <ul>
+      <li><a href="./gradual-blur.en.md"><strong>GradualBlur 渐变模糊</strong></a><span class="docs-component-desc"> — 用于在容器边缘叠加多层 `backdrop-filter: blur(...)`，实现从清晰到模糊的渐变过渡。</span></li>
+      <li><a href="./glow-text.en.md"><strong>GlowText 扫光</strong></a><span class="docs-component-desc"> — 用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。</span></li>
+      <li><a href="./text-transformer.en.md"><strong>TextTransformer 文本变换</strong></a><span class="docs-component-desc"> — 用于在文本变化时提供平滑的过渡效果（fade + blur），适合与 `TxAutoSizer` 搭配实现“内容变化 + 尺寸跟随”的丝滑体验。</span></li>
+      <li><a href="./transition.en.md"><strong>Transition 动效</strong></a><span class="docs-component-desc"> — 用于内容切换（X）与列表增删（Y）的通用过渡封装。</span></li>
+      <li><a href="./stagger.en.md"><strong>Stagger 依次进入</strong></a><span class="docs-component-desc"> — 用于列表/节点依次进入（enter/leave）动画。</span></li>
+      <li><a href="./fusion.en.md"><strong>Fusion 交融</strong></a><span class="docs-component-desc"> — 两个元素交融与分开的视觉组件。</span></li>
+      <li><a href="./corner-overlay.en.md"><strong>CornerOverlay 角标容器</strong></a><span class="docs-component-desc"> — `TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。</span></li>
+      <li><a href="./gradient-border.en.md"><strong>GradientBorder 渐变边框</strong></a><span class="docs-component-desc"> — 用于给内容容器提供动态渐变边框效果。</span></li>
+    </ul>
+  </section>
+</div>
 
 ## Component Map
 | Category | Core Scope | Migration |

@@ -12,7 +12,6 @@ tags: [icon, glyph, visual]
 > 统一图标体系，控制密度与对齐，保证视觉节奏一致。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}

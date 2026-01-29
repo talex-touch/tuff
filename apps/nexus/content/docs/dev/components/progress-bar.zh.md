@@ -12,7 +12,6 @@ tags: [progress, bar, loading]
 > 更细颗粒的进度反馈，支持 loading / success / error。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Stateful Progress" description="加载、警告、成功态一屏展示。" code-lang="vue"}

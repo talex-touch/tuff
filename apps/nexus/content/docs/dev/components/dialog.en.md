@@ -12,7 +12,6 @@ tags: [dialog, modal, confirm]
 > For critical confirmations, with strict focus control and hierarchy.  
 > **Status**: Beta
 
-**Since**: {{ $doc.since }}
 
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}

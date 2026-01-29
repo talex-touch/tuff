@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const query = ref('')
+const runtimeConfig = useRuntimeConfig()
+const showCardChrome = computed(() => {
+  const value = runtimeConfig.public?.docs?.asideCardChrome
+  if (value === true)
+    return true
+  if (typeof value === 'string')
+    return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
+  return false
+})
 
 function handleAsk() {
   const text = query.value.trim()
@@ -13,23 +22,23 @@ function handleAsk() {
 </script>
 
 <template>
-  <section class="docs-aside-cards">
+  <section class="docs-aside-cards" :class="{ 'docs-aside-cards--chrome': showCardChrome }">
     <div class="docs-aside-card">
       <div class="docs-aside-card__title">
         <span class="docs-aside-card__sparkle">✦</span>
-        Tuff Intelligence
+        Zen Assistant
       </div>
       <p class="docs-aside-card__desc">
-        Instant answers for implementation.
+        Get instant help with component implementation.
       </p>
       <form class="docs-aside-card__field" @submit.prevent="handleAsk">
         <input
           v-model="query"
           type="text"
-          placeholder="Ask Tuff..."
+          placeholder="Ask docs..."
           class="docs-aside-card__input"
         >
-        <button type="submit" class="docs-aside-card__send" aria-label="Ask Tuff Intelligence">
+        <button type="submit" class="docs-aside-card__send" aria-label="Ask Zen Assistant">
           <span class="i-carbon-arrow-right" />
         </button>
       </form>
@@ -42,17 +51,20 @@ function handleAsk() {
       <ul class="docs-aside-card__list">
         <li>
           <a class="docs-aside-card__link" href="https://github.com/talex-touch/tuff/issues/new/choose" target="_blank" rel="noreferrer">
-            Report Bug
+            <span>Report an Issue</span>
+            <span class="docs-aside-card__link-icon i-carbon-flag" />
           </a>
         </li>
         <li>
           <a class="docs-aside-card__link" href="https://github.com/talex-touch/tuff/discussions" target="_blank" rel="noreferrer">
-            Ask Question
+            <span>Request Feature</span>
+            <span class="docs-aside-card__link-icon i-carbon-add" />
           </a>
         </li>
         <li>
           <a class="docs-aside-card__link" href="https://github.com/talex-touch/tuff" target="_blank" rel="noreferrer">
-            View Repository
+            <span>View Repository</span>
+            <span class="docs-aside-card__link-icon i-carbon-code" />
           </a>
         </li>
       </ul>
@@ -68,22 +80,26 @@ function handleAsk() {
 }
 
 .docs-aside-card {
-  border-radius: 0;
+  border-radius: 18px;
   border: 0;
   background: transparent;
-  padding: 2px 0;
+  padding: 16px;
   box-shadow: none;
+}
+
+.docs-aside-cards--chrome .docs-aside-card {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
 }
 
 .docs-aside-card__title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.85);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(15, 23, 42, 0.9);
 }
 
 .docs-aside-card__sparkle {
@@ -94,86 +110,141 @@ function handleAsk() {
 .docs-aside-card__desc {
   margin: 8px 0 12px;
   font-size: 13px;
-  color: rgba(71, 85, 105, 0.9);
+  color: rgba(100, 116, 139, 0.9);
 }
 
 .docs-aside-card__field {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px;
-  align-items: center;
+  position: relative;
 }
 
 .docs-aside-card__input {
   width: 100%;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.45);
-  padding: 8px 10px;
-  font-size: 12px;
-  background: white;
-  color: rgba(15, 23, 42, 0.85);
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 1);
+  padding: 10px 36px 10px 14px;
+  font-size: 13px;
+  background: rgba(248, 250, 252, 0.9);
+  color: rgba(15, 23, 42, 0.9);
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .docs-aside-card__input:focus {
-  border-color: rgba(59, 130, 246, 0.6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  border-color: rgba(147, 197, 253, 0.9);
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.25);
 }
 
 .docs-aside-card__send {
+  position: absolute;
+  right: 6px;
+  top: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(59, 130, 246, 0.4);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(14, 165, 233, 0.22));
-  color: rgba(30, 64, 175, 0.95);
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: rgba(148, 163, 184, 0.9);
   cursor: pointer;
   transition: all 0.2s ease;
+  transform: translateY(-50%);
 }
 
 .docs-aside-card__send:hover {
-  border-color: rgba(37, 99, 235, 0.7);
-  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.2);
+  background: rgba(226, 232, 240, 0.7);
+  color: rgba(71, 85, 105, 0.9);
 }
 
 .docs-aside-card__list {
   list-style: none;
-  padding: 8px 0 0;
+  padding: 10px 0 0;
   margin: 0;
   display: grid;
   gap: 8px;
 }
 
 .docs-aside-card__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 13px;
-  color: rgba(71, 85, 105, 0.9);
+  padding: 6px 6px;
+  border-radius: 10px;
+  color: rgba(100, 116, 139, 0.9);
   text-decoration: none;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.docs-aside-card__link-icon {
+  font-size: 14px;
+  color: rgba(148, 163, 184, 0.9);
+  transition: color 0.2s ease;
 }
 
 .docs-aside-card__link:hover {
   color: rgba(15, 23, 42, 0.95);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.docs-aside-card__link:hover .docs-aside-card__link-icon {
+  color: rgba(100, 116, 139, 0.9);
+}
+
+:global(.dark .docs-aside-card),
+:global([data-theme='dark'] .docs-aside-card) {
+  background: transparent;
+}
+
+:global(.dark .docs-aside-cards--chrome .docs-aside-card),
+:global([data-theme='dark'] .docs-aside-cards--chrome .docs-aside-card) {
+  border-color: rgba(71, 85, 105, 0.4);
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.35);
 }
 
 :global(.dark .docs-aside-card__title),
 :global([data-theme='dark'] .docs-aside-card__title) {
-  color: rgba(248, 250, 252, 0.9);
+  color: rgba(248, 250, 252, 0.92);
 }
 
 :global(.dark .docs-aside-card__desc),
 :global([data-theme='dark'] .docs-aside-card__desc),
 :global(.dark .docs-aside-card__link),
 :global([data-theme='dark'] .docs-aside-card__link) {
-  color: rgba(226, 232, 240, 0.75);
+  color: rgba(226, 232, 240, 0.78);
 }
 
 :global(.dark .docs-aside-card__input),
 :global([data-theme='dark'] .docs-aside-card__input) {
-  background: rgba(15, 23, 42, 0.6);
-  color: rgba(248, 250, 252, 0.9);
-  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(2, 6, 23, 0.7);
+  color: rgba(248, 250, 252, 0.92);
+  border-color: rgba(51, 65, 85, 0.7);
+}
+
+:global(.dark .docs-aside-card__send),
+:global([data-theme='dark'] .docs-aside-card__send) {
+  color: rgba(148, 163, 184, 0.85);
+}
+
+:global(.dark .docs-aside-card__send:hover),
+:global([data-theme='dark'] .docs-aside-card__send:hover) {
+  background: rgba(51, 65, 85, 0.6);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+:global(.dark .docs-aside-card__link:hover),
+:global([data-theme='dark'] .docs-aside-card__link:hover) {
+  background: rgba(30, 41, 59, 0.6);
+}
+
+:global(.dark .docs-aside-card__link-icon),
+:global([data-theme='dark'] .docs-aside-card__link-icon) {
+  color: rgba(148, 163, 184, 0.7);
+}
+
+:global(.dark .docs-aside-card__link:hover .docs-aside-card__link-icon),
+:global([data-theme='dark'] .docs-aside-card__link:hover .docs-aside-card__link-icon) {
+  color: rgba(226, 232, 240, 0.85);
 }
 </style>

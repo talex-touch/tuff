@@ -12,7 +12,6 @@ tags: [tooltip, hint, overlay]
 > 小而轻的提示，不打断流程但能提供必要信息。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Hover Hint" description="短文本提示，保持低侵入感。" code-lang="vue"}

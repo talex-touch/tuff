@@ -1,0 +1,49 @@
+---
+title: "GlowText 扫光"
+description: "用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。"
+---
+# GlowText 扫光
+
+用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。
+
+<script setup lang="ts">
+import GlowTextBasicDemo from '~/components/content/demos/GlowTextBasicDemo.vue'
+import GlowTextBasicDemoSource from '~/components/content/demos/GlowTextBasicDemo.vue?raw'
+
+import GlowTextImageDemo from '~/components/content/demos/GlowTextImageDemo.vue'
+import GlowTextImageDemoSource from '~/components/content/demos/GlowTextImageDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="GlowText" :code="GlowTextBasicDemoSource">
+  <template #preview>
+    <GlowTextBasicDemo />
+  </template>
+</DemoBlock>
+
+## 作用于图片/卡片
+
+<DemoBlock title="GlowText on image" :code="GlowTextImageDemoSource">
+  <template #preview>
+    <GlowTextImageDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `tag` | `string` | `span` | 外层渲染标签 |
+| `active` | `boolean` | `true` | 是否启用扫光 |
+| `repeat` | `boolean` | `true` | 是否循环 |
+| `durationMs` | `number` | `1400` | 动画时长(ms) |
+| `delayMs` | `number` | `0` | 延迟(ms) |
+| `angle` | `number` | `20` | 扫光角度(deg) |
+| `bandSize` | `number` | `38` | 高光带宽度(%) |
+| `color` | `string` | `rgba(255, 255, 255, 0.9)` | 高光颜色 |
+| `opacity` | `number` | `0.75` | 高光不透明度 |
+| `blendMode` | `string` | `screen` | 混合模式（如 `screen` / `overlay` / `lighten`） |
+| `radius` | `number` | `10` | 圆角(px) |

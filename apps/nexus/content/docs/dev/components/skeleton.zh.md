@@ -12,7 +12,6 @@ tags: [skeleton, loading, placeholder]
 > 加载中结构提示，避免内容跳动。  
 > **状态**：Beta
 
-**Since**: {{ $doc.since }}
 
 ## Demo
 ::TuffDemo{title="Skeleton" description="文本与头像混合占位" code-lang="vue"}
