@@ -1,0 +1,55 @@
+---
+title: Timeline
+description: Event timeline for status history
+category: Data
+---
+
+# Timeline
+
+Chronological list of events.
+
+## Basic Usage
+::TuffDemo{title="Timeline" description="Highlight recent updates." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTimeline>
+      <TxTimelineItem title="Design phase" time="09:30" color="primary" />
+      <TxTimelineItem title="Build" time="12:00" color="success" />
+      <TxTimelineItem title="Launch" time="16:10" color="warning" />
+    </TxTimeline>
+  </template>
+---
+#preview
+<tx-timeline>
+  <tx-timeline-item title="Design phase" time="09:30" color="primary" />
+  <tx-timeline-item title="Build" time="12:00" color="success" />
+  <tx-timeline-item title="Launch" time="16:10" color="warning" />
+</tx-timeline>
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: layout
+    type: "'vertical' | 'horizontal'"
+    default: "'vertical'"
+    description: Layout direction
+  - name: title
+    type: string
+    default: "''"
+    description: Timeline item title
+  - name: time
+    type: string
+    default: "''"
+    description: Time label
+  - name: color
+    type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
+    default: "'default'"
+    description: Dot color
+---
+:::
+
+## Source
+<TuffDocSourceLink />

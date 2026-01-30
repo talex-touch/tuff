@@ -1,0 +1,63 @@
+---
+title: Rating
+description: Star rating input
+category: Form
+---
+
+# Rating
+
+Star rating control for feedback input.
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const score = ref(3.5)
+</script>
+
+## Basic Usage
+::TuffDemo{title="Rating" description="Select a score with half steps." code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const score = ref(3.5)
+  </script>
+
+  <template>
+    <TxRating v-model="score" :precision="0.5" show-text />
+  </template>
+---
+#preview
+<tx-rating v-model="score" :precision="0.5" show-text />
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: number
+    default: '0'
+    description: Current score
+  - name: maxStars
+    type: number
+    default: '5'
+    description: Total stars
+  - name: precision
+    type: "number | 0.5"
+    default: '1'
+    description: Step size
+  - name: showText
+    type: boolean
+    default: 'false'
+    description: Show score text
+  - name: readonly
+    type: boolean
+    default: 'false'
+    description: Readonly mode
+---
+:::
+
+## Source
+<TuffDocSourceLink />

@@ -1,0 +1,69 @@
+---
+title: FlatInput 扁平输入
+description: 简洁的扁平输入框
+category: Form
+---
+
+# FlatInput 扁平输入
+
+轻量、紧凑的输入样式。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const text = ref('')
+const secret = ref('')
+</script>
+
+## 基础用法
+::TuffDemo{title="扁平输入" description="文本与密码输入。" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('')
+  const secret = ref('')
+  </script>
+
+  <template>
+    <FlatInput v-model="text" placeholder="请输入内容" />
+    <FlatInput v-model="secret" placeholder="密码" password />
+  </template>
+---
+#preview
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 360px;">
+  <flat-input v-model="text" placeholder="请输入内容" />
+  <flat-input v-model="secret" placeholder="密码" password />
+</div>
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: string
+    default: "''"
+    description: 输入值
+  - name: placeholder
+    type: string
+    default: "''"
+    description: 占位提示
+  - name: icon
+    type: string
+    default: "''"
+    description: 前缀图标类名
+  - name: password
+    type: boolean
+    default: 'false'
+    description: 密码模式
+  - name: area
+    type: boolean
+    default: 'false'
+    description: 文本域模式
+---
+:::
+
+## Source
+<TuffDocSourceLink />

@@ -1,0 +1,55 @@
+---
+title: Badge 徽标
+description: 用于展示数量或状态的轻量标记
+category: Feedback
+---
+
+# Badge 徽标
+
+用于展示计数或状态提示。
+
+## 基础用法
+::TuffDemo{title="徽标样式" description="数量、文本与点状提示。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxBadge :value="8" />
+    <TxBadge value="New" variant="primary" />
+    <TxBadge value="99+" variant="success" />
+    <TxBadge dot variant="error" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-badge :value="8" />
+  <tx-badge value="New" variant="primary" />
+  <tx-badge value="99+" variant="success" />
+  <tx-badge dot variant="error" />
+</div>
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: variant
+    type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
+    default: "'default'"
+    description: 颜色类型
+  - name: value
+    type: "string | number"
+    default: '0'
+    description: 徽标内容
+  - name: dot
+    type: boolean
+    default: 'false'
+    description: 点状模式
+  - name: color
+    type: string
+    default: '-'
+    description: 自定义颜色
+---
+:::
+
+## Source
+<TuffDocSourceLink />

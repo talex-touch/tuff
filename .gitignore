@@ -4,6 +4,8 @@
 .DS_Store*
 .idea/
 .vscode-test/
+.cursor/
+.codex/
 
 # ========================
 # Logs / Debug / Reports

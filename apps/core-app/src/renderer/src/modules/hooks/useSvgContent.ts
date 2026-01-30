@@ -1,5 +1,11 @@
 import type { RetrierOptions } from '@talex-touch/utils'
-import { createRetrier, DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+import {
+  createRetrier,
+  DownloadModule,
+  DownloadPriority,
+  DownloadStatus,
+  isLocalhostUrl
+} from '@talex-touch/utils'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -42,11 +48,19 @@ export function useSvgContent(
     'temp-file:create'
   )
   const downloadSdk = isElectronRenderer() ? useDownloadSdk() : null
+  const defaultFetchTimeoutMs = 5_000
+  const downloadTimeoutMs = 20_000
 
   const retrier = createRetrier(
     retrierOptions ?? {
       maxRetries: 2,
-      timeoutMs: 5000
+      timeoutMs: () => {
+        const targetUrl = normalizeSource(url.value)
+        if (targetUrl && isRemoteHttp(targetUrl) && !isLocalHttpSource(targetUrl)) {
+          return downloadTimeoutMs
+        }
+        return defaultFetchTimeoutMs
+      }
     }
   )
 
@@ -78,6 +92,15 @@ export function useSvgContent(
     try {
       const parsed = new URL(source)
       return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }
+
+  function isLocalHttpSource(source: string): boolean {
+    if (!isRemoteHttp(source)) return false
+    try {
+      return isLocalhostUrl(source)
     } catch {
       return false
     }
@@ -152,7 +175,7 @@ export function useSvgContent(
     if (pendingTasks.has(taskId)) {
       return pendingTasks.get(taskId)!.promise
     }
-    const timeoutMs = 20_000
+    const timeoutMs = downloadTimeoutMs
     let resolve!: () => void
     let reject!: (error: Error) => void
     const promise = new Promise<void>((resolveFn, rejectFn) => {
@@ -247,6 +270,12 @@ export function useSvgContent(
     }
 
     if (isApiSource(targetUrl) || !isElectronRenderer()) {
+      resolvedUrl.value = targetUrl
+      const response = await fetch(targetUrl)
+      return await response.text()
+    }
+
+    if (isLocalHttpSource(targetUrl)) {
       resolvedUrl.value = targetUrl
       const response = await fetch(targetUrl)
       return await response.text()

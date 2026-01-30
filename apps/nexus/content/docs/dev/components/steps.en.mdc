@@ -1,0 +1,51 @@
+---
+title: Steps
+description: Step-by-step progress indicator
+category: Layout
+---
+
+# Steps
+
+Progress indicator for multi-step flows.
+
+## Basic Usage
+::TuffDemo{title="Steps" description="Show progress across steps." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSteps :active="1">
+      <TxStep title="Start" description="Collect basics" :step="0" />
+      <TxStep title="Details" description="Fill in details" :step="1" />
+      <TxStep title="Finish" description="Review and submit" :step="2" />
+    </TxSteps>
+  </template>
+---
+#preview
+<tx-steps :active="1">
+  <tx-step title="Start" description="Collect basics" :step="0" />
+  <tx-step title="Details" description="Fill in details" :step="1" />
+  <tx-step title="Finish" description="Review and submit" :step="2" />
+</tx-steps>
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: active
+    type: "number | string"
+    default: '0'
+    description: Active step
+  - name: direction
+    type: "'horizontal' | 'vertical'"
+    default: "'horizontal'"
+    description: Layout direction
+  - name: size
+    type: "'small' | 'medium' | 'large'"
+    default: "'medium'"
+    description: Step size
+---
+:::
+
+## Source
+<TuffDocSourceLink />

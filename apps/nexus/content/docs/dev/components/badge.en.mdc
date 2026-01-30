@@ -1,0 +1,55 @@
+---
+title: Badge
+description: Small status pill for counts and indicators
+category: Feedback
+---
+
+# Badge
+
+Compact count or status indicator.
+
+## Basic Usage
+::TuffDemo{title="Badge Variants" description="Counts, labels, and dot indicators." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxBadge :value="8" />
+    <TxBadge value="New" variant="primary" />
+    <TxBadge value="99+" variant="success" />
+    <TxBadge dot variant="error" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-badge :value="8" />
+  <tx-badge value="New" variant="primary" />
+  <tx-badge value="99+" variant="success" />
+  <tx-badge dot variant="error" />
+</div>
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: variant
+    type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
+    default: "'default'"
+    description: Color preset
+  - name: value
+    type: "string | number"
+    default: '0'
+    description: Badge content
+  - name: dot
+    type: boolean
+    default: 'false'
+    description: Dot mode
+  - name: color
+    type: string
+    default: '-'
+    description: Custom color
+---
+:::
+
+## Source
+<TuffDocSourceLink />

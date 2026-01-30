@@ -1,5 +1,5 @@
 import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
-import type { Component } from 'vue'
+import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsChannel from '@talex-touch/utils/channel'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
@@ -48,37 +48,44 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/utils/types': TalexUtilsTypes
 }
 
+type PluginInjectedInstance = ComponentPublicInstance & { $plugin?: Record<string, unknown> }
+
+type WidgetSetup = (props: Record<string, unknown>, ctx: SetupContext) => unknown
+
+type WidgetComponent = {
+  setup?: WidgetSetup
+  beforeCreate?: (this: PluginInjectedInstance) => void
+  __pluginInjected?: boolean
+} & Record<string, unknown>
+
+type WidgetFunctionalComponent = (props: Record<string, unknown>, ctx: SetupContext) => unknown
+
 function attachPluginInfoToComponent(
   component: Component,
   pluginInfo: Record<string, unknown>
 ): Component {
-  const candidate = component as
-    | {
-        setup?: (props: any, ctx: any) => unknown
-        beforeCreate?: () => void
-        __pluginInjected?: boolean
-      }
-    | ((props: any, ctx: any) => unknown)
+  const candidate = component as WidgetComponent | WidgetFunctionalComponent
 
   if (candidate && typeof candidate === 'object') {
-    if ((candidate as any).__pluginInjected) {
+    if (candidate.__pluginInjected) {
       return component
     }
 
     const originalSetup = candidate.setup
     const originalBeforeCreate = candidate.beforeCreate
 
-    const wrapped = {
+    const wrapped: WidgetComponent = {
       ...candidate,
-      setup(props: any, ctx: any) {
+      setup(props: Record<string, unknown>, ctx: SetupContext) {
         const instance = Vue.getCurrentInstance()
-        if (instance?.proxy) {
-          ;(instance.proxy as any).$plugin = pluginInfo
+        const proxy = instance?.proxy as PluginInjectedInstance | null
+        if (proxy) {
+          proxy.$plugin = pluginInfo
         }
         return originalSetup ? originalSetup(props, ctx) : undefined
       },
-      beforeCreate() {
-        ;(this as any).$plugin = pluginInfo
+      beforeCreate(this: PluginInjectedInstance) {
+        this.$plugin = pluginInfo
         if (typeof originalBeforeCreate === 'function') {
           originalBeforeCreate.call(this)
         }
@@ -92,12 +99,13 @@ function attachPluginInfoToComponent(
   if (typeof candidate === 'function') {
     const wrapped = Vue.defineComponent({
       name: 'WidgetPluginWrapper',
-      setup(props, ctx) {
+      setup(props: Record<string, unknown>, ctx: SetupContext) {
         const instance = Vue.getCurrentInstance()
-        if (instance?.proxy) {
-          ;(instance.proxy as any).$plugin = pluginInfo
+        const proxy = instance?.proxy as PluginInjectedInstance | null
+        if (proxy) {
+          proxy.$plugin = pluginInfo
         }
-        return () => Vue.h(candidate as any, props, ctx.slots)
+        return () => Vue.h(candidate as Component, props, ctx.slots)
       }
     }) as Component & { __pluginInjected?: boolean }
 

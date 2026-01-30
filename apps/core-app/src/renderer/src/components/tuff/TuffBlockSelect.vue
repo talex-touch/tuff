@@ -1,6 +1,7 @@
 <script lang="ts" name="TuffBlockSelect" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import type { WritableComputedRef } from 'vue'
 import { computed } from 'vue'
 import TSelect from '~/components/base/select/TSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -24,7 +25,7 @@ const emits = defineEmits<{
   (e: 'change', value: string | number, event?: Event): void
 }>()
 
-const value = useModelWrapper(props, emits)
+const value = useModelWrapper(props, emits) as unknown as WritableComputedRef<string | number>
 const isActive = computed(() => value.value !== undefined && value.value !== null)
 
 function handleChange(val: string | number, evt?: Event) {
@@ -47,7 +48,7 @@ function handleChange(val: string | number, evt?: Event) {
     <template #default>
       <div class="flex items-center justify-end w-full">
         <TSelect
-          v-model="value.value"
+          v-model="value"
           :class="disabled ? 'pointer-events-none opacity-70' : ''"
           @change="handleChange"
         >

@@ -1,0 +1,75 @@
+---
+title: Pagination
+description: Page navigation for long lists
+category: Data
+---
+
+# Pagination
+
+Pagination controls for datasets and tables.
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const page = ref(1)
+</script>
+
+## Basic Usage
+::TuffDemo{title="Pagination" description="Navigate through pages of data." code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const page = ref(1)
+  </script>
+
+  <template>
+    <TxPagination
+      v-model:current-page="page"
+      :total="120"
+      :page-size="10"
+      show-info
+      show-first-last
+    />
+  </template>
+---
+#preview
+<tx-pagination
+  v-model:current-page="page"
+  :total="120"
+  :page-size="10"
+  show-info
+  show-first-last
+/>
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: currentPage
+    type: number
+    default: '1'
+    description: Current page
+  - name: pageSize
+    type: number
+    default: '10'
+    description: Items per page
+  - name: total
+    type: number
+    default: '0'
+    description: Total items
+  - name: showInfo
+    type: boolean
+    default: 'false'
+    description: Show total info
+  - name: showFirstLast
+    type: boolean
+    default: 'false'
+    description: Show first/last buttons
+---
+:::
+
+## Source
+<TuffDocSourceLink />

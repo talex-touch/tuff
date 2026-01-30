@@ -1,0 +1,71 @@
+---
+title: Modal
+description: Lightweight modal dialog
+category: Feedback
+---
+
+# Modal
+
+Centered modal for short tasks or confirmations.
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const open = ref(false)
+</script>
+
+## Basic Usage
+::TuffDemo{title="Modal Dialog" description="Trigger a lightweight modal." code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxButton variant="primary" @click="open = true">Open Modal</TxButton>
+    <TxModal v-model="open" title="Quick Action">
+      <p>Give the user a short task or decision.</p>
+      <template #footer>
+        <TxButton variant="ghost" @click="open = false">Cancel</TxButton>
+        <TxButton variant="primary" @click="open = false">Confirm</TxButton>
+      </template>
+    </TxModal>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button variant="primary" @click="open = true">Open Modal</tx-button>
+  <tx-modal v-model="open" title="Quick Action">
+    <p>Give the user a short task or decision.</p>
+    <template #footer>
+      <tx-button variant="ghost" @click="open = false">Cancel</tx-button>
+      <tx-button variant="primary" @click="open = false">Confirm</tx-button>
+    </template>
+  </tx-modal>
+</div>
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: boolean
+    default: 'false'
+    description: Visible state
+  - name: title
+    type: string
+    default: "''"
+    description: Modal title
+  - name: width
+    type: string
+    default: "'480px'"
+    description: Content width
+---
+:::
+
+## Source
+<TuffDocSourceLink />

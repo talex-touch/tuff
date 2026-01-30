@@ -14,6 +14,7 @@ declare global {
   const GoogleTranslateProvider: typeof import('./src/providers/google-translate').GoogleTranslateProvider
   const MyMemoryTranslateProvider: typeof import('./src/providers/mymemory-translate').MyMemoryTranslateProvider
   const TencentTranslateProvider: typeof import('./src/providers/tencent-translate').TencentTranslateProvider
+  const TuffIntelligenceTranslateProvider: typeof import('./src/providers/tuffintelligence-translate').TuffIntelligenceTranslateProvider
   const asyncComputed: typeof import('@vueuse/core').asyncComputed
   const autoResetRef: typeof import('@vueuse/core').autoResetRef
   const computed: typeof import('vue').computed
@@ -335,6 +336,9 @@ declare global {
   // @ts-ignore
   export type { TencentTranslateProvider } from './src/providers/tencent-translate'
   import('./src/providers/tencent-translate')
+  // @ts-ignore
+  export type { TuffIntelligenceTranslateProvider } from './src/providers/tuffintelligence-translate'
+  import('./src/providers/tuffintelligence-translate')
 }
 
 // for vue template auto import
@@ -350,6 +354,7 @@ declare module 'vue' {
     readonly GoogleTranslateProvider: UnwrapRef<typeof import('./src/providers/google-translate')['GoogleTranslateProvider']>
     readonly MyMemoryTranslateProvider: UnwrapRef<typeof import('./src/providers/mymemory-translate')['MyMemoryTranslateProvider']>
     readonly TencentTranslateProvider: UnwrapRef<typeof import('./src/providers/tencent-translate')['TencentTranslateProvider']>
+    readonly TuffIntelligenceTranslateProvider: UnwrapRef<typeof import('./src/providers/tuffintelligence-translate')['TuffIntelligenceTranslateProvider']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>
     readonly autoResetRef: UnwrapRef<typeof import('@vueuse/core')['autoResetRef']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>

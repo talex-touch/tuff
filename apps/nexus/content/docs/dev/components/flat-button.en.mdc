@@ -1,0 +1,55 @@
+---
+title: FlatButton
+description: Minimal, low-emphasis button
+category: Basic
+---
+
+# FlatButton
+
+A lightweight button for secondary actions.
+
+## Basic Usage
+::TuffDemo{title="Flat Button" description="Default, primary, mini, and loading states." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffFlatButton>Default</TuffFlatButton>
+    <TuffFlatButton primary>Primary</TuffFlatButton>
+    <TuffFlatButton mini>Mini</TuffFlatButton>
+    <TuffFlatButton loading>Loading</TuffFlatButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-flat-button>Default</tuff-flat-button>
+  <tuff-flat-button primary>Primary</tuff-flat-button>
+  <tuff-flat-button mini>Mini</tuff-flat-button>
+  <tuff-flat-button loading>Loading</tuff-flat-button>
+</div>
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: primary
+    type: boolean
+    default: 'false'
+    description: Primary visual style
+  - name: mini
+    type: boolean
+    default: 'false'
+    description: Compact size
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: Disable interactions
+  - name: loading
+    type: boolean
+    default: 'false'
+    description: Loading state
+---
+:::
+
+## Source
+<TuffDocSourceLink />

@@ -1,5 +1,5 @@
 <script lang="ts" name="TFormInput" setup>
-import type { StyleValue } from 'vue'
+import type { StyleValue, WritableComputedRef } from 'vue'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { computed, ref, useAttrs } from 'vue'
 
@@ -35,7 +35,9 @@ const emits = defineEmits<{
   (e: 'focus', event: FocusEvent): void
 }>()
 
-const value = useModelWrapper(props, emits)
+const value = useModelWrapper(props, emits) as unknown as WritableComputedRef<
+  string | number | null | undefined
+>
 const showCapsLock = ref(false)
 const attrs = useAttrs()
 const wrapperClass = computed(() => attrs.class)
@@ -68,7 +70,7 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
     </span>
     <textarea
       v-if="textarea"
-      v-model="value.value"
+      v-model="value"
       :placeholder="placeholder"
       :rows="rows"
       :disabled="disabled"
@@ -81,7 +83,7 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
     />
     <input
       v-else
-      v-model="value.value"
+      v-model="value"
       :type="inputType"
       :placeholder="placeholder"
       :disabled="disabled"
