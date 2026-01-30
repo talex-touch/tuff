@@ -19,6 +19,13 @@ const HEADER_HEIGHT = 64
 const MIN_HEIGHT = 64
 const MAX_HEIGHT = 600
 
+const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
+
+const logResizeDebug = (...args: unknown[]) => {
+  if (!shouldLog()) return
+  console.debug('[CoreBoxResize]', ...args)
+}
+
 function clampHeight(height: number): number {
   return Math.max(MIN_HEIGHT, Math.min(height, MAX_HEIGHT))
 }
@@ -36,7 +43,13 @@ function calculateDesiredHeight(resultCount: number): number {
   if (resultCount === 0) return clampHeight(headerHeight)
 
   const scrollRoot = document.querySelector('.CoreBoxRes-Main .touch-scroll')
-  if (!scrollRoot) return MIN_HEIGHT
+  if (!scrollRoot) {
+    logResizeDebug('calculateDesiredHeight:scrollRootMissing', {
+      resultCount,
+      headerHeight
+    })
+    return MIN_HEIGHT
+  }
 
   const nativeWrap = scrollRoot.querySelector(
     '.native-scroll-wrapper, .tx-scroll__native'
@@ -47,7 +60,10 @@ function calculateDesiredHeight(resultCount: number): number {
   const txWrapper = scrollRoot.querySelector('.tx-scroll__wrapper') as HTMLElement | null
   const txContent = scrollRoot.querySelector('.tx-scroll__content') as HTMLElement | null
   const wrap = nativeWrap ?? legacyElWrap ?? txWrapper ?? txContent
-  if (!wrap) return MIN_HEIGHT
+  if (!wrap) {
+    logResizeDebug('calculateDesiredHeight:wrapMissing', { resultCount, headerHeight })
+    return MIN_HEIGHT
+  }
 
   const scrollHeight = txContent?.scrollHeight ?? wrap.scrollHeight
   const clientHeight = wrap.clientHeight
@@ -142,7 +158,7 @@ export function useResize(options: UseResizeOptions): void {
       if (newResults === oldResults) return
       scheduleLayoutUpdate('results')
     },
-    { deep: true }
+    { deep: true, flush: 'post' }
   )
 
   watch(

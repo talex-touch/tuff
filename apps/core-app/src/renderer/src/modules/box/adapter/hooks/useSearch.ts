@@ -14,7 +14,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { useDebounceFn } from '@vueuse/core'
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { appSetting } from '~/modules/channel/storage'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
@@ -286,6 +286,10 @@ export function useSearch(
         applySearchEnd(pending)
       }
     }
+
+    nextTick(() => {
+      window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
+    })
   }
 
   async function executeSearch(): Promise<void> {
@@ -372,8 +376,13 @@ export function useSearch(
           inputs: inputs.length
         })
 
+        const requestStartedAt = performance.now()
         const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
           query
+        })
+        logDebug('[useSearch] Recommendation IPC duration:', {
+          ms: Math.round(performance.now() - requestStartedAt),
+          sessionId: initialResult?.sessionId
         })
         if (recommendationTimeoutId) {
           clearTimeout(recommendationTimeoutId)
@@ -470,8 +479,13 @@ export function useSearch(
         source: 'renderer'
       })
 
+      const requestStartedAt = performance.now()
       const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
         query
+      })
+      logDebug('[useSearch] Search IPC duration:', {
+        ms: Math.round(performance.now() - requestStartedAt),
+        sessionId: initialResult?.sessionId
       })
       if (inFlightQueryKey === queryKey) {
         inFlightQueryKey = null

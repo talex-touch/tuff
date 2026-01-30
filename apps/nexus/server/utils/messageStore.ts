@@ -84,33 +84,38 @@ export async function recordTelemetryMessages(
     return 0
   }
 
-  await ensureMessageSchema(db)
-
   let processed = 0
-  for (const input of inputs) {
-    if (!input.source || !input.severity || !input.title || !input.message) {
-      continue
+  try {
+    await ensureMessageSchema(db)
+
+    for (const input of inputs) {
+      if (!input.source || !input.severity || !input.title || !input.message) {
+        continue
+      }
+      const id = input.id || crypto.randomUUID()
+      const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : new Date().toISOString()
+      await db.prepare(`
+        INSERT OR REPLACE INTO ${MESSAGE_TABLE} (
+          id, source, severity, title, message, meta, status, platform, version, is_anonymous, created_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
+      `).bind(
+        id,
+        input.source,
+        input.severity,
+        input.title,
+        input.message,
+        input.meta ? JSON.stringify(input.meta) : null,
+        input.status || 'unread',
+        input.platform || null,
+        input.version || null,
+        input.isAnonymous === false ? 0 : 1,
+        createdAt,
+      ).run()
+      processed += 1
     }
-    const id = input.id || crypto.randomUUID()
-    const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : new Date().toISOString()
-    await db.prepare(`
-      INSERT OR REPLACE INTO ${MESSAGE_TABLE} (
-        id, source, severity, title, message, meta, status, platform, version, is_anonymous, created_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
-    `).bind(
-      id,
-      input.source,
-      input.severity,
-      input.title,
-      input.message,
-      input.meta ? JSON.stringify(input.meta) : null,
-      input.status || 'unread',
-      input.platform || null,
-      input.version || null,
-      input.isAnonymous === false ? 0 : 1,
-      createdAt,
-    ).run()
-    processed += 1
+  }
+  catch (error) {
+    console.warn('Telemetry messages: D1 error', error)
   }
 
   return processed
@@ -132,55 +137,61 @@ export async function listTelemetryMessages(
     return []
   }
 
-  await ensureMessageSchema(db)
+  try {
+    await ensureMessageSchema(db)
 
-  const clauses: string[] = []
-  const params: Array<string | number> = []
+    const clauses: string[] = []
+    const params: Array<string | number> = []
 
-  if (options.status && options.status !== 'all') {
-    clauses.push('status = ?')
-    params.push(options.status)
+    if (options.status && options.status !== 'all') {
+      clauses.push('status = ?')
+      params.push(options.status)
+    }
+    if (options.source) {
+      clauses.push('source = ?')
+      params.push(options.source)
+    }
+    if (options.severity) {
+      clauses.push('severity = ?')
+      params.push(options.severity)
+    }
+    if (options.since) {
+      clauses.push('created_at >= ?')
+      params.push(new Date(options.since).toISOString())
+    }
+
+    const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+    const limit = Math.min(options.limit ?? 50, 100)
+
+    const query = `
+      SELECT id, source, severity, title, message, meta, status, platform, version, is_anonymous, created_at
+      FROM ${MESSAGE_TABLE}
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ?;
+    `
+
+    const result = await db.prepare(query).bind(...params, limit).all()
+    const rows = (result.results ?? []) as Array<Record<string, any>>
+
+    return rows.map(row => ({
+      id: row.id,
+      source: row.source,
+      severity: row.severity,
+      title: row.title,
+      message: row.message,
+      meta: row.meta ? safeParseMeta(row.meta) : undefined,
+      status: row.status,
+      platform: row.platform || undefined,
+      version: row.version || undefined,
+      isAnonymous: row.is_anonymous === 1,
+      createdAt: row.created_at,
+    }))
   }
-  if (options.source) {
-    clauses.push('source = ?')
-    params.push(options.source)
+  catch (error) {
+    console.warn('Telemetry messages: D1 error', error)
+    return []
   }
-  if (options.severity) {
-    clauses.push('severity = ?')
-    params.push(options.severity)
-  }
-  if (options.since) {
-    clauses.push('created_at >= ?')
-    params.push(new Date(options.since).toISOString())
-  }
-
-  const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
-  const limit = Math.min(options.limit ?? 50, 100)
-
-  const query = `
-    SELECT id, source, severity, title, message, meta, status, platform, version, is_anonymous, created_at
-    FROM ${MESSAGE_TABLE}
-    ${whereClause}
-    ORDER BY created_at DESC
-    LIMIT ?;
-  `
-
-  const result = await db.prepare(query).bind(...params, limit).all()
-  const rows = (result.results ?? []) as Array<Record<string, any>>
-
-  return rows.map(row => ({
-    id: row.id,
-    source: row.source,
-    severity: row.severity,
-    title: row.title,
-    message: row.message,
-    meta: row.meta ? safeParseMeta(row.meta) : undefined,
-    status: row.status,
-    platform: row.platform || undefined,
-    version: row.version || undefined,
-    isAnonymous: row.is_anonymous === 1,
-    createdAt: row.created_at,
-  }))
 }
 
 function safeParseMeta(raw: string): Record<string, unknown> {

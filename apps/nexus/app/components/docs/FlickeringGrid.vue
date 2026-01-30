@@ -48,8 +48,9 @@ const computedColor = computed(() => {
   }
 
   const rgbMatch = value.match(/rgba?\(([^)]+)\)/i)
-  if (rgbMatch) {
-    const [r, g, b] = rgbMatch[1].split(',').map(part => Number.parseFloat(part.trim()))
+  const channelText = rgbMatch?.[1]
+  if (channelText) {
+    const [r, g, b] = channelText.split(',').map(part => Number.parseFloat(part.trim()))
     if ([r, g, b].every(channel => Number.isFinite(channel)))
       return `rgba(${r}, ${g}, ${b},`
   }
@@ -197,7 +198,10 @@ onMounted(() => {
     updateCanvasSize()
   })
   intersectionObserver = new IntersectionObserver(
-    ([entry]) => {
+    (entries) => {
+      const entry = entries[0]
+      if (!entry)
+        return
       isInView.value = entry.isIntersecting
       if (isInView.value)
         startAnimation()

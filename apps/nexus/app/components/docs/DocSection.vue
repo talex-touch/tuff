@@ -15,6 +15,13 @@ const emit = defineEmits<{
 }>()
 
 const linkable = computed(() => props.list <= 0)
+const { sizerRef, runWithAutoSizer } = useAutoSizerAction()
+
+function handleToggle() {
+  void runWithAutoSizer(() => {
+    emit('click')
+  })
+}
 </script>
 
 <template>
@@ -36,7 +43,7 @@ const linkable = computed(() => props.list <= 0)
       class="DocSection-Header"
       :class="active ? 'is-active' : ''"
       :aria-expanded="active"
-      @click="emit('click')"
+      @click="handleToggle"
     >
       <span class="truncate">
         <slot name="header" />
@@ -48,16 +55,21 @@ const linkable = computed(() => props.list <= 0)
       />
     </button>
 
-    <div
-      class="grid transition-[grid-template-rows] duration-200 ease-out"
-      :style="{ gridTemplateRows: active && list > 0 ? '1fr' : '0fr' }"
+    <TxAutoSizer
+      v-if="list > 0"
+      ref="sizerRef"
+      :width="false"
+      :height="true"
+      :duration-ms="200"
+      outer-class="DocSection-Body overflow-hidden"
+      inner-class="DocSection-BodyInner min-h-0"
     >
-      <div class="overflow-hidden min-h-0">
+      <div v-show="active && list > 0">
         <ul class="docs-nav-list">
           <slot />
         </ul>
       </div>
-    </div>
+    </TxAutoSizer>
   </div>
 </template>
 

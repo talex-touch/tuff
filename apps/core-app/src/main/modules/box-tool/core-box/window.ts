@@ -96,6 +96,7 @@ export class WindowManager {
   private boundsAnimationTaskId: string | null = null
   private boundsAnimationToken = 0
   private currentAnimationTarget: Electron.Rectangle | null = null
+  private animationResizeRestore: (() => void) | null = null
   // Track last set bounds to avoid getBounds() latency issues
   private lastSetBounds: { height: number; y: number } | null = null
   private customTopPercent: number | null = null // Custom position offset (0-1)
@@ -330,6 +331,33 @@ export class WindowManager {
     }
     this.currentAnimationTarget = null
     this.boundsAnimationToken += 1
+    if (this.animationResizeRestore) {
+      this.animationResizeRestore()
+      this.animationResizeRestore = null
+    }
+  }
+
+  // Some macOS panel windows ignore setBounds when resizable is false.
+  private prepareTemporaryResize(browserWindow: Electron.BrowserWindow): () => void {
+    if (browserWindow.isDestroyed()) return () => {}
+    const wasResizable = browserWindow.isResizable()
+    if (!wasResizable) {
+      try {
+        browserWindow.setResizable(true)
+      } catch (error) {
+        coreBoxWindowLog.warn('Failed to enable resizable state for bounds update', { error })
+      }
+    }
+    return () => {
+      if (browserWindow.isDestroyed()) return
+      if (!wasResizable) {
+        try {
+          browserWindow.setResizable(false)
+        } catch (error) {
+          coreBoxWindowLog.warn('Failed to restore resizable state after bounds update', { error })
+        }
+      }
+    }
   }
 
   /**
@@ -343,6 +371,13 @@ export class WindowManager {
     if (window.window.isDestroyed()) return
 
     const browserWindow = window.window
+    if (typeof options.minHeight === 'number') {
+      try {
+        browserWindow.setMinimumSize(720, options.minHeight)
+      } catch (error) {
+        coreBoxWindowLog.warn('Failed to update minimum size before bounds animation', { error })
+      }
+    }
     const rawBounds = browserWindow.getBounds()
 
     // Skip if same target as current animation (prevent duplicate animations)
@@ -372,7 +407,6 @@ export class WindowManager {
     // Cancel any existing animation and start fresh from current position
     this.stopBoundsAnimation()
     this.currentAnimationTarget = { ...target }
-
     const token = this.boundsAnimationToken
     const heightDelta = Math.abs(target.height - startBounds.height)
     // Duration: 120-220ms based on distance
@@ -669,18 +703,36 @@ export class WindowManager {
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
+      const logVerbose =
+        settings.searchEngine?.logsEnabled === true || settings.diagnostics?.verboseLogs === true
       const animationEnabled = settings.animation?.coreBoxResize === true
 
       if (currentWindow.window.isVisible() && animationEnabled) {
         this.animateWindowBounds(currentWindow, bounds, { minHeight: COREBOX_MIN_HEIGHT })
       } else {
         this.stopBoundsAnimation()
+        const restoreResizable = this.prepareTemporaryResize(currentWindow.window)
         try {
+          currentWindow.window.setMinimumSize(720, COREBOX_MIN_HEIGHT)
           currentWindow.window.setBounds(bounds, false)
           this.lastSetBounds = { height: bounds.height, y: bounds.y }
-          currentWindow.window.setMinimumSize(720, COREBOX_MIN_HEIGHT)
+          const [, minHeightAfter] = currentWindow.window.getMinimumSize()
+          const finalBounds = currentWindow.window.getBounds()
+          const shrinkMeta = {
+            targetHeight: bounds.height,
+            finalHeight: finalBounds.height,
+            minHeightAfter,
+            visible: currentWindow.window.isVisible()
+          }
+          if (logVerbose) {
+            coreBoxWindowLog.info('CoreBox shrink applied', { meta: shrinkMeta })
+          } else {
+            coreBoxWindowLog.debug('CoreBox shrink applied', { meta: shrinkMeta })
+          }
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
+        } finally {
+          restoreResizable()
         }
       }
     } else {
@@ -712,6 +764,8 @@ export class WindowManager {
     if (!bounds) return
 
     const settings = this.getAppSettingConfig()
+    const logVerbose =
+      settings.searchEngine?.logsEnabled === true || settings.diagnostics?.verboseLogs === true
     const animationEnabled = settings.animation?.coreBoxResize === true
     const isVisible = currentWindow.window.isVisible()
 
@@ -719,12 +773,28 @@ export class WindowManager {
       this.animateWindowBounds(currentWindow, bounds, { minHeight: safeHeight })
     } else {
       this.stopBoundsAnimation()
+      const restoreResizable = this.prepareTemporaryResize(currentWindow.window)
       try {
+        currentWindow.window.setMinimumSize(720, safeHeight)
         currentWindow.window.setBounds(bounds, false)
         this.lastSetBounds = { height: bounds.height, y: bounds.y }
-        currentWindow.window.setMinimumSize(720, safeHeight)
+        const [, minHeightAfter] = currentWindow.window.getMinimumSize()
+        const finalBounds = currentWindow.window.getBounds()
+        const setHeightMeta = {
+          targetHeight: safeHeight,
+          finalHeight: finalBounds.height,
+          minHeightAfter,
+          visible: currentWindow.window.isVisible()
+        }
+        if (logVerbose) {
+          coreBoxWindowLog.info('CoreBox setHeight applied', { meta: setHeightMeta })
+        } else {
+          coreBoxWindowLog.debug('CoreBox setHeight applied', { meta: setHeightMeta })
+        }
       } catch (error) {
         coreBoxWindowLog.error('Failed to set window height', { error })
+      } finally {
+        restoreResizable()
       }
     }
 

@@ -2,9 +2,11 @@
 import { useAttrs } from 'vue'
 import TuffComponentCanvas from '~/components/content/TuffComponentCanvas.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   name?: string
-}>()
+}>(), {
+  name: '',
+})
 const attrs = useAttrs()
 </script>
 

@@ -11,14 +11,17 @@ const {
 
 const crypto = require('node:crypto')
 const { createIntelligenceClient } = require('@talex-touch/utils/intelligence')
+const { makeWidgetId } = require('@talex-touch/utils/plugin/widget')
 
 const PLUGIN_NAME = 'touch-translation'
+const WIDGET_ITEM_ID = 'translation-widget'
 
 const latestRequestSeqByFeature = new Map()
 
 const debounceTimersByFeature = new Map()
 const abortControllersByFeature = new Map()
 const lastQueryByFeature = new Map()
+const widgetStateByFeature = new Map()
 
 let networkPermissionState = null
 
@@ -46,22 +49,12 @@ async function ensureNetworkPermission() {
 }
 
 async function startTranslationRequest(textToTranslate, featureId, signal, nextSeq) {
-  const ok = await ensureNetworkPermission()
-  if (!ok) {
-    const errorItem = new TuffItemBuilder('permission-denied')
-      .setTitle('需要网络权限')
-      .setSubtitle('请在插件设置中授予网络权限以使用翻译功能')
-      .setIcon({ type: 'file', value: 'assets/logo.svg' })
-      .build()
-    plugin.feature.pushItems([errorItem])
-    return
-  }
-
   plugin.search.updateQuery(textToTranslate)
   plugin.feature.clearItems()
 
   const detectedLang = detectLanguage(textToTranslate)
   const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
+  const requestId = `translation-${Date.now()}-${nextSeq}`
 
   const providersConfig = await plugin.storage.getFile('providers_config')
   const enabledProviders = providersConfig
@@ -71,9 +64,24 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
     : [{ id: 'tuffintelligence', enabled: true }]
 
   const providersToShow = enabledProviders.length > 0 ? enabledProviders : [{ id: 'tuffintelligence', enabled: true }]
-  const pendingItems = providersToShow.map(p => createPendingTranslationItem(textToTranslate, featureId, p.id, detectedLang, targetLang))
-  plugin.feature.pushItems(pendingItems)
+  const state = createWidgetState(
+    featureId,
+    textToTranslate,
+    detectedLang,
+    targetLang,
+    providersToShow,
+    requestId,
+    nextSeq
+  )
 
+  const ok = await ensureNetworkPermission()
+  if (!ok) {
+    state.error = '请在插件设置中授予网络权限以使用翻译功能'
+    upsertWidgetItem(featureId)
+    return
+  }
+
+  upsertWidgetItem(featureId)
   Promise.resolve().then(() => translateAndUpsertResults(textToTranslate, featureId, signal, nextSeq, providersToShow, detectedLang, targetLang))
 }
 
@@ -84,19 +92,6 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
  */
 function md5(string) {
   return crypto.createHash('md5').update(string).digest('hex')
-}
-
-function formatOriginalSnippet(text, maxLen = 56) {
-  const normalized = String(text ?? '').replace(/\s+/g, ' ').trim()
-  if (!normalized)
-    return ''
-  if (normalized.length <= maxLen)
-    return normalized
-  return `${normalized.slice(0, maxLen)}…`
-}
-
-function getTranslationItemId(originalText, service) {
-  return `translation-${md5(String(originalText ?? ''))}-${service}`
 }
 
 function upsertFeatureItem(item) {
@@ -111,6 +106,129 @@ function upsertFeatureItem(item) {
   plugin.feature.pushItems([item])
 }
 
+function formatProviderName(providerId) {
+  const map = {
+    tuffintelligence: 'Tuff Intelligence',
+    google: 'Google',
+    deepl: 'DeepL',
+    bing: 'Bing',
+    baidu: 'Baidu',
+    tencent: 'Tencent',
+    caiyun: 'Caiyun',
+    custom: 'Custom',
+    mymemory: 'MyMemory',
+  }
+  return map[providerId] || providerId
+}
+
+function resolveWidgetStatus(state) {
+  if (!state.query) {
+    return 'idle'
+  }
+  if (state.error) {
+    return 'error'
+  }
+  const hasPending = state.providers.some(provider => provider.status === 'pending')
+  return hasPending ? 'running' : 'complete'
+}
+
+function buildWidgetPayload(state) {
+  return {
+    requestId: state.requestId,
+    query: state.query,
+    detectedLang: state.detectedLang,
+    targetLang: state.targetLang,
+    status: resolveWidgetStatus(state),
+    providers: state.providers,
+    error: state.error || undefined,
+    updatedAt: Date.now(),
+  }
+}
+
+function buildWidgetItem(featureId, state) {
+  const status = resolveWidgetStatus(state)
+  const statusLabel = status === 'idle'
+    ? '等待输入'
+    : status === 'running'
+      ? '翻译中'
+      : status === 'complete'
+        ? '翻译完成'
+        : '翻译失败'
+
+  return new TuffItemBuilder(WIDGET_ITEM_ID)
+    .setSource('plugin', 'plugin-features', PLUGIN_NAME)
+    .setTitle(state.query ? `翻译：${state.query}` : '翻译')
+    .setSubtitle(statusLabel)
+    .setIcon({ type: 'file', value: 'assets/logo.svg' })
+    .setCustomRender('vue', makeWidgetId(PLUGIN_NAME, featureId), buildWidgetPayload(state))
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      pluginType: 'translation',
+      keepCoreBoxOpen: true,
+    })
+    .build()
+}
+
+function upsertWidgetItem(featureId) {
+  const state = widgetStateByFeature.get(featureId)
+  if (!state) {
+    return
+  }
+  state.updatedAt = Date.now()
+  upsertFeatureItem(buildWidgetItem(featureId, state))
+}
+
+function ensureIdleWidget(featureId) {
+  const state = {
+    requestId: `idle-${Date.now()}`,
+    requestSeq: latestRequestSeqByFeature.get(featureId) || 0,
+    query: '',
+    detectedLang: '',
+    targetLang: '',
+    providers: [],
+    error: null,
+    updatedAt: Date.now(),
+  }
+  widgetStateByFeature.set(featureId, state)
+  upsertWidgetItem(featureId)
+}
+
+function createWidgetState(featureId, textToTranslate, detectedLang, targetLang, providersToShow, requestId, requestSeq) {
+  const state = {
+    requestId,
+    requestSeq,
+    query: textToTranslate,
+    detectedLang,
+    targetLang,
+    providers: providersToShow.map(provider => ({
+      id: provider.id,
+      name: formatProviderName(provider.id),
+      status: 'pending',
+    })),
+    error: null,
+    updatedAt: Date.now(),
+  }
+
+  widgetStateByFeature.set(featureId, state)
+  return state
+}
+
+function updateProviderState(featureId, providerId, patch) {
+  const state = widgetStateByFeature.get(featureId)
+  if (!state) {
+    return
+  }
+
+  const provider = state.providers.find(item => item.id === providerId)
+  if (!provider) {
+    return
+  }
+
+  Object.assign(provider, patch)
+  upsertWidgetItem(featureId)
+}
+
 /**
  * @param {string} originalText
  * @param {string} featureId
@@ -119,31 +237,6 @@ function upsertFeatureItem(item) {
  * @param {string} to
  * @returns {import('@talex-touch/utils').TuffItem}
  */
-function createPendingTranslationItem(originalText, featureId, service, from, to) {
-  const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
-  const originalSnippet = formatOriginalSnippet(originalText)
-  // Always show original text first in pending state
-  const subtitle = `原文: ${originalSnippet || originalText} · ${serviceName}: ${from} → ${to} (翻译中…)`
-  return new TuffItemBuilder(getTranslationItemId(originalText, service))
-    .setSource('plugin', 'plugin-features')
-    .setTitle('翻译中…')
-    .setSubtitle(subtitle)
-    .setIcon({ type: 'file', value: 'assets/logo.svg' })
-    .addTag('Translation', 'blue')
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      pluginType: 'translation',
-      originalText,
-      translatedText: '',
-      fromLang: from,
-      toLang: to,
-      serviceName: service,
-      pending: true,
-    })
-    .build()
-}
-
 /**
  * Runs translation asynchronously and upserts final results.
  * @param {string} textToTranslate
@@ -161,30 +254,9 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
       return
     }
 
-    function buildFailedItem(providerId, errorMessage) {
-      const serviceName = providerId.charAt(0).toUpperCase() + providerId.slice(1)
-      const originalSnippet = formatOriginalSnippet(textToTranslate)
-      // Always show original text first in failed state
-      const subtitle = `原文: ${originalSnippet || textToTranslate} · ${serviceName}: ${detectedLang} → ${targetLang}${errorMessage ? ` · 错误: ${errorMessage}` : ''}`
-      return new TuffItemBuilder(getTranslationItemId(textToTranslate, providerId))
-        .setSource('plugin', 'plugin-features')
-        .setTitle(`${serviceName} 翻译失败`)
-        .setSubtitle(subtitle)
-        .setIcon({ type: 'file', value: 'assets/logo.svg' })
-        .addTag('Translation', 'red')
-        .setMeta({
-          pluginName: PLUGIN_NAME,
-          featureId,
-          pluginType: 'translation',
-          originalText: textToTranslate,
-          translatedText: '',
-          fromLang: detectedLang,
-          toLang: targetLang,
-          serviceName: providerId,
-          pending: false,
-          error: errorMessage || 'translation failed',
-        })
-        .build()
+    const state = widgetStateByFeature.get(featureId)
+    if (!state || state.requestSeq !== requestSeq) {
+      return
     }
 
     const runProvider = async (provider) => {
@@ -264,18 +336,23 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
       if (latestRequestSeqByFeature.get(featureId) !== requestSeq)
         return
 
-      if (!result) {
-        upsertFeatureItem(buildFailedItem(provider.id, 'translation failed'))
+      if (!result || result.error) {
+        const errorMessage = result?.error || 'translation failed'
+        updateProviderState(featureId, provider.id, {
+          status: 'error',
+          error: errorMessage,
+        })
         return
       }
 
-      if (result.error) {
-        upsertFeatureItem(buildFailedItem(provider.id, result.error))
-        return
-      }
-
-      const item = createTranslationSearchItem(textToTranslate, result, featureId)
-      upsertFeatureItem(item)
+      updateProviderState(featureId, provider.id, {
+        status: 'success',
+        translatedText: result.text,
+        from: result.from || detectedLang,
+        to: result.to || targetLang,
+        provider: result.provider,
+        model: result.model,
+      })
     }
 
     await Promise.allSettled(providersToUse.map(runProvider))
@@ -283,6 +360,11 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
   catch (error) {
     if (!signal?.aborted) {
       logger.error('Error processing translation feature (async):', error)
+    }
+    const state = widgetStateByFeature.get(featureId)
+    if (state) {
+      state.error = error instanceof Error ? error.message : 'translation failed'
+      upsertWidgetItem(featureId)
     }
   }
 }
@@ -859,200 +941,11 @@ async function translateWithMyMemory(text, from = 'auto', to = 'zh', signal) {
  * @param {any} translationResult
  * @returns {import('@talex-touch/utils').TuffItem}
  */
-function createTranslationSearchItem(originalText, translationResult, featureId) {
-  const { text: translatedText, from, to, service, provider, model } = translationResult
-
-  const serviceName = service.charAt(0).toUpperCase() + service.slice(1)
-  const originalSnippet = formatOriginalSnippet(originalText)
-
-  // Ensure we always show the original text in subtitle
-  const providerInfo = provider && model ? ` (${provider}/${model})` : ''
-  const subtitle = `原文: ${originalSnippet || originalText} · ${serviceName}${providerInfo}: ${from || 'auto'} → ${to}`
-
-  return new TuffItemBuilder(getTranslationItemId(originalText, service))
-    .setSource('plugin', 'plugin-features')
-    .setTitle(translatedText)
-    .setSubtitle(subtitle)
-    .setIcon({ type: 'file', value: 'assets/logo.svg' })
-    .createAndAddAction('copy-translation', 'copy', '复制', translatedText)
-    .addTag('Translation', 'green')
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      defaultAction: 'copy',
-      pluginType: 'translation',
-      originalText,
-      translatedText,
-      fromLang: from || 'auto',
-      toLang: to,
-      serviceName: service,
-      provider,
-      model,
-      pending: false,
-    })
-    .build()
-}
-
 /**
  * @param {string} textToTranslate
  * @param {string} featureId
  * @param {AbortSignal} signal
  */
-async function translateAndPushResults(textToTranslate, featureId, signal) {
-  plugin.search.updateQuery(textToTranslate)
-  plugin.feature.clearItems()
-
-  const detectedLang = detectLanguage(textToTranslate)
-  const targetLang = detectedLang === 'zh' ? 'en' : 'zh'
-
-  const providersConfig = await plugin.storage.getFile('providers_config')
-
-  if (!providersConfig || Object.keys(providersConfig).length === 0) {
-    logger.warn('No providers config found. Falling back to Google Translate.')
-    // Fallback to old behavior if no config is found
-    const result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
-    const searchItem = createTranslationSearchItem(textToTranslate, result, featureId)
-    logger.debug(`[touch-translation] pushItems fallback meta ${JSON.stringify(searchItem.meta)}`)
-    plugin.feature.pushItems([searchItem])
-    return
-  }
-
-  const enabledProviders = Object.entries(providersConfig)
-    .filter(([_id, config]) => config.enabled)
-    .map(([id, config]) => ({ id, ...config }))
-
-  if (enabledProviders.length === 0) {
-    logger.info('No enabled providers.')
-    const infoItem = new TuffItemBuilder('no-providers-info')
-      .setTitle('No enabled translation providers')
-      .setSubtitle('Please enable at least one provider in the plugin settings.')
-      .setIcon({ type: 'file', value: 'assets/logo.svg' })
-      .build()
-    plugin.feature.pushItems([infoItem])
-    return
-  }
-
-  const translationPromises = enabledProviders.map((provider) => {
-    switch (provider.id) {
-      case 'google':
-        return translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
-      case 'deepl':
-        return translateWithDeepL(
-          textToTranslate,
-          'auto',
-          targetLang,
-          provider.config?.apiKey,
-          signal,
-        )
-      case 'bing':
-        if (!provider.config?.apiKey) {
-          return Promise.resolve({
-            text: '[Bing] API Key not set',
-            from: 'plugin',
-            to: 'config',
-            service: 'bing',
-            error: 'API Key is missing.',
-          })
-        }
-        return translateWithBing(
-          textToTranslate,
-          'auto',
-          targetLang,
-          provider.config.apiKey,
-          provider.config.region,
-          signal,
-        )
-      case 'baidu':
-        if (!provider.config?.appId || !provider.config?.appKey) {
-          return Promise.resolve({
-            text: '[Baidu] App ID or Key not set',
-            from: 'plugin',
-            to: 'config',
-            service: 'baidu',
-            error: 'App ID or App Key is missing.',
-          })
-        }
-        return translateWithBaidu(
-          textToTranslate,
-          'auto',
-          targetLang,
-          provider.config.appId,
-          provider.config.appKey,
-          signal,
-        )
-      case 'tencent':
-        if (!provider.config?.secretId || !provider.config?.secretKey) {
-          return Promise.resolve({
-            text: '[Tencent] Secret ID or Key not set',
-            from: 'plugin',
-            to: 'config',
-            service: 'tencent',
-            error: 'Secret ID or Secret Key is missing.',
-          })
-        }
-        return translateWithTencent(
-          textToTranslate,
-          'auto',
-          targetLang,
-          provider.config.secretId,
-          provider.config.secretKey,
-          signal,
-        )
-      case 'caiyun':
-        return translateWithCaiyun(
-          textToTranslate,
-          'auto',
-          targetLang,
-          provider.config?.token,
-          signal,
-        )
-      case 'custom':
-        if (!provider.config) {
-          return Promise.resolve({
-            text: '[Custom] Not configured',
-            from: 'plugin',
-            to: 'config',
-            service: 'custom',
-            error: 'Configuration is missing.',
-          })
-        }
-        return translateWithCustom(textToTranslate, 'auto', targetLang, provider.config, signal)
-      case 'mymemory':
-        return translateWithMyMemory(textToTranslate, 'auto', targetLang, signal)
-      default:
-        logger.warn(`Provider ${provider.id} is not supported in backend yet.`)
-        return Promise.resolve(null)
-    }
-  })
-
-  const results = await Promise.allSettled(translationPromises)
-
-  for (let i = 0; i < results.length; i++) {
-    if (signal?.aborted)
-      return
-    if (latestRequestSeqByFeature.get(featureId) !== requestSeq)
-      return
-
-    const provider = providersToUse[i]
-    const settled = results[i]
-
-    if (!provider)
-      continue
-
-    if (settled.status === 'fulfilled' && settled.value) {
-      const item = createTranslationSearchItem(textToTranslate, settled.value, featureId)
-      upsertFeatureItem(item)
-      continue
-    }
-
-    const errorMessage = settled.status === 'rejected'
-      ? (settled.reason?.message || String(settled.reason || 'translation failed'))
-      : (settled.value?.error || 'translation failed')
-
-    upsertFeatureItem(buildFailedItem(provider.id, errorMessage))
-  }
-}
-
 const pluginLifecycle = {
   /**
    * @param {string} featureId
@@ -1066,8 +959,14 @@ const pluginLifecycle = {
       // 兼容新版本：query 可能是字符串或 TuffQuery 对象
       const queryText = typeof query === 'string' ? query : query?.text
 
-      if (featureId === 'touch-translate' && queryText && queryText.trim()) {
-        const textToTranslate = queryText.trim()
+      if (featureId === 'touch-translate') {
+        const textToTranslate = queryText?.trim() || ''
+
+        if (!textToTranslate) {
+          lastQueryByFeature.delete(featureId)
+          ensureIdleWidget(featureId)
+          return true
+        }
 
         // Check if query is the same as last query - if so, skip to avoid duplicate searches
         const lastQuery = lastQueryByFeature.get(featureId)
