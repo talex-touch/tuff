@@ -1,0 +1,51 @@
+---
+title: Steps 步骤条
+description: 多步骤进度展示
+category: Layout
+---
+
+# Steps 步骤条
+
+用于展示流程进度。
+
+## 基础用法
+::TuffDemo{title="步骤条" description="展示当前进度。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSteps :active="1">
+      <TxStep title="开始" description="收集基础信息" :step="0" />
+      <TxStep title="填写" description="补充详细内容" :step="1" />
+      <TxStep title="完成" description="确认提交" :step="2" />
+    </TxSteps>
+  </template>
+---
+#preview
+<tx-steps :active="1">
+  <tx-step title="开始" description="收集基础信息" :step="0" />
+  <tx-step title="填写" description="补充详细内容" :step="1" />
+  <tx-step title="完成" description="确认提交" :step="2" />
+</tx-steps>
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: active
+    type: "number | string"
+    default: '0'
+    description: 当前步骤
+  - name: direction
+    type: "'horizontal' | 'vertical'"
+    default: "'horizontal'"
+    description: 方向
+  - name: size
+    type: "'small' | 'medium' | 'large'"
+    default: "'medium'"
+    description: 尺寸
+---
+:::
+
+## Source
+<TuffDocSourceLink />

@@ -1,0 +1,75 @@
+---
+title: Pagination 分页
+description: 大数据列表的分页导航
+category: Data
+---
+
+# Pagination 分页
+
+用于数据列表或表格的分页切换。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const page = ref(1)
+</script>
+
+## 基础用法
+::TuffDemo{title="分页导航" description="在多页数据间切换。" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const page = ref(1)
+  </script>
+
+  <template>
+    <TxPagination
+      v-model:current-page="page"
+      :total="120"
+      :page-size="10"
+      show-info
+      show-first-last
+    />
+  </template>
+---
+#preview
+<tx-pagination
+  v-model:current-page="page"
+  :total="120"
+  :page-size="10"
+  show-info
+  show-first-last
+/>
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: currentPage
+    type: number
+    default: '1'
+    description: 当前页
+  - name: pageSize
+    type: number
+    default: '10'
+    description: 每页数量
+  - name: total
+    type: number
+    default: '0'
+    description: 总数量
+  - name: showInfo
+    type: boolean
+    default: 'false'
+    description: 显示总量信息
+  - name: showFirstLast
+    type: boolean
+    default: 'false'
+    description: 显示首末页按钮
+---
+:::
+
+## Source
+<TuffDocSourceLink />

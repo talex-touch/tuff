@@ -1,6 +1,7 @@
 <script lang="ts" name="TuffBlockInput" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import type { WritableComputedRef } from 'vue'
 import { computed, ref } from 'vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -30,7 +31,13 @@ const emits = defineEmits<{
   (e: 'blur'): void
 }>()
 
-const value = useModelWrapper(props, emits)
+const value = useModelWrapper(props, emits) as unknown as WritableComputedRef<string | number>
+const inputValue = computed<string>({
+  get: () => (value.value ?? '').toString(),
+  set: (next) => {
+    value.value = next
+  }
+})
 const primitiveValue = computed(() => value.value as string | number)
 const focused = ref(false)
 
@@ -80,7 +87,7 @@ function updateValue(val: string | number) {
         :disabled="disabled"
       >
         <FlatInput
-          v-model="value.value"
+          v-model="inputValue"
           :placeholder="placeholder"
           :non-win="true"
           @focusin="handleFocus"

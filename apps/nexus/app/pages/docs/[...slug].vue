@@ -6,6 +6,10 @@ import DocHero from '~/components/docs/DocHero.vue'
 
 definePageMeta({
   layout: 'docs',
+  pageTransition: {
+    name: 'docs-page',
+    mode: 'out-in',
+  },
 })
 
 const route = useRoute()
@@ -753,6 +757,28 @@ watch(
   opacity: 0;
   filter: blur(8px);
   transform: translateY(6px);
+}
+
+:global(.docs-page-enter-active),
+:global(.docs-page-leave-active) {
+  transition:
+    opacity 260ms ease,
+    transform 320ms cubic-bezier(0.28, 1.7, 0.52, 1),
+    filter 260ms ease;
+}
+
+:global(.docs-page-enter-from),
+:global(.docs-page-leave-to) {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+  filter: blur(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.docs-page-enter-active),
+  :global(.docs-page-leave-active) {
+    transition: none;
+  }
 }
 
 .docs-surface {

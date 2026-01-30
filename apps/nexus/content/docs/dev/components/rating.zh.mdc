@@ -1,0 +1,63 @@
+---
+title: Rating 评分
+description: 星级评分输入
+category: Form
+---
+
+# Rating 评分
+
+用于收集打分或满意度反馈。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const score = ref(3.5)
+</script>
+
+## 基础用法
+::TuffDemo{title="评分组件" description="支持半星评分。" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const score = ref(3.5)
+  </script>
+
+  <template>
+    <TxRating v-model="score" :precision="0.5" show-text />
+  </template>
+---
+#preview
+<tx-rating v-model="score" :precision="0.5" show-text />
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: modelValue
+    type: number
+    default: '0'
+    description: 当前评分
+  - name: maxStars
+    type: number
+    default: '5'
+    description: 星级数量
+  - name: precision
+    type: "number | 0.5"
+    default: '1'
+    description: 精度步进
+  - name: showText
+    type: boolean
+    default: 'false'
+    description: 显示分数文本
+  - name: readonly
+    type: boolean
+    default: 'false'
+    description: 只读模式
+---
+:::
+
+## Source
+<TuffDocSourceLink />

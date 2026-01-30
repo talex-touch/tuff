@@ -1,0 +1,51 @@
+---
+title: Breadcrumb
+description: Contextual navigation trail
+category: Layout
+---
+
+# Breadcrumb
+
+Navigation trail that shows hierarchy.
+
+## Basic Usage
+::TuffDemo{title="Breadcrumb Trail" description="Provide a quick sense of place." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxBreadcrumb
+      :items="[
+        { label: 'Home', href: '/' },
+        { label: 'Library', href: '/library' },
+        { label: 'Data' },
+      ]"
+    />
+  </template>
+---
+#preview
+<tx-breadcrumb
+  :items="[
+    { label: 'Home', href: '/' },
+    { label: 'Library', href: '/library' },
+    { label: 'Data' },
+  ]"
+/>
+:::
+
+## API (Lite)
+::TuffPropsTable
+---
+rows:
+  - name: items
+    type: "BreadcrumbItem[]"
+    default: '[]'
+    description: Breadcrumb items
+  - name: separatorIcon
+    type: string
+    default: "'chevron-right'"
+    description: Separator icon
+---
+:::
+
+## Source
+<TuffDocSourceLink />

@@ -1,0 +1,55 @@
+---
+title: FlatButton 扁平按钮
+description: 低强调的轻量按钮
+category: Basic
+---
+
+# FlatButton 扁平按钮
+
+用于次要动作的轻量按钮样式。
+
+## 基础用法
+::TuffDemo{title="扁平按钮" description="基础、主色、小尺寸与加载状态。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffFlatButton>默认</TuffFlatButton>
+    <TuffFlatButton primary>主色</TuffFlatButton>
+    <TuffFlatButton mini>小尺寸</TuffFlatButton>
+    <TuffFlatButton loading>加载中</TuffFlatButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-flat-button>默认</tuff-flat-button>
+  <tuff-flat-button primary>主色</tuff-flat-button>
+  <tuff-flat-button mini>小尺寸</tuff-flat-button>
+  <tuff-flat-button loading>加载中</tuff-flat-button>
+</div>
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: primary
+    type: boolean
+    default: 'false'
+    description: 是否主色样式
+  - name: mini
+    type: boolean
+    default: 'false'
+    description: 紧凑尺寸
+  - name: disabled
+    type: boolean
+    default: 'false'
+    description: 是否禁用
+  - name: loading
+    type: boolean
+    default: 'false'
+    description: 加载状态
+---
+:::
+
+## Source
+<TuffDocSourceLink />

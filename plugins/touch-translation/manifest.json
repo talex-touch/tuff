@@ -11,9 +11,9 @@
   "description": "一款全平台资源聚合翻译平台，支持多种翻译服务",
   "main": "index.js",
   "dev": {
-    "enable": false,
-    "address": "http://localhost:3333/",
-    "source": false
+    "enable": true,
+    "address": "http://localhost:3733/",
+    "source": true
   },
   "permissions": {
     "required": ["clipboard.read", "network.internet"],

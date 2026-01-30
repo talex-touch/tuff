@@ -1,0 +1,51 @@
+---
+title: Breadcrumb 面包屑
+description: 展示层级路径的导航组件
+category: Layout
+---
+
+# Breadcrumb 面包屑
+
+用于展示页面层级路径。
+
+## 基础用法
+::TuffDemo{title="路径导航" description="展示当前位置层级。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxBreadcrumb
+      :items="[
+        { label: '首页', href: '/' },
+        { label: '资料库', href: '/library' },
+        { label: '数据' },
+      ]"
+    />
+  </template>
+---
+#preview
+<tx-breadcrumb
+  :items="[
+    { label: '首页', href: '/' },
+    { label: '资料库', href: '/library' },
+    { label: '数据' },
+  ]"
+/>
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: items
+    type: "BreadcrumbItem[]"
+    default: '[]'
+    description: 路径数据
+  - name: separatorIcon
+    type: string
+    default: "'chevron-right'"
+    description: 分隔图标
+---
+:::
+
+## Source
+<TuffDocSourceLink />

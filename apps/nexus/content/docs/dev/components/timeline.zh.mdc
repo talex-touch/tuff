@@ -1,0 +1,55 @@
+---
+title: Timeline 时间线
+description: 用于展示事件流
+category: Data
+---
+
+# Timeline 时间线
+
+按时间顺序展示事件记录。
+
+## 基础用法
+::TuffDemo{title="时间线" description="展示近期动态。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTimeline>
+      <TxTimelineItem title="设计阶段" time="09:30" color="primary" />
+      <TxTimelineItem title="开发构建" time="12:00" color="success" />
+      <TxTimelineItem title="上线发布" time="16:10" color="warning" />
+    </TxTimeline>
+  </template>
+---
+#preview
+<tx-timeline>
+  <tx-timeline-item title="设计阶段" time="09:30" color="primary" />
+  <tx-timeline-item title="开发构建" time="12:00" color="success" />
+  <tx-timeline-item title="上线发布" time="16:10" color="warning" />
+</tx-timeline>
+:::
+
+## API（Lite）
+::TuffPropsTable
+---
+rows:
+  - name: layout
+    type: "'vertical' | 'horizontal'"
+    default: "'vertical'"
+    description: 布局方向
+  - name: title
+    type: string
+    default: "''"
+    description: 条目标题
+  - name: time
+    type: string
+    default: "''"
+    description: 时间文本
+  - name: color
+    type: "'default' | 'primary' | 'success' | 'warning' | 'error'"
+    default: "'default'"
+    description: 节点颜色
+---
+:::
+
+## Source
+<TuffDocSourceLink />
