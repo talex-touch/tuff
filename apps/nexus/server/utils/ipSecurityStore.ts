@@ -95,22 +95,37 @@ export async function guardTelemetryIp(
   if (!db)
     return { ip }
 
-  await ensureSecuritySchema(db)
-
   const now = Date.now()
-  const { results } = await db.prepare(`
-      SELECT ip, window_start, window_count, violation_count, blocked_until, block_reason
-      FROM ${SECURITY_TABLE}
-      WHERE ip = ?1;
-    `).bind(ip).all<{
+  let row: {
     ip: string
     window_start: number
     window_count: number
     violation_count: number
     blocked_until: number | null
     block_reason: string | null
-  }>()
-  const row = results?.[0]
+  } | undefined
+
+  try {
+    await ensureSecuritySchema(db)
+
+    const { results } = await db.prepare(`
+      SELECT ip, window_start, window_count, violation_count, blocked_until, block_reason
+      FROM ${SECURITY_TABLE}
+      WHERE ip = ?1;
+    `).bind(ip).all<{
+      ip: string
+      window_start: number
+      window_count: number
+      violation_count: number
+      blocked_until: number | null
+      block_reason: string | null
+    }>()
+    row = results?.[0]
+  }
+  catch (error) {
+    console.warn('IP security: D1 error', error)
+    return { ip }
+  }
 
   if (row?.blocked_until && row.blocked_until > now) {
     throw createError({
@@ -135,7 +150,8 @@ export async function guardTelemetryIp(
   const blockedUntil = exceeded ? now + blockMs : null
   const blockReason = exceeded ? `rate_limit:${nextWindowCount}/${WINDOW_MS} (${options.action})` : null
 
-  await db.prepare(`
+  try {
+    await db.prepare(`
       INSERT INTO ${SECURITY_TABLE} (
         ip, window_start, window_count, violation_count, blocked_until, block_reason, created_at, updated_at
       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -147,39 +163,49 @@ export async function guardTelemetryIp(
         block_reason = excluded.block_reason,
         updated_at = excluded.updated_at;
     `).bind(
-    ip,
-    nextWindowStart,
-    nextWindowCount,
-    nextViolationCount,
-    blockedUntil,
-    blockReason,
-    now,
-    now,
-  ).run()
+      ip,
+      nextWindowStart,
+      nextWindowCount,
+      nextViolationCount,
+      blockedUntil,
+      blockReason,
+      now,
+      now,
+    ).run()
+  }
+  catch (error) {
+    console.warn('IP security: D1 error', error)
+    return { ip }
+  }
 
   if (exceeded) {
     const bucket = Math.floor(now / (60 * 60_000))
-    await recordTelemetryMessages(event, [{
-      id: `ip-ban:${ip}:${bucket}`,
-      source: 'system',
-      severity: 'warn',
-      title: 'IP auto blocked',
-      message: 'Telemetry traffic exceeded threshold and was automatically blocked.',
-      meta: {
-        ip,
-        action: options.action,
-        windowMs: WINDOW_MS,
-        windowCount: nextWindowCount,
-        threshold: MAX_EVENTS_PER_WINDOW,
-        violationCount: nextViolationCount,
-        blockedUntil,
-        blockMs,
-        reason: blockReason,
-      },
-      status: 'unread',
-      isAnonymous: false,
-      createdAt: now,
-    }])
+    try {
+      await recordTelemetryMessages(event, [{
+        id: `ip-ban:${ip}:${bucket}`,
+        source: 'system',
+        severity: 'warn',
+        title: 'IP auto blocked',
+        message: 'Telemetry traffic exceeded threshold and was automatically blocked.',
+        meta: {
+          ip,
+          action: options.action,
+          windowMs: WINDOW_MS,
+          windowCount: nextWindowCount,
+          threshold: MAX_EVENTS_PER_WINDOW,
+          violationCount: nextViolationCount,
+          blockedUntil,
+          blockMs,
+          reason: blockReason,
+        },
+        status: 'unread',
+        isAnonymous: false,
+        createdAt: now,
+      }])
+    }
+    catch (error) {
+      console.warn('Telemetry messages: D1 error', error)
+    }
 
     throw createError({
       statusCode: 429,
@@ -206,32 +232,38 @@ export async function listBlockedIps(
     return []
   }
 
-  await ensureSecuritySchema(db)
+  try {
+    await ensureSecuritySchema(db)
 
-  const now = Date.now()
-  const limit = Math.min(Math.max(1, Math.round(options.limit ?? 50)), 200)
+    const now = Date.now()
+    const limit = Math.min(Math.max(1, Math.round(options.limit ?? 50)), 200)
 
-  const { results } = await db.prepare(`
-    SELECT ip, blocked_until, block_reason, violation_count, updated_at
-    FROM ${SECURITY_TABLE}
-    WHERE blocked_until IS NOT NULL AND blocked_until > ?1
-    ORDER BY blocked_until DESC
-    LIMIT ?2;
-  `).bind(now, limit).all<{
-    ip: string
-    blocked_until: number
-    block_reason: string | null
-    violation_count: number
-    updated_at: number
-  }>()
+    const { results } = await db.prepare(`
+      SELECT ip, blocked_until, block_reason, violation_count, updated_at
+      FROM ${SECURITY_TABLE}
+      WHERE blocked_until IS NOT NULL AND blocked_until > ?1
+      ORDER BY blocked_until DESC
+      LIMIT ?2;
+    `).bind(now, limit).all<{
+      ip: string
+      blocked_until: number
+      block_reason: string | null
+      violation_count: number
+      updated_at: number
+    }>()
 
-  return (results ?? []).map(row => ({
-    ip: row.ip,
-    blockedUntil: row.blocked_until,
-    blockReason: row.block_reason || undefined,
-    violationCount: row.violation_count || 0,
-    updatedAt: row.updated_at,
-  }))
+    return (results ?? []).map(row => ({
+      ip: row.ip,
+      blockedUntil: row.blocked_until,
+      blockReason: row.block_reason || undefined,
+      violationCount: row.violation_count || 0,
+      updatedAt: row.updated_at,
+    }))
+  }
+  catch (error) {
+    console.warn('IP security: D1 error', error)
+    return []
+  }
 }
 
 export async function unblockIp(event: H3Event, ip: string): Promise<boolean> {
@@ -241,18 +273,24 @@ export async function unblockIp(event: H3Event, ip: string): Promise<boolean> {
     return false
   }
 
-  await ensureSecuritySchema(db)
-
   const now = Date.now()
   const normalized = String(ip || '').trim()
   if (!normalized)
     return false
 
-  await db.prepare(`
-    UPDATE ${SECURITY_TABLE}
-    SET blocked_until = NULL, block_reason = NULL, updated_at = ?2
-    WHERE ip = ?1;
-  `).bind(normalized, now).run()
+  try {
+    await ensureSecuritySchema(db)
 
-  return true
+    await db.prepare(`
+      UPDATE ${SECURITY_TABLE}
+      SET blocked_until = NULL, block_reason = NULL, updated_at = ?2
+      WHERE ip = ?1;
+    `).bind(normalized, now).run()
+
+    return true
+  }
+  catch (error) {
+    console.warn('IP security: D1 error', error)
+    return false
+  }
 }

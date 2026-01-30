@@ -1515,7 +1515,7 @@ export class RecommendationEngine {
    */
   private async cacheRecommendations(context: ContextSignal, items: TuffItem[]): Promise<void> {
     const cacheKey = this.contextProvider.generateCacheKey(context)
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
+    const expiresAt = new Date(Date.now() + this.CACHE_DURATION_MS)
 
     await this.dbUtils.setRecommendationCache(cacheKey, items, expiresAt)
   }

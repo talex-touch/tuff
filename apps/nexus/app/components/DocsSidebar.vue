@@ -5,7 +5,7 @@ const { data: navigationTree, pending, error } = await useAsyncData(
   'docs-navigation',
   () => queryCollectionNavigation('docs'),
 )
-const { data: componentDocs } = await useAsyncData(
+const { data: componentDocs, pending: componentDocsPending } = await useAsyncData(
   'docs-components-meta',
   () => queryCollection('docs')
     .where('path', 'LIKE', '/docs/dev/components/%')
@@ -191,23 +191,38 @@ function normalizeContentPath(path: string | null | undefined) {
   return stripLocalePrefix(fullPath).replace(/\.(en|zh)$/, '')
 }
 
-function isCurrentLocaleItem(item: any): boolean {
-  if (!item?.path)
-    return true
-  const path = item.path as string
-  const currentLocale = locale.value
-  const otherLocale = currentLocale === 'en' ? 'zh' : 'en'
-
-  // If path ends with other locale suffix, filter it out
-  if (path.endsWith(`.${otherLocale}`))
-    return false
-
-  return true
+function resolveMeta(meta: unknown): Record<string, any> | null {
+  if (!meta)
+    return null
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta) as Record<string, any>
+    } catch (error) {
+      console.warn('[DocsSidebar] Failed to parse content meta.', error)
+      return null
+    }
+  }
+  if (typeof meta === 'object')
+    return meta as Record<string, any>
+  return null
 }
 
 function filterByLocale(items: any[]): any[] {
+  if (!items.length)
+    return []
+  const currentLocale = locale.value
+  const otherLocale = currentLocale === 'en' ? 'zh' : 'en'
+  const hasCurrentLocale = items.some(item =>
+    typeof item?.path === 'string' && item.path.endsWith(`.${currentLocale}`),
+  )
+
   return items
-    .filter(isCurrentLocaleItem)
+    .filter((item) => {
+      if (!item?.path || !hasCurrentLocale)
+        return true
+      const path = item.path as string
+      return !path.endsWith(`.${otherLocale}`)
+    })
     .map((item) => {
       if (Array.isArray(item.children) && item.children.length > 0) {
         return {
@@ -286,7 +301,14 @@ const componentSections = computed(() => {
     return []
 
   const normalizedItems = sourceItems
-    .map(item => ({ ...item, _normalizedPath: normalizeContentPath(item.path) }))
+    .map((item) => {
+      const meta = resolveMeta(item.meta)
+      return {
+        ...item,
+        _normalizedPath: normalizeContentPath(item.path),
+        _category: item.category ?? meta?.category,
+      }
+    })
     .filter(item => item._normalizedPath?.startsWith('/docs/dev/components'))
 
   if (!normalizedItems.length)
@@ -310,7 +332,7 @@ const componentSections = computed(() => {
 
   for (const category of COMPONENT_CATEGORY_ORDER.value) {
     const children = sortByOrder(
-      entries.filter(item => item.category === category.key),
+      entries.filter(item => item._category === category.key),
       '/docs/dev/components',
     )
     if (!children.length)
@@ -353,6 +375,10 @@ const activeTopSection = computed(() => {
   }
   return defaultSection.value
 })
+
+const sidebarPending = computed(() =>
+  pending.value || (activeTopSection.value === 'components' && componentDocsPending.value),
+)
 
 const currentSectionData = computed(() => {
   if (isTutorialRoute.value) {
@@ -444,15 +470,6 @@ function sectionKey(item: any) {
   return normalizeContentPath(item.path) ?? item.title ?? JSON.stringify(item)
 }
 
-function sectionContainsActive(item: any): boolean {
-  const target = linkTarget(item)
-  if (target && isLinkActive(target))
-    return true
-  if (Array.isArray(item.children))
-    return item.children.some((child: any) => sectionContainsActive(child))
-  return false
-}
-
 function toggleSection(item: any) {
   const key = sectionKey(item)
   expandedSections.value[key] = !expandedSections.value[key]
@@ -460,7 +477,7 @@ function toggleSection(item: any) {
 
 function isSectionExpanded(item: any) {
   const key = sectionKey(item)
-  return expandedSections.value[key] ?? sectionContainsActive(item)
+  return expandedSections.value[key] ?? true
 }
 
 // Initialize all sections as expanded by default
@@ -510,11 +527,8 @@ watch(
     </div>
 
     <!-- Scrollable content -->
-    <div class="flex flex-col gap-0.5">
-      <template v-if="pending">
-        <div v-for="index in 6" :key="index" class="h-8 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
-      </template>
-      <template v-else-if="error">
+    <div v-if="!sidebarPending" class="flex flex-col gap-0.5">
+      <template v-if="error">
         <div class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300">
           {{ t('docsSidebar.error') }}
         </div>

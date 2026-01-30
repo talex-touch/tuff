@@ -47,7 +47,11 @@
           "type": "over",
           "value": ["fy", "翻译", "translate"]
         }
-      ]
+      ],
+      "interaction": {
+        "type": "widget",
+        "path": "translate-panel"
+      }
     },
     {
       "id": "multi-source-translate",

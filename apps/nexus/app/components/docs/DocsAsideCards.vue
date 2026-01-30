@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 const query = ref('')
 const runtimeConfig = useRuntimeConfig()
 const showCardChrome = computed(() => {
-  const value = runtimeConfig.public?.docs?.asideCardChrome
+  const value = runtimeConfig.public?.docs?.asideCardChrome as string | boolean | undefined
   if (value === true)
     return true
   if (typeof value === 'string')

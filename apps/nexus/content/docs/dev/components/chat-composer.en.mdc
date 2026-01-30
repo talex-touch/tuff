@@ -1,0 +1,48 @@
+---
+title: "ChatComposer 消息输入"
+description: "用于 AI 消息输入、发送。"
+category: Form
+---
+# ChatComposer 消息输入
+
+用于 AI 消息输入、发送。
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const text = ref('')
+const sent = ref<string[]>([])
+
+function onSend(payload: { text: string }) {
+  sent.value.unshift(payload.text)
+  text.value = ''
+}
+</script>
+
+## 基础用法
+
+<DemoBlock title="ChatComposer">
+<template #preview>
+<div style="width: 680px; display: grid; gap: 12px;">
+  <TxChatComposer v-model="text" @send="onSend" />
+
+  <div style="padding: 10px 12px; border-radius: 14px; border: 1px solid var(--tx-border-color-lighter); background: var(--tx-fill-color-blank);">
+    <div style="font-size: 12px; opacity: .7; margin-bottom: 8px;">Sent</div>
+    <div v-if="!sent.length" style="opacity: .7;">None</div>
+    <div v-else style="display: grid; gap: 6px;">
+      <div v-for="(s, i) in sent" :key="i">{{ s }}</div>
+    </div>
+  </div>
+
+  <TxTypingIndicator />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxChatComposer v-model="text" @send="onSend" />
+</template>
+```
+</template>
+</DemoBlock>

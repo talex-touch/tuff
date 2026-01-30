@@ -305,7 +305,7 @@ const lastUpdatedDate = computed(() => {
     return null
 
   const meta = source.meta as Record<string, unknown> | undefined
-  const record = source as Record<string, unknown>
+  const record = source as unknown as Record<string, unknown>
   const candidates = [
     meta?.updatedAt,
     meta?.modifiedAt,
@@ -335,9 +335,13 @@ const lastUpdatedDate = computed(() => {
 })
 
 const heroUpdatedLocale = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
-const heroUpdatedAgo = useTimeAgo(
+const heroUpdatedAgo = useTimeAgoIntl(
   () => lastUpdatedDate.value?.getTime() ?? Date.now(),
-  { locale: heroUpdatedLocale },
+  {
+    get locale() {
+      return heroUpdatedLocale.value
+    },
+  },
 )
 const heroUpdatedLabel = computed(() => {
   if (!lastUpdatedDate.value)

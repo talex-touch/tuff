@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import TuffPropsTable from '~/components/content/TuffPropsTable.vue'
 
+interface PropRow {
+  name: string
+  type?: string
+  default?: string
+  description?: string
+  values?: string[]
+}
+
 const props = withDefaults(defineProps<{
   title?: string
-  rows?: Array<Record<string, any>>
+  rows?: PropRow[]
 }>(), {
   title: '',
   rows: () => [],

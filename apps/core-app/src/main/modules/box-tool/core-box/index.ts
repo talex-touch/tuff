@@ -171,27 +171,94 @@ export class CoreBoxModule extends BaseModule {
     }, 16)
   }
 
+  private shouldLogLayout(): boolean {
+    try {
+      const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting
+      return appSetting?.searchEngine?.logsEnabled || appSetting?.diagnostics?.verboseLogs
+    } catch {
+      return false
+    }
+  }
+
   private applyLayoutUpdate(payload: CoreBoxLayoutUpdateRequest): void {
-    if (coreBoxManager.isUIMode) return
+    const logEnabled = this.shouldLogLayout()
+    if (coreBoxManager.isUIMode) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update skipped (UI mode active)', {
+          meta: {
+            height: Number(payload.height),
+            resultCount: Number(payload.resultCount),
+            loading: payload.loading === true,
+            recommendationPending: payload.recommendationPending === true,
+            activationCount: Number(payload.activationCount),
+            source: String(payload.source ?? '')
+          }
+        })
+      }
+      return
+    }
 
     const currentWindow = windowManager.current?.window
-    if (!currentWindow || currentWindow.isDestroyed()) return
+    if (!currentWindow || currentWindow.isDestroyed()) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update skipped (no window)', {
+          meta: {
+            height: Number(payload.height),
+            resultCount: Number(payload.resultCount),
+            loading: payload.loading === true,
+            recommendationPending: payload.recommendationPending === true,
+            activationCount: Number(payload.activationCount),
+            source: String(payload.source ?? '')
+          }
+        })
+      }
+      return
+    }
 
     const activationCount = Number.isFinite(payload.activationCount)
       ? Math.max(0, payload.activationCount)
       : 0
     const resultCount = Number.isFinite(payload.resultCount) ? Math.max(0, payload.resultCount) : 0
+    const loading = payload.loading === true
+    const recommendationPending = payload.recommendationPending === true
+
+    if (logEnabled) {
+      coreBoxLog.info('Layout update received', {
+        meta: {
+          height: Number(payload.height),
+          resultCount,
+          activationCount,
+          loading,
+          recommendationPending,
+          source: String(payload.source ?? '')
+        }
+      })
+    }
 
     if (activationCount > 0 && resultCount > 0) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update: expand (activation + results)', {
+          meta: {
+            activationCount,
+            resultCount
+          }
+        })
+      }
       coreBoxManager.expand({ forceMax: true })
       return
     }
 
-    const loading = payload.loading === true
-    const recommendationPending = payload.recommendationPending === true
-
     const shouldCollapse = resultCount === 0 && !loading && !recommendationPending
     if (shouldCollapse) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update: shrink (empty, idle)', {
+          meta: {
+            resultCount,
+            loading,
+            recommendationPending
+          }
+        })
+      }
       coreBoxManager.shrink()
       return
     }
@@ -199,6 +266,14 @@ export class CoreBoxModule extends BaseModule {
     // When waiting for data (loading/recommendation), keep current window size stable.
     // This avoids collapse-then-expand jitter while results are still pending.
     if (resultCount === 0 && (loading || recommendationPending)) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update: skip (pending)', {
+          meta: {
+            loading,
+            recommendationPending
+          }
+        })
+      }
       return
     }
 
@@ -208,13 +283,30 @@ export class CoreBoxModule extends BaseModule {
     )
 
     // Guard: if UI has results but height measurement isn't ready, skip this update.
-    if (resultCount > 0 && safeHeight <= COREBOX_MIN_HEIGHT) return
+    if (resultCount > 0 && safeHeight <= COREBOX_MIN_HEIGHT) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update: skip (height not ready)', {
+          meta: {
+            safeHeight,
+            resultCount
+          }
+        })
+      }
+      return
+    }
 
     if (safeHeight > COREBOX_MIN_HEIGHT && coreBoxManager.isCollapsed) {
       coreBoxManager.markExpanded()
     }
 
     windowManager.setHeight(safeHeight)
+    if (logEnabled) {
+      coreBoxLog.info('Layout update: setHeight', {
+        meta: {
+          safeHeight
+        }
+      })
+    }
   }
 }
 

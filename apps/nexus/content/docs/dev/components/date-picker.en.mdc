@@ -1,0 +1,51 @@
+---
+title: "DatePicker 日期选择"
+description: "基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。"
+category: Form
+---
+# DatePicker 日期选择
+
+基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。
+
+<script setup lang="ts">
+import DatePickerBasicDemo from '~/components/content/demos/DatePickerBasicDemo.vue'
+import DatePickerBasicDemoSource from '~/components/content/demos/DatePickerBasicDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="DatePicker" :code="DatePickerBasicDemoSource">
+  <template #preview>
+    <DatePickerBasicDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | 当前值（`YYYY-MM-DD`） |
+| `visible` | `boolean` | `false` | 弹层显示（v-model:visible） |
+| `popup` | `boolean` | `true` | 是否使用底部弹层模式 |
+| `title` | `string` | `'Select date'` | 标题 |
+| `min` | `string` | - | 最小日期（`YYYY-MM-DD`） |
+| `max` | `string` | - | 最大日期（`YYYY-MM-DD`） |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `showToolbar` | `boolean` | `true` | 是否显示工具栏 |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
+| `cancelText` | `string` | `'Cancel'` | 取消按钮文案 |
+| `closeOnClickMask` | `boolean` | `true` | 点击遮罩关闭 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string)` | v-model 更新 |
+| `change` | `(value: string)` | 值变化 |
+| `update:visible` | `(visible: boolean)` | 弹层显示更新 |
+| `confirm` | `(value: string)` | 点击确认 |
+| `cancel` | - | 点击取消 |
+| `open` | - | 打开弹层 |
+| `close` | - | 关闭弹层 |

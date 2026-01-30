@@ -48,6 +48,66 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/utils/types': TalexUtilsTypes
 }
 
+function attachPluginInfoToComponent(
+  component: Component,
+  pluginInfo: Record<string, unknown>
+): Component {
+  const candidate = component as
+    | {
+        setup?: (props: any, ctx: any) => unknown
+        beforeCreate?: () => void
+        __pluginInjected?: boolean
+      }
+    | ((props: any, ctx: any) => unknown)
+
+  if (candidate && typeof candidate === 'object') {
+    if ((candidate as any).__pluginInjected) {
+      return component
+    }
+
+    const originalSetup = candidate.setup
+    const originalBeforeCreate = candidate.beforeCreate
+
+    const wrapped = {
+      ...candidate,
+      setup(props: any, ctx: any) {
+        const instance = Vue.getCurrentInstance()
+        if (instance?.proxy) {
+          ;(instance.proxy as any).$plugin = pluginInfo
+        }
+        return originalSetup ? originalSetup(props, ctx) : undefined
+      },
+      beforeCreate() {
+        ;(this as any).$plugin = pluginInfo
+        if (typeof originalBeforeCreate === 'function') {
+          originalBeforeCreate.call(this)
+        }
+      },
+      __pluginInjected: true
+    }
+
+    return wrapped as Component
+  }
+
+  if (typeof candidate === 'function') {
+    const wrapped = Vue.defineComponent({
+      name: 'WidgetPluginWrapper',
+      setup(props, ctx) {
+        const instance = Vue.getCurrentInstance()
+        if (instance?.proxy) {
+          ;(instance.proxy as any).$plugin = pluginInfo
+        }
+        return () => Vue.h(candidate as any, props, ctx.slots)
+      }
+    }) as Component & { __pluginInjected?: boolean }
+
+    wrapped.__pluginInjected = true
+    return wrapped
+  }
+
+  return component
+}
+
 /**
  * Create a sandboxed require function for widgets
  * 为 widget 创建沙箱化的 require 函数
@@ -137,7 +197,10 @@ function injectStyles(widgetId: string, styles: string): void {
 
 transport.on(widgetRegisterEvent, (payload) => {
   try {
-    const component = evaluateWidgetComponent(payload.code, payload.dependencies || [])
+    const component = attachPluginInfoToComponent(
+      evaluateWidgetComponent(payload.code, payload.dependencies || []),
+      { name: payload.pluginName, featureId: payload.featureId }
+    )
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     return { widgetId: payload.widgetId }
@@ -149,7 +212,10 @@ transport.on(widgetRegisterEvent, (payload) => {
 
 transport.on(widgetUpdateEvent, (payload) => {
   try {
-    const component = evaluateWidgetComponent(payload.code, payload.dependencies || [])
+    const component = attachPluginInfoToComponent(
+      evaluateWidgetComponent(payload.code, payload.dependencies || []),
+      { name: payload.pluginName, featureId: payload.featureId }
+    )
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     return { widgetId: payload.widgetId }

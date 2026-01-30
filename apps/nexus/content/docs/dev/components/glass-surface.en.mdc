@@ -1,0 +1,113 @@
+---
+title: "GlassSurface 玻璃拟态"
+description: "用于渲染带玻璃拟态效果的容器。"
+category: Layout
+---
+# GlassSurface 玻璃拟态
+
+用于渲染带玻璃拟态效果的容器。
+
+<script setup>
+import GlassSurfaceControlsDemo from '~/components/content/demos/GlassSurfaceControlsDemo.vue'
+import GlassSurfaceControlsDemoSource from '~/components/content/demos/GlassSurfaceControlsDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="GlassSurface">
+<template #preview>
+<div
+  style="
+    position: relative;
+    width: 100%;
+    height: 380px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.08);
+    background: #fafbfc;
+  "
+>
+  <div style="position: absolute; inset: 0; overflow-y: auto; padding: 24px; line-height: 1.6;">
+    <h3 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: rgba(0,0,0,0.88);">Article Title</h3>
+    <p style="margin: 0 0 16px 0; font-size: 14px; color: rgba(0,0,0,0.65);">Published on Dec 25, 2025</p>
+
+    <p style="margin: 0 0 14px 0; font-size: 14px; color: rgba(0,0,0,0.75);">
+      This is the main content of the article. The GlassSurface component floats above this text, demonstrating how the glass effect interacts with real content behind it.
+    </p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0;">
+      <div style="height: 120px; border-radius: 12px; background: rgba(0,0,0,0.06);"></div>
+      <div style="height: 120px; border-radius: 12px; background: rgba(0,0,0,0.04);"></div>
+    </div>
+
+    <p style="margin: 0 0 14px 0; font-size: 14px; color: rgba(0,0,0,0.75);">
+      The glass effect provides a frosted appearance while maintaining readability of the content beneath. This is useful for overlays and floating panels.
+    </p>
+
+    <p style="margin: 0 0 14px 0; font-size: 14px; color: rgba(0,0,0,0.75);">
+      Notice how the GlassSurface stays in place as you scroll, creating a sticky-like effect. The blur and transparency work together to create depth.
+    </p>
+
+    <div style="height: 200px;"></div>
+  </div>
+
+  <div
+    style="
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    "
+  >
+    <TxGlassSurface :width="380" :height="140" :border-radius="20" :background-opacity="0">
+      <div style="padding: 16px; font-weight: 700; color: rgba(0,0,0,0.72);">GlassSurface</div>
+    </TxGlassSurface>
+  </div>
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxGlassSurface :width="360" :height="160" :border-radius="20" :background-opacity="0">
+    <div style="padding: 16px; font-weight: 700;">GlassSurface</div>
+  </TxGlassSurface>
+</template>
+```
+</template>
+</DemoBlock>
+
+## 参数调节（滑块）
+
+<DemoBlock title="GlassSurface 参数调节" :code="GlassSurfaceControlsDemoSource">
+  <template #preview>
+    <GlassSurfaceControlsDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `width` | `string \| number` | `'200px'` | 宽度 |
+| `height` | `string \| number` | `'200px'` | 高度 |
+| `borderRadius` | `number` | `20` | 圆角 |
+| `borderWidth` | `number` | `0.07` | 边缘强度 |
+| `brightness` | `number` | `70` | 亮度 |
+| `opacity` | `number` | `0.93` | 玻璃透明度 |
+| `blur` | `number` | `11` | 模糊 |
+| `displace` | `number` | `0.5` | 位移模糊强度 |
+| `backgroundOpacity` | `number` | `0` | 背景透明度 |
+| `saturation` | `number` | `1` | 饱和度 |
+| `distortionScale` | `number` | `-180` | 色散强度 |
+| `redOffset` | `number` | `0` | 红色通道偏移 |
+| `greenOffset` | `number` | `10` | 绿色通道偏移 |
+| `blueOffset` | `number` | `20` | 蓝色通道偏移 |
+| `xChannel` | `'R' \| 'G' \| 'B'` | `'R'` | X 轴通道选择 |
+| `yChannel` | `'R' \| 'G' \| 'B'` | `'G'` | Y 轴通道选择 |
+| `mixBlendMode` | `string` | `'difference'` | 混合模式 |
+
+> 该组件会根据浏览器能力自动降级（不支持 SVG filter / backdrop-filter 时）。

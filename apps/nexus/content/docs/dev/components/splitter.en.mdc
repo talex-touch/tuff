@@ -1,0 +1,51 @@
+---
+title: "Splitter 分割面板"
+description: "可拖拽分割面板，支持水平/垂直。"
+category: Layout
+---
+# Splitter 分割面板
+
+可拖拽分割面板，支持水平/垂直。
+
+<script setup lang="ts">
+import SplitterBasicDemo from '~/components/content/demos/SplitterBasicDemo.vue'
+import SplitterBasicDemoSource from '~/components/content/demos/SplitterBasicDemo.vue?raw'
+</script>
+
+## 基础用法
+
+<DemoBlock title="Splitter" :code="SplitterBasicDemoSource">
+  <template #preview>
+    <SplitterBasicDemo />
+  </template>
+</DemoBlock>
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `number` | `0.5` | 分割比例（0-1） |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | 分割方向 |
+| `min` | `number` | `0.1` | 最小比例 |
+| `max` | `number` | `0.9` | 最大比例 |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `barSize` | `number` | `10` | 分割条尺寸（px） |
+| `snap` | `number` | `0` | 吸附步进（0 表示不吸附） |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `a` | 左/上面板 |
+| `b` | 右/下面板 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(ratio)` | v-model 更新 |
+| `change` | `(ratio)` | 值变化 |
+| `drag-start` | - | 开始拖拽 |
+| `drag-end` | - | 结束拖拽 |

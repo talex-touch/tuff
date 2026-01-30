@@ -20,7 +20,7 @@ const outlineVisible = ref(false)
       <div class="relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
         <div class="max-w-7xl w-full flex gap-6 lg:gap-8">
           <aside class="hidden w-[200px] shrink-0 xl:block">
-            <div class="docs-sidebar sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5">
+            <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5 relative z-30">
               <DocsSidebar />
             </div>
           </aside>
@@ -49,7 +49,7 @@ const outlineVisible = ref(false)
           </main>
           <aside class="hidden w-[240px] shrink-0 lg:block">
             <div class="sticky top-24 flex flex-col gap-6">
-              <div class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2">
+              <div class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">
                 <DocsOutline />
               </div>
               <DocsAsideCards />
