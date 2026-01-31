@@ -11,8 +11,10 @@ import type {
   InputChangedRequest,
   PluginFilters,
   PluginStateEvent,
+  RegisterWidgetRequest,
   TriggerFeatureRequest
 } from '@talex-touch/utils/plugin/sdk/types'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
@@ -22,6 +24,7 @@ type PluginCallback = (plugin: ITouchPlugin) => void
 
 const transport = useTuffTransport()
 const pluginTransportSdk = createPluginSdk(transport)
+const pollingService = PollingService.getInstance()
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -35,6 +38,7 @@ class PluginSDK {
   private subscribers: Set<PluginStateCallback> = new Set()
   private pluginSubscribers: Map<string, Set<PluginCallback>> = new Map()
   private initialized = false
+  private initRetryTaskId: string | null = null
   private transportDisposers: Array<() => void> = []
 
   constructor() {
@@ -47,7 +51,10 @@ class PluginSDK {
   private initializeEventListener(): void {
     if (this.initialized) return
 
-    if (!tryUseChannel()) return
+    if (!tryUseChannel()) {
+      this.scheduleEventListenerInit()
+      return
+    }
 
     this.transportDisposers.push(
       pluginTransportSdk.onStateChanged((event) => {
@@ -130,6 +137,38 @@ class PluginSDK {
     )
 
     this.initialized = true
+  }
+
+  private scheduleEventListenerInit(): void {
+    if (this.initRetryTaskId) return
+
+    const taskId = `plugin-sdk.channel-check.${Date.now()}`
+    this.initRetryTaskId = taskId
+
+    pollingService.register(
+      taskId,
+      () => {
+        if (this.initialized) {
+          pollingService.unregister(taskId)
+          this.initRetryTaskId = null
+          return
+        }
+        if (tryUseChannel()) {
+          pollingService.unregister(taskId)
+          this.initRetryTaskId = null
+          this.initializeEventListener()
+        }
+      },
+      { interval: 100, unit: 'milliseconds' }
+    )
+    pollingService.start()
+
+    setTimeout(() => {
+      if (this.initRetryTaskId === taskId) {
+        pollingService.unregister(taskId)
+        this.initRetryTaskId = null
+      }
+    }, 5000)
   }
 
   // ============================================
@@ -298,6 +337,19 @@ class PluginSDK {
     } catch (error) {
       console.error('[PluginSDK] Failed to trigger feature:', error)
       throw error
+    }
+  }
+
+  /**
+   * Register a widget renderer for preview or rendering
+   */
+  async registerWidget(request: RegisterWidgetRequest): Promise<boolean> {
+    try {
+      const response = await pluginTransportSdk.registerWidget(request)
+      return response?.success || false
+    } catch (error) {
+      console.error('[PluginSDK] Failed to register widget:', error)
+      return false
     }
   }
 
@@ -616,6 +668,7 @@ class PluginSDK {
    * @returns Unsubscribe function
    */
   subscribe(callback: PluginStateCallback): () => void {
+    this.initializeEventListener()
     this.subscribers.add(callback)
 
     return () => {
@@ -628,6 +681,7 @@ class PluginSDK {
    * @returns Unsubscribe function
    */
   subscribePlugin(name: string, callback: PluginCallback): () => void {
+    this.initializeEventListener()
     if (!this.pluginSubscribers.has(name)) {
       this.pluginSubscribers.set(name, new Set())
     }

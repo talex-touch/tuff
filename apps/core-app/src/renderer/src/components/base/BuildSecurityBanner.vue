@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { AppEvents } from '@talex-touch/utils/transport/events'
+import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -11,13 +12,7 @@ const showBanner = ref(false)
 const verificationFailed = ref(false)
 const dismissed = ref(false)
 
-interface VerificationStatus {
-  isOfficialBuild: boolean
-  verificationFailed: boolean
-  hasOfficialKey: boolean
-}
-
-function handleVerificationStatus(status: VerificationStatus) {
+function handleVerificationStatus(status: BuildVerificationStatus) {
   if (!status.isOfficialBuild || status.verificationFailed) {
     if (!dismissed.value) {
       showBanner.value = true
@@ -27,20 +22,15 @@ function handleVerificationStatus(status: VerificationStatus) {
 }
 
 onMounted(async () => {
-  const verificationStatusEvent = defineRawEvent<VerificationStatus, void>(
-    'build:verification-status'
-  )
+  const verificationStatusEvent = AppEvents.build.statusUpdated
   transport.on(verificationStatusEvent, (status) => {
     handleVerificationStatus(status)
   })
 
   try {
-    const getVerificationStatus = defineRawEvent<void, VerificationStatus>(
-      'build:get-verification-status'
-    )
-    const status = await transport.send(getVerificationStatus)
+    const status = await transport.send(AppEvents.build.getVerificationStatus)
     if (status) {
-      handleVerificationStatus(status as VerificationStatus)
+      handleVerificationStatus(status as BuildVerificationStatus)
     }
   } catch (error) {
     console.warn('[BuildSecurityBanner] Failed to get verification status:', error)

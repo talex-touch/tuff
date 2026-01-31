@@ -326,7 +326,7 @@ export class TouchStorage<T extends object> {
 
     // Register update listener - only triggered for OTHER windows' changes
     // (source window is excluded by main process)
-    channel.regChannel('storage:update', ({ data }) => {
+    channel.regChannel(StorageEvents.legacy.update.toEventName(), ({ data }) => {
       const { name, version } = data as { name: string, version?: number }
 
       if (name === this.#qualifiedName) {

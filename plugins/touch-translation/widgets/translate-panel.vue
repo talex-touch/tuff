@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useChannel, useClipboard, usePluginInfo, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+import {
+  tryUsePluginInfo,
+  useChannel,
+  useClipboard,
+  usePluginStorage,
+} from '@talex-touch/utils/plugin/sdk'
 
 type ProviderStatus = 'pending' | 'success' | 'error'
 type WidgetStatus = 'idle' | 'running' | 'complete' | 'error'
@@ -50,10 +55,25 @@ const props = defineProps<{
   payload?: Record<string, unknown>
 }>()
 
-const storage = usePluginStorage()
-const channel = useChannel()
-const clipboard = useClipboard()
-const pluginInfo = usePluginInfo('[Translation Widget] Plugin info not available')
+const pluginInfo = tryUsePluginInfo() ?? { name: 'Preview' }
+const hasRuntime = ref(Boolean(tryUsePluginInfo()?.name))
+let storage: ReturnType<typeof usePluginStorage> | null = null
+let channel: ReturnType<typeof useChannel> | null = null
+let clipboard: ReturnType<typeof useClipboard> | null = null
+
+try {
+  storage = usePluginStorage()
+} catch {
+  storage = null
+}
+
+try {
+  channel = useChannel()
+  clipboard = useClipboard()
+} catch {
+  channel = null
+  clipboard = null
+}
 
 const pluginName = computed(() => (typeof pluginInfo.name === 'string' ? pluginInfo.name : ''))
 const history = ref<HistoryItem[]>([])
@@ -93,6 +113,10 @@ const statusLabel = computed(() => {
 
 async function loadHistory(): Promise<void> {
   try {
+    if (!storage) {
+      history.value = []
+      return
+    }
     const saved = await storage.getFile('history')
     if (Array.isArray(saved)) {
       history.value = saved
@@ -106,6 +130,9 @@ async function loadHistory(): Promise<void> {
 
 async function saveHistory(): Promise<void> {
   try {
+    if (!storage) {
+      return
+    }
     await storage.setFile('history', history.value)
   }
   catch (error) {
@@ -211,6 +238,9 @@ async function useHistoryItem(text: string): Promise<void> {
   }
 
   try {
+    if (!channel) {
+      return
+    }
     await channel.send('core-box:set-query', { value: text })
   }
   catch (error) {
@@ -223,6 +253,9 @@ async function copyResult(text: string): Promise<void> {
     return
   }
   try {
+    if (!clipboard) {
+      return
+    }
     await clipboard.writeText(text)
   }
   catch (error) {
@@ -246,6 +279,7 @@ function providerStatusLabel(provider: ProviderState): string {
 }
 
 onMounted(() => {
+  hasRuntime.value = Boolean(tryUsePluginInfo()?.name)
   loadHistory().catch((err) => {
     void err
   })
@@ -304,6 +338,9 @@ onMounted(() => {
           <div class="TranslationWidget__query-text">
             {{ query || '请输入要翻译的文本' }}
           </div>
+        </div>
+        <div v-if="!hasRuntime" class="TranslationWidget__runtime-hint">
+          预览模式
         </div>
         <div class="TranslationWidget__status" :class="`is-${status}`">
           {{ statusLabel }}
@@ -495,6 +532,14 @@ onMounted(() => {
   font-weight: 600;
   background: rgba(64, 158, 255, 0.15);
   color: var(--el-color-primary);
+}
+
+.TranslationWidget__runtime-hint {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-lighter);
 }
 
 .TranslationWidget__status.is-error {

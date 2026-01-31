@@ -14,9 +14,12 @@ type PluginFeatureWithCommandsData = IPluginFeature & {
 
 const props = defineProps<{
   feature: PluginFeatureWithCommandsData
+  active?: boolean
 }>()
 
-const emit = defineEmits(['click'])
+const emit = defineEmits<{
+  (event: 'click', value: MouseEvent): void
+}>()
 
 const platformMeta = [
   {
@@ -80,10 +83,15 @@ function getPrimaryCommandLabel(): string {
   if (!primary) return '-'
   return getCommandName(primary).toUpperCase()
 }
+
+function handleClick(event: MouseEvent): void {
+  if (props.active) return
+  emit('click', event)
+}
 </script>
 
 <template>
-  <div class="FeatureCard element" @click="emit('click')">
+  <div class="FeatureCard element" :class="{ 'is-active': active }" @click="handleClick">
     <div class="FeatureCard-Content">
       <div class="FeatureCard-Header flex items-start justify-between">
         <div class="FeatureCard-HeaderMain flex items-center gap-4">
@@ -154,6 +162,12 @@ function getPrimaryCommandLabel(): string {
   cursor: pointer;
   height: 100%;
   box-sizing: border-box;
+  transition: opacity 180ms ease;
+}
+
+.FeatureCard.is-active {
+  opacity: 0;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
 }
@@ -238,7 +252,6 @@ function getPrimaryCommandLabel(): string {
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--el-color-warning);
-}
 }
 
 .line-clamp-2 {

@@ -1,0 +1,118 @@
+# APP 技术原理
+
+## 定位与边界
+这是一个 pnpm workspace 的 monorepo：以 **桌面应用** 为核心，配套 **开发者文档站**、**共享工具包** 与 **插件示例**。核心运行时由 Electron（主进程）+ Vue 3（渲染进程）构成，插件系统以 Manifest/Prelude/Surface 三层结构扩展功能。
+
+## 运行时架构
+- **进程模型**：主进程（Electron）负责窗口、模块与系统能力；渲染进程（Vue 3）负责 UI 与交互；Preload 负责安全桥接。
+- **模块体系**：主进程通过 `ModuleManager` 管理模块生命周期，模块遵循 `BaseModule` 的 `created/onInit/start/stop/onDestroy` 规范。
+- **核心入口**：CoreBox 是应用搜索与执行的主入口，负责搜索聚合、推荐与结果渲染。
+
+## 通信与事件
+- **Channel 系统**：抽象 IPC 通信（`ChannelType.MAIN` / `ChannelType.PLUGIN`），支持主进程、渲染进程与插件进程间调用。
+- **事件总线**：`TouchEventBus` 分发应用级事件（如 `APP_READY`、`ALL_MODULES_LOADED`、`PLUGIN_STORAGE_UPDATED`）。
+- **插件隔离**：插件通道使用隔离密钥，避免跨插件干扰。
+
+## 数据与存储
+- **应用配置**：主进程 `StorageModule` 持久化至 `config/`，支持多窗口同步更新。
+- **插件配置**：插件独立存储（10MB 限制）并做安全文件名清理。
+- **结构化数据**：`database/` 模块基于 Drizzle ORM + LibSQL。
+
+## 搜索与 CoreBox
+- **搜索入口**：输入 → Provider 过滤 → 结果评分 → 合并展示。
+- **平台差异**：Windows 使用 Everything Provider；macOS/Linux 使用 File Provider。
+- **UI 行为**：CoreBox 由渲染侧结果驱动窗口高度，主进程做统一调度与动画。
+
+## 构建与发布
+- **构建链路**：Electron-Vite + Vite + TypeScript。
+- **发布配置**：`electron-builder.yml` 与 `dev-app-update.yml` 负责构建与更新策略。
+- **脚本**：`scripts/` 提供版本同步、权限修复与调试命令。
+
+## 工程目录结构（根目录）
+- `apps/`：应用与站点子项目。
+- `packages/`：共享工具包与组件库。
+- `plugins/`：插件示例与可独立运行的插件项目。
+- `docs/`：工程与产品文档、PRD、分析报告。
+- `examples/`：SDK/功能使用示例与对接样例。
+- `scripts/`：CI/工具脚本与工程维护脚本。
+- `build/`：构建配置产物（少量文件）。
+- `plan/`、`issues/`、`reports/`、`shots/`：计划、议题、报告与截图归档。
+- `.github/`、`.husky/`、`.workflow/`、`.spec-workflow/`、`.vscode/`、`.idea/` 等：协作与工具链配置。
+- 关键文件：`package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`eslint.config.js`、`commitlint.config.cts`、`README.md`、`README.zh-CN.md`、`AGENTS.md`、`CLAUDE.md`。
+
+## 子项目结构详解
+
+### apps/core-app（Electron 主应用）
+- **源码目录**
+  - `src/main/`：主进程（core/modules/channel/db/service 等）。
+  - `src/renderer/`：渲染进程（Vue 3），含 `src/components`、`src/views`、`src/stores`、`src/modules`、`src/styles`。
+  - `src/preload/`：预加载脚本与桥接定义。
+  - `src/shared/`：跨进程共享类型。
+- **资源与配置**
+  - `resources/`：应用资源与图标。
+  - `public/`：渲染层静态资源。
+  - `scripts/`：构建/调试脚本。
+  - 关键文件：`electron.vite.config.ts`、`electron-builder.yml`、`dev-app-update.yml`、`drizzle.config.ts`、`tsconfig*.json`、`package.json`。
+
+### apps/nexus（文档站 / 开发者中心）
+- **内容与页面**
+  - `content/`：文档内容（`docs/`、`app/`）。
+  - `app/`：Nuxt App 目录与页面。
+  - `server/`：服务端 API 与中间层。
+  - `public/`：公共静态资源。
+  - `i18n/`：多语言资源与配置。
+  - `types/`：类型定义。
+- **关键配置**
+  - `nuxt.config.ts`、`content.config.ts`、`i18n.config.ts`、`uno.config.ts`、`sentry.*.config.ts`、`package.json`、`SETUP.md`、`README.md`。
+
+### packages/utils（共享工具包）
+- **能力分层**
+  - `base/`、`common/`：基础类型与通用工具。
+  - `channel/`、`transport/`：通信与传输封装。
+  - `plugin/`、`core-box/`、`renderer/`：插件与 UI 侧 SDK。
+  - `i18n/`、`eventbus/`、`account/`、`permission/`、`analytics/`：跨模块能力。
+- **测试与入口**
+  - `__tests__/`、`index.ts`、`vitest.config.ts`、`package.json`。
+
+### packages/tuffex（UI 组件库）
+- **组件与工具**
+  - `packages/components/`：组件实现（含 TuffIcon）。
+  - `packages/utils/`、`packages/script/`：内部工具与脚本。
+  - `docs/`：组件文档。
+- **配置**
+  - `components.json`、`tsconfig.json`、`vitest.config.ts`、`package.json`、`CHANGELOG.md`。
+
+### packages/tuff-intelligence（智能能力）
+- `src/`：`index.ts`、`graph.ts`、`storage.ts`、`types.ts`、`langchain-bridge.ts`。
+- `package.json`、`tsconfig.json`、`eslint.config.js`。
+
+### packages/unplugin-export-plugin（打包/导出插件）
+- `src/`：`core/`、`cli/`、`bin/`、`__tests__/` 与多构建入口（`vite.ts`、`rollup.ts`、`esbuild.ts`、`webpack.ts`、`nuxt.ts`）。
+- `tsup.config.ts`、`package.json`、`README.md`。
+
+### packages/help（工程辅助）
+- `tree-generator.ts`：目录/结构生成脚本。
+
+### packages/test（测试与验证）
+- `src/`：`core-box/`、`download/`、`aisdk/`、`common/`。
+- `vitest.config.ts`、`tsconfig.json`、`package.json`。
+
+### plugins/touch-translation（翻译插件）
+- `manifest.json`、`index.js`：插件入口与清单。
+- `src/`：`pages/`、`components/`、`providers/`、`router/`、`styles/`。
+- `widgets/`、`shared/`：插件扩展与共享资源。
+
+### plugins/touch-music（音乐插件）
+- `init.json`、`preload.js`：初始化与预加载。
+- `src/`：`components/`、`modules/`、`styles/`、`assets/`。
+
+### plugins/touch-image（图片插件）
+- `src/`：`App.vue`、`main.ts`、`assets/`。
+- `public/`：静态资源与图片。
+
+### examples（示例与演示）
+- `basic-usage.js`、`complete-example.js`、`message-system-example.js` 等对接样例。
+- `util-pkg/`、`division-box/` 子示例工程。
+
+## 排除项（生成/缓存目录）
+为避免噪声，以下目录默认不展开：`node_modules/`、`.git/`、`.pnpm-store/`、`.venv/`、`.nuxt/`、`dist/`、`out/`、`.data/`、`.eslintcache`、`.DS_Store` 等缓存/产物目录。

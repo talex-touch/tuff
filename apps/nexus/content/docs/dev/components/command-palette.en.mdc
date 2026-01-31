@@ -37,7 +37,7 @@ function onSelect(cmd: { title: string }) {
 <TxCommandPalette v-model="open" :commands="commands" @select="onSelect" />
 </ClientOnly>
 
-:::: details Show Code
+::: details Show Code
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -51,7 +51,7 @@ const commands = [{ id: 'open', title: 'Open File' }]
   <TxCommandPalette v-model="open" :commands="commands" />
 </template>
 ```
-::::
+:::
 
 ## API
 

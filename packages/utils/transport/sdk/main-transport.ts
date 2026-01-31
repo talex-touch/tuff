@@ -622,6 +622,24 @@ export class TuffMainTransport implements ITuffTransportMain {
   }
 
   /**
+   * Broadcasts a message to a specific window (fire-and-forget).
+   */
+  broadcastToWindow<TReq>(
+    windowId: number,
+    event: TuffEvent<TReq, void>,
+    payload: TReq,
+  ): void {
+    assertTuffEvent(event, 'TuffMainTransport.broadcastToWindow')
+
+    const eventName = event.toEventName()
+    const win = electron.BrowserWindow.fromId(windowId)
+    if (!win) {
+      throw new Error(`[TuffTransport] Cannot find BrowserWindow for id=${windowId}`)
+    }
+    this.channel.broadcastTo(win, ChannelType.MAIN, eventName, payload)
+  }
+
+  /**
    * Sends a message to a specific WebContents.
    */
   async sendTo<TReq, TRes>(

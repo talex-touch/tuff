@@ -1,0 +1,68 @@
+# 通道与 IPC 事件表
+
+本页聚焦通道层与 IPC 事件定义，方便快速定位事件来源与注册点。
+
+## 1. 通道入口
+
+- 主进程通道核心：`apps/core-app/src/main/core/channel-core.ts`
+- 通用通道模块：`apps/core-app/src/main/channel/common.ts`
+- 渲染进程通道核心：`apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
+- 渲染进程主通道：`apps/core-app/src/renderer/src/modules/channel/main/`
+- 渲染进程插件通道：`apps/core-app/src/renderer/src/modules/channel/plugin-core/`
+- 渲染进程存储通道：`apps/core-app/src/renderer/src/modules/channel/storage/`
+
+## 2. 事件定义入口
+
+- 事件聚合入口：`packages/utils/transport/events/index.ts`
+- MetaOverlay 专用：`packages/utils/transport/events/meta-overlay.ts`
+- 类型/事件分组：`packages/utils/transport/events/types/`
+
+## 3. IPC 事件分组表（类型文件）
+
+| 分组 | 文件 |
+| --- | --- |
+| App Events | `packages/utils/transport/events/types/app.ts` |
+| App Index | `packages/utils/transport/events/types/app-index.ts` |
+| CoreBox | `packages/utils/transport/events/types/core-box.ts` |
+| Box Item | `packages/utils/transport/events/types/box-item.ts` |
+| DivisionBox | `packages/utils/transport/events/types/division-box.ts` |
+| Meta Overlay | `packages/utils/transport/events/types/meta-overlay.ts` |
+| Plugin | `packages/utils/transport/events/types/plugin.ts` |
+| Storage | `packages/utils/transport/events/types/storage.ts` |
+| Clipboard | `packages/utils/transport/events/types/clipboard.ts` |
+| Device Idle | `packages/utils/transport/events/types/device-idle.ts` |
+| Platform | `packages/utils/transport/events/types/platform.ts` |
+| Permission | `packages/utils/transport/events/types/permission.ts` |
+| Notification | `packages/utils/transport/events/types/notification.ts` |
+| Market | `packages/utils/transport/events/types/market.ts` |
+| Sentry | `packages/utils/transport/events/types/sentry.ts` |
+| Agents | `packages/utils/transport/events/types/agents.ts` |
+| Flow | `packages/utils/transport/events/types/flow.ts` |
+| Download | `packages/utils/transport/events/types/download.ts` |
+| Update | `packages/utils/transport/events/types/update.ts` |
+| Tray | `packages/utils/transport/events/types/tray.ts` |
+| Transport | `packages/utils/transport/events/types/transport.ts` |
+| File Index | `packages/utils/transport/events/types/file-index.ts` |
+
+## 4. 事件到模块的落地示例
+
+- CoreBox 事件：`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- Plugin 事件：`apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- Storage 事件：`apps/core-app/src/main/modules/storage/index.ts`
+- DivisionBox 事件：`apps/core-app/src/main/modules/division-box/ipc.ts`
+
+## 5. 结构示意（Mermaid）
+
+```mermaid
+flowchart LR
+  main["Main ChannelCore"] <--> renderer["Renderer ChannelCore"]
+  main <--> plugin["Plugin Channel (isolated)"]
+  main --> events["Event Types (packages/utils/transport/events/types/*)"]
+  renderer --> events
+  plugin --> events
+```
+
+## 6. 相关文档
+
+- SearchEngine：`apps/nexus/content/docs/dev/architecture/search-engine.zh.mdc`
+- Plugin System：`apps/nexus/content/docs/dev/architecture/plugin-system.zh.mdc`

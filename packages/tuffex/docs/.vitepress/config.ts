@@ -73,6 +73,7 @@ export default defineConfig({
           text: '表单',
           items: [
             { text: '输入框 Input', link: '/components/input' },
+            { text: '代码编辑器 CodeEditor', link: '/components/code-editor' },
             { text: '搜索输入框 SearchInput', link: '/components/search-input' },
             { text: '搜索选择器 SearchSelect', link: '/components/search-select' },
             { text: '表单 Form', link: '/components/form' },

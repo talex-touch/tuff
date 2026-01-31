@@ -19,6 +19,7 @@ import type {
 } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
@@ -33,7 +34,7 @@ import {
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { app, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
@@ -354,6 +355,25 @@ export class TouchPlugin implements ITouchPlugin {
         const registration = await widgetManager.registerWidget(this, feature)
         if (!registration) {
           this.logger.warn(`Widget interaction failed to load for feature: ${feature.id}`)
+          const coreBoxWindow = getCoreBoxWindow()
+          if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+            const transport = this.resolveTransport()
+            void transport
+              .sendToWindow(coreBoxWindow.window.id, NotificationEvents.push.notify, {
+                id: randomUUID(),
+                request: {
+                  channel: 'app',
+                  level: 'error',
+                  message: '哇 corebox 你这里是不是有点问题捏',
+                  app: { presentation: 'toast' }
+                }
+              })
+              .catch((error) => {
+                this.logger.warn('Failed to notify CoreBox about widget load failure', {
+                  error: error instanceof Error ? error.message : String(error)
+                })
+              })
+          }
           return false
         }
         this.logger.info(
@@ -565,6 +585,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this.status = PluginStatus.LOADING
+    this.logger.info('[Lifecycle] enable start')
 
     this.issues.length = 0
 
@@ -638,6 +659,7 @@ export class TouchPlugin implements ITouchPlugin {
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Unknown error'
       const stack = e instanceof Error ? e.stack : undefined
+      this.logger.error('[Lifecycle] enable failed', e as Error)
       this.issues.push({
         type: 'error',
         message: `Failed to execute index.js: ${message}`,
@@ -664,6 +686,7 @@ export class TouchPlugin implements ITouchPlugin {
       .sendToPlugin(this.name, PluginEvents.lifecycleSignal.enabled, this.toJSONObject())
       .catch(() => {})
 
+    this.logger.info('[Lifecycle] enabled')
     pluginSystemLog.debug(
       `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`
     )
@@ -687,6 +710,7 @@ export class TouchPlugin implements ITouchPlugin {
       return Promise.resolve(false)
     }
 
+    this.logger.info('[Lifecycle] disable start')
     this.status = PluginStatus.DISABLING
     this.logger.debug('Disabling plugin')
 
@@ -742,6 +766,7 @@ export class TouchPlugin implements ITouchPlugin {
 
     this.status = PluginStatus.DISABLED
     this.logger.debug('Plugin disable lifecycle completed.')
+    this.logger.info('[Lifecycle] disabled')
 
     return Promise.resolve(true)
   }
@@ -848,6 +873,48 @@ export class TouchPlugin implements ITouchPlugin {
       onRenderer: (eventName, handler) =>
         onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler),
       raw: channel
+    }
+
+    const touchChannel = {
+      send: async (eventName: string, payload?: unknown) => {
+        const rawChannel = channel as unknown as {
+          channelMap?: Map<ChannelType, Map<string, Array<(data: StandardChannelData) => unknown>>>
+        }
+        const handlers =
+          rawChannel.channelMap?.get(ChannelType.PLUGIN)?.get(eventName) ??
+          rawChannel.channelMap?.get(ChannelType.MAIN)?.get(eventName)
+
+        if (!handlers || handlers.length === 0) {
+          throw new Error(`[Plugin API] No handler registered for "${eventName}"`)
+        }
+
+        let replied = false
+        let replyPayload: unknown
+        const data: StandardChannelData = {
+          name: eventName,
+          header: {
+            status: 'request',
+            type: ChannelType.PLUGIN,
+            uniqueKey: this._uniqueChannelKey,
+            plugin: pluginName
+          },
+          code: DataCode.SUCCESS,
+          data: payload as unknown,
+          plugin: pluginName,
+          reply: (_code, response) => {
+            replied = true
+            replyPayload = response
+          }
+        }
+
+        let lastResult: unknown
+        for (const handler of handlers) {
+          const result = handler(data)
+          lastResult = result instanceof Promise ? await result : result
+        }
+
+        return replied ? replyPayload : lastResult
+      }
     }
 
     type BoxChannelHandler = (data: StandardChannelData) => unknown
@@ -1319,6 +1386,7 @@ export class TouchPlugin implements ITouchPlugin {
       storage,
       clipboard: clipboardUtil,
       channel: channelBridge,
+      touchChannel,
       divisionBox: createDivisionBoxSDK(channelBridge),
       box: createBoxSDK(boxChannel),
       feature: createFeatureSDK(boxItems, channelBridge),

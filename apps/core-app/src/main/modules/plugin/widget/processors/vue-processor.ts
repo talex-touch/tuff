@@ -162,7 +162,7 @@ export class WidgetVueProcessor implements IWidgetProcessor {
           filename: source.filePath,
           source: descriptor.template.content,
           compilerOptions: {
-            mode: 'function'
+            mode: 'module'
           }
         })
         templateCode = compiledTemplate.code

@@ -1,0 +1,49 @@
+# AI / Intelligence Module Map
+
+This page maps the AI/Intelligence subsystem files and layers in the main process.
+
+## 1. Responsibilities
+
+- Capability registry and orchestration
+- Quota checks and auditing
+- Model routing and strategy management
+- Agents and toolchain runtime
+
+## 2. Directory Layout
+
+**Main module directory**: `apps/core-app/src/main/modules/ai/`
+
+**Core files**:
+- Module entry: `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- Service entry: `apps/core-app/src/main/modules/ai/intelligence-service.ts`
+- Config: `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- Quota manager: `apps/core-app/src/main/modules/ai/intelligence-quota-manager.ts`
+- Capability registry: `apps/core-app/src/main/modules/ai/intelligence-capability-registry.ts`
+- Strategy manager: `apps/core-app/src/main/modules/ai/intelligence-strategy-manager.ts`
+- Audit logger: `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+- SDK: `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- Provider models: `apps/core-app/src/main/modules/ai/provider-models.ts`
+- Storage adapter: `apps/core-app/src/main/modules/ai/tuff-intelligence-storage-adapter.ts`
+
+**Subdirectories**:
+- Providers: `apps/core-app/src/main/modules/ai/providers/`
+- Capability testers: `apps/core-app/src/main/modules/ai/capability-testers/`
+- Runtime: `apps/core-app/src/main/modules/ai/runtime/`
+- Agents: `apps/core-app/src/main/modules/ai/agents/`
+
+## 3. Runtime Relation (Mermaid)
+
+```mermaid
+flowchart TB
+  module["IntelligenceModule"] --> service["IntelligenceService"]
+  service --> strategy["Strategy Manager"]
+  service --> registry["Capability Registry"]
+  service --> quota["Quota Manager"]
+  service --> providers["Providers"]
+  service --> agents["Agents + Tools"]
+  service --> storage["Storage Adapter"]
+```
+
+## 4. Related Docs
+
+- Intelligence system overview: `apps/nexus/content/docs/dev/architecture/intelligence-system.en.mdc`

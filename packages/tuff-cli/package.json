@@ -1,0 +1,45 @@
+{
+  "name": "@talex-touch/tuff-cli",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "Tuff CLI entrypoint",
+  "license": "MIT",
+  "keywords": [
+    "tuff",
+    "cli"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "tuff": "bin/tuff.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@talex-touch/tuff-cli-core": "workspace:*",
+    "@talex-touch/unplugin-export-plugin": "workspace:*"
+  },
+  "devDependencies": {
+    "eslint": "^9.31.0",
+    "rimraf": "^5.0.10",
+    "tsup": "^8.1.2",
+    "typescript": "^5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "composite": false,
+    "target": "ES2022",
+    "moduleDetection": "force",
+    "rootDir": "src",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "dist",
+    "isolatedModules": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}

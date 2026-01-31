@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import TuffVortexBackground from '../VortexBackground.vue'
+import TuffShowcaseContainer from './showcase/TuffShowcaseContainer.vue'
 import TuffShowcase from './showcase/TuffShowcase.vue'
 
 const { t } = useI18n()

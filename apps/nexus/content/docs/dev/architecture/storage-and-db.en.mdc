@@ -1,0 +1,56 @@
+# Storage & Database Map
+
+This page covers the storage module, plugin storage isolation, and database files.
+
+## 1. Main Storage Module (StorageModule)
+
+**Responsibility**: config persistence, cache/LRU, version broadcast, unified read/write.
+
+**Code locations**:
+- Entry: `apps/core-app/src/main/modules/storage/index.ts`
+- Cache: `apps/core-app/src/main/modules/storage/storage-cache.ts`
+- LRU manager: `apps/core-app/src/main/modules/storage/storage-lru-manager.ts`
+- Frequency monitor: `apps/core-app/src/main/modules/storage/storage-frequency-monitor.ts`
+- Polling service: `apps/core-app/src/main/modules/storage/storage-polling-service.ts`
+- Registry: `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+
+**Common storage entities**:
+- `packages/utils/common/storage/`
+- `packages/utils/common/storage/entity/`
+- `packages/utils/common/storage/constants.ts`
+
+## 2. Plugin Storage Isolation
+
+**Responsibility**: per-plugin isolated config/data (10MB cap) with broadcast sync.
+
+**Code locations**:
+- Plugin storage events: `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- Plugin storage bridge: `apps/core-app/src/main/modules/plugin/plugin.ts`
+- Event bus marker: `apps/core-app/src/main/core/eventbus/touch-event.ts`
+
+## 3. Database Module (DatabaseModule)
+
+**Responsibility**: structured storage, scheduled writes, retry strategy.
+
+**Code locations**:
+- Module entry: `apps/core-app/src/main/modules/database/index.ts`
+- Schema: `apps/core-app/src/main/db/schema.ts`
+- Write scheduler: `apps/core-app/src/main/db/db-write-scheduler.ts`
+- SQLite retry: `apps/core-app/src/main/db/sqlite-retry.ts`
+- DB utils: `apps/core-app/src/main/db/utils.ts`
+
+## 4. Storage Update Flow (Mermaid)
+
+```mermaid
+flowchart LR
+  storage["StorageModule"] --> cache["Cache/LRU"]
+  storage --> persist["Disk JSON / SQLite"]
+  storage --> broadcast["Broadcast Update"]
+  broadcast --> renderer["Renderer Windows"]
+  broadcast --> plugin["Plugin Storage Listeners"]
+```
+
+## 5. Related Docs
+
+- IPC event map: `apps/nexus/content/docs/dev/architecture/transport-events.en.mdc`
+- Module overview: `apps/nexus/content/docs/dev/architecture/module-map.en.mdc`

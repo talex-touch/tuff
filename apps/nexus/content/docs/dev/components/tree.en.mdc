@@ -47,7 +47,7 @@ const nodes = [
 </div>
 </ClientOnly>
 
-:::: details Show Code
+::: details Show Code
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -62,7 +62,7 @@ const nodes = [{ key: 'design', label: 'Design' }]
   <TxTree v-model="value" :nodes="nodes" :filter-text="query" />
 </template>
 ```
-::::
+:::
 
 ## API
 

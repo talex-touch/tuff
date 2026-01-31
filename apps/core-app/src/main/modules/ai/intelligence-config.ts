@@ -1,11 +1,11 @@
 import type { AiCapabilityRoutingConfig, AiSDKPersistedConfig } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { ai } from './intelligence-sdk'
 
-const storageUpdateEvent = defineRawEvent<{ name: string; version: number }, void>('storage:update')
+const storageUpdateEvent = StorageEvents.legacy.update
 
 const SUPPORTED_PROVIDER_TYPES = new Set([
   'openai',

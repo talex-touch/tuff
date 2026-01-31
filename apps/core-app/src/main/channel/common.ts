@@ -1,6 +1,7 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
+  BatteryStatusPayload,
   PackageInfo,
   ReadFileRequest,
   StartupRequest,
@@ -133,11 +134,8 @@ const legacyStorageCleanupIntelligenceEvent = defineRawEvent<unknown, unknown>(
 )
 const legacyStorageCleanupConfigEvent = defineRawEvent<void, unknown>('storage:cleanup:config')
 const legacyStorageCleanupUpdatesEvent = defineRawEvent<void, unknown>('storage:cleanup:updates')
-const legacyBuildVerificationEvent = defineRawEvent<
-  void,
-  { isOfficialBuild: boolean; verificationFailed: boolean; hasOfficialKey: boolean }
->('build:get-verification-status')
-const legacyBatteryStatusEvent = defineRawEvent<BatteryStatusPayload, void>('power:battery-status')
+const legacyBuildVerificationEvent = AppEvents.build.getVerificationStatusLegacy
+const legacyBatteryStatusEvent = AppEvents.power.batteryStatus
 
 function safeNamespaceSegment(value: string): string {
   return value.replace(/[^\w.-]+/g, '-').slice(0, 64) || 'unknown'
@@ -160,11 +158,6 @@ interface ReadFileCacheEntry {
 const readFileCache = new Map<string, ReadFileCacheEntry>()
 const readFileInflight = new Map<string, Promise<string>>()
 let readFileCacheBytes = 0
-
-interface BatteryStatusPayload {
-  onBattery: boolean
-  percent: number | null
-}
 
 interface OSInformation {
   arch: ReturnType<typeof os.arch>
@@ -369,7 +362,7 @@ export class CommonChannelModule extends BaseModule {
       const windows = BrowserWindow.getAllWindows()
       for (const win of windows) {
         try {
-          void transport.sendTo(win.webContents, legacyBatteryStatusEvent, payload)
+          transport.broadcastToWindow(win.id, legacyBatteryStatusEvent, payload)
         } catch {
           // Ignore broadcast errors
         }
@@ -789,26 +782,29 @@ export class CommonChannelModule extends BaseModule {
 
     touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) => onOpenUrl(event.data))
 
-    this.transportDisposers.push(
-      transport.on(legacyBuildVerificationEvent, () => {
-        try {
-          if (buildVerificationModule?.getVerificationStatus) {
-            const status = buildVerificationModule.getVerificationStatus()
-            return {
-              isOfficialBuild: status.isOfficialBuild,
-              verificationFailed: status.verificationFailed,
-              hasOfficialKey: status.isVerified
-            }
+    const resolveBuildVerificationStatus = () => {
+      try {
+        if (buildVerificationModule?.getVerificationStatus) {
+          const status = buildVerificationModule.getVerificationStatus()
+          return {
+            isOfficialBuild: status.isOfficialBuild,
+            verificationFailed: status.verificationFailed,
+            hasOfficialKey: status.isVerified
           }
-        } catch (error) {
-          log.warn('[CommonChannel] Failed to get build verification status:', { error })
         }
-        return {
-          isOfficialBuild: false,
-          verificationFailed: false,
-          hasOfficialKey: false
-        }
-      })
+      } catch (error) {
+        log.warn('[CommonChannel] Failed to get build verification status:', { error })
+      }
+      return {
+        isOfficialBuild: false,
+        verificationFailed: false,
+        hasOfficialKey: false
+      }
+    }
+
+    this.transportDisposers.push(
+      transport.on(legacyBuildVerificationEvent, resolveBuildVerificationStatus),
+      transport.on(AppEvents.build.getVerificationStatus, resolveBuildVerificationStatus)
     )
 
     this.registerTransportHandlers()

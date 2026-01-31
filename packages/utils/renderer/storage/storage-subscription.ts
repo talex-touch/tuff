@@ -1,6 +1,7 @@
 import type { ITuffTransport } from '../../transport'
 import type { StorageUpdateNotification } from '../../transport/events/types'
 import type { IStorageChannel } from './base-storage'
+import { defineRawEvent } from '../../transport/event/builder'
 import { StorageEvents } from '../../transport/events'
 
 /**
@@ -37,36 +38,42 @@ class StorageSubscriptionManager {
         this.transport
           .stream(StorageEvents.app.updated, undefined, {
             onData: (payload: StorageUpdateNotification) => {
-              const { key, version } = payload
-              const currentVersion = this.configVersions.get(key) ?? 0
-              if (version === undefined || version > currentVersion) {
-                if (version !== undefined) {
-                  this.configVersions.set(key, version)
-                }
-                this.handleStorageUpdate(key)
-              }
+              this.handleVersionedUpdate(payload.key, payload.version)
             },
           })
           .catch((error) => {
             console.error('[StorageSubscription] Failed to subscribe to storage updates:', error)
           })
+
+        const legacyStorageUpdateEvent = defineRawEvent<{ name: string; version?: number }, void>(
+          StorageEvents.legacy.update.toEventName()
+        )
+        this.transport.on(legacyStorageUpdateEvent, (payload) => {
+          if (!payload || typeof payload !== 'object') return
+          const { name, version } = payload as { name?: string; version?: number }
+          if (!name) return
+          this.handleVersionedUpdate(name, version)
+        })
       }
 
       if (this.channel) {
         // Listen to storage:update events from main process
-        this.channel.regChannel('storage:update', ({ data }) => {
+        this.channel.regChannel(StorageEvents.legacy.update.toEventName(), ({ data }) => {
           const { name, version } = data as { name: string, version?: number }
-          // Only handle update if version is newer or unknown
-          const currentVersion = this.configVersions.get(name) ?? 0
-          if (version === undefined || version > currentVersion) {
-            if (version !== undefined) {
-              this.configVersions.set(name, version)
-            }
-            this.handleStorageUpdate(name)
-          }
+          this.handleVersionedUpdate(name, version)
         })
       }
       this.channelListenerRegistered = true
+    }
+  }
+
+  private handleVersionedUpdate(name: string, version?: number): void {
+    const currentVersion = this.configVersions.get(name) ?? 0
+    if (version === undefined || version > currentVersion) {
+      if (version !== undefined) {
+        this.configVersions.set(name, version)
+      }
+      void this.handleStorageUpdate(name)
     }
   }
 

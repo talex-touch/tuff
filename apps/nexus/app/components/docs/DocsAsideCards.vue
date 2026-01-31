@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 
 const query = ref('')
 const runtimeConfig = useRuntimeConfig()
+const { locale } = useI18n()
+const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
 const showCardChrome = computed(() => {
   const value = runtimeConfig.public?.docs?.asideCardChrome as string | boolean | undefined
   if (value === true)
@@ -11,6 +13,17 @@ const showCardChrome = computed(() => {
     return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
   return false
 })
+const isComponentDoc = computed(() => {
+  const path = typeof docMetaState.value?.path === 'string' ? docMetaState.value.path : ''
+  return path.includes('/docs/dev/components/')
+})
+const isVerified = computed(() => docMetaState.value?.verified === true)
+const showAiNotice = computed(() => isComponentDoc.value && !isVerified.value)
+const aiTitle = computed(() => (locale.value === 'zh' ? 'AI Generated' : 'AI Generated'))
+const aiDescription = computed(() => (locale.value === 'zh'
+  ? 'AI 生成内容，仅供参考。最终以 Verified 文档为准。'
+  : 'AI generated content for reference only. Please rely on Verified docs.'
+))
 
 function handleAsk() {
   const text = query.value.trim()
@@ -23,6 +36,16 @@ function handleAsk() {
 
 <template>
   <section class="docs-aside-cards" :class="{ 'docs-aside-cards--chrome': showCardChrome }">
+    <div v-if="showAiNotice" class="docs-aside-card docs-aside-card--notice">
+      <div class="docs-aside-card__title">
+        <span class="docs-aside-card__sparkle">⚠</span>
+        {{ aiTitle }}
+      </div>
+      <p class="docs-aside-card__desc">
+        {{ aiDescription }}
+      </p>
+    </div>
+
     <div class="docs-aside-card">
       <div class="docs-aside-card__title">
         <span class="docs-aside-card__sparkle">✦</span>
@@ -85,6 +108,15 @@ function handleAsk() {
   background: transparent;
   padding: 16px;
   box-shadow: none;
+}
+
+.docs-aside-card--notice {
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.docs-aside-card--notice .docs-aside-card__sparkle {
+  color: #f59e0b;
 }
 
 .docs-aside-cards--chrome .docs-aside-card {
@@ -246,5 +278,10 @@ function handleAsk() {
 :global(.dark .docs-aside-card__link:hover .docs-aside-card__link-icon),
 :global([data-theme='dark'] .docs-aside-card__link:hover .docs-aside-card__link-icon) {
   color: rgba(226, 232, 240, 0.85);
+}
+::global(.dark .docs-aside-card--notice),
+::global([data-theme='dark'] .docs-aside-card--notice) {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.1);
 }
 </style>

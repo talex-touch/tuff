@@ -971,6 +971,18 @@ export interface TriggerFeatureRequest {
 }
 
 /**
+ * Register a widget for preview or rendering
+ */
+export interface RegisterWidgetRequest {
+  /** Plugin name */
+  plugin: string
+  /** Feature ID */
+  feature: string
+  /** Emit update event even if cached */
+  emitAsUpdate?: boolean
+}
+
+/**
  * Input changed event payload
  */
 export interface InputChangedRequest {

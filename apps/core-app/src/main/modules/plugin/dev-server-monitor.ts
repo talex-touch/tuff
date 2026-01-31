@@ -16,8 +16,18 @@ type PluginWindowInfo = {
   }
 }
 type PluginWindows = Map<number, PluginWindowInfo>
-const toErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
+const toErrorMessage = (error: unknown): string => {
+  if (axios.isAxiosError(error)) {
+    const detailParts = [
+      error.code,
+      typeof error.response?.status === 'number' ? `status ${error.response.status}` : undefined,
+      error.config?.url ? `url ${error.config.url}` : undefined
+    ].filter(Boolean)
+    const suffix = detailParts.length ? ` (${detailParts.join(', ')})` : ''
+    return `${error.message}${suffix}`
+  }
+  return error instanceof Error ? error.message : String(error)
+}
 
 const monitorLog = createLogger('DevServerMonitor')
 
@@ -37,11 +47,12 @@ export class DevServerHealthMonitor {
   private monitors: Map<string, string> = new Map()
   private lastFileStatus: Map<string, FileStatusMap> = new Map()
   private failureCount: Map<string, number> = new Map()
+  private inFlightChecks: Set<string> = new Set()
   private readonly pollingService = PollingService.getInstance()
 
   private readonly INTERVAL = 5000 // 探测间隔 5 秒
-  private readonly TIMEOUT = 1500 // 请求超时 1.5 秒
-  private readonly MAX_RETRIES = 1 // 重试次数
+  private readonly TIMEOUT = 2500 // 请求超时 2.5 秒
+  private readonly MAX_RETRIES = 2 // 重试次数
 
   constructor(private manager: IPluginManager) {}
 
@@ -65,7 +76,7 @@ export class DevServerHealthMonitor {
     if (this.pollingService.isRegistered(taskId)) {
       this.pollingService.unregister(taskId)
     }
-    this.pollingService.register(taskId, () => this.checkHealth(plugin), {
+    this.pollingService.register(taskId, () => this.runHealthCheck(plugin), {
       interval: this.INTERVAL,
       unit: 'milliseconds',
       runImmediately: true
@@ -84,6 +95,7 @@ export class DevServerHealthMonitor {
       this.monitors.delete(pluginName)
       this.lastFileStatus.delete(pluginName)
       this.failureCount.delete(pluginName)
+      this.inFlightChecks.delete(pluginName)
       monitorLog.info(`Stopped monitoring plugin ${pluginName}`)
     }
   }
@@ -101,9 +113,9 @@ export class DevServerHealthMonitor {
     plugin.status = PluginStatus.DEV_RECONNECTING
     plugin.logger.info('Attempting to reconnect to Dev Server...')
 
-    const isHealthy = await this.checkDevServerHealth(plugin.dev.address)
+    const result = await this.checkDevServerHealth(plugin.dev.address)
 
-    if (isHealthy) {
+    if (result.healthy) {
       plugin.status = PluginStatus.ENABLED
       // 清除断连警告
       plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
@@ -111,7 +123,9 @@ export class DevServerHealthMonitor {
       return true
     } else {
       plugin.status = PluginStatus.DEV_DISCONNECTED
-      plugin.logger.error('Failed to reconnect to Dev Server')
+      this.upsertDevDisconnectIssue(plugin, result)
+      const errorSuffix = result.error ? `: ${result.error}` : ''
+      plugin.logger.error(`Failed to reconnect to Dev Server${errorSuffix}`)
       return false
     }
   }
@@ -139,8 +153,21 @@ export class DevServerHealthMonitor {
       plugin.dev.enable === true &&
       plugin.dev.source === true &&
       !!plugin.dev.address &&
-      (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE)
+      [
+        PluginStatus.ENABLED,
+        PluginStatus.ACTIVE,
+        PluginStatus.DEV_DISCONNECTED,
+        PluginStatus.DEV_RECONNECTING
+      ].includes(plugin.status)
     )
+  }
+
+  private runHealthCheck(plugin: ITouchPlugin): void {
+    if (this.inFlightChecks.has(plugin.name)) return
+    this.inFlightChecks.add(plugin.name)
+    void this.checkHealth(plugin).finally(() => {
+      this.inFlightChecks.delete(plugin.name)
+    })
   }
 
   /**
@@ -174,24 +201,30 @@ export class DevServerHealthMonitor {
    * 检查 Dev Server 健康状态
    */
   private async checkDevServerHealth(address: string): Promise<DevServerHealthCheckResult> {
-    const healthUrl = new URL('/_tuff_devkit/update', address).toString()
+    const endpoints = ['/_tuff_devkit/update', '/manifest.json']
+    let lastError: unknown
 
-    try {
-      await axios.get(healthUrl, {
-        timeout: this.TIMEOUT,
-        validateStatus: (status) => status === 200
-      })
+    for (const endpoint of endpoints) {
+      const healthUrl = new URL(endpoint, address).toString()
+      try {
+        await axios.get(healthUrl, {
+          timeout: this.TIMEOUT,
+          proxy: false,
+          validateStatus: (status) => status >= 200 && status < 400
+        })
+        return {
+          healthy: true,
+          timestamp: Date.now()
+        }
+      } catch (error: unknown) {
+        lastError = error
+      }
+    }
 
-      return {
-        healthy: true,
-        timestamp: Date.now()
-      }
-    } catch (error: unknown) {
-      return {
-        healthy: false,
-        timestamp: Date.now(),
-        error: toErrorMessage(error)
-      }
+    return {
+      healthy: false,
+      timestamp: Date.now(),
+      error: toErrorMessage(lastError)
     }
   }
 
@@ -221,7 +254,7 @@ export class DevServerHealthMonitor {
    */
   private async handleUnhealthyResponse(
     plugin: ITouchPlugin,
-    _result: DevServerHealthCheckResult
+    result: DevServerHealthCheckResult
   ): Promise<void> {
     const failureCount = (this.failureCount.get(plugin.name) || 0) + 1
     this.failureCount.set(plugin.name, failureCount)
@@ -238,19 +271,42 @@ export class DevServerHealthMonitor {
     if (plugin.status !== PluginStatus.DEV_DISCONNECTED) {
       plugin.status = PluginStatus.DEV_DISCONNECTED
 
-      // Add disconnection warning with i18n message
-      plugin.issues.push({
-        type: 'warning',
-        code: 'DEV_SERVER_DISCONNECTED',
-        message: i18nMsg(DevServerKeys.DISCONNECTED_DESC),
-        suggestion: i18nMsg(DevServerKeys.CHECK_SERVER),
-        timestamp: Date.now()
-      })
-
-      plugin.logger.warn('Dev Server disconnected')
+      this.upsertDevDisconnectIssue(plugin, result)
+      const errorSuffix = result.error ? ` (${result.error})` : ''
+      plugin.logger.warn(`Dev Server disconnected${errorSuffix}`)
 
       // Notify all view windows instead of closing them (per PRD requirement)
       this.notifyViewWindowsDisconnected(plugin)
+    }
+  }
+
+  private upsertDevDisconnectIssue(plugin: ITouchPlugin, result: DevServerHealthCheckResult): void {
+    const issueIndex = plugin.issues.findIndex((issue) => issue.code === 'DEV_SERVER_DISCONNECTED')
+    const payload = {
+      type: 'warning' as const,
+      code: 'DEV_SERVER_DISCONNECTED',
+      message: i18nMsg(DevServerKeys.DISCONNECTED_DESC),
+      suggestion: i18nMsg(DevServerKeys.CHECK_SERVER),
+      timestamp: Date.now(),
+      meta: {
+        error: result.error || '',
+        address: plugin.dev.address,
+        checkedAt: result.timestamp
+      }
+    }
+
+    if (issueIndex >= 0) {
+      const existing = plugin.issues[issueIndex]
+      plugin.issues[issueIndex] = {
+        ...existing,
+        ...payload,
+        meta: {
+          ...((existing.meta as Record<string, unknown> | undefined) || {}),
+          ...payload.meta
+        }
+      }
+    } else {
+      plugin.issues.push(payload)
     }
   }
 

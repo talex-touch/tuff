@@ -56,6 +56,7 @@ import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
 import { PluginInstaller } from './plugin-installer'
+import { widgetManager } from './widget/widget-manager'
 
 import { createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
@@ -66,6 +67,101 @@ const pluginModuleLog = createLogger('PluginSystem')
 const devWatcherLog = pluginLog.child('DevWatcher')
 const WIDGET_ROOT_DIR = 'widgets'
 const WIDGET_ALLOWED_EXTENSIONS = new Set(['.vue', '.tsx', '.jsx', '.ts', '.js'])
+
+function resolveWidgetFeaturePath(plugin: TouchPlugin, widgetPath: string): string | null {
+  const trimmed = widgetPath.trim()
+  if (!trimmed) return null
+  const normalized = trimmed.replace(/\\/g, '/').replace(/^\/+/, '')
+  const withoutRoot = normalized.replace(/^widgets\//, '')
+  if (!withoutRoot || withoutRoot.split('/').some((segment) => segment === '..')) return null
+
+  const widgetsDir = path.resolve(plugin.pluginPath, WIDGET_ROOT_DIR)
+  const candidate = path.resolve(widgetsDir, withoutRoot)
+  const relative = path.relative(widgetsDir, candidate)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null
+
+  const finalPath = path.extname(candidate) ? candidate : `${candidate}.vue`
+  const ext = path.extname(finalPath).toLowerCase()
+  if (!WIDGET_ALLOWED_EXTENSIONS.has(ext)) return null
+  return finalPath
+}
+
+async function collectWidgetFiles(rootDir: string): Promise<string[]> {
+  const entries = await fse.readdir(rootDir, { withFileTypes: true })
+  const files: string[] = []
+
+  for (const entry of entries) {
+    const fullPath = path.resolve(rootDir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...(await collectWidgetFiles(fullPath)))
+      continue
+    }
+    if (!entry.isFile()) continue
+    const ext = path.extname(entry.name).toLowerCase()
+    if (WIDGET_ALLOWED_EXTENSIONS.has(ext)) {
+      files.push(fullPath)
+    }
+  }
+
+  return files
+}
+
+async function precompilePluginWidgets(plugin: TouchPlugin): Promise<void> {
+  const widgetFeatures = plugin.features.filter(
+    (feature) =>
+      feature.interaction?.type === 'widget' &&
+      typeof feature.interaction?.path === 'string' &&
+      feature.interaction.path.trim().length > 0
+  )
+
+  if (!widgetFeatures.length) return
+  plugin.logger.info(`[Widget] Precompiling ${widgetFeatures.length} widget(s)`)
+
+  for (const feature of widgetFeatures) {
+    try {
+      const result = await widgetManager.registerWidget(plugin, feature)
+      if (!result) {
+        plugin.logger.warn(
+          `[Widget] Failed to compile widget for feature "${feature.id}" (${feature.interaction?.path})`
+        )
+      }
+    } catch (error) {
+      plugin.logger.warn(
+        `[Widget] Failed to compile widget for feature "${feature.id}"`,
+        error as Error
+      )
+    }
+  }
+}
+
+async function warnUnusedWidgets(plugin: TouchPlugin): Promise<void> {
+  const widgetsDir = path.resolve(plugin.pluginPath, WIDGET_ROOT_DIR)
+  try {
+    if (!(await fse.pathExists(widgetsDir))) return
+    const widgetFiles = await collectWidgetFiles(widgetsDir)
+    if (!widgetFiles.length) return
+
+    const usedWidgetFiles = new Set<string>()
+    plugin.features.forEach((feature) => {
+      if (feature.interaction?.type !== 'widget') return
+      if (typeof feature.interaction?.path !== 'string') return
+      const resolved = resolveWidgetFeaturePath(plugin, feature.interaction.path)
+      if (resolved) {
+        usedWidgetFiles.add(resolved)
+      }
+    })
+
+    const unused = widgetFiles.filter((filePath) => !usedWidgetFiles.has(filePath))
+    if (!unused.length) return
+
+    const displayPaths = unused.map((filePath) =>
+      path.relative(widgetsDir, filePath).split(path.sep).join('/')
+    )
+    plugin.logger.warn(`[Widget] Unused widget files: ${displayPaths.join(', ')}`)
+  } catch (error) {
+    plugin.logger.warn('[Widget] Failed to scan widgets directory', error as Error)
+  }
+}
 
 type IPluginManagerWithInternals = IPluginManager & {
   __installQueue?: PluginInstallQueue
@@ -644,6 +740,7 @@ function createPluginModuleInternal(
           timestamp: Date.now()
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
+        touchPlugin.logger.error('[Lifecycle] load failed: manifest.json missing')
         plugins.set(pluginName, touchPlugin)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'added',
@@ -693,6 +790,18 @@ function createPluginModuleInternal(
         } else {
           touchPlugin.status = PluginStatus.DISABLED
         }
+        if (touchPlugin.status === PluginStatus.LOAD_FAILED) {
+          touchPlugin.logger.error('[Lifecycle] load failed')
+          touchPlugin.issues
+            .filter((issue) => issue.type === 'error')
+            .forEach((issue) => {
+              touchPlugin.logger.error(`[Issue] ${issue.code ?? 'ERROR'}: ${issue.message}`, issue)
+            })
+        } else {
+          touchPlugin.logger.info(`[Lifecycle] loaded (${touchPlugin.features.length} features)`)
+          await precompilePluginWidgets(touchPlugin)
+          await warnUnusedWidgets(touchPlugin)
+        }
 
         localProvider.trackFile(path.resolve(currentPluginPath, 'README.md'))
         plugins.set(pluginName, touchPlugin)
@@ -740,6 +849,7 @@ function createPluginModuleInternal(
           timestamp: Date.now()
         })
         touchPlugin.status = PluginStatus.LOAD_FAILED
+        touchPlugin.logger.error('[Lifecycle] load failed', error as Error)
         plugins.set(pluginName, touchPlugin)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'added',
@@ -2037,6 +2147,44 @@ export class PluginModule extends BaseModule {
         } catch (error) {
           console.error('Error in plugin:api:trigger-feature handler:', error)
           return { error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+      }),
+
+      transport.on(PluginEvents.api.registerWidget, async (payload) => {
+        try {
+          const pluginName = payload?.plugin
+          const featureId = payload?.feature
+          if (!pluginName || !featureId) {
+            return { success: false, error: 'Plugin name and feature ID are required' }
+          }
+
+          const pluginIns = manager.plugins.get(pluginName)
+          if (!pluginIns) {
+            return { success: false, error: `Plugin ${pluginName} not found` }
+          }
+
+          const feature = pluginIns.getFeature(featureId)
+          if (!feature) {
+            return {
+              success: false,
+              error: `Feature ${featureId} not found in plugin ${pluginName}`
+            }
+          }
+
+          if (feature.interaction?.type !== 'widget' || !feature.interaction?.path) {
+            return { success: false, error: 'Feature does not have a widget interaction' }
+          }
+
+          const registration = await widgetManager.registerWidget(pluginIns, feature, {
+            emitAsUpdate: payload?.emitAsUpdate
+          })
+          if (!registration) {
+            return { success: false, error: 'WIDGET_REGISTER_FAILED' }
+          }
+          return { success: true }
+        } catch (error) {
+          console.error('Error in plugin:api:register-widget handler:', error)
+          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
         }
       }),
 

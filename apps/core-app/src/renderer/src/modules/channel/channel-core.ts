@@ -7,6 +7,11 @@ import type {
 
 import type { IpcRendererEvent } from 'electron'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import {
+  findCloneIssue,
+  isCloneError,
+  summarizeClonePayload
+} from '@talex-touch/utils/common/utils/clone-diagnostics'
 import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 
@@ -178,12 +183,17 @@ class TouchChannel implements ITouchClientChannel {
         ipcRenderer.send('@main-process-message', data)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(`[Channel] Failed to send "${eventName}": ${errorMessage}`, {
+        const meta: Record<string, unknown> = {
           payloadPreview: this.formatPayloadPreview(arg)
-        })
+        }
+        if (isCloneError(error)) {
+          meta.cloneIssue = findCloneIssue(arg)
+          meta.payloadSummary = summarizeClonePayload(arg)
+        }
+        console.error(`[Channel] Failed to send \"${eventName}\": ${errorMessage}`, meta)
         reject(
           Object.assign(
-            new Error(`Failed to send channel message "${eventName}": ${errorMessage}`),
+            new Error(`Failed to send channel message \"${eventName}\": ${errorMessage}`),
             { code: 'channel_send_failed' }
           )
         )
@@ -195,7 +205,7 @@ class TouchChannel implements ITouchClientChannel {
         if (!this.pendingMap.has(uniqueId)) return
         this.pendingMap.delete(uniqueId)
         const error = Object.assign(
-          new Error(`Channel request "${eventName}" timed out after ${timeoutMs}ms`),
+          new Error(`Channel request \"${eventName}\" timed out after ${timeoutMs}ms`),
           { code: 'channel_timeout' }
         )
         console.warn(error.message, {
@@ -222,7 +232,7 @@ class TouchChannel implements ITouchClientChannel {
         const duration = performance.now() - startedAt
         if (duration >= CHANNEL_SEND_ERROR_MS) {
           const logSlow = eventName === 'market:http-request' ? console.warn : console.error
-          logSlow(`[Channel][send][slow] "${eventName}" took ${duration.toFixed(1)}ms`, {
+          logSlow(`[Channel][send][slow] \"${eventName}\" took ${duration.toFixed(1)}ms`, {
             payloadPreview: this.formatPayloadPreview(arg),
             stack
           })
@@ -237,7 +247,7 @@ class TouchChannel implements ITouchClientChannel {
             meta: { threshold: CHANNEL_SEND_ERROR_MS, syncId: uniqueId }
           })
         } else if (duration >= CHANNEL_SEND_WARN_MS) {
-          console.warn(`[Channel][send][slow] "${eventName}" took ${duration.toFixed(1)}ms`, {
+          console.warn(`[Channel][send][slow] \"${eventName}\" took ${duration.toFixed(1)}ms`, {
             payloadPreview: this.formatPayloadPreview(arg),
             stack
           })
@@ -254,7 +264,7 @@ class TouchChannel implements ITouchClientChannel {
         }
 
         if (res.code === DataCode.ERROR) {
-          console.warn(`[Channel][send][errorReply] "${eventName}" replied with ERROR`, {
+          console.warn(`[Channel][send][errorReply] \"${eventName}\" replied with ERROR`, {
             payloadPreview: this.formatPayloadPreview(arg),
             replyPreview: this.formatPayloadPreview(res.data),
             stack
@@ -297,7 +307,7 @@ class TouchChannel implements ITouchClientChannel {
 
       if (duration >= CHANNEL_SENDSYNC_WARN_MS) {
         console.warn(
-          `[Channel][sendSync][slow] "${eventName}" blocked renderer for ${duration.toFixed(1)}ms`,
+          `[Channel][sendSync][slow] \"${eventName}\" blocked renderer for ${duration.toFixed(1)}ms`,
           {
             payloadPreview: this.formatPayloadPreview(arg),
             stack: new Error().stack
@@ -321,11 +331,16 @@ class TouchChannel implements ITouchClientChannel {
       return res
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
-      console.error(`[Channel] Failed to sendSync "${eventName}": ${errorMessage}`, {
+      const meta: Record<string, unknown> = {
         payloadPreview: this.formatPayloadPreview(arg)
-      })
+      }
+      if (isCloneError(error)) {
+        meta.cloneIssue = findCloneIssue(arg)
+        meta.payloadSummary = summarizeClonePayload(arg)
+      }
+      console.error(`[Channel] Failed to sendSync \"${eventName}\": ${errorMessage}`, meta)
       throw Object.assign(
-        new Error(`Failed to sendSync channel message "${eventName}": ${errorMessage}`),
+        new Error(`Failed to sendSync channel message \"${eventName}\": ${errorMessage}`),
         { code: 'channel_send_failed' }
       )
     }

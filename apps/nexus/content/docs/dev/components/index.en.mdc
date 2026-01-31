@@ -149,6 +149,11 @@ description: The component gallery for Tuffex (Ta Fu)
 | Category | Core Scope | Migration |
 |----------|------------|-----------|
 | Basic | Button / Icon / Avatar | In progress |
+
+## Sync Status
+Track the migration here: ✅ means migrated or verified, unmarked means not migrated.
+
+<DocsComponentSyncTable />
 | Form | Input / Select / Switch | In progress |
 | Feedback | Dialog / Toast / Tooltip / ProgressBar | Planned |
 | Layout | Grid / Flex / LayoutSkeleton / Container | Planned |

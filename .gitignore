@@ -113,6 +113,7 @@ apps/core-app/src/renderer/src/distinformation.json
 # Docs / Local notes
 # ========================
 readme.local.md
+.doc.local/
 
 # ========================
 # Project-specific (nexus)

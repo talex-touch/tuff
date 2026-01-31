@@ -7,6 +7,7 @@ import process from 'node:process'
  */
 import { app, crashReporter } from 'electron'
 import * as log4js from 'log4js'
+import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { APP_FOLDER_NAME } from '../config/default'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
@@ -19,6 +20,16 @@ import {
   touchEventBus,
   WindowAllClosedEvent
 } from './eventbus/touch-event'
+
+const resolveKeyManager = (channel: unknown): unknown =>
+  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+
+function broadcastBeforeQuit(): void {
+  const channel = ($app as { channel?: unknown } | null | undefined)?.channel
+  if (!channel) return
+  const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
+  transport.broadcast(AppEvents.lifecycle.beforeQuit, undefined)
+}
 
 export const innerRootPath = getRootPath()
 
@@ -128,6 +139,7 @@ app.addListener('ready', (event, launchInfo) =>
 
 app.on('before-quit', (event) => {
   touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))
+  broadcastBeforeQuit()
   mainLog.info('App quit requested')
 
   if (!app.isPackaged) {

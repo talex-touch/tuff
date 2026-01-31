@@ -21,7 +21,7 @@ const files = ref([])
 </div>
 </ClientOnly>
 
-:::: details Show Code
+::: details Show Code
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -33,7 +33,7 @@ const files = ref([])
   <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
 </template>
 ```
-::::
+:::
 
 ## API
 

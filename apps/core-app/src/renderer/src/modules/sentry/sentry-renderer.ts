@@ -5,6 +5,7 @@
  */
 
 import * as Sentry from '@sentry/electron/renderer'
+import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
 import { getBuildInfo } from '../../utils/build-info'
@@ -22,7 +23,7 @@ export async function initSentryRenderer(): Promise<void> {
   }
 
   // Skip Sentry in development mode to avoid CSP warnings
-  if (import.meta.env.DEV) {
+  if (isDevEnv()) {
     console.debug('[SentryRenderer] Sentry disabled in development mode')
     return
   }

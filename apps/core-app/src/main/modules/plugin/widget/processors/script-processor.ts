@@ -35,7 +35,7 @@ const ALLOWED_PACKAGES = [
  * Handles .ts and .js widget files
  */
 export class WidgetScriptProcessor implements IWidgetProcessor {
-  readonly supportedExtensions = ['.ts', '.js']
+  readonly supportedExtensions = ['.ts', '.js', '.cjs']
 
   /**
    * Validate dependencies used in the widget source
@@ -123,18 +123,23 @@ export class WidgetScriptProcessor implements IWidgetProcessor {
     try {
       // Step 2: Determine loader based on extension
       const ext = path.extname(source.filePath).toLowerCase()
+      const isPrecompiled = ext === '.cjs'
       const loader: 'ts' | 'js' = ext === '.ts' ? 'ts' : 'js'
 
-      // Step 3: Transform with esbuild
-      const transformed = await transform(source.source, {
-        loader,
-        format: 'cjs',
-        target: 'node18'
-      })
+      let compiledCode = source.source
+      if (!isPrecompiled) {
+        // Step 3: Transform with esbuild
+        const transformed = await transform(source.source, {
+          loader,
+          format: 'cjs',
+          target: 'node18'
+        })
+        compiledCode = transformed.code
+      }
 
       // Step 4: Wrap for module export
       const wrappedCode = `
-${transformed.code}
+${compiledCode}
 // Export default component
 const __component = exports.default || module.exports || {}
 module.exports = __component

@@ -17,6 +17,23 @@ export interface WidgetSource {
 
 const WIDGET_ROOT = 'widgets'
 
+export function resolveWidgetFilePath(pluginPath: string, rawPath: string): string | null {
+  const widgetsDir = path.resolve(pluginPath, WIDGET_ROOT)
+  const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '')
+  if (!normalized) {
+    return null
+  }
+
+  const candidate = path.resolve(widgetsDir, normalized)
+  const relative = path.relative(widgetsDir, candidate)
+
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return null
+  }
+
+  return path.extname(candidate) ? candidate : `${candidate}.vue`
+}
+
 export class WidgetLoader {
   private readonly cache = new Map<string, WidgetSource>()
 
@@ -117,7 +134,9 @@ export class WidgetLoader {
     }
 
     try {
-      const response = await axios.get(widgetUrl, {
+      const fetchUrl = new URL(widgetUrl)
+      fetchUrl.searchParams.set('raw', '1')
+      const response = await axios.get(fetchUrl.toString(), {
         timeout: 2000,
         proxy: false,
         responseType: 'text'
@@ -175,26 +194,11 @@ export class WidgetLoader {
     }
 
     const resolvedPath = path.posix.extname(candidate) ? candidate : `${candidate}.vue`
-    const url = new URL(resolvedPath, devAddress)
-    url.searchParams.set('raw', '1')
-    return url.toString()
+    return new URL(resolvedPath, devAddress).toString()
   }
 
   private resolveWidgetFile(pluginPath: string, rawPath: string): string | null {
-    const widgetsDir = path.resolve(pluginPath, WIDGET_ROOT)
-    const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '')
-    if (!normalized) {
-      return null
-    }
-
-    const candidate = path.resolve(widgetsDir, normalized)
-    const relative = path.relative(widgetsDir, candidate)
-
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      return null
-    }
-
-    return path.extname(candidate) ? candidate : `${candidate}.vue`
+    return resolveWidgetFilePath(pluginPath, rawPath)
   }
 
   private hashContent(content: string): string {

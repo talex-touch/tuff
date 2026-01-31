@@ -1,0 +1,49 @@
+# AI / Intelligence 模块落地图
+
+本页聚焦主进程 AI/Intelligence 子系统的落地文件与分层结构。
+
+## 1. 核心职责
+
+- 智能能力注册与调度
+- 配额/能力检测与审计
+- 模型路由与策略管理
+- Agent 与工具链运行
+
+## 2. 目录结构
+
+**主模块目录**：`apps/core-app/src/main/modules/ai/`
+
+**核心文件**：
+- 模块入口：`apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- 服务主入口：`apps/core-app/src/main/modules/ai/intelligence-service.ts`
+- 配置：`apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- 配额管理：`apps/core-app/src/main/modules/ai/intelligence-quota-manager.ts`
+- 能力注册：`apps/core-app/src/main/modules/ai/intelligence-capability-registry.ts`
+- 策略管理：`apps/core-app/src/main/modules/ai/intelligence-strategy-manager.ts`
+- 审计日志：`apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+- SDK：`apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- Provider Models：`apps/core-app/src/main/modules/ai/provider-models.ts`
+- 适配存储：`apps/core-app/src/main/modules/ai/tuff-intelligence-storage-adapter.ts`
+
+**子目录**：
+- Providers：`apps/core-app/src/main/modules/ai/providers/`
+- Capability Testers：`apps/core-app/src/main/modules/ai/capability-testers/`
+- Runtime：`apps/core-app/src/main/modules/ai/runtime/`
+- Agents：`apps/core-app/src/main/modules/ai/agents/`
+
+## 3. 运行关系（Mermaid）
+
+```mermaid
+flowchart TB
+  module["IntelligenceModule"] --> service["IntelligenceService"]
+  service --> strategy["Strategy Manager"]
+  service --> registry["Capability Registry"]
+  service --> quota["Quota Manager"]
+  service --> providers["Providers"]
+  service --> agents["Agents + Tools"]
+  service --> storage["Storage Adapter"]
+```
+
+## 4. 相关文档
+
+- Intelligence 系统概念：`apps/nexus/content/docs/dev/architecture/intelligence-system.zh.mdc`

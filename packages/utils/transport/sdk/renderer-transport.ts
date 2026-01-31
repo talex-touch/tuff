@@ -20,6 +20,7 @@ import type {
   TransportPortOpenOptions,
 } from '../types'
 import { useChannel } from '../../renderer/hooks/use-channel'
+import { findCloneIssue, isCloneError, summarizeClonePayload } from '../../common/utils/clone-diagnostics'
 import { assertTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
 import { STREAM_SUFFIXES } from './constants'
@@ -77,6 +78,7 @@ function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string
     return `${eventName}:${Object.prototype.toString.call(payload)}`
   }
 }
+
 
 function resolveInvokeSender(): ((eventName: string, payload?: unknown) => Promise<unknown>) | null {
   if (typeof globalThis === 'undefined') {
@@ -267,6 +269,14 @@ export class TuffRendererTransport implements ITuffTransport {
     }
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
+      if (isCloneError(error)) {
+        const issue = findCloneIssue(payload)
+        const summary = summarizeClonePayload(payload)
+        console.error(`[TuffTransport] Payload not cloneable for "${eventName}"`, {
+          issue,
+          summary
+        })
+      }
       throw new Error(`[TuffTransport] Failed to send \"${eventName}\": ${errorMessage}`)
     }
   }

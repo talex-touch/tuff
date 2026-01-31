@@ -13,8 +13,7 @@ import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
 import path from 'node:path'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
-import { DataCode } from '@talex-touch/utils/channel'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -22,9 +21,6 @@ import { genTouchApp } from '../../core'
 import { pluginModule } from '../plugin/plugin-module'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
-const resolveKeyManager = (channel: unknown): unknown =>
-  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-
 /**
  * Type for state change listener callback
  */
@@ -253,13 +249,17 @@ export class DivisionBoxSession {
 
       // Notify renderer about DivisionBox trigger via unified channel
       const channel = genTouchApp().channel
-      const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-      void transport.sendTo(this.touchWindow.window.webContents, coreBoxTriggerEvent, {
-        type: 'division-box',
-        sessionId: this.sessionId,
-        config: this.config,
-        meta: this.meta
-      })
+      channel.broadcastTo(
+        this.touchWindow.window,
+        ChannelType.MAIN,
+        coreBoxTriggerEvent.toEventName(),
+        {
+          type: 'division-box',
+          sessionId: this.sessionId,
+          config: this.config,
+          meta: this.meta
+        }
+      )
 
       // Handle window close
       this.touchWindow.window.on('closed', () => {
@@ -550,13 +550,17 @@ export class DivisionBoxSession {
     // Send trigger to notify renderer about DivisionBox mode
     // This populates windowState.divisionBox in the renderer
     const channel = genTouchApp().channel
-    const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-    void transport.sendTo(this.touchWindow.window.webContents, coreBoxTriggerEvent, {
-      type: 'division-box',
-      sessionId: this.sessionId,
-      config: this.config,
-      meta: this.meta
-    })
+    channel.broadcastTo(
+      this.touchWindow.window,
+      ChannelType.MAIN,
+      coreBoxTriggerEvent.toEventName(),
+      {
+        type: 'division-box',
+        sessionId: this.sessionId,
+        config: this.config,
+        meta: this.meta
+      }
+    )
 
     await this.setState(DivisionBoxState.ACTIVE)
 

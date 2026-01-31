@@ -1,0 +1,57 @@
+# CoreBox System Map
+
+This page maps CoreBox system files in main/renderer processes.
+
+## 1. Responsibilities
+
+- Unified search entry and UI window management
+- Work with SearchEngine to build results
+- Manage UI view cache and UI mode
+- Bridge to DivisionBox and plugin UI
+
+## 2. Main Process Files
+
+**CoreBox module**:
+- Entry: `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- Window: `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- Manager: `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- IPC: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- Input/Key Transport: `apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`, `apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts`
+- Meta Overlay: `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- View Cache: `apps/core-app/src/main/modules/box-tool/core-box/view-cache.ts`
+- Transport: `apps/core-app/src/main/modules/box-tool/core-box/transport/core-box-transport.ts`
+
+**SearchEngine linkage**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/`
+
+**DivisionBox bridge**:
+- `apps/core-app/src/main/modules/division-box/` (see DivisionBox doc)
+
+## 3. Renderer Files
+
+**CoreBox UI**:
+- Main view: `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- Grid: `apps/core-app/src/renderer/src/components/render/BoxGrid.vue`
+- Grid item: `apps/core-app/src/renderer/src/components/render/BoxGridItem.vue`
+
+**Adapter layer**:
+- Adapter entry: `apps/core-app/src/renderer/src/modules/box/adapter/index.ts`
+- Input/Key: `apps/core-app/src/renderer/src/modules/box/adapter/transport/input-transport.ts`, `apps/core-app/src/renderer/src/modules/box/adapter/transport/key-transport.ts`
+- Hooks: `apps/core-app/src/renderer/src/modules/box/adapter/hooks/` (search/focus/resize/visibility)
+
+## 4. Main Flow (Mermaid)
+
+```mermaid
+flowchart LR
+  renderer["Renderer CoreBox UI"] --> ipc["CoreBox IPC"]
+  ipc --> corebox["CoreBox Module (Main)"]
+  corebox --> engine["SearchEngine"]
+  engine --> providers["Providers"]
+  providers --> engine --> corebox --> renderer
+```
+
+## 5. Related Events
+
+- CoreBox event list: `apps/nexus/content/docs/dev/architecture/ipc-events-detail.en.mdc`
+- CoreBox behavior: `apps/nexus/content/docs/dev/architecture/corebox-and-views.en.mdc`

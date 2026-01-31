@@ -73,9 +73,24 @@ const isHome = computed(() => normalizedPath.value === '/')
 
 function isActiveLink(link: { to: string }) {
   const path = normalizedPath.value
-  if (link.to === '/')
-    return path === '/'
-  return path === link.to || path.startsWith(`${link.to}/`)
+  const matches = (item: { to: string }) => {
+    if (item.to === '/')
+      return path === '/'
+    return path === item.to || path.startsWith(`${item.to}/`)
+  }
+
+  if (!matches(link))
+    return false
+
+  const bestMatch = links.value.reduce<{ to: string } | null>((best, item) => {
+    if (!matches(item))
+      return best
+    if (!best || item.to.length > best.to.length)
+      return item
+    return best
+  }, null)
+
+  return bestMatch?.to === link.to
 }
 
 onMounted(() => {

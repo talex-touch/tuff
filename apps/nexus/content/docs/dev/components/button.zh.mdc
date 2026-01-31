@@ -5,11 +5,12 @@ category: Basic
 status: beta
 since: 1.0.0
 tags: [action, tactile, primary]
+syncStatus: migrated
 ---
 
 # Button 按钮
 
-> 触感与阻尼并存的按钮体系，强调“按下去”的真实反馈。  
+> 按钮用于触发一个操作，如提交表单。该组件风格参考 core-app 的 **TuffButton(TButton)**：圆角 pill 形态，支持 `variant` / `type` / `size` / `block` / `loading` / `disabled`，并提供 `plain` / `round` / `circle` / `dashed` 等外观。  
 > **状态**：Beta
 
 <div class="tuff-doc-canvas">
@@ -34,33 +35,69 @@ tags: [action, tactile, primary]
 
 基础外观与主次层级组合。
 
-:::TuffDemo{title="Primary / Flat" description="触感与扁平并置，用于不同层级场景。" code-lang="vue"}
+:::TuffDemo{title="Appearance" description="默认、主色与语义色状态。" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton>Primary</TxButton>
-    <TuffFlatButton>Flat</TuffFlatButton>
+    <TxButton>默认按钮</TxButton>
+    <TxButton variant="primary">Primary</TxButton>
+    <TxButton variant="secondary">Secondary</TxButton>
     <TxButton variant="ghost">Ghost</TxButton>
+    <TxButton variant="danger">Danger</TxButton>
+    <TxButton variant="success">Success</TxButton>
+    <TxButton variant="warning">Warning</TxButton>
+    <TxButton variant="info">Info</TxButton>
   </template>
 ---
 #preview
 <div class="tuff-demo-row">
-  <tx-button>Primary</tx-button>
-  <tuff-flat-button>Flat</tuff-flat-button>
+  <tx-button>默认按钮</tx-button>
+  <tx-button variant="primary">Primary</tx-button>
+  <tx-button variant="secondary">Secondary</tx-button>
   <tx-button variant="ghost">Ghost</tx-button>
+  <tx-button variant="danger">Danger</tx-button>
+  <tx-button variant="success">Success</tx-button>
+  <tx-button variant="warning">Warning</tx-button>
+  <tx-button variant="info">Info</tx-button>
 </div>
 :::
 
-### States
+### Disabled
 
-加载与禁用场景的状态表达。
+按钮不可用状态。
 
-:::TuffDemo{title="Loading / Disabled" description="异步操作与不可用状态。" code-lang="vue"}
+:::TuffDemo{title="Disabled" description="禁用态样式。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton disabled>默认按钮</TxButton>
+    <TxButton variant="primary" disabled>Primary</TxButton>
+    <TxButton variant="secondary" disabled>Secondary</TxButton>
+    <TxButton variant="ghost" disabled>Ghost</TxButton>
+    <TxButton variant="danger" disabled>Danger</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button disabled>默认按钮</tx-button>
+  <tx-button variant="primary" disabled>Primary</tx-button>
+  <tx-button variant="secondary" disabled>Secondary</tx-button>
+  <tx-button variant="ghost" disabled>Ghost</tx-button>
+  <tx-button variant="danger" disabled>Danger</tx-button>
+</div>
+:::
+
+### Loading
+
+点击按钮后进行数据加载操作，在按钮上显示加载状态。
+
+:::TuffDemo{title="Loading" description="异步加载与交互反馈。" code-lang="vue"}
 ---
 code: |
   <template>
     <TxButton variant="primary" loading>加载中</TxButton>
-    <TxButton variant="ghost" disabled>不可用</TxButton>
+    <TxButton variant="secondary" loading>加载中</TxButton>
+    <TxButton circle icon="i-carbon-edit" loading />
   </template>
 ---
 #preview
@@ -68,15 +105,18 @@ code: |
   <tx-button variant="primary" :loading="loading" @click="handleClick">
     {{ loading ? '加载中' : '点击加载' }}
   </tx-button>
-  <tx-button variant="ghost" disabled>不可用</tx-button>
+  <tx-button variant="secondary" :loading="loading" @click="handleClick">
+    {{ loading ? '加载中' : '点击加载' }}
+  </tx-button>
+  <tx-button circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
 </div>
 :::
 
 ### Sizes
 
-尺寸决定触感和视觉层级的密度。
+Button 组件提供除了默认值以外的三种尺寸，可以在不同场景下选择合适的按钮尺寸。
 
-:::TuffCodeBlock{lang="vue"}
+:::TuffDemo{title="Sizes" description="尺寸决定触感与密度。" code-lang="vue"}
 ---
 code: |
   <template>
@@ -85,26 +125,36 @@ code: |
     <TxButton size="sm">Small</TxButton>
   </template>
 ---
+#preview
+<div class="tuff-demo-row">
+  <tx-button size="lg">Large</tx-button>
+  <tx-button size="md">Medium</tx-button>
+  <tx-button size="sm">Small</tx-button>
+</div>
 :::
 
 ### Block
 
 在卡片或表单中使用块级按钮。
 
-:::TuffCodeBlock{lang="vue"}
+:::TuffDemo{title="Block" description="撑满容器的主操作。" code-lang="vue"}
 ---
 code: |
   <template>
     <TxButton block variant="primary">Block Button</TxButton>
   </template>
 ---
+#preview
+<div class="tuff-demo-row" style="width: 260px;">
+  <tx-button block variant="primary">Block Button</tx-button>
+</div>
 :::
 
 ### Shapes
 
 通过 `plain` / `round` / `circle` / `dashed` 调整形态。
 
-:::TuffCodeBlock{lang="vue"}
+:::TuffDemo{title="Shapes" description="不同形态与边界表现。" code-lang="vue"}
 ---
 code: |
   <template>
@@ -114,13 +164,20 @@ code: |
     <TxButton circle icon="i-carbon-edit" />
   </template>
 ---
+#preview
+<div class="tuff-demo-row">
+  <tx-button dashed>Dashed</tx-button>
+  <tx-button plain variant="primary">Plain</tx-button>
+  <tx-button round variant="primary">Round</tx-button>
+  <tx-button circle icon="i-carbon-edit" />
+</div>
 :::
 
 ### Haptics
 
 移动端触觉反馈强化按下感。
 
-:::TuffCodeBlock{lang="vue"}
+:::TuffDemo{title="Haptics" description="不同震动反馈强度。" code-lang="vue"}
 ---
 code: |
   <template>
@@ -131,6 +188,14 @@ code: |
     <TxButton variant="secondary" :vibrate="false">无震动</TxButton>
   </template>
 ---
+#preview
+<div class="tuff-demo-row">
+  <tx-button variant="primary" vibrate-type="light">轻微震动</tx-button>
+  <tx-button variant="primary" vibrate-type="medium">中等震动</tx-button>
+  <tx-button variant="primary" vibrate-type="heavy">重度震动</tx-button>
+  <tx-button variant="danger" vibrate-type="error">错误震动</tx-button>
+  <tx-button variant="secondary" :vibrate="false">无震动</tx-button>
+</div>
 :::
 
 ## API Specifications
@@ -227,6 +292,59 @@ code: |
 
 ## Composition Notes
 
+### Split Button
+
+用于“主操作 + 更多操作”的组合按钮（例如 RUN + …）。
+
+:::TuffDemo{title="Split Button" description="主操作与菜单操作组合。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSplitButton
+      variant="primary"
+      size="sm"
+      icon="i-ri-play-fill"
+      :loading="splitLoading"
+      @click="handleRun"
+    >
+      RUN
+      <template #menu="{ close }">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+            Settings
+          </TxButton>
+          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+            Open Folder
+          </TxButton>
+        </div>
+      </template>
+    </TxSplitButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-split-button
+    variant="primary"
+    size="sm"
+    icon="i-ri-play-fill"
+    :loading="splitLoading"
+    @click="handleRun"
+  >
+    RUN
+    <template #menu="{ close }">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <tx-button size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+          Settings
+        </tx-button>
+        <tx-button size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+          Open Folder
+        </tx-button>
+      </div>
+    </template>
+  </tx-split-button>
+</div>
+:::
+
 ### Primary + Ghost
 
 主动作 + 次动作组合时使用 `primary + ghost` 保持层级清晰。
@@ -248,6 +366,10 @@ code: |
 
 ## Design Principles
 
+- 主按钮始终只有一个，避免操作权重冲突
+- 同类操作保持 `variant` 一致，方便用户形成记忆
+- 异步操作必须搭配 `loading`，避免重复触发
+- 移动端优先使用 `vibrate` 增强触感反馈
 - 强调按压反馈与弹性回弹
 - 透明材质与阴影层次需要配合背景使用
 - Icon 与文字间距保持一致，避免视觉偏移
@@ -260,6 +382,7 @@ code: |
 import { ref } from 'vue'
 
 const loading = ref(false)
+const splitLoading = ref(false)
 
 async function handleClick() {
   loading.value = true
@@ -267,6 +390,15 @@ async function handleClick() {
   setTimeout(() => {
     loading.value = false
   }, 3000)
+}
+
+async function handleRun() {
+  if (splitLoading.value) return
+  splitLoading.value = true
+
+  setTimeout(() => {
+    splitLoading.value = false
+  }, 1200)
 }
 </script>
 

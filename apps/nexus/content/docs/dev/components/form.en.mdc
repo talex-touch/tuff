@@ -62,7 +62,7 @@ function handleReset() {
 </div>
 </ClientOnly>
 
-:::: details Show Code
+::: details Show Code
 ```vue
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
@@ -87,7 +87,7 @@ async function handleValidate() {
   </TxForm>
 </template>
 ```
-::::
+:::
 
 ## API
 

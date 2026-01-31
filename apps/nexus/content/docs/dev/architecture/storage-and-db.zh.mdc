@@ -1,0 +1,56 @@
+# Storage & Database 落地图
+
+本页覆盖主存储模块、插件存储隔离、以及数据库模块的落地文件。
+
+## 1. 主存储模块（StorageModule）
+
+**职责**：配置持久化、缓存、LRU、版本广播、统一读写接口。
+
+**代码落地**：
+- 主入口：`apps/core-app/src/main/modules/storage/index.ts`
+- 缓存：`apps/core-app/src/main/modules/storage/storage-cache.ts`
+- LRU 管理：`apps/core-app/src/main/modules/storage/storage-lru-manager.ts`
+- 频率监控：`apps/core-app/src/main/modules/storage/storage-frequency-monitor.ts`
+- 轮询服务：`apps/core-app/src/main/modules/storage/storage-polling-service.ts`
+- 注册表：`apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+
+**通用存储实体**：
+- `packages/utils/common/storage/`
+- `packages/utils/common/storage/entity/`
+- `packages/utils/common/storage/constants.ts`
+
+## 2. 插件存储隔离
+
+**职责**：按插件隔离配置与数据（10MB 限制），广播变更同步。
+
+**落地文件**：
+- 插件存储事件处理：`apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- 插件运行时存储桥接：`apps/core-app/src/main/modules/plugin/plugin.ts`
+- 事件总线标记：`apps/core-app/src/main/core/eventbus/touch-event.ts`
+
+## 3. 数据库模块（DatabaseModule）
+
+**职责**：结构化数据存储、调度写入、重试策略。
+
+**代码落地**：
+- 模块入口：`apps/core-app/src/main/modules/database/index.ts`
+- Schema：`apps/core-app/src/main/db/schema.ts`
+- 写入调度：`apps/core-app/src/main/db/db-write-scheduler.ts`
+- SQLite 重试：`apps/core-app/src/main/db/sqlite-retry.ts`
+- DB 工具：`apps/core-app/src/main/db/utils.ts`
+
+## 4. 存储更新链路（Mermaid）
+
+```mermaid
+flowchart LR
+  storage["StorageModule"] --> cache["Cache/LRU"]
+  storage --> persist["Disk JSON / SQLite"]
+  storage --> broadcast["Broadcast Update"]
+  broadcast --> renderer["Renderer Windows"]
+  broadcast --> plugin["Plugin Storage Listeners"]
+```
+
+## 5. 相关文档
+
+- 通道事件表：`apps/nexus/content/docs/dev/architecture/transport-events.zh.mdc`
+- 核心模块总览：`apps/nexus/content/docs/dev/architecture/module-map.zh.mdc`

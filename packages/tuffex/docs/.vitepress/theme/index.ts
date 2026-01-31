@@ -30,6 +30,8 @@ import {
   TxChatComposer,
   TxChatList,
   TxChatMessage,
+  TxCodeEditor,
+  TxCodeEditorToolbar,
   TxCol,
   TxContainer,
   TxContextMenu,
@@ -229,6 +231,8 @@ export default {
     app.component('TxMarkdownView', TxMarkdownView)
     app.component('TxChatList', TxChatList)
     app.component('TxChatMessage', TxChatMessage)
+    app.component('TxCodeEditor', TxCodeEditor)
+    app.component('TxCodeEditorToolbar', TxCodeEditorToolbar)
     app.component('TxChatComposer', TxChatComposer)
     app.component('TxTypingIndicator', TxTypingIndicator)
     app.component('TxImageUploader', TxImageUploader)

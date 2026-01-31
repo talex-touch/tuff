@@ -8,6 +8,7 @@ interface DocHeroProps {
   sinceLabel?: string
   readTimeLabel?: string
   updatedLabel?: string
+  verifiedLabel?: string
 }
 
 const props = withDefaults(defineProps<DocHeroProps>(), {
@@ -16,6 +17,7 @@ const props = withDefaults(defineProps<DocHeroProps>(), {
   sinceLabel: '',
   readTimeLabel: '',
   updatedLabel: '',
+  verifiedLabel: '',
 })
 
 const colorMode = useColorMode()
@@ -32,10 +34,13 @@ const heroStyle = computed(() => ({
   '--docs-hero-tag-text': isDark.value ? 'rgba(226, 232, 240, 0.86)' : 'rgba(71, 85, 105, 0.86)',
 }))
 const tagItems = computed(() => ([
+  props.verifiedLabel
+    ? { label: props.verifiedLabel, icon: 'i-carbon-checkmark-filled', variant: 'badge' }
+    : null,
   props.sinceLabel ? { label: props.sinceLabel } : null,
   props.readTimeLabel ? { label: props.readTimeLabel, icon: 'i-carbon-time' } : null,
   props.updatedLabel ? { label: props.updatedLabel, icon: 'i-carbon-calendar' } : null,
-].filter(Boolean) as Array<{ label: string, icon?: string }>))
+].filter(Boolean) as Array<{ label: string, icon?: string, variant?: 'badge' }>))
 const hasTags = computed(() => tagItems.value.length > 0)
 </script>
 
@@ -49,7 +54,12 @@ const hasTags = computed(() => tagItems.value.length > 0)
     />
     <div class="docs-hero__content">
       <div v-if="hasTags" class="docs-hero__tags">
-        <span v-for="(tag, index) in tagItems" :key="`${tag.label}-${index}`" class="docs-hero__tag">
+        <span
+          v-for="(tag, index) in tagItems"
+          :key="`${tag.label}-${index}`"
+          class="docs-hero__tag"
+          :class="{ 'docs-hero__badge': tag.variant === 'badge' }"
+        >
           <span v-if="tag.icon" :class="tag.icon" class="docs-hero__tag-icon" aria-hidden="true" />
           <span>{{ tag.label }}</span>
         </span>
@@ -105,13 +115,21 @@ const hasTags = computed(() => tagItems.value.length > 0)
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 12px;
   border: 1px solid var(--docs-hero-tag-border, rgba(15, 23, 42, 0.08));
   background: var(--docs-hero-tag-bg, rgba(15, 23, 42, 0.04));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   font-size: 13px;
   font-weight: 600;
   color: var(--docs-hero-tag-text, rgba(71, 85, 105, 0.86));
   letter-spacing: 0.01em;
+}
+
+.docs-hero__badge {
+  border-color: rgba(56, 189, 248, 0.25);
+  background: rgba(56, 189, 248, 0.12);
+  color: rgba(14, 116, 144, 0.92);
 }
 
 .docs-hero__tag-icon {

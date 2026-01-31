@@ -1,0 +1,68 @@
+# Channel & IPC Event Map
+
+This page maps channel entry points and IPC event definitions.
+
+## 1. Channel Entry Points
+
+- Main channel core: `apps/core-app/src/main/core/channel-core.ts`
+- Common channel module: `apps/core-app/src/main/channel/common.ts`
+- Renderer channel core: `apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
+- Renderer main channel: `apps/core-app/src/renderer/src/modules/channel/main/`
+- Renderer plugin channel: `apps/core-app/src/renderer/src/modules/channel/plugin-core/`
+- Renderer storage channel: `apps/core-app/src/renderer/src/modules/channel/storage/`
+
+## 2. Event Definition Entry
+
+- Aggregator: `packages/utils/transport/events/index.ts`
+- MetaOverlay events: `packages/utils/transport/events/meta-overlay.ts`
+- Grouped types: `packages/utils/transport/events/types/`
+
+## 3. IPC Event Groups (Type Files)
+
+| Group | File |
+| --- | --- |
+| App Events | `packages/utils/transport/events/types/app.ts` |
+| App Index | `packages/utils/transport/events/types/app-index.ts` |
+| CoreBox | `packages/utils/transport/events/types/core-box.ts` |
+| Box Item | `packages/utils/transport/events/types/box-item.ts` |
+| DivisionBox | `packages/utils/transport/events/types/division-box.ts` |
+| Meta Overlay | `packages/utils/transport/events/types/meta-overlay.ts` |
+| Plugin | `packages/utils/transport/events/types/plugin.ts` |
+| Storage | `packages/utils/transport/events/types/storage.ts` |
+| Clipboard | `packages/utils/transport/events/types/clipboard.ts` |
+| Device Idle | `packages/utils/transport/events/types/device-idle.ts` |
+| Platform | `packages/utils/transport/events/types/platform.ts` |
+| Permission | `packages/utils/transport/events/types/permission.ts` |
+| Notification | `packages/utils/transport/events/types/notification.ts` |
+| Market | `packages/utils/transport/events/types/market.ts` |
+| Sentry | `packages/utils/transport/events/types/sentry.ts` |
+| Agents | `packages/utils/transport/events/types/agents.ts` |
+| Flow | `packages/utils/transport/events/types/flow.ts` |
+| Download | `packages/utils/transport/events/types/download.ts` |
+| Update | `packages/utils/transport/events/types/update.ts` |
+| Tray | `packages/utils/transport/events/types/tray.ts` |
+| Transport | `packages/utils/transport/events/types/transport.ts` |
+| File Index | `packages/utils/transport/events/types/file-index.ts` |
+
+## 4. Event-to-Module Examples
+
+- CoreBox events: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- Plugin events: `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- Storage events: `apps/core-app/src/main/modules/storage/index.ts`
+- DivisionBox events: `apps/core-app/src/main/modules/division-box/ipc.ts`
+
+## 5. Diagram (Mermaid)
+
+```mermaid
+flowchart LR
+  main["Main ChannelCore"] <--> renderer["Renderer ChannelCore"]
+  main <--> plugin["Plugin Channel (isolated)"]
+  main --> events["Event Types (packages/utils/transport/events/types/*)"]
+  renderer --> events
+  plugin --> events
+```
+
+## 6. Related Docs
+
+- SearchEngine: `apps/nexus/content/docs/dev/architecture/search-engine.en.mdc`
+- Plugin System: `apps/nexus/content/docs/dev/architecture/plugin-system.en.mdc`

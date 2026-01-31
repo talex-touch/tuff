@@ -1,0 +1,51 @@
+# DivisionBox Map
+
+DivisionBox separates CoreBox UI views into standalone windows with session management.
+
+## 1. Responsibilities
+
+- Manage multi-session windows
+- Transfer UI views from CoreBox
+- Sync UI/window state and shortcuts
+
+## 2. Directories and Files
+
+- Module entry: `apps/core-app/src/main/modules/division-box/module.ts`
+- IPC: `apps/core-app/src/main/modules/division-box/ipc.ts`
+- Manager: `apps/core-app/src/main/modules/division-box/manager.ts`
+- Session: `apps/core-app/src/main/modules/division-box/session.ts`
+- Window pool: `apps/core-app/src/main/modules/division-box/window-pool.ts`
+- State sync: `apps/core-app/src/main/modules/division-box/state-sync.ts`
+- Flow trigger: `apps/core-app/src/main/modules/division-box/flow-trigger.ts`
+- Shortcut trigger: `apps/core-app/src/main/modules/division-box/shortcut-trigger.ts`
+- Command provider: `apps/core-app/src/main/modules/division-box/command-provider.ts`
+- Manifest parser: `apps/core-app/src/main/modules/division-box/manifest-parser.ts`
+- LRU cache: `apps/core-app/src/main/modules/division-box/lru-cache.ts`
+- Error logger: `apps/core-app/src/main/modules/division-box/error-logger.ts`
+- Index: `apps/core-app/src/main/modules/division-box/index.ts`
+
+## 3. Renderer Entry
+
+- Shell: `apps/core-app/src/renderer/src/modules/division-box/components/DivisionBoxShell.vue`
+- Store: `apps/core-app/src/renderer/src/modules/division-box/store/division-box.ts`
+- Header: `apps/core-app/src/renderer/src/views/box/DivisionBoxHeader.vue`
+
+## 4. Events and Handling
+
+- Event definitions: `packages/utils/transport/events/index.ts` (DivisionBoxEvents)
+- Main handlers: `apps/core-app/src/main/modules/division-box/ipc.ts`
+- Renderer listeners: `apps/core-app/src/renderer/src/modules/division-box/`, `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+
+## 5. Main Flow (Mermaid)
+
+```mermaid
+flowchart LR
+  corebox["CoreBox UI View"] --> transfer["Transfer View"]
+  transfer --> division["DivisionBox Session"]
+  division --> window["TouchWindow + WebContentsView"]
+```
+
+## 6. Related Docs
+
+- IPC event list: `apps/nexus/content/docs/dev/architecture/ipc-events-detail.en.mdc`
+- CoreBox system: `apps/nexus/content/docs/dev/architecture/corebox-system.en.mdc`

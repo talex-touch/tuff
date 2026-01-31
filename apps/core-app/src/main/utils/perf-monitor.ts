@@ -459,12 +459,17 @@ export class PerfMonitor {
 
     const shouldLog = this.shouldLog(`event_loop.lag:${severity}`, LOOP_LOG_THROTTLE_MS, now)
     if (shouldLog) {
-      const message = `Event loop lag ${formatDuration(lagMs)}`
       const contexts = getPerfContextSnapshot(3)
       const pollingDiagnostics = pollingService.getDiagnostics()
       const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
         id: task.id,
-        ageMs: Math.round(task.ageMs)
+        ageMs: Math.round(task.ageMs),
+        intervalMs: typeof task.intervalMs === 'number' ? Math.round(task.intervalMs) : undefined,
+        lastDurationMs:
+          typeof task.lastDurationMs === 'number' ? Math.round(task.lastDurationMs) : undefined,
+        maxDurationMs:
+          typeof task.maxDurationMs === 'number' ? Math.round(task.maxDurationMs) : undefined,
+        count: task.count
       }))
       const pollingRecent = pollingDiagnostics.recentTasks
         .sort((a, b) => b.lastDurationMs - a.lastDurationMs)
@@ -472,8 +477,28 @@ export class PerfMonitor {
         .map((task) => ({
           id: task.id,
           durationMs: Math.round(task.lastDurationMs),
-          ageMs: Math.max(0, now - task.lastEndAt)
+          ageMs: Math.max(0, now - task.lastEndAt),
+          intervalMs: typeof task.intervalMs === 'number' ? Math.round(task.intervalMs) : undefined,
+          maxDurationMs: Math.round(task.maxDurationMs),
+          count: task.count
         }))
+      const primaryContext = contexts[0]
+        ? `${contexts[0].label} ${formatDuration(contexts[0].durationMs)}`
+        : undefined
+      const primaryPollingActive = pollingActive[0]
+        ? `${pollingActive[0].id} ${formatDuration(pollingActive[0].ageMs)}`
+        : undefined
+      const primaryPollingRecent = pollingRecent[0]
+        ? `${pollingRecent[0].id} ${formatDuration(pollingRecent[0].durationMs)}`
+        : undefined
+      const messageHints = [
+        primaryContext ? `context=${primaryContext}` : null,
+        primaryPollingActive ? `polling=${primaryPollingActive}` : null,
+        primaryPollingRecent ? `recent=${primaryPollingRecent}` : null
+      ].filter(Boolean)
+      const message = messageHints.length
+        ? `Event loop lag ${formatDuration(lagMs)} (${messageHints.join(' | ')})`
+        : `Event loop lag ${formatDuration(lagMs)}`
       const lastSlowIpc = this.lastSlowIpc
         ? {
             kind: this.lastSlowIpc.kind,
@@ -485,8 +510,11 @@ export class PerfMonitor {
       const meta = toLogMeta({
         lagMs: Math.round(lagMs),
         contexts,
+        primaryContext,
         pollingActive,
         pollingRecent,
+        primaryPollingActive,
+        primaryPollingRecent,
         lastSlowIpc
       })
       if (severity === 'error') {

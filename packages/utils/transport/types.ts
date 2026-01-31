@@ -522,6 +522,20 @@ export interface ITuffTransportMain {
   ) => Promise<TRes>
 
   /**
+   * Broadcasts a message to a specific window (fire-and-forget).
+   *
+   * @typeParam TReq - Request payload type
+   * @param windowId - Target window ID
+   * @param event - The TuffEvent to send
+   * @param payload - Request payload
+   */
+  broadcastToWindow: <TReq>(
+    windowId: number,
+    event: TuffEvent<TReq, void>,
+    payload: TReq,
+  ) => void
+
+  /**
    * Sends a message to a specific WebContents.
    *
    * @typeParam TReq - Request payload type

@@ -1,0 +1,196 @@
+# Core Module Map (SearchEngine and Major Systems)
+
+This document maps runtime modules to concrete directories and files so you can locate implementations quickly.
+
+## 1. Entry and Module System
+
+**Responsibility**: app bootstrap, module orchestration, channel initialization, event bus.
+
+**Code locations**:
+- Entry: `apps/core-app/src/main/index.ts`
+- TouchApp: `apps/core-app/src/main/core/touch-app.ts`
+- Factory: `apps/core-app/src/main/core/index.ts`
+- ModuleManager: `apps/core-app/src/main/core/module-manager.ts`
+- ChannelCore: `apps/core-app/src/main/core/channel-core.ts`
+- EventBus: `apps/core-app/src/main/core/eventbus/touch-event.ts`
+- BaseModule: `apps/core-app/src/main/modules/abstract-base-module.ts`
+
+```mermaid
+flowchart TB
+  entry["apps/core-app/src/main/index.ts"]
+  gen["apps/core-app/src/main/core/index.ts"]
+  app["TouchApp"]
+  manager["ModuleManager"]
+  channel["ChannelCore"]
+  modules["Modules (BaseModule)"]
+
+  entry --> gen --> app --> manager --> modules
+  manager --> channel
+```
+
+## 2. Module Load Order (Main)
+
+**Responsibility**: boot core modules after Electron is ready.
+
+**Order & files**:
+1. DatabaseModule → `apps/core-app/src/main/modules/database/index.ts`
+2. StorageModule → `apps/core-app/src/main/modules/storage/index.ts`
+3. ShortcutModule → `apps/core-app/src/main/modules/global-shortcon.ts`
+4. ExtensionLoaderModule → `apps/core-app/src/main/modules/extension-loader.ts`
+5. CommonChannelModule → `apps/core-app/src/main/channel/common.ts`
+6. PluginModule → `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+7. PluginLogModule → `apps/core-app/src/main/service/plugin-log.service.ts`
+8. CoreBoxModule → `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+9. TrayHolderModule → `apps/core-app/src/main/modules/tray-holder.ts`
+10. AddonOpenerModule → `apps/core-app/src/main/modules/addon-opener.ts`
+11. ClipboardModule → `apps/core-app/src/main/modules/clipboard.ts`
+12. TuffDashboardModule → `apps/core-app/src/main/modules/system/tuff-dashboard.ts`
+13. FileSystemWatcherModule → `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+14. FileProtocolModule → `apps/core-app/src/main/modules/file-protocol/index.ts`
+15. TerminalModule → `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
+
+```mermaid
+flowchart TB
+  m1["Database"] --> m2["Storage"] --> m3["Shortcut"] --> m4["ExtensionLoader"] --> m5["CommonChannel"]
+  m5 --> m6["Plugin"] --> m7["PluginLog"] --> m8["CoreBox"] --> m9["TrayHolder"]
+  m9 --> m10["AddonOpener"] --> m11["Clipboard"] --> m12["TuffDashboard"]
+  m12 --> m13["FileSystemWatcher"] --> m14["FileProtocol"] --> m15["Terminal"]
+```
+
+## 3. CoreBox & SearchEngine
+
+**Responsibility**: unified search entry, aggregation, window behavior, UI integration.
+
+**CoreBox locations**:
+- Module: `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- Window: `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- Manager: `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- IPC: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- Input/Key Transport: `apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`, `apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts`
+- Meta Overlay: `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- CoreBox Transport: `apps/core-app/src/main/modules/box-tool/core-box/transport/core-box-transport.ts`
+- Item SDK: `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+
+**SearchEngine locations**:
+- Search Core: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- Engine entry: `apps/core-app/src/main/modules/box-tool/search-engine/index.ts`
+- Sorting/Scoring: `apps/core-app/src/main/modules/box-tool/search-engine/sort/index.ts`
+- Providers: `apps/core-app/src/main/modules/box-tool/search-engine/providers/`
+- Recommendation: `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/`
+- Types: `apps/core-app/src/main/modules/box-tool/search-engine/types.ts`
+- Search logger: `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts`
+
+**File providers (SearchEngine subsystem)**:
+- Everything Provider (Windows) → `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- File Provider (macOS/Linux) → `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- App Provider → `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- FileSystemWatcher → `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+
+```mermaid
+flowchart LR
+  input["CoreBox Input"] --> parser["Query Parser (@file)"]
+  parser --> providers["Providers (Everything/File/App/Plugin/Intelligence)"]
+  providers --> score["Scoring + Sort"]
+  score --> merge["Merge & Rank"]
+  merge --> output["CoreBox Results UI"]
+```
+
+## 4. Plugin System (Manifest/Prelude/Surface)
+
+**Responsibility**: plugin loading, permission gating, isolated IPC, UI view mounting.
+
+**Code locations**:
+- PluginModule: `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- Plugin runtime: `apps/core-app/src/main/modules/plugin/plugin.ts`
+- Provider registry: `apps/core-app/src/main/modules/plugin/providers/registry.ts`
+- Dev server monitor: `apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
+- Features adapter: `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- Widget manager: `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- UI utils: `apps/core-app/src/main/modules/plugin/plugin-ui-utils.ts`
+- Built-in plugins: `apps/core-app/src/main/plugins/internal/`
+- SDK version gate: `packages/utils/plugin/sdk-version.ts`
+- Plugin SDK: `packages/utils/plugin/sdk/`
+- Plugin types/helpers: `packages/utils/plugin/`
+- Examples: `plugins/touch-translation/`, `plugins/touch-music/`, `plugins/touch-image/`
+
+```mermaid
+flowchart TB
+  manifest["Manifest (manifest.json)"] --> prelude["Prelude (index.js)"]
+  prelude --> surface["Surface UI (attachUIView)"]
+  prelude --> ipc["Plugin Channel (isolated)"]
+```
+
+## 5. Channel / Transport
+
+**Responsibility**: IPC abstraction between main, renderer, and plugin processes.
+
+**Code locations**:
+- Main channel: `apps/core-app/src/main/core/channel-core.ts`
+- Common channel module: `apps/core-app/src/main/channel/common.ts`
+- Renderer channel: `apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
+- Renderer main/plugin channels: `apps/core-app/src/renderer/src/modules/channel/main/`, `apps/core-app/src/renderer/src/modules/channel/plugin-core/`
+- Storage channel: `apps/core-app/src/renderer/src/modules/channel/storage/`
+- Transport events: `packages/utils/transport/events/`, `packages/utils/transport/event/`
+- Channel types: `packages/utils/channel/`
+
+## 6. Storage & Config
+
+**Responsibility**: config persistence, cache/LRU, broadcast updates, plugin storage isolation.
+
+**Code locations**:
+- Storage module: `apps/core-app/src/main/modules/storage/index.ts`
+- Storage submodules: `apps/core-app/src/main/modules/storage/storage-cache.ts`, `storage-lru-manager.ts`, `storage-frequency-monitor.ts`, `storage-polling-service.ts`
+- Registry: `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+- Common storage entities: `packages/utils/common/storage/`
+- Renderer storage channel: `apps/core-app/src/renderer/src/modules/channel/storage/`
+
+## 7. Database
+
+**Responsibility**: structured storage and scheduled writes.
+
+**Code locations**:
+- DatabaseModule: `apps/core-app/src/main/modules/database/index.ts`
+- Schema: `apps/core-app/src/main/db/schema.ts`
+- Write scheduler: `apps/core-app/src/main/db/db-write-scheduler.ts`
+- SQLite retry: `apps/core-app/src/main/db/sqlite-retry.ts`
+- DB utils: `apps/core-app/src/main/db/utils.ts`
+
+## 8. Renderer Structure
+
+**Responsibility**: Vue 3 app entry, state, UI components, views.
+
+**Code locations**:
+- Entry: `apps/core-app/src/renderer/src/main.ts`
+- Root component: `apps/core-app/src/renderer/src/App.vue`
+- Views: `apps/core-app/src/renderer/src/views/`
+- Components: `apps/core-app/src/renderer/src/components/`
+- Stores: `apps/core-app/src/renderer/src/stores/`
+- Modules: `apps/core-app/src/renderer/src/modules/`
+
+## 9. System Services & Capabilities
+
+**Responsibility**: permissions, logging, notifications, tray, AI/Intelligence, etc.
+
+**Code locations**:
+- Permission: `apps/core-app/src/main/modules/permission/index.ts`, `permission-guard.ts`, `permission-store.ts`
+- Logging: `apps/core-app/src/main/service/plugin-log.service.ts`
+- Notification: `apps/core-app/src/main/modules/notification.ts`
+- Tray: `apps/core-app/src/main/modules/tray-holder.ts`, `apps/core-app/src/main/modules/tray/`
+- AI/Intelligence: `apps/core-app/src/main/modules/ai/`
+- Sentry: `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- Analytics: `apps/core-app/src/main/modules/analytics/`
+- DivisionBox: `apps/core-app/src/main/modules/division-box/`
+
+## 10. UI & i18n
+
+**Responsibility**: shared UI library and localization.
+
+**Code locations**:
+- Tuffex components: `packages/tuffex/packages/components/`
+- TuffIcon: `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- i18n core: `packages/utils/i18n/`
+- Renderer locales: `apps/core-app/src/renderer/src/locales/`
+
+## Related Docs
+
+- Everything integration: `docs/everything-integration.md`
